@@ -1,0 +1,715 @@
+import * as tf from '@tensorflow/tfjs';
+import ModelManager from '../utils/ModelManager.js';
+import CacheService from './CacheService.js';
+import WebSocketService from './WebSocketService.js';
+import { getService } from './GlobalServiceManager.js';
+
+/**
+ * Сервис Meta-Learning (обучение обучению)
+ * Позволяет быстро адаптировать модели к новым задачам и рыночным условиям
+ */
+class MetaLearningService {
+    constructor() {
+        this.metaModel = null;
+        this.knowledgeBase = [];
+        this.isInitialized = false;
+        this.config = {
+            metaLearningRate: 0.001,
+            adaptationRate: 0.01,
+            metaBatchSize: 16,
+            supportSetSize: 32,
+            querySetSize: 16,
+            taskEmbeddingSize: 64
+        };
+    }
+
+    /**
+     * Инициализация Meta-Learning системы
+     */
+    async initialize() {
+        try {
+            console.log('🧠 Initializing Meta-Learning Service...');
+            
+            // Сначала пытаемся загрузить существующую мета-модель
+            await this.loadMetaModel();
+            
+            // Если модель не загружена, создаем новую
+            if (!this.metaModel) {
+                console.log('Creating new meta-model...');
+                this.metaModel = this.createMetaModel();
+            }
+            
+            // Загружаем базу знаний
+            await this.loadKnowledgeBase();
+            
+            this.isInitialized = true;
+            console.log('✅ Meta-Learning Service initialized');
+        } catch (error) {
+            console.error('❌ Failed to initialize Meta-Learning Service:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Создание мета-модели
+     */
+    createMetaModel() {
+        const model = tf.sequential({
+            layers: [
+                tf.layers.dense({
+                    units: 128,
+                    activation: 'relu',
+                    inputShape: [this.config.taskEmbeddingSize],
+                    kernelInitializer: 'heUniform'
+                }),
+                tf.layers.dropout({ rate: 0.2 }),
+                tf.layers.dense({ 
+                    units: 64, 
+                    activation: 'relu',
+                    kernelInitializer: 'heUniform'
+                }),
+                tf.layers.dropout({ rate: 0.2 }),
+                tf.layers.dense({ 
+                    units: 32, 
+                    activation: 'relu',
+                    kernelInitializer: 'heUniform'
+                }),
+                tf.layers.dense({ 
+                    units: 10, 
+                    activation: 'linear',
+                    kernelInitializer: 'glorotUniform'
+                }) // Параметры адаптации
+            ]
+        });
+
+        model.compile({
+            optimizer: tf.train.adam(this.config.metaLearningRate),
+            loss: 'meanSquaredError',
+            metrics: ['mae']
+        });
+
+        return model;
+    }
+
+    /**
+     * Создание эмбеддинга задачи
+     */
+    createTaskEmbedding(marketData, taskType, performance) {
+        const embedding = new Array(this.config.taskEmbeddingSize).fill(0);
+        
+        // Рыночные характеристики (5 значений)
+        embedding[0] = marketData.volatility || 0;
+        embedding[1] = marketData.trend || 0;
+        embedding[2] = marketData.volume_ratio || 1;
+        embedding[3] = marketData.rsi || 50;
+        embedding[4] = marketData.macd || 0;
+        
+        // Временные характеристики (3 значения)
+        const now = new Date();
+        embedding[5] = now.getHours() / 23;
+        embedding[6] = now.getDay() / 6;
+        embedding[7] = now.getMonth() / 11;
+        
+        // Производительность (4 значения)
+        embedding[8] = performance.accuracy || 0;
+        embedding[9] = performance.sharpe || 0;
+        embedding[10] = performance.maxDrawdown || 0;
+        embedding[11] = performance.winRate || 0;
+        
+        // Тип задачи (5 значений) - one-hot кодирование
+        const taskTypes = ['price_prediction', 'trend_classification', 'volatility_forecasting', 'sentiment_analysis', 'risk_assessment'];
+        const taskIndex = taskTypes.indexOf(taskType);
+        if (taskIndex >= 0) {
+            embedding[12 + taskIndex] = 1;
+        }
+        
+        // Дополнение до 64 значений нулями (более стабильно чем случайный шум)
+        for (let i = 17; i < this.config.taskEmbeddingSize; i++) {
+            embedding[i] = 0; // Нулевое заполнение для стабильности
+        }
+        
+        return embedding;
+    }
+
+    /**
+     * Обучение Meta-Learning (алиас для adaptToTask)
+     */
+    async train(figi, options = {}) {
+        // Получаем TrainingStatusService один раз
+        const trainingStatusService = getService('TrainingStatusService');
+        
+        try {
+            console.log(`🧠 Meta-learning training for ${figi}...`);
+            
+            // Обновляем статус обучения
+            if (trainingStatusService) {
+                trainingStatusService.startTraining('metaLearning', 1);
+            }
+            
+            // Получаем данные для задачи
+            const candles = await CacheService.getCandles(figi, 'DAY', 30);
+            if (candles.length < 10) {
+                throw new Error(`Insufficient data: ${candles.length} candles`);
+            }
+            
+            // Создаем задачу
+            const taskData = {
+                figi,
+                candles,
+                taskType: 'price_prediction',
+                marketData: candles.slice(-10), // последние 10 свечей
+                performance: { accuracy: 0.5, profit: 0 }
+            };
+            
+            // Создаем базовую модель для адаптации
+            const baseModel = this.createBaseModel();
+            
+            // Адаптируемся к задаче
+            const result = await this.adaptToTask(taskData, baseModel, options.adaptationSteps || 5);
+            
+            // Завершаем обучение
+            if (trainingStatusService) {
+                trainingStatusService.completeTraining('metaLearning', true);
+            }
+            
+            return {
+                success: true,
+                figi,
+                result,
+                adaptationSteps: options.adaptationSteps || 5
+            };
+            
+        } catch (error) {
+            console.error(`❌ Meta-learning failed for ${figi}:`, error);
+            
+            // Завершаем обучение с ошибкой
+            if (trainingStatusService) {
+                trainingStatusService.completeTraining('metaLearning', false);
+            }
+            
+            // Отправляем алерт в Telegram
+            try {
+                const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+                if (OptimizedTelegramService.isInitialized) {
+                    await OptimizedTelegramService.sendAlert(
+                        'META_LEARNING_TRAINING_ERROR',
+                        `❌ <b>ОШИБКА META-LEARNING ОБУЧЕНИЯ</b>\n\n📈 Инструмент: <b>${figi}</b>\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
+                        'error'
+                    );
+                }
+            } catch (telegramError) {
+                console.error('❌ Failed to send meta-learning training error alert:', telegramError.message);
+            }
+            
+            throw error;
+        }
+    }
+
+    /**
+     * Создание базовой модели для адаптации
+     */
+    createBaseModel() {
+        const model = tf.sequential({
+            layers: [
+                tf.layers.dense({
+                    inputShape: [10], // 10 признаков
+                    units: 32,
+                    activation: 'relu'
+                }),
+                tf.layers.dense({
+                    units: 16,
+                    activation: 'relu'
+                }),
+                tf.layers.dense({
+                    units: 1,
+                    activation: 'linear'
+                })
+            ]
+        });
+        
+        model.compile({
+            optimizer: tf.train.adam(0.001),
+            loss: 'meanSquaredError',
+            metrics: ['mae']
+        });
+        
+        return model;
+    }
+
+    /**
+     * Адаптация к задаче
+     */
+    async adaptToTask(taskData, targetModel, adaptationSteps = 5) {
+        try {
+            if (!this.isInitialized) {
+                throw new Error('Meta-Learning not initialized');
+            }
+
+            console.log(`🔄 Adapting to task: ${taskData.taskType}...`);
+            
+            // Создаем эмбеддинг задачи
+            const taskEmbedding = this.createTaskEmbedding(
+                taskData.marketData,
+                taskData.taskType,
+                taskData.performance
+            );
+            
+            // Получаем параметры адаптации от мета-модели
+            const adaptationParams = await this.getAdaptationParameters(taskEmbedding);
+            
+            // Применяем адаптацию к целевой модели
+            const adaptedModel = await this.applyAdaptation(targetModel, adaptationParams);
+            
+            // Выполняем несколько шагов градиентного спуска
+            for (let step = 0; step < adaptationSteps; step++) {
+                await this.performAdaptationStep(adaptedModel, taskData.supportSet);
+            }
+            
+            // Сохраняем задачу в базу знаний
+            await this.saveTaskToKnowledgeBase(taskData, adaptationParams);
+            
+            console.log('✅ Task adaptation completed');
+            return adaptedModel;
+            
+        } catch (error) {
+            console.error('❌ Task adaptation failed:', error);
+            // Временный алерт в Telegram
+            try {
+                const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+                await OptimizedTelegramService.sendAlert('META_LEARNING_ERROR', {
+                    error: error.message,
+                    context: 'Task Adaptation',
+                    timestamp: new Date().toISOString()
+                });
+            } catch (telegramError) {
+                console.error('Failed to send Telegram alert:', telegramError);
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Получение параметров адаптации от мета-модели
+     */
+    async getAdaptationParameters(taskEmbedding) {
+        const inputTensor = tf.tensor2d([taskEmbedding]);
+        const prediction = this.metaModel.predict(inputTensor);
+        const params = await prediction.data();
+        
+        inputTensor.dispose();
+        prediction.dispose();
+        
+        return Array.from(params);
+    }
+
+    /**
+     * Применение адаптации к модели
+     */
+    async applyAdaptation(targetModel, adaptationParams) {
+        if (!targetModel) {
+            throw new Error('Target model is null - cannot apply adaptation');
+        }
+        
+        // Получаем текущие веса модели
+        const currentWeights = targetModel.getWeights();
+        
+        // Применяем адаптацию к каждому слою
+        const adaptedWeights = await Promise.all(currentWeights.map(async (weight, layerIndex) => {
+            // Используем параметр адаптации для этого слоя
+            const adaptationFactor = adaptationParams[layerIndex % adaptationParams.length];
+            
+            // Получаем данные весов как плоский массив
+            const weightData = await weight.data();
+            const weightArray = Array.from(weightData);
+            
+            // Применяем адаптацию ко всем весам слоя
+            const adaptedData = weightArray.map(value => 
+                value * (1 + adaptationFactor * 0.1) // Небольшая адаптация
+            );
+            
+            // Создаем новый тензор с той же формой
+            return tf.tensor(adaptedData, weight.shape, weight.dtype);
+        }));
+        
+        // Создаем новую модель с адаптированными весами
+        // Клонируем модель, создавая новую с той же архитектурой
+        const adaptedModel = this.createBaseModel();
+        adaptedModel.setWeights(adaptedWeights);
+        
+        return adaptedModel;
+    }
+
+    /**
+     * Выполнение шага адаптации
+     */
+    async performAdaptationStep(model, supportSet) {
+        if (!supportSet || supportSet.length === 0) return;
+        
+        // Подготавливаем данные
+        const features = supportSet.map(item => item.features);
+        const labels = supportSet.map(item => item.labels);
+        
+        const xs = tf.tensor2d(features);
+        const ys = tf.tensor2d(labels);
+        
+        // Один шаг обучения
+        await model.fit(xs, ys, {
+            epochs: 1,
+            verbose: 0,
+            batchSize: Math.min(8, features.length)
+        });
+        
+        xs.dispose();
+        ys.dispose();
+    }
+
+    /**
+     * Обучение мета-модели
+     */
+    async trainMetaModel(tasks) {
+        try {
+            console.log('🧠 Training meta-model...');
+            
+            const metaFeatures = [];
+            const metaLabels = [];
+            
+            for (const task of tasks) {
+                const taskEmbedding = this.createTaskEmbedding(
+                    task.marketData,
+                    task.taskType,
+                    task.performance
+                );
+                
+                metaFeatures.push(taskEmbedding);
+                metaLabels.push(task.adaptationParams || new Array(10).fill(0));
+            }
+            
+            const featuresTensor = tf.tensor2d(metaFeatures);
+            const labelsTensor = tf.tensor2d(metaLabels);
+            
+            // Обучение мета-модели
+            const history = await this.metaModel.fit(featuresTensor, labelsTensor, {
+                epochs: 10,
+                batchSize: this.config.metaBatchSize,
+                validationSplit: 0.2,
+                verbose: 0,
+                callbacks: {
+                    onEpochEnd: (epoch, logs) => {
+                        this.broadcastMetaTrainingProgress(epoch, logs);
+                    }
+                }
+            });
+            
+            featuresTensor.dispose();
+            labelsTensor.dispose();
+            
+            console.log('✅ Meta-model training completed');
+            return history;
+            
+        } catch (error) {
+            console.error('❌ Meta-model training failed:', error);
+            // Временный алерт в Telegram
+            try {
+                const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+                await OptimizedTelegramService.sendAlert('META_LEARNING_TRAINING_ERROR', {
+                    error: error.message,
+                    context: 'Meta-Model Training',
+                    timestamp: new Date().toISOString()
+                });
+            } catch (telegramError) {
+                console.error('Failed to send Telegram alert:', telegramError);
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Поиск похожих задач
+     */
+    async findSimilarTasks(marketData, taskType, performance, limit = 10) {
+        try {
+            const queryEmbedding = this.createTaskEmbedding(marketData, taskType, performance);
+            
+            const similarTasks = this.knowledgeBase
+                .map(task => ({
+                    ...task,
+                    similarity: this.calculateSimilarity(queryEmbedding, task.embedding)
+                }))
+                .sort((a, b) => b.similarity - a.similarity)
+                .slice(0, limit);
+            
+            return similarTasks;
+            
+        } catch (error) {
+            console.error('❌ Similar tasks search failed:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Расчет схожести задач
+     */
+    calculateSimilarity(embedding1, embedding2) {
+        if (embedding1.length !== embedding2.length) return 0;
+        
+        let dotProduct = 0;
+        let norm1 = 0;
+        let norm2 = 0;
+        
+        for (let i = 0; i < embedding1.length; i++) {
+            dotProduct += embedding1[i] * embedding2[i];
+            norm1 += embedding1[i] * embedding1[i];
+            norm2 += embedding2[i] * embedding2[i];
+        }
+        
+        const denominator = Math.sqrt(norm1) * Math.sqrt(norm2);
+        return denominator > 0 ? dotProduct / denominator : 0;
+    }
+
+    /**
+     * Сохранение задачи в базу знаний
+     */
+    async saveTaskToKnowledgeBase(taskData, adaptationParams) {
+        const taskEmbedding = this.createTaskEmbedding(
+            taskData.marketData,
+            taskData.taskType,
+            taskData.performance
+        );
+        
+        const task = {
+            id: Date.now(),
+            embedding: taskEmbedding,
+            marketData: taskData.marketData,
+            taskType: taskData.taskType,
+            performance: taskData.performance,
+            adaptationParams,
+            timestamp: new Date().toISOString()
+        };
+        
+        this.knowledgeBase.push(task);
+        
+        // Ограничиваем размер базы знаний
+        if (this.knowledgeBase.length > 1000) {
+            this.knowledgeBase = this.knowledgeBase.slice(-1000);
+        }
+        
+        // Сохраняем на диск
+        await this.saveKnowledgeBase();
+        
+        console.log(`💾 Task saved to knowledge base. Total tasks: ${this.knowledgeBase.length}`);
+    }
+
+    /**
+     * Сохранение базы знаний на диск
+     */
+    async saveKnowledgeBase() {
+        try {
+            const fs = await import('fs/promises');
+            const path = await import('path');
+            
+            const knowledgeBaseDir = path.join('./models', 'meta_learning');
+            const knowledgeBasePath = path.join(knowledgeBaseDir, 'knowledge_base.json');
+            
+            // Создаем директорию если не существует
+            await fs.mkdir(knowledgeBaseDir, { recursive: true });
+            
+            // Сохраняем базу знаний
+            await fs.writeFile(knowledgeBasePath, JSON.stringify(this.knowledgeBase, null, 2));
+            
+            console.log(`💾 Knowledge base saved: ${this.knowledgeBase.length} tasks`);
+        } catch (error) {
+            console.warn('⚠️ Failed to save knowledge base:', error.message);
+        }
+    }
+
+    /**
+     * Загрузка базы знаний
+     */
+    async loadKnowledgeBase() {
+        try {
+            const fs = await import('fs/promises');
+            const path = await import('path');
+            
+            const knowledgeBasePath = path.join('./models', 'meta_learning', 'knowledge_base.json');
+            
+            // Проверяем существование файла
+            try {
+                await fs.access(knowledgeBasePath);
+                const data = await fs.readFile(knowledgeBasePath, 'utf-8');
+                this.knowledgeBase = JSON.parse(data);
+                console.log(`📚 Knowledge base loaded: ${this.knowledgeBase.length} tasks`);
+            } catch (fileError) {
+                // Файл не существует - создаем пустую базу знаний
+                this.knowledgeBase = [];
+                console.log('📚 Knowledge base file not found, starting with empty base');
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to load knowledge base:', error.message);
+            this.knowledgeBase = [];
+        }
+    }
+
+    /**
+     * Уведомление о прогрессе мета-обучения
+     */
+    broadcastMetaTrainingProgress(epoch, logs) {
+        WebSocketService.broadcast({
+            type: 'meta_training_progress',
+            data: {
+                epoch,
+                loss: logs.loss,
+                mae: logs.mae,
+                valLoss: logs.val_loss,
+                valMae: logs.val_mae
+            },
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    /**
+     * Получение статистики
+     */
+    getStats() {
+        return {
+            isInitialized: this.isInitialized,
+            totalTasks: this.knowledgeBase.length,
+            successfulAdaptations: this.knowledgeBase.filter(task => task.adaptationParams).length,
+            averageAdaptationTime: this.calculateAverageAdaptationTime(),
+            knowledgeBaseSize: this.knowledgeBase.length,
+            adaptationRate: this.config.adaptationRate,
+            metaLearningRate: this.config.metaLearningRate
+        };
+    }
+
+    /**
+     * Обновление конфигурации
+     */
+    updateConfig(newConfig) {
+        this.config = { ...this.config, ...newConfig };
+        
+        if (this.metaModel) {
+            this.metaModel.compile({
+                optimizer: tf.train.adam(this.config.metaLearningRate),
+                loss: 'meanSquaredError',
+                metrics: ['mae']
+            });
+        }
+        
+        console.log('⚙️ Meta-Learning config updated');
+    }
+
+    /**
+     * Получение статуса
+     */
+    getStatus() {
+        return {
+            isInitialized: this.isInitialized,
+            metaModelLoaded: !!this.metaModel,
+            knowledgeBaseSize: this.knowledgeBase.length,
+            config: this.config
+        };
+    }
+
+    /**
+     * Сохранение мета-модели
+     */
+    async saveMetaModel() {
+        try {
+            if (!this.metaModel) {
+                console.warn('⚠️ Meta-model is null, skipping save');
+                return;
+            }
+
+            // Сохраняем через ModelManager в стандартном формате
+            const success = await ModelManager.saveModel(this.metaModel, 'meta_model/meta_model');
+            if (success) {
+                console.log('✅ Meta-model saved');
+            } else {
+                console.warn('⚠️ Meta-model save reported failure');
+            }
+            
+            // Также сохраняем базу знаний
+            await this.saveKnowledgeBase();
+        } catch (error) {
+            console.error('❌ Failed to save meta-model:', error);
+        }
+    }
+
+    /**
+     * Загрузка мета-модели
+     */
+    async loadMetaModel() {
+        try {
+            console.log('📥 Loading meta-model with ModelManager...');
+            
+            // Пытаемся загрузить модель через ModelManager
+            const model = await ModelManager.loadModel('meta_model/meta_model');
+            
+            if (model) {
+                // Компилируем модель
+                model.compile({
+                    optimizer: tf.train.adam(0.001),
+                    loss: 'meanSquaredError',
+                    metrics: ['mae'] // tfjs ожидает 'mae' вместо 'meanAbsoluteError'
+                });
+                
+                this.metaModel = model;
+                console.log('✅ Meta-model loaded successfully');
+            } else {
+                console.warn('⚠️ Failed to load meta-model, creating new one');
+                this.metaModel = this.createMetaModel();
+            }
+        } catch (error) {
+            console.error('❌ Failed to load meta-model:', error.message);
+            this.metaModel = this.createMetaModel();
+        }
+    }
+
+    /**
+     * Расчет среднего времени адаптации
+     */
+    calculateAverageAdaptationTime() {
+        const adaptations = this.knowledgeBase.filter(task => 
+            task.adaptationParams && task.adaptationTime
+        );
+        
+        if (adaptations.length === 0) return 0;
+        
+        const totalTime = adaptations.reduce((sum, task) => 
+            sum + (task.adaptationTime || 0), 0
+        );
+        
+        return totalTime / adaptations.length;
+    }
+
+    /**
+     * Остановить адаптацию мета-обучения
+     */
+    async stopAdaptation() {
+        try {
+            console.log('🛑 Stopping meta-learning adaptation');
+            
+            this.isAdapting = false;
+            this.status = 'idle';
+            
+            // Уведомить через WebSocket
+            if (typeof WebSocketService !== 'undefined' && WebSocketService.broadcast) {
+                WebSocketService.broadcast({
+                    type: 'meta_learning_stopped',
+                    timestamp: new Date().toISOString()
+                });
+            }
+            
+            return {
+                success: true,
+                message: 'Meta-learning adaptation stopped successfully',
+                status: this.status
+            };
+        } catch (error) {
+            console.error('❌ Error stopping meta-learning adaptation:', error);
+            throw error;
+        }
+    }
+}
+
+export default new MetaLearningService();

@@ -1,0 +1,32 @@
+{
+  "name": "ivashka-trade-helper",
+  "version": "1.0.0",
+  "description": "AI-powered trading helper with neural networks",
+  "main": "index.js",
+  "scripts": {
+    "start": "concurrently \"npm run start:server\" \"npm run start:client\"",
+    "start:server": "cd server && npm start",
+    "start:client": "cd client && npm run dev",
+    "dev": "npm run start",
+    "build": "cd client && npm run build",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "clean": "rm -rf node_modules server/node_modules client/node_modules"
+  },
+  "keywords": [
+    "trading",
+    "ai",
+    "neural-networks",
+    "tensorflow",
+    "react",
+    "tinkoff-api"
+  ],
+  "author": "Ivan Vashchenkov",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}
