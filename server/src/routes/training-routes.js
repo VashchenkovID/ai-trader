@@ -69,37 +69,42 @@ router.post('/batch-train-all', async (req, res) => {
  */
 router.post('/meta-learning/train', async (req, res) => {
     try {
-        const { epochs = 10, batchSize = 32 } = req.body;
+        const { figi, epochs = 10, batchSize = 32, options = {} } = req.body;
         
         // Отправляем ответ сразу
         res.json({
             success: true,
             message: 'Обучение Meta-Learning запущено',
-            data: { epochs, batchSize }
+            data: { figi, epochs, batchSize }
         });
 
         // Запускаем обучение в фоне
         try {
-            // Получаем все инструменты для обучения
-            const CacheService = ServiceManager.getService('CacheService');
-            const instruments = await CacheService.getAllInstruments();
-            
-            if (!instruments || instruments.length === 0) {
-                throw new Error('No instruments available for meta-learning training');
+            // Если figi не передан,fallback на первый из кеша
+            let targetFigi = figi;
+            if (!targetFigi) {
+                const CacheService = ServiceManager.getService('CacheService');
+                const instruments = await CacheService.getAllInstruments();
+                if (!instruments || instruments.length === 0) {
+                    throw new Error('No instruments available for meta-learning training');
+                }
+                targetFigi = instruments[0].figi || instruments[0];
             }
-            
-            // Обучаем для первого инструмента (можно расширить для всех)
-            const figi = instruments[0].figi || instruments[0];
-            const result = await MetaLearningService.train(figi, { epochs, batchSize });
+
+            const result = await MetaLearningService.train(targetFigi, { ...options, epochs, batchSize });
             console.log('Обучение Meta-Learning завершено:', result);
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
-            if (WebSocketService) {
-                WebSocketService.broadcast('meta_learning_training_completed', {
-                    success: true,
-                    result: result
-                });
+            try {
+                const WebSocketService = ServiceManager.getService('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'meta_learning_training_completed',
+                        data: { success: true, result }
+                    });
+                }
+            } catch (error) {
+                console.warn('WebSocketService not available for broadcast:', error.message);
             }
         } catch (trainingError) {
             console.error('Ошибка обучения Meta-Learning:', trainingError);

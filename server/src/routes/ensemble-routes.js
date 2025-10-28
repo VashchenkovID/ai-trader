@@ -30,26 +30,29 @@ router.get('/status', async (req, res) => {
  */
 router.post('/train', async (req, res) => {
     try {
-        const { epochs = 10, batchSize = 32 } = req.body;
+        const { figi, options = {} } = req.body;
+        if (!figi) {
+            return res.status(400).json({ success: false, message: 'FIGI is required' });
+        }
         
         // Отправляем ответ сразу
         res.json({
             success: true,
             message: 'Обучение ансамбля запущено',
-            data: { epochs, batchSize }
+            data: { figi }
         });
 
         // Запускаем обучение в фоне
         try {
-            const result = await EnsembleService.trainEnsemble(epochs, batchSize);
+            const result = await EnsembleService.trainEnsemble(figi, options);
             console.log('Обучение ансамбля завершено:', result);
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
-            if (WebSocketService) {
-                WebSocketService.broadcast('ensemble_training_completed', {
-                    success: true,
-                    result: result
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'ensemble_training_completed',
+                    data: { success: true, result }
                 });
             }
         } catch (trainingError) {
@@ -64,11 +67,11 @@ router.post('/train', async (req, res) => {
             }
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
-            if (WebSocketService) {
-                WebSocketService.broadcast('ensemble_training_error', {
-                    success: false,
-                    error: trainingError.message
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'ensemble_training_error',
+                    data: { success: false, error: trainingError.message }
                 });
             }
         }

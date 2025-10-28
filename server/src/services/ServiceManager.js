@@ -169,6 +169,13 @@ class ServiceManager {
     }
 
     /**
+     * Безопасное получение сервиса (возвращает null если не найден)
+     */
+    getServiceSafe(serviceName) {
+        return this.services.get(serviceName) || null;
+    }
+
+    /**
      * Проверка, инициализирован ли сервис
      */
     isServiceInitialized(serviceName) {

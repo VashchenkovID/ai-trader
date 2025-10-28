@@ -185,7 +185,6 @@ class CacheService {
             const nowTs = Date.now();
             const lastTs = this.lastFetchMap.get(key) || 0;
             if (nowTs - lastTs < 60000) {
-                console.log(`⏱️ Skipping frequent fetch for ${key} (last fetch: ${new Date(lastTs).toISOString()})`);
                 return [];
             }
             

@@ -31,26 +31,31 @@ router.get('/status', async (req, res) => {
  */
 router.post('/train', async (req, res) => {
     try {
-        const { epochs = 10, batchSize = 32 } = req.body;
+        const { figi, options = {} } = req.body;
+        if (!figi) {
+            return res.status(400).json({ success: false, message: 'FIGI is required' });
+        }
         
         // Отправляем ответ сразу
         res.json({
             success: true,
             message: 'Обучение нейросети запущено',
-            data: { epochs, batchSize }
+            data: { figi }
         });
 
         // Запускаем обучение в фоне
         try {
-            const result = await NeuralNetworkService.trainModel(epochs, batchSize);
+            // Используем существующий метод обучения для инструмента
+            const days = typeof options.days === 'number' ? options.days : 180;
+            const result = await NeuralNetworkService.trainForInstrument(figi, days);
             console.log('Обучение нейросети завершено:', result);
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
-            if (WebSocketService) {
-                WebSocketService.broadcast('neural_network_training_completed', {
-                    success: true,
-                    result: result
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'neural_network_training_completed',
+                    data: { success: true, result }
                 });
             }
         } catch (trainingError) {
@@ -65,11 +70,11 @@ router.post('/train', async (req, res) => {
             }
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
-            if (WebSocketService) {
-                WebSocketService.broadcast('neural_network_training_error', {
-                    success: false,
-                    error: trainingError.message
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'neural_network_training_error',
+                    data: { success: false, error: trainingError.message }
                 });
             }
         }

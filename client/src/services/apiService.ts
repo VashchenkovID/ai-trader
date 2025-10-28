@@ -1667,7 +1667,7 @@ export const apiService = {
    */
   async trainMetaLearning(figi: string, options: any = {}): Promise<any> {
     try {
-      const response = await api.post('/api/meta-learning/train', { figi, options });
+      const response = await api.post('/api/training/meta-learning/train', { figi, options });
       return response.data.data;
     } catch (error) {
       console.error('Error training meta learning:', error);

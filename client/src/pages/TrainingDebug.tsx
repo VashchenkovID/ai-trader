@@ -84,7 +84,8 @@ const TrainingDebug: React.FC = () => {
       addToLog(`📊 Загружено ${data?.length || 0} инструментов`);
     } catch (error) {
       console.error('Ошибка загрузки инструментов:', error);
-      // reportError(error as Error);
+      addToLog(`❌ Ошибка загрузки инструментов: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+      setInstruments([]);
     }
   };
 
@@ -203,7 +204,6 @@ const TrainingDebug: React.FC = () => {
     } catch (error) {
       console.error('Ошибка обучения:', error);
       addToLog(`❌ Ошибка обучения: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
-      // reportError(error as Error);
     } finally {
       setIsTraining(false);
       setCurrentTraining('');
@@ -248,7 +248,6 @@ const TrainingDebug: React.FC = () => {
                 onChange={(e) => setSelectedInstrument(e.value)}
                 options={instruments}
                 optionLabel="name"
-                optionValue="value"
                 placeholder="Выберите инструмент"
                 className="w-full"
                 disabled={isTraining}
