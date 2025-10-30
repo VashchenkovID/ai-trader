@@ -1,0 +1,359 @@
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 11:49:35"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 11:49:35"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 12:02:21"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 12:02:21"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 12:49:23"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 12:49:23"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 13:09:40"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 13:09:40"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 17:32:17"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 17:32:17"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 17:44:21"}
+{"context":"PortfolioSyncService","level":"error","message":"Portfolio sync failed: WebSocketService.sendMessage is not a function","service":"ivashka-trade-helper","stack":"TypeError: WebSocketService.sendMessage is not a function\n    at PortfolioSyncService.syncPortfolio (file:///C:/Users/Vashh/WebstormProjects/IvashkaTradeHelper/server/src/services/PortfolioSyncService.js:72:30)\n    at file:///C:/Users/Vashh/WebstormProjects/IvashkaTradeHelper/server/src/routes/portfolio-sync.js:97:51\n    at Layer.handle [as handle_request] (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at Function.handle (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:47:12)\n    at Layer.handle [as handle_request] (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at serveStatic (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\serve-static\\index.js:75:16)\n    at Layer.handle [as handle_request] (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:280:10)","timestamp":"2025-09-28 17:44:21"}
+{"context":"PortfolioSyncRoutes","level":"error","message":"Error in POST /api/portfolio-sync/sync: WebSocketService.sendMessage is not a function","service":"ivashka-trade-helper","timestamp":"2025-09-28 17:44:21"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 17:46:43"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 17:46:43"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 17:46:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"service":"ivashka-trade-helper","timestamp":"2025-09-28 17:46:55","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 17:46:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 17:52:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 17:52:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:18:26"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:18:26"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:37:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:37:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:42:22"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"service":"ivashka-trade-helper","timestamp":"2025-09-28 18:42:23","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:42:23"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:43:06"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:43:06"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:00"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:01","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:01"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:31","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:31"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:35"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:36","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:36"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:37"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:39","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 18:57:39"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:05:38"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:05:39","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:05:39"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:14:06"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:14:06"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:22:53"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:22:53"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:28:32"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:28:32"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:28:32"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:28:34","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:28:34"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:28:34"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:29:06"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:29:08","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:29:08"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:30:44"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:30:44"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:30:44"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:30:46","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:30:46"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:30:46"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:33:28"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:33:28"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:33:28"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:33:30","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:33:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:33:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:37:38"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:37:38"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:37:38"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:37:40","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:37:40"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:37:40"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:39:47"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:39:47"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:39:47"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:39:49","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:39:49"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:39:49"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:43:37"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:43:37"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:43:37"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:43:38","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:43:38"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:43:38"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:46:00"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:46:00"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:46:00"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:46:01","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:46:01"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:46:01"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:48:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:48:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:48:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:48:58","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:48:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:48:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:50:21"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:50:23","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:50:23"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:52:20"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:52:20"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:52:20"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:52:21","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:52:21"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:52:21"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:52:31"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:52:32","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:52:32"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:55:18"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:55:18"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:55:18"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:55:20","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:55:20"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:55:20"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:57:09"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:57:09"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:57:09"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:57:10","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:57:10"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:57:10"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:59:02"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:59:02"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:59:02"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:59:03","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:59:03"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:59:03"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:59:20"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-28 19:59:21","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 19:59:21"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-28 20:02:53"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-28 20:02:53"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 20:02:53"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (4 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-28 20:02:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (124 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-28 20:02:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":4,"ticker":"VTBR"},{"averagePrice":1,"quantity":124,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-28 20:02:55","totalValue":"399"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 20:02:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 20:02:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-28 20:03:00"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (4 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-28 20:03:02"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (124 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-28 20:03:02"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":4,"ticker":"VTBR"},{"averagePrice":1,"quantity":124,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-28 20:03:02","totalValue":"399"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-28 20:03:02"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:15:19"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:15:19"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:15:19"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-29 16:15:20","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:15:20"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:15:20"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:21:15"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:21:15"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:21:15"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-29 16:21:16","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:21:16"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:21:16"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:24:06"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:24:06"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:24:06"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-29 16:24:07","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:24:07"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:24:07"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:28:11"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:28:11"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:28:11"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-29 16:28:12","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:28:12"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:28:12"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:34:18"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:34:18"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:34:18"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-29 16:34:19","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:34:19"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:34:19"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:38:35"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:38:35"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:38:35"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-29 16:38:36","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:38:36"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:38:36"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:39:29"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:39:29"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:39:29"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-29 16:39:30","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:39:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:39:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:44:20"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:44:20"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:44:20"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-29 16:44:21","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:44:21"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:44:21"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:47:09"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:47:09"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:47:09"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:47:11"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:47:11"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 16:47:11","totalValue":"401"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:47:11"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:47:11"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:48:28"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:48:28"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:48:28"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:48:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:48:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 16:48:30","totalValue":"401"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:48:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 16:48:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:15:51"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:15:51"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:15:51"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:15:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:15:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 18:15:54","totalValue":"397"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:15:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:15:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:20:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:20:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:20:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 18:20:56","totalValue":"396"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:20:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:25:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:25:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:25:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 18:25:56","totalValue":"396"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:25:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:30:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:30:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:30:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 18:30:56","totalValue":"396"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:30:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:35:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:35:57"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:35:57"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 18:35:57","totalValue":"396"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:35:57"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:40:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:40:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:40:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 18:40:56","totalValue":"396"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:40:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:45:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:45:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:45:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 18:45:56","totalValue":"396"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:45:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:50:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:50:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:50:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 18:50:56","totalValue":"396"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:50:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:55:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:55:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:55:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 18:55:56","totalValue":"396"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 18:55:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:00:54"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:00:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:00:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 19:00:56","totalValue":"396"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:00:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:05:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:05:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:05:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 19:05:58","totalValue":"396"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:05:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:10:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:10:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:10:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 19:10:58","totalValue":"397"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:10:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:15:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:15:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:15:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 19:15:58","totalValue":"397"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:15:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:20:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-29 19:21:26","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:21:26"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:25:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:26:35"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:26:35"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 19:26:35","totalValue":"397"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:26:35"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:30:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:31:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:31:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 19:31:30","totalValue":"397"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:31:30"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:35:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-29 19:36:38","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:36:38"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:40:55"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":0,"savedItems":[],"service":"ivashka-trade-helper","timestamp":"2025-09-29 19:41:21","totalValue":0}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:41:21"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:51:50"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:51:50"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:51:50"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:51:51"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:51:51"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-29 19:51:51","totalValue":"397"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:51:51"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-29 19:51:51"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:47:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:47:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:47:56"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:47:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:47:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-30 14:47:58","totalValue":"396"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:47:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:47:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:52:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:53:00"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:53:00"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-30 14:53:00","totalValue":"395"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:53:00"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:57:58"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:58:00"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:58:00"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-30 14:58:00","totalValue":"395"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 14:58:00"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:02:26"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:02:26"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:02:26"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:02:29"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:02:29"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-30 15:02:29","totalValue":"395"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:02:29"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:02:29"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:07:25"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:07:25"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:07:25"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:07:27"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:07:27"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-30 15:07:27","totalValue":"395"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:07:27"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:07:27"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:12:27"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:12:29"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:12:29"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-30 15:12:29","totalValue":"395"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:12:29"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:13:13"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:13:13"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:13:13"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:13:15"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:13:15"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-30 15:13:15","totalValue":"395"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:13:15"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:13:15"}
+{"context":"PortfolioSyncService","level":"info","message":"Initializing Portfolio Sync Service...","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:15:08"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting auto sync with interval: 300000ms","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:15:08"}
+{"context":"PortfolioSyncService","level":"info","message":"Starting portfolio sync...","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:15:08"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: VTBR (5 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:15:11"}
+{"context":"PortfolioSyncService","level":"info","message":"Saved portfolio item: RUB000UTSTOM (55 shares)","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:15:11"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio data saved to database:","positionsCount":2,"savedItems":[{"averagePrice":68,"quantity":5,"ticker":"VTBR"},{"averagePrice":1,"quantity":55,"ticker":"RUB000UTSTOM"}],"service":"ivashka-trade-helper","timestamp":"2025-09-30 15:15:11","totalValue":"395"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio sync completed successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:15:11"}
+{"context":"PortfolioSyncService","level":"info","message":"Portfolio Sync Service initialized successfully","service":"ivashka-trade-helper","timestamp":"2025-09-30 15:15:11"}

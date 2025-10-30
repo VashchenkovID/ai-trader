@@ -1,0 +1,66 @@
+{
+  "timestamp": "2025-09-28T09:54:20.268Z",
+  "uptime": 325.0151808,
+  "metrics": {
+    "system": {
+      "uptime": 295.0623671,
+      "memory": {
+        "used": 9569,
+        "total": 16203,
+        "percentage": 59
+      },
+      "cpu": {
+        "usage": 8,
+        "loadAverage": [
+          0,
+          0,
+          0
+        ]
+      },
+      "disk": {
+        "used": 0,
+        "total": 0,
+        "percentage": 0
+      }
+    },
+    "application": {
+      "requests": 0,
+      "errors": 0,
+      "responseTime": 0,
+      "activeConnections": 0,
+      "uptime": 295.062928,
+      "memory": {
+        "rss": 103964672,
+        "heapTotal": 55046144,
+        "heapUsed": 52638280,
+        "external": 9249243,
+        "arrayBuffers": 619084
+      },
+      "pid": 10904
+    },
+    "database": {
+      "connections": 0,
+      "queries": 343,
+      "slowQueries": 0,
+      "errors": 0
+    },
+    "neuralNetwork": {
+      "status": "inactive",
+      "isTraining": false,
+      "lastTraining": null,
+      "accuracy": 0,
+      "errors": 0
+    }
+  },
+  "alerts": [
+    {
+      "id": 1759052960252,
+      "type": "system",
+      "severity": "low",
+      "message": "Monitoring service started",
+      "timestamp": "2025-09-28T09:49:20.252Z",
+      "resolved": false
+    }
+  ],
+  "recommendations": []
+}

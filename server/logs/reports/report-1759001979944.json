@@ -1,0 +1,98 @@
+{
+  "timestamp": "2025-09-27T19:39:39.944Z",
+  "uptime": 919.5914568,
+  "metrics": {
+    "system": {
+      "uptime": 889.8194865,
+      "memory": {
+        "used": 9857,
+        "total": 16203,
+        "percentage": 61
+      },
+      "cpu": {
+        "usage": 4,
+        "loadAverage": [
+          0,
+          0,
+          0
+        ]
+      },
+      "disk": {
+        "used": 0,
+        "total": 0,
+        "percentage": 0
+      }
+    },
+    "application": {
+      "requests": 217,
+      "errors": 0,
+      "responseTime": 1.519300000043586,
+      "activeConnections": 0,
+      "uptime": 889.8197566,
+      "memory": {
+        "rss": 240431104,
+        "heapTotal": 60813312,
+        "heapUsed": 47208352,
+        "external": 10375154,
+        "arrayBuffers": 1744995
+      },
+      "pid": 17160
+    },
+    "database": {
+      "connections": 0,
+      "queries": 466,
+      "slowQueries": 0,
+      "errors": 0
+    },
+    "neuralNetwork": {
+      "status": "active",
+      "isTraining": false,
+      "lastTraining": "2025-09-27T19:31:51.030Z",
+      "accuracy": 0,
+      "errors": 4
+    }
+  },
+  "alerts": [
+    {
+      "id": 1759001079905,
+      "type": "system",
+      "severity": "low",
+      "message": "Monitoring service started",
+      "timestamp": "2025-09-27T19:24:39.905Z",
+      "resolved": false
+    },
+    {
+      "id": 1759001442876,
+      "type": "neural_network",
+      "severity": "high",
+      "message": "Neural network training error: Argument tensors passed to stack must be a `Tensor[]` or `TensorLike[]`",
+      "timestamp": "2025-09-27T19:30:42.876Z",
+      "resolved": false
+    },
+    {
+      "id": 1759001464056,
+      "type": "neural_network",
+      "severity": "high",
+      "message": "Neural network training error: Argument tensors passed to stack must be a `Tensor[]` or `TensorLike[]`",
+      "timestamp": "2025-09-27T19:31:04.056Z",
+      "resolved": false
+    },
+    {
+      "id": 1759001485109,
+      "type": "neural_network",
+      "severity": "high",
+      "message": "Neural network training error: Argument tensors passed to stack must be a `Tensor[]` or `TensorLike[]`",
+      "timestamp": "2025-09-27T19:31:25.109Z",
+      "resolved": false
+    },
+    {
+      "id": 1759001510985,
+      "type": "neural_network",
+      "severity": "high",
+      "message": "Neural network training error: Argument tensors passed to stack must be a `Tensor[]` or `TensorLike[]`",
+      "timestamp": "2025-09-27T19:31:50.985Z",
+      "resolved": false
+    }
+  ],
+  "recommendations": []
+}

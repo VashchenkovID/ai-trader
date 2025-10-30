@@ -1,0 +1,57 @@
+{
+  "timestamp": "2025-09-27T19:54:40.003Z",
+  "uptime": 1819.6079027,
+  "metrics": {
+    "system": {
+      "uptime": 1790.0919905,
+      "memory": {
+        "used": 9499,
+        "total": 16203,
+        "percentage": 59
+      },
+      "cpu": {
+        "usage": 4,
+        "loadAverage": [
+          0,
+          0,
+          0
+        ]
+      },
+      "disk": {
+        "used": 0,
+        "total": 0,
+        "percentage": 0
+      }
+    },
+    "application": {
+      "requests": 501,
+      "errors": 0,
+      "responseTime": 2.9658999999519438,
+      "activeConnections": 0,
+      "uptime": 1790.0923925,
+      "memory": {
+        "rss": 238403584,
+        "heapTotal": 57405440,
+        "heapUsed": 54569000,
+        "external": 10374918,
+        "arrayBuffers": 1744023
+      },
+      "pid": 17160
+    },
+    "database": {
+      "connections": 0,
+      "queries": 848,
+      "slowQueries": 0,
+      "errors": 0
+    },
+    "neuralNetwork": {
+      "status": "active",
+      "isTraining": false,
+      "lastTraining": "2025-09-27T19:31:51.030Z",
+      "accuracy": 0,
+      "errors": 4
+    }
+  },
+  "alerts": [],
+  "recommendations": []
+}
