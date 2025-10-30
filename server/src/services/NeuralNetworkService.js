@@ -270,6 +270,21 @@ class NeuralNetworkService {
                         architecture: this.model.toJSON(null, false),
                         weights: await this.getModelWeights()
                     };
+                } else if (typeof modelData.toJSON === 'function') {
+                    // Нам вернули инстанс модели tfjs — сериализуем
+                    this.model = modelData; // кэшируем на всякий случай
+                    const archJson = this.model.toJSON(null, false);
+                    const weights = this.model.getWeights();
+                    const specs = await Promise.all(weights.map(async (w) => ({
+                        name: w.name,
+                        shape: w.shape,
+                        dtype: w.dtype,
+                        data: await w.array()
+                    })));
+                    modelData = {
+                        architecture: archJson,
+                        weights: { specs }
+                    };
                 }
             } else if (this.model) {
                 // Используем локальную модель (для обратной совместимости)
@@ -635,12 +650,15 @@ class NeuralNetworkService {
                 return { score: 0, confidence: 0, reason: 'Insufficient data' };
             }
 
-            // Подготавливаем фичи для предсказания
-            const technicalFeatures = OptimizedDataService.calculateTechnicalIndicators(
-                closingPrices, 
-                [], // volumes
-                [], // highs  
-                []  // lows
+            // Технические индикаторы для объяснения
+            const volumes = candles.map(c => c.volume || 0);
+            const highs = candles.map(c => c.high);
+            const lows = candles.map(c => c.low);
+            const indicators = OptimizedDataService.calculateTechnicalIndicators(
+                closingPrices,
+                volumes,
+                highs,
+                lows
             );
 
             // Используем новый метод с дивидендами
@@ -704,7 +722,7 @@ class NeuralNetworkService {
     }
 
     // Историческое предсказание из заранее переданных свечей (с использованием worker'а)
-    async predictFromCandles(candles, dividendYield = 0) {
+    async predictFromCandles(figi, candles, dividendYield = 0) {
         try {
             const closingPrices = candles.map(c => c.close);
             if (closingPrices.length < 60) {
@@ -723,6 +741,15 @@ class NeuralNetworkService {
             const finalScore = Math.min(1, score + dividendBonus);
             
             // Генерируем объяснение предсказания
+            const volumes = candles.map(c => c.volume || 0);
+            const highs = candles.map(c => c.high);
+            const lows = candles.map(c => c.low);
+            const indicators = OptimizedDataService.calculateTechnicalIndicators(
+                closingPrices,
+                volumes,
+                highs,
+                lows
+            );
             const explanation = await this.generateExplanation(
                 {
                     score: finalScore,
@@ -832,11 +859,11 @@ class NeuralNetworkService {
 
                 // Добавляем ВСЕ рекомендации с уверенностью < 100% для фронтенда
                 if (prediction.score < 1.0) {
-                    analysis.sellRecommendations.push({
-                        item,
-                        prediction,
-                        reason: prediction.score < 0.2 ? 'Low prediction score' : 'Moderate prediction score'
-                    });
+                analysis.sellRecommendations.push({
+                    item,
+                    prediction,
+                    reason: prediction.score < 0.2 ? 'Low prediction score' : 'Moderate prediction score'
+                });
                     console.log(`✅ Added SELL recommendation for ${item.ticker}: ${prediction.score.toFixed(3)}`);
                 } else {
                     console.log(`❌ Skipped ${item.ticker}: score too high (${prediction.score.toFixed(3)})`);
@@ -936,7 +963,7 @@ class NeuralNetworkService {
             }
 
             // Получаем реальные данные из кеша для анализа
-            const candles = await CacheService.getCandles(figi, 100);
+            const candles = await CacheService.getCandles(figi, 'DAY', 100);
             if (!candles || candles.length === 0) {
                 return {
                     figi: figi || 'all',

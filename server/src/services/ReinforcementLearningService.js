@@ -17,6 +17,7 @@ class ReinforcementLearningService {
         this.priorities = [];
         this.isInitialized = false;
         this.isTraining = false;
+        this.trainingFigiLocks = new Set();
         this.config = {
             stateSize: 20,
             actionSize: 3,
@@ -123,6 +124,16 @@ class ReinforcementLearningService {
         const trainingStatusService = getService('TrainingStatusService');
         
         try {
+            // Глобальный лок для RL
+            if (this.isTraining) {
+                console.warn(`⚠️ RL training already in progress, skipping new start for ${figi}`);
+                return { success: false, error: 'RL training already in progress' };
+            }
+            // Per-FIGI лок
+            if (this.trainingFigiLocks.has(figi)) {
+                console.warn(`⚠️ RL training already running for ${figi}, skipping duplicate start`);
+                return { success: false, error: 'RL training already running for this FIGI' };
+            }
             console.log(`🤖 Starting RL training for ${figi}...`);
             
             // Обновляем статус обучения
@@ -142,6 +153,7 @@ class ReinforcementLearningService {
                 }
             }
             this.isTraining = true;
+            this.trainingFigiLocks.add(figi);
             this.stats.totalEpisodes = 0;
             this.stats.averageReward = 0;
             this.stats.bestReward = -Infinity;
@@ -215,6 +227,7 @@ class ReinforcementLearningService {
             throw error;
         } finally {
             this.isTraining = false;
+            try { this.trainingFigiLocks.delete(figi); } catch {}
         }
     }
 
@@ -253,7 +266,7 @@ class ReinforcementLearningService {
 
             // Обучение
             if (this.memory.length >= this.config.batchSize) {
-                await this.train();
+                await this.trainBatchStep();
             }
 
             portfolio = newPortfolio;
@@ -435,7 +448,7 @@ class ReinforcementLearningService {
     /**
      * Обучение агента
      */
-    async train() {
+    async trainBatchStep() {
         if (this.memory.length < this.config.batchSize) return;
 
         // Выборка батча с приоритезированным сэмплингом

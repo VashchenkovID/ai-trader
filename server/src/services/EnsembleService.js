@@ -26,6 +26,7 @@ class EnsembleService {
         };
         this.isInitialized = false;
         this.isTraining = false;
+        this.trainingFigiLocks = new Set();
         this.performance = {
             lstm: { accuracy: 0, precision: 0, recall: 0, f1Score: 0 },
             cnn: { accuracy: 0, precision: 0, recall: 0, f1Score: 0 },
@@ -322,8 +323,20 @@ class EnsembleService {
         const trainingStatusService = getService('TrainingStatusService');
         
         try {
+            // Глобальный лок для ансамбля
+            if (this.isTraining) {
+                console.warn(`⚠️ Ensemble training already in progress, skipping new start for ${figi}`);
+                return { success: false, error: 'Ensemble training already in progress' };
+            }
+            // Per-FIGI лок
+            if (this.trainingFigiLocks.has(figi)) {
+                console.warn(`⚠️ Ensemble training already running for ${figi}, skipping duplicate start`);
+                return { success: false, error: 'Ensemble training already running for this FIGI' };
+            }
+
             console.log(`🎭 Training ensemble for ${figi}...`);
             this.isTraining = true;
+            this.trainingFigiLocks.add(figi);
             
             // Обновляем статус обучения
             if (trainingStatusService) {
@@ -409,6 +422,7 @@ class EnsembleService {
             throw error;
         } finally {
             this.isTraining = false;
+            try { this.trainingFigiLocks.delete(figi); } catch {}
         }
     }
 

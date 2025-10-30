@@ -6,6 +6,7 @@ import CachedInstrument from '../models/CachedInstrument.js';
 import CachedCandle from '../models/CachedCandle.js';
 import CachedNews from '../models/CachedNews.js';
 import CachedTelegramSentiment from '../models/CachedTelegramSentiment.js';
+import CachedTradingHours from '../models/CachedTradingHours.js';
 import Company from '../models/Company.js';
 import PortfolioItem from '../models/PortfolioItem.js';
 import Recommendation from '../models/Recommendation.js';
@@ -32,9 +33,10 @@ export async function initDatabase() {
         console.log('✅ Все модели синхронизированы');
         
         // Создаем новые таблицы для кеширования
-        console.log('📰 Создание таблиц кеширования новостей и настроений...');
+        console.log('📰 Создание таблиц кеширования новостей, настроений и торговых часов...');
         await CachedNews.sync({ force: false });
         await CachedTelegramSentiment.sync({ force: false });
+        await CachedTradingHours.sync({ force: false });
         console.log('✅ Таблицы кеширования созданы/обновлены');
         
         // Создаем таблицу торговых заявок

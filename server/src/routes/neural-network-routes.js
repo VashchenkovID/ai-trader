@@ -91,7 +91,8 @@ router.post('/train', async (req, res) => {
 /**
  * Пакетное обучение нейросети
  */
-router.post('/batch-train', async (req, res) => {
+// alias для совместимости с фронтом: /train-batch
+router.post('/train-batch', async (req, res) => {
     try {
         const { epochs = 10, batchSize = 32, models = ['lstm', 'cnn', 'transformer'] } = req.body;
         
@@ -142,6 +143,31 @@ router.post('/batch-train', async (req, res) => {
             message: 'Ошибка запуска пакетного обучения нейросети',
             error: error.message
         });
+    }
+});
+
+// основной маршрут
+router.post('/batch-train', async (req, res) => {
+    try {
+        const { epochs = 10, batchSize = 32, models = ['lstm', 'cnn', 'transformer'] } = req.body;
+        res.json({ success: true, message: 'Пакетное обучение нейросети запущено', data: { epochs, batchSize, models } });
+        try {
+            const result = await NeuralNetworkService.batchTrainModels(epochs, batchSize, models);
+            const WebSocketService = ServiceManager.getService('WebSocketService');
+            if (WebSocketService) {
+                WebSocketService.broadcast('neural_network_batch_training_completed', { success: true, result });
+            }
+        } catch (trainingError) {
+            if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
+                await OptimizedTelegramService.sendAlert('Ошибка пакетного обучения нейросети', `Ошибка: ${trainingError.message}\nСтек: ${trainingError.stack}`);
+            }
+            const WebSocketService = ServiceManager.getService('WebSocketService');
+            if (WebSocketService) {
+                WebSocketService.broadcast('neural_network_batch_training_error', { success: false, error: trainingError.message });
+            }
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Ошибка запуска пакетного обучения нейросети', error: error.message });
     }
 });
 

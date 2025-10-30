@@ -1,6 +1,7 @@
 import * as tf from '@tensorflow/tfjs';
 import ModelManager from '../utils/ModelManager.js';
 import CacheService from './CacheService.js';
+import OptimizedDataService from './OptimizedDataService.js';
 import WebSocketService from './WebSocketService.js';
 import { getService } from './GlobalServiceManager.js';
 
@@ -13,6 +14,8 @@ class MetaLearningService {
         this.metaModel = null;
         this.knowledgeBase = [];
         this.isInitialized = false;
+        this.isTraining = false;
+        this.trainingFigiLocks = new Set();
         this.config = {
             metaLearningRate: 0.001,
             adaptationRate: 0.01,
@@ -139,7 +142,19 @@ class MetaLearningService {
         const trainingStatusService = getService('TrainingStatusService');
         
         try {
+            // Глобальный лок для Meta
+            if (this.isTraining) {
+                console.warn(`⚠️ Meta-learning already in progress, skipping new start for ${figi}`);
+                return { success: false, error: 'Meta-learning already in progress' };
+            }
+            // Per-FIGI лок
+            if (this.trainingFigiLocks.has(figi)) {
+                console.warn(`⚠️ Meta-learning already running for ${figi}, skipping duplicate start`);
+                return { success: false, error: 'Meta-learning already running for this FIGI' };
+            }
             console.log(`🧠 Meta-learning training for ${figi}...`);
+            this.isTraining = true;
+            this.trainingFigiLocks.add(figi);
             
             // Обновляем статус обучения
             if (trainingStatusService) {
@@ -152,18 +167,32 @@ class MetaLearningService {
                 throw new Error(`Insufficient data: ${candles.length} candles`);
             }
             
+            // Подготовим реальные фичи/метки для support-set
+            const { features, labels } = await OptimizedDataService.prepareTrainingData(candles, 20, 3, figi);
+            if (!features.length) {
+                throw new Error('No features prepared for meta-learning');
+            }
+
+            const inputSize = features[0].length;
+            const supportCount = Math.min(features.length, options.supportSetSize || this.config.supportSetSize);
+            const supportSet = Array.from({ length: supportCount }).map((_, i) => ({
+                features: features[i],
+                labels: [labels[i]]
+            }));
+
             // Создаем задачу
             const taskData = {
                 figi,
                 candles,
                 taskType: 'price_prediction',
-                marketData: candles.slice(-10), // последние 10 свечей
-                performance: { accuracy: 0.5, profit: 0 }
+                marketData: candles.slice(-10),
+                performance: { accuracy: 0.5, profit: 0 },
+                supportSet
             };
-            
-            // Создаем базовую модель для адаптации
-            const baseModel = this.createBaseModel();
-            
+
+            // Базовая модель под реальный размер признаков
+            const baseModel = this.createBaseModel(inputSize);
+
             // Адаптируемся к задаче
             const result = await this.adaptToTask(taskData, baseModel, options.adaptationSteps || 5);
             
@@ -203,16 +232,20 @@ class MetaLearningService {
             
             throw error;
         }
+        finally {
+            this.isTraining = false;
+            try { this.trainingFigiLocks.delete(figi); } catch {}
+        }
     }
 
     /**
      * Создание базовой модели для адаптации
      */
-    createBaseModel() {
+    createBaseModel(inputSize = 10) {
         const model = tf.sequential({
             layers: [
                 tf.layers.dense({
-                    inputShape: [10], // 10 признаков
+                    inputShape: [inputSize],
                     units: 32,
                     activation: 'relu'
                 }),
@@ -331,9 +364,9 @@ class MetaLearningService {
             return tf.tensor(adaptedData, weight.shape, weight.dtype);
         }));
         
-        // Создаем новую модель с адаптированными весами
-        // Клонируем модель, создавая новую с той же архитектурой
-        const adaptedModel = this.createBaseModel();
+        // Создаем новую модель с адаптированными весами под тот же input size
+        const inputSize = targetModel.inputs?.[0]?.shape?.[1] || 10;
+        const adaptedModel = this.createBaseModel(inputSize);
         adaptedModel.setWeights(adaptedWeights);
         
         return adaptedModel;

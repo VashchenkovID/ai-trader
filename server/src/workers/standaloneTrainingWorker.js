@@ -12,6 +12,22 @@ class StandaloneTrainingWorker {
         this.isTraining = false;
     }
 
+    // Человекочитаемое описание типа модели
+    getModelTypeDescription(modelType) {
+        switch (modelType) {
+            case 'nn':
+                return 'Классическая нейронная сеть по табличным признакам (бинарная классификация)';
+            case 'ensemble':
+                return 'Ансамблевая модель (комбинация нескольких предсказателей)';
+            case 'meta':
+                return 'Мета-обучение (адатация модели под задачу)';
+            case 'rl':
+                return 'Обучение с подкреплением (агент DQN)';
+            default:
+                return `Неизвестный тип модели: ${modelType}`;
+        }
+    }
+
     // Создание модели
     async createModel(inputShape, sequenceLength = 60) {
         try {
@@ -155,14 +171,22 @@ class StandaloneTrainingWorker {
     }
 
     // Обучение модели
-    async trainModel(features, labels, epochs = 50, batchSize = 16) {
+    async trainModel(features, labels, epochs = 50, batchSize = 16, modelType = 'nn') {
         try {
             if (this.isTraining) {
                 throw new Error('Training already in progress');
             }
 
             this.isTraining = true;
-            console.log(`🚀 Standalone Worker: Starting training with ${features.length} samples`);
+            const featureSize = Array.isArray(features[0]) ? features[0].length : 0;
+            const pos = labels.filter(v => v === 1).length;
+            const neg = labels.length - pos;
+            const modelDesc = this.getModelTypeDescription(modelType);
+            console.log('🚀 Standalone Worker: Запуск обучения');
+            console.log(`   • Тип модели: ${modelType} — ${modelDesc}`);
+            console.log(`   • Объём данных: ${features.length} образцов, размер признакового вектора: ${featureSize}`);
+            console.log(`   • Параметры: эпох=${epochs}, batchSize=${batchSize}`);
+            console.log(`   • Баланс классов: положительных=${pos}, отрицательных=${neg}`);
 
             // Создаем модель
             const model = await this.createModel(features[0].length);
@@ -203,7 +227,7 @@ class StandaloneTrainingWorker {
             ys.dispose();
             model.dispose();
 
-            console.log('✅ Standalone Worker: Training completed successfully');
+            console.log('✅ Standalone Worker: Обучение завершено успешно');
             
             // Отправляем результат
             parentPort.postMessage({
@@ -215,6 +239,14 @@ class StandaloneTrainingWorker {
                         accuracy: history.history.acc,
                         valLoss: history.history.val_loss,
                         valAccuracy: history.history.val_acc
+                    },
+                    meta: {
+                        modelType,
+                        samples: features.length,
+                        featureSize,
+                        epochs,
+                        batchSize,
+                        classBalance: { pos, neg }
                     }
                 }
             });
@@ -262,7 +294,8 @@ parentPort.on('message', async (message) => {
                     message.data.features,
                     message.data.labels,
                     message.data.epochs,
-                    message.data.batchSize
+                    message.data.batchSize,
+                    message.data.modelType
                 );
                 break;
                 

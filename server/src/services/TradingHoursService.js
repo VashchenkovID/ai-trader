@@ -20,6 +20,14 @@ class TradingHoursService {
             console.log('🚀 Инициализация TradingHoursService...');
             
             await this.loadSettings();
+
+            // Гарантируем наличие таблицы кеша торговых часов
+            try {
+                const { default: CachedTradingHours } = await import('../models/CachedTradingHours.js');
+                await CachedTradingHours.sync({ force: false });
+            } catch (e) {
+                console.warn('⚠️ Не удалось синхронизировать таблицу cached_trading_hours:', e.message);
+            }
             
             this.isInitialized = true;
             console.log('✅ TradingHoursService инициализирован');
@@ -55,10 +63,27 @@ class TradingHoursService {
             }
 
             // Получаем список инструментов для проверки
-            const instruments = await CachedTradingHours.findAll({
-                limit: this.settings.instrumentsCount,
-                order: [['lastUpdated', 'ASC']]
-            });
+            let instruments = [];
+            try {
+                instruments = await CachedTradingHours.findAll({
+                    limit: this.settings.instrumentsCount,
+                    order: [['lastUpdated', 'ASC']]
+                });
+            } catch (dbError) {
+                // Если таблицы нет — создаем и выходим мягко до следующего запуска
+                if (dbError?.original?.code === '42P01' || /does not exist/i.test(dbError?.message || '')) {
+                    console.warn('⚠️ Таблица cached_trading_hours отсутствует. Создаю...');
+                    try {
+                        await CachedTradingHours.sync({ force: false });
+                        console.log('✅ Таблица cached_trading_hours создана');
+                        return { status: 'initialized' };
+                    } catch (syncErr) {
+                        console.error('❌ Не удалось создать таблицу cached_trading_hours:', syncErr);
+                        return { status: 'error', error: syncErr.message };
+                    }
+                }
+                throw dbError;
+            }
 
             const results = [];
 

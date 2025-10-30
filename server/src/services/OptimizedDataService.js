@@ -190,9 +190,6 @@ class OptimizedDataService {
             features.push(...newsFeatures);
             features.push(...telegramFeatures);
             
-            // Отладочная информация
-            console.log(`🔍 Feature breakdown: prices=${normalizedPrices.length}, volumes=${normalizedVolumes.length}, technical=${technicalFeatures.length}, time=${timeFeatures.length}, market=${marketFeatures.length}, news=${newsFeatures.length}, telegram=${telegramFeatures.length}`);
-            
             // Логирование и исправление размеров фичей
             const expectedSize = 49;
             if (features.length !== expectedSize) {

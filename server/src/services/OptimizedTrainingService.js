@@ -19,6 +19,7 @@ class OptimizedTrainingService {
             accuracy: 0
         };
         this.workers = new Set(); // Храним все worker'ы для завершения
+        this.trainingFigiLocks = new Set(); // Лок на FIGI, чтобы не запускать дубликаты
     }
 
     /**
@@ -62,13 +63,26 @@ class OptimizedTrainingService {
             epochs = 50,
             batchSize = 16,
             useAdvancedFeatures = true,
-            enableValidation = true
+            enableValidation = true,
+            useWorker = true
         } = options;
 
         try {
+            // Глобальный лок для типа модели (nn) — предотвращает параллельные запуски
+            if (this.isTraining) {
+                console.warn(`⚠️ Training already in progress, skipping new start for ${figi}`);
+                return { success: false, figi, error: 'Training already in progress' };
+            }
+            // Per-FIGI лок — не позволяем запустить обучение для того же инструмента повторно
+            if (this.trainingFigiLocks.has(figi)) {
+                console.warn(`⚠️ Training already running for ${figi}, skipping duplicate start`);
+                return { success: false, figi, error: 'Training already running for this FIGI' };
+            }
+
             console.log(`🚀 Training ${figi}...`);
             this.isTraining = true;
             this.trainingProgress.currentInstrument = figi;
+            this.trainingFigiLocks.add(figi);
 
             // 1. Получаем данные
             const candles = await this.getTrainingData(figi, days);
@@ -93,8 +107,18 @@ class OptimizedTrainingService {
                 model = await this.createOptimizedModel(features[0].length);
             }
 
-            // 4. Обучаем модель через воркер (избегаем клонирования функций TensorFlow.js)
-            const trainingResult = await this.trainModelViaWorker(features, labels, epochs, batchSize);
+            // 4. Обучение: пробуем через воркер, при ошибке — локально
+            let trainingResult;
+            if (useWorker) {
+                try {
+                    trainingResult = await this.trainModelViaWorker(features, labels, epochs, batchSize, 'nn');
+                } catch (workerError) {
+                    console.warn(`⚠️ Worker training failed for ${figi}, falling back to local: ${workerError.message}`);
+                    trainingResult = await this.trainModel(model, features, labels, epochs, batchSize);
+                }
+            } else {
+                trainingResult = await this.trainModel(model, features, labels, epochs, batchSize);
+            }
 
             // 5. Валидация (опционально)
             let validationResult = null;
@@ -151,6 +175,8 @@ class OptimizedTrainingService {
         } finally {
             this.isTraining = false;
             this.trainingProgress.currentInstrument = null;
+            // Снимаем лок для FIGI
+            try { this.trainingFigiLocks.delete(figi); } catch {}
         }
     }
 
@@ -317,7 +343,11 @@ class OptimizedTrainingService {
             const prices = candles.slice(Math.max(0, index - 20), index + 1).map(c => c.close);
             if (prices.length < 5) return new Array(10).fill(0);
 
-            const indicators = OptimizedDataService.calculateTechnicalIndicators(prices, [], [], []);
+            const windowCandles = candles.slice(Math.max(0, index - 20), index + 1);
+            const vols = windowCandles.map(c => c.volume || 0);
+            const highs = windowCandles.map(c => c.high);
+            const lows = windowCandles.map(c => c.low);
+            const indicators = OptimizedDataService.calculateTechnicalIndicators(prices, vols, highs, lows);
             return indicators;
         } catch (error) {
             return new Array(10).fill(0);
@@ -363,7 +393,7 @@ class OptimizedTrainingService {
     /**
      * Обучение модели через воркер (избегает клонирования функций TensorFlow.js)
      */
-    async trainModelViaWorker(features, labels, epochs, batchSize) {
+    async trainModelViaWorker(features, labels, epochs, batchSize, modelType = 'nn') {
         return new Promise(async (resolve, reject) => {
             const { Worker } = await import('worker_threads');
             const { join } = await import('path');
@@ -380,7 +410,7 @@ class OptimizedTrainingService {
             
             worker.postMessage({
                 type: 'train',
-                data: { features, labels, epochs, batchSize }
+                data: { features, labels, epochs, batchSize, modelType }
             });
             
             worker.on('message', (msg) => {
@@ -843,9 +873,10 @@ class OptimizedTrainingService {
                 metrics: ['accuracy']
             });
             
-            // Загружаем веса
-            if (weightData && weightData.length > 0) {
-                const weights = weightData.map(w => tf.tensor(w.data, w.shape, w.dtype));
+            // Загружаем веса (формат { specs: [...] })
+            if (weightData && (Array.isArray(weightData) || Array.isArray(weightData.specs))) {
+                const specsArray = Array.isArray(weightData) ? weightData : weightData.specs;
+                const weights = specsArray.map(w => tf.tensor(w.data, w.shape, w.dtype));
                 model.setWeights(weights);
             }
 
