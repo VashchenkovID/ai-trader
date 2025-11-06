@@ -81,11 +81,15 @@ class StandaloneTrainingWorker {
                 recurrentInitializer: 'glorotUniform'
             }));
 
-            // Dense слои
+            // L2 регуляризация для предотвращения переобучения
+            const l2Regularizer = tf.regularizers.l2({ l2: 0.001 });
+            
+            // Dense слои с L2 регуляризацией
             model.add(tf.layers.dense({ 
                 units: 128, 
                 activation: 'relu',
-                kernelInitializer: 'heUniform'
+                kernelInitializer: 'heUniform',
+                kernelRegularizer: l2Regularizer // L2 регуляризация
             }));
             model.add(tf.layers.batchNormalization({
                 betaInitializer: 'zeros',
@@ -93,12 +97,13 @@ class StandaloneTrainingWorker {
                 movingMeanInitializer: 'zeros',
                 movingVarianceInitializer: 'ones'
             }));
-            model.add(tf.layers.dropout({ rate: 0.3 }));
+            model.add(tf.layers.dropout({ rate: 0.3 })); // Актуализированный dropout
 
             model.add(tf.layers.dense({ 
                 units: 64, 
                 activation: 'relu',
-                kernelInitializer: 'heUniform'
+                kernelInitializer: 'heUniform',
+                kernelRegularizer: l2Regularizer // L2 регуляризация
             }));
             model.add(tf.layers.batchNormalization({
                 betaInitializer: 'zeros',
@@ -106,20 +111,22 @@ class StandaloneTrainingWorker {
                 movingMeanInitializer: 'zeros',
                 movingVarianceInitializer: 'ones'
             }));
-            model.add(tf.layers.dropout({ rate: 0.2 }));
+            model.add(tf.layers.dropout({ rate: 0.25 })); // Актуализированный dropout
 
             model.add(tf.layers.dense({ 
                 units: 32, 
                 activation: 'relu',
-                kernelInitializer: 'heUniform'
+                kernelInitializer: 'heUniform',
+                kernelRegularizer: l2Regularizer // L2 регуляризация
             }));
-            model.add(tf.layers.dropout({ rate: 0.1 }));
+            model.add(tf.layers.dropout({ rate: 0.2 })); // Актуализированный dropout
 
             // Выходной слой
             model.add(tf.layers.dense({ 
                 units: 1, 
                 activation: 'sigmoid',
                 kernelInitializer: 'glorotUniform'
+                // Выходной слой без L2 для сохранения предсказательной способности
             }));
 
             // Компиляция
@@ -170,6 +177,154 @@ class StandaloneTrainingWorker {
         return { finalFeatures, finalLabels };
     }
 
+    /**
+     * Time-based split данных (хронологическое разделение)
+     */
+    timeBasedSplit(features, labels, trainRatio = 0.7, valRatio = 0.15) {
+        const total = features.length;
+        const trainSize = Math.floor(total * trainRatio);
+        const valSize = Math.floor(total * valRatio);
+        
+        // Разделяем хронологически (первые 70% - train, следующие 15% - val, последние 15% - test)
+        const trainFeatures = features.slice(0, trainSize);
+        const trainLabels = labels.slice(0, trainSize);
+        const valFeatures = features.slice(trainSize, trainSize + valSize);
+        const valLabels = labels.slice(trainSize, trainSize + valSize);
+        const testFeatures = features.slice(trainSize + valSize);
+        const testLabels = labels.slice(trainSize + valSize);
+        
+        console.log(`📅 Time-based split: train=${trainSize} (${(trainRatio*100).toFixed(0)}%), val=${valSize} (${(valRatio*100).toFixed(0)}%), test=${testFeatures.length} (${((1-trainRatio-valRatio)*100).toFixed(0)}%)`);
+        
+        return {
+            train: { features: trainFeatures, labels: trainLabels },
+            val: { features: valFeatures, labels: valLabels },
+            test: { features: testFeatures, labels: testLabels }
+        };
+    }
+
+    /**
+     * Расчет class weights для балансировки классов
+     */
+    calculateClassWeights(labels) {
+        const total = labels.length;
+        const posCount = labels.filter(l => l === 1).length;
+        const negCount = total - posCount;
+        
+        if (posCount === 0 || negCount === 0) {
+            // Если один из классов отсутствует, возвращаем равные веса
+            return { 0: 1.0, 1: 1.0 };
+        }
+        
+        // Вычисляем веса обратно пропорционально частоте класса
+        // Более редкий класс получает больший вес
+        const posWeight = total / (2 * posCount);
+        const negWeight = total / (2 * negCount);
+        
+        // Нормализуем веса (сумма = 2.0)
+        const sum = posWeight + negWeight;
+        const normalizedPosWeight = (posWeight / sum) * 2;
+        const normalizedNegWeight = (negWeight / sum) * 2;
+        
+        const imbalance = Math.abs(posCount - negCount) / total;
+        if (imbalance > 0.2) {
+            console.log(`⚖️ Обнаружен дисбаланс классов: ${(imbalance*100).toFixed(1)}% (pos=${posCount}, neg=${negCount})`);
+            console.log(`⚖️ Class weights: 0=${normalizedNegWeight.toFixed(3)}, 1=${normalizedPosWeight.toFixed(3)}`);
+        }
+        
+        return {
+            0: normalizedNegWeight,
+            1: normalizedPosWeight
+        };
+    }
+
+    /**
+     * Создание sample weights на основе class weights
+     */
+    createSampleWeights(labels, classWeights) {
+        return labels.map(label => classWeights[label] || 1.0);
+    }
+
+    /**
+     * Расчет метрик ROC-AUC и F1
+     */
+    async calculateMetrics(model, features, labels) {
+        try {
+            // Получаем предсказания
+            const xs = tf.tensor2d(features);
+            const predictions = await model.predict(xs).data();
+            xs.dispose();
+            
+            // Преобразуем предсказания в вероятности (если нужно)
+            const probs = Array.from(predictions);
+            const preds = probs.map(p => p >= 0.5 ? 1 : 0);
+            
+            // Расчет метрик
+            let tp = 0, fp = 0, tn = 0, fn = 0;
+            for (let i = 0; i < labels.length; i++) {
+                const actual = labels[i];
+                const pred = preds[i];
+                
+                if (actual === 1 && pred === 1) tp++;
+                else if (actual === 0 && pred === 1) fp++;
+                else if (actual === 0 && pred === 0) tn++;
+                else if (actual === 1 && pred === 0) fn++;
+            }
+            
+            // Precision, Recall, F1
+            const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
+            const recall = tp + fn > 0 ? tp / (tp + fn) : 0;
+            const f1 = precision + recall > 0 ? 2 * (precision * recall) / (precision + recall) : 0;
+            
+            // ROC-AUC (упрощенный расчет через площадь под кривой)
+            const sortedPairs = probs.map((prob, i) => ({ prob, label: labels[i] }))
+                .sort((a, b) => b.prob - a.prob);
+            
+            let auc = 0;
+            let tpr = 0, fpr = 0;
+            let prevTpr = 0, prevFpr = 0;
+            const totalPos = labels.filter(l => l === 1).length;
+            const totalNeg = labels.filter(l => l === 0).length;
+            
+            if (totalPos > 0 && totalNeg > 0) {
+                for (const pair of sortedPairs) {
+                    if (pair.label === 1) {
+                        tpr++;
+                    } else {
+                        fpr++;
+                    }
+                    
+                    const currentTpr = tpr / totalPos;
+                    const currentFpr = fpr / totalNeg;
+                    
+                    // Площадь трапеции
+                    auc += (currentFpr - prevFpr) * (currentTpr + prevTpr) / 2;
+                    
+                    prevTpr = currentTpr;
+                    prevFpr = currentFpr;
+                }
+            }
+            
+            return {
+                precision,
+                recall,
+                f1,
+                auc,
+                accuracy: (tp + tn) / (tp + tn + fp + fn),
+                confusionMatrix: { tp, fp, tn, fn }
+            };
+        } catch (error) {
+            console.error('Error calculating metrics:', error);
+            return {
+                precision: 0,
+                recall: 0,
+                f1: 0,
+                auc: 0,
+                accuracy: 0,
+                confusionMatrix: { tp: 0, fp: 0, tn: 0, fn: 0 }
+            };
+        }
+    }
+
     // Обучение модели
     async trainModel(features, labels, epochs = 50, batchSize = 16, modelType = 'nn') {
         try {
@@ -191,21 +346,68 @@ class StandaloneTrainingWorker {
             // Создаем модель
             const model = await this.createModel(features[0].length);
 
-            // Применяем взвешивание данных
-            const { finalFeatures, finalLabels } = this.applyDataWeighting(features, labels);
+            // Time-based split (хронологическое разделение)
+            const split = this.timeBasedSplit(features, labels, 0.7, 0.15);
 
-            // Конвертируем данные в тензоры
+            // Применяем взвешивание данных для train
+            const { finalFeatures, finalLabels } = this.applyDataWeighting(split.train.features, split.train.labels);
+
+            // Расчет class weights для балансировки классов
+            // Примечание: TensorFlow.js не поддерживает sampleWeight в model.fit()
+            // Используем взвешивание через дублирование данных (уже применено в applyDataWeighting)
+            const classWeights = this.calculateClassWeights(finalLabels);
+            
+            // Конвертируем данные в тензоры для обучения
             const xs = tf.tensor2d(finalFeatures);
             const ys = tf.tensor2d(finalLabels.map(label => [label]));
+            
+            // Создаем тензоры для валидации
+            const valXs = tf.tensor2d(split.val.features);
+            const valYs = tf.tensor2d(split.val.labels.map(label => [label]));
+
+            // Настройки для early stopping и reduce LR on plateau
+            let bestValLoss = Infinity;
+            let patience = 10; // Количество эпох без улучшения для early stopping
+            let patienceCount = 0;
+            let reduceLRPatience = 5; // Количество эпох без улучшения для снижения LR
+            let reduceLRCount = 0;
+            let currentLR = 0.001; // Начальный learning rate
+            
+            // Получаем текущий learning rate из оптимизатора
+            // Примечание: В TensorFlow.js learning rate может быть тензором или числом
+            const optimizer = model.optimizer;
+            if (optimizer) {
+                try {
+                    if (optimizer.learningRate) {
+                        // Если learning rate это тензор, получаем его значение
+                        if (typeof optimizer.learningRate.data === 'function') {
+                            const lrData = await optimizer.learningRate.data();
+                            if (lrData && lrData.length > 0) {
+                                currentLR = lrData[0];
+                            }
+                        } else if (typeof optimizer.learningRate === 'number') {
+                            // Если learning rate это число, используем его напрямую
+                            currentLR = optimizer.learningRate;
+                        } else if (optimizer.getLearningRate) {
+                            // Если есть метод getLearningRate
+                            currentLR = await optimizer.getLearningRate();
+                        }
+                    }
+                } catch (e) {
+                    // Если не удалось получить LR, используем значение по умолчанию (0.001)
+                    // Не логируем предупреждение, так как это нормально для некоторых оптимизаторов
+                }
+            }
 
             // Обучение
             const history = await model.fit(xs, ys, {
                 epochs: epochs,
                 batchSize: batchSize,
-                validationSplit: 0.2,
+                // sampleWeight не поддерживается в TensorFlow.js - используем взвешивание через дублирование данных
+                validationData: [valXs, valYs], // Используем time-based validation set
                 verbose: 0,
                 callbacks: {
-                    onEpochEnd: (epoch, logs) => {
+                    onEpochEnd: async (epoch, logs) => {
                         // Отправляем прогресс в основной процесс
                         parentPort.postMessage({
                             type: 'training_progress',
@@ -218,6 +420,34 @@ class StandaloneTrainingWorker {
                                 valAccuracy: logs.val_acc
                             }
                         });
+                        
+                        // Early stopping и reduce LR on plateau
+                        const valLoss = logs.val_loss || logs.loss;
+                        
+                        if (valLoss < bestValLoss) {
+                            // Улучшение - сбрасываем счетчики
+                            bestValLoss = valLoss;
+                            patienceCount = 0;
+                            reduceLRCount = 0;
+                            console.log(`✅ Epoch ${epoch + 1}: Улучшение val_loss = ${valLoss.toFixed(4)}`);
+                        } else {
+                            // Нет улучшения
+                            patienceCount++;
+                            reduceLRCount++;
+                            
+                            // Отслеживание плато для информации (без попыток изменения LR)
+                            if (reduceLRCount >= reduceLRPatience) {
+                                const suggestedLR = currentLR * 0.5; // Рекомендуемый LR
+                                console.log(`📉 Epoch ${epoch + 1}: Плато обнаружено (val_loss не улучшается ${reduceLRCount} эпох). Для следующего обучения рекомендуется LR=${suggestedLR.toFixed(6)}`);
+                                reduceLRCount = 0; // Сбрасываем счетчик
+                            }
+                            
+                            // Early stopping
+                            if (patienceCount >= patience) {
+                                model.stopTraining = true; // Останавливаем обучение в TensorFlow.js
+                                console.log(`🛑 Epoch ${epoch + 1}: Early stopping (val_loss не улучшается ${patience} эпох, лучший val_loss = ${bestValLoss.toFixed(4)})`);
+                            }
+                        }
                     }
                 }
             });
@@ -225,6 +455,16 @@ class StandaloneTrainingWorker {
             // Освобождаем память
             xs.dispose();
             ys.dispose();
+            valXs.dispose();
+            valYs.dispose();
+
+            // Расчет метрик ROC-AUC и F1 на валидации
+            const valMetrics = await this.calculateMetrics(model, split.val.features, split.val.labels);
+            const testMetrics = await this.calculateMetrics(model, split.test.features, split.test.labels);
+            
+            console.log(`📊 Validation metrics: F1=${valMetrics.f1.toFixed(4)}, ROC-AUC=${valMetrics.auc.toFixed(4)}, Precision=${valMetrics.precision.toFixed(4)}, Recall=${valMetrics.recall.toFixed(4)}`);
+            console.log(`📊 Test metrics: F1=${testMetrics.f1.toFixed(4)}, ROC-AUC=${testMetrics.auc.toFixed(4)}, Precision=${testMetrics.precision.toFixed(4)}, Recall=${testMetrics.recall.toFixed(4)}`);
+
             model.dispose();
 
             console.log('✅ Standalone Worker: Обучение завершено успешно');
@@ -239,6 +479,10 @@ class StandaloneTrainingWorker {
                         accuracy: history.history.acc,
                         valLoss: history.history.val_loss,
                         valAccuracy: history.history.val_acc
+                    },
+                    metrics: {
+                        val: valMetrics,
+                        test: testMetrics
                     },
                     meta: {
                         modelType,

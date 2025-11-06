@@ -34,16 +34,6 @@ app.use((req, res, next) => {
     const userAgent = req.get('User-Agent') || 'Unknown';
     const ip = req.ip || req.connection.remoteAddress || 'Unknown';
     
-    // Логируем только если это не обычный браузерный запрос
-    if (req.path === '/' && userAgent.includes('Mozilla')) {
-        // Это обычный браузерный запрос - логируем реже
-        if (Math.random() < 0.1) { // Только 10% запросов
-            console.log(`📡 ${req.method} ${req.path} (${userAgent.substring(0, 50)}...)`);
-        }
-    } else {
-        // Это необычный запрос - логируем всегда
-        console.log(`📡 ${req.method} ${req.path} from ${ip} (${userAgent.substring(0, 50)}...)`);
-    }
     
     res.on('finish', () => {
         const duration = Date.now() - start;
@@ -108,19 +98,24 @@ async function initializeServices() {
             await new Promise(resolve => setTimeout(resolve, 1000));
             
             const OptimizedTelegramService = (await import('./services/OptimizedTelegramService.js')).default;
-            await OptimizedTelegramService.initialize();
-            console.log('✅ Optimized Telegram service initialized');
-        }
-        
-        // Отправляем уведомление о старте сервера
-        if (process.env.TELEGRAM_BOT_TOKEN) {
+            
+            // Проверяем, не инициализирован ли уже бот
+            if (!OptimizedTelegramService.isInitialized) {
+                await OptimizedTelegramService.initialize();
+                console.log('✅ Optimized Telegram service initialized');
+            } else {
+                console.log('⚠️ Optimized Telegram service already initialized, skipping...');
+            }
+            
+            // Отправляем уведомление о старте сервера
             try {
-                const OptimizedTelegramService = (await import('./services/OptimizedTelegramService.js')).default;
-                await OptimizedTelegramService.sendAlert(
-                    'SERVER_STARTUP',
-                    `🚀 <b>СЕРВЕР ЗАПУЩЕН</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n✅ Все сервисы инициализированы`,
-                    'info'
-                );
+                if (OptimizedTelegramService.isInitialized) {
+                    await OptimizedTelegramService.sendAlert(
+                        'SERVER_STARTUP',
+                        `🚀 <b>СЕРВЕР ЗАПУЩЕН</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n✅ Все сервисы инициализированы`,
+                        'info'
+                    );
+                }
             } catch (error) {
                 console.error('❌ Error sending startup notification:', error);
             }

@@ -45,7 +45,7 @@ router.post('/train', async (req, res) => {
         // Запускаем обучение в фоне
         try {
             const result = await EnsembleService.trainEnsemble(figi, options);
-            console.log('Обучение ансамбля завершено:', result);
+            console.log('Обучение ансамбля завершено:', result?.success ? 'Успешно' : 'Ошибка');
             
             // Уведомляем через WebSocket
             const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');

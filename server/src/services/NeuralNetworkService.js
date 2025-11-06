@@ -112,11 +112,15 @@ class NeuralNetworkService {
                 recurrentInitializer: 'glorotUniform'
             }));
 
-            // Dense слои для обработки извлеченных признаков
+            // L2 регуляризация для предотвращения переобучения
+            const l2Regularizer = tf.regularizers.l2({ l2: 0.001 });
+            
+            // Dense слои для обработки извлеченных признаков с L2 регуляризацией
             model.add(tf.layers.dense({ 
                 units: 128, 
                 activation: 'relu',
-                kernelInitializer: 'heUniform'
+                kernelInitializer: 'heUniform',
+                kernelRegularizer: l2Regularizer // L2 регуляризация
             }));
             model.add(tf.layers.batchNormalization({
                 betaInitializer: 'zeros',
@@ -124,12 +128,13 @@ class NeuralNetworkService {
                 movingMeanInitializer: 'zeros',
                 movingVarianceInitializer: 'ones'
             }));
-            model.add(tf.layers.dropout({ rate: dropoutRate + 0.1 }));
+            model.add(tf.layers.dropout({ rate: Math.min(0.3, dropoutRate + 0.1) })); // Актуализированный dropout
 
             model.add(tf.layers.dense({ 
                 units: 64, 
                 activation: 'relu',
-                kernelInitializer: 'heUniform'
+                kernelInitializer: 'heUniform',
+                kernelRegularizer: l2Regularizer // L2 регуляризация
             }));
             model.add(tf.layers.batchNormalization({
                 betaInitializer: 'zeros',
@@ -137,20 +142,22 @@ class NeuralNetworkService {
                 movingMeanInitializer: 'zeros',
                 movingVarianceInitializer: 'ones'
             }));
-            model.add(tf.layers.dropout({ rate: dropoutRate }));
+            model.add(tf.layers.dropout({ rate: Math.max(0.2, dropoutRate) })); // Актуализированный dropout
 
             model.add(tf.layers.dense({ 
                 units: 32, 
                 activation: 'relu',
-                kernelInitializer: 'heUniform'
+                kernelInitializer: 'heUniform',
+                kernelRegularizer: l2Regularizer // L2 регуляризация
             }));
-            model.add(tf.layers.dropout({ rate: dropoutRate - 0.1 }));
+            model.add(tf.layers.dropout({ rate: Math.max(0.15, dropoutRate - 0.05) })); // Актуализированный dropout
 
             // Выходной слой (бинарная классификация)
             model.add(tf.layers.dense({ 
                 units: 1, 
                 activation: 'sigmoid',
                 kernelInitializer: 'glorotUniform'
+                // Выходной слой без L2 для сохранения предсказательной способности
             }));
 
             // Компиляция модели с настраиваемыми параметрами
@@ -266,9 +273,15 @@ class NeuralNetworkService {
                     console.warn(`⚠️ Модель для ${figi} не найдена, создаем новую модель...`);
                     // Создаем новую модель с базовыми параметрами
                     this.model = await this.createModel(100, 60); // базовые параметры
+                    const weights = this.model.getWeights();
                     modelData = {
                         architecture: this.model.toJSON(null, false),
-                        weights: await this.getModelWeights()
+                        weights: await Promise.all(weights.map(async (w) => ({
+                            name: w.name,
+                            shape: w.shape,
+                            dtype: w.dtype,
+                            data: await w.array()
+                        })))
                     };
                 } else if (typeof modelData.toJSON === 'function') {
                     // Нам вернули инстанс модели tfjs — сериализуем
@@ -312,31 +325,104 @@ class NeuralNetworkService {
                 return;
             }
 
-            // Сохраняем архитектуру
-            await fs.writeFile(this.modelFile, typeof modelData.architecture === 'string' 
-                ? modelData.architecture 
-                : JSON.stringify(modelData.architecture));
+            // Сохраняем модель: если указан FIGI, сохраняем per-FIGI, иначе общую
+            if (figi) {
+                // Сохраняем per-FIGI модель
+                const figiModelFile = path.join(this.modelPath, `${figi}_model.json`);
+                const figiWeightsFile = path.join(this.modelPath, `${figi}_weights.json`);
+                
+                await fs.writeFile(figiModelFile, typeof modelData.architecture === 'string' 
+                    ? modelData.architecture 
+                    : JSON.stringify(modelData.architecture));
+                
+                await fs.writeFile(figiWeightsFile, JSON.stringify(modelData.weights));
+                
+                console.log(`✅ Per-FIGI модель сохранена для ${figi} (архитектура и веса)`);
+                
+                // Также сохраняем через ModelManager для совместимости
+                try {
+                    if (this.model) {
+                        await ModelManager.saveModel(this.model, `neural/${figi}`);
+                    }
+                } catch (modelManagerError) {
+                    console.warn(`⚠️ Failed to save model via ModelManager for ${figi}:`, modelManagerError.message);
+                }
+            } else {
+                // Сохраняем общую модель (для обратной совместимости)
+                await fs.writeFile(this.modelFile, typeof modelData.architecture === 'string' 
+                    ? modelData.architecture 
+                    : JSON.stringify(modelData.architecture));
 
-            // Сохраняем веса
-            await fs.writeFile(this.weightsFile, JSON.stringify(modelData.weights));
+                await fs.writeFile(this.weightsFile, JSON.stringify(modelData.weights));
 
-            console.log('✅ Модель сохранена (архитектура и веса)');
+                console.log('✅ Общая модель сохранена (архитектура и веса)');
+            }
         } catch (error) {
             console.error('❌ Ошибка сохранения модели:', error);
         }
     }
 
     // Загрузка модели из файлов (без tfjs-node): архитектура + веса
-    async loadModel() {
+    async loadModel(figi = null) {
         try {
+            // Попытка 1: Загрузить модель для конкретного FIGI (если указан)
+            if (figi) {
+                const figiModelFile = path.join(this.modelPath, `${figi}_model.json`);
+                const figiWeightsFile = path.join(this.modelPath, `${figi}_weights.json`);
+                
+                try {
+                    const modelExists = await fs.access(figiModelFile).then(() => true).catch(() => false);
+                    const weightsExist = await fs.access(figiWeightsFile).then(() => true).catch(() => false);
+                    
+                    if (modelExists && weightsExist) {
+                        console.log(`📥 Loading per-FIGI neural model for ${figi}...`);
+                        
+                        // Пытаемся загрузить через ModelManager
+                        const model = await ModelManager.loadModel(`neural/${figi}`);
+                        
+                        if (model) {
+                            this.model = model;
+                            console.log(`✅ Per-FIGI neural model loaded successfully for ${figi} via ModelManager`);
+                        } else {
+                            // Fallback к прямому чтению файлов
+                            const archRaw = await fs.readFile(figiModelFile, 'utf-8');
+                            const arch = JSON.parse(archRaw);
+                            this.model = await tf.models.modelFromJSON(arch);
+                            
+                            const weightsRaw = await fs.readFile(figiWeightsFile, 'utf-8');
+                            const { specs } = JSON.parse(weightsRaw);
+                            const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
+                            this.model.setWeights(tensors);
+                            
+                            console.log(`✅ Per-FIGI neural model loaded for ${figi} with legacy format`);
+                        }
+                        
+                        // Гарантируем компиляцию после загрузки
+                        if (!this.model.optimizer) {
+                            this.model.compile({
+                                optimizer: tf.train.adam(0.001),
+                                loss: 'binaryCrossentropy',
+                                metrics: ['accuracy']
+                            });
+                        }
+                        
+                        return true;
+                    }
+                } catch (figiError) {
+                    console.warn(`⚠️ Failed to load per-FIGI model for ${figi}:`, figiError.message);
+                }
+            }
+            
+            // Попытка 2: Загрузить общую модель (fallback)
             const modelExists = await fs.access(this.modelFile).then(() => true).catch(() => false);
             const weightsExist = await fs.access(this.weightsFile).then(() => true).catch(() => false);
+            
             if (!modelExists || !weightsExist) {
                 console.log('📭 Модель не найдена, будет создана при обучении');
                 return false;
             }
 
-            console.log('📥 Loading neural model with ModelManager...');
+            console.log('📥 Loading general neural model with ModelManager...');
             
             // Пытаемся загрузить модель через ModelManager
             const modelName = path.basename(this.modelFile, '.json');
@@ -344,7 +430,7 @@ class NeuralNetworkService {
             
             if (model) {
                 this.model = model;
-                console.log('✅ Neural model loaded successfully with ModelManager');
+                console.log('✅ General neural model loaded successfully with ModelManager');
             } else {
                 console.warn('⚠️ Failed to load neural model with ModelManager, trying legacy format...');
                 
@@ -358,7 +444,7 @@ class NeuralNetworkService {
                 const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
                 this.model.setWeights(tensors);
                 
-                console.log('✅ Neural model loaded with legacy format');
+                console.log('✅ General neural model loaded with legacy format');
             }
 
             // Гарантируем компиляцию после загрузки

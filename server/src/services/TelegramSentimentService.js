@@ -106,12 +106,19 @@ class TelegramSentimentService {
 
     /**
      * Анализ настроений в каналах
+     * @param {string} figi - FIGI инструмента
+     * @param {object} options - Опции анализа
+     * @param {number} options.days - Количество дней назад для поиска
+     * @param {number} options.limit - Максимальное количество сообщений
+     * @param {string[]} options.channels - Список каналов для анализа
+     * @param {Date|string} options.maxDate - Максимальная дата сообщений (для предотвращения утечки данных)
      */
     async analyzeTelegramSentiment(figi, options = {}) {
         const {
             days = 7,
             limit = 100,
-            channels = Array.from(this.channels)
+            channels = Array.from(this.channels),
+            maxDate = null // Если указан, фильтруем сообщения только до этой даты
         } = options;
 
         try {
@@ -124,8 +131,8 @@ class TelegramSentimentService {
                 };
             }
 
-            // Проверяем кеш
-            const cacheKey = `${figi}_${days}_${limit}`;
+            // Проверяем кеш (учитываем maxDate в ключе кеша)
+            const cacheKey = `${figi}_${days}_${limit}_${maxDate ? new Date(maxDate).toISOString() : 'current'}`;
             if (this.sentimentCache.has(cacheKey)) {
                 const cached = this.sentimentCache.get(cacheKey);
                 if (Date.now() - cached.timestamp < this.cacheTimeout) {
@@ -139,11 +146,22 @@ class TelegramSentimentService {
             // Получаем сообщения из каждого канала
             for (const channel of channels) {
                 try {
-                    const messages = await this.getChannelMessages(channel, figi, days, limit);
-                    allMessages.push(...messages);
+                    const messages = await this.getChannelMessages(channel, figi, days, limit, maxDate);
+                    
+                    // Дополнительная фильтрация по maxDate если указан (защита от утечки данных)
+                    let filteredMessages = messages;
+                    if (maxDate) {
+                        const maxDateObj = new Date(maxDate);
+                        filteredMessages = messages.filter(msg => {
+                            const msgDate = new Date(msg.date || msg.timestamp || 0);
+                            return msgDate <= maxDateObj;
+                        });
+                    }
+                    
+                    allMessages.push(...filteredMessages);
                     channelResults[channel] = {
-                        messageCount: messages.length,
-                        sentiment: this.calculateChannelSentiment(messages)
+                        messageCount: filteredMessages.length,
+                        sentiment: this.calculateChannelSentiment(filteredMessages)
                     };
                 } catch (error) {
                     console.warn(`⚠️ Error getting messages from ${channel}:`, error.message);
@@ -189,11 +207,17 @@ class TelegramSentimentService {
 
     /**
      * Получение сообщений из канала
+     * @param {string} channel - ID канала
+     * @param {string} figi - FIGI инструмента
+     * @param {number} days - Количество дней назад
+     * @param {number} limit - Максимальное количество сообщений
+     * @param {Date|string} maxDate - Максимальная дата сообщений (для предотвращения утечки данных)
      */
-    async getChannelMessages(channel, figi, days, limit) {
+    async getChannelMessages(channel, figi, days, limit, maxDate = null) {
         try {
             // В реальной реализации здесь был бы запрос к Telegram API
             // Пока что возвращаем заглушку
+            // ВАЖНО: При реализации нужно фильтровать сообщения по maxDate
             return [];
         } catch (error) {
             console.error(`❌ Error getting messages from ${channel}:`, error);

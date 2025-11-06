@@ -3,9 +3,10 @@ import CacheService from '../services/CacheService.js';
 
 async function performCacheUpdate() {
     try {
-        const { updateInstruments, updateCandles, instrumentsLimit, candlesDays } = workerData;
+        const { updateInstruments, updateCandles, instrumentsLimit, candlesDays, incrementalUpdate } = workerData;
         const startTime = Date.now();
         let totalUpdated = 0;
+        let totalCandlesCached = 0;
 
         console.log('🔄 Starting cache update in worker...');
 
@@ -32,17 +33,29 @@ async function performCacheUpdate() {
                 // Получаем список инструментов для обновления свечей
                 const instruments = await CacheService.getAllInstruments(instrumentsLimit);
                 
-                console.log(`📊 Updating candles for ${instruments.length} instruments...`);
+                console.log(`📊 Updating candles for ${instruments.length} instruments (incremental: ${incrementalUpdate || false})...`);
                 
                 for (let i = 0; i < instruments.length; i++) {
                     const instrument = instruments[i];
                     
                     try {
-                        await CacheService.cacheCandles(instrument.figi, 'DAY', candlesDays);
+                        let candlesCached = 0;
+                        
+                        // Используем инкрементальное обновление, если включено
+                        if (incrementalUpdate) {
+                            const newCandles = await CacheService.updateCandlesIncremental(instrument.figi, 'DAY', candlesDays);
+                            candlesCached = newCandles.length;
+                        } else {
+                            // Полное обновление для новых инструментов или при первом запуске
+                            const newCandles = await CacheService.cacheCandles(instrument.figi, 'DAY', candlesDays);
+                            candlesCached = newCandles.length;
+                        }
+                        
+                        totalCandlesCached += candlesCached;
                         totalUpdated++;
                         
                         if (i % 10 === 0) {
-                            console.log(`📊 Updated candles for ${i + 1}/${instruments.length} instruments`);
+                            console.log(`📊 Updated candles for ${i + 1}/${instruments.length} instruments (total candles: ${totalCandlesCached})`);
                         }
                     } catch (error) {
                         console.error(`❌ Error updating candles for ${instrument.figi}:`, error.message);
@@ -50,7 +63,7 @@ async function performCacheUpdate() {
                     }
                 }
                 
-                console.log(`✅ Updated candles for ${instruments.length} instruments`);
+                console.log(`✅ Updated candles for ${instruments.length} instruments (total candles cached: ${totalCandlesCached})`);
             } catch (error) {
                 console.error('❌ Error updating candles:', error);
                 throw error;
@@ -67,6 +80,7 @@ async function performCacheUpdate() {
                 success: true,
                 message: `Cache updated successfully in ${duration}s`,
                 totalUpdated,
+                totalCandlesCached,
                 duration
             }
         });

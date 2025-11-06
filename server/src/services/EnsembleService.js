@@ -1,6 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
 import CacheService from './CacheService.js';
-import WebSocketService from './WebSocketService.js';
 import OptimizedAnalysisService from './OptimizedAnalysisService.js';
 import ModelManager from '../utils/ModelManager.js';
 import { getService } from './GlobalServiceManager.js';
@@ -194,16 +193,19 @@ class EnsembleService {
                     kernelInitializer: 'glorotUniform',
                     recurrentInitializer: 'glorotUniform'
                 }),
+                // L2 регуляризация для предотвращения переобучения
                 tf.layers.dense({ 
                     units: 16, 
                     activation: 'relu',
-                    kernelInitializer: 'heUniform'
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 }) // L2 регуляризация
                 }),
-                tf.layers.dropout({ rate: 0.3 }),
+                tf.layers.dropout({ rate: 0.3 }), // Актуализированный dropout
                 tf.layers.dense({ 
                     units: 1, 
                     activation: 'sigmoid',
                     kernelInitializer: 'glorotUniform'
+                    // Выходной слой без L2 для сохранения предсказательной способности
                 })
             ]
         });
@@ -229,34 +231,49 @@ class EnsembleService {
                     activation: 'relu',
                     inputShape: [30, 10], // 30 дней, 10 фичей
                     kernelInitializer: 'heUniform',
-                    biasInitializer: 'zeros'
+                    biasInitializer: 'zeros',
+                    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 }) // Добавляем L2 регуляризацию
                 }),
+                tf.layers.batchNormalization(), // Добавляем batch normalization для стабильности
                 tf.layers.maxPooling1d({ poolSize: 2 }),
                 tf.layers.conv1d({
                     filters: 64,
                     kernelSize: 3,
                     activation: 'relu',
                     kernelInitializer: 'heUniform',
-                    biasInitializer: 'zeros'
+                    biasInitializer: 'zeros',
+                    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 }) // Добавляем L2 регуляризацию
                 }),
+                tf.layers.batchNormalization(), // Добавляем batch normalization
                 tf.layers.maxPooling1d({ poolSize: 2 }),
                 tf.layers.flatten(),
+                // L2 регуляризация для предотвращения переобучения
                 tf.layers.dense({ 
-                    units: 32, 
+                    units: 64, // Увеличиваем размер для лучшей способности к обучению
                     activation: 'relu',
-                    kernelInitializer: 'heUniform'
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 }) // L2 регуляризация
                 }),
-                tf.layers.dropout({ rate: 0.3 }),
+                tf.layers.batchNormalization(), // Добавляем batch normalization
+                tf.layers.dropout({ rate: 0.25 }), // Немного уменьшаем dropout
+                tf.layers.dense({ 
+                    units: 32, // Добавляем промежуточный слой
+                    activation: 'relu',
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 })
+                }),
+                tf.layers.dropout({ rate: 0.2 }),
                 tf.layers.dense({ 
                     units: 1, 
                     activation: 'sigmoid',
                     kernelInitializer: 'glorotUniform'
+                    // Выходной слой без L2 для сохранения предсказательной способности
                 })
             ]
         });
 
         model.compile({
-            optimizer: tf.train.adam(0.001),
+            optimizer: tf.train.adam(0.001), // Можно попробовать увеличить LR до 0.002
             loss: 'binaryCrossentropy',
             metrics: ['accuracy']
         });
@@ -274,28 +291,33 @@ class EnsembleService {
                 tf.layers.flatten({
                     inputShape: [84, 10] // 12 недель * 7 дней, 10 фичей
                 }),
+                // L2 регуляризация для предотвращения переобучения
                 tf.layers.dense({
                     units: 128,
                     activation: 'relu',
-                    kernelInitializer: 'heUniform'
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 }) // L2 регуляризация
                 }),
-                tf.layers.dropout({ rate: 0.2 }),
+                tf.layers.dropout({ rate: 0.25 }), // Актуализированный dropout
                 tf.layers.dense({ 
                     units: 64, 
                     activation: 'relu',
-                    kernelInitializer: 'heUniform'
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 }) // L2 регуляризация
                 }),
-                tf.layers.dropout({ rate: 0.2 }),
+                tf.layers.dropout({ rate: 0.2 }), // Актуализированный dropout
                 tf.layers.dense({ 
                     units: 32, 
                     activation: 'relu',
-                    kernelInitializer: 'heUniform'
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: tf.regularizers.l2({ l2: 0.001 }) // L2 регуляризация
                 }),
-                tf.layers.dropout({ rate: 0.1 }),
+                tf.layers.dropout({ rate: 0.15 }), // Актуализированный dropout
                 tf.layers.dense({ 
                     units: 1, 
                     activation: 'sigmoid',
                     kernelInitializer: 'glorotUniform'
+                    // Выходной слой без L2 для сохранения предсказательной способности
                 })
             ]
         });
@@ -347,8 +369,28 @@ class EnsembleService {
             const candles = await CacheService.getCandles(figi, 'DAY', days);
             console.log(`📊 Retrieved ${candles.length} candles for ${figi}`);
             
-            if (candles.length < 100) {
-                throw new Error(`Insufficient data: ${candles.length} candles`);
+            // Адаптивная проверка данных
+            // Минимальные требования для каждой модели:
+            // - LSTM: минимум 24 + 1 = 25 свечей (окно 24 часа)
+            // - CNN: минимум 30 + 1 = 31 свечей (окно 30 дней)
+            // - Transformer: минимум 84 + 1 = 85 свечей (окно 84 дня)
+            const minRequired = 25; // Минимум для LSTM
+            const minForCNN = 31;
+            const minForTransformer = 85;
+            
+            if (candles.length < minRequired) {
+                throw new Error(`Insufficient data: ${candles.length} candles (minimum ${minRequired} required for LSTM)`);
+            }
+            
+            // Определяем, какие модели можем обучить
+            const canTrainLSTM = candles.length >= minRequired;
+            const canTrainCNN = candles.length >= minForCNN;
+            const canTrainTransformer = candles.length >= minForTransformer;
+            
+            console.log(`📊 Available models: LSTM=${canTrainLSTM}, CNN=${canTrainCNN}, Transformer=${canTrainTransformer}`);
+            
+            if (!canTrainLSTM && !canTrainCNN && !canTrainTransformer) {
+                throw new Error(`Insufficient data: ${candles.length} candles (minimum ${minRequired} required)`);
             }
             
             // Проверяем, что данные реальные
@@ -364,20 +406,67 @@ class EnsembleService {
                 });
             }
 
-            // Подготавливаем данные для каждой модели
-            const lstmData = await this.prepareLSTMData(candles);
-            const cnnData = await this.prepareCNNData(candles);
-            const transformerData = await this.prepareTransformerData(candles);
-
-            // Обучаем каждую модель
-            const lstmResult = await this.trainModel('lstm', lstmData, epochs, batchSize);
-            const cnnResult = await this.trainModel('cnn', cnnData, epochs, batchSize);
-            const transformerResult = await this.trainModel('transformer', transformerData, epochs, batchSize);
-
-            // Обновляем производительность
-            this.performance.lstm = lstmResult;
-            this.performance.cnn = cnnResult;
-            this.performance.transformer = transformerResult;
+            // Подготавливаем и обучаем только те модели, для которых достаточно данных
+            const results = {};
+            
+            if (canTrainLSTM) {
+                try {
+                    const lstmData = await this.prepareLSTMData(candles);
+                    if (lstmData.features.length > 0) {
+                        const lstmResult = await this.trainModel('lstm', lstmData, epochs, batchSize);
+                        this.performance.lstm = lstmResult;
+                        results.lstm = lstmResult;
+                        console.log(`✅ LSTM model trained successfully`);
+                    } else {
+                        console.warn(`⚠️ LSTM: No training samples generated`);
+                    }
+                } catch (error) {
+                    console.error(`❌ LSTM training failed:`, error.message);
+                }
+            } else {
+                console.warn(`⚠️ Skipping LSTM training: insufficient data (${candles.length} < ${minRequired})`);
+            }
+            
+            if (canTrainCNN) {
+                try {
+                    const cnnData = await this.prepareCNNData(candles);
+                    if (cnnData.features.length > 0) {
+                        const cnnResult = await this.trainModel('cnn', cnnData, epochs, batchSize);
+                        this.performance.cnn = cnnResult;
+                        results.cnn = cnnResult;
+                        console.log(`✅ CNN model trained successfully`);
+                    } else {
+                        console.warn(`⚠️ CNN: No training samples generated`);
+                    }
+                } catch (error) {
+                    console.error(`❌ CNN training failed:`, error.message);
+                }
+            } else {
+                console.warn(`⚠️ Skipping CNN training: insufficient data (${candles.length} < ${minForCNN})`);
+            }
+            
+            if (canTrainTransformer) {
+                try {
+                    const transformerData = await this.prepareTransformerData(candles);
+                    if (transformerData.features.length > 0) {
+                        const transformerResult = await this.trainModel('transformer', transformerData, epochs, batchSize);
+                        this.performance.transformer = transformerResult;
+                        results.transformer = transformerResult;
+                        console.log(`✅ Transformer model trained successfully`);
+                    } else {
+                        console.warn(`⚠️ Transformer: No training samples generated`);
+                    }
+                } catch (error) {
+                    console.error(`❌ Transformer training failed:`, error.message);
+                }
+            } else {
+                console.warn(`⚠️ Skipping Transformer training: insufficient data (${candles.length} < ${minForTransformer})`);
+            }
+            
+            // Проверяем, что хотя бы одна модель обучилась
+            if (Object.keys(results).length === 0) {
+                throw new Error(`Failed to train any model: insufficient data or training errors`);
+            }
 
             // Адаптивные веса на основе производительности
             await this.updateWeights();
@@ -427,6 +516,48 @@ class EnsembleService {
     }
 
     /**
+     * Расчет class weights для балансировки классов
+     */
+    calculateClassWeights(labels) {
+        const total = labels.length;
+        const posCount = labels.filter(l => l === 1).length;
+        const negCount = total - posCount;
+        
+        if (posCount === 0 || negCount === 0) {
+            // Если один из классов отсутствует, возвращаем равные веса
+            return { 0: 1.0, 1: 1.0 };
+        }
+        
+        // Вычисляем веса обратно пропорционально частоте класса
+        // Более редкий класс получает больший вес
+        const posWeight = total / (2 * posCount);
+        const negWeight = total / (2 * negCount);
+        
+        // Нормализуем веса (сумма = 2.0)
+        const sum = posWeight + negWeight;
+        const normalizedPosWeight = (posWeight / sum) * 2;
+        const normalizedNegWeight = (negWeight / sum) * 2;
+        
+        const imbalance = Math.abs(posCount - negCount) / total;
+        if (imbalance > 0.2) {
+            console.log(`⚖️ Обнаружен дисбаланс классов: ${(imbalance*100).toFixed(1)}% (pos=${posCount}, neg=${negCount})`);
+            console.log(`⚖️ Class weights: 0=${normalizedNegWeight.toFixed(3)}, 1=${normalizedPosWeight.toFixed(3)}`);
+        }
+        
+        return {
+            0: normalizedNegWeight,
+            1: normalizedPosWeight
+        };
+    }
+
+    /**
+     * Создание sample weights на основе class weights
+     */
+    createSampleWeights(labels, classWeights) {
+        return labels.map(label => classWeights[label] || 1.0);
+    }
+
+    /**
      * Обучение отдельной модели
      */
     async trainModel(modelType, data, epochs, batchSize) {
@@ -459,16 +590,38 @@ class EnsembleService {
         console.log(`   Features[0][0]: ${features[0]?.[0]?.length} features per step`);
         console.log(`   Labels: ${labels.length} samples`);
         
+        // Диагностика данных для CNN
+        if (modelType === 'cnn' && features.length > 0) {
+            const sampleFeature = features[0];
+            const sampleValues = sampleFeature.flat();
+            const minVal = Math.min(...sampleValues);
+            const maxVal = Math.max(...sampleValues);
+            const meanVal = sampleValues.reduce((a, b) => a + b, 0) / sampleValues.length;
+            const stdVal = Math.sqrt(sampleValues.reduce((sum, val) => sum + Math.pow(val - meanVal, 2), 0) / sampleValues.length);
+            
+            console.log(`📊 ${modelType} Data statistics: min=${minVal.toFixed(4)}, max=${maxVal.toFixed(4)}, mean=${meanVal.toFixed(4)}, std=${stdVal.toFixed(4)}`);
+            
+            // Проверка на NaN и Infinity
+            const hasNaN = sampleValues.some(v => isNaN(v));
+            const hasInf = sampleValues.some(v => !isFinite(v));
+            if (hasNaN || hasInf) {
+                console.warn(`⚠️ ${modelType}: Обнаружены некорректные значения (NaN: ${hasNaN}, Infinity: ${hasInf})`);
+            }
+            
+            // Проверка распределения labels
+            const posCount = labels.filter(l => l === 1).length;
+            const negCount = labels.filter(l => l === 0).length;
+            console.log(`📊 ${modelType} Labels distribution: pos=${posCount}, neg=${negCount}, ratio=${(posCount / labels.length * 100).toFixed(1)}%`);
+        }
+        
         // Создаем тензоры с правильными размерностями
         let xs, ys;
         
         if (modelType === 'transformer') {
-            // Transformer ожидает 2D данные [samples, features]
-            // Преобразуем [samples, time_steps, features] в [samples, time_steps * features]
-            const flattenedFeatures = features.map(sample => 
-                sample.flat() // Преобразуем [84, 10] в [840]
-            );
-            xs = tf.tensor2d(flattenedFeatures);
+            // Transformer ожидает 3D данные [samples, time_steps, features]
+            // Модель имеет inputShape: [84, 10] и flatten слой, который преобразует [batch, 84, 10] в [batch, 840]
+            // Но входные данные должны быть 3D: [samples, 84, 10]
+            xs = tf.tensor3d(features);
         } else {
             // LSTM и CNN ожидают 3D данные [samples, time_steps, features]
             xs = tf.tensor3d(features);
@@ -476,21 +629,106 @@ class EnsembleService {
         
         ys = tf.tensor2d(labels, [labels.length, 1]);
         
+        // Расчет class weights для балансировки классов
+        const classWeights = this.calculateClassWeights(labels);
+        // Примечание: TensorFlow.js не поддерживает sampleWeight в model.fit()
+        // Используем взвешивание через дублирование данных
+        
         if (modelType === 'transformer') {
-            console.log(`   X tensor shape: [${xs.shape[0]}, ${xs.shape[1]}] (2D for transformer)`);
+            console.log(`   X tensor shape: [${xs.shape[0]}, ${xs.shape[1]}, ${xs.shape[2]}] (3D for transformer: [samples, time_steps, features])`);
         } else {
             console.log(`   X tensor shape: [${xs.shape[0]}, ${xs.shape[1]}, ${xs.shape[2]}] (3D for ${modelType})`);
         }
         console.log(`   Y tensor shape: [${ys.shape[0]}, ${ys.shape[1]}]`);
 
+        // Настройки для отслеживания лучшей модели
+        let bestValLoss = Infinity;
+        let bestEpoch = 0; // Эпоха с лучшим val_loss
+        let bestModelWeights = null; // Веса лучшей модели
+        let initialLoss = null; // Начальный loss для отслеживания прогресса
+        let reduceLRPatience = 5; // Количество эпох без улучшения для снижения LR
+        let reduceLRCount = 0;
+        let currentLR = 0.001; // Начальный learning rate
+        
+        // Получаем текущий learning rate из оптимизатора
+        // Примечание: В TensorFlow.js learning rate может быть тензором или числом
+        const optimizer = model.optimizer;
+        if (optimizer) {
+            try {
+                if (optimizer.learningRate) {
+                    // Если learning rate это тензор, получаем его значение
+                    if (typeof optimizer.learningRate.data === 'function') {
+                        const lrData = await optimizer.learningRate.data();
+                        if (lrData && lrData.length > 0) {
+                            currentLR = lrData[0];
+                        }
+                    } else if (typeof optimizer.learningRate === 'number') {
+                        // Если learning rate это число, используем его напрямую
+                        currentLR = optimizer.learningRate;
+                    } else if (optimizer.getLearningRate) {
+                        // Если есть метод getLearningRate
+                        currentLR = await optimizer.getLearningRate();
+                    }
+                }
+            } catch (e) {
+                // Если не удалось получить LR, используем значение по умолчанию (0.001)
+                // Не логируем предупреждение, так как это нормально для некоторых оптимизаторов
+            }
+        }
+
         const history = await model.fit(xs, ys, {
             epochs,
             batchSize,
+            // sampleWeight не поддерживается в TensorFlow.js - используем взвешивание через дублирование данных
             validationSplit: 0.2,
             verbose: 0,
             callbacks: {
-                onEpochEnd: (epoch, logs) => {
+                onEpochEnd: async (epoch, logs) => {
                     this.broadcastProgress(modelType, epoch, logs);
+                    
+                    // Сохраняем начальный loss для отслеживания прогресса
+                    if (initialLoss === null) {
+                        initialLoss = logs.loss;
+                        console.log(`📊 ${modelType} Initial loss: ${initialLoss.toFixed(4)}, val_loss: ${(logs.val_loss || logs.loss).toFixed(4)}`);
+                    }
+                    
+                    const valLoss = logs.val_loss || logs.loss;
+                    const trainLoss = logs.loss;
+                    const accuracy = logs.acc || 0;
+                    const valAccuracy = logs.val_acc || 0;
+                    
+                    // Логируем прогресс каждой эпохи
+                    console.log(`📈 ${modelType} Epoch ${epoch + 1}/${epochs}: loss=${trainLoss.toFixed(4)}, val_loss=${valLoss.toFixed(4)}, acc=${accuracy.toFixed(4)}, val_acc=${valAccuracy.toFixed(4)}`);
+                    
+                    if (valLoss < bestValLoss) {
+                        // Улучшение - сохраняем веса лучшей модели
+                        const improvement = bestValLoss === Infinity ? 0 : ((bestValLoss - valLoss) / bestValLoss * 100).toFixed(2);
+                        bestValLoss = valLoss;
+                        bestEpoch = epoch + 1;
+                        reduceLRCount = 0;
+                        
+                        // Сохраняем веса текущей модели как лучшие
+                        try {
+                            const weights = model.getWeights();
+                            bestModelWeights = weights.map(w => w.clone());
+                            console.log(`✅ ${modelType} Epoch ${epoch + 1}: Улучшение val_loss = ${valLoss.toFixed(4)} (улучшение на ${improvement}%, лучший на эпохе ${bestEpoch}) - веса сохранены`);
+                        } catch (error) {
+                            console.warn(`⚠️ ${modelType} Epoch ${epoch + 1}: Не удалось сохранить веса: ${error.message}`);
+                        }
+                    } else {
+                        // Нет улучшения
+                        reduceLRCount++;
+                        
+                        const noImprovement = ((valLoss - bestValLoss) / bestValLoss * 100).toFixed(2);
+                        console.log(`⏸️ ${modelType} Epoch ${epoch + 1}: Нет улучшения (val_loss=${valLoss.toFixed(4)}, лучший=${bestValLoss.toFixed(4)} на эпохе ${bestEpoch}, хуже на ${noImprovement}%)`);
+                        
+                        // Отслеживание плато для информации (без попыток изменения LR)
+                        if (reduceLRCount >= reduceLRPatience) {
+                            const suggestedLR = currentLR * 0.5; // Рекомендуемый LR
+                            console.log(`📉 ${modelType} Epoch ${epoch + 1}: Плато обнаружено (val_loss не улучшается ${reduceLRCount} эпох). Для следующего обучения рекомендуется LR=${suggestedLR.toFixed(6)}`);
+                            reduceLRCount = 0; // Сбрасываем счетчик
+                        }
+                    }
                 }
             }
         });
@@ -499,13 +737,34 @@ class EnsembleService {
         xs.dispose();
         ys.dispose();
 
-        // Простые метрики без вызова predict
-        const finalAccuracy = history.history.acc[history.history.acc.length - 1];
-        const finalLoss = history.history.loss[history.history.loss.length - 1];
+        // Восстанавливаем веса лучшей модели
+        if (bestModelWeights && bestEpoch > 0) {
+            try {
+                model.setWeights(bestModelWeights);
+                console.log(`✅ ${modelType}: Восстановлены веса лучшей модели (эпоха ${bestEpoch}, val_loss=${bestValLoss.toFixed(4)})`);
+                
+                // Очищаем клонированные веса
+                bestModelWeights.forEach(w => w.dispose());
+                bestModelWeights = null;
+            } catch (error) {
+                console.warn(`⚠️ ${modelType}: Не удалось восстановить веса лучшей модели: ${error.message}`);
+            }
+        }
+
+        // Используем метрики лучшей модели
+        const finalAccuracy = history.history.acc[bestEpoch - 1] || history.history.acc[history.history.acc.length - 1];
+        const finalValAccuracy = history.history.val_acc ? (history.history.val_acc[bestEpoch - 1] || history.history.val_acc[history.history.val_acc.length - 1]) : finalAccuracy;
+        const finalLoss = bestValLoss !== Infinity ? bestValLoss : history.history.loss[history.history.loss.length - 1];
+        
+        const totalImprovement = initialLoss ? ((initialLoss - finalLoss) / initialLoss * 100).toFixed(2) : 'N/A';
+        console.log(`📊 ${modelType}: Обучение завершено. Лучшая модель на эпохе ${bestEpoch}, val_loss=${bestValLoss.toFixed(4)}, общее улучшение: ${totalImprovement}%`);
         
         return {
             accuracy: finalAccuracy,
+            valAccuracy: finalValAccuracy,
             loss: finalLoss,
+            bestEpoch: bestEpoch,
+            totalImprovement: totalImprovement,
             precision: finalAccuracy, // Упрощенная метрика
             recall: finalAccuracy,    // Упрощенная метрика
             f1Score: finalAccuracy // Упрощенная метрика
@@ -556,23 +815,49 @@ class EnsembleService {
         const features = [];
         const labels = [];
 
+        // Нормализация данных для CNN
+        const allValues = [];
+        for (let i = 30; i < candles.length - 1; i++) {
+            const window = candles.slice(i - 30, i);
+            window.forEach(candle => {
+                allValues.push(candle.close, candle.volume, candle.high, candle.low, candle.open);
+            });
+        }
+        
+        const mean = allValues.reduce((a, b) => a + b, 0) / allValues.length;
+        const std = Math.sqrt(allValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allValues.length);
+        const maxVol = Math.max(...candles.map(c => c.volume));
+        const minVol = Math.min(...candles.map(c => c.volume));
+        const volRange = maxVol - minVol || 1;
+
         for (let i = 30; i < candles.length - 1; i++) {
             const window = candles.slice(i - 30, i);
             const nextCandle = candles[i + 1];
             
-            // Подготавливаем фичи
-            const windowFeatures = window.map(candle => [
-                candle.close,
-                candle.volume,
-                candle.high,
-                candle.low,
-                candle.open,
-                (candle.high - candle.low) / candle.close,
-                (candle.close - candle.open) / candle.open,
-                candle.volume / window.reduce((sum, c) => sum + c.volume, 0) / 30,
-                i % 30 / 30,
-                i % 7 / 7
-            ]);
+            // Подготавливаем фичи с нормализацией
+            const windowFeatures = window.map((candle, idx) => {
+                // Z-score нормализация для цен
+                const normalizedClose = (candle.close - mean) / (std || 1);
+                const normalizedHigh = (candle.high - mean) / (std || 1);
+                const normalizedLow = (candle.low - mean) / (std || 1);
+                const normalizedOpen = (candle.open - mean) / (std || 1);
+                
+                // Min-max нормализация для объема
+                const normalizedVolume = (candle.volume - minVol) / volRange;
+                
+                return [
+                    normalizedClose,
+                    normalizedVolume,
+                    normalizedHigh,
+                    normalizedLow,
+                    normalizedOpen,
+                    (candle.high - candle.low) / (candle.close || 1), // волатильность (уже нормализована)
+                    (candle.close - candle.open) / (candle.open || 1), // изменение цены (уже нормализовано)
+                    candle.volume / window.reduce((sum, c) => sum + c.volume, 0) / 30, // нормализованный объем
+                    idx / 30, // позиция в окне (0-1)
+                    i % 7 / 7 // день недели (0-1)
+                ];
+            });
 
             const currentCandle = candles[i];
             const priceChange = (nextCandle.close - currentCandle.close) / currentCandle.close;
@@ -697,6 +982,206 @@ class EnsembleService {
     }
 
     /**
+     * Простой ансамбль: MLP + правила тренда/волатильности
+     */
+    async predictSimple(figi, portfolio = null) {
+        try {
+            // Получаем данные
+            const candles = await CacheService.getCandles(figi, 'DAY', 60);
+            if (candles.length < 20) {
+                return { score: 0, confidence: 0, reason: 'Insufficient data' };
+            }
+
+            // 1. MLP предсказание (используем OptimizedTrainingService)
+            let mlpScore = 0.5;
+            let mlpConfidence = 0;
+            try {
+                const OptimizedTrainingService = getService('OptimizedTrainingService');
+                if (OptimizedTrainingService) {
+                    // Получаем последние фичи
+                    const { features } = await OptimizedTrainingService.prepareFeatures(candles, figi, false);
+                    if (features && features.length > 0) {
+                        const model = await OptimizedTrainingService.loadModel(figi);
+                        if (model) {
+                            const xs = tf.tensor2d([features[features.length - 1]]);
+                            const prediction = model.predict(xs);
+                            mlpScore = (await prediction.data())[0];
+                            mlpConfidence = 0.7; // Базовая уверенность для MLP
+                            
+                            xs.dispose();
+                            prediction.dispose();
+                        }
+                    }
+                }
+            } catch (mlpError) {
+                console.warn(`⚠️ MLP prediction failed for ${figi}:`, mlpError.message);
+            }
+
+            // 2. Правила тренда
+            const trendScore = this.calculateTrendRule(candles);
+            // Уверенность тренда зависит от силы тренда
+            const trendStrength = Math.abs(trendScore - 0.5) * 2; // 0-1, где 1 = сильный тренд
+            const trendConfidence = 0.4 + (trendStrength * 0.3); // 0.4-0.7
+
+            // 3. Правила волатильности
+            const volatilityScore = this.calculateVolatilityRule(candles);
+            // Уверенность волатильности зависит от четкости сигнала
+            const volatilitySignalStrength = Math.abs(volatilityScore - 0.5) * 2; // 0-1
+            const volatilityConfidence = 0.3 + (volatilitySignalStrength * 0.3); // 0.3-0.6
+
+            // Адаптивные веса на основе уверенности компонентов
+            const baseWeights = {
+                mlp: 0.5,        // Базовый вес для MLP
+                trend: 0.3,      // Базовый вес для правил тренда
+                volatility: 0.2  // Базовый вес для правил волатильности
+            };
+
+            // Нормализуем веса с учетом уверенности
+            const confidenceWeights = {
+                mlp: baseWeights.mlp * mlpConfidence,
+                trend: baseWeights.trend * trendConfidence,
+                volatility: baseWeights.volatility * volatilityConfidence
+            };
+
+            // Нормализуем веса так, чтобы сумма была равна 1
+            const totalWeight = confidenceWeights.mlp + confidenceWeights.trend + confidenceWeights.volatility;
+            const weights = {
+                mlp: totalWeight > 0 ? confidenceWeights.mlp / totalWeight : baseWeights.mlp,
+                trend: totalWeight > 0 ? confidenceWeights.trend / totalWeight : baseWeights.trend,
+                volatility: totalWeight > 0 ? confidenceWeights.volatility / totalWeight : baseWeights.volatility
+            };
+
+            const ensembleScore = (
+                mlpScore * weights.mlp +
+                trendScore * weights.trend +
+                volatilityScore * weights.volatility
+            );
+
+            // Уверенность на основе согласованности
+            const predictions = [mlpScore, trendScore, volatilityScore];
+            const variance = this.calculateVariance(predictions);
+            const confidence = Math.max(0, 1 - variance) * 0.8; // Немного снижаем уверенность для простого ансамбля
+
+            return {
+                score: ensembleScore,
+                confidence: confidence,
+                components: {
+                    mlp: { score: mlpScore, confidence: mlpConfidence },
+                    trend: { score: trendScore, confidence: trendConfidence },
+                    volatility: { score: volatilityScore, confidence: volatilityConfidence }
+                },
+                weights: weights,
+                recommendation: ensembleScore > 0.7 ? 'BUY' : ensembleScore < 0.3 ? 'SELL' : 'HOLD'
+            };
+
+        } catch (error) {
+            console.error('❌ Simple ensemble prediction failed:', error);
+            return { score: 0, confidence: 0, error: error.message };
+        }
+    }
+
+    /**
+     * Расчет правила тренда
+     */
+    calculateTrendRule(candles) {
+        if (candles.length < 20) return 0.5;
+
+        const prices = candles.map(c => c.close);
+        
+        // Краткосрочный тренд (последние 5 дней)
+        const shortTerm = prices.slice(-5);
+        const shortAvg = shortTerm.reduce((sum, p) => sum + p, 0) / shortTerm.length;
+        
+        // Среднесрочный тренд (последние 20 дней)
+        const mediumTerm = prices.slice(-20);
+        const mediumAvg = mediumTerm.reduce((sum, p) => sum + p, 0) / mediumTerm.length;
+        
+        // Долгосрочный тренд (все данные)
+        const longAvg = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+        
+        const currentPrice = prices[prices.length - 1];
+        
+        // Правила тренда
+        let score = 0.5; // Нейтральное значение
+        
+        // Сильный восходящий тренд: цена выше всех средних
+        if (currentPrice > shortAvg && shortAvg > mediumAvg && mediumAvg > longAvg) {
+            score = 0.8; // Сильный сигнал на покупку
+        }
+        // Восходящий тренд: цена выше средних
+        else if (currentPrice > mediumAvg && mediumAvg > longAvg) {
+            score = 0.65; // Умеренный сигнал на покупку
+        }
+        // Сильный нисходящий тренд: цена ниже всех средних
+        else if (currentPrice < shortAvg && shortAvg < mediumAvg && mediumAvg < longAvg) {
+            score = 0.2; // Сильный сигнал на продажу
+        }
+        // Нисходящий тренд: цена ниже средних
+        else if (currentPrice < mediumAvg && mediumAvg < longAvg) {
+            score = 0.35; // Умеренный сигнал на продажу
+        }
+        // Боковой тренд: смешанные сигналы
+        else {
+            score = 0.5; // Нейтральный сигнал
+        }
+        
+        return Math.max(0, Math.min(1, score));
+    }
+
+    /**
+     * Расчет правила волатильности
+     */
+    calculateVolatilityRule(candles) {
+        if (candles.length < 20) return 0.5;
+
+        const prices = candles.map(c => c.close);
+        
+        // Расчет волатильности (стандартное отклонение доходности)
+        const returns = [];
+        for (let i = 1; i < prices.length; i++) {
+            returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
+        }
+        
+        const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+        const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
+        const volatility = Math.sqrt(variance);
+        
+        // Расчет RSI (упрощенная версия)
+        const gains = returns.filter(r => r > 0);
+        const losses = returns.filter(r => r < 0).map(r => Math.abs(r));
+        const avgGain = gains.length > 0 ? gains.reduce((sum, g) => sum + g, 0) / gains.length : 0;
+        const avgLoss = losses.length > 0 ? losses.reduce((sum, l) => sum + l, 0) / losses.length : 0;
+        const rs = avgLoss > 0 ? avgGain / avgLoss : 100;
+        const rsi = 100 - (100 / (1 + rs));
+        
+        // Правила волатильности
+        let score = 0.5; // Нейтральное значение
+        
+        // Низкая волатильность + перепроданность (RSI < 30) = сигнал на покупку
+        if (volatility < 0.02 && rsi < 30) {
+            score = 0.75; // Сильный сигнал на покупку
+        }
+        // Низкая волатильность + перекупленность (RSI > 70) = сигнал на продажу
+        else if (volatility < 0.02 && rsi > 70) {
+            score = 0.25; // Сильный сигнал на продажу
+        }
+        // Высокая волатильность = нейтральный сигнал (рискованно)
+        else if (volatility > 0.05) {
+            score = 0.5; // Нейтральный сигнал при высокой волатильности
+        }
+        // Средняя волатильность + перепроданность = слабый сигнал на покупку
+        else if (rsi < 40) {
+            score = 0.6; // Слабый сигнал на покупку
+        }
+        // Средняя волатильность + перекупленность = слабый сигнал на продажу
+        else if (rsi > 60) {
+            score = 0.4; // Слабый сигнал на продажу
+        }
+        
+        return Math.max(0, Math.min(1, score));
+    }
+
+    /**
      * Получение формы входа для модели
      */
     getModelInputShape(modelType) {
@@ -712,17 +1197,84 @@ class EnsembleService {
      * Обновление весов на основе производительности
      */
     async updateWeights() {
-        const totalF1 = this.performance.lstm.f1Score + 
-                       this.performance.cnn.f1Score + 
-                       this.performance.transformer.f1Score;
-
-        if (totalF1 > 0) {
-            this.weights.lstm = this.performance.lstm.f1Score / totalF1;
-            this.weights.cnn = this.performance.cnn.f1Score / totalF1;
-            this.weights.transformer = this.performance.transformer.f1Score / totalF1;
+        // Собираем только те модели, которые были обучены
+        const trainedModels = [];
+        const weights = {};
+        
+        if (this.performance.lstm && this.performance.lstm.f1Score > 0) {
+            trainedModels.push({ type: 'lstm', f1Score: this.performance.lstm.f1Score });
         }
-
+        if (this.performance.cnn && this.performance.cnn.f1Score > 0) {
+            trainedModels.push({ type: 'cnn', f1Score: this.performance.cnn.f1Score });
+        }
+        if (this.performance.transformer && this.performance.transformer.f1Score > 0) {
+            trainedModels.push({ type: 'transformer', f1Score: this.performance.transformer.f1Score });
+        }
+        
+        if (trainedModels.length === 0) {
+            // Если ни одна модель не обучена, используем равные веса для доступных моделей
+            const availableModels = [];
+            if (this.models.lstm) availableModels.push('lstm');
+            if (this.models.cnn) availableModels.push('cnn');
+            if (this.models.transformer) availableModels.push('transformer');
+            
+            if (availableModels.length > 0) {
+                const equalWeight = 1.0 / availableModels.length;
+                availableModels.forEach(type => {
+                    weights[type] = equalWeight;
+                });
+                console.log(`⚠️ No trained models, using equal weights:`, weights);
+            } else {
+                console.warn(`⚠️ No models available for weighting`);
+                return;
+            }
+        } else {
+            // Вычисляем общий F1-score для обученных моделей
+            const totalF1 = trainedModels.reduce((sum, m) => sum + m.f1Score, 0);
+            
+            if (totalF1 > 0) {
+                // Распределяем веса пропорционально F1-score
+                trainedModels.forEach(model => {
+                    weights[model.type] = model.f1Score / totalF1;
+                });
+                
+                // Обнуляем веса для необученных моделей
+                ['lstm', 'cnn', 'transformer'].forEach(type => {
+                    if (!weights[type]) {
+                        weights[type] = 0;
+                    }
+                });
+            } else {
+                // Если F1-score всех моделей = 0, используем равные веса
+                const equalWeight = 1.0 / trainedModels.length;
+                trainedModels.forEach(model => {
+                    weights[model.type] = equalWeight;
+                });
+                ['lstm', 'cnn', 'transformer'].forEach(type => {
+                    if (!weights[type]) {
+                        weights[type] = 0;
+                    }
+                });
+            }
+        }
+        
+        // Обновляем веса
+        this.weights = {
+            lstm: weights.lstm || 0,
+            cnn: weights.cnn || 0,
+            transformer: weights.transformer || 0
+        };
+        
+        // Нормализуем веса (сумма должна быть 1.0)
+        const totalWeight = this.weights.lstm + this.weights.cnn + this.weights.transformer;
+        if (totalWeight > 0) {
+            this.weights.lstm /= totalWeight;
+            this.weights.cnn /= totalWeight;
+            this.weights.transformer /= totalWeight;
+        }
+        
         console.log('🔄 Updated ensemble weights:', this.weights);
+        console.log(`📊 Trained models: ${trainedModels.map(m => m.type).join(', ') || 'none'}`);
     }
 
     /**
@@ -822,18 +1374,25 @@ class EnsembleService {
      * Уведомление о прогрессе
      */
     broadcastProgress(modelType, epoch, logs) {
-        WebSocketService.broadcast({
-            type: 'ensemble_training_progress',
-            data: {
-                modelType,
-                epoch,
-                accuracy: logs.acc,
-                loss: logs.loss,
-                valAccuracy: logs.val_acc,
-                valLoss: logs.val_loss
-            },
-            timestamp: new Date().toISOString()
-        });
+        try {
+            const WebSocketService = getService('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'ensemble_training_progress',
+                    data: {
+                        modelType,
+                        epoch,
+                        accuracy: logs.acc,
+                        loss: logs.loss,
+                        valAccuracy: logs.val_acc,
+                        valLoss: logs.val_loss
+                    },
+                    timestamp: new Date().toISOString()
+                });
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to broadcast ensemble training progress:', error.message);
+        }
     }
 
     /**

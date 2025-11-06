@@ -174,7 +174,7 @@ class CacheService {
     }
 
     // Кеширование свечей для инструмента (append/upsert без уничтожения старых записей)
-    async cacheCandles(figi, interval = 'DAY', days = 180) {
+    async cacheCandles(figi, interval = 'DAY', days = 365) {
         try {
             // Минимальное окно запроса: 30 дней, чтобы избегать пустых ответов
             const minDays = 30;
@@ -296,12 +296,82 @@ class CacheService {
     }
 
     // Обновление свечей для инструмента (алиас для cacheCandles)
-    async updateCandles(figi, interval = 'DAY', days = 180) {
+    async updateCandles(figi, interval = 'DAY', days = 365) {
         return await this.cacheCandles(figi, interval, days);
     }
 
+    /**
+     * Инкрементальное обновление свечей (только новые свечи с последнего обновления)
+     */
+    async updateCandlesIncremental(figi, interval = 'DAY', days = 30) {
+        try {
+            // Получаем последнюю свечу из кеша
+            const lastCandle = await CachedCandle.findOne({
+                where: {
+                    figi,
+                    interval
+                },
+                order: [['time', 'DESC']]
+            });
+
+            // Если есть последняя свеча, загружаем только новые свечи
+            if (lastCandle) {
+                const from = new Date(lastCandle.time);
+                from.setDate(from.getDate() - 1); // Начинаем с 1 дня до последней свечи (на случай пропусков)
+                const to = new Date();
+                
+                console.log(`🔄 Incremental cache update for ${figi} (${interval}) from ${from.toISOString()} to ${to.toISOString()}`);
+                
+                const candlesFromApi = await this.fetchCandlesRangeBatched(figi, interval, from, to);
+                if (!Array.isArray(candlesFromApi) || candlesFromApi.length === 0) {
+                    console.log(`No new candles for ${figi} (${interval})`);
+                    return [];
+                }
+
+                const candleData = candlesFromApi.map(candle => ({
+                    figi: figi,
+                    interval: interval,
+                    open: this.convertToFloat(candle.open),
+                    close: this.convertToFloat(candle.close),
+                    high: this.convertToFloat(candle.high),
+                    low: this.convertToFloat(candle.low),
+                    volume: candle.volume || 0,
+                    time: new Date(candle.time)
+                }));
+
+                // Получаем существующие таймстемпы для предотвращения дубликатов
+                const existing = await CachedCandle.findAll({
+                    where: {
+                        figi,
+                        interval,
+                        time: { [Op.between]: [from, to] }
+                    },
+                    attributes: ['time']
+                });
+                const existingTimes = new Set(existing.map(e => new Date(e.time).getTime()));
+
+                const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
+                if (toInsert.length > 0) {
+                    await CachedCandle.bulkCreate(toInsert);
+                    console.log(`✅ Incremental update: cached ${toInsert.length} new candles for ${figi} (${interval})`);
+                } else {
+                    console.log(`✅ Incremental update: no new candles for ${figi} (${interval})`);
+                }
+
+                return toInsert;
+            } else {
+                // Если нет последней свечи, делаем полное кеширование
+                console.log(`🔄 No existing candles for ${figi} (${interval}), performing full cache`);
+                return await this.cacheCandles(figi, interval, days);
+            }
+        } catch (error) {
+            console.error(`❌ Error in incremental cache update for ${figi}:`, error);
+            return [];
+        }
+    }
+
     // Получение свечей из кеша (с догрузкой при дефиците)
-    async getCandles(figi, interval = 'DAY', days = 180) {
+    async getCandles(figi, interval = 'DAY', days = 365) {
         try {
             const from = new Date();
             from.setDate(from.getDate() - days);
@@ -318,11 +388,13 @@ class CacheService {
             });
 
             // Если данных нет или их мало/обрезаны, догружаем историю
-            const minRequired = 100;
+            const minRequired = Math.max(100, Math.floor(days * 0.8)); // Минимум 80% от запрошенных дней
             const earliest = candles[0]?.time ? new Date(candles[0].time) : null;
             const rangeInsufficient = candles.length < minRequired || (earliest && earliest > from);
             if (candles.length === 0 || rangeInsufficient) {
-                const extendDays = days * 3;
+                // Увеличиваем период для догрузки, но не более 730 дней (2 года)
+                const extendDays = Math.min(days * 2, 730);
+                console.log(`📊 Insufficient candles for ${figi}: found ${candles.length}, required ${minRequired}, extending to ${extendDays} days`);
                 await this.cacheCandles(figi, interval, extendDays);
                 candles = await CachedCandle.findAll({
                     where: {

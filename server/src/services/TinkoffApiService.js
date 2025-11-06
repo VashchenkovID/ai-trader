@@ -120,9 +120,6 @@ class TinkoffApiService {
     // Получение списка акций с пагинацией
     async getStocks() {
         try {
-            console.log('🔍 Getting stocks from Tinkoff API...');
-            console.log('📡 Endpoint: /tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares');
-            console.log('📦 Request body: { instrumentStatus: "INSTRUMENT_STATUS_BASE" }');
             
             const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares', {
                 instrumentStatus: 'INSTRUMENT_STATUS_BASE'

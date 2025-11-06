@@ -65,6 +65,17 @@ class OptimizedDataService {
                 }
             }
 
+            // Загружаем все свечи один раз для использования в getMarketFeatures
+            // Это предотвращает множественные запросы к кешу
+            let allCandles = null;
+            if (figi) {
+                try {
+                    allCandles = await CacheService.getCandles(figi, 'DAY', 365);
+                } catch (error) {
+                    console.warn(`⚠️ Failed to preload candles for market features: ${error.message}`);
+                }
+            }
+
             const features = [];
             const labels = [];
             let expectedFeatureSize = null;
@@ -77,8 +88,8 @@ class OptimizedDataService {
                 
                 if (window.length === lookbackPeriod && futureCandle) {
                     try {
-                        // Подготавливаем фичи
-                        const featureVector = await this.createFeatureVector(window, figi);
+                        // Подготавливаем фичи, передавая предзагруженные свечи
+                        const featureVector = await this.createFeatureVector(window, figi, allCandles);
                         
                         // Проверяем размер фичей для консистентности
                         if (expectedFeatureSize === null) {
@@ -119,7 +130,7 @@ class OptimizedDataService {
     /**
      * Создание вектора фичей из окна данных
      */
-    async createFeatureVector(window, figi = null) {
+    async createFeatureVector(window, figi = null, preloadedCandles = null) {
         try {
             const features = [];
             
@@ -129,40 +140,39 @@ class OptimizedDataService {
             const highs = window.map(c => c.high);
             const lows = window.map(c => c.low);
             
-            // Нормализация цен (берем только последние значения для экономии фичей)
-            // Убеждаемся, что у нас есть ровно 10 элементов
-            const pricesForFeatures = prices.slice(-10);
-            const volumesForFeatures = volumes.slice(-10);
+            // Упрощенная нормализация: берем только последние 5 значений (достаточно для тренда)
+            const pricesForFeatures = prices.slice(-5);
+            const volumesForFeatures = volumes.slice(-5);
             
-            // Дополняем до 10 элементов, если нужно
-            while (pricesForFeatures.length < 10) {
+            // Дополняем до 5 элементов, если нужно
+            while (pricesForFeatures.length < 5) {
                 pricesForFeatures.unshift(pricesForFeatures[0] || 0);
             }
-            while (volumesForFeatures.length < 10) {
+            while (volumesForFeatures.length < 5) {
                 volumesForFeatures.unshift(volumesForFeatures[0] || 0);
             }
             
             const normalizedPrices = this.normalizePrices(pricesForFeatures);
             const normalizedVolumes = this.normalizeVolumes(volumesForFeatures);
             
-            // Убеждаемся, что у нас ровно 10 фичей для цен и объемов
-            if (normalizedPrices.length !== 10) {
-                console.warn(`⚠️ Prices count mismatch: expected 10, got ${normalizedPrices.length}`);
-                while (normalizedPrices.length < 10) {
+            // Убеждаемся, что у нас ровно 5 фичей для цен и объемов
+            if (normalizedPrices.length !== 5) {
+                console.warn(`⚠️ Prices count mismatch: expected 5, got ${normalizedPrices.length}`);
+                while (normalizedPrices.length < 5) {
                     normalizedPrices.push(0);
                 }
-                if (normalizedPrices.length > 10) {
-                    normalizedPrices.splice(10);
+                if (normalizedPrices.length > 5) {
+                    normalizedPrices.splice(5);
                 }
             }
             
-            if (normalizedVolumes.length !== 10) {
-                console.warn(`⚠️ Volumes count mismatch: expected 10, got ${normalizedVolumes.length}`);
-                while (normalizedVolumes.length < 10) {
+            if (normalizedVolumes.length !== 5) {
+                console.warn(`⚠️ Volumes count mismatch: expected 5, got ${normalizedVolumes.length}`);
+                while (normalizedVolumes.length < 5) {
                     normalizedVolumes.push(0);
                 }
-                if (normalizedVolumes.length > 10) {
-                    normalizedVolumes.splice(10);
+                if (normalizedVolumes.length > 5) {
+                    normalizedVolumes.splice(5);
                 }
             }
             
@@ -172,8 +182,8 @@ class OptimizedDataService {
             // Временные фичи
             const timeFeatures = this.createTimeFeatures(window[window.length - 1].time);
             
-            // Рыночные фичи (если доступны)
-            const marketFeatures = await this.getMarketFeatures(figi);
+            // Рыночные фичи (если доступны) - передаем предзагруженные свечи для оптимизации
+            const marketFeatures = await this.getMarketFeatures(figi, window[window.length - 1].time, preloadedCandles);
             
             // Новостные фичи и анализ настроений
             const newsFeatures = await this.getNewsFeatures(figi, window[window.length - 1].time);
@@ -191,7 +201,8 @@ class OptimizedDataService {
             features.push(...telegramFeatures);
             
             // Логирование и исправление размеров фичей
-            const expectedSize = 49;
+            // Упрощенный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) = 25
+            const expectedSize = 25;
             if (features.length !== expectedSize) {
                 console.warn(`⚠️ Unexpected feature size: ${features.length}, expected ${expectedSize}`);
                 
@@ -213,8 +224,8 @@ class OptimizedDataService {
         } catch (error) {
             console.error('Error creating feature vector:', error);
             // Возвращаем нулевой вектор при ошибке с правильным размером
-            // 10 (prices) + 10 (volumes) + 10 (technical) + 5 (time) + 5 (market) + 5 (news) + 4 (telegram) = 49
-            return new Array(49).fill(0);
+            // Упрощенный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 = 25
+            return new Array(25).fill(0);
         }
     }
 
@@ -443,100 +454,126 @@ class OptimizedDataService {
     }
 
     /**
-     * Расчет технических индикаторов
+     * Расчет технических индикаторов (упрощенный набор - только устойчивые индикаторы)
      */
     calculateTechnicalIndicators(prices, volumes, highs, lows) {
         try {
             const features = [];
             
-            // RSI (1 фича)
+            // RSI (1 фича) - устойчивый осциллятор
             const rsi = this.calculateRSI(prices);
             features.push(rsi);
             
-            // MACD (3 фичи)
+            // MACD line (1 фича) - только основная линия, убираем signal и histogram
             const macd = this.calculateMACD(prices);
-            features.push(...macd);
+            features.push(macd[0]); // Только MACD line
             
-            // Bollinger Bands (3 фичи)
+            // Bollinger Bands position (1 фича) - позиция цены относительно BB (0-1)
             const bb = this.calculateBollingerBands(prices);
-            features.push(...bb);
+            const currentPrice = prices[prices.length - 1];
+            const bbPosition = bb[1] > 0 ? (currentPrice - bb[0]) / (bb[2] - bb[0]) : 0.5; // Нормализованная позиция
+            features.push(Math.max(0, Math.min(1, bbPosition))); // Ограничиваем 0-1
             
-            // Volume indicators (1 фича)
-            const volumeSma = this.calculateSMA(volumes, 5);
-            features.push(volumeSma);
-            
-            // SMA и EMA (2 фичи)
+            // SMA20 (1 фича) - нормализованная относительно текущей цены
             const sma20 = this.calculateSMA(prices, 20);
-            const ema12 = this.calculateEMA(prices, 12);
-            features.push(sma20, ema12);
+            const sma20Ratio = currentPrice > 0 ? sma20 / currentPrice : 1;
+            features.push(sma20Ratio);
             
-            // Всего должно быть 10 фичей
-            if (features.length !== 10) {
-                console.warn(`⚠️ Technical indicators count mismatch: expected 10, got ${features.length}`);
-                // Дополняем или обрезаем до 10
-                while (features.length < 10) {
+            // EMA12 (1 фича) - нормализованная относительно текущей цены
+            const ema12 = this.calculateEMA(prices, 12);
+            const ema12Ratio = currentPrice > 0 ? ema12 / currentPrice : 1;
+            features.push(ema12Ratio);
+            
+            // Volume SMA (1 фича) - нормализованная относительно текущего объема
+            const volumeSma = this.calculateSMA(volumes, 5);
+            const currentVolume = volumes[volumes.length - 1] || 1;
+            const volumeRatio = volumeSma > 0 ? currentVolume / volumeSma : 1;
+            features.push(Math.min(2, volumeRatio)); // Ограничиваем до 2x
+            
+            // Всего должно быть 6 фичей (упрощенный набор)
+            if (features.length !== 6) {
+                console.warn(`⚠️ Technical indicators count mismatch: expected 6, got ${features.length}`);
+                // Дополняем или обрезаем до 6
+                while (features.length < 6) {
                     features.push(0);
                 }
-                if (features.length > 10) {
-                    features.splice(10);
+                if (features.length > 6) {
+                    features.splice(6);
                 }
             }
             
             return features;
         } catch (error) {
             console.error('Error calculating technical indicators:', error);
-            return new Array(10).fill(0);
+            return new Array(6).fill(0);
         }
     }
 
     /**
-     * Создание временных фичей
+     * Создание временных фичей (упрощенный набор - только важные)
      */
     createTimeFeatures(timestamp) {
         const date = new Date(timestamp);
         return [
-            date.getDay() / 6, // День недели (0-1)
-            date.getMonth() / 11, // Месяц (0-1)
-            date.getDate() / 30, // День месяца (0-1)
-            date.getHours() / 23, // Час (0-1)
-            date.getMinutes() / 59 // Минута (0-1)
+            date.getDay() / 6, // День недели (0-1) - важен для недельных паттернов
+            date.getMonth() / 11 // Месяц (0-1) - важен для сезонности
+            // Убрали день месяца, час и минуту - менее важны для дневных свечей
         ];
     }
 
     /**
      * Получение рыночных фичей
+     * ВАЖНО: Фильтруем свечи только до переданного timestamp для предотвращения утечки данных
+     * @param {string} figi - FIGI инструмента
+     * @param {Date|string} timestamp - Максимальная дата свечей (для предотвращения утечки данных)
      */
-    async getMarketFeatures(figi) {
+    async getMarketFeatures(figi, timestamp, preloadedCandles = null) {
         try {
-            // Получаем реальные рыночные фичи
-            const candles = await CacheService.getCandles(figi, 'DAY', 30);
+            // Используем предзагруженные свечи, если они переданы, иначе загружаем из кеша
+            let candles = preloadedCandles;
+            if (!candles || candles.length === 0) {
+                // Загружаем только если не переданы предзагруженные свечи
+                candles = await CacheService.getCandles(figi, 'DAY', 30);
+            }
+            
             if (!candles || candles.length < 10) {
-                return [0, 0, 0, 0, 0];
+                return [0, 0, 0]; // Возвращаем 3 фичи: volatility, trend, rsi
             }
 
-            const prices = candles.map(c => c.close);
-            const volumes = candles.map(c => c.volume || 0);
+            // Фильтруем свечи только до переданного timestamp (защита от утечки данных)
+            let filteredCandles = candles;
+            if (timestamp) {
+                const timestampDate = new Date(timestamp);
+                filteredCandles = candles.filter(c => {
+                    const candleDate = new Date(c.time);
+                    return candleDate <= timestampDate;
+                });
+            }
+
+            if (filteredCandles.length < 10) {
+                // Если после фильтрации недостаточно данных, возвращаем 3 фичи: volatility, trend, rsi
+                return [0, 0, 0];
+            }
+
+            const prices = filteredCandles.map(c => c.close);
+            const volumes = filteredCandles.map(c => c.volume || 0);
             
-            // Рассчитываем фичи (все должны быть скалярными значениями)
+            // Рассчитываем только самые важные фичи (упрощенный набор)
             const volatility = this.calculateVolatility(prices);
             const trend = this.calculateTrend(prices);
-            const volumeRatio = this.calculateVolumeRatio(volumes);
-            const priceChange = this.calculatePriceChange(prices);
             const rsi = this.calculateRSI(prices);
             
             // Убеждаемся, что все значения скалярные
             const features = [
                 typeof volatility === 'number' ? volatility : 0,
                 typeof trend === 'number' ? trend : 0,
-                typeof volumeRatio === 'number' ? volumeRatio : 0,
-                typeof priceChange === 'number' ? priceChange : 0,
                 typeof rsi === 'number' ? rsi : 0
             ];
             
             return features;
         } catch (error) {
             console.error('Error getting market features:', error);
-            return [0, 0, 0, 0, 0];
+            return [0, 0, 0];
         }
     }
 
@@ -707,50 +744,55 @@ class OptimizedDataService {
 
     /**
      * Получение новостных фичей
+     * ВАЖНО: Фильтруем новости только до переданного timestamp для предотвращения утечки данных
      */
     async getNewsFeatures(figi, timestamp) {
         try {
             const NewsAnalysisService = (await import('./NewsAnalysisService.js')).default;
             
-            // Получаем новости за последние 7 дней (с кешированием)
+            // Получаем новости за последние 7 дней от переданного timestamp (не от текущего момента!)
             const news = await NewsAnalysisService.fetchNews(figi, { 
                 days: 7, 
                 limit: 20,
-                useCache: true
+                useCache: true,
+                maxDate: timestamp // Передаем максимальную дату для фильтрации
             });
             
             if (news.length === 0) {
-                return [0, 0, 0, 0, 0]; // Нет новостей
+                return [0, 0]; // Нет новостей - возвращаем 2 фичи
             }
             
-            // Рассчитываем фичи на основе новостей
-            const sentiments = news.map(n => n.sentiment);
-            const relevances = news.map(n => n.relevance);
-            const impacts = news.map(n => n.impact || 0);
+            // Дополнительная фильтрация: исключаем новости после timestamp (защита от утечки данных)
+            const timestampDate = new Date(timestamp);
+            const filteredNews = news.filter(n => {
+                const newsDate = new Date(n.publishedAt);
+                return newsDate <= timestampDate;
+            });
+            
+            if (filteredNews.length === 0) {
+                return [0, 0]; // Нет новостей до указанного времени
+            }
+            
+            // Рассчитываем только самые важные фичи (упрощенный набор)
+            const sentiments = filteredNews.map(n => n.sentiment);
+            const relevances = filteredNews.map(n => n.relevance);
             
             const avgSentiment = sentiments.reduce((sum, s) => sum + s, 0) / sentiments.length;
             const avgRelevance = relevances.reduce((sum, r) => sum + r, 0) / relevances.length;
-            const avgImpact = impacts.reduce((sum, i) => sum + i, 0) / impacts.length;
-            const sentimentVolatility = this.calculateVolatility(sentiments);
-            const positiveNewsRatio = sentiments.filter(s => s > 0.1).length / sentiments.length;
-            const highRelevanceRatio = relevances.filter(r => r > 0.7).length / relevances.length;
             
             const features = [
                 avgSentiment,      // Средний сентимент
-                avgRelevance,      // Средняя релевантность
-                avgImpact,         // Среднее влияние
-                sentimentVolatility, // Волатильность настроений
-                positiveNewsRatio  // Доля позитивных новостей
+                avgRelevance       // Средняя релевантность (уверенность)
             ];
             
-            // Убеждаемся, что возвращаем ровно 5 фичей
-            if (features.length !== 5) {
-                console.warn(`⚠️ News features count mismatch: expected 5, got ${features.length}`);
-                while (features.length < 5) {
+            // Убеждаемся, что возвращаем ровно 2 фичи
+            if (features.length !== 2) {
+                console.warn(`⚠️ News features count mismatch: expected 2, got ${features.length}`);
+                while (features.length < 2) {
                     features.push(0);
                 }
-                if (features.length > 5) {
-                    features.splice(5);
+                if (features.length > 2) {
+                    features.splice(2);
                 }
             }
             
@@ -758,48 +800,46 @@ class OptimizedDataService {
             
         } catch (error) {
             console.error('❌ Ошибка получения новостных фичей:', error);
-            return [0, 0, 0, 0, 0];
+            return [0, 0];
         }
     }
 
     /**
      * Получение фичей настроений Telegram
+     * ВАЖНО: Фильтруем сообщения только до переданного timestamp для предотвращения утечки данных
      */
     async getTelegramFeatures(figi, timestamp) {
         try {
             const TelegramSentimentService = (await import('./TelegramSentimentService.js')).default;
             
-            // Получаем анализ настроений за последние 7 дней
+            // Получаем анализ настроений за последние 7 дней от переданного timestamp (не от текущего момента!)
             const sentiment = await TelegramSentimentService.analyzeTelegramSentiment(figi, {
                 days: 7,
-                limit: 100
+                limit: 100,
+                maxDate: timestamp // Передаем максимальную дату для фильтрации
             });
             
             if (sentiment.messageCount === 0) {
-                return [0, 0, 0, 0]; // Нет данных
+                return [0, 0]; // Нет данных
             }
             
-            // Рассчитываем фичи на основе настроений
+            // Рассчитываем только самые важные фичи (упрощенный набор)
             const sentimentValue = sentiment.sentiment || 0;
             const confidence = sentiment.confidence || 0;
-            const messageCount = sentiment.messageCount || 0;
-            const activeChannels = Object.values(sentiment.channels || {}).filter(c => c.messageCount > 0).length;
             
             const features = [
                 sentimentValue,    // Общий сентимент
-                confidence,        // Уверенность
-                messageCount / 100, // Нормализованное количество сообщений
-                activeChannels / 10 // Нормализованное количество активных каналов
+                confidence         // Уверенность
             ];
             
-            // Убеждаемся, что возвращаем ровно 4 фичи
-            if (features.length !== 4) {
-                console.warn(`⚠️ Telegram features count mismatch: expected 4, got ${features.length}`);
-                while (features.length < 4) {
+            // Убеждаемся, что возвращаем ровно 2 фичи
+            if (features.length !== 2) {
+                console.warn(`⚠️ Telegram features count mismatch: expected 2, got ${features.length}`);
+                while (features.length < 2) {
                     features.push(0);
                 }
-                if (features.length > 4) {
-                    features.splice(4);
+                if (features.length > 2) {
+                    features.splice(2);
                 }
             }
             
@@ -807,7 +847,7 @@ class OptimizedDataService {
             
         } catch (error) {
             console.error('❌ Ошибка получения Telegram фичей:', error);
-            return [0, 0, 0, 0];
+            return [0, 0]; // Возвращаем 2 фичи при ошибке
         }
     }
 

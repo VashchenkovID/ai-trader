@@ -28,6 +28,12 @@ class OptimizedTelegramService {
     }
 
     async initialize() {
+        // Проверяем, не инициализирован ли уже бот
+        if (this.isInitialized && this.bot) {
+            console.log('⚠️ Telegram bot already initialized, skipping...');
+            return;
+        }
+
         const token = process.env.TELEGRAM_BOT_TOKEN;
         const chatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -44,15 +50,40 @@ class OptimizedTelegramService {
         const retryDelay = Math.min(2000 * Math.pow(2, retryCount), 10000);
 
         try {
+            // Если бот уже существует, останавливаем его перед переинициализацией
+            if (this.bot) {
+                try {
+                    this.bot.stopPolling();
+                    this.bot = null;
+                } catch (e) {
+                    // Игнорируем ошибки при остановке
+                }
+            }
+
             console.log(`🤖 Initializing Telegram bot (attempt ${retryCount + 1}/${maxRetries + 1})...`);
             
-            this.bot = new TelegramBot(token, { 
-                polling: {
-                    interval: 30000,
-                    autoStart: true,
-                    params: { timeout: 10 }
+            // Сначала пытаемся создать бота с polling
+            // Но если сразу возникает ошибка 409, переключаемся на режим без polling
+            let botCreated = false;
+            try {
+                this.bot = new TelegramBot(token, { 
+                    polling: {
+                        interval: 30000,
+                        autoStart: true,
+                        params: { timeout: 10 }
+                    }
+                });
+                botCreated = true;
+            } catch (createError) {
+                // Если ошибка 409 при создании, сразу переключаемся на режим без polling
+                if (createError.message && createError.message.includes('409 Conflict')) {
+                    console.warn('⚠️ Another Telegram bot instance is already running. This instance will use polling: false.');
+                    this.bot = new TelegramBot(token, { polling: false });
+                    botCreated = true;
+                } else {
+                    throw createError;
                 }
-            });
+            }
             
             this.chatId = chatId;
             this.isInitialized = true;
@@ -62,9 +93,34 @@ class OptimizedTelegramService {
             this.setupErrorHandlers();
             this.startSystemReportScheduler();
             
-            console.log('✅ Telegram bot initialized successfully');
+            if (botCreated && this.bot && this.bot._polling) {
+                console.log('✅ Telegram bot initialized successfully with polling');
+            } else {
+                console.log('✅ Telegram bot initialized without polling (another instance is active)');
+            }
         } catch (error) {
             console.error(`❌ Error initializing Telegram bot (attempt ${retryCount + 1}):`, error.message);
+            
+            // Если ошибка 409 Conflict, значит другой экземпляр уже запущен
+            if (error.message && error.message.includes('409 Conflict')) {
+                console.warn('⚠️ Another Telegram bot instance is already running. This instance will use polling: false.');
+                // Инициализируем без polling
+                try {
+                    this.bot = new TelegramBot(token, { polling: false });
+                    this.chatId = chatId;
+                    this.isInitialized = true;
+                    this.startTime = new Date();
+                    this.setupHandlers();
+                    this.setupErrorHandlers();
+                    this.startSystemReportScheduler();
+                    console.log('✅ Telegram bot initialized without polling (another instance is active)');
+                    return;
+                } catch (fallbackError) {
+                    console.error('❌ Failed to initialize Telegram bot without polling:', fallbackError.message);
+                    this.isInitialized = false;
+                    return;
+                }
+            }
             
             if (retryCount < maxRetries) {
                 console.log(`🔄 Retrying in ${retryDelay / 1000} seconds...`);
@@ -83,6 +139,40 @@ class OptimizedTelegramService {
 
         this.bot.on('polling_error', (error) => {
             console.error('Telegram polling error:', error.message);
+            
+            // Обработка ошибки 409 Conflict (другой экземпляр уже запущен)
+            if (error.message && error.message.includes('409 Conflict')) {
+                console.warn('⚠️ Another Telegram bot instance is running. Stopping polling for this instance.');
+                try {
+                    // Останавливаем polling
+                    if (this.bot && this.bot.stopPolling) {
+                        this.bot.stopPolling();
+                    }
+                    
+                    // Переинициализируем без polling
+                    const token = process.env.TELEGRAM_BOT_TOKEN;
+                    const chatId = process.env.TELEGRAM_CHAT_ID;
+                    if (token && chatId) {
+                        // Удаляем старый бот
+                        this.bot = null;
+                        
+                        // Создаем нового бота без polling
+                        this.bot = new TelegramBot(token, { polling: false });
+                        this.chatId = chatId;
+                        this.isInitialized = true;
+                        
+                        // Переустанавливаем обработчики
+                        this.setupHandlers();
+                        this.setupErrorHandlers();
+                        
+                        console.log('✅ Telegram bot reinitialized without polling');
+                    }
+                } catch (e) {
+                    console.error('❌ Error reinitializing Telegram bot:', e.message);
+                    this.isInitialized = false;
+                }
+                return;
+            }
             
             if (error.message.includes('ENOTFOUND') || 
                 error.message.includes('ECONNRESET') || 
@@ -543,6 +633,29 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
         return this.trainingCount || 0;
     }
 
+    /**
+     * Очистка HTML от неподдерживаемых тегов для Telegram
+     */
+    sanitizeHtml(html) {
+        if (!html || typeof html !== 'string') return html;
+        
+        // Удаляем неподдерживаемые теги (anonymous, script, style и т.д.)
+        // Оставляем только поддерживаемые: <b>, <i>, <u>, <s>, <code>, <pre>, <a>
+        return html
+            .replace(/<anonymous[^>]*>.*?<\/anonymous>/gi, '') // Удаляем теги anonymous
+            .replace(/<script[^>]*>.*?<\/script>/gi, '') // Удаляем script
+            .replace(/<style[^>]*>.*?<\/style>/gi, '') // Удаляем style
+            .replace(/<[^>]+>/g, (tag) => {
+                // Разрешаем только поддерживаемые теги
+                const allowedTags = ['b', 'i', 'u', 's', 'code', 'pre', 'a'];
+                const tagName = tag.match(/<\/?(\w+)/)?.[1]?.toLowerCase();
+                if (tagName && allowedTags.includes(tagName)) {
+                    return tag;
+                }
+                return ''; // Удаляем неподдерживаемые теги
+            });
+    }
+
     async safeSendMessage(chatId, message, options = {}, retryCount = 0) {
         if (!this.isInitialized || !this.bot || this.temporarilyDisabled) {
             console.log('Telegram temporarily disabled or not initialized, skipping message');
@@ -553,11 +666,29 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
         const retryDelay = 1000 * (retryCount + 1);
 
         try {
+            // Очищаем HTML от неподдерживаемых тегов, если используется HTML parse_mode
+            if (options.parse_mode === 'HTML' && typeof message === 'string') {
+                message = this.sanitizeHtml(message);
+            }
+            
             await this.bot.sendMessage(chatId, message, options);
             this.networkErrors = Math.max(0, this.networkErrors - 1);
             return true;
         } catch (error) {
             console.error(`Error sending Telegram message (attempt ${retryCount + 1}):`, error.message);
+            
+            // Если ошибка связана с парсингом HTML, пробуем отправить без HTML
+            if (error.message && error.message.includes('parse entities') && options.parse_mode === 'HTML') {
+                console.warn('⚠️ HTML parsing error, retrying without HTML formatting');
+                try {
+                    // Удаляем HTML теги и отправляем как простой текст
+                    const plainMessage = message.replace(/<[^>]+>/g, '');
+                    await this.bot.sendMessage(chatId, plainMessage, { parse_mode: undefined });
+                    return true;
+                } catch (retryError) {
+                    console.error('Error sending plain text message:', retryError.message);
+                }
+            }
             
             if (retryCount < maxRetries && this.isInitialized && !this.temporarilyDisabled) {
                 setTimeout(() => {

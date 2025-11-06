@@ -57,30 +57,37 @@ class MetaLearningService {
      * Создание мета-модели
      */
     createMetaModel() {
+        // L2 регуляризация для предотвращения переобучения
+        const l2Regularizer = tf.regularizers.l2({ l2: 0.001 });
+        
         const model = tf.sequential({
             layers: [
                 tf.layers.dense({
                     units: 128,
                     activation: 'relu',
                     inputShape: [this.config.taskEmbeddingSize],
-                    kernelInitializer: 'heUniform'
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: l2Regularizer // L2 регуляризация
                 }),
-                tf.layers.dropout({ rate: 0.2 }),
+                tf.layers.dropout({ rate: 0.25 }), // Актуализированный dropout
                 tf.layers.dense({ 
                     units: 64, 
                     activation: 'relu',
-                    kernelInitializer: 'heUniform'
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: l2Regularizer // L2 регуляризация
                 }),
-                tf.layers.dropout({ rate: 0.2 }),
+                tf.layers.dropout({ rate: 0.2 }), // Актуализированный dropout
                 tf.layers.dense({ 
                     units: 32, 
                     activation: 'relu',
-                    kernelInitializer: 'heUniform'
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: l2Regularizer // L2 регуляризация
                 }),
                 tf.layers.dense({ 
                     units: 10, 
                     activation: 'linear',
                     kernelInitializer: 'glorotUniform'
+                    // Выходной слой без L2 для сохранения предсказательной способности
                 }) // Параметры адаптации
             ]
         });
@@ -242,20 +249,27 @@ class MetaLearningService {
      * Создание базовой модели для адаптации
      */
     createBaseModel(inputSize = 10) {
+        // L2 регуляризация для предотвращения переобучения
+        const l2Regularizer = tf.regularizers.l2({ l2: 0.001 });
+        
         const model = tf.sequential({
             layers: [
                 tf.layers.dense({
                     inputShape: [inputSize],
                     units: 32,
-                    activation: 'relu'
+                    activation: 'relu',
+                    kernelRegularizer: l2Regularizer // L2 регуляризация
                 }),
+                tf.layers.dropout({ rate: 0.2 }), // Добавляем dropout для регуляризации
                 tf.layers.dense({
                     units: 16,
-                    activation: 'relu'
+                    activation: 'relu',
+                    kernelRegularizer: l2Regularizer // L2 регуляризация
                 }),
                 tf.layers.dense({
                     units: 1,
                     activation: 'linear'
+                    // Выходной слой без L2 для сохранения предсказательной способности
                 })
             ]
         });

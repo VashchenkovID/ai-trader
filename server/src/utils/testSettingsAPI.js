@@ -32,9 +32,6 @@ async function testSettingsAPI() {
             console.log('🚀 Тестовый сервер запущен на порту 3002\n');
         });
 
-        // Тестируем API endpoints
-        console.log('📡 Тестирование API endpoints...\n');
-
         // Тест 1: GET /api/settings/categories
         console.log('1. Тестируем GET /api/settings/categories');
         try {

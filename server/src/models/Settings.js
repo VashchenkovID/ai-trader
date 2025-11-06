@@ -390,6 +390,24 @@ Settings.initializeDefaults = async function() {
             category: 'neural_network',
             dataType: 'number',
             minValue: 7,
+            maxValue: 180
+        },
+        {
+            key: 'cache_candles_days',
+            value: 365,
+            description: 'Количество дней свечей для кеширования в БД',
+            category: 'scheduler',
+            dataType: 'number',
+            minValue: 180,
+            maxValue: 730
+        },
+        {
+            key: 'nn_retrain_days',
+            value: 180,
+            description: 'Количество дней для переобучения нейросети',
+            category: 'neural_network',
+            dataType: 'number',
+            minValue: 7,
             maxValue: 90
         },
         

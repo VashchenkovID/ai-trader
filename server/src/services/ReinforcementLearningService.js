@@ -73,30 +73,37 @@ class ReinforcementLearningService {
      * Создание DQN сети
      */
     createDQN() {
+        // L2 регуляризация для предотвращения переобучения
+        const l2Regularizer = tf.regularizers.l2({ l2: 0.001 });
+        
         const model = tf.sequential({
             layers: [
                 tf.layers.dense({
                     units: 128,
                     activation: 'relu',
                     inputShape: [this.config.stateSize],
-                    kernelInitializer: 'heUniform'
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: l2Regularizer // L2 регуляризация
                 }),
-                tf.layers.dropout({ rate: 0.2 }),
+                tf.layers.dropout({ rate: 0.25 }), // Актуализированный dropout
                 tf.layers.dense({
                     units: 64,
                     activation: 'relu',
-                    kernelInitializer: 'heUniform'
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: l2Regularizer // L2 регуляризация
                 }),
-                tf.layers.dropout({ rate: 0.2 }),
+                tf.layers.dropout({ rate: 0.2 }), // Актуализированный dropout
                 tf.layers.dense({
                     units: 32,
                     activation: 'relu',
-                    kernelInitializer: 'heUniform'
+                    kernelInitializer: 'heUniform',
+                    kernelRegularizer: l2Regularizer // L2 регуляризация
                 }),
                 tf.layers.dense({
                     units: this.config.actionSize,
                     activation: 'linear',
                     kernelInitializer: 'glorotUniform'
+                    // Выходной слой без L2 для сохранения предсказательной способности
                 })
             ]
         });
@@ -160,15 +167,38 @@ class ReinforcementLearningService {
 
             // Получаем исторические данные
             const candles = await CacheService.getCandles(figi, 'DAY', days);
-            if (candles.length < 30) {
-                throw new Error(`Insufficient data: ${candles.length} candles`);
+            
+            // Адаптивная проверка данных
+            // Минимальное требование: 20 свечей (для расчета технических индикаторов)
+            // Рекомендуемое: 30+ свечей для стабильного обучения
+            const minRequired = 20;
+            const recommended = 30;
+            
+            if (candles.length < minRequired) {
+                throw new Error(`Insufficient data: ${candles.length} candles (minimum ${minRequired} required)`);
+            }
+            
+            // Адаптируем параметры обучения для малого количества данных
+            let adaptedEpisodes = episodes;
+            let adaptedMaxSteps = 100;
+            
+            if (candles.length < recommended) {
+                console.warn(`⚠️ RL: Limited data (${candles.length} candles, recommended ${recommended}+). Adapting training parameters...`);
+                // Уменьшаем количество эпизодов и шагов для малого количества данных
+                adaptedEpisodes = Math.min(episodes, Math.floor(candles.length / 2));
+                adaptedMaxSteps = Math.min(100, candles.length - 1);
+                console.log(`📊 RL: Adapted parameters: episodes=${adaptedEpisodes}, maxSteps=${adaptedMaxSteps}`);
             }
 
             const results = [];
             let bestReward = -Infinity;
 
-            for (let episode = 0; episode < episodes; episode++) {
-                const result = await this.runEpisode(candles, initialPortfolio, episode);
+            // Используем адаптированные параметры
+            const finalEpisodes = adaptedEpisodes || episodes;
+            const finalMaxSteps = adaptedMaxSteps || 100;
+
+            for (let episode = 0; episode < finalEpisodes; episode++) {
+                const result = await this.runEpisode(candles, initialPortfolio, episode, finalMaxSteps);
                 results.push(result);
                 if (result.totalReward > bestReward) {
                     bestReward = result.totalReward;
@@ -234,11 +264,11 @@ class ReinforcementLearningService {
     /**
      * Запуск одного эпизода обучения
      */
-    async runEpisode(candles, initialPortfolio, episode) {
+    async runEpisode(candles, initialPortfolio, episode, maxStepsOverride = null) {
         let portfolio = { ...initialPortfolio };
         let totalReward = 0;
         let stepCount = 0;
-        const maxSteps = Math.min(candles.length - 1, 100);
+        const maxSteps = maxStepsOverride !== null ? maxStepsOverride : Math.min(candles.length - 1, 100);
 
         for (let i = 1; i < maxSteps; i++) {
             const currentCandle = candles[i];

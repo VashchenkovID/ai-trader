@@ -92,7 +92,7 @@ router.post('/meta-learning/train', async (req, res) => {
             }
 
             const result = await MetaLearningService.train(targetFigi, { ...options, epochs, batchSize });
-            console.log('Обучение Meta-Learning завершено:', result);
+            console.log('Обучение Meta-Learning завершено:', result?.success ? 'Успешно' : 'Ошибка');
             
             // Уведомляем через WebSocket
             try {
@@ -163,7 +163,7 @@ router.post('/meta-learning/batch-train', async (req, res) => {
             // Обучаем для первого инструмента
             const figi = instruments[0].figi || instruments[0];
             const result = await MetaLearningService.train(figi, { epochs, batchSize });
-            console.log('Обучение Meta-Learning завершено:', result);
+            console.log('Обучение Meta-Learning завершено:', result?.success ? 'Успешно' : 'Ошибка');
             
             // Уведомляем через WebSocket
             const WebSocketService = ServiceManager.getService('WebSocketService');
@@ -230,7 +230,7 @@ router.post('/reinforcement-learning/train', async (req, res) => {
             // Обучаем для первого инструмента (можно расширить для всех)
             const figi = instruments[0].figi || instruments[0];
             const result = await ReinforcementLearningService.train(figi, { epochs, batchSize });
-            console.log('Обучение Reinforcement Learning завершено:', result);
+            console.log('Обучение Reinforcement Learning завершено:', result?.success ? 'Успешно' : 'Ошибка');
             
             // Уведомляем через WebSocket
             const WebSocketService = ServiceManager.getService('WebSocketService');
@@ -297,7 +297,7 @@ router.post('/reinforcement-learning/batch-train', async (req, res) => {
             // Обучаем для первого инструмента
             const figi = instruments[0].figi || instruments[0];
             const result = await ReinforcementLearningService.train(figi, { epochs, batchSize });
-            console.log('Обучение Reinforcement Learning завершено:', result);
+            console.log('Обучение Reinforcement Learning завершено:', result?.success ? 'Успешно' : 'Ошибка');
             
             // Уведомляем через WebSocket
             const WebSocketService = ServiceManager.getService('WebSocketService');
@@ -332,6 +332,63 @@ router.post('/reinforcement-learning/batch-train', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Ошибка запуска пакетного обучения Reinforcement Learning',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Подбор гиперпараметров
+ */
+router.post('/tune-hyperparameters', async (req, res) => {
+    try {
+        const { testFigis = null, options = {} } = req.body;
+        
+        // Отправляем ответ сразу
+        res.json({
+            success: true,
+            message: 'Подбор гиперпараметров запущен',
+            data: { testFigis, options }
+        });
+
+        // Запускаем подбор в фоне
+        try {
+            const result = await OptimizedTrainingService.tuneHyperparameters(testFigis, options);
+            console.log('Подбор гиперпараметров завершен:', result);
+            
+            // Уведомляем через WebSocket
+            const WebSocketService = ServiceManager.getService('WebSocketService');
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'hyperparameter_tuning_completed',
+                    data: { success: true, result }
+                });
+            }
+        } catch (tuningError) {
+            console.error('Ошибка подбора гиперпараметров:', tuningError);
+            
+            // Отправляем ошибку в Telegram
+            if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
+                await OptimizedTelegramService.sendAlert(
+                    'Ошибка подбора гиперпараметров',
+                    `Ошибка: ${tuningError.message}\nСтек: ${tuningError.stack}`
+                );
+            }
+            
+            // Уведомляем через WebSocket
+            const WebSocketService = ServiceManager.getService('WebSocketService');
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'hyperparameter_tuning_error',
+                    data: { success: false, error: tuningError.message }
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Ошибка запуска подбора гиперпараметров:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка запуска подбора гиперпараметров',
             error: error.message
         });
     }

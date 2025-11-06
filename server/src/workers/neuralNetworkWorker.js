@@ -66,11 +66,15 @@ class NeuralNetworkWorker {
                 recurrentInitializer: 'glorotUniform'
             }));
 
-            // Dense слои
+            // L2 регуляризация для предотвращения переобучения
+            const l2Regularizer = tf.regularizers.l2({ l2: 0.001 });
+            
+            // Dense слои с L2 регуляризацией
             model.add(tf.layers.dense({ 
                 units: 128, 
                 activation: 'relu',
-                kernelInitializer: 'heUniform'
+                kernelInitializer: 'heUniform',
+                kernelRegularizer: l2Regularizer // L2 регуляризация
             }));
             model.add(tf.layers.batchNormalization({
                 betaInitializer: 'zeros',
@@ -78,12 +82,13 @@ class NeuralNetworkWorker {
                 movingMeanInitializer: 'zeros',
                 movingVarianceInitializer: 'ones'
             }));
-            model.add(tf.layers.dropout({ rate: 0.3 }));
+            model.add(tf.layers.dropout({ rate: 0.3 })); // Актуализированный dropout
 
             model.add(tf.layers.dense({ 
                 units: 64, 
                 activation: 'relu',
-                kernelInitializer: 'heUniform'
+                kernelInitializer: 'heUniform',
+                kernelRegularizer: l2Regularizer // L2 регуляризация
             }));
             model.add(tf.layers.batchNormalization({
                 betaInitializer: 'zeros',
@@ -91,20 +96,22 @@ class NeuralNetworkWorker {
                 movingMeanInitializer: 'zeros',
                 movingVarianceInitializer: 'ones'
             }));
-            model.add(tf.layers.dropout({ rate: 0.2 }));
+            model.add(tf.layers.dropout({ rate: 0.25 })); // Актуализированный dropout
 
             model.add(tf.layers.dense({ 
                 units: 32, 
                 activation: 'relu',
-                kernelInitializer: 'heUniform'
+                kernelInitializer: 'heUniform',
+                kernelRegularizer: l2Regularizer // L2 регуляризация
             }));
-            model.add(tf.layers.dropout({ rate: 0.1 }));
+            model.add(tf.layers.dropout({ rate: 0.2 })); // Актуализированный dropout
 
             // Выходной слой
             model.add(tf.layers.dense({ 
                 units: 1, 
                 activation: 'sigmoid',
                 kernelInitializer: 'glorotUniform'
+                // Выходной слой без L2 для сохранения предсказательной способности
             }));
 
             // Компиляция

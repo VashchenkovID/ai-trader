@@ -19,6 +19,7 @@ class SchedulerService {
         this.quickTrainingTask = null;
         this.tradingHoursTask = null;
         this.tradingHoursCacheTask = null;
+        this.degradationCheckTask = null;
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -95,7 +96,6 @@ class SchedulerService {
                 
                 // Проверяем, нужно ли обновлять кеш
                 if (!(await this.shouldUpdateCache())) {
-                    console.log('⏰ Cache update skipped - too soon since last update');
                     return;
                 }
                 
@@ -206,6 +206,21 @@ class SchedulerService {
             timezone: "Europe/Moscow"
         });
 
+        // Задача 9: Проверка деградации моделей и автоматическое восстановление (каждые 6 часов)
+        const degradationCheckSchedule = schedulerSettings.degradation_check_interval || '0 */6 * * *';
+        this.degradationCheckTask = cron.schedule(degradationCheckSchedule, async () => {
+            try {
+                console.log('🔍 Scheduled degradation check started...');
+                await this.checkDegradationAndRestoreAll();
+            } catch (error) {
+                console.error('Error in scheduled degradation check:', error);
+                await OptimizedTelegramService.sendAlert('DEGRADATION_CHECK_ERROR', error.message, 'warning');
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
         // Первое обновление при запуске (через 1 минуту) - ОТКЛЮЧЕНО для отладки
         // setTimeout(() => {
         //     this.performCacheUpdate();
@@ -223,6 +238,7 @@ class SchedulerService {
         }
         console.log(`   - Trading hours cache update: ${tradingHoursSchedule}`);
         console.log('   - Trading hours notifications: every 5 minutes');
+        console.log(`   - Model degradation check: ${degradationCheckSchedule}`);
         
         // Запускаем периодическую отправку данных через WebSocket
         this.startWebSocketBroadcasts();
@@ -290,11 +306,7 @@ class SchedulerService {
         if (shouldUpdate) {
             const hoursSinceUpdate = Math.round(timeSinceLastUpdate / (60 * 60 * 1000));
             console.log(`📅 Cache update needed: ${hoursSinceUpdate}h since last update (interval: ${this.cacheUpdateInterval / (60 * 60 * 1000)}h)`);
-        } else {
-            const remainingTime = Math.round((this.cacheUpdateInterval - timeSinceLastUpdate) / (60 * 1000));
-            console.log(`⏰ Cache update skipped: ${remainingTime}min until next update`);
-        }
-
+        } 
         return shouldUpdate;
     }
 
@@ -576,9 +588,7 @@ class SchedulerService {
     async getCacheStatus() {
         const now = Date.now();
         const timeSinceLastUpdate = this.lastCacheUpdate ? now - this.lastCacheUpdate : null;
-        
-        console.log(`📊 Cache status: lastUpdate=${this.lastCacheUpdate ? new Date(this.lastCacheUpdate).toISOString() : 'null'}, timeSince=${timeSinceLastUpdate ? Math.round(timeSinceLastUpdate / (60 * 1000)) : 'null'}min`);
-        
+                
         return {
             lastUpdate: this.lastCacheUpdate ? new Date(this.lastCacheUpdate).toISOString() : null,
             timeSinceLastUpdate: timeSinceLastUpdate ? Math.round(timeSinceLastUpdate / (60 * 1000)) : null, // в минутах
@@ -733,12 +743,17 @@ class SchedulerService {
             const __dirname = dirname(__filename);
             const workerPath = join(__dirname, '../workers/cacheUpdateWorker.js');
             
+            // Получаем настройки для объёма кеширования
+            const nnSettings = await SettingsService.getNeuralNetworkSettings();
+            const cacheDays = nnSettings.cache_candles_days || 365; // Год данных по умолчанию
+            
             const worker = new Worker(workerPath, {
                 workerData: {
                     updateInstruments: true,
                     updateCandles: true,
                     instrumentsLimit: 100,
-                    candlesDays: 30
+                    candlesDays: cacheDays, // Увеличенный объём свечей
+                    incrementalUpdate: true // Используем инкрементальное обновление
                 }
             });
             
@@ -858,6 +873,10 @@ class SchedulerService {
         this.isTraining = true;
         
         try {
+            // Сначала проверяем деградацию и восстанавливаем best-модели
+            console.log('🔍 Checking model degradation before scheduled training...');
+            await this.checkDegradationAndRestoreAll();
+
             // Проверяем, нужно ли переобучение
             const shouldRetrain = await this.shouldRetrainModel();
             if (!shouldRetrain) {
@@ -883,6 +902,13 @@ class SchedulerService {
             // Обучаем каждый инструмент через IntegratedAIService
             for (const instrument of instruments) {
                 try {
+                    // Проверяем, нужно ли переобучение для этого инструмента
+                    const shouldRetrain = await this.shouldRetrainModel(instrument.figi);
+                    if (!shouldRetrain) {
+                        console.log(`🧠 Model for ${instrument.ticker} is up to date, skipping`);
+                        continue;
+                    }
+
                     console.log(`🧠 Training all networks for ${instrument.ticker}...`);
                     const results = await IntegratedAIService.trainAllNetworks(instrument.figi, {
                         days: trainingDays,
@@ -1007,8 +1033,15 @@ class SchedulerService {
         }
     }
 
-    async shouldRetrainModel() {
+    async shouldRetrainModel(figi = null) {
         try {
+            const OptimizedTrainingService = getService('OptimizedTrainingService');
+            
+            // Если указан FIGI, проверяем per-FIGI модель
+            if (figi && OptimizedTrainingService) {
+                return await this.shouldRetrainModelForFigi(figi, OptimizedTrainingService);
+            }
+
             // Проверяем, есть ли сохраненная модель
             const modelExists = NeuralNetworkService.model !== null;
             if (!modelExists) {
@@ -1051,6 +1084,127 @@ class SchedulerService {
         }
     }
 
+    /**
+     * Проверка необходимости переобучения для конкретного FIGI с учетом деградации
+     */
+    async shouldRetrainModelForFigi(figi, OptimizedTrainingService) {
+        try {
+            // 1. Проверяем возраст модели
+            const fs = await import('fs/promises');
+            const path = await import('path');
+            const modelsDir = './models';
+            const modelPath = path.join(modelsDir, `${figi}_model.json`);
+            
+            try {
+                const stats = await fs.stat(modelPath);
+                const ageInDays = (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24);
+                const nnSettings = await SettingsService.getNeuralNetworkSettings();
+                const modelAge = nnSettings.nn_model_max_age_days || 7;
+                
+                if (ageInDays > modelAge) {
+                    console.log(`🧠 Model for ${figi} is ${ageInDays.toFixed(1)} days old (max: ${modelAge} days), retraining required`);
+                    return true;
+                }
+            } catch (error) {
+                // Модель не найдена - нужно обучить
+                console.log(`🧠 No model found for ${figi}, training required`);
+                return true;
+            }
+
+            // 2. Проверяем деградацию модели
+            try {
+                const bestMeta = await OptimizedTrainingService.loadBestMeta(figi);
+                if (bestMeta && bestMeta.bestAccuracy) {
+                    // Загружаем текущую модель и оцениваем её производительность
+                    const currentModel = await OptimizedTrainingService.loadModel(figi);
+                    if (currentModel) {
+                        const currentMetrics = await OptimizedTrainingService.evaluateModelPerformance(figi, currentModel);
+                        
+                        if (currentMetrics && currentMetrics.accuracy) {
+                            const degradation = bestMeta.bestAccuracy - currentMetrics.accuracy;
+                            const degradationThreshold = 0.05; // 5% деградация
+                            
+                            if (degradation > degradationThreshold) {
+                                console.log(`⚠️ Model degradation detected for ${figi}: current=${currentMetrics.accuracy.toFixed(4)}, best=${bestMeta.bestAccuracy.toFixed(4)}, degradation=${(degradation*100).toFixed(2)}%`);
+                                console.log(`🔄 Retraining required due to degradation`);
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn(`⚠️ Error checking degradation for ${figi}:`, error.message);
+                // В случае ошибки проверки деградации, проверяем только возраст
+            }
+
+            return false;
+        } catch (error) {
+            console.error(`Error checking if model should retrain for ${figi}:`, error);
+            return true; // В случае ошибки лучше переобучить
+        }
+    }
+
+    /**
+     * Проверка деградации и автоматическое восстановление best-модели для всех инструментов
+     */
+    async checkDegradationAndRestoreAll() {
+        try {
+            const OptimizedTrainingService = getService('OptimizedTrainingService');
+            
+            if (!OptimizedTrainingService) {
+                console.warn('⚠️ OptimizedTrainingService not available for degradation check');
+                return;
+            }
+
+            console.log('🔍 Checking model degradation for all instruments...');
+            
+            // Получаем все инструменты
+            const instruments = await CacheService.getAllInstruments(100);
+            let checked = 0;
+            let degraded = 0;
+            let restored = 0;
+
+            for (const instrument of instruments) {
+                try {
+                    const model = await OptimizedTrainingService.loadModel(instrument.figi);
+                    if (model) {
+                        const metrics = await OptimizedTrainingService.evaluateModelPerformance(instrument.figi, model);
+                        if (metrics) {
+                            const result = await OptimizedTrainingService.checkDegradationAndRestore(
+                                instrument.figi, 
+                                model, 
+                                metrics
+                            );
+                            
+                            checked++;
+                            if (result.degraded) {
+                                degraded++;
+                            }
+                            if (result.restored) {
+                                restored++;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`⚠️ Error checking degradation for ${instrument.figi}:`, error.message);
+                }
+            }
+
+            console.log(`✅ Degradation check completed: checked=${checked}, degraded=${degraded}, restored=${restored}`);
+            
+            if (degraded > 0 || restored > 0) {
+                // Отправляем уведомление о результатах проверки
+                await OptimizedTelegramService.sendAlert(
+                    'DEGRADATION_CHECK',
+                    `Проверка деградации моделей:\n• Проверено: ${checked}\n• Деградировало: ${degraded}\n• Восстановлено: ${restored}`,
+                    degraded > 0 ? 'warning' : 'info'
+                );
+            }
+        } catch (error) {
+            console.error('❌ Error checking degradation for all instruments:', error);
+        }
+    }
+
     stop() {
         if (this.cacheTask) {
             this.cacheTask.stop();
@@ -1075,6 +1229,10 @@ class SchedulerService {
         if (this.tradingHoursCacheTask) {
             this.tradingHoursCacheTask.stop();
             console.log('Trading hours cache task stopped');
+        }
+        if (this.degradationCheckTask) {
+            this.degradationCheckTask.stop();
+            console.log('Degradation check task stopped');
         }
         if (this.newsCleanupTask) {
             this.newsCleanupTask.stop();

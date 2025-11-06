@@ -48,7 +48,7 @@ router.post('/train', async (req, res) => {
             // Используем существующий метод обучения для инструмента
             const days = typeof options.days === 'number' ? options.days : 180;
             const result = await NeuralNetworkService.trainForInstrument(figi, days);
-            console.log('Обучение нейросети завершено:', result);
+            console.log('Обучение нейросети завершено:', result?.success ? 'Успешно' : 'Ошибка');
             
             // Уведомляем через WebSocket
             const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');

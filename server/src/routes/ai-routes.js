@@ -72,7 +72,7 @@ router.post('/train', async (req, res) => {
         // Запускаем обучение в фоне
         try {
             const result = await IntegratedAIService.train(epochs, batchSize);
-            console.log('Обучение ИИ завершено:', result);
+            console.log('Обучение ИИ завершено:', result?.success ? 'Успешно' : 'Ошибка');
             
             // Уведомляем через WebSocket
             const WebSocketService = ServiceManager.getService('WebSocketService');
