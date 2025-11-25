@@ -158,10 +158,11 @@ export const apiService = {
 
   async predictEnsemble(figi: string, portfolio: any) {
     try {
-      const response = await api.post('/api/ensemble/predict', { figi, portfolio });
+      // Проксируем на интегрированный ИИ, который внутри использует EnsembleService и другие модели
+      const response = await api.post('/api/ai/recommendation', { figi, context: { portfolio } });
       return response.data;
     } catch (error) {
-      console.error('Error predicting with ensemble:', error);
+      console.error('Error predicting with ensemble (integrated AI):', error);
       throw error;
     }
   },
@@ -220,7 +221,7 @@ export const apiService = {
 
   async trainReinforcementLearning(figi: string, episodes: number = 50, days: number = 30, initialPortfolio: any = null) {
     try {
-      const response = await api.post('/api/reinforcement-learning/train', { figi, episodes, days, initialPortfolio });
+      const response = await api.post('/api/training/reinforcement-learning/train', { figi, episodes, days, initialPortfolio });
       return response.data;
     } catch (error) {
       console.error('Error training reinforcement learning:', error);

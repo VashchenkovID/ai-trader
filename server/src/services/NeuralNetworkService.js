@@ -356,6 +356,18 @@ class NeuralNetworkService {
                 await fs.writeFile(this.weightsFile, JSON.stringify(modelData.weights));
 
                 console.log('✅ Общая модель сохранена (архитектура и веса)');
+
+                // Дополнительно сохраняем через ModelManager в новом формате,
+                // чтобы последующие загрузки не падали на fallback и не логировали warning
+                try {
+                    if (this.model) {
+                        const path = await import('path');
+                        const modelName = path.basename(this.modelFile, '.json');
+                        await ModelManager.saveModel(this.model, `neural/${modelName}`);
+                    }
+                } catch (modelManagerError) {
+                    console.warn(`⚠️ Failed to save general neural model via ModelManager: ${modelManagerError.message}`);
+                }
             }
         } catch (error) {
             console.error('❌ Ошибка сохранения модели:', error);
@@ -385,16 +397,25 @@ class NeuralNetworkService {
                             console.log(`✅ Per-FIGI neural model loaded successfully for ${figi} via ModelManager`);
                         } else {
                             // Fallback к прямому чтению файлов
-                            const archRaw = await fs.readFile(figiModelFile, 'utf-8');
-                            const arch = JSON.parse(archRaw);
-                            this.model = await tf.models.modelFromJSON(arch);
-                            
-                            const weightsRaw = await fs.readFile(figiWeightsFile, 'utf-8');
-                            const { specs } = JSON.parse(weightsRaw);
-                            const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
-                            this.model.setWeights(tensors);
-                            
-                            console.log(`✅ Per-FIGI neural model loaded for ${figi} with legacy format`);
+                            try {
+                                const archRaw = await fs.readFile(figiModelFile, 'utf-8');
+                                const arch = JSON.parse(archRaw);
+                                this.model = await tf.models.modelFromJSON(arch);
+                                
+                                const weightsRaw = await fs.readFile(figiWeightsFile, 'utf-8');
+                                const { specs } = JSON.parse(weightsRaw);
+                                const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
+                                this.model.setWeights(tensors);
+                                
+                                console.log(`✅ Per-FIGI neural model loaded for ${figi} with legacy format`);
+                            } catch (legacyError) {
+                                console.warn(`⚠️ Failed to load legacy per-FIGI model for ${figi}: ${legacyError.message}. Deleting corrupted files.`);
+                                // Если файлы повреждены, удаляем их, чтобы не пытаться загружать снова
+                                try { await fs.unlink(figiModelFile); } catch {}
+                                try { await fs.unlink(figiWeightsFile); } catch {}
+                                this.model = null;
+                                return false;
+                            }
                         }
                         
                         // Гарантируем компиляцию после загрузки
@@ -723,10 +744,6 @@ class NeuralNetworkService {
 
     // Предсказание для конкретной акции
     async predict(figi, dividendYield = 0) {
-        if (!this.model) {
-            throw new Error('Model not trained');
-        }
-
         try {
             // Получаем последние данные
             const candles = await CacheService.getCandles(figi, 'DAY', 100);
@@ -748,16 +765,47 @@ class NeuralNetworkService {
             );
 
             // Используем новый метод с дивидендами
-            const { features: allFeatures } = await OptimizedDataService.prepareTrainingData(candles, 60, 5, figi);
+            // prepareTrainingData возвращает массив сэмплов, берем последний как наиболее свежий
+            const { features } = await OptimizedDataService.prepareTrainingData(candles, 60, 5, figi);
+            if (!features || features.length === 0) {
+                console.error(`❌ No features prepared for prediction (FIGI: ${figi})`);
+                return { score: 0, confidence: 0, error: 'No features prepared for prediction' };
+            }
+            const featureVector = features[features.length - 1];
 
-            console.log(`🔍 Prediction input shape: ${allFeatures.length} features`);
+            console.log(`🔍 Prediction input shape: ${featureVector.length} features`);
             
-            // Проверяем совместимость размерности
-            if (this.model.inputs && this.model.inputs[0] && this.model.inputs[0].shape) {
-                const expectedShape = this.model.inputs[0].shape[1];
-                if (expectedShape !== allFeatures.length) {
-                    console.error(`❌ Prediction input shape mismatch: expected ${expectedShape}, got ${allFeatures.length}`);
-                    return { score: 0, confidence: 0, error: `Input shape mismatch: expected ${expectedShape}, got ${allFeatures.length}` };
+            // Выбираем подходящую модель для предсказания
+            // Пытаемся взять актуальную per-FIGI модель из OptimizedTrainingService (соответствует текущему размеру фичей)
+            // Если не удалось — не используем устаревшую this.model с другой размерностью, а мягко возвращаем ошибку
+            let model = null;
+            try {
+                const OptimizedTrainingService = getService('OptimizedTrainingService');
+                if (OptimizedTrainingService) {
+                    const loadedModel = await OptimizedTrainingService.loadModel(figi, featureVector.length);
+                    if (loadedModel) {
+                        model = loadedModel;
+                    }
+                }
+            } catch (serviceError) {
+                console.warn(`⚠️ Failed to load per-FIGI model for prediction via OptimizedTrainingService: ${serviceError.message}`);
+            }
+
+            if (!model) {
+                console.error(`❌ No compatible model found for prediction (FIGI: ${figi}, features: ${featureVector.length}). Train model first.`);
+                return {
+                    score: 0,
+                    confidence: 0,
+                    error: `Model not trained or incompatible for FIGI ${figi}. Please run optimized training first.`
+                };
+            }
+
+            // Проверяем совместимость размерности только для выбранной модели
+            if (model.inputs && model.inputs[0] && model.inputs[0].shape) {
+                const expectedShape = model.inputs[0].shape[1];
+                if (expectedShape !== featureVector.length) {
+                    console.error(`❌ Prediction input shape mismatch: expected ${expectedShape}, got ${featureVector.length}`);
+                    return { score: 0, confidence: 0, error: `Input shape mismatch: expected ${expectedShape}, got ${featureVector.length}` };
                 }
             } else {
                 console.error(`❌ Model inputs not properly initialized`);
@@ -765,8 +813,8 @@ class NeuralNetworkService {
             }
 
             // Предсказание
-            const inputTensor = tf.tensor2d([allFeatures]);
-            const prediction = this.model.predict(inputTensor);
+            const inputTensor = tf.tensor2d([featureVector]);
+            const prediction = model.predict(inputTensor);
             const score = (await prediction.data())[0];
 
             inputTensor.dispose();
@@ -787,9 +835,11 @@ class NeuralNetworkService {
                     recommendation: finalScore > 0.7 ? 'BUY' : finalScore < 0.3 ? 'SELL' : 'HOLD',
                     dividendImpact: dividendBonus
                 },
-                candles,
                 indicators,
-                dividendYield
+                {
+                    candlesCount: candles.length,
+                    dividendYield
+                }
             );
 
             return {
@@ -816,12 +866,17 @@ class NeuralNetworkService {
             }
 
             // Используем новый метод с дивидендами
-            const { features: allFeatures } = await OptimizedDataService.prepareTrainingData(candles, 60, 5, figi);
+            const { features } = await OptimizedDataService.prepareTrainingData(candles, 60, 5, figi);
+            if (!features || features.length === 0) {
+                console.error(`❌ No features prepared for PredictFromCandles (FIGI: ${figi})`);
+                return { score: 0, confidence: 0, error: 'No features prepared for prediction' };
+            }
+            const featureVector = features[features.length - 1];
 
-            console.log(`🔍 PredictFromCandles input shape: ${allFeatures.length} features`);
+            console.log(`🔍 PredictFromCandles input shape: ${featureVector.length} features`);
 
-            // Используем worker для предсказания
-            const score = await OptimizedTrainingService.predict(figi, allFeatures);
+            // Используем worker/OptimizedTrainingService для предсказания по последнему сэмплу
+            const score = await OptimizedTrainingService.predict(figi, featureVector);
 
             const dividendBonus = dividendYield * 0.1;
             const finalScore = Math.min(1, score + dividendBonus);
@@ -843,9 +898,11 @@ class NeuralNetworkService {
                     recommendation: finalScore > 0.7 ? 'BUY' : finalScore < 0.3 ? 'SELL' : 'HOLD',
                     dividendImpact: dividendBonus
                 },
-                candles,
                 indicators,
-                dividendYield
+                {
+                    candlesCount: candles.length,
+                    dividendYield
+                }
             );
             
             return {
@@ -1271,6 +1328,23 @@ class NeuralNetworkService {
             console.log(`📈 Buy recommendations: ${analysis.buyRecommendations?.length || 0}`);
             console.log(`📉 Sell recommendations: ${analysis.sellRecommendations?.length || 0}`);
 
+            // Шлём статус анализа (старт)
+            try {
+                const webSocketService = this.getWebSocketService();
+                if (webSocketService && typeof webSocketService.broadcast === 'function') {
+                    webSocketService.broadcast({
+                        type: 'analysis_status_update',
+                        data: {
+                            isAnalyzing: true,
+                            lastRunAt: new Date().toISOString()
+                        },
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (wsError) {
+                console.warn('Failed to broadcast analysis status (start):', wsError.message);
+            }
+
             // Сохраняем рекомендации в базу данных
             await this.saveRecommendationsToDatabase(analysis.buyRecommendations || [], analysis.sellRecommendations || []);
 
@@ -1301,11 +1375,18 @@ class NeuralNetworkService {
             }
 
             // Отправляем анализ через WebSocket
-            WebSocketService.broadcast({
-                type: 'analysis_update',
-                data: analysis,
-                timestamp: new Date().toISOString()
-            });
+            try {
+                const webSocketService = this.getWebSocketService();
+                if (webSocketService && typeof webSocketService.broadcast === 'function') {
+                    webSocketService.broadcast({
+                        type: 'analysis_update',
+                        data: analysis,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (wsError) {
+                console.warn('Failed to broadcast market analysis via WebSocket:', wsError.message);
+            }
 
             console.log(`✅ Market analysis completed. Telegram notifications sent: ${telegramSent}`);
 
@@ -1327,6 +1408,23 @@ class NeuralNetworkService {
             // Сбрасываем флаг анализа
             const SchedulerService = (await import('./SchedulerService.js')).default;
             SchedulerService.isAnalyzing = false;
+
+            // Шлём статус анализа (завершён)
+            try {
+                const webSocketService = this.getWebSocketService();
+                if (webSocketService && typeof webSocketService.broadcast === 'function') {
+                    webSocketService.broadcast({
+                        type: 'analysis_status_update',
+                        data: {
+                            isAnalyzing: false,
+                            lastRunAt: new Date().toISOString()
+                        },
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (wsError) {
+                console.warn('Failed to broadcast analysis status (finish):', wsError.message);
+            }
         }
     }
 
@@ -1428,14 +1526,21 @@ class NeuralNetworkService {
             console.log(`💾 Saved ${buyRecommendations.length} BUY and ${sellRecommendations.length} SELL recommendations to database`);
 
             // Отправляем уведомление через WebSocket о новых рекомендациях
-            WebSocketService.broadcast({
-                type: 'recommendations_updated',
-                data: {
-                    buyCount: buyRecommendations.length,
-                    sellCount: sellRecommendations.length,
-                    timestamp: new Date().toISOString()
+            try {
+                const webSocketService = this.getWebSocketService();
+                if (webSocketService && typeof webSocketService.broadcast === 'function') {
+                    webSocketService.broadcast({
+                        type: 'recommendations_updated',
+                        data: {
+                            buyCount: buyRecommendations.length,
+                            sellCount: sellRecommendations.length,
+                            timestamp: new Date().toISOString()
+                        }
+                    });
                 }
-            });
+            } catch (wsError) {
+                console.warn('Failed to broadcast recommendations update via WebSocket:', wsError.message);
+            }
 
         } catch (error) {
             console.error('❌ Error saving recommendations to database:', error);

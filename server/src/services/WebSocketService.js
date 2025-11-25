@@ -276,11 +276,25 @@ class WebSocketService {
             if (TradingEngine) {
                 try {
                     const portfolio = await TradingEngine.getVirtualPortfolioValue();
+                    const stats = await TradingEngine.calculateTradingStats();
+                    const Recommendation = (await import('../models/Recommendation.js')).default;
+                    const topBuys = await Recommendation.getTopRecommendations(3, 'BUY');
+
                     const tradingStats = {
-                        totalPnL: portfolio.totalValue - 100000, // Предполагаем начальный капитал 100k
-                        winRate: 0.75, // Статическое значение для демонстрации
-                        totalTrades: 0,
-                        successfulTrades: 0
+                        portfolioValue: portfolio.totalValue,
+                        cash: portfolio.cash,
+                        totalPnL: stats.totalReturn || 0,
+                        winRate: (stats.winRate || 0) * 100,
+                        totalTrades: stats.totalTrades || 0,
+                        successfulTrades: Math.round((stats.totalTrades || 0) * (stats.winRate || 0)),
+                        recommendations: topBuys.map(rec => ({
+                            figi: rec.figi,
+                            ticker: rec.ticker,
+                            name: rec.name,
+                            recommendation: rec.recommendation,
+                            confidence: rec.confidence,
+                            score: rec.score
+                        }))
                     };
                     
                     this.sendToClient(ws, {

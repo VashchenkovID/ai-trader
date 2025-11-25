@@ -58,12 +58,20 @@ export interface Portfolio {
 }
 
 export interface TradingStats {
-  totalTrades: number;
-  profitableTrades: number;
-  winRate: number;
+  portfolioValue: number;
+  cash: number;
   totalPnL: number;
-  maxDrawdown: number;
-  sharpeRatio: number;
+  winRate: number;
+  totalTrades: number;
+  successfulTrades: number;
+  recommendations?: {
+    figi: string;
+    ticker: string;
+    name: string;
+    recommendation: 'BUY' | 'SELL' | 'HOLD';
+    confidence: number;
+    score: number;
+  }[];
 }
 
 export interface Recommendation {
@@ -1516,7 +1524,8 @@ export const apiService = {
    */
   async getEnsemblePrediction(figi: string, portfolio?: any): Promise<any> {
     try {
-      const response = await api.post('/api/ensemble/predict', { figi, portfolio });
+      // Используем интегрированный ИИ, который внутри опирается на EnsembleService и другие модели
+      const response = await api.post('/api/ai/recommendation', { figi, context: { portfolio } });
       return response.data.data;
     } catch (error) {
       console.error('Error getting ensemble prediction:', error);
@@ -1654,7 +1663,7 @@ export const apiService = {
    */
   async trainReinforcementLearning(figi: string, options: any = {}): Promise<any> {
     try {
-      const response = await api.post('/api/reinforcement-learning/train', { figi, options });
+      const response = await api.post('/api/training/reinforcement-learning/train', { figi, options });
       return response.data.data;
     } catch (error) {
       console.error('Error training reinforcement learning:', error);
@@ -1732,7 +1741,7 @@ export const apiService = {
    */
   async startRLTraining(): Promise<any> {
     try {
-      const response = await api.post('/api/reinforcement-learning/train');
+      const response = await api.post('/api/training/reinforcement-learning/train');
       return response.data;
     } catch (error) {
       console.error('Error starting RL training:', error);

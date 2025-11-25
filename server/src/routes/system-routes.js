@@ -72,6 +72,34 @@ router.get('/health', async (req, res) => {
 });
 
 /**
+ * Запуск анализа рынка и портфеля
+ */
+router.post('/market-analysis', async (req, res) => {
+    try {
+        // Отдаём ответ сразу, анализ запускаем в фоне
+        res.json({
+            success: true,
+            message: 'Анализ рынка и портфеля запущен'
+        });
+
+        setImmediate(async () => {
+            try {
+                await NeuralNetworkService.performMarketAnalysis();
+            } catch (error) {
+                console.error('Ошибка фонового анализа рынка:', error);
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка запуска анализа рынка:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка запуска анализа рынка',
+            error: error.message
+        });
+    }
+});
+
+/**
  * Статус кеша
  */
 router.get('/cache/status', async (req, res) => {

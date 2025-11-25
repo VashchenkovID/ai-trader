@@ -29,10 +29,6 @@ class TinkoffApiService {
                 await this.delay(this.requestDelay - timeSinceLastRequest);
             }
 
-            console.log(`🌐 Making API request to: ${this.baseUrl}${path}`);
-            console.log(`🔑 Using token: ${this.token ? this.token.substring(0, 10) + '...' : 'NOT SET'}`);
-            console.log(`📦 Request body:`, JSON.stringify(body, null, 2));
-
             const controller = new AbortController();
             // Увеличиваем таймаут для Shares endpoint, так как он может быть медленным
             const timeout = path.includes('/Shares') ? 60000 : 30000; // 60 секунд для Shares, 30 для остальных

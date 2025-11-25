@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from 'primereact/card';
-import { Button } from 'primereact/button';
 import { Badge } from 'primereact/badge';
 import { Skeleton } from 'primereact/skeleton';
 import { Message } from 'primereact/message';
 import { apiService } from '../services/apiService';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { useWebSocketData } from '../components/WebSocketDataProvider';
+import CacheStatusCard from '../components/dashboard/CacheStatusCard';
+import TradingSummaryCard from '../components/dashboard/TradingSummaryCard';
+import NeuralNetworksControlCard from '../components/dashboard/NeuralNetworksControlCard';
 
 interface DashboardProps {
   className?: string;
@@ -19,29 +21,11 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
   const { 
     systemStatus, 
     cacheStatus, 
+    systemResources,
     tradingStats, 
     trainingStatus, 
     isConnected 
   } = useWebSocketData();
-
-  // Отладочная информация
-  useEffect(() => {
-    console.log('🔍 Dashboard - WebSocket connected:', isConnected);
-    console.log('🔍 Dashboard - System status:', systemStatus);
-    console.log('🔍 Dashboard - System status type:', typeof systemStatus);
-    console.log('🔍 Dashboard - System status keys:', systemStatus ? Object.keys(systemStatus) : 'null');
-    console.log('🔍 Dashboard - Cache status:', cacheStatus);
-    console.log('🔍 Dashboard - Trading stats:', tradingStats);
-    console.log('🔍 Dashboard - Training status:', trainingStatus);
-    console.log('🔍 Dashboard - Training status type:', typeof trainingStatus);
-    console.log('🔍 Dashboard - Training status keys:', trainingStatus ? Object.keys(trainingStatus) : 'null');
-    if (trainingStatus) {
-      console.log('🔍 Dashboard - Neural network isTraining:', trainingStatus.neuralNetwork?.isTraining);
-      console.log('🔍 Dashboard - Ensemble isTraining:', trainingStatus.ensemble?.isTraining);
-      console.log('🔍 Dashboard - Meta learning isTraining:', trainingStatus.metaLearning?.isTraining);
-      console.log('🔍 Dashboard - RL isTraining:', trainingStatus.reinforcementLearning?.isTraining);
-    }
-  }, [isConnected, systemStatus, cacheStatus, tradingStats, trainingStatus]);
   
   // Локальное состояние
   const [error, setError] = useState<string | null>(null);
@@ -331,9 +315,10 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
   return (
     <div className={`dashboard ${className}`}>
       <div className="grid">
-        {/* Заголовок слева */}
-        <div className="col-12 xl:col-6">
+        {/* Заголовок и статус подключения */}
+        <div className="col-12">
           <Card className="h-full">
+            <div className="flex flex-column md:flex-row md:align-items-center md:justify-content-between gap-3">
             <div>
               <div className="flex align-items-center gap-2 mb-2">
                 <h1 className="m-0 text-3xl font-bold text-primary">📊 Панель управления</h1>
@@ -354,24 +339,20 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
                   Обновлено: {new Date().toLocaleString('ru-RU')}
                 </small>
               )}
-            </div>
-          </Card>
         </div>
 
-        {/* Информация о подключении справа */}
-        <div className="col-12 xl:col-6">
-          <Card className="h-full">
-            <div className="flex align-items-center justify-content-center">
+              <div className="flex align-items-center justify-content-center md:justify-content-end gap-2">
               <div className="text-center">
-                <div className="text-2xl mb-2">
+                  <div className="text-2xl mb-1">
                   {isConnected ? '🟢' : '🔴'}
                 </div>
-                <div className="text-600">
+                  <div className="text-600 text-sm">
                   {isConnected ? 'Подключено к серверу' : 'Отключено от сервера'}
                 </div>
                 <small className="text-500">
                   {isConnected ? 'Данные обновляются в реальном времени' : 'Попытка переподключения...'}
                 </small>
+                </div>
               </div>
             </div>
           </Card>
@@ -385,6 +366,24 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
         )}
 
         {/* Грид 2x2 для основных панелей */}
+        
+        {/* Краткая сводка по торговле */}
+        <div className="col-12 xl:col-6">
+          <TradingSummaryCard tradingStats={tradingStats} />
+        </div>
+
+        {/* Управление нейросетями */}
+        <div className="col-12 xl:col-6">
+          <NeuralNetworksControlCard
+            trainingStatus={trainingStatus}
+            isAnyNetworkTraining={isAnyNetworkTraining}
+            trainLoading={trainLoading}
+            trainingStages={trainingStages}
+            trainingStage={trainingStage || null}
+            trainingProgress={trainingProgress || null}
+            onTrainAllNetworks={handleTrainAllNetworks}
+          />
+        </div>
         
         {/* Статус системы */}
         <div className="col-12 xl:col-6">
@@ -401,6 +400,7 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
                 ))}
               </div>
             ) : systemStatus ? (
+              <div className="flex flex-column gap-3">
               <div className="grid">
                 <div className="col-6">
                   <div className="text-center p-3 border-round surface-100">
@@ -424,6 +424,30 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
                   <div className="text-center p-3 border-round surface-100">
                     <div className="text-900 font-medium mb-2">🗄️ База данных</div>
                     {getStatusBadge(systemStatus.database)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ресурсы сервера */}
+                <div className="p-3 border-round surface-100">
+                  <div className="text-900 font-medium mb-2">💻 Ресурсы сервера</div>
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    <div>
+                      <span className="text-500 mr-1">CPU:</span>
+                      <span className="text-900">
+                        {systemResources?.cpu?.usage != null
+                          ? `${systemResources.cpu.usage.toFixed(1)}%`
+                          : '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-500 mr-1">Память:</span>
+                      <span className="text-900">
+                        {systemResources?.memory?.usage != null
+                          ? `${systemResources.memory.usage}%`
+                          : '—'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -437,409 +461,9 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
 
         {/* Информация о кеше */}
         <div className="col-12 xl:col-6">
-          <Card title="💾 Статус кеша" className="h-full">
-            {!cacheStatus ? (
-              <div className="grid">
-                {[1, 2, 3].map((item) => (
-                  <div key={item} className="col-12">
-                    <div className="text-center p-3 border-round surface-100">
-                      <Skeleton width="100%" height="1.5rem" className="mb-2" />
-                      <Skeleton width="60%" height="1rem" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : cacheStatus ? (
-              <div className="grid">
-                <div className="col-12">
-                  <div className="text-center p-3 border-round surface-100">
-                    <div className="text-900 font-medium mb-2">🕐 Последнее обновление</div>
-                    <div className="text-600 text-sm">
-                      {cacheStatus.lastUpdate ? 
-                        new Date(cacheStatus.lastUpdate).toLocaleString('ru-RU') : 
-                        'Никогда'
-                      }
-                    </div>
-                  </div>
-                </div>
-                <div className="col-6">
-                  <div className="text-center p-3 border-round surface-100">
-                    <div className="text-900 font-medium mb-2">⏱️ Время с обновления</div>
-                    <div className="text-600 text-sm">
-                      {cacheStatus.timeSinceLastUpdate ? 
-                        `${cacheStatus.timeSinceLastUpdate} мин` : 
-                        'Неизвестно'
-                      }
-                    </div>
-                  </div>
-                </div>
-                <div className="col-6">
-                  <div className="text-center p-3 border-round surface-100">
-                    <div className="text-900 font-medium mb-2">🔄 Интервал обновления</div>
-                    <div className="text-600 text-sm">
-                      {cacheStatus.updateInterval} мин
-                    </div>
-                  </div>
-                </div>
-                <div className="col-6">
-                  <div className="text-center p-3 border-round surface-100">
-                    <div className="text-900 font-medium mb-2">⏰ Следующее обновление</div>
-                    <div className="text-600 text-sm">
-                      {cacheStatus.nextUpdateIn ? 
-                        `через ${cacheStatus.nextUpdateIn} мин` : 
-                        'Неизвестно'
-                      }
-                    </div>
-                  </div>
-                </div>
-                <div className="col-6">
-                  <div className="text-center p-3 border-round surface-100">
-                    <div className="text-900 font-medium mb-2">📊 Статус</div>
-                    {cacheStatus.needsUpdate ? (
-                      <Badge value="Требует обновления" severity="warning" />
-                    ) : (
-                      <Badge value="Актуален" severity="success" />
-                    )}
-                  </div>
-                </div>
-                <div className="col-12">
-                  <div className="text-center p-3 border-round surface-100">
-                    <Button
-                      icon="pi pi-refresh"
-                      label="Обновить кеш"
-                      size="small"
-                      severity="info"
-                      className="w-full"
-                      loading={false}
-                      onClick={async () => {
-                        try {
-                          await apiService.refreshCache();
-                          alert('Кеш обновлен!');
-                        } catch (e) {
-                          console.error('Cache refresh failed:', e);
-                          alert('Ошибка обновления кеша');
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center p-4">
-                <p className="text-600">Нет данных о кеше</p>
-              </div>
-            )}
-          </Card>
-        </div>
-
-        {/* Краткая сводка по торговле */}
-        <div className="col-12 xl:col-6">
-          <Card title="📈 Торговая сводка" className="h-full">
-            {!tradingStats ? (
-              <div className="grid">
-                {[1, 2].map((item) => (
-                  <div key={item} className="col-6">
-                    <div className="text-center p-3">
-                      <Skeleton width="60%" height="2rem" className="mb-2" />
-                      <Skeleton width="80%" height="1rem" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : tradingStats ? (
-              <div className="grid">
-                <div className="col-6">
-                  <div className="text-center p-3">
-                    <div className={`text-2xl font-bold mb-2 ${
-                      (tradingStats.totalPnL || 0) >= 0 ? 'text-green-500' : 'text-red-500'
-                    }`}>
-                      {(() => {
-                        const pnl = tradingStats.totalPnL || 0;
-                        return `${pnl > 0 ? '+' : ''}${pnl.toFixed(1)}%`;
-                      })()}
-                    </div>
-                    <div className="text-600">💰 Общая прибыль</div>
-                  </div>
-                </div>
-                <div className="col-6">
-                  <div className="text-center p-3">
-                    <div className="text-2xl font-bold text-blue-500 mb-2">
-                      {(tradingStats.winRate || 0).toFixed(1)}%
-                    </div>
-                    <div className="text-600">🏆 Процент прибыльных</div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center p-4">
-                <p className="text-600">Нет торговых данных</p>
-              </div>
-            )}
-          </Card>
-        </div>
-
-        {/* Управление нейросетями (одна кнопка) */}
-        <div className="col-12 xl:col-6">
-          <Card title="🧠 Управление нейросетями" className="h-full">
-            <div className="flex flex-column align-items-center justify-content-center gap-3">
-              <Button
-                icon="pi pi-play"
-                label="Запустить обучение всех нейросетей"
-                size="large"
-                severity="success"
-                loading={trainLoading || isAnyNetworkTraining}
-                disabled={isAnyNetworkTraining}
-                onClick={handleTrainAllNetworks}
-                className="w-full"
-              />
-              
-              {trainingProgress && (
-                <div className="text-center">
-                  <small className="text-600">{trainingProgress}</small>
-                </div>
-              )}
-
-              {/* Индикатор обучения через WebSocket */}
-              {isAnyNetworkTraining && !trainLoading && (
-                <div className="text-center">
-                  <div className="flex align-items-center justify-content-center gap-2 mb-2">
-                    <i className="pi pi-spin pi-spinner text-blue-500"></i>
-                    <small className="text-600 font-medium">Нейросети обучаются...</small>
-                  </div>
-                  <div className="text-xs text-500">
-                    {trainingStatus?.neuralNetwork?.isTraining && '🧠 Нейросеть • '}
-                    {trainingStatus?.ensemble?.isTraining && '🎭 Ансамбль • '}
-                    {trainingStatus?.metaLearning?.isTraining && '🧠 Meta-Learning • '}
-                    {trainingStatus?.reinforcementLearning?.isTraining && '🤖 RL'}
-                  </div>
-                </div>
-              )}
-
-              {/* Отображение стадий обучения */}
-              {trainLoading && (
-                <div className="w-full">
-                  <div className="text-center mb-3">
-                    <small className="text-600 font-medium">Стадии обучения:</small>
-                  </div>
-                  
-                  <div className="grid">
-                    {/* Нейросеть */}
-                    <div className="col-12">
-                      <div className="flex align-items-center justify-content-between p-2 border-round surface-100">
-                        <div className="flex align-items-center gap-2">
-                          <i className={`pi ${trainingStages.neuralNetwork === 'completed' ? 'pi-check-circle text-green-500' : 
-                            trainingStages.neuralNetwork === 'failed' ? 'pi-times-circle text-red-500' :
-                            trainingStages.neuralNetwork === 'in_progress' ? 'pi-spin pi-spinner text-blue-500' : 
-                            'pi-circle text-gray-500'}`}></i>
-                          <span className="text-sm">🧠 Нейросеть</span>
-                        </div>
-                        <Badge 
-                          value={trainingStages.neuralNetwork === 'completed' ? 'Завершено' :
-                            trainingStages.neuralNetwork === 'failed' ? 'Ошибка' :
-                            trainingStages.neuralNetwork === 'in_progress' ? 'В процессе' : 'Ожидание'}
-                           severity={trainingStages.neuralNetwork === 'completed' ? 'success' :
-                             trainingStages.neuralNetwork === 'failed' ? 'danger' :
-                             trainingStages.neuralNetwork === 'in_progress' ? 'info' : 'warning'}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Ансамбль */}
-                    <div className="col-12">
-                      <div className="flex align-items-center justify-content-between p-2 border-round surface-100">
-                        <div className="flex align-items-center gap-2">
-                          <i className={`pi ${trainingStages.ensemble === 'completed' ? 'pi-check-circle text-green-500' : 
-                            trainingStages.ensemble === 'failed' ? 'pi-times-circle text-red-500' :
-                            trainingStages.ensemble === 'in_progress' ? 'pi-spin pi-spinner text-blue-500' : 
-                            'pi-circle text-gray-500'}`}></i>
-                          <span className="text-sm">🎭 Ансамбль</span>
-                        </div>
-                        <Badge 
-                          value={trainingStages.ensemble === 'completed' ? 'Завершено' :
-                            trainingStages.ensemble === 'failed' ? 'Ошибка' :
-                            trainingStages.ensemble === 'in_progress' ? 'В процессе' : 'Ожидание'}
-                           severity={trainingStages.ensemble === 'completed' ? 'success' :
-                             trainingStages.ensemble === 'failed' ? 'danger' :
-                             trainingStages.ensemble === 'in_progress' ? 'info' : 'warning'}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Meta-Learning */}
-                    <div className="col-12">
-                      <div className="flex align-items-center justify-content-between p-2 border-round surface-100">
-                        <div className="flex align-items-center gap-2">
-                          <i className={`pi ${trainingStages.metaLearning === 'completed' ? 'pi-check-circle text-green-500' : 
-                            trainingStages.metaLearning === 'failed' ? 'pi-times-circle text-red-500' :
-                            trainingStages.metaLearning === 'in_progress' ? 'pi-spin pi-spinner text-blue-500' : 
-                            'pi-circle text-gray-500'}`}></i>
-                          <span className="text-sm">🧠 Meta-Learning</span>
-                        </div>
-                        <Badge 
-                          value={trainingStages.metaLearning === 'completed' ? 'Завершено' :
-                            trainingStages.metaLearning === 'failed' ? 'Ошибка' :
-                            trainingStages.metaLearning === 'in_progress' ? 'В процессе' : 'Ожидание'}
-                           severity={trainingStages.metaLearning === 'completed' ? 'success' :
-                             trainingStages.metaLearning === 'failed' ? 'danger' :
-                             trainingStages.metaLearning === 'in_progress' ? 'info' : 'warning'}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Reinforcement Learning */}
-                    <div className="col-12">
-                      <div className="flex align-items-center justify-content-between p-2 border-round surface-100">
-                        <div className="flex align-items-center gap-2">
-                          <i className={`pi ${trainingStages.reinforcementLearning === 'completed' ? 'pi-check-circle text-green-500' : 
-                            trainingStages.reinforcementLearning === 'failed' ? 'pi-times-circle text-red-500' :
-                            trainingStages.reinforcementLearning === 'in_progress' ? 'pi-spin pi-spinner text-blue-500' : 
-                            'pi-circle text-gray-500'}`}></i>
-                          <span className="text-sm">🤖 Reinforcement Learning</span>
-                        </div>
-                        <Badge 
-                          value={trainingStages.reinforcementLearning === 'completed' ? 'Завершено' :
-                            trainingStages.reinforcementLearning === 'failed' ? 'Ошибка' :
-                            trainingStages.reinforcementLearning === 'in_progress' ? 'В процессе' : 'Ожидание'}
-                           severity={trainingStages.reinforcementLearning === 'completed' ? 'success' :
-                             trainingStages.reinforcementLearning === 'failed' ? 'danger' :
-                             trainingStages.reinforcementLearning === 'in_progress' ? 'info' : 'warning'}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Текущая стадия */}
-                  {trainingStage && (
-                    <div className="text-center mt-3">
-                      <small className="text-600 font-medium">Текущая стадия: {trainingStage}</small>
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              <div className="flex gap-2 w-full">
-                <Button
-                  icon="pi pi-info-circle"
-                  label="Проверить статус"
-                  size="small"
-                  severity="secondary"
-                  className="flex-1"
-                  onClick={async () => {
-                    try {
-                      const status = await apiService.getSystemStatus();
-                      console.log('System status:', status);
-                      alert(`Система: ${status?.neuralNetwork?.status || 'Неизвестно'}, WebSocket: ${status?.websocket?.status || 'Неизвестно'}, База данных: ${status?.database?.status || 'Неизвестно'}`);
-                    } catch (e) {
-                      console.error('Status check failed:', e);
-                      alert('Ошибка получения статуса системы');
-                    }
-                  }}
-                />
-                <Button
-                  icon="pi pi-clock"
-                  label="Обновить время"
-                  size="small"
-                  severity="warning"
-                  className="flex-1"
-                  onClick={async () => {
-                    try {
-                      const response = await fetch('/api/cache/force-update-time', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                      });
-                      const result = await response.json();
-                      if (result.success) {
-                        alert('Время последнего обновления кеша обновлено!');
-                      } else {
-                        alert('Ошибка обновления времени кеша');
-                      }
-                    } catch (e) {
-                      console.error('Force update cache time failed:', e);
-                      alert('Ошибка обновления времени кеша');
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Дополнительные действия и системная информация */}
-        <div className="col-12">
-          <Card title="🚀 Быстрые ссылки и система" className="h-full">
-            <div className="grid">
-              {/* Быстрые ссылки */}
-              <div className="col-12 md:col-8">
-                <div className="text-600 mb-3">📋 Быстрые переходы</div>
-                <div className="grid">
-                  <div className="col-6 md:col-3">
-                    <Button
-                      icon="pi pi-cog"
-                      label="Настройки"
-                      className="p-button-outlined w-full"
-                      onClick={() => window.location.href = '/settings'}
-                    />
-                  </div>
-                  <div className="col-6 md:col-3">
-                    <Button
-                      icon="pi pi-brain"
-                      label="Нейросети"
-                      className="p-button-outlined w-full"
-                      onClick={() => window.location.href = '/neural-networks'}
-                    />
-                  </div>
-                  <div className="col-6 md:col-3">
-                    <Button
-                      icon="pi pi-chart-line"
-                      label="Аналитика"
-                      className="p-button-outlined w-full"
-                      onClick={() => window.location.href = '/metrics'}
-                    />
-                  </div>
-                  <div className="col-6 md:col-3">
-                    <Button
-                      icon="pi pi-shopping-cart"
-                      label="Торговые заявки"
-                      className="p-button-outlined w-full"
-                      onClick={() => window.location.href = '/trading-requests'}
-                    />
-                  </div>
-                </div>
+          <CacheStatusCard cacheStatus={cacheStatus} />
               </div>
 
-              {/* Системная информация */}
-              <div className="col-12 md:col-4">
-                <div className="p-3 surface-100 border-round h-full">
-                  <div className="text-600 mb-3">💻 Система</div>
-                  <div className="grid">
-                    <div className="col-6">
-                      <div className="text-xs text-500 mb-1">Время работы</div>
-                      <div className="font-medium text-sm">
-                        0м
-                      </div>
-                    </div>
-                    <div className="col-6">
-                      <div className="text-xs text-500 mb-1">Память</div>
-                      <div className="font-medium text-sm">
-                        0MB
-                      </div>
-                    </div>
-                    <div className="col-6">
-                      <div className="text-xs text-500 mb-1">Кэш</div>
-                      <div className="font-medium text-sm">
-                        0 записей
-                      </div>
-                    </div>
-                    <div className="col-6">
-                      <div className="text-xs text-500 mb-1">Статус</div>
-                      <Badge value="Работает" severity="success" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
       </div>
       <ConfirmDialog />
     </div>

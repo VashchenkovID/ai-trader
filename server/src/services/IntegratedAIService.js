@@ -265,7 +265,9 @@ class IntegratedAIService {
                 score: rec.score,
                 confidence: rec.confidence,
                 recommendation: rec.recommendation,
-                weight: weight
+                weight: weight,
+                // Пробрасываем детализированное объяснение, если оно есть
+                rawDetails: rec.details || null
             };
         }
 

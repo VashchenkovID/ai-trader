@@ -104,9 +104,10 @@ class OptimizedTrainingService {
             }
 
             // 3. Пытаемся загрузить существующую модель (тёплый старт), иначе создаем новую
-            let model = await this.loadModel(figi);
+            const inputSize = features[0].length;
+            let model = await this.loadModel(figi, inputSize);
             if (!model) {
-                model = await this.createOptimizedModel(features[0].length);
+                model = await this.createOptimizedModel(inputSize);
             }
 
             // 4. Обучение: пробуем через воркер, при ошибке — локально
@@ -1041,7 +1042,7 @@ class OptimizedTrainingService {
     /**
      * Загрузка модели
      */
-    async loadModel(figi) {
+    async loadModel(figi, inputSize = null) {
         try {
             const fs = await import('fs/promises');
             const path = await import('path');
@@ -1067,6 +1068,17 @@ class OptimizedTrainingService {
             const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
             model.setWeights(tensors);
 
+                    // Проверяем совместимость входного размера, если он известен
+                    if (inputSize !== null) {
+                        const modelInputShape = model.inputs?.[0]?.shape;
+                        const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
+                        
+                        if (modelInputSize !== null && modelInputSize !== inputSize) {
+                            console.warn(`⚠️ Input size mismatch for ${figi}: model expects ${modelInputSize}, but features have size ${inputSize}. Creating new model.`);
+                            return null;
+                        }
+                    }
+
             // Компилируем загруженную модель
             model.compile({
                         optimizer: tf.train.adam(0.001),
@@ -1085,6 +1097,17 @@ class OptimizedTrainingService {
             try {
                 const model = await ModelManager.loadModel(`neural/${figi}`);
                 if (model) {
+                    // Проверяем совместимость входного размера, если он известен
+                    if (inputSize !== null) {
+                        const modelInputShape = model.inputs?.[0]?.shape;
+                        const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
+                        
+                        if (modelInputSize !== null && modelInputSize !== inputSize) {
+                            console.warn(`⚠️ Input size mismatch for ${figi} (ModelManager): model expects ${modelInputSize}, but features have size ${inputSize}. Creating new model.`);
+                            return null;
+                        }
+                    }
+                    
                     console.log(`✅ Loaded model for ${figi} via ModelManager`);
                     return model;
                 }
@@ -1109,6 +1132,17 @@ class OptimizedTrainingService {
                     const { specs } = JSON.parse(weightsRaw);
                     const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
                     model.setWeights(tensors);
+                    
+                    // Проверяем совместимость входного размера, если он известен
+                    if (inputSize !== null) {
+                        const modelInputShape = model.inputs?.[0]?.shape;
+                        const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
+                        
+                        if (modelInputSize !== null && modelInputSize !== inputSize) {
+                            console.warn(`⚠️ Input size mismatch for general model (used for ${figi}): model expects ${modelInputSize}, but features have size ${inputSize}. Creating new model.`);
+                            return null;
+                        }
+                    }
                     
                     model.compile({
                         optimizer: tf.train.adam(0.001),

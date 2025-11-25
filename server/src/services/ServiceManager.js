@@ -15,7 +15,6 @@ class ServiceManager {
      */
     async initializeSystem(server = null, sequelize = null) {
         if (this.isInitialized) {
-            console.log('✅ ServiceManager already initialized');
             return;
         }
 
@@ -25,12 +24,10 @@ class ServiceManager {
             // 1. Инициализируем базу данных (если передана)
             if (sequelize) {
                 await sequelize.authenticate();
-                console.log('✅ Database connected');
                 
                 // Инициализируем DatabaseConnectionManager
                 const DatabaseConnectionManager = (await import('../utils/DatabaseConnectionManager.js')).default;
                 await DatabaseConnectionManager.initialize();
-                console.log('✅ Database connection manager initialized');
             }
 
             // 2. Инициализируем основные сервисы
@@ -80,18 +77,15 @@ class ServiceManager {
                 const webSocketService = new WebSocketService();
                 webSocketService.initialize(server);
                 this.services.set('WebSocketService', webSocketService);
-                console.log('✅ WebSocket service initialized with server');
                 
                 // Передаем WebSocketService в SchedulerService
                 const schedulerService = this.getService('SchedulerService');
                 if (schedulerService && typeof schedulerService.setWebSocketService === 'function') {
                     schedulerService.setWebSocketService(webSocketService);
-                    console.log('✅ WebSocketService passed to SchedulerService');
                 }
             }
 
             this.isInitialized = true;
-            console.log('✅ Complete system initialized successfully');
         } catch (error) {
             console.error('❌ System initialization failed:', error);
             throw error;
@@ -118,7 +112,6 @@ class ServiceManager {
             return await this.initializationPromises.get(serviceName);
         }
 
-        console.log(`🔧 Initializing ${serviceName}...`);
         
         const initPromise = (async () => {
             try {
@@ -128,11 +121,8 @@ class ServiceManager {
                 let service;
                 if (typeof ServiceModule === 'function') {
                     // Это класс - создаем экземпляр
-                    console.log(`📦 ${serviceName} is a class, creating instance...`);
                     service = new ServiceModule();
                 } else if (typeof ServiceModule === 'object' && ServiceModule !== null) {
-                    // Это уже экземпляр - используем как есть
-                    console.log(`📦 ${serviceName} is already an instance, using as is...`);
                     service = ServiceModule;
                 } else {
                     console.error(`❌ Invalid service export for ${serviceName}:`, typeof ServiceModule, ServiceModule);
@@ -146,7 +136,6 @@ class ServiceManager {
                 }
                 
                 this.services.set(serviceName, service);
-                console.log(`✅ ${serviceName} initialized`);
                 return service;
             } catch (error) {
                 console.error(`❌ Failed to initialize ${serviceName}:`, error);
@@ -203,7 +192,6 @@ class ServiceManager {
             }
             
             await telegramService.sendAlert(alertType, message, severity);
-            console.log('✅ Telegram alert sent successfully');
         } catch (error) {
             console.error('❌ Failed to send Telegram alert:', error);
         }
@@ -232,7 +220,6 @@ class ServiceManager {
         this.initializationPromises.clear();
         this.isInitialized = false;
         
-        console.log('✅ ServiceManager stopped');
     }
 
     /**

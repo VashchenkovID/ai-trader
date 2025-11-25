@@ -27,6 +27,26 @@ router.get('/status', async (req, res) => {
 });
 
 /**
+ * Активация нейросети (включение анализа)
+ */
+router.post('/activate', async (req, res) => {
+    try {
+        await NeuralNetworkService.setStatus('active');
+        res.json({
+            success: true,
+            message: 'Нейросеть активирована'
+        });
+    } catch (error) {
+        console.error('Ошибка активации нейросети:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка активации нейросети',
+            error: error.message
+        });
+    }
+});
+
+/**
  * Обучение нейросети
  */
 router.post('/train', async (req, res) => {

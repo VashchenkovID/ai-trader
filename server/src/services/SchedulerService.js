@@ -290,23 +290,16 @@ class SchedulerService {
      * Проверяет, нужно ли обновлять кеш
      */
     async shouldUpdateCache() {
-        console.log(`🔍 Checking cache update need: lastUpdate=${this.lastCacheUpdate ? new Date(this.lastCacheUpdate).toISOString() : 'null'}, interval=${this.cacheUpdateInterval}ms`);
         
         if (!this.lastCacheUpdate) {
-            console.log('📅 No previous cache update found, checking if cache is fresh...');
             // Проверяем, есть ли свежие данные в кеше
             const isStale = await this.isCacheStale();
-            console.log(`🔍 Cache staleness result: ${isStale ? 'STALE - update needed' : 'FRESH - no update needed'}`);
             return isStale;
         }
 
         const timeSinceLastUpdate = Date.now() - this.lastCacheUpdate;
         const shouldUpdate = timeSinceLastUpdate >= this.cacheUpdateInterval;
 
-        if (shouldUpdate) {
-            const hoursSinceUpdate = Math.round(timeSinceLastUpdate / (60 * 60 * 1000));
-            console.log(`📅 Cache update needed: ${hoursSinceUpdate}h since last update (interval: ${this.cacheUpdateInterval / (60 * 60 * 1000)}h)`);
-        } 
         return shouldUpdate;
     }
 
@@ -318,16 +311,12 @@ class SchedulerService {
             const lastUpdateSetting = await SettingsService.getSetting('last_cache_update_time');
             if (lastUpdateSetting) {
                 this.lastCacheUpdate = new Date(lastUpdateSetting).getTime();
-                console.log(`📅 Loaded last cache update time: ${new Date(this.lastCacheUpdate).toISOString()}`);
             } else {
-                console.log('📅 No previous cache update time found, checking cache freshness...');
                 // При первом запуске проверяем свежесть кеша
                 const isStale = await this.isCacheStale();
                 if (isStale) {
-                    console.log('📅 Cache is stale, will update on first check');
                     this.lastCacheUpdate = null; // Устанавливаем null, чтобы shouldUpdateCache() вернул true
                 } else {
-                    console.log('📅 Cache is fresh, setting current time to prevent immediate update');
                     this.lastCacheUpdate = Date.now();
                     await this.saveLastCacheUpdateTime();
                 }
@@ -346,7 +335,6 @@ class SchedulerService {
     async saveLastCacheUpdateTime() {
         try {
             if (!this.lastCacheUpdate) {
-                console.log('⚠️ Cannot save cache update time: lastCacheUpdate is null');
                 return;
             }
             await SettingsService.setSetting('last_cache_update_time', new Date(this.lastCacheUpdate).toISOString());
@@ -365,7 +353,6 @@ class SchedulerService {
             try {
                 // Проверяем, не закрыта ли база данных
                 if (!this.isInitialized) {
-                    console.log('⏰ Skipping cache status - service not initialized');
                     return;
                 }
                 
@@ -493,13 +480,29 @@ class SchedulerService {
                         return;
                     }
                     
-                    // Получаем реальную торговую статистику
+                    // Получаем реальную торговую статистику и состояние портфеля
                     const portfolio = await TradingEngine.getVirtualPortfolioValue();
+                    const stats = await TradingEngine.calculateTradingStats();
+
+                    // Получаем топ-3 активные BUY-рекомендации
+                    const Recommendation = (await import('../models/Recommendation.js')).default;
+                    const topBuys = await Recommendation.getTopRecommendations(3, 'BUY');
+
                     const tradingStats = {
-                        totalPnL: portfolio.totalValue - 100000, // Предполагаем начальный капитал 100k
-                        winRate: portfolio.trades ? (portfolio.trades.filter(t => t.profit > 0).length / portfolio.trades.length * 100) : 0,
-                        totalTrades: portfolio.trades ? portfolio.trades.length : 0,
-                        successfulTrades: portfolio.trades ? portfolio.trades.filter(t => t.profit > 0).length : 0
+                        portfolioValue: portfolio.totalValue,
+                        cash: portfolio.cash,
+                        totalPnL: stats.totalReturn || 0,
+                        winRate: (stats.winRate || 0) * 100,
+                        totalTrades: stats.totalTrades || 0,
+                        successfulTrades: Math.round((stats.totalTrades || 0) * (stats.winRate || 0)),
+                        recommendations: topBuys.map(rec => ({
+                            figi: rec.figi,
+                            ticker: rec.ticker,
+                            name: rec.name,
+                            recommendation: rec.recommendation,
+                            confidence: rec.confidence,
+                            score: rec.score
+                        }))
                     };
                     
                     WebSocketService.broadcastTradingStats(tradingStats);

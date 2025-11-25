@@ -93,6 +93,20 @@ class NewsAnalysisService {
                 }
             }
 
+            // ВРЕМЕННО: полностью отключаем внешние запросы к NewsAPI, чтобы не упираться в лимиты
+            console.warn(`⚠️ NewsAPI requests temporarily disabled, returning cached or empty news for ${figi}`);
+            if (this.cache.has(cacheKey)) {
+                const cached = this.cache.get(cacheKey);
+                const age = Date.now() - cached.timestamp;
+                const ageMinutes = Math.round(age / (60 * 1000));
+                const articleCount = cached.data ? cached.data.length : 0;
+                console.log(`📦 Using cached news (offline mode) for ${figi} (${articleCount} articles, age: ${ageMinutes}m)`);
+                return cached.data;
+            }
+            
+            return [];
+
+            // --- Ниже старая логика запроса к NewsAPI, временно отключена ---
             // Проверяем лимит запросов
             const timeSinceReset = Date.now() - this.lastResetTime;
             if (timeSinceReset >= this.rateLimitResetInterval) {
@@ -117,13 +131,13 @@ class NewsAnalysisService {
                 
                 // Проверяем, есть ли вообще что-то в кеше
                 if (this.cache.size > 0) {
-                    console.warn(`⚠️ Cache has ${this.cache.size} entries, but none match key "${cacheKey}". Available keys: ${Array.from(this.cache.keys()).slice(0, 3).join(', ')}...`);
+                    console.warn(`⚠️ Cache has ${this.cache.size} entries, but none match key \"${cacheKey}\". Available keys: ${Array.from(this.cache.keys()).slice(0, 3).join(', ')}...`);
                 }
                 
                 return [];
             }
 
-            // Получаем новости из NewsAPI
+            // Получаем новости из NewsAPI (отключено)
             const url = `https://newsapi.org/v2/everything?` +
                 `q=${encodeURIComponent(figi)}&` +
                 `sources=${sources.join(',')}&` +

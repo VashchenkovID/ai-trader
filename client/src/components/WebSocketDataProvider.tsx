@@ -30,10 +30,30 @@ export interface SystemResources {
 }
 
 export interface TradingStats {
-  totalPnL: number;
-  winRate: number;
+  // Баланс и прибыль
+  portfolioValue: number; // Текущая стоимость портфеля
+  cash: number;           // Свободные средства
+  totalPnL: number;       // Суммарная прибыль/убыток по сделкам (валюта)
+
+  // Статистика сделок
+  winRate: number;        // WinRate в %, 0-100
   totalTrades: number;
   successfulTrades: number;
+
+  // Топ-рекомендации
+  recommendations?: {
+    figi: string;
+    ticker: string;
+    name: string;
+    recommendation: 'BUY' | 'SELL' | 'HOLD';
+    confidence: number;
+    score: number;
+  }[];
+}
+
+export interface AnalysisStatus {
+  isAnalyzing: boolean;
+  lastRunAt?: string;
 }
 
 export interface PerformanceMetrics {
@@ -88,6 +108,7 @@ interface WebSocketDataContextType {
   tradingStats: TradingStats | null;
   performanceMetrics: PerformanceMetrics | null;
   trainingStatus: TrainingStatus | null;
+  analysisStatus: AnalysisStatus | null;
   
   // Методы
   reconnect: () => void;
@@ -115,6 +136,7 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
   const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics | null>(null);
   const [trainingStatus, setTrainingStatus] = useState<TrainingStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus | null>(null);
 
   // Отладка изменений состояния
   useEffect(() => {
@@ -150,6 +172,9 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
       case 'training_status_update':
         console.log('🎯 Training status update received:', message.data);
         setTrainingStatus(message.data);
+        break;
+      case 'analysis_status_update':
+        setAnalysisStatus(message.data);
         break;
       case 'batch_training_started':
       case 'batch_training_completed':
@@ -278,6 +303,7 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
     tradingStats,
     performanceMetrics,
     trainingStatus,
+    analysisStatus,
     reconnect
   };
 

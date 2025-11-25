@@ -66,7 +66,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
   // Обработчик входящих сообщений
   const handleMessage = (message: WebSocketMessage) => {
-    console.log('📡 WebSocket message received:', message);
 
     switch (message.type) {
       case 'status':

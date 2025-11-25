@@ -81,16 +81,12 @@ const server = createServer(app);
 
 // Initialize services
 async function initializeServices() {
-    try {
-        console.log('🚀 Initializing services...');
-        
+    try {        
         // Initialize complete system through ServiceManager
         await ServiceManager.initializeSystem(server, sequelize);
-        console.log('✅ Complete system initialized through ServiceManager');
         
         // Устанавливаем глобальный ServiceManager
         setGlobalServiceManager(ServiceManager);
-        console.log('✅ Global ServiceManager set');
         
         // Initialize Telegram (optional) - ПОСЛЕ всех остальных сервисов
         if (process.env.TELEGRAM_BOT_TOKEN) {
@@ -102,7 +98,6 @@ async function initializeServices() {
             // Проверяем, не инициализирован ли уже бот
             if (!OptimizedTelegramService.isInitialized) {
                 await OptimizedTelegramService.initialize();
-                console.log('✅ Optimized Telegram service initialized');
             } else {
                 console.log('⚠️ Optimized Telegram service already initialized, skipping...');
             }
@@ -199,7 +194,6 @@ async function gracefulShutdown(signal) {
                     }
                 }
             });
-            console.log('✅ All cron tasks force stopped');
         } catch (error) {
             console.error('❌ Error force stopping cron tasks:', error);
         }
@@ -211,7 +205,6 @@ async function gracefulShutdown(signal) {
         await sequelize.close();
         
         server.close(() => {
-            console.log('✅ Server closed');
             process.exit(0);
         });
     } catch (error) {

@@ -57,6 +57,11 @@ class ReinforcementLearningService {
             if (!this.agent) {
                 console.log('Creating new RL agent...');
                 this.agent = this.createDQN();
+            }
+
+            // Гарантируем наличие целевой сети
+            if (!this.targetAgent && this.agent) {
+                console.log('Creating target RL agent...');
                 this.targetAgent = this.createDQN();
                 this.targetAgent.setWeights(this.agent.getWeights());
             }
@@ -155,9 +160,14 @@ class ReinforcementLearningService {
                 await this.loadModel();
                 if (!this.agent) {
                     this.agent = this.createDQN();
-                    this.targetAgent = this.createDQN();
-                    this.targetAgent.setWeights(this.agent.getWeights());
                 }
+            }
+
+            // На всякий случай гарантируем наличие целевой сети
+            if (!this.targetAgent && this.agent) {
+                console.log('RL: targetAgent is null, recreating target network...');
+                this.targetAgent = this.createDQN();
+                this.targetAgent.setWeights(this.agent.getWeights());
             }
             this.isTraining = true;
             this.trainingFigiLocks.add(figi);
@@ -168,14 +178,50 @@ class ReinforcementLearningService {
             // Получаем исторические данные
             const candles = await CacheService.getCandles(figi, 'DAY', days);
             
-            // Адаптивная проверка данных
-            // Минимальное требование: 20 свечей (для расчета технических индикаторов)
-            // Рекомендуемое: 30+ свечей для стабильного обучения
+            // Адаптивная проверка данных (по аналогии с OptimizedTrainingService)
+            // Минимальное требование: 20 свечей (для расчета тех. индикаторов и простого эпизода)
+            // Рекомендуемое: 30+ свечей для более стабильного обучения
             const minRequired = 20;
             const recommended = 30;
             
             if (candles.length < minRequired) {
-                throw new Error(`Insufficient data: ${candles.length} candles (minimum ${minRequired} required)`);
+                const message = `Insufficient data for RL: ${candles.length} candles (minimum ${minRequired} required)`;
+                console.warn(`⚠️ ${message}`);
+                
+                // Обновляем статус обучения как неуспешный, но без выброса исключения
+                if (trainingStatusService) {
+                    trainingStatusService.completeTraining('reinforcementLearning', false);
+                }
+                
+                // Уведомляем через WebSocket, что обучение пропущено
+                try {
+                    const WebSocketService = getService('WebSocketService');
+                    if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                        WebSocketService.broadcast({
+                            type: 'reinforcement_learning_training_skipped',
+                            data: {
+                                success: false,
+                                reason: 'INSUFFICIENT_DATA',
+                                message,
+                                figi,
+                                candles: candles.length,
+                                minRequired
+                            }
+                        });
+                    }
+                } catch (wsError) {
+                    console.warn('⚠️ Failed to broadcast RL insufficient data event:', wsError.message);
+                }
+                
+                // Возвращаем "мягкий" результат вместо ошибки
+                return {
+                    success: false,
+                    error: message,
+                    reason: 'INSUFFICIENT_DATA',
+                    figi,
+                    candles: candles.length,
+                    minRequired
+                };
             }
             
             // Адаптируем параметры обучения для малого количества данных
@@ -213,7 +259,11 @@ class ReinforcementLearningService {
 
                 // Обновляем целевую сеть
                 if (episode % this.config.updateTargetFreq === 0) {
-                    this.targetAgent.setWeights(this.agent.getWeights());
+                    if (this.agent && this.targetAgent) {
+                        this.targetAgent.setWeights(this.agent.getWeights());
+                    } else {
+                        console.warn('⚠️ RL: Cannot update target network, agent or targetAgent is null');
+                    }
                 }
 
                 // Уведомляем о прогрессе
@@ -480,6 +530,7 @@ class ReinforcementLearningService {
      */
     async trainBatchStep() {
         if (this.memory.length < this.config.batchSize) return;
+        if (!this.agent) return;
 
         // Выборка батча с приоритезированным сэмплингом
         const batch = this.sampleBatch();
@@ -492,18 +543,50 @@ class ReinforcementLearningService {
         // Целевые значения
         const targets = await this.computeTargets(states, actions, rewards, nextStates, dones);
 
-        // Предсказанные Q для оценки TD-ошибки (простая оценка по argmax действию)
-        const statesTensor = tf.tensor2d(states);
-        const qValues = this.agent.predict(statesTensor);
-        const qValuesArray = await qValues.data();
-        const predictedQ = Array.from(qValuesArray).map(v => v); // плоский вид для простоты
+        // Гарантируем, что модель скомпилирована (на случай загрузки без оптимизатора)
+        if (!this.agent.optimizer) {
+            this.agent.compile({
+                optimizer: tf.train.adam(this.config.learningRate),
+                loss: 'meanSquaredError',
+                metrics: ['mae']
+            });
+            console.log('⚙️ Compiled RL agent inside trainBatchStep');
+        }
 
-        // Обучение
-        const targetsTensor = tf.tensor2d(targets);
+        // Предсказанные Q-значения для текущих состояний
+        const batchSize = batch.length;
+        const stateSize = this.config.stateSize;
+        const actionSize = this.config.actionSize;
+        
+        // Явно задаем shape, чтобы избежать ошибок с плоскими массивами
+        const statesTensor = tf.tensor2d(states, [batchSize, stateSize]);
+        const qValues = this.agent.predict(statesTensor);
+        const qValuesArray = await qValues.array(); // [batchSize, actionSize]
+
+        // Формируем матрицу целевых Q-значений:
+        // - исходно берём текущие Q(s,a) из модели
+        // - заменяем Q(s, a_taken) на целевой target
+        const targetsMatrix = qValuesArray.map((row, i) => {
+            const newRow = row.slice();
+            const action = actions[i];
+            const target = targets[i];
+            if (action >= 0 && action < actionSize) {
+                newRow[action] = target;
+            }
+            return newRow;
+        });
+
+        // Обучение: целевой тензор имеет форму [batchSize, actionSize]
+        const targetsTensor = tf.tensor2d(targetsMatrix, [batchSize, actionSize]);
         await this.agent.fit(statesTensor, targetsTensor, { epochs: 1, verbose: 0 });
 
-        // Обновляем приоритеты на основе TD-ошибки
-        await this.updatePriorities(batch, predictedQ, targets);
+        // Обновляем приоритеты на основе TD-ошибки для выбранных действий
+        // predictedQ: Q(s, a_taken) до обновления, targets: целевые Q для a_taken
+        const predictedQForActions = qValuesArray.map((row, i) => {
+            const action = actions[i];
+            return (action >= 0 && action < actionSize) ? row[action] : 0;
+        });
+        await this.updatePriorities(batch, predictedQForActions, targets);
 
         // Очистка
         statesTensor.dispose();
@@ -550,7 +633,9 @@ class ReinforcementLearningService {
      * Вычисление целевых Q-значений
      */
     async computeTargets(states, actions, rewards, nextStates, dones) {
-        const nextStatesTensor = tf.tensor2d(nextStates);
+        const batchSize = states.length;
+        const stateSize = this.config.stateSize;
+        const nextStatesTensor = tf.tensor2d(nextStates, [batchSize, stateSize]);
         const nextQValues = this.targetAgent.predict(nextStatesTensor);
         const maxNextQValues = tf.max(nextQValues, 1);
         const maxNextQValuesArray = await maxNextQValues.data();
@@ -651,20 +736,27 @@ class ReinforcementLearningService {
      * Уведомление о прогрессе обучения
      */
     broadcastTrainingProgress(episode, totalEpisodes, result) {
-        WebSocketService.broadcast({
-            type: 'rl_training_progress',
-            data: {
-                episode: episode + 1,
-                totalEpisodes,
-                totalReward: result.totalReward,
-                stepCount: result.stepCount,
-                epsilon: this.config.epsilon,
-                memorySize: this.memory.length,
-                averageReward: this.stats.averageReward,
-                bestReward: this.stats.bestReward
-            },
-            timestamp: new Date().toISOString()
-        });
+        try {
+            const WebSocketServiceInstance = getService('WebSocketService');
+            if (WebSocketServiceInstance && typeof WebSocketServiceInstance.broadcast === 'function') {
+                WebSocketServiceInstance.broadcast({
+                    type: 'rl_training_progress',
+                    data: {
+                        episode: episode + 1,
+                        totalEpisodes,
+                        totalReward: result.totalReward,
+                        stepCount: result.stepCount,
+                        epsilon: this.config.epsilon,
+                        memorySize: this.memory.length,
+                        averageReward: this.stats.averageReward,
+                        bestReward: this.stats.bestReward
+                    },
+                    timestamp: new Date().toISOString()
+                });
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to broadcast RL training progress:', error.message);
+        }
     }
 
     /**
@@ -751,10 +843,21 @@ class ReinforcementLearningService {
             if (model) {
                 this.agent = model;
                 
-                // Копируем веса в целевую сеть
-                if (this.targetAgent) {
-                    this.targetAgent.setWeights(this.agent.getWeights());
+                // Гарантируем, что загруженная модель скомпилирована
+                if (!this.agent.optimizer) {
+                    this.agent.compile({
+                        optimizer: tf.train.adam(this.config.learningRate),
+                        loss: 'meanSquaredError',
+                        metrics: ['mae']
+                    });
+                    console.log('⚙️ Compiled RL agent after loading');
                 }
+                
+                // Гарантируем наличие целевой сети и копируем в неё веса
+                if (!this.targetAgent) {
+                    this.targetAgent = this.createDQN();
+                }
+                this.targetAgent.setWeights(this.agent.getWeights());
                 
                 console.log('✅ RL model loaded successfully');
             } else {
@@ -776,11 +879,16 @@ class ReinforcementLearningService {
             this.status = 'idle';
             
             // Уведомить через WebSocket
-            if (typeof WebSocketService !== 'undefined' && WebSocketService.broadcast) {
-                WebSocketService.broadcast({
-                    type: 'rl_training_stopped',
-                    timestamp: new Date().toISOString()
-                });
+            try {
+                const WebSocketServiceInstance = getService('WebSocketService');
+                if (WebSocketServiceInstance && typeof WebSocketServiceInstance.broadcast === 'function') {
+                    WebSocketServiceInstance.broadcast({
+                        type: 'rl_training_stopped',
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (wsError) {
+                console.warn('⚠️ Failed to broadcast RL stop event:', wsError.message);
             }
             
             return {
@@ -803,27 +911,47 @@ class ReinforcementLearningService {
             
             // Остановить обучение если оно идет
             this.isTraining = false;
-            this.status = 'idle';
             
-            // Очистить модель и создать новую
-            if (this.model) {
-                this.model.dispose();
-                this.model = null;
+            // Очистить текущие модели агента
+            if (this.agent && typeof this.agent.dispose === 'function') {
+                this.agent.dispose();
             }
+            if (this.targetAgent && typeof this.targetAgent.dispose === 'function') {
+                this.targetAgent.dispose();
+            }
+            this.agent = null;
+            this.targetAgent = null;
             
-            // Очистить буфер опыта
-            this.replayBuffer = [];
-            this.epsilon = 1.0; // Сбросить exploration rate
+            // Очистить буфер опыта и приоритеты
+            this.memory = [];
+            this.priorities = [];
             
-            // Создать новую модель
+            // Сбросить epsilon и статистику
+            this.config.epsilon = 1.0;
+            this.stats = {
+                totalEpisodes: 0,
+                averageReward: 0,
+                bestReward: -Infinity,
+                winRate: 0,
+                epsilon: this.config.epsilon,
+                memorySize: 0
+            };
+            
+            // Переинициализировать агента и целевую сеть
+            this.isInitialized = false;
             await this.initialize();
             
             // Уведомить через WebSocket
-            if (typeof WebSocketService !== 'undefined' && WebSocketService.broadcast) {
-                WebSocketService.broadcast({
-                    type: 'rl_agent_reset',
-                    timestamp: new Date().toISOString()
-                });
+            try {
+                const WebSocketServiceInstance = getService('WebSocketService');
+                if (WebSocketServiceInstance && typeof WebSocketServiceInstance.broadcast === 'function') {
+                    WebSocketServiceInstance.broadcast({
+                        type: 'rl_agent_reset',
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (wsError) {
+                console.warn('⚠️ Failed to broadcast RL reset event:', wsError.message);
             }
             
             return {
