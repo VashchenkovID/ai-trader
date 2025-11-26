@@ -15,7 +15,6 @@ import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import NeuralNetworks from './pages/NeuralNetworks';
 import TradingModeManager from './pages/TradingModeManager';
-import TradingModeDashboardPage from './pages/TradingModeDashboardPage';
 import MetricsMonitoring from './pages/MetricsMonitoring';
 import TradingRequests from './pages/TradingRequests';
 import Portfolio from './pages/Portfolio';
@@ -37,7 +36,6 @@ function App() {
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/neural-networks" element={<NeuralNetworks />} />
                 <Route path="/trading-mode" element={<TradingModeManager />} />
-                <Route path="/trading-mode-dashboard" element={<TradingModeDashboardPage />} />
                 <Route path="/metrics" element={<MetricsMonitoring />} />
                 <Route path="/trading-requests" element={<TradingRequests />} />
                 <Route path="/portfolio" element={<Portfolio />} />

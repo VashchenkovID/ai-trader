@@ -6,7 +6,6 @@ import { Divider } from 'primereact/divider';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
 import WebSocketStatus from './WebSocketStatus';
-import RealTimeNotifications from './RealTimeNotifications';
 
 interface NavigationProps {
   className?: string;
@@ -43,7 +42,6 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
     { path: '/neural-networks', label: 'Нейросети', icon: 'pi pi-brain' },
     { path: '/trading-requests', label: 'Торговые заявки', icon: 'pi pi-list-check' },
     { path: '/trading-mode', label: 'Режимы торговли', icon: 'pi pi-cog' },
-    { path: '/trading-mode-dashboard', label: 'Дашборд режимов', icon: 'pi pi-chart-bar' },
     { path: '/training-debug', label: 'Отладка обучения', icon: 'pi pi-cog' },
     { path: '/metrics', label: 'Метрики', icon: 'pi pi-chart-line' },
     { path: '/settings', label: 'Настройки', icon: 'pi pi-wrench' }

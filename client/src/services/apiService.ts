@@ -640,6 +640,58 @@ export const apiService = {
     }
   },
 
+  /**
+   * Активация торгового движка
+   */
+  async activateTradingEngine(): Promise<any> {
+    try {
+      const response = await api.post('/api/trading/activate');
+      return response.data;
+    } catch (error) {
+      console.error('Error activating trading engine:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Деактивация торгового движка
+   */
+  async deactivateTradingEngine(): Promise<any> {
+    try {
+      const response = await api.post('/api/trading/deactivate');
+      return response.data;
+    } catch (error) {
+      console.error('Error deactivating trading engine:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить статус торгового движка
+   */
+  async getTradingEngineStatus(): Promise<any> {
+    try {
+      const response = await api.get('/api/trading/status');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting trading engine status:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Проверить возможность переключения на режим
+   */
+  async canSwitchToMode(mode: 'paper' | 'micro' | 'real'): Promise<any> {
+    try {
+      const response = await api.get(`/api/trading-mode/can-switch/${mode}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error checking if can switch to mode:', error);
+      throw error;
+    }
+  },
+
   // ============================================================================
   // РИСК-МЕНЕДЖМЕНТ
   // ============================================================================

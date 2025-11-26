@@ -19,6 +19,7 @@ class TradingEngine {
             trades: []
         };
         this.isInitialized = false;
+        this.isActive = false; // Флаг активности торгового движка
     }
 
     /**
@@ -36,7 +37,8 @@ class TradingEngine {
             await this.initializeDemoPortfolio();
             
             this.isInitialized = true;
-            console.log('✅ Trading Engine инициализирован');
+            this.isActive = true; // Активируем после инициализации
+            console.log('✅ Trading Engine инициализирован и активирован');
             
         } catch (error) {
             console.error('❌ Ошибка инициализации Trading Engine:', error);
@@ -134,23 +136,41 @@ class TradingEngine {
             throw new Error('Trading Engine не инициализирован');
         }
 
-        const mode = this.modeManager.getCurrentMode();
+        if (!this.isActive) {
+            throw new Error('Trading Engine не активирован. Используйте метод activate() для активации.');
+        }
+
+        const modeInfo = this.modeManager.getCurrentMode();
+        const mode = modeInfo.mode || modeInfo; // Поддержка старого формата
         console.log(`📊 Исполнение ордера в режиме ${mode.toUpperCase()}:`, signal);
 
         try {
-            // 1. Валидация через риск-менеджмент
+            // 1. Получаем актуальный портфель в зависимости от режима
+            let portfolio;
+            if (mode === 'paper') {
+                portfolio = await this.getVirtualPortfolioValue();
+            } else {
+                try {
+                    portfolio = await this.getRealPortfolioValue();
+                } catch (error) {
+                    console.warn('⚠️ Не удалось получить реальный портфель, используем виртуальный:', error.message);
+                    portfolio = await this.getVirtualPortfolioValue();
+                }
+            }
+            
+            // 2. Валидация через риск-менеджмент
             const currentPrices = await this.getCurrentPrices([signal.symbol]);
-            const validation = await RiskManagementService.validateOrder(signal, this.virtualPortfolio, currentPrices);
+            const validation = await RiskManagementService.validateOrder(signal, portfolio, currentPrices);
             
             if (!validation.isValid) {
                 console.warn('⚠️ Ордер отклонен риск-менеджментом:', validation.errors);
                 throw new Error(`Ордер отклонен: ${validation.errors.join(', ')}`);
             }
 
-            // 2. Использование скорректированного сигнала если есть
+            // 3. Использование скорректированного сигнала если есть
             const finalSignal = validation.adjustedSignal || signal;
             
-            // 3. Исполнение ордера
+            // 4. Исполнение ордера
             let result;
             
             switch (mode) {
@@ -233,7 +253,8 @@ class TradingEngine {
      * Бумажная торговля - виртуальное исполнение
      */
     async executePaperOrder(signal) {
-        const settings = this.modeManager.getModeSettings();
+        const modeSettings = await this.modeManager.getModeSettings();
+        const settings = modeSettings.settings || modeSettings; // Поддержка старого формата
         const { symbol, action, quantity, price, confidence } = signal;
         
         // Имитация задержки исполнения
@@ -246,8 +267,11 @@ class TradingEngine {
         const slippage = price * slippagePercent * volumeFactor * (action === 'BUY' ? 1 : -1);
         const executionPrice = price + slippage;
         
-        // Расчет комиссии
-        const commission = executionPrice * quantity * settings.commission;
+        // Расчет комиссии (как у Tinkoff: 0.3% с минимумом 1 рубль)
+        const dealAmount = executionPrice * quantity;
+        const commissionRate = settings.commission || 0.003; // 0.3% по умолчанию
+        const minCommission = settings.minCommission || 1; // 1 рубль минимум
+        const commission = Math.max(dealAmount * commissionRate, minCommission);
         
         // Проверка достаточности средств
         const requiredAmount = executionPrice * quantity + commission;
@@ -268,9 +292,28 @@ class TradingEngine {
         }
 
         // Расчет PnL для сделки
-        const pnl = action === 'SELL' ? 
-            (executionPrice - (this.virtualPortfolio.trades.find(t => t.symbol === symbol && t.action === 'BUY')?.price || executionPrice)) * quantity - commission :
-            -commission;
+        // Важно: комиссия платится и при покупке, и при продаже
+        let pnl = -commission; // Для BUY - только комиссия покупки (убыток)
+        if (action === 'SELL') {
+            // Рассчитываем среднюю цену покупки из всех сделок BUY для этого инструмента
+            const buyTrades = this.virtualPortfolio.trades.filter(t => 
+                (t.symbol === symbol || t.figi === symbol) && t.action === 'BUY'
+            );
+            if (buyTrades.length > 0) {
+                // Суммируем стоимость покупок (цена + комиссия)
+                const totalCost = buyTrades.reduce((sum, trade) => 
+                    sum + (trade.price * trade.quantity) + (trade.commission || 0), 0
+                );
+                const totalQuantity = buyTrades.reduce((sum, trade) => sum + trade.quantity, 0);
+                const averageBuyPrice = totalQuantity > 0 ? totalCost / totalQuantity : executionPrice;
+                
+                // PnL = (цена продажи - средняя цена покупки с комиссией) * количество - комиссия продажи
+                pnl = (executionPrice - averageBuyPrice) * quantity - commission;
+            } else {
+                // Если нет истории покупок, используем текущую цену
+                pnl = -commission;
+            }
+        }
 
         // Запись сделки
         const trade = {
@@ -300,11 +343,16 @@ class TradingEngine {
      * Микро-торговля - реальные ордера с ограничениями
      */
     async executeMicroOrder(signal) {
-        const settings = this.modeManager.getModeSettings();
+        const modeSettings = await this.modeManager.getModeSettings();
+        const settings = modeSettings.settings || modeSettings; // Поддержка старого формата
         const { symbol, action, quantity, price, confidence } = signal;
         
+        // Получаем текущий портфель для расчета капитала
+        const portfolio = await this.getRealPortfolioValue();
+        const capital = portfolio.totalValue || portfolio.totalAmountPortfolio?.value || 1000000;
+        
         // Ограничение размера позиции для микро-торговли
-        const maxQuantity = Math.floor(settings.capital * settings.maxPositionSize / price);
+        const maxQuantity = Math.floor(capital * settings.maxPositionSize / price);
         const limitedQuantity = Math.min(quantity, maxQuantity);
         
         if (limitedQuantity < quantity) {
@@ -361,7 +409,8 @@ class TradingEngine {
      * Реальная торговля - полное исполнение
      */
     async executeRealOrder(signal) {
-        const settings = this.modeManager.getModeSettings();
+        const modeSettings = await this.modeManager.getModeSettings();
+        const settings = modeSettings.settings || modeSettings; // Поддержка старого формата
         const { symbol, action, quantity, price, confidence } = signal;
         
         try {
@@ -414,10 +463,11 @@ class TradingEngine {
      * Получение стоимости портфеля
      */
     async getPortfolioValue() {
-        const mode = this.modeManager.getCurrentMode();
+        const modeInfo = this.modeManager.getCurrentMode();
+        const mode = modeInfo.mode || modeInfo; // Поддержка старого формата
         
         if (mode === 'paper') {
-            return this.getVirtualPortfolioValue();
+            return await this.getVirtualPortfolioValue();
         } else {
             return await this.getRealPortfolioValue();
         }
@@ -473,7 +523,8 @@ class TradingEngine {
      * Получение истории сделок
      */
     getTradeHistory(limit = 100) {
-        const mode = this.modeManager.getCurrentMode();
+        const modeInfo = this.modeManager.getCurrentMode();
+        const mode = modeInfo.mode || modeInfo; // Поддержка старого формата
         
         if (mode === 'paper') {
             return this.virtualPortfolio.trades.slice(-limit);
@@ -488,7 +539,8 @@ class TradingEngine {
      */
     async calculateTradingStats() {
         const trades = this.getTradeHistory();
-        const mode = this.modeManager.getCurrentMode();
+        const modeInfo = this.modeManager.getCurrentMode();
+        const mode = modeInfo.mode || modeInfo; // Поддержка старого формата
         
         if (trades.length === 0) {
             return {
@@ -507,16 +559,30 @@ class TradingEngine {
         let maxDrawdown = 0;
 
         for (const trade of trades) {
-            // Упрощенный расчет статистики
-            if (trade.action === 'SELL') {
-                // Логика расчета прибыли/убытка
-                const currentPrices = await this.getCurrentPrices([trade.symbol]);
-                const currentPrice = currentPrices[trade.symbol] || 0;
-                const profit = (currentPrice - trade.price) * trade.quantity;
-                totalReturn += profit;
-                
-                if (profit > 0) {
+            // Используем уже рассчитанный PnL из сделки (учитывает комиссии)
+            if (trade.pnl !== undefined) {
+                totalReturn += trade.pnl;
+                if (trade.pnl > 0) {
                     profitableTrades++;
+                }
+            } else if (trade.action === 'SELL') {
+                // Fallback: если PnL не рассчитан, рассчитываем с учетом комиссии
+                const buyTrades = trades.filter(t => 
+                    (t.symbol === trade.symbol || t.figi === trade.symbol) && 
+                    t.action === 'BUY' && 
+                    new Date(t.timestamp) < new Date(trade.timestamp)
+                );
+                if (buyTrades.length > 0) {
+                    const totalCost = buyTrades.reduce((sum, t) => 
+                        sum + (t.price * t.quantity) + (t.commission || 0), 0
+                    );
+                    const totalQuantity = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
+                    const averageBuyPrice = totalQuantity > 0 ? totalCost / totalQuantity : trade.price;
+                    const profit = (trade.price - averageBuyPrice) * trade.quantity - (trade.commission || 0);
+                    totalReturn += profit;
+                    if (profit > 0) {
+                        profitableTrades++;
+                    }
                 }
             }
         }
@@ -559,15 +625,135 @@ class TradingEngine {
     }
 
     /**
+     * Переключение режима торговли
+     */
+    async switchTradingMode(newMode) {
+        try {
+            if (!this.isInitialized) {
+                await this.initialize();
+            }
+
+            // Проверяем возможность переключения
+            const canSwitch = await this.modeManager.canSwitchTo(newMode);
+            if (!canSwitch.canSwitch) {
+                throw new Error(`Невозможно переключиться на режим ${newMode}: ${canSwitch.reason}`);
+            }
+
+            const previousMode = this.modeManager.getCurrentMode().mode;
+            const result = await this.modeManager.switchMode(newMode);
+            
+            // Автоматически активируем движок при переключении на paper режим
+            // Для micro и real требуется явная активация через activate()
+            if (newMode === 'paper') {
+                this.isActive = true;
+                console.log(`✅ TradingEngine автоматически активирован для режима ${newMode}`);
+            } else {
+                // Для micro и real деактивируем до явной активации
+                this.isActive = false;
+                console.log(`⏸️ TradingEngine деактивирован. Требуется явная активация для режима ${newMode}`);
+            }
+            
+            console.log(`🔄 TradingEngine: режим изменен с ${previousMode} на ${newMode}`);
+            
+            return {
+                ...result,
+                isActive: this.isActive,
+                requiresActivation: newMode !== 'paper'
+            };
+        } catch (error) {
+            console.error('❌ Ошибка переключения режима в TradingEngine:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Активация торгового движка
+     * Для micro и real режимов требуется явная активация
+     */
+    async activate() {
+        try {
+            if (!this.isInitialized) {
+                await this.initialize();
+            }
+
+            const modeInfo = this.modeManager.getCurrentMode();
+            const mode = modeInfo.mode || modeInfo;
+
+            // Проверяем готовность к активации
+            if (mode === 'micro' || mode === 'real') {
+                // Для реальных режимов проверяем готовность
+                const canSwitch = await this.modeManager.canSwitchTo(mode);
+                if (!canSwitch.canSwitch) {
+                    throw new Error(`Невозможно активировать движок в режиме ${mode}: ${canSwitch.reason}`);
+                }
+
+                // Проверяем доступность брокера для реальных режимов
+                if (mode === 'real') {
+                    const isTradingAvailable = await this.broker.isTradingAvailable();
+                    if (!isTradingAvailable) {
+                        throw new Error('Торговля недоступна в данный момент. Проверьте подключение к брокеру.');
+                    }
+                }
+            }
+            
+            this.isActive = true;
+            console.log(`✅ Trading Engine активирован в режиме ${mode}`);
+            
+            return {
+                success: true,
+                isActive: true,
+                mode: mode,
+                timestamp: new Date().toISOString()
+            };
+        } catch (error) {
+            console.error('❌ Ошибка активации Trading Engine:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Деактивация торгового движка
+     */
+    async deactivate() {
+        try {
+            this.isActive = false;
+            console.log('⏸️ Trading Engine деактивирован');
+            
+            return {
+                success: true,
+                isActive: false,
+                timestamp: new Date().toISOString()
+            };
+        } catch (error) {
+            console.error('❌ Ошибка деактивации Trading Engine:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Получить текущий режим (для совместимости)
+     */
+    get mode() {
+        const modeInfo = this.modeManager.getCurrentMode();
+        return modeInfo.mode || modeInfo;
+    }
+
+    /**
      * Получение статуса движка
      */
-    getStatus() {
+    async getStatus() {
+        const modeInfo = this.modeManager.getCurrentMode();
+        const modeSettings = await this.modeManager.getModeSettings();
+        const mode = modeInfo.mode || modeInfo;
+        
         return {
             isInitialized: this.isInitialized,
-            currentMode: this.modeManager.getCurrentMode(),
-            modeSettings: this.modeManager.getModeSettings(),
-            portfolio: this.getVirtualPortfolioValue(),
-            stats: this.calculateTradingStats()
+            isActive: this.isActive,
+            currentMode: modeInfo,
+            mode: mode, // Для совместимости с WebSocket
+            modeSettings: modeSettings,
+            portfolio: await this.getPortfolioValue(),
+            stats: await this.calculateTradingStats()
         };
     }
 

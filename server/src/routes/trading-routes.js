@@ -179,4 +179,44 @@ router.post('/mode/switch', async (req, res) => {
     }
 });
 
+/**
+ * Активация торгового движка
+ */
+router.post('/activate', async (req, res) => {
+    try {
+        const result = await TradingEngine.activate();
+        res.json({
+            success: true,
+            data: result
+        });
+    } catch (error) {
+        console.error('Ошибка активации торгового движка:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка активации торгового движка',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Деактивация торгового движка
+ */
+router.post('/deactivate', async (req, res) => {
+    try {
+        const result = await TradingEngine.deactivate();
+        res.json({
+            success: true,
+            data: result
+        });
+    } catch (error) {
+        console.error('Ошибка деактивации торгового движка:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка деактивации торгового движка',
+            error: error.message
+        });
+    }
+});
+
 export default router;

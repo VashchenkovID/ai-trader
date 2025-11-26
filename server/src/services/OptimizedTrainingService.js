@@ -917,7 +917,14 @@ class OptimizedTrainingService {
             const model = await tf.models.modelFromJSON(arch);
 
             const weightsRaw = await fs.readFile(bestWeightsPath, 'utf-8');
-            const { specs } = JSON.parse(weightsRaw);
+            const weightsData = JSON.parse(weightsRaw);
+            const specs = weightsData.specs || weightsData.weights || null;
+            
+            if (!specs || !Array.isArray(specs) || specs.length === 0) {
+                console.warn(`⚠️ Invalid weights format for best model ${figi}, skipping load`);
+                throw new Error('Invalid weights format: specs is not an array');
+            }
+            
             const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
             model.setWeights(tensors);
 
@@ -1064,7 +1071,14 @@ class OptimizedTrainingService {
             const model = await tf.models.modelFromJSON(arch);
 
                     const weightsRaw = await fs.readFile(figiWeightsPath, 'utf-8');
-            const { specs } = JSON.parse(weightsRaw);
+            const weightsData = JSON.parse(weightsRaw);
+            const specs = weightsData.specs || weightsData.weights || null;
+            
+            if (!specs || !Array.isArray(specs) || specs.length === 0) {
+                console.warn(`⚠️ Invalid weights format for ${figi}, skipping load`);
+                throw new Error('Invalid weights format: specs is not an array');
+            }
+            
             const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
             model.setWeights(tensors);
 
@@ -1129,7 +1143,14 @@ class OptimizedTrainingService {
                     const model = await tf.models.modelFromJSON(arch);
                     
                     const weightsRaw = await fs.readFile(generalWeightsPath, 'utf-8');
-                    const { specs } = JSON.parse(weightsRaw);
+                    const weightsData = JSON.parse(weightsRaw);
+                    const specs = weightsData.specs || weightsData.weights || null;
+                    
+                    if (!specs || !Array.isArray(specs) || specs.length === 0) {
+                        console.warn(`⚠️ Invalid weights format for general model, skipping load`);
+                        throw new Error('Invalid weights format: specs is not an array');
+                    }
+                    
                     const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
                     model.setWeights(tensors);
                     

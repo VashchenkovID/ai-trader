@@ -127,6 +127,27 @@ router.get('/validation', async (req, res) => {
 });
 
 /**
+ * Проверка возможности переключения на конкретный режим
+ */
+router.get('/can-switch/:mode', async (req, res) => {
+    try {
+        const { mode } = req.params;
+        const canSwitch = await TradingModeManager.canSwitchTo(mode);
+        res.json({
+            success: true,
+            data: canSwitch
+        });
+    } catch (error) {
+        console.error('Ошибка проверки возможности переключения:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка проверки возможности переключения',
+            error: error.message
+        });
+    }
+});
+
+/**
  * Производительность режима торговли
  */
 router.get('/performance', async (req, res) => {

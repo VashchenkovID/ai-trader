@@ -149,12 +149,13 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
       }
     }
     
-    // TradingEngine: {isInitialized, currentMode}
+    // TradingEngine: {isInitialized, isActive, currentMode, mode}
     if (status.hasOwnProperty('isInitialized') && status.hasOwnProperty('currentMode')) {
-      if (status.isInitialized) {
-        const mode = typeof status.currentMode === 'string' ? status.currentMode : 
-                    status.currentMode?.mode || 'unknown';
+      const mode = status.mode || (typeof status.currentMode === 'string' ? status.currentMode : status.currentMode?.mode) || 'unknown';
+      if (status.isActive) {
         return <Badge value={`Активен (${mode})`} severity="success" />;
+      } else if (status.isInitialized) {
+        return <Badge value={`Неактивен (${mode})`} severity="warning" />;
       } else {
         return <Badge value="Не инициализирован" severity="danger" />;
       }

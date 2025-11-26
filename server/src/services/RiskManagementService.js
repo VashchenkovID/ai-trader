@@ -122,7 +122,7 @@ class RiskManagementService {
             }
 
             // 7. Проверка общего воздействия
-            const totalExposure = this.calculateTotalExposure(portfolio);
+            const totalExposure = this.calculateTotalExposure(portfolio, currentPrices);
             if (totalExposure > this.limits.maxTotalExposure) {
                 validation.warnings.push(`Общее воздействие ${(totalExposure * 100).toFixed(1)}% превышает лимит ${(this.limits.maxTotalExposure * 100)}%`);
             }
@@ -183,18 +183,24 @@ class RiskManagementService {
     /**
      * Расчет общего воздействия портфеля
      */
-    calculateTotalExposure(portfolio) {
+    calculateTotalExposure(portfolio, currentPrices = {}) {
+        if (!portfolio || !portfolio.positions || !portfolio.totalValue || portfolio.totalValue === 0) {
+            return 0;
+        }
+        
         let totalExposure = 0;
         
         for (const [symbol, quantity] of Object.entries(portfolio.positions)) {
             if (quantity > 0) {
-                // Здесь нужно получить текущую цену, но для упрощения используем примерную
-                const estimatedValue = quantity * 1000; // Примерная цена
-                totalExposure += estimatedValue / portfolio.totalValue;
+                // Получаем цену из переданных цен или используем positionsValue если доступен
+                const price = currentPrices[symbol] || (portfolio.positionsValue ? portfolio.positionsValue / Object.values(portfolio.positions).reduce((sum, qty) => sum + (qty || 0), 0) : 0);
+                const positionValue = price * quantity;
+                totalExposure += positionValue;
             }
         }
         
-        return totalExposure;
+        // Возвращаем как долю от общего капитала
+        return portfolio.totalValue > 0 ? totalExposure / portfolio.totalValue : 0;
     }
 
     /**
