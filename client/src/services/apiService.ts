@@ -350,7 +350,7 @@ export const apiService = {
    */
   async getInstruments(): Promise<any[]> {
     try {
-      const response = await api.get('/api/instruments');
+      const response = await api.get('/api/market/instruments');
       return response.data.data;
     } catch (error) {
       console.error('Error fetching instruments:', error);

@@ -42,24 +42,68 @@ const EnsembleManager: React.FC<EnsembleManagerProps> = ({ className = '' }) => 
   const loadEnsembleData = async () => {
     try {
       setRefreshing(true);
-      const [modelsResponse, metricsResponse] = await Promise.all([
-        apiService.getEnsembleModels(),
-        apiService.getEnsembleMetrics()
-      ]);
-
-      if (modelsResponse.success) {
-        setModels(modelsResponse.data || []);
+      
+      // Получаем статус ансамбля, который содержит и модели, и метрики
+      const statusResponse = await apiService.getEnsembleStatus();
+      
+      // Обрабатываем ответ в разных форматах
+      let statusData = null;
+      if (statusResponse && typeof statusResponse === 'object') {
+        if (statusResponse.success && statusResponse.data) {
+          statusData = statusResponse.data;
+        } else if (statusResponse.models !== undefined) {
+          // Прямой объект данных
+          statusData = statusResponse;
+        } else if (statusResponse.data) {
+          statusData = statusResponse.data;
+        }
       }
 
-      if (metricsResponse.success) {
-        setMetrics(metricsResponse.data);
+      if (statusData) {
+        // Извлекаем модели
+        let modelsData: any[] = [];
+        if (Array.isArray(statusData.models)) {
+          modelsData = statusData.models;
+        } else if (statusData.models && Array.isArray(statusData.models)) {
+          modelsData = statusData.models;
+        }
+
+        // Извлекаем метрики
+        let metricsData: EnsembleMetrics | null = null;
+        if (statusData.metrics && typeof statusData.metrics === 'object') {
+          metricsData = {
+            overallAccuracy: statusData.metrics.overallAccuracy || 0,
+            diversity: statusData.metrics.diversity || 0,
+            stability: statusData.metrics.stability || 0,
+            performance: statusData.metrics.performance || 0
+          };
+        } else if (statusData.overallAccuracy !== undefined) {
+          // Прямые метрики в корне объекта
+          metricsData = {
+            overallAccuracy: statusData.overallAccuracy || 0,
+            diversity: statusData.diversity || 0,
+            stability: statusData.stability || 0,
+            performance: statusData.performance || 0
+          };
+        }
+
+        // Убеждаемся, что models всегда массив
+        setModels(Array.isArray(modelsData) ? modelsData : []);
+        setMetrics(metricsData);
+      } else {
+        // Если данных нет, устанавливаем пустые значения
+        setModels([]);
+        setMetrics(null);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading ensemble data:', error);
+      // Устанавливаем пустой массив при ошибке
+      setModels([]);
+      setMetrics(null);
       toast.current?.show({
         severity: 'error',
         summary: 'Ошибка',
-        detail: 'Не удалось загрузить данные ансамбля'
+        detail: error?.response?.data?.message || error?.message || 'Не удалось загрузить данные ансамбля'
       });
     } finally {
       setRefreshing(false);
@@ -77,15 +121,24 @@ const EnsembleManager: React.FC<EnsembleManagerProps> = ({ className = '' }) => 
   const trainModel = async (modelType: string) => {
     try {
       setLoading(true);
-      const response = await apiService.trainEnsembleModel(modelType);
       
-      if (response.success) {
+      if (typeof apiService.trainEnsembleModel === 'function') {
+        const response = await apiService.trainEnsembleModel(modelType);
+        
+        if (response && (response.success || response)) {
+          toast.current?.show({
+            severity: 'success',
+            summary: 'Успех',
+            detail: `Обучение ${modelType} модели запущено`
+          });
+          await loadEnsembleData();
+        }
+      } else {
         toast.current?.show({
-          severity: 'success',
-          summary: 'Успех',
-          detail: `Обучение ${modelType} модели запущено`
+          severity: 'warn',
+          summary: 'Недоступно',
+          detail: 'Метод обучения модели не реализован'
         });
-        await loadEnsembleData();
       }
     } catch (error) {
       console.error('Error training model:', error);
@@ -103,15 +156,24 @@ const EnsembleManager: React.FC<EnsembleManagerProps> = ({ className = '' }) => 
   const trainAllModels = async () => {
     try {
       setLoading(true);
-      const response = await apiService.trainAllEnsembleModels();
       
-      if (response.success) {
+      if (typeof apiService.trainAllEnsembleModels === 'function') {
+        const response = await apiService.trainAllEnsembleModels('', {});
+        
+        if (response && (response.success || response)) {
+          toast.current?.show({
+            severity: 'success',
+            summary: 'Успех',
+            detail: 'Обучение всех моделей запущено'
+          });
+          await loadEnsembleData();
+        }
+      } else {
         toast.current?.show({
-          severity: 'success',
-          summary: 'Успех',
-          detail: 'Обучение всех моделей запущено'
+          severity: 'warn',
+          summary: 'Недоступно',
+          detail: 'Метод обучения всех моделей не реализован'
         });
-        await loadEnsembleData();
       }
     } catch (error) {
       console.error('Error training all models:', error);
@@ -126,13 +188,13 @@ const EnsembleManager: React.FC<EnsembleManagerProps> = ({ className = '' }) => 
   };
 
   // Получение цвета статуса
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): 'success' | 'warning' | 'danger' | 'info' => {
     switch (status) {
       case 'active': return 'success';
       case 'training': return 'warning';
       case 'idle': return 'info';
       case 'error': return 'danger';
-      default: return 'secondary';
+      default: return 'info';
     }
   };
 
@@ -147,24 +209,18 @@ const EnsembleManager: React.FC<EnsembleManagerProps> = ({ className = '' }) => 
     }
   };
 
-  // Получение цвета типа модели
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'LSTM': return 'blue';
-      case 'CNN': return 'green';
-      case 'Transformer': return 'purple';
-      default: return 'gray';
-    }
-  };
+
+  // Убеждаемся, что models всегда массив
+  const safeModels = Array.isArray(models) ? models : [];
 
   // Данные для графика точности
   const accuracyChartData = {
-    labels: models.map(m => m.name),
+    labels: safeModels.map(m => m.name || 'Unknown'),
     datasets: [
       {
         label: 'Точность (%)',
-        data: models.map(m => m.accuracy * 100),
-        backgroundColor: models.map(m => {
+        data: safeModels.map(m => (m.accuracy || 0) * 100),
+        backgroundColor: safeModels.map(m => {
           switch (m.type) {
             case 'LSTM': return 'rgba(66, 165, 245, 0.6)';
             case 'CNN': return 'rgba(76, 175, 80, 0.6)';
@@ -172,7 +228,7 @@ const EnsembleManager: React.FC<EnsembleManagerProps> = ({ className = '' }) => 
             default: return 'rgba(158, 158, 158, 0.6)';
           }
         }),
-        borderColor: models.map(m => {
+        borderColor: safeModels.map(m => {
           switch (m.type) {
             case 'LSTM': return '#42A5F5';
             case 'CNN': return '#4CAF50';
@@ -187,11 +243,11 @@ const EnsembleManager: React.FC<EnsembleManagerProps> = ({ className = '' }) => 
 
   // Данные для графика весов
   const weightChartData = {
-    labels: models.map(m => m.name),
+    labels: safeModels.map(m => m.name || 'Unknown'),
     datasets: [
       {
         label: 'Вес в ансамбле',
-        data: models.map(m => m.weight * 100),
+        data: safeModels.map(m => (m.weight || 0) * 100),
         backgroundColor: 'rgba(255, 152, 0, 0.6)',
         borderColor: '#FF9800',
         borderWidth: 2
@@ -284,10 +340,11 @@ const EnsembleManager: React.FC<EnsembleManagerProps> = ({ className = '' }) => 
       {/* Таблица моделей */}
       <Card title="Модели ансамбля" className="mb-4">
         <DataTable 
-          value={models} 
+          value={safeModels} 
           paginator 
           rows={10}
           emptyMessage="Нет данных о моделях"
+          loading={refreshing}
         >
           <Column 
             field="name" 
@@ -300,7 +357,7 @@ const EnsembleManager: React.FC<EnsembleManagerProps> = ({ className = '' }) => 
             body={(rowData) => (
               <Badge 
                 value={rowData.type}
-                severity={getTypeColor(rowData.type) as any}
+                severity="info"
               />
             )}
             sortable

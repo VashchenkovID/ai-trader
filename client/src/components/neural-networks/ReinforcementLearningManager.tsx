@@ -45,25 +45,57 @@ const ReinforcementLearningManager: React.FC<ReinforcementLearningManagerProps> 
   const loadRLStatus = async () => {
     try {
       setRefreshing(true);
-      const [statusResponse, historyResponse] = await Promise.all([
-        apiService.getRLStatus(),
-        apiService.getRLHistory()
-      ]);
-
-      if (statusResponse.success) {
-        setStatus(statusResponse.data);
+      
+      // Получаем статус через stats endpoint
+      const statsResponse = await apiService.getReinforcementLearningStats();
+      
+      // Обрабатываем ответ в разных форматах
+      let statusData = null;
+      if (statsResponse && typeof statsResponse === 'object') {
+        if (statsResponse.success && statsResponse.data) {
+          statusData = statsResponse.data;
+        } else if (statsResponse.isActive !== undefined) {
+          // Прямой объект данных
+          statusData = statsResponse;
+        } else if (statsResponse.data) {
+          statusData = statsResponse.data;
+        }
       }
-
-      if (historyResponse.success) {
-        setHistory(historyResponse.data || []);
+      
+      if (statusData) {
+        setStatus({
+          isActive: statusData.isActive || false,
+          isInitialized: statusData.isInitialized || false,
+          episodes: statusData.episodes || 0,
+          averageReward: statusData.averageReward || 0,
+          epsilon: statusData.epsilon || 0.1,
+          lastEpisode: statusData.lastEpisode || new Date().toISOString(),
+          currentAction: statusData.currentAction || 'Нет данных',
+          qValue: statusData.qValue || 0
+        });
       }
-    } catch (error) {
+      
+      // История пока не реализована на бэкенде, используем пустой массив
+      setHistory([]);
+    } catch (error: any) {
       console.error('Error loading RL status:', error);
       toast.current?.show({
         severity: 'error',
         summary: 'Ошибка',
-        detail: 'Не удалось загрузить статус RL'
+        detail: error?.response?.data?.message || error?.message || 'Не удалось загрузить статус RL'
       });
+      // Устанавливаем значения по умолчанию при ошибке
+      setStatus({
+        isActive: false,
+        isInitialized: false,
+        episodes: 0,
+        averageReward: 0,
+        epsilon: 0.1,
+        lastEpisode: new Date().toISOString(),
+        currentAction: 'Нет данных',
+        qValue: 0
+      });
+      setHistory([]);
     } finally {
       setRefreshing(false);
     }

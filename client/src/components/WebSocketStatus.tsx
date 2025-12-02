@@ -15,7 +15,18 @@ const WebSocketStatus: React.FC<WebSocketStatusProps> = ({
   showReconnectButton = false,
   compact = false 
 }) => {
-  const { isConnected, error } = useWebSocketData();
+  // Безопасное получение данных из контекста
+  let isConnected = false;
+  let error: string | null = null;
+  
+  try {
+    const wsData = useWebSocketData();
+    isConnected = wsData?.isConnected || false;
+    error = wsData?.error || null;
+  } catch (err) {
+    // Если контекст недоступен, используем значения по умолчанию
+    console.warn('WebSocket context not available:', err);
+  }
   
   // Функция для переподключения (пока не реализована в новом провайдере)
   const reconnect = () => {

@@ -176,10 +176,29 @@ const TradingModeManager: React.FC<TradingModeManagerProps> = ({ className = '' 
         // Показываем рекомендации, если есть
         if (canSwitchResult.recommendations && canSwitchResult.recommendations.length > 0) {
           setTimeout(() => {
+            // Обрабатываем рекомендации - могут быть строками или объектами
+            const recommendationsText = canSwitchResult.recommendations
+              .map((rec: any) => {
+                if (typeof rec === 'string') {
+                  return rec;
+                } else if (rec && typeof rec === 'object') {
+                  // Если это объект с category и actions
+                  if (rec.category && rec.actions && Array.isArray(rec.actions)) {
+                    return `${rec.category}: ${rec.actions.join(', ')}`;
+                  } else if (rec.message) {
+                    return rec.message;
+                  } else {
+                    return JSON.stringify(rec);
+                  }
+                }
+                return String(rec);
+              })
+              .join('; ');
+            
             toast.current?.show({
               severity: 'warn',
               summary: 'Рекомендации',
-              detail: canSwitchResult.recommendations.join('; '),
+              detail: recommendationsText,
               life: 10000
             });
           }, 1000);
@@ -597,9 +616,25 @@ const TradingModeManager: React.FC<TradingModeManagerProps> = ({ className = '' 
                             <div className="text-sm text-600 mt-2">
                               <strong>Рекомендации:</strong>
                               <ul className="mt-1 pl-4">
-                                {modeValidations[mode.mode].recommendations.slice(0, 3).map((rec: string, idx: number) => (
-                                  <li key={idx}>{rec}</li>
-                                ))}
+                                {modeValidations[mode.mode].recommendations.slice(0, 3).map((rec: any, idx: number) => {
+                                  // Обрабатываем рекомендации - могут быть строками или объектами
+                                  let recText: string;
+                                  if (typeof rec === 'string') {
+                                    recText = rec;
+                                  } else if (rec && typeof rec === 'object') {
+                                    // Если это объект с category и actions
+                                    if (rec.category && rec.actions && Array.isArray(rec.actions)) {
+                                      recText = `${rec.category}: ${rec.actions.join(', ')}`;
+                                    } else if (rec.message) {
+                                      recText = rec.message;
+                                    } else {
+                                      recText = JSON.stringify(rec);
+                                    }
+                                  } else {
+                                    recText = String(rec);
+                                  }
+                                  return <li key={idx}>{recText}</li>;
+                                })}
                               </ul>
                             </div>
                           )}

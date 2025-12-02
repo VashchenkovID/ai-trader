@@ -43,25 +43,55 @@ const MetaLearningManager: React.FC<MetaLearningManagerProps> = ({ className = '
   const loadMetaLearningStatus = async () => {
     try {
       setRefreshing(true);
-      const [statusResponse, historyResponse] = await Promise.all([
-        apiService.getMetaLearningStatus(),
-        apiService.getMetaLearningHistory()
-      ]);
-
-      if (statusResponse.success) {
-        setStatus(statusResponse.data);
+      
+      // Получаем статус через stats endpoint
+      const statsResponse = await apiService.getMetaLearningStats();
+      
+      // Обрабатываем ответ в разных форматах
+      let statusData = null;
+      if (statsResponse && typeof statsResponse === 'object') {
+        if (statsResponse.success && statsResponse.data) {
+          statusData = statsResponse.data;
+        } else if (statsResponse.isActive !== undefined) {
+          // Прямой объект данных
+          statusData = statsResponse;
+        } else if (statsResponse.data) {
+          statusData = statsResponse.data;
+        }
       }
-
-      if (historyResponse.success) {
-        setHistory(historyResponse.data || []);
+      
+      if (statusData) {
+        setStatus({
+          isActive: statusData.isActive || false,
+          isInitialized: statusData.isInitialized || false,
+          adaptationCount: statusData.adaptationCount || 0,
+          successRate: statusData.successRate || 0,
+          lastAdaptation: statusData.lastAdaptation || new Date().toISOString(),
+          currentTask: statusData.currentTask || 'Нет активной задачи',
+          performance: statusData.performance || 0
+        });
       }
-    } catch (error) {
+      
+      // История пока не реализована на бэкенде, используем пустой массив
+      setHistory([]);
+    } catch (error: any) {
       console.error('Error loading meta-learning status:', error);
       toast.current?.show({
         severity: 'error',
         summary: 'Ошибка',
-        detail: 'Не удалось загрузить статус Meta-Learning'
+        detail: error?.response?.data?.message || error?.message || 'Не удалось загрузить статус Meta-Learning'
       });
+      // Устанавливаем значения по умолчанию при ошибке
+      setStatus({
+        isActive: false,
+        isInitialized: false,
+        adaptationCount: 0,
+        successRate: 0,
+        lastAdaptation: new Date().toISOString(),
+        currentTask: 'Нет данных',
+        performance: 0
+      });
+      setHistory([]);
     } finally {
       setRefreshing(false);
     }

@@ -24,6 +24,15 @@ class NeuralNetworkService {
         this.modelFile = path.join(this.modelPath, 'neural-network-model.json');
         this.weightsFile = path.join(this.modelPath, 'neural-network-weights.json');
         this.isBatchTraining = false;
+        // Метаданные обучения
+        this.lastTrainingTime = null;
+        this.lastTrainingDuration = null;
+        this.lastTrainingAccuracy = null;
+        this.lastTrainingLoss = null;
+        this.trainingHistory = [];
+        this.totalPredictions = 0;
+        this.successfulPredictions = 0;
+        this.modelCreatedAt = null; // Время создания/загрузки модели
     }
 
     /**
@@ -478,6 +487,8 @@ class NeuralNetworkService {
             }
 
             console.log('✅ Модель загружена (архитектура и веса)');
+            // Сохраняем время загрузки модели
+            this.modelCreatedAt = new Date().toISOString();
             return true;
         } catch (error) {
             console.error('❌ Ошибка загрузки модели:', error);
@@ -608,16 +619,50 @@ class NeuralNetworkService {
             setupWorkerListeners();
 
             // Запускаем обучение в worker'е
+            const startTime = Date.now();
             const history = await OptimizedTrainingService.trainInstrument(figi, { epochs, batchSize });
+            const trainingDuration = Date.now() - startTime;
 
-            if (history?.history?.acc?.length) {
-                console.log(`✅ Training completed for ${figi}. Final accuracy: ${history.history.acc[history.history.acc.length - 1].toFixed(4)}`);
-            } else {
-                console.log(`✅ Training completed for ${figi}.`);
+            // Сохраняем метаданные обучения
+            if (history?.history) {
+                const finalAcc = history.history.acc?.length > 0 
+                    ? history.history.acc[history.history.acc.length - 1] 
+                    : null;
+                const finalLoss = history.history.loss?.length > 0 
+                    ? history.history.loss[history.history.loss.length - 1] 
+                    : null;
+                
+                this.lastTrainingTime = new Date().toISOString();
+                this.lastTrainingDuration = Math.round(trainingDuration / 1000); // в секундах
+                this.lastTrainingAccuracy = finalAcc;
+                this.lastTrainingLoss = finalLoss;
+                this.trainingHistory = history.history;
+                
+                if (finalAcc !== null) {
+                    console.log(`✅ Training completed for ${figi}. Final accuracy: ${finalAcc.toFixed(4)}, loss: ${finalLoss?.toFixed(4) || 'N/A'}`);
+                } else {
+                    console.log(`✅ Training completed for ${figi}.`);
+                }
             }
 
-            // Сохраняем модель после обучения
-            await this.saveModel(figi);
+            // Получаем обученную модель из OptimizedTrainingService и сохраняем
+            try {
+                const trainedModel = await OptimizedTrainingService.getModel(figi);
+                if (trainedModel) {
+                    this.model = trainedModel;
+                    // Сохраняем модель через OptimizedTrainingService (он знает правильный формат)
+                    await OptimizedTrainingService.saveModel(figi, trainedModel);
+                    // Также сохраняем через наш метод для совместимости
+                    await this.saveModel(figi);
+                    // Обновляем время создания модели
+                    this.modelCreatedAt = new Date().toISOString();
+                    console.log(`✅ Model saved successfully for ${figi}`);
+                } else {
+                    console.warn(`⚠️ Trained model not found for ${figi} after training`);
+                }
+            } catch (saveError) {
+                console.error(`❌ Error saving model for ${figi}:`, saveError.message);
+            }
 
             // Завершаем обучение
             const TrainingStatusService = getService('TrainingStatusService');
@@ -789,6 +834,29 @@ class NeuralNetworkService {
                 }
             } catch (serviceError) {
                 console.warn(`⚠️ Failed to load per-FIGI model for prediction via OptimizedTrainingService: ${serviceError.message}`);
+            }
+
+            // Если per-FIGI модель не найдена, пытаемся использовать общую модель
+            if (!model && this.model) {
+                // Проверяем совместимость размерности
+                const modelInputShape = this.model.inputs?.[0]?.shape;
+                const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
+                
+                if (modelInputSize === null || modelInputSize === featureVector.length) {
+                    model = this.model;
+                    console.log(`📥 Using general model for prediction (FIGI: ${figi})`);
+                } else {
+                    console.warn(`⚠️ General model input size mismatch: expected ${modelInputSize}, got ${featureVector.length}`);
+                    // Пытаемся создать временную модель с правильным размером для предсказания
+                    try {
+                        console.log(`🔄 Creating temporary model with input size ${featureVector.length} for prediction`);
+                        const tempModel = await this.createModel(featureVector.length, 60);
+                        model = tempModel;
+                        console.log(`✅ Temporary model created for prediction (FIGI: ${figi})`);
+                    } catch (tempModelError) {
+                        console.warn(`⚠️ Failed to create temporary model: ${tempModelError.message}`);
+                    }
+                }
             }
 
             if (!model) {
@@ -1558,17 +1626,15 @@ class NeuralNetworkService {
             if (this.model?.inputs?.[0]?.shape) {
                 console.log(`🧠 Input shape: ${JSON.stringify(this.model.inputs[0].shape)}`);
             }
-        } else {
-            console.log('⚠️ Модель не найдена, создаем новую...');
-            // Создаем новую модель с базовыми параметрами
-            try {
-                this.model = await this.createModel(100, 60); // базовые параметры
-                console.log('✅ Новая нейросеть создана');
-                console.log(`🧠 Model status: ${this.model ? 'created' : 'failed'}`);
-            } catch (error) {
-                console.error('❌ Ошибка создания модели:', error.message);
-                console.log('⚠️ Нейросеть требует обучения');
+            // Устанавливаем время создания модели, если еще не установлено
+            if (!this.modelCreatedAt) {
+                this.modelCreatedAt = new Date().toISOString();
             }
+        } else {
+            console.log('⚠️ Модель не найдена, будет создана при первом обучении');
+            // Не создаем модель заранее, так как размер входных данных зависит от prepareTrainingData
+            // Модель будет создана автоматически при обучении с правильным размером входных данных
+            console.log('📝 Модель будет создана при обучении с адаптивным размером входных данных');
         }
     }
 
@@ -1578,18 +1644,51 @@ class NeuralNetworkService {
             const isLoaded = !!this.model;
             const isTraining = !!this.isTraining || this.status === 'training';
             const modelInputs = this.model?.inputs?.length || 0;
+            
+            // Вычисляем возраст модели (в днях)
+            let modelAge = null;
+            if (this.modelCreatedAt) {
+                const ageMs = Date.now() - new Date(this.modelCreatedAt).getTime();
+                modelAge = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+            } else if (this.lastTrainingTime) {
+                // Если нет времени создания, используем время последнего обучения
+                const ageMs = Date.now() - new Date(this.lastTrainingTime).getTime();
+                modelAge = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+            }
+            
+            // Вычисляем accuracy из метрик производительности или последнего обучения
+            let accuracy = null;
+            if (this.totalPredictions > 0) {
+                accuracy = this.successfulPredictions / this.totalPredictions;
+            } else if (this.lastTrainingAccuracy !== null) {
+                accuracy = this.lastTrainingAccuracy;
+            }
+            
             return {
                 isLoaded,
                 isTraining,
+                isActive: this.isActive,
                 modelInputs,
-                status: this.status || (isLoaded ? 'ready' : 'not_loaded')
+                status: this.status || (isLoaded ? 'ready' : 'not_loaded'),
+                accuracy: accuracy,
+                lastTraining: this.lastTrainingTime,
+                modelAge: modelAge,
+                lastTrainingAccuracy: this.lastTrainingAccuracy,
+                lastTrainingLoss: this.lastTrainingLoss,
+                totalPredictions: this.totalPredictions || 0,
+                successfulPredictions: this.successfulPredictions || 0
             };
         } catch (error) {
+            console.error('Error in getModelStatus:', error);
             return {
                 isLoaded: false,
                 isTraining: false,
+                isActive: false,
                 modelInputs: 0,
-                status: 'unknown'
+                status: 'unknown',
+                accuracy: null,
+                lastTraining: null,
+                modelAge: null
             };
         }
     }

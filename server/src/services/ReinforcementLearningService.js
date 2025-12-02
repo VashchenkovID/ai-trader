@@ -41,6 +41,11 @@ class ReinforcementLearningService {
             epsilon: 1.0,
             memorySize: 0
         };
+        // Дополнительные поля для отслеживания текущего состояния
+        this.lastEpisodeTime = null;
+        this.currentAction = null;
+        this.currentQValue = 0;
+        this.lastTotalReward = 0;
     }
 
     /**
@@ -256,6 +261,10 @@ class ReinforcementLearningService {
                 this.stats.bestReward = Math.max(this.stats.bestReward, result.totalReward);
                 this.stats.epsilon = this.config.epsilon;
                 this.stats.memorySize = this.memory.length;
+                
+                // Обновляем последние данные эпизода
+                this.lastEpisodeTime = new Date().toISOString();
+                this.lastTotalReward = result.totalReward;
 
                 // Обновляем целевую сеть
                 if (episode % this.config.updateTargetFreq === 0) {
@@ -705,6 +714,10 @@ class ReinforcementLearningService {
 
             const actionNames = ['HOLD', 'BUY', 'SELL'];
             const actionName = actionNames[action];
+            
+            // Сохраняем текущее действие и Q-значение
+            this.currentAction = actionName;
+            this.currentQValue = Math.max(...qValuesArray);
 
             return {
                 action,

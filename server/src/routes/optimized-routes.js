@@ -23,6 +23,7 @@ import portfolioMigratorRoutes from './portfolio-migrator-routes.js';
 import preflightCheckRoutes from './preflight-check-routes.js';
 import notificationsRoutes from './notifications-routes.js';
 import errorsRoutes from './errors-routes.js';
+import ServiceManager from '../services/ServiceManager.js';
 
 const router = express.Router();
 
@@ -51,6 +52,156 @@ router.use('/portfolio-migrator', portfolioMigratorRoutes);
 router.use('/preflight-check', preflightCheckRoutes);
 router.use('/notifications', notificationsRoutes);
 router.use('/errors', errorsRoutes);
+
+/**
+ * Статистика Meta-Learning
+ */
+router.get('/meta-learning/stats', async (req, res) => {
+    try {
+        const MetaLearningService = ServiceManager.getService('MetaLearningService');
+        if (!MetaLearningService) {
+            return res.status(503).json({
+                success: false,
+                message: 'Meta-Learning service not available',
+                data: {
+                    isActive: false,
+                    isInitialized: false,
+                    adaptationCount: 0,
+                    successRate: 0,
+                    lastAdaptation: null,
+                    currentTask: null,
+                    performance: 0,
+                    history: []
+                }
+            });
+        }
+
+        const stats = MetaLearningService.getStats();
+        const status = MetaLearningService.getStatus();
+        
+        // Безопасное получение свойств
+        const isAdapting = MetaLearningService.isAdapting || false;
+        const lastAdaptationTime = MetaLearningService.lastAdaptationTime || new Date().toISOString();
+        const currentTask = MetaLearningService.currentTask || 'Нет активной задачи';
+        
+        // Формируем ответ в формате, ожидаемом фронтендом
+        const response = {
+            success: true,
+            data: {
+                isActive: status.isInitialized && isAdapting,
+                isInitialized: status.isInitialized || false,
+                adaptationCount: stats.successfulAdaptations || 0,
+                successRate: stats.totalTasks > 0 && stats.successfulAdaptations > 0
+                    ? stats.successfulAdaptations / stats.totalTasks 
+                    : 0,
+                lastAdaptation: lastAdaptationTime,
+                currentTask: currentTask,
+                performance: stats.adaptationRate || 0,
+                // Дополнительные данные для истории
+                totalTasks: stats.totalTasks || 0,
+                knowledgeBaseSize: stats.knowledgeBaseSize || 0,
+                averageAdaptationTime: stats.averageAdaptationTime || 0
+            }
+        };
+
+        res.json(response);
+    } catch (error) {
+        console.error('❌ Error getting meta-learning stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения статистики Meta-Learning',
+            error: error.message,
+            data: {
+                isActive: false,
+                isInitialized: false,
+                adaptationCount: 0,
+                successRate: 0,
+                lastAdaptation: null,
+                currentTask: null,
+                performance: 0
+            }
+        });
+    }
+});
+
+/**
+ * Статистика Reinforcement Learning
+ */
+router.get('/reinforcement-learning/stats', async (req, res) => {
+    try {
+        const ReinforcementLearningService = ServiceManager.getService('ReinforcementLearningService');
+        if (!ReinforcementLearningService) {
+            return res.status(503).json({
+                success: false,
+                message: 'Reinforcement Learning service not available',
+                data: {
+                    isActive: false,
+                    isInitialized: false,
+                    episodes: 0,
+                    averageReward: 0,
+                    epsilon: 0,
+                    lastEpisode: null,
+                    currentAction: null,
+                    qValue: 0,
+                    history: []
+                }
+            });
+        }
+
+        const stats = ReinforcementLearningService.getStats();
+        
+        // Безопасное получение свойств из stats и сервиса
+        const episodes = stats.totalEpisodes || stats.episodes || 0;
+        const averageReward = stats.averageReward || 0;
+        const epsilon = stats.epsilon !== undefined ? stats.epsilon : (ReinforcementLearningService.config?.epsilon || 0.1);
+        const bestReward = stats.bestReward !== undefined && stats.bestReward !== -Infinity ? stats.bestReward : 0;
+        
+        // Получаем реальные данные из сервиса
+        const lastEpisode = ReinforcementLearningService.lastEpisodeTime || null;
+        const currentAction = ReinforcementLearningService.currentAction || 'Нет данных';
+        const qValue = ReinforcementLearningService.currentQValue || 0;
+        const totalReward = ReinforcementLearningService.lastTotalReward || 0;
+        
+        // Формируем ответ в формате, ожидаемом фронтендом
+        const response = {
+            success: true,
+            data: {
+                isActive: stats.isTraining || false,
+                isInitialized: stats.isInitialized || false,
+                episodes: episodes,
+                averageReward: averageReward,
+                epsilon: epsilon,
+                lastEpisode: lastEpisode || new Date().toISOString(),
+                currentAction: currentAction,
+                qValue: qValue,
+                // Дополнительные данные
+                totalReward: totalReward,
+                bestReward: bestReward,
+                winRate: stats.winRate || 0,
+                memorySize: stats.memorySize || 0
+            }
+        };
+
+        res.json(response);
+    } catch (error) {
+        console.error('❌ Error getting reinforcement-learning stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения статистики Reinforcement Learning',
+            error: error.message,
+            data: {
+                isActive: false,
+                isInitialized: false,
+                episodes: 0,
+                averageReward: 0,
+                epsilon: 0,
+                lastEpisode: null,
+                currentAction: null,
+                qValue: 0
+            }
+        });
+    }
+});
 
 // Основные роуты (для обратной совместимости) - они уже подключены через router.use выше
 

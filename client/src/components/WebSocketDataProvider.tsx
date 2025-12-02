@@ -6,6 +6,7 @@ export interface SystemStatus {
   websocket: any;
   database: any;
   trading: any;
+  ensemble?: any;
 }
 
 export interface CacheStatus {

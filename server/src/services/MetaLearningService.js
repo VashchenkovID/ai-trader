@@ -15,7 +15,10 @@ class MetaLearningService {
         this.knowledgeBase = [];
         this.isInitialized = false;
         this.isTraining = false;
+        this.isAdapting = false;
         this.trainingFigiLocks = new Set();
+        this.lastAdaptationTime = null;
+        this.currentTask = null;
         this.config = {
             metaLearningRate: 0.001,
             adaptationRate: 0.01,
@@ -154,6 +157,12 @@ class MetaLearningService {
                 console.warn(`⚠️ Meta-learning already in progress, skipping new start for ${figi}`);
                 return { success: false, error: 'Meta-learning already in progress' };
             }
+            
+            // Обновляем текущую задачу и время
+            this.currentTask = `Обучение для ${figi}`;
+            this.lastAdaptationTime = new Date().toISOString();
+            this.isAdapting = true;
+            
             // Per-FIGI лок
             if (this.trainingFigiLocks.has(figi)) {
                 console.warn(`⚠️ Meta-learning already running for ${figi}, skipping duplicate start`);
@@ -161,7 +170,12 @@ class MetaLearningService {
             }
             console.log(`🧠 Meta-learning training for ${figi}...`);
             this.isTraining = true;
+            this.isAdapting = true;
             this.trainingFigiLocks.add(figi);
+            
+            // Обновляем текущую задачу и время
+            this.currentTask = `Обучение для ${figi}`;
+            this.lastAdaptationTime = new Date().toISOString();
             
             // Обновляем статус обучения
             if (trainingStatusService) {
@@ -203,6 +217,10 @@ class MetaLearningService {
             // Адаптируемся к задаче
             const result = await this.adaptToTask(taskData, baseModel, options.adaptationSteps || 5);
             
+            // Обновляем время завершения адаптации
+            this.lastAdaptationTime = new Date().toISOString();
+            this.currentTask = `Завершено: ${figi}`;
+            
             // Завершаем обучение
             if (trainingStatusService) {
                 trainingStatusService.completeTraining('metaLearning', true);
@@ -241,6 +259,7 @@ class MetaLearningService {
         }
         finally {
             this.isTraining = false;
+            this.isAdapting = false;
             try { this.trainingFigiLocks.delete(figi); } catch {}
         }
     }

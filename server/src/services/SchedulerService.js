@@ -425,26 +425,54 @@ class SchedulerService {
                     // Получаем сервисы из глобального ServiceManager
                     const NeuralNetworkService = getService('NeuralNetworkService');
                     const TradingEngine = getService('TradingEngine');
+                    const EnsembleService = getService('EnsembleService');
+                    const WebSocketService = getService('WebSocketService');
                     
-                    // Получаем реальный статус системы
+                    // Получаем реальный статус системы с полными данными
+                    let neuralNetworkStatus = {};
+                    if (NeuralNetworkService) {
+                        try {
+                            // Используем getModelStatus() для получения полных данных
+                            neuralNetworkStatus = NeuralNetworkService.getModelStatus();
+                        } catch (error) {
+                            console.warn('Error getting neural network status in scheduler:', error);
+                            // Fallback к базовому статусу
+                            neuralNetworkStatus = {
+                                status: NeuralNetworkService.isTraining ? 'training' : (NeuralNetworkService.isActive ? 'active' : 'off'),
+                                isTraining: NeuralNetworkService.isTraining || false,
+                                isActive: NeuralNetworkService.isActive || false,
+                                isLoaded: !!NeuralNetworkService.model
+                            };
+                        }
+                    }
+                    
+                    // Получаем статус ансамбля
+                    let ensembleStatus = {};
+                    if (EnsembleService) {
+                        try {
+                            ensembleStatus = EnsembleService.getEnsembleStats();
+                        } catch (error) {
+                            console.warn('Error getting ensemble status in scheduler:', error);
+                            ensembleStatus = {
+                                isInitialized: EnsembleService.isInitialized || false,
+                                isTraining: EnsembleService.isTraining || false
+                            };
+                        }
+                    }
+                    
                     const systemStatus = {
-                        neuralNetwork: {
-                            status: NeuralNetworkService?.isTraining ? 'training' : 'active',
-                            isTraining: NeuralNetworkService?.isTraining || false,
-                            lastAnalysis: NeuralNetworkService?.lastAnalysisTime || null
-                        },
-                        websocket: { 
-                            status: 'connected', 
-                            clients: WebSocketService ? WebSocketService.getStatus().clientsCount : 0
-                        },
+                        neuralNetwork: neuralNetworkStatus,
+                        websocket: WebSocketService ? WebSocketService.getStatus() : { isConnected: false, clientsCount: 0, isInitialized: false },
                         database: { 
                             status: 'connected', 
                             lastQuery: new Date().toISOString() 
                         },
                         trading: { 
                             status: TradingEngine?.isActive ? 'active' : 'inactive',
-                            mode: TradingEngine?.mode || 'paper'
-                        }
+                            mode: TradingEngine?.mode || 'paper',
+                            isActive: TradingEngine?.isActive || false
+                        },
+                        ensemble: ensembleStatus
                     };
                     
                     WebSocketService.broadcastSystemStatus(systemStatus);

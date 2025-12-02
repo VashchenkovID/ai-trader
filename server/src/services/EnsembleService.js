@@ -31,6 +31,18 @@ class EnsembleService {
             cnn: { accuracy: 0, precision: 0, recall: 0, f1Score: 0 },
             transformer: { accuracy: 0, precision: 0, recall: 0, f1Score: 0 }
         };
+        // Отслеживание времени последнего обновления моделей
+        this.lastUpdate = {
+            lstm: null,
+            cnn: null,
+            transformer: null
+        };
+        // История весов для расчета стабильности
+        this.weightHistory = {
+            lstm: [],
+            cnn: [],
+            transformer: []
+        };
     }
 
     /**
@@ -415,6 +427,16 @@ class EnsembleService {
                     if (lstmData.features.length > 0) {
                         const lstmResult = await this.trainModel('lstm', lstmData, epochs, batchSize);
                         this.performance.lstm = lstmResult;
+                        this.lastUpdate.lstm = new Date().toISOString();
+                        // Сохраняем историю весов для стабильности
+                        this.weightHistory.lstm.push({
+                            weight: this.weights.lstm,
+                            timestamp: new Date().toISOString()
+                        });
+                        // Ограничиваем историю последними 10 значениями
+                        if (this.weightHistory.lstm.length > 10) {
+                            this.weightHistory.lstm.shift();
+                        }
                         results.lstm = lstmResult;
                         console.log(`✅ LSTM model trained successfully`);
                     } else {
@@ -433,6 +455,16 @@ class EnsembleService {
                     if (cnnData.features.length > 0) {
                         const cnnResult = await this.trainModel('cnn', cnnData, epochs, batchSize);
                         this.performance.cnn = cnnResult;
+                        this.lastUpdate.cnn = new Date().toISOString();
+                        // Сохраняем историю весов для стабильности
+                        this.weightHistory.cnn.push({
+                            weight: this.weights.cnn,
+                            timestamp: new Date().toISOString()
+                        });
+                        // Ограничиваем историю последними 10 значениями
+                        if (this.weightHistory.cnn.length > 10) {
+                            this.weightHistory.cnn.shift();
+                        }
                         results.cnn = cnnResult;
                         console.log(`✅ CNN model trained successfully`);
                     } else {
@@ -451,6 +483,16 @@ class EnsembleService {
                     if (transformerData.features.length > 0) {
                         const transformerResult = await this.trainModel('transformer', transformerData, epochs, batchSize);
                         this.performance.transformer = transformerResult;
+                        this.lastUpdate.transformer = new Date().toISOString();
+                        // Сохраняем историю весов для стабильности
+                        this.weightHistory.transformer.push({
+                            weight: this.weights.transformer,
+                            timestamp: new Date().toISOString()
+                        });
+                        // Ограничиваем историю последними 10 значениями
+                        if (this.weightHistory.transformer.length > 10) {
+                            this.weightHistory.transformer.shift();
+                        }
                         results.transformer = transformerResult;
                         console.log(`✅ Transformer model trained successfully`);
                     } else {
@@ -1281,6 +1323,93 @@ class EnsembleService {
      * Получить статистику ансамбля
      */
     getEnsembleStats() {
+        // Вычисляем стабильность на основе истории весов
+        const calculateStability = (history) => {
+            if (history.length < 2) return 0.5; // Если недостаточно данных, средняя стабильность
+            const weights = history.map(h => h.weight);
+            const mean = weights.reduce((sum, w) => sum + w, 0) / weights.length;
+            const variance = weights.reduce((sum, w) => sum + Math.pow(w - mean, 2), 0) / weights.length;
+            const stdDev = Math.sqrt(variance);
+            // Стабильность обратно пропорциональна стандартному отклонению
+            // Нормализуем к [0, 1], где 1 = максимальная стабильность (stdDev = 0)
+            return Math.max(0, Math.min(1, 1 - (stdDev * 10))); // Умножаем на 10 для масштабирования
+        };
+
+        // Формируем массив моделей для фронтенда
+        const modelsArray = [
+            {
+                name: 'LSTM',
+                type: 'LSTM',
+                status: this.models.lstm !== null ? 'active' : 'idle',
+                accuracy: this.performance.lstm?.accuracy || 0,
+                weight: this.weights.lstm || 0,
+                lastUpdate: this.lastUpdate.lstm || null,
+                isTraining: this.isTraining,
+                precision: this.performance.lstm?.precision || 0,
+                recall: this.performance.lstm?.recall || 0,
+                f1Score: this.performance.lstm?.f1Score || 0
+            },
+            {
+                name: 'CNN',
+                type: 'CNN',
+                status: this.models.cnn !== null ? 'active' : 'idle',
+                accuracy: this.performance.cnn?.accuracy || 0,
+                weight: this.weights.cnn || 0,
+                lastUpdate: this.lastUpdate.cnn || null,
+                isTraining: this.isTraining,
+                precision: this.performance.cnn?.precision || 0,
+                recall: this.performance.cnn?.recall || 0,
+                f1Score: this.performance.cnn?.f1Score || 0
+            },
+            {
+                name: 'Transformer',
+                type: 'Transformer',
+                status: this.models.transformer !== null ? 'active' : 'idle',
+                accuracy: this.performance.transformer?.accuracy || 0,
+                weight: this.weights.transformer || 0,
+                lastUpdate: this.lastUpdate.transformer || null,
+                isTraining: this.isTraining,
+                precision: this.performance.transformer?.precision || 0,
+                recall: this.performance.transformer?.recall || 0,
+                f1Score: this.performance.transformer?.f1Score || 0
+            }
+        ];
+
+        // Вычисляем метрики ансамбля
+        const activeModels = modelsArray.filter(m => m.status === 'active');
+        const totalWeight = modelsArray.reduce((sum, m) => sum + m.weight, 0);
+        
+        // Общая точность (средневзвешенная)
+        const overallAccuracy = activeModels.length > 0
+            ? modelsArray.reduce((sum, m) => sum + (m.accuracy * m.weight), 0) / (totalWeight || 1)
+            : 0;
+
+        // Разнообразие (дисперсия точности моделей)
+        const accuracies = activeModels.map(m => m.accuracy);
+        const meanAccuracy = accuracies.length > 0 
+            ? accuracies.reduce((sum, acc) => sum + acc, 0) / accuracies.length 
+            : 0;
+        const variance = accuracies.length > 0
+            ? accuracies.reduce((sum, acc) => sum + Math.pow(acc - meanAccuracy, 2), 0) / accuracies.length
+            : 0;
+        const diversity = Math.min(1, Math.sqrt(variance)); // Нормализуем к [0, 1]
+
+        // Стабильность (на основе стабильности весов - если веса не меняются, стабильность высокая)
+        const stabilities = [
+            calculateStability(this.weightHistory.lstm),
+            calculateStability(this.weightHistory.cnn),
+            calculateStability(this.weightHistory.transformer)
+        ].filter(s => s > 0); // Убираем нулевые значения
+        const stability = stabilities.length > 0
+            ? stabilities.reduce((sum, s) => sum + s, 0) / stabilities.length
+            : 0.5; // Если нет истории, средняя стабильность
+
+        // Производительность (комбинация точности и F1-score)
+        const avgF1Score = activeModels.length > 0
+            ? activeModels.reduce((sum, m) => sum + (m.f1Score || 0), 0) / activeModels.length
+            : 0;
+        const performance = (overallAccuracy * 0.6 + avgF1Score * 0.4);
+
         return {
             isInitialized: this.isInitialized,
             isTraining: this.isTraining,
@@ -1292,7 +1421,15 @@ class EnsembleService {
             weights: this.weights,
             performance: this.performance,
             totalModels: Object.keys(this.models).length,
-            activeModels: Object.values(this.models).filter(model => model !== null).length
+            activeModels: Object.values(this.models).filter(model => model !== null).length,
+            // Данные для фронтенда
+            models: modelsArray,
+            metrics: {
+                overallAccuracy: overallAccuracy || 0,
+                diversity: diversity || 0,
+                stability: stability || 0,
+                performance: performance || 0
+            }
         };
     }
 
