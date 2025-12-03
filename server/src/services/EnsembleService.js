@@ -691,6 +691,11 @@ class EnsembleService {
         let reduceLRPatience = 5; // Количество эпох без улучшения для снижения LR
         let reduceLRCount = 0;
         let currentLR = 0.001; // Начальный learning rate
+        let lrReductionFactor = 0.5; // Коэффициент уменьшения LR
+        let minLR = 1e-6; // Минимальный learning rate
+        let lrHistory = []; // История изменений LR
+        let lrReductionCount = 0; // Количество уменьшений LR
+        let maxLRReductions = 3; // Максимальное количество уменьшений LR
         
         // Получаем текущий learning rate из оптимизатора
         // Примечание: В TensorFlow.js learning rate может быть тензором или числом
@@ -764,10 +769,40 @@ class EnsembleService {
                         const noImprovement = ((valLoss - bestValLoss) / bestValLoss * 100).toFixed(2);
                         console.log(`⏸️ ${modelType} Epoch ${epoch + 1}: Нет улучшения (val_loss=${valLoss.toFixed(4)}, лучший=${bestValLoss.toFixed(4)} на эпохе ${bestEpoch}, хуже на ${noImprovement}%)`);
                         
-                        // Отслеживание плато для информации (без попыток изменения LR)
-                        if (reduceLRCount >= reduceLRPatience) {
-                            const suggestedLR = currentLR * 0.5; // Рекомендуемый LR
-                            console.log(`📉 ${modelType} Epoch ${epoch + 1}: Плато обнаружено (val_loss не улучшается ${reduceLRCount} эпох). Для следующего обучения рекомендуется LR=${suggestedLR.toFixed(6)}`);
+                        // Автоматическое уменьшение LR при обнаружении плато
+                        if (reduceLRCount >= reduceLRPatience && lrReductionCount < maxLRReductions) {
+                            const oldLR = currentLR; // Сохраняем старое значение
+                            const newLR = Math.max(currentLR * lrReductionFactor, minLR);
+                            
+                            if (newLR < currentLR) {
+                                // Перекомпилируем модель с новым LR
+                                try {
+                                    model.compile({
+                                        optimizer: tf.train.adam(newLR),
+                                        loss: 'binaryCrossentropy',
+                                        metrics: ['accuracy']
+                                    });
+                                    
+                                    currentLR = newLR;
+                                    lrReductionCount++;
+                                    lrHistory.push({
+                                        epoch: epoch + 1,
+                                        oldLR: oldLR,
+                                        newLR: currentLR,
+                                        valLoss: valLoss,
+                                        reason: 'plateau_detected'
+                                    });
+                                    
+                                    console.log(`📉 ${modelType} Epoch ${epoch + 1}: Автоматическое уменьшение LR: ${oldLR.toFixed(6)} → ${currentLR.toFixed(6)} (плато ${reduceLRCount} эпох, уменьшение #${lrReductionCount})`);
+                                } catch (lrError) {
+                                    console.warn(`⚠️ ${modelType}: Не удалось изменить LR: ${lrError.message}`);
+                                }
+                            }
+                            
+                            reduceLRCount = 0; // Сбрасываем счетчик после уменьшения LR
+                        } else if (reduceLRCount >= reduceLRPatience && lrReductionCount >= maxLRReductions) {
+                            // Достигнуто максимальное количество уменьшений LR
+                            console.log(`📉 ${modelType} Epoch ${epoch + 1}: Плато обнаружено, но LR уже уменьшен ${maxLRReductions} раз (текущий LR=${currentLR.toFixed(6)})`);
                             reduceLRCount = 0; // Сбрасываем счетчик
                         }
                     }
@@ -801,6 +836,14 @@ class EnsembleService {
         const totalImprovement = initialLoss ? ((initialLoss - finalLoss) / initialLoss * 100).toFixed(2) : 'N/A';
         console.log(`📊 ${modelType}: Обучение завершено. Лучшая модель на эпохе ${bestEpoch}, val_loss=${bestValLoss.toFixed(4)}, общее улучшение: ${totalImprovement}%`);
         
+        // Логируем историю изменений LR, если были изменения
+        if (lrHistory.length > 0) {
+            console.log(`📈 ${modelType}: История изменений LR (${lrHistory.length} раз):`);
+            lrHistory.forEach((lrChange, idx) => {
+                console.log(`   ${idx + 1}. Эпоха ${lrChange.epoch}: ${lrChange.oldLR.toFixed(6)} → ${lrChange.newLR.toFixed(6)} (val_loss=${lrChange.valLoss.toFixed(4)})`);
+            });
+        }
+        
         return {
             accuracy: finalAccuracy,
             valAccuracy: finalValAccuracy,
@@ -809,7 +852,10 @@ class EnsembleService {
             totalImprovement: totalImprovement,
             precision: finalAccuracy, // Упрощенная метрика
             recall: finalAccuracy,    // Упрощенная метрика
-            f1Score: finalAccuracy // Упрощенная метрика
+            f1Score: finalAccuracy, // Упрощенная метрика
+            lrHistory: lrHistory, // История изменений LR
+            finalLR: currentLR, // Финальный learning rate
+            lrReductions: lrReductionCount // Количество уменьшений LR
         };
     }
 

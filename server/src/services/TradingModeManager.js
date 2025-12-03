@@ -52,6 +52,32 @@ class TradingModeManager {
                 throw new Error(`Недопустимый режим торговли: ${newMode}`);
             }
 
+            // Paper режим всегда доступен
+            if (newMode === 'paper') {
+                await Settings.setSetting('trading_mode', newMode, {
+                    description: 'Текущий режим торговли',
+                    category: 'trading',
+                    dataType: 'string'
+                });
+
+                this.currentMode = newMode;
+                
+                console.log(`🔄 Режим торговли изменен на: ${newMode}`);
+                
+                return {
+                    success: true,
+                    previousMode: this.currentMode,
+                    currentMode: newMode,
+                    timestamp: new Date().toISOString()
+                };
+            }
+
+            // Для micro и real режимов проверяем валидацию
+            const canSwitch = await this.canSwitchTo(newMode);
+            if (!canSwitch.canSwitch) {
+                throw new Error(canSwitch.reason || 'Система не готова к переходу на этот режим. Проверьте валидацию.');
+            }
+
             // Сохраняем новый режим в настройки
             await Settings.setSetting('trading_mode', newMode, {
                 description: 'Текущий режим торговли',
@@ -67,7 +93,8 @@ class TradingModeManager {
                 success: true,
                 previousMode: this.currentMode,
                 currentMode: newMode,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                warnings: canSwitch.warnings || []
             };
         } catch (error) {
             console.error('❌ Ошибка переключения режима торговли:', error);

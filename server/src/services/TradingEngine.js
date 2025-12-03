@@ -3,6 +3,7 @@ import TinkoffApiService from './TinkoffApiService.js';
 import WebSocketService from './WebSocketService.js';
 import RiskManagementService from './RiskManagementService.js';
 import CacheService from './CacheService.js';
+import VirtualPortfolio from '../models/VirtualPortfolio.js';
 
 /**
  * Единый торговый движок для всех режимов торговли
@@ -16,7 +17,8 @@ class TradingEngine {
             cash: 1000000, // 1 млн руб
             positions: {},
             totalValue: 1000000,
-            trades: []
+            trades: [],
+            initialCapital: 1000000 // Начальный капитал для расчета PnL
         };
         this.isInitialized = false;
         this.isActive = false; // Флаг активности торгового движка
@@ -33,8 +35,8 @@ class TradingEngine {
             await RiskManagementService.initialize();
             this.broker = TinkoffApiService;
             
-            // Инициализируем демо-портфель с тестовыми позициями
-            await this.initializeDemoPortfolio();
+            // Загружаем виртуальный портфель из БД или создаем новый
+            await this.loadVirtualPortfolio();
             
             this.isInitialized = true;
             this.isActive = true; // Активируем после инициализации
@@ -122,6 +124,9 @@ class TradingEngine {
             console.log('✅ Демо-портфель инициализирован с тестовыми позициями');
             console.log(`💰 Наличные: ${this.virtualPortfolio.cash.toLocaleString('ru-RU')} ₽`);
             console.log(`📊 Позиций: ${Object.keys(demoPositions).length}`);
+            
+            // Сохраняем демо-портфель в БД
+            await this.saveVirtualPortfolio();
             
         } catch (error) {
             console.warn('⚠️ Ошибка инициализации демо-портфеля:', error.message);
@@ -331,10 +336,13 @@ class TradingEngine {
         
         this.virtualPortfolio.trades.push(trade);
         
+        // Сохраняем виртуальный портфель в БД
+        await this.saveVirtualPortfolio();
+        
         return {
             success: true,
             trade,
-            portfolio: this.getPortfolioValue(),
+            portfolio: await this.getPortfolioValue(),
             mode: 'paper'
         };
     }
@@ -474,6 +482,180 @@ class TradingEngine {
     }
 
     /**
+     * Загрузка виртуального портфеля из БД
+     */
+    async loadVirtualPortfolio() {
+        try {
+            console.log('📊 Загрузка виртуального портфеля из БД...');
+            const savedPortfolio = await VirtualPortfolio.getCurrent();
+            
+            if (savedPortfolio) {
+                // Восстанавливаем данные из БД
+                // Важно: positions и trades могут быть JSON строками, нужно их правильно распарсить
+                let positions = savedPortfolio.positions;
+                let trades = savedPortfolio.trades;
+                
+                // Если positions - строка, парсим её
+                if (typeof positions === 'string') {
+                    try {
+                        positions = JSON.parse(positions);
+                    } catch (e) {
+                        console.warn('⚠️ Ошибка парсинга positions из БД:', e.message);
+                        positions = {};
+                    }
+                }
+                
+                // Если trades - строка, парсим её
+                if (typeof trades === 'string') {
+                    try {
+                        trades = JSON.parse(trades);
+                    } catch (e) {
+                        console.warn('⚠️ Ошибка парсинга trades из БД:', e.message);
+                        trades = [];
+                    }
+                }
+                
+                // Убеждаемся, что positions - объект, а trades - массив
+                if (!positions || typeof positions !== 'object' || Array.isArray(positions)) {
+                    positions = {};
+                }
+                if (!trades || !Array.isArray(trades)) {
+                    trades = [];
+                }
+                
+                this.virtualPortfolio = {
+                    cash: savedPortfolio.cash || 1000000,
+                    positions: positions,
+                    trades: trades,
+                    totalValue: savedPortfolio.totalValue || savedPortfolio.cash || 1000000,
+                    initialCapital: savedPortfolio.initialCapital || 1000000
+                };
+                
+                const positionsCount = Object.keys(this.virtualPortfolio.positions).length;
+                console.log(`✅ Виртуальный портфель загружен из БД:`);
+                console.log(`   💰 Наличные: ${this.virtualPortfolio.cash.toLocaleString('ru-RU')} ₽`);
+                console.log(`   📈 Позиций: ${positionsCount}`);
+                if (positionsCount > 0) {
+                    console.log(`   📋 Позиции:`, Object.entries(this.virtualPortfolio.positions).map(([figi, qty]) => `${figi}: ${qty}`).join(', '));
+                }
+                console.log(`   💼 Общая стоимость: ${this.virtualPortfolio.totalValue.toLocaleString('ru-RU')} ₽`);
+                console.log(`   📊 Сделок в истории: ${this.virtualPortfolio.trades.length}`);
+                
+                // Пересчитываем totalValue на основе текущих цен (но не перезаписываем сохраненное значение)
+                // Это нужно для актуальности данных
+                try {
+                    let positionsValue = 0;
+                    for (const [figi, quantity] of Object.entries(this.virtualPortfolio.positions)) {
+                        if (quantity > 0) {
+                            try {
+                                const prices = await this.getCurrentPrices([figi], true);
+                                const currentPrice = prices[figi] || 0;
+                                if (currentPrice > 0) {
+                                    positionsValue += currentPrice * quantity;
+                                }
+                            } catch (error) {
+                                // Пропускаем позиции с ошибками получения цены
+                                console.warn(`⚠️ Не удалось получить цену для ${figi}:`, error.message);
+                            }
+                        }
+                    }
+                    // Обновляем totalValue только если удалось получить цены
+                    if (positionsValue > 0) {
+                        this.virtualPortfolio.totalValue = this.virtualPortfolio.cash + positionsValue;
+                        console.log(`   🔄 Общая стоимость пересчитана: ${this.virtualPortfolio.totalValue.toLocaleString('ru-RU')} ₽`);
+                    }
+                } catch (priceError) {
+                    console.warn('⚠️ Не удалось пересчитать стоимость позиций, используем сохраненное значение:', priceError.message);
+                }
+            } else {
+                // Если портфеля нет в БД, создаем новый
+                console.log('📊 Виртуальный портфель не найден в БД, создаем новый с начальным капиталом');
+                this.virtualPortfolio = {
+                    cash: 1000000,
+                    positions: {},
+                    totalValue: 1000000,
+                    trades: [],
+                    initialCapital: 1000000
+                };
+                await this.saveVirtualPortfolio();
+                console.log('✅ Новый виртуальный портфель создан и сохранен в БД');
+            }
+        } catch (error) {
+            console.error('❌ Ошибка загрузки виртуального портфеля из БД:', error);
+            console.warn('⚠️ Используем значения по умолчанию');
+            this.virtualPortfolio = {
+                cash: 1000000,
+                positions: {},
+                totalValue: 1000000,
+                trades: [],
+                initialCapital: 1000000
+            };
+        }
+    }
+
+    /**
+     * Сохранение виртуального портфеля в БД
+     */
+    async saveVirtualPortfolio() {
+        try {
+            // Пересчитываем totalValue перед сохранением
+            let positionsValue = 0;
+            const positionsCount = Object.keys(this.virtualPortfolio.positions || {}).length;
+            
+            if (positionsCount > 0) {
+                for (const [symbol, quantity] of Object.entries(this.virtualPortfolio.positions)) {
+                    if (quantity > 0) {
+                        try {
+                            const prices = await this.getCurrentPrices([symbol], true);
+                            const currentPrice = prices[symbol] || 0;
+                            if (currentPrice > 0) {
+                                positionsValue += currentPrice * quantity;
+                            }
+                        } catch (error) {
+                            // Если не удалось получить цену, пропускаем эту позицию
+                            console.warn(`⚠️ Не удалось получить цену для ${symbol} при сохранении:`, error.message);
+                        }
+                    }
+                }
+            }
+            
+            this.virtualPortfolio.totalValue = this.virtualPortfolio.cash + positionsValue;
+            
+            // Убеждаемся, что positions - объект, а trades - массив
+            const positionsToSave = this.virtualPortfolio.positions && typeof this.virtualPortfolio.positions === 'object' && !Array.isArray(this.virtualPortfolio.positions)
+                ? this.virtualPortfolio.positions
+                : {};
+            const tradesToSave = Array.isArray(this.virtualPortfolio.trades)
+                ? this.virtualPortfolio.trades
+                : [];
+            
+            console.log(`💾 Сохранение виртуального портфеля в БД:`);
+            console.log(`   💰 Наличные: ${this.virtualPortfolio.cash.toLocaleString('ru-RU')} ₽`);
+            console.log(`   📈 Позиций: ${Object.keys(positionsToSave).length}`);
+            if (Object.keys(positionsToSave).length > 0) {
+                console.log(`   📋 Позиции:`, Object.entries(positionsToSave).map(([figi, qty]) => `${figi}: ${qty}`).join(', '));
+            }
+            console.log(`   💼 Общая стоимость: ${this.virtualPortfolio.totalValue.toLocaleString('ru-RU')} ₽`);
+            console.log(`   📊 Сделок в истории: ${tradesToSave.length}`);
+            
+            await VirtualPortfolio.savePortfolio({
+                cash: this.virtualPortfolio.cash,
+                positions: positionsToSave,
+                trades: tradesToSave,
+                totalValue: this.virtualPortfolio.totalValue,
+                initialCapital: this.virtualPortfolio.initialCapital || 1000000
+            });
+            
+            console.log(`✅ Виртуальный портфель успешно сохранен в БД`);
+            
+        } catch (error) {
+            console.error('❌ Ошибка сохранения виртуального портфеля в БД:', error);
+            console.error('   Детали ошибки:', error.stack);
+            // Не прерываем выполнение, если сохранение не удалось
+        }
+    }
+
+    /**
      * Расчет стоимости виртуального портфеля
      */
     async getVirtualPortfolioValue() {
@@ -492,6 +674,9 @@ class TradingEngine {
         }
         
         const totalValue = this.virtualPortfolio.cash + positionsValue;
+        
+        // Обновляем totalValue в объекте портфеля
+        this.virtualPortfolio.totalValue = totalValue;
         
         return {
             cash: this.virtualPortfolio.cash,

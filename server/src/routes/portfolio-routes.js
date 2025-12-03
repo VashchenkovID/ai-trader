@@ -7,6 +7,63 @@ import CacheService from '../services/CacheService.js';
 const router = express.Router();
 
 /**
+ * Общая информация о портфеле
+ */
+router.get('/', async (req, res) => {
+    try {
+        const portfolio = await TradingEngine.getPortfolioValue();
+        
+        // Рассчитываем стоимость позиций
+        let positionsValue = 0;
+        const rawPositions = portfolio?.positions || {};
+        
+        for (const [figi, quantity] of Object.entries(rawPositions)) {
+            if (typeof quantity === 'number' && quantity > 0) {
+                try {
+                    const instrument = await CacheService.getInstrument(figi, true);
+                    const currentPrice = instrument?.lastPrice || 0;
+                    positionsValue += currentPrice * quantity;
+                } catch (error) {
+                    // Пропускаем позиции с ошибками
+                    console.warn(`⚠️ Не удалось получить цену для ${figi}:`, error.message);
+                }
+            }
+        }
+        
+        const cash = portfolio?.cash || 0;
+        const totalValue = cash + positionsValue;
+        
+        // Рассчитываем PnL
+        const initialCapital = portfolio?.initialCapital || 1000000;
+        const totalPnL = totalValue - initialCapital;
+        const totalPnLPercent = initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
+        
+        res.json({
+            success: true,
+            data: {
+                cash,
+                positions: rawPositions,
+                positionsValue,
+                totalValue,
+                totalPnL,
+                totalPnLPercent,
+                trades: portfolio?.trades || [],
+                mode: portfolio?.mode || 'paper',
+                initialCapital
+            },
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Ошибка получения портфеля:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения портфеля',
+            error: error.message
+        });
+    }
+});
+
+/**
  * Позиции портфеля
  */
 router.get('/positions', async (req, res) => {

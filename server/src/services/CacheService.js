@@ -83,6 +83,22 @@ class CacheService {
 
                     const priceEntry = priceMap[instrument.figi];
 
+                    // Определяем тип инструмента из API данных
+                    // instrumentKind может быть: 'INSTRUMENT_TYPE_SHARE', 'INSTRUMENT_TYPE_BOND', и т.д.
+                    let instrumentType = 'share'; // По умолчанию для getStocks()
+                    if (instrument.instrumentKind) {
+                        // Преобразуем 'INSTRUMENT_TYPE_SHARE' -> 'share'
+                        const kind = instrument.instrumentKind.toLowerCase();
+                        if (kind.includes('share')) instrumentType = 'share';
+                        else if (kind.includes('bond')) instrumentType = 'bond';
+                        else if (kind.includes('etf')) instrumentType = 'etf';
+                        else if (kind.includes('currency')) instrumentType = 'currency';
+                        else if (kind.includes('future')) instrumentType = 'future';
+                        else if (kind.includes('option')) instrumentType = 'option';
+                    } else if (instrument.instrumentType) {
+                        instrumentType = instrument.instrumentType.toLowerCase();
+                    }
+                    
                     await CachedInstrument.upsert({
                         figi: instrument.figi,
                         ticker: instrument.ticker,
@@ -94,6 +110,7 @@ class CacheService {
                         lastPrice: priceEntry?.value ?? null,
                         lastPriceTime: priceEntry?.time ?? null,
                         dividendYield: dividendYield,
+                        instrumentType: instrumentType,
                         apiData: instrument,
                         lastUpdated: new Date()
                     });

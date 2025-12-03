@@ -24,6 +24,7 @@ import preflightCheckRoutes from './preflight-check-routes.js';
 import notificationsRoutes from './notifications-routes.js';
 import errorsRoutes from './errors-routes.js';
 import ServiceManager from '../services/ServiceManager.js';
+import Recommendation from '../models/Recommendation.js';
 
 const router = express.Router();
 
@@ -199,6 +200,116 @@ router.get('/reinforcement-learning/stats', async (req, res) => {
                 currentAction: null,
                 qValue: 0
             }
+        });
+    }
+});
+
+// ============================================================================
+// РЕКОМЕНДАЦИИ
+// ============================================================================
+// Примечание: /api/market/recommendations уже существует в market-routes.js
+// Здесь добавляем дополнительные роуты для работы с БД напрямую
+
+/**
+ * Рекомендации по типу
+ * GET /api/recommendations/type/:type
+ * (Более специфичный роут должен быть раньше общего /recommendations)
+ */
+router.get('/recommendations/type/:type', async (req, res) => {
+    try {
+        const { type } = req.params;
+        if (!['BUY', 'SELL', 'HOLD'].includes(type)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid recommendation type. Must be BUY, SELL, or HOLD'
+            });
+        }
+        
+        const recommendations = await Recommendation.findAll({
+            where: { 
+                isActive: true,
+                recommendation: type
+            },
+            order: [['confidence', 'DESC'], ['analysisDate', 'DESC']]
+        });
+        res.json({
+            success: true,
+            data: recommendations
+        });
+    } catch (error) {
+        console.error('Ошибка получения рекомендаций по типу:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения рекомендаций по типу',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Топ рекомендации
+ * GET /api/recommendations/top?limit=N
+ */
+router.get('/recommendations/top', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
+        const recommendations = await Recommendation.getTopRecommendations(limit);
+        res.json({
+            success: true,
+            data: recommendations
+        });
+    } catch (error) {
+        console.error('Ошибка получения топ рекомендаций:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения топ рекомендаций',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Недавние рекомендации
+ * GET /api/recommendations/recent?limit=N
+ */
+router.get('/recommendations/recent', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 20;
+        const recommendations = await Recommendation.getRecentRecommendations(limit);
+        res.json({
+            success: true,
+            data: recommendations
+        });
+    } catch (error) {
+        console.error('Ошибка получения недавних рекомендаций:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения недавних рекомендаций',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Все рекомендации (из БД, альтернатива /market/recommendations из кеша)
+ * GET /api/recommendations
+ */
+router.get('/recommendations', async (req, res) => {
+    try {
+        const recommendations = await Recommendation.findAll({
+            where: { isActive: true },
+            order: [['analysisDate', 'DESC']]
+        });
+        res.json({
+            success: true,
+            data: recommendations
+        });
+    } catch (error) {
+        console.error('Ошибка получения рекомендаций:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения рекомендаций',
+            error: error.message
         });
     }
 });

@@ -6,26 +6,6 @@ import OptimizedTelegramService from '../services/OptimizedTelegramService.js';
 const router = express.Router();
 
 /**
- * Портфель
- */
-router.get('/portfolio', async (req, res) => {
-    try {
-        const portfolio = await TradingEngine.getPortfolioValue();
-        res.json({
-            success: true,
-            data: portfolio
-        });
-    } catch (error) {
-        console.error('Ошибка получения портфеля:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Ошибка получения портфеля',
-            error: error.message
-        });
-    }
-});
-
-/**
  * Статистика торговли
  */
 router.get('/stats', async (req, res) => {

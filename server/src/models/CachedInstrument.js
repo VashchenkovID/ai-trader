@@ -65,6 +65,11 @@ CachedInstrument.init({
         allowNull: false,
         defaultValue: true,
     },
+    instrumentType: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        comment: 'Тип инструмента (share, bond, etf, currency, future, option)'
+    },
 }, {
     sequelize,
     modelName: 'CachedInstrument',

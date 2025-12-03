@@ -86,18 +86,43 @@ class OptimizedTrainingService {
             this.trainingProgress.currentInstrument = figi;
             this.trainingFigiLocks.add(figi);
 
-            // 1. Получаем данные
-            const candles = await this.getTrainingData(figi, days);
-            
-            // Адаптивная проверка минимального количества данных
-            const minCandles = this.getMinimumCandlesRequired(candles.length);
-            if (candles.length < minCandles) {
-                throw new Error(`Insufficient data: ${candles.length} candles (minimum required: ${minCandles})`);
+            // 1. Проверяем, существует ли инструмент в кеше
+            const instrument = await CacheService.getInstrument(figi, false);
+            if (!instrument) {
+                const errorMsg = `Instrument ${figi} not found in cache. Please ensure the instrument is cached before training.`;
+                console.warn(`⚠️ ${errorMsg}`);
+                return {
+                    success: false,
+                    figi,
+                    error: errorMsg,
+                    reason: 'INSTRUMENT_NOT_FOUND'
+                };
             }
             
-            console.log(`📊 Training data: ${candles.length} candles for ${figi}`);
+            // 2. Получаем данные
+            const candles = await this.getTrainingData(figi, days);
+            
+            // 3. Адаптивная проверка минимального количества данных
+            const minCandles = this.getMinimumCandlesRequired(candles.length);
+            if (candles.length < minCandles) {
+                const errorMsg = `Insufficient data: ${candles.length} candles (minimum required: ${minCandles}). Instrument: ${instrument.name || figi}`;
+                console.warn(`⚠️ ${errorMsg}`);
+                
+                // Возвращаем информативный результат вместо исключения
+                return {
+                    success: false,
+                    figi,
+                    error: errorMsg,
+                    reason: 'INSUFFICIENT_DATA',
+                    candlesCount: candles.length,
+                    minRequired: minCandles,
+                    instrumentName: instrument.name || figi
+                };
+            }
+            
+            console.log(`📊 Training data: ${candles.length} candles for ${figi} (${instrument.name || figi})`);
 
-            // 2. Подготавливаем фичи
+            // 4. Подготавливаем фичи
             const { features, labels } = await this.prepareFeatures(candles, figi, useAdvancedFeatures);
             if (features.length === 0) {
                 throw new Error('No features prepared');
@@ -545,7 +570,9 @@ class OptimizedTrainingService {
     async calculateMetrics(model, features, labels) {
         try {
             // Получаем предсказания
-            const xs = tf.tensor2d(features);
+            // Убеждаемся, что features - это массив массивов, и указываем форму явно
+            const featuresArray = Array.isArray(features[0]) ? features : [features];
+            const xs = tf.tensor2d(featuresArray, [featuresArray.length, featuresArray[0].length]);
             const predictions = await model.predict(xs).data();
             xs.dispose();
             
@@ -656,13 +683,17 @@ class OptimizedTrainingService {
         // Используем взвешивание через дублирование данных (уже применено в applyDataWeighting)
         const classWeights = this.calculateClassWeights(finalTrainLabels);
         
-        // Создаем тензоры для обучения
-        const xs = tf.tensor2d(finalTrainFeatures);
-        const ys = tf.tensor2d(finalTrainLabels.map(label => [label]));
+        // Создаем тензоры для обучения с явным указанием формы
+        const trainFeaturesShape = [finalTrainFeatures.length, finalTrainFeatures[0]?.length || 0];
+        const xs = tf.tensor2d(finalTrainFeatures, trainFeaturesShape);
+        const trainLabelsArray = finalTrainLabels.map(label => [label]);
+        const ys = tf.tensor2d(trainLabelsArray, [trainLabelsArray.length, 1]);
         
-        // Создаем тензоры для валидации
-        const valXs = tf.tensor2d(split.val.features);
-        const valYs = tf.tensor2d(split.val.labels.map(label => [label]));
+        // Создаем тензоры для валидации с явным указанием формы
+        const valFeaturesShape = [split.val.features.length, split.val.features[0]?.length || 0];
+        const valXs = tf.tensor2d(split.val.features, valFeaturesShape);
+        const valLabelsArray = split.val.labels.map(label => [label]);
+        const valYs = tf.tensor2d(valLabelsArray, [valLabelsArray.length, 1]);
 
         // Настройки для early stopping и reduce LR on plateau
         let bestValLoss = Infinity;
@@ -671,6 +702,11 @@ class OptimizedTrainingService {
         let reduceLRPatience = 5; // Количество эпох без улучшения для снижения LR
         let reduceLRCount = 0;
         let currentLR = 0.001; // Начальный learning rate
+        let lrReductionFactor = 0.5; // Коэффициент уменьшения LR
+        let minLR = 1e-6; // Минимальный learning rate
+        let lrHistory = []; // История изменений LR для отслеживания
+        let lrReductionCount = 0; // Количество уменьшений LR
+        let maxLRReductions = 3; // Максимальное количество уменьшений LR
         
         // Получаем текущий learning rate из оптимизатора
         // Примечание: В TensorFlow.js learning rate может быть тензором или числом
@@ -724,10 +760,40 @@ class OptimizedTrainingService {
                         patienceCount++;
                         reduceLRCount++;
                         
-                        // Отслеживание плато для информации (без попыток изменения LR)
-                        if (reduceLRCount >= reduceLRPatience) {
-                            const suggestedLR = currentLR * 0.5; // Рекомендуемый LR
-                            console.log(`📉 Epoch ${epoch + 1}: Плато обнаружено (val_loss не улучшается ${reduceLRCount} эпох). Для следующего обучения рекомендуется LR=${suggestedLR.toFixed(6)}`);
+                        // Автоматическое уменьшение LR при обнаружении плато
+                        if (reduceLRCount >= reduceLRPatience && lrReductionCount < maxLRReductions) {
+                            const oldLR = currentLR; // Сохраняем старое значение
+                            const newLR = Math.max(currentLR * lrReductionFactor, minLR);
+                            
+                            if (newLR < currentLR) {
+                                // Перекомпилируем модель с новым LR
+                                try {
+                                    model.compile({
+                                        optimizer: tf.train.adam(newLR),
+                                        loss: 'binaryCrossentropy',
+                                        metrics: ['accuracy']
+                                    });
+                                    
+                                    currentLR = newLR;
+                                    lrReductionCount++;
+                                    lrHistory.push({
+                                        epoch: epoch + 1,
+                                        oldLR: oldLR,
+                                        newLR: currentLR,
+                                        valLoss: valLoss,
+                                        reason: 'plateau_detected'
+                                    });
+                                    
+                                    console.log(`📉 Epoch ${epoch + 1}: Автоматическое уменьшение LR: ${oldLR.toFixed(6)} → ${currentLR.toFixed(6)} (плато ${reduceLRCount} эпох, уменьшение #${lrReductionCount})`);
+                                } catch (lrError) {
+                                    console.warn(`⚠️ Не удалось изменить LR: ${lrError.message}`);
+                                }
+                            }
+                            
+                            reduceLRCount = 0; // Сбрасываем счетчик после уменьшения LR
+                        } else if (reduceLRCount >= reduceLRPatience && lrReductionCount >= maxLRReductions) {
+                            // Достигнуто максимальное количество уменьшений LR
+                            console.log(`📉 Epoch ${epoch + 1}: Плато обнаружено, но LR уже уменьшен ${maxLRReductions} раз (текущий LR=${currentLR.toFixed(6)})`);
                             reduceLRCount = 0; // Сбрасываем счетчик
                         }
                         
@@ -753,13 +819,24 @@ class OptimizedTrainingService {
         
         console.log(`📊 Validation metrics: F1=${valMetrics.f1.toFixed(4)}, ROC-AUC=${valMetrics.auc.toFixed(4)}, Precision=${valMetrics.precision.toFixed(4)}, Recall=${valMetrics.recall.toFixed(4)}`);
         console.log(`📊 Test metrics: F1=${testMetrics.f1.toFixed(4)}, ROC-AUC=${testMetrics.auc.toFixed(4)}, Precision=${testMetrics.precision.toFixed(4)}, Recall=${testMetrics.recall.toFixed(4)}`);
+        
+        // Логируем историю изменений LR, если были изменения
+        if (lrHistory.length > 0) {
+            console.log(`📈 История изменений LR (${lrHistory.length} раз):`);
+            lrHistory.forEach((lrChange, idx) => {
+                console.log(`   ${idx + 1}. Эпоха ${lrChange.epoch}: ${lrChange.oldLR.toFixed(6)} → ${lrChange.newLR.toFixed(6)} (val_loss=${lrChange.valLoss.toFixed(4)})`);
+            });
+        }
 
         return {
             history: history.history,
             finalAccuracy: history.history.acc[history.history.acc.length - 1],
             finalLoss: history.history.loss[history.history.loss.length - 1],
             valMetrics,
-            testMetrics
+            testMetrics,
+            lrHistory: lrHistory, // История изменений LR
+            finalLR: currentLR, // Финальный learning rate
+            lrReductions: lrReductionCount // Количество уменьшений LR
         };
     }
 
@@ -773,8 +850,11 @@ class OptimizedTrainingService {
 
         if (valFeatures.length === 0) return null;
 
-        const valXs = tf.tensor2d(valFeatures);
-        const valYs = tf.tensor2d(valLabels.map(label => [label]));
+        // Убеждаемся, что valFeatures - массив массивов, и указываем форму явно
+        const valFeaturesShape = [valFeatures.length, valFeatures[0]?.length || 0];
+        const valXs = tf.tensor2d(valFeatures, valFeaturesShape);
+        const valLabelsArray = valLabels.map(label => [label]);
+        const valYs = tf.tensor2d(valLabelsArray, [valLabelsArray.length, 1]);
 
         const predictions = model.predict(valXs);
         const predictedValues = await predictions.data();
@@ -1407,7 +1487,9 @@ class OptimizedTrainingService {
                 throw new Error(`Model not found for ${figi}`);
             }
 
-            const input = tf.tensor2d([features]);
+            // Убеждаемся, что features - массив, и создаем тензор с явной формой
+            const featuresArray = Array.isArray(features[0]) ? features : [features];
+            const input = tf.tensor2d(featuresArray, [featuresArray.length, featuresArray[0].length]);
             const prediction = model.predict(input);
             const result = await prediction.data();
             

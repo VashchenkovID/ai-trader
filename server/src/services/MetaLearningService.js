@@ -358,7 +358,9 @@ class MetaLearningService {
      * Получение параметров адаптации от мета-модели
      */
     async getAdaptationParameters(taskEmbedding) {
-        const inputTensor = tf.tensor2d([taskEmbedding]);
+        // Убеждаемся, что taskEmbedding - массив, и создаем тензор с явной формой
+        const embeddingArray = Array.isArray(taskEmbedding[0]) ? taskEmbedding : [taskEmbedding];
+        const inputTensor = tf.tensor2d(embeddingArray, [embeddingArray.length, embeddingArray[0].length]);
         const prediction = this.metaModel.predict(inputTensor);
         const params = await prediction.data();
         
@@ -415,8 +417,12 @@ class MetaLearningService {
         const features = supportSet.map(item => item.features);
         const labels = supportSet.map(item => item.labels);
         
-        const xs = tf.tensor2d(features);
-        const ys = tf.tensor2d(labels);
+        // Убеждаемся, что features и labels - массивы массивов, и указываем форму явно
+        const featuresShape = [features.length, features[0]?.length || 0];
+        const labelsShape = [labels.length, Array.isArray(labels[0]) ? labels[0].length : 1];
+        const xs = tf.tensor2d(features, featuresShape);
+        const labelsArray = labels.map(l => Array.isArray(l) ? l : [l]);
+        const ys = tf.tensor2d(labelsArray, labelsShape);
         
         // Один шаг обучения
         await model.fit(xs, ys, {
@@ -450,8 +456,12 @@ class MetaLearningService {
                 metaLabels.push(task.adaptationParams || new Array(10).fill(0));
             }
             
-            const featuresTensor = tf.tensor2d(metaFeatures);
-            const labelsTensor = tf.tensor2d(metaLabels);
+            // Убеждаемся, что metaFeatures и metaLabels - массивы массивов, и указываем форму явно
+            const featuresShape = [metaFeatures.length, metaFeatures[0]?.length || 0];
+            const labelsShape = [metaLabels.length, Array.isArray(metaLabels[0]) ? metaLabels[0].length : 1];
+            const featuresTensor = tf.tensor2d(metaFeatures, featuresShape);
+            const labelsArray = metaLabels.map(l => Array.isArray(l) ? l : [l]);
+            const labelsTensor = tf.tensor2d(labelsArray, labelsShape);
             
             // Обучение мета-модели
             const history = await this.metaModel.fit(featuresTensor, labelsTensor, {

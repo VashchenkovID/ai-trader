@@ -1,8 +1,8 @@
 import TradingRequest from '../models/TradingRequest.js';
 import Recommendation from '../models/Recommendation.js';
-import TradingEngine from './TradingEngine.js';
+import TradingEngine from './TradingEngine.js'; // Нужен для обновления виртуального портфеля в paper mode
 import TradingModeManager from './TradingModeManager.js';
-import WebSocketService from './WebSocketService.js';
+import ServiceManager from './ServiceManager.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
 import TinkoffApiService from './TinkoffApiService.js';
 import SettingsService from './SettingsService.js';
@@ -13,7 +13,7 @@ import SettingsService from './SettingsService.js';
 class TradingRequestService {
     constructor() {
         this.isInitialized = false;
-        this.autoExecutionEnabled = false;
+        this.autoExecutionEnabled = false; // Отключено - пользователь выполняет вручную
         this.cleanupInterval = null;
     }
 
@@ -59,18 +59,49 @@ class TradingRequestService {
             await this.validateTradingMode(currentMode, recommendation);
 
             // Получаем текущую цену
-            const currentPrice = await this.getCurrentPrice(recommendation.figi);
+            let currentPrice = await this.getCurrentPrice(recommendation.figi);
             
-            // Рассчитываем количество акций с учетом режима
-            const quantity = await this.calculateQuantity(
-                recommendation.figi, 
-                currentPrice, 
-                recommendation.confidence,
-                options.maxAmount,
-                currentMode
-            );
+            // Если цена не получена, используем цену из рекомендации
+            if (!currentPrice || currentPrice === 0 || isNaN(currentPrice) || currentPrice === null) {
+                currentPrice = recommendation.priceAtAnalysis || recommendation.price || null;
+                if (currentPrice) {
+                    console.warn(`⚠️ Using recommendation price for ${recommendation.figi}: ${currentPrice}`);
+                }
+            }
+            
+            // Валидация цены
+            if (!currentPrice || currentPrice <= 0 || isNaN(currentPrice) || currentPrice === null) {
+                throw new Error(`Invalid price for ${recommendation.figi}: ${currentPrice}. Cannot create trading request. Please provide a valid price.`);
+            }
+            
+            // Используем указанное количество или рассчитываем автоматически
+            let quantity;
+            if (options.quantity && options.quantity > 0 && !isNaN(options.quantity)) {
+                quantity = Math.floor(Math.abs(options.quantity)); // Округляем вниз до целого числа
+            } else {
+                // Рассчитываем количество акций с учетом режима
+                quantity = await this.calculateQuantity(
+                    recommendation.figi, 
+                    currentPrice, 
+                    recommendation.confidence,
+                    options.maxAmount,
+                    currentMode
+                );
+            }
+            
+            // Валидация количества
+            if (!quantity || quantity <= 0 || isNaN(quantity) || !isFinite(quantity)) {
+                throw new Error(`Invalid quantity calculated: ${quantity}. Price: ${currentPrice}, Confidence: ${recommendation.confidence}`);
+            }
+            
+            quantity = Math.floor(Math.abs(quantity)); // Убеждаемся, что это целое положительное число
 
             const estimatedAmount = currentPrice * quantity;
+            
+            // Валидация суммы
+            if (!estimatedAmount || estimatedAmount <= 0 || isNaN(estimatedAmount) || !isFinite(estimatedAmount)) {
+                throw new Error(`Invalid estimated amount: ${estimatedAmount}. Price: ${currentPrice}, Quantity: ${quantity}`);
+            }
 
             // Создаем заявку
             const tradingRequest = await TradingRequest.create({
@@ -93,14 +124,25 @@ class TradingRequestService {
                 userComment: options.comment
             });
 
-            // Уведомляем через WebSocket
-            WebSocketService.broadcast({
-                type: 'TRADING_REQUEST_CREATED',
-                data: tradingRequest
-            });
+            // Уведомляем через WebSocket (если доступен)
+            try {
+                const WebSocketService = ServiceManager.getService('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'TRADING_REQUEST_CREATED',
+                        data: tradingRequest
+                    });
+                }
+            } catch (wsError) {
+                console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
+            }
 
-            // Отправляем уведомление в Telegram
-            await this.sendTelegramNotification(tradingRequest, 'CREATED');
+            // Отправляем уведомление в Telegram (опционально)
+            try {
+                await this.sendTelegramNotification(tradingRequest, 'CREATED');
+            } catch (telegramError) {
+                console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
+            }
 
             console.log(`📝 Trading request created: ${tradingRequest.id} (${tradingRequest.action} ${tradingRequest.ticker})`);
             
@@ -108,6 +150,118 @@ class TradingRequestService {
 
         } catch (error) {
             console.error('❌ Error creating trading request:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Создание торговой заявки из данных рекомендации (без сохранения в БД)
+     */
+    async createTradingRequestFromData(recommendationData, options = {}) {
+        try {
+            if (!recommendationData.figi) {
+                throw new Error('FIGI is required in recommendationData');
+            }
+
+            if (recommendationData.recommendation === 'HOLD') {
+                throw new Error('Cannot create trading request for HOLD recommendation');
+            }
+
+            // Получаем текущий режим торговли
+            const currentMode = TradingModeManager.getCurrentMode().mode;
+            
+            // Получаем текущую цену
+            let currentPrice = await this.getCurrentPrice(recommendationData.figi);
+            
+            // Если цена не получена, используем цену из данных рекомендации
+            if (!currentPrice || currentPrice === 0 || isNaN(currentPrice) || currentPrice === null) {
+                currentPrice = recommendationData.priceAtAnalysis || recommendationData.price || null;
+                if (currentPrice) {
+                    console.warn(`⚠️ Using recommendation data price for ${recommendationData.figi}: ${currentPrice}`);
+                }
+            }
+            
+            // Валидация цены
+            if (!currentPrice || currentPrice <= 0 || isNaN(currentPrice) || currentPrice === null) {
+                throw new Error(`Invalid price for ${recommendationData.figi}: ${currentPrice}. Cannot create trading request. Please provide a valid price.`);
+            }
+            
+            // Используем указанное количество или рассчитываем автоматически
+            let quantity;
+            if (options.quantity && options.quantity > 0 && !isNaN(options.quantity)) {
+                quantity = Math.floor(Math.abs(options.quantity));
+            } else {
+                // Рассчитываем количество акций с учетом режима
+                quantity = await this.calculateQuantity(
+                    recommendationData.figi, 
+                    currentPrice, 
+                    recommendationData.confidence || 0.5,
+                    options.maxAmount,
+                    currentMode
+                );
+            }
+            
+            // Валидация количества
+            if (!quantity || quantity <= 0 || isNaN(quantity) || !isFinite(quantity)) {
+                throw new Error(`Invalid quantity calculated: ${quantity}. Price: ${currentPrice}, Confidence: ${recommendationData.confidence || 0.5}`);
+            }
+            
+            quantity = Math.floor(Math.abs(quantity)); // Убеждаемся, что это целое положительное число
+
+            const estimatedAmount = currentPrice * quantity;
+            
+            // Валидация суммы
+            if (!estimatedAmount || estimatedAmount <= 0 || isNaN(estimatedAmount) || !isFinite(estimatedAmount)) {
+                throw new Error(`Invalid estimated amount: ${estimatedAmount}. Price: ${currentPrice}, Quantity: ${quantity}`);
+            }
+
+            // Создаем заявку
+            const tradingRequest = await TradingRequest.create({
+                recommendationId: recommendationData.figi, // Используем FIGI как ID рекомендации
+                figi: recommendationData.figi,
+                ticker: recommendationData.ticker,
+                name: recommendationData.name,
+                action: recommendationData.recommendation,
+                quantity,
+                priceAtRequest: currentPrice,
+                estimatedAmount,
+                confidence: recommendationData.confidence || 0.5,
+                score: recommendationData.score || 0.5,
+                reasoning: this.generateReasoning(recommendationData),
+                aiExplanation: recommendationData.explanation || recommendationData.analysis,
+                tradingMode: currentMode,
+                stopLoss: options.stopLoss || recommendationData.stopLoss,
+                takeProfit: options.takeProfit || recommendationData.targetPrice || recommendationData.takeProfit,
+                maxLoss: options.maxLoss,
+                userComment: options.comment
+            });
+
+            // Уведомляем через WebSocket (если доступен)
+            try {
+                const WebSocketService = ServiceManager.getService('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'TRADING_REQUEST_CREATED',
+                        data: tradingRequest
+                    });
+                }
+            } catch (wsError) {
+                console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
+            }
+
+            // Отправляем уведомление в Telegram (опционально)
+            try {
+                await this.sendTelegramNotification(tradingRequest, 'CREATED');
+            } catch (telegramError) {
+                console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
+            }
+
+            console.log(`📝 Trading request created from data: ${tradingRequest.id} (${tradingRequest.action} ${tradingRequest.ticker})`);
+            
+            return tradingRequest;
+
+        } catch (error) {
+            console.error('❌ Error creating trading request from data:', error);
             throw error;
         }
     }
@@ -143,20 +297,42 @@ class TradingRequestService {
 
             await request.approve(userComment);
 
-            // Уведомляем
-            WebSocketService.broadcast({
-                type: 'TRADING_REQUEST_APPROVED',
-                data: request
-            });
-
-            await this.sendTelegramNotification(request, 'APPROVED');
-
-            console.log(`✅ Trading request approved: ${requestId}`);
-
-            // Если включено автоисполнение, выполняем сразу
-            if (this.autoExecutionEnabled) {
-                setTimeout(() => this.executeRequest(requestId), 1000);
+            // Уведомляем через WebSocket (если доступен)
+            try {
+                const WebSocketService = ServiceManager.getService('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'TRADING_REQUEST_APPROVED',
+                        data: request
+                    });
+                }
+            } catch (wsError) {
+                console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
             }
+
+            // Отправляем уведомление в Telegram (опционально)
+            try {
+                await this.sendTelegramNotification(request, 'APPROVED');
+            } catch (telegramError) {
+                console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
+            }
+
+            console.log(`✅ Trading request approved: ${requestId} (User confirmed execution)`);
+
+            // Для paper режима обновляем виртуальный портфель
+            const currentMode = TradingModeManager.getCurrentMode().mode;
+            if (currentMode === 'paper') {
+                try {
+                    await this.updateVirtualPortfolioForApprovedRequest(request);
+                    console.log(`📊 Виртуальный портфель обновлен для заявки ${requestId}`);
+                } catch (portfolioError) {
+                    console.warn(`⚠️ Не удалось обновить виртуальный портфель: ${portfolioError.message}`);
+                    // Не прерываем процесс одобрения, если обновление портфеля не удалось
+                }
+            }
+            
+            // Для real/micro режимов - пользователь сам выполняет сделку в брокерском приложении
+            // Одобрение = пользователь подтвердил, что выполнил сделку согласно заявке
 
             return request;
 
@@ -178,13 +354,25 @@ class TradingRequestService {
 
             await request.reject(reason);
 
-            // Уведомляем
-            WebSocketService.broadcast({
-                type: 'TRADING_REQUEST_REJECTED',
-                data: request
-            });
+            // Уведомляем через WebSocket (если доступен)
+            try {
+                const WebSocketService = ServiceManager.getService('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'TRADING_REQUEST_REJECTED',
+                        data: request
+                    });
+                }
+            } catch (wsError) {
+                console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
+            }
 
-            await this.sendTelegramNotification(request, 'REJECTED');
+            // Отправляем уведомление в Telegram (опционально)
+            try {
+                await this.sendTelegramNotification(request, 'REJECTED');
+            } catch (telegramError) {
+                console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
+            }
 
             console.log(`❌ Trading request rejected: ${requestId} - ${reason}`);
             
@@ -197,9 +385,10 @@ class TradingRequestService {
     }
 
     /**
-     * Исполнение заявки
+     * Отметка заявки как выполненной (пользователь подтверждает выполнение)
+     * Исполнение происходит вручную пользователем, мы только фиксируем факт
      */
-    async executeRequest(requestId) {
+    async markRequestAsExecuted(requestId, actualPrice = null, actualAmount = null) {
         try {
             const request = await TradingRequest.findByPk(requestId);
             if (!request) {
@@ -207,61 +396,52 @@ class TradingRequestService {
             }
 
             if (request.status !== 'APPROVED') {
-                throw new Error(`Cannot execute request with status: ${request.status}`);
+                throw new Error(`Cannot mark as executed request with status: ${request.status}. Request must be approved first.`);
             }
 
-            // Получаем текущую цену для проверки
-            const currentPrice = await this.getCurrentPrice(request.figi);
-            const priceChange = Math.abs(currentPrice - request.priceAtRequest) / request.priceAtRequest;
-            
-            // Проверяем, не изменилась ли цена слишком сильно (более 5%)
-            if (priceChange > 0.05) {
-                await request.reject(`Price changed too much: ${(priceChange * 100).toFixed(2)}%`);
-                throw new Error('Price changed significantly since request creation');
-            }
+            // Если цены не указаны, используем цену из заявки
+            const finalPrice = actualPrice || request.priceAtRequest;
+            const finalAmount = actualAmount || (finalPrice * request.quantity);
 
-            // Создаем торговый сигнал
-            const signal = {
-                symbol: request.ticker,
-                figi: request.figi,
-                action: request.action,
-                quantity: request.quantity,
-                price: currentPrice,
-                confidence: request.confidence,
-                requestId: request.id
-            };
-
-            // Исполняем через TradingEngine
-            const executionResult = await TradingEngine.executeOrder(signal);
-
-            // Обновляем заявку
-            await request.execute(executionResult);
-
-            // Уведомляем
-            WebSocketService.broadcast({
-                type: 'TRADING_REQUEST_EXECUTED',
-                data: { request, result: executionResult }
+            // Обновляем статус заявки (пользователь подтвердил выполнение)
+            await request.update({
+                status: 'EXECUTED',
+                executedAt: new Date(),
+                actualPrice: finalPrice,
+                actualAmount: finalAmount,
+                executionResult: {
+                    executed: true,
+                    executedAt: new Date().toISOString(),
+                    note: 'Executed manually by user'
+                }
             });
 
-            await this.sendTelegramNotification(request, 'EXECUTED', executionResult);
+            // Уведомляем через WebSocket (если доступен)
+            try {
+                const WebSocketService = ServiceManager.getService('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'TRADING_REQUEST_EXECUTED',
+                        data: { request, executedAt: new Date().toISOString() }
+                    });
+                }
+            } catch (wsError) {
+                console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
+            }
 
-            console.log(`🎯 Trading request executed: ${requestId}`);
+            // Отправляем уведомление в Telegram (опционально)
+            try {
+                await this.sendTelegramNotification(request, 'EXECUTED');
+            } catch (telegramError) {
+                console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
+            }
+
+            console.log(`✅ Trading request marked as executed: ${requestId} (User confirmed manual execution)`);
             
-            return { request, executionResult };
+            return request;
 
         } catch (error) {
-            console.error('❌ Error executing trading request:', error);
-            
-            // Обновляем статус заявки на ошибку
-            try {
-                const request = await TradingRequest.findByPk(requestId);
-                if (request && request.status === 'APPROVED') {
-                    await request.reject(`Execution failed: ${error.message}`);
-                }
-            } catch (updateError) {
-                console.error('❌ Error updating failed request:', updateError);
-            }
-            
+            console.error('❌ Error marking trading request as executed:', error);
             throw error;
         }
     }
@@ -403,10 +583,17 @@ class TradingRequestService {
             }
 
             if (expiredRequests.length > 0) {
-                WebSocketService.broadcast({
-                    type: 'TRADING_REQUESTS_EXPIRED',
-                    data: { count: expiredRequests.length }
-                });
+                try {
+                    const WebSocketService = ServiceManager.getService('WebSocketService');
+                    if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                        WebSocketService.broadcast({
+                            type: 'TRADING_REQUESTS_EXPIRED',
+                            data: { count: expiredRequests.length }
+                        });
+                    }
+                } catch (wsError) {
+                    console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
+                }
             }
 
         } catch (error) {
@@ -415,15 +602,232 @@ class TradingRequestService {
     }
 
     /**
+     * Очистка одобренных и отклоненных заявок
+     */
+    async cleanupCompletedRequests(options = {}) {
+        try {
+            const { 
+                olderThanDays = null,  // Удалять только заявки старше N дней
+                tradingMode = null      // Фильтр по режиму торговли
+            } = options;
+
+            let whereClause = {
+                status: {
+                    [TradingRequest.sequelize.Op.in]: ['APPROVED', 'REJECTED']
+                }
+            };
+
+            // Фильтр по режиму торговли
+            if (tradingMode) {
+                whereClause.tradingMode = tradingMode;
+            }
+
+            // Фильтр по дате (если указан)
+            if (olderThanDays && olderThanDays > 0) {
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+                whereClause.updatedAt = {
+                    [TradingRequest.sequelize.Op.lt]: cutoffDate
+                };
+            }
+
+            const deletedCount = await TradingRequest.destroy({
+                where: whereClause
+            });
+
+            console.log(`🧹 Удалено ${deletedCount} завершенных торговых заявок (APPROVED/REJECTED)`);
+
+            // Уведомляем через WebSocket (если доступен)
+            try {
+                const WebSocketService = ServiceManager.getService('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'TRADING_REQUESTS_CLEANED',
+                        data: {
+                            deletedCount,
+                            filters: { olderThanDays, tradingMode }
+                        }
+                    });
+                }
+            } catch (wsError) {
+                console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
+            }
+
+            return {
+                success: true,
+                deletedCount,
+                filters: { olderThanDays, tradingMode }
+            };
+
+        } catch (error) {
+            console.error('❌ Error cleaning up completed requests:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Получение статистики по завершенным заявкам (для информации перед очисткой)
+     */
+    async getCompletedRequestsStats(tradingMode = null) {
+        try {
+            let whereClause = {
+                status: {
+                    [TradingRequest.sequelize.Op.in]: ['APPROVED', 'REJECTED']
+                }
+            };
+
+            if (tradingMode) {
+                whereClause.tradingMode = tradingMode;
+            }
+
+            const [approvedCount, rejectedCount, totalCount] = await Promise.all([
+                TradingRequest.count({
+                    where: { ...whereClause, status: 'APPROVED' }
+                }),
+                TradingRequest.count({
+                    where: { ...whereClause, status: 'REJECTED' }
+                }),
+                TradingRequest.count({
+                    where: whereClause
+                })
+            ]);
+
+            // Получаем самую старую и новую заявку
+            const oldestRequest = await TradingRequest.findOne({
+                where: whereClause,
+                order: [['updatedAt', 'ASC']],
+                attributes: ['updatedAt']
+            });
+
+            const newestRequest = await TradingRequest.findOne({
+                where: whereClause,
+                order: [['updatedAt', 'DESC']],
+                attributes: ['updatedAt']
+            });
+
+            return {
+                total: totalCount,
+                approved: approvedCount,
+                rejected: rejectedCount,
+                oldestDate: oldestRequest?.updatedAt || null,
+                newestDate: newestRequest?.updatedAt || null
+            };
+
+        } catch (error) {
+            console.error('❌ Error getting completed requests stats:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Обновление виртуального портфеля для одобренной заявки (paper mode)
+     */
+    async updateVirtualPortfolioForApprovedRequest(request) {
+        try {
+            // Проверяем, что TradingEngine инициализирован
+            if (!TradingEngine.isInitialized) {
+                await TradingEngine.initialize();
+            }
+            
+            // Для paper mode активируем движок, если он не активен
+            // (executePaperOrder требует isActive = true)
+            if (!TradingEngine.isActive) {
+                console.warn('⚠️ Trading Engine не активен, активируем для обновления портфеля');
+                await TradingEngine.activate();
+            }
+            
+            // Получаем текущую цену для расчета
+            let executionPrice = request.priceAtRequest;
+            try {
+                const currentPrice = await this.getCurrentPrice(request.figi);
+                if (currentPrice && currentPrice > 0) {
+                    executionPrice = currentPrice;
+                } else {
+                    console.warn(`⚠️ Используем цену из заявки: ${executionPrice}`);
+                }
+            } catch (priceError) {
+                console.warn(`⚠️ Не удалось получить текущую цену, используем цену из заявки: ${priceError.message}`);
+            }
+            
+            if (!executionPrice || executionPrice <= 0) {
+                throw new Error(`Не удалось определить цену для ${request.figi}`);
+            }
+            
+            // Создаем торговый сигнал для обновления портфеля
+            const signal = {
+                symbol: request.figi,
+                figi: request.figi,
+                action: request.action,
+                quantity: request.quantity,
+                price: executionPrice,
+                confidence: request.confidence,
+                requestId: request.id
+            };
+            
+            // Обновляем виртуальный портфель через TradingEngine
+            // Используем executePaperOrder напрямую, так как мы уже в paper mode
+            const result = await TradingEngine.executePaperOrder(signal);
+            
+            // Портфель автоматически сохраняется в БД внутри executePaperOrder
+            console.log(`✅ Виртуальный портфель обновлен и сохранен в БД: ${request.action} ${request.quantity} ${request.ticker} по ${executionPrice.toFixed(2)} ₽`);
+            
+            // Уведомляем через WebSocket об обновлении портфеля
+            try {
+                const WebSocketService = ServiceManager.getService('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    const updatedPortfolio = await TradingEngine.getPortfolioValue();
+                    WebSocketService.broadcast({
+                        type: 'PORTFOLIO_UPDATED',
+                        data: {
+                            requestId: request.id,
+                            portfolio: updatedPortfolio
+                        }
+                    });
+                }
+            } catch (wsError) {
+                console.warn('⚠️ Could not broadcast portfolio update:', wsError.message);
+            }
+            
+            return result;
+            
+        } catch (error) {
+            console.error('❌ Ошибка обновления виртуального портфеля:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Получение текущей цены инструмента
      */
     async getCurrentPrice(figi) {
         try {
-            const orderbook = await TinkoffApiService.getOrderBook(figi);
-            return (orderbook.lastPrice || orderbook.closePrice || 0);
+            // Используем getLastPrices вместо getOrderBook
+            const response = await TinkoffApiService.getLastPrices([figi]);
+            const lastPrices = response?.lastPrices || [];
+            
+            if (lastPrices.length > 0) {
+                const priceData = lastPrices[0];
+                // Цена может быть в разных форматах: price или units/nano
+                let price = 0;
+                if (priceData.price) {
+                    if (typeof priceData.price === 'number') {
+                        price = priceData.price;
+                    } else if (priceData.price.units !== undefined) {
+                        price = parseFloat(priceData.price.units) + (parseFloat(priceData.price.nano || 0) / 1000000000);
+                    }
+                }
+                
+                // Валидация цены
+                if (price && price > 0 && !isNaN(price)) {
+                    return price;
+                }
+            }
+            
+            console.warn(`⚠️ Invalid price from getLastPrices for ${figi}`);
+            return null;
         } catch (error) {
             console.warn(`⚠️ Could not get current price for ${figi}:`, error.message);
-            return 0;
+            return null; // Возвращаем null вместо 0
         }
     }
 
@@ -474,18 +878,42 @@ class TradingRequestService {
      */
     async calculateQuantity(figi, price, confidence, maxAmount = null, tradingMode = null) {
         try {
+            // Валидация входных параметров
+            if (!price || price <= 0 || isNaN(price)) {
+                throw new Error(`Invalid price for quantity calculation: ${price}`);
+            }
+            
+            if (!confidence || confidence <= 0 || isNaN(confidence)) {
+                confidence = 0.5; // Значение по умолчанию
+            }
+            
             const portfolioSettings = await SettingsService.getPortfolioSettings();
             const mode = tradingMode || TradingModeManager.getCurrentMode().mode;
             
-            // Базовая сумма на основе уверенности
-            let baseAmount = portfolioSettings.user_max_portfolio_budget * 0.05; // 5% от портфеля
+            // Если указана максимальная сумма, используем её
+            let baseAmount;
+            if (maxAmount && maxAmount > 0 && !isNaN(maxAmount)) {
+                baseAmount = maxAmount;
+            } else {
+                // Базовая сумма на основе уверенности
+                const budget = portfolioSettings?.user_max_portfolio_budget || 100000; // Fallback: 100k
+                baseAmount = budget * 0.05; // 5% от портфеля
+                
+                // Корректируем на основе уверенности
+                baseAmount *= confidence;
+                
+                // Корректируем на основе режима торговли
+                const modeSettings = await TradingModeManager.getModeSettings();
+                if (modeSettings?.maxPositionSize) {
+                    baseAmount *= modeSettings.maxPositionSize / 0.05; // Нормализуем к базовому 5%
+                }
+            }
             
-            // Корректируем на основе уверенности
-            baseAmount *= confidence;
-            
-            // Корректируем на основе режима торговли
-            const modeSettings = await TradingModeManager.getModeSettings();
-            baseAmount *= modeSettings.maxPositionSize / 0.05; // Нормализуем к базовому 5%
+            // Валидация базовой суммы
+            if (!baseAmount || baseAmount <= 0 || isNaN(baseAmount)) {
+                baseAmount = 10000; // Fallback: 10k рублей
+                console.warn(`⚠️ Using fallback baseAmount: ${baseAmount}`);
+            }
             
             // Дополнительные ограничения по режимам
             switch (mode) {
@@ -506,17 +934,30 @@ class TradingRequestService {
             }
             
             // Применяем максимальную сумму если указана
-            if (maxAmount && maxAmount < baseAmount) {
+            if (maxAmount && maxAmount > 0 && !isNaN(maxAmount) && maxAmount < baseAmount) {
                 baseAmount = maxAmount;
             }
             
+            // Валидация базовой суммы перед расчетом
+            if (!baseAmount || baseAmount <= 0 || isNaN(baseAmount) || !isFinite(baseAmount)) {
+                console.warn(`⚠️ Invalid baseAmount: ${baseAmount}, using fallback`);
+                baseAmount = 10000; // Fallback: 10k рублей
+            }
+            
             // Рассчитываем количество акций
-            const quantity = Math.floor(baseAmount / price);
+            let quantity = Math.floor(baseAmount / price);
+            
+            // Валидация результата
+            if (!quantity || quantity <= 0 || isNaN(quantity) || !isFinite(quantity)) {
+                console.warn(`⚠️ Invalid calculated quantity: ${quantity}, using fallback. baseAmount: ${baseAmount}, price: ${price}`);
+                quantity = 1; // Fallback к 1 акции
+            }
             
             return Math.max(1, quantity); // Минимум 1 акция
             
         } catch (error) {
             console.error('❌ Error calculating quantity:', error);
+            // Возвращаем минимальное значение вместо NaN
             return 1; // Fallback к 1 акции
         }
     }
@@ -586,7 +1027,16 @@ class TradingRequestService {
             }
             
             if (message) {
-                await OptimizedTelegramService.sendMessage(message);
+                // Используем sendAlert если доступен, иначе просто логируем
+                try {
+                    if (OptimizedTelegramService && typeof OptimizedTelegramService.sendAlert === 'function') {
+                        await OptimizedTelegramService.sendAlert('Торговая заявка', message);
+                    } else {
+                        console.log('📱 Telegram notification (service not available):', message);
+                    }
+                } catch (telegramError) {
+                    console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
+                }
             }
             
         } catch (error) {
@@ -607,10 +1057,17 @@ class TradingRequestService {
             await request.cancel(reason);
 
             // Уведомляем
-            WebSocketService.broadcast({
-                type: 'TRADING_REQUEST_CANCELLED',
-                data: request
-            });
+            try {
+                const WebSocketService = ServiceManager.getService('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'TRADING_REQUEST_CANCELLED',
+                        data: request
+                    });
+                }
+            } catch (wsError) {
+                console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
+            }
 
             console.log(`🚫 Trading request cancelled: ${requestId}`);
             

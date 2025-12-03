@@ -11,6 +11,7 @@ import Company from '../models/Company.js';
 import PortfolioItem from '../models/PortfolioItem.js';
 import Recommendation from '../models/Recommendation.js';
 import TradingRequest from '../models/TradingRequest.js';
+import VirtualPortfolio from '../models/VirtualPortfolio.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
@@ -32,6 +33,28 @@ export async function initDatabase() {
         await sequelize.sync({ force: false });
         console.log('✅ Все модели синхронизированы');
         
+        // Добавляем столбец instrumentType, если его нет
+        try {
+            await sequelize.query(`
+                ALTER TABLE cached_instruments 
+                ADD COLUMN IF NOT EXISTS "instrumentType" VARCHAR(255);
+            `);
+            console.log('✅ Столбец instrumentType проверен/добавлен');
+            
+            // Обновляем существующие записи: устанавливаем 'share' для всех существующих
+            await sequelize.query(`
+                UPDATE cached_instruments 
+                SET "instrumentType" = 'share' 
+                WHERE "instrumentType" IS NULL;
+            `);
+            console.log('✅ Существующие записи обновлены с instrumentType = share');
+        } catch (error) {
+            // Игнорируем ошибку, если столбец уже существует или таблицы нет
+            if (!error.message.includes('не существует') && !error.message.includes('does not exist')) {
+                console.warn('⚠️ Предупреждение при добавлении столбца instrumentType:', error.message);
+            }
+        }
+        
         // Создаем новые таблицы для кеширования
         console.log('📰 Создание таблиц кеширования новостей, настроений и торговых часов...');
         await CachedNews.sync({ force: false });
@@ -43,6 +66,11 @@ export async function initDatabase() {
         console.log('🎯 Создание таблицы торговых заявок...');
         await TradingRequest.sync({ force: false });
         console.log('✅ Таблица торговых заявок создана/обновлена');
+        
+        // Создаем таблицу виртуального портфеля
+        console.log('💼 Создание таблицы виртуального портфеля...');
+        await VirtualPortfolio.sync({ force: false });
+        console.log('✅ Таблица виртуального портфеля создана/обновлена');
 
         // Инициализация настроек
         console.log('\n🔧 Инициализация настроек...');
