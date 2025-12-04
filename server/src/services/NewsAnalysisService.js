@@ -815,7 +815,12 @@ class NewsAnalysisService {
                 
                 let cleaned = validator.stripLow(text, true);
                 cleaned = cleaned.replace(/\s+/g, ' ');
-                cleaned = validator.escape(cleaned);
+                
+                // Удаляем нулевые байты и другие проблемные символы
+                cleaned = cleaned.replace(/\0/g, '');
+                
+                // НЕ используем validator.escape() - Sequelize уже экранирует данные при сохранении
+                // escape() превращает нормальные символы в HTML-сущности (&#x2F; и т.д.)
                 
                 return cleaned.trim();
             };
@@ -830,8 +835,9 @@ class NewsAnalysisService {
                 try {
                     const newsToCache = batch.map(article => {
                         let url = article.url || '';
-                        if (url && !validator.isURL(url)) {
-                            url = validator.escape(url);
+                        // Если URL невалидный, просто очищаем его (не экранируем, это портит данные)
+                        if (url && !validator.isURL(url, { require_protocol: false })) {
+                            url = ''; // Оставляем пустым вместо порчи данных
                         }
                         
                         return {
@@ -864,8 +870,8 @@ class NewsAnalysisService {
                     for (const article of batch) {
                         try {
                             let url = article.url || '';
-                            if (url && !validator.isURL(url)) {
-                                url = validator.escape(url);
+                            if (url && !validator.isURL(url, { require_protocol: false })) {
+                                url = '';
                             }
                             
                             const newsData = {
