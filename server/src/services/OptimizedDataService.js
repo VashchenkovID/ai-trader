@@ -750,13 +750,8 @@ class OptimizedDataService {
         try {
             const NewsAnalysisService = (await import('./NewsAnalysisService.js')).default;
             
-            // Получаем новости за последние 7 дней от переданного timestamp (не от текущего момента!)
-            const news = await NewsAnalysisService.fetchNews(figi, { 
-                days: 7, 
-                limit: 20,
-                useCache: true,
-                maxDate: timestamp // Передаем максимальную дату для фильтрации
-            });
+            // Получаем новости за последние 7 дней только из БД (для обучения)
+            const news = await NewsAnalysisService.getCachedNews(figi, 7, 20);
             
             if (news.length === 0) {
                 return [0, 0]; // Нет новостей - возвращаем 2 фичи

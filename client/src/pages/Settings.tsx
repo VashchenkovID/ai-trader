@@ -23,6 +23,7 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { apiService } from '../services/apiService';
 import SettingsStats from '../components/SettingsStats';
+import NewsManagement from '../components/NewsManagement';
 import { useWebSocketData } from '../components/WebSocketDataProvider';
 
 interface Setting {
@@ -655,6 +656,86 @@ const Settings: React.FC = () => {
     // Специальная обработка для обзорной вкладки
     if (moduleName === 'Обзор') {
       return renderOverviewTab();
+    }
+
+    // Специальная обработка для вкладки "Уведомления" - добавляем управление новостями
+    if (moduleName === 'Уведомления') {
+      const moduleSettings = getModuleSettings(moduleName);
+      return (
+        <div className="flex flex-column gap-4">
+          {/* Компонент управления новостями */}
+          <NewsManagement />
+          
+          {/* Настройки уведомлений */}
+          {moduleSettings.length > 0 && (
+            <>
+              <Divider />
+              <h4 className="text-xl font-semibold mb-3">Настройки уведомлений</h4>
+              {Object.entries(
+                moduleSettings.reduce((acc, setting) => {
+                  const category = setting.category || 'Общие';
+                  if (!acc[category]) {
+                    acc[category] = [];
+                  }
+                  acc[category].push(setting);
+                  return acc;
+                }, {} as Record<string, Setting[]>)
+              ).map(([category, categorySettings]) => (
+                <div key={category}>
+                  <Divider align="left">
+                    <Tag value={category} severity="info" />
+                  </Divider>
+                  <div className="grid">
+                    {categorySettings.map((setting) => {
+                      const hasChanged = originalSettings.find(orig => orig.key === setting.key)?.value !== setting.value;
+                      return (
+                        <div key={setting.key} className="col-12 md:col-6 lg:col-4">
+                          <Card className={`h-full ${hasChanged ? 'border-orange-300' : ''}`}>
+                            <div className="flex flex-column gap-3">
+                              <div className="flex justify-content-between align-items-start">
+                                <div className="flex-1">
+                                  <label className="font-semibold text-sm text-gray-700">
+                                    {setting.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                  </label>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {setting.description}
+                                  </p>
+                                </div>
+                                <div className="flex align-items-center gap-1">
+                                  {hasChanged && (
+                                    <Badge value="Изменено" severity="warning" size="normal" />
+                                  )}
+                                  {!setting.isEditable && (
+                                    <i className="pi pi-lock text-gray-400" title="Только для чтения"></i>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="flex align-items-center gap-2">
+                                {renderSettingInput(setting)}
+                              </div>
+
+                              <div className="flex justify-content-between align-items-center">
+                                <div className="text-xs text-gray-400">
+                                  Обновлено: {new Date(setting.lastUpdated).toLocaleString('ru-RU')}
+                                </div>
+                                <Tag 
+                                  value={setting.dataType} 
+                                  severity="info" 
+                                />
+                              </div>
+                            </div>
+                          </Card>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      );
     }
 
     const moduleSettings = getModuleSettings(moduleName);

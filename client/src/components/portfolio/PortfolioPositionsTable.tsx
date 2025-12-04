@@ -68,12 +68,18 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
     );
   };
 
-  const quantityTemplate = (rowData: Position) => (
-    <div className="text-right">
-      <div className="font-medium">{rowData.quantity.toLocaleString('ru-RU')}</div>
-      <div className="text-sm text-600">{rowData.currency}</div>
-    </div>
-  );
+  const quantityTemplate = (rowData: Position) => {
+    const quantity = typeof rowData.quantity === 'number' && !isNaN(rowData.quantity) && isFinite(rowData.quantity) && rowData.quantity > 0
+      ? rowData.quantity
+      : 0;
+    
+    return (
+      <div className="text-right">
+        <div className="font-medium">{quantity > 0 ? quantity.toLocaleString('ru-RU') : '—'}</div>
+        <div className="text-sm text-600">шт.</div>
+      </div>
+    );
+  };
 
   const priceTemplate = (rowData: Position) => {
     const currentPrice = typeof rowData.currentPrice === 'number' && !isNaN(rowData.currentPrice) && isFinite(rowData.currentPrice) 

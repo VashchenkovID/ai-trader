@@ -1,227 +1,111 @@
-import fetch from 'node-fetch';
+import { Op } from 'sequelize';
 
 /**
  * Сервис для анализа новостей
- * Получает новости из различных источников и анализирует их влияние на рынок
+ * Получает новости из внешних источников и анализирует их влияние на рынок
  */
 class NewsAnalysisService {
     constructor() {
         this.isInitialized = false;
-        this.newsApiKey = process.env.NEWS_API_KEY;
-        // Минимальная дата, разрешенная планом NewsAPI (можно настроить через переменную окружения)
-        // По умолчанию: 2025-10-05 (пример для бесплатного плана)
-        this.minAllowedDate = process.env.NEWS_API_MIN_DATE 
-            ? new Date(process.env.NEWS_API_MIN_DATE) 
-            : new Date('2025-10-05');
-        this.newsSources = [
-            'reuters',
-            'bloomberg',
-            'financial-times',
-            'wall-street-journal',
-            'cnbc',
-            'marketwatch'
-        ];
         this.cache = new Map();
         this.cacheTimeout = 30 * 60 * 1000; // 30 минут
-        this.requestCount = 0; // Счетчик запросов
-        this.requestLimit = 100; // Лимит запросов в 24 часа (для разработческого аккаунта)
-        this.lastResetTime = Date.now(); // Время последнего сброса счетчика
-        this.rateLimitResetInterval = 24 * 60 * 60 * 1000; // 24 часа
+        this.sentimentModel = null; // BERT модель для анализа тональности
+        this.modelLoading = false; // Флаг загрузки модели
     }
 
     async initialize() {
         try {
-            if (!this.newsApiKey) {
-                console.warn('⚠️ NEWS_API_KEY not set, news analysis disabled');
-                return;
-            }
-
             this.isInitialized = true;
-            console.log('✅ NewsAnalysisService initialized');
         } catch (error) {
             console.error('❌ Error initializing NewsAnalysisService:', error);
         }
     }
 
     /**
-     * Получение новостей для конкретного инструмента
-     * @param {string} figi - FIGI инструмента
-     * @param {object} options - Опции запроса
-     * @param {number} options.limit - Максимальное количество новостей
-     * @param {number} options.days - Количество дней назад для поиска
-     * @param {string[]} options.sources - Источники новостей
-     * @param {Date|string} options.maxDate - Максимальная дата новостей (для предотвращения утечки данных)
+     * Ленивая загрузка BERT модели для анализа тональности
+     * Использует @xenova/transformers, пробует несколько моделей по порядку
+     * @returns {Promise<object>} - Загруженная модель (pipeline)
      */
-    async fetchNews(figi, options = {}) {
-        const {
-            limit = 10,
-            days = 7,
-            sources = this.newsSources,
-            maxDate = null // Если указан, фильтруем новости только до этой даты
-        } = options;
-
+    async loadSentimentModel() {
         try {
-            if (!this.isInitialized) {
-                return [];
+            if (this.modelLoading) {
+                while (this.modelLoading) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                return this.sentimentModel;
             }
 
-            // Определяем дату "от" - используем maxDate если указан, иначе текущую дату
-            const referenceDate = maxDate ? new Date(maxDate) : new Date();
-            let fromDate = new Date(referenceDate);
-            fromDate.setDate(fromDate.getDate() - days);
-
-            // Ограничиваем дату минимальной разрешенной датой плана NewsAPI
-            if (fromDate < this.minAllowedDate) {
-                fromDate = new Date(this.minAllowedDate);
+            if (this.sentimentModel) {
+                return this.sentimentModel;
             }
 
-            // Проверяем кеш (учитываем maxDate в ключе кеша)
-            const cacheKey = `${figi}_${days}_${limit}_${maxDate ? new Date(maxDate).toISOString() : 'current'}`;
-            if (this.cache.has(cacheKey)) {
-                const cached = this.cache.get(cacheKey);
-                // Увеличиваем время кеширования до 2 часов для уменьшения количества запросов
-                const extendedCacheTimeout = 2 * 60 * 60 * 1000; // 2 часа
-                const age = Date.now() - cached.timestamp;
-                if (age < extendedCacheTimeout) {
-                    const articleCount = cached.data ? cached.data.length : 0;
-                    const ageMinutes = Math.round(age / (60 * 1000));
-                    console.log(`📦 Using cached news for ${figi} (${articleCount} articles, age: ${ageMinutes}m)`);
-                    return cached.data;
-                } else {
-                    const ageHours = (age / (60 * 60 * 1000)).toFixed(2);
-                    console.log(`⏰ Cached news for ${figi} expired (age: ${ageHours}h), fetching fresh data`);
+            this.modelLoading = true;
+
+            const { pipeline } = await import('@xenova/transformers');
+
+            const modelsToTry = [
+                'Xenova/bert-base-multilingual-uncased-sentiment',
+                'Xenova/rubert-base-cased-sentiment',
+                'cointegrated/rubert-tiny2',
+                'nlptown/bert-base-multilingual-uncased-sentiment',
+                'Xenova/distilbert-base-multilingual-cased',
+                null
+            ];
+
+            let lastError = null;
+            for (const modelName of modelsToTry) {
+                try {
+                    this.sentimentModel = await pipeline(
+                        'sentiment-analysis',
+                        modelName,
+                        {
+                            quantized: true
+                        }
+                    );
+                    break;
+                } catch (error) {
+                    lastError = error;
+                    continue;
                 }
             }
 
-            // ВРЕМЕННО: полностью отключаем внешние запросы к NewsAPI, чтобы не упираться в лимиты
-            console.warn(`⚠️ NewsAPI requests temporarily disabled, returning cached or empty news for ${figi}`);
-            if (this.cache.has(cacheKey)) {
-                const cached = this.cache.get(cacheKey);
-                const age = Date.now() - cached.timestamp;
-                const ageMinutes = Math.round(age / (60 * 1000));
-                const articleCount = cached.data ? cached.data.length : 0;
-                console.log(`📦 Using cached news (offline mode) for ${figi} (${articleCount} articles, age: ${ageMinutes}m)`);
-                return cached.data;
-            }
-            
-            return [];
-
-            // --- Ниже старая логика запроса к NewsAPI, временно отключена ---
-            // Проверяем лимит запросов
-            const timeSinceReset = Date.now() - this.lastResetTime;
-            if (timeSinceReset >= this.rateLimitResetInterval) {
-                // Сбрасываем счетчик каждые 24 часа
-                this.requestCount = 0;
-                this.lastResetTime = Date.now();
-                console.log('🔄 NewsAPI request counter reset');
+            if (!this.sentimentModel) {
+                throw lastError || new Error('Не удалось загрузить ни одну модель для анализа тональности');
             }
 
-            if (this.requestCount >= this.requestLimit) {
-                const hoursUntilReset = Math.ceil((this.rateLimitResetInterval - timeSinceReset) / (60 * 60 * 1000));
-                
-                // Пытаемся вернуть устаревшие данные из кеша, если они есть
-                if (this.cache.has(cacheKey)) {
-                    const cached = this.cache.get(cacheKey);
-                    const age = Date.now() - cached.timestamp;
-                    const ageHours = (age / (60 * 60 * 1000)).toFixed(2);
-                    const articleCount = cached.data ? cached.data.length : 0;
-                    console.warn(`⚠️ Returning stale cached news for ${figi} due to rate limit (${articleCount} articles, age: ${ageHours}h)`);
-                    return cached.data;
-                }
-                
-                // Проверяем, есть ли вообще что-то в кеше
-                if (this.cache.size > 0) {
-                    console.warn(`⚠️ Cache has ${this.cache.size} entries, but none match key \"${cacheKey}\". Available keys: ${Array.from(this.cache.keys()).slice(0, 3).join(', ')}...`);
-                }
-                
-                return [];
-            }
-
-            // Получаем новости из NewsAPI (отключено)
-            const url = `https://newsapi.org/v2/everything?` +
-                `q=${encodeURIComponent(figi)}&` +
-                `sources=${sources.join(',')}&` +
-                `from=${fromDate.toISOString().split('T')[0]}&` +
-                `sortBy=publishedAt&` +
-                `pageSize=${limit}&` +
-                `apiKey=${this.newsApiKey}`;
-
-            console.log(`📡 NewsAPI request #${this.requestCount + 1}/${this.requestLimit} for ${figi}`);
-
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.status === 'ok') {
-                // Увеличиваем счетчик запросов только при успешном запросе
-                this.requestCount++;
-                let news = data.articles.map(article => ({
-                    title: article.title,
-                    description: article.description,
-                    url: article.url,
-                    publishedAt: new Date(article.publishedAt),
-                    source: article.source.name,
-                    relevance: this.calculateRelevance(article, figi),
-                    sentiment: this.analyzeSentiment(article.title + ' ' + article.description)
-                }));
-
-                // Фильтруем новости по maxDate если указан (защита от утечки данных)
-                if (maxDate) {
-                    const maxDateObj = new Date(maxDate);
-                    news = news.filter(article => article.publishedAt <= maxDateObj);
-                }
-
-                // Кешируем результат (увеличиваем время кеширования до 2 часов)
-                this.cache.set(cacheKey, {
-                    data: news,
-                    timestamp: Date.now()
-                });
-
-                console.log(`💾 Cached ${news.length} news articles for ${figi} (valid for 2 hours)`);
-
-                return news;
-            } else {
-                console.error('❌ NewsAPI error:', data.message);
-                
-                // Обработка различных типов ошибок
-                if (data.message && data.message.includes('too far in the past')) {
-                    console.error(`⚠️ NewsAPI date limit error. Minimum allowed date: ${this.minAllowedDate.toISOString().split('T')[0]}, requested from: ${fromDate.toISOString().split('T')[0]}`);
-                } else if (data.message && data.message.includes('too many requests')) {
-                    // Превышен лимит запросов - используем кеш
-                    console.error(`⚠️ NewsAPI rate limit exceeded. Request count: ${this.requestCount}/${this.requestLimit}`);
-                    this.requestCount = this.requestLimit; // Устанавливаем на лимит, чтобы не делать больше запросов
-                    
-                    // Пытаемся вернуть устаревшие данные из кеша
-                    if (this.cache.has(cacheKey)) {
-                        const cached = this.cache.get(cacheKey);
-                        console.warn(`⚠️ Returning stale cached news for ${figi} due to rate limit`);
-                        return cached.data;
-                    }
-                }
-                
-                return [];
-            }
+            this.modelLoading = false;
+            return this.sentimentModel;
 
         } catch (error) {
-            console.error('❌ Error fetching news:', error);
-            return [];
+            this.modelLoading = false;
+            console.error('❌ Ошибка загрузки BERT модели для анализа тональности:', error.message);
+            this.sentimentModel = null;
+            return null;
         }
+    }
+
+    /**
+     * @deprecated Используйте getCachedNews() для получения новостей из БД
+     * Метод fetchNews удален, используйте getCachedNews().
+     */
+    async fetchNews(figi, options = {}) {
+        const { days = 7, limit = 10 } = options;
+        return await this.getCachedNews(figi, days, limit);
     }
 
     /**
      * Расчет релевантности новости для инструмента
      */
     calculateRelevance(article, figi) {
-        const text = (article.title + ' ' + article.description).toLowerCase();
+        const text = (article.title + ' ' + (article.description || '')).toLowerCase();
         const figiLower = figi.toLowerCase();
         
-        // Простая эвристика релевантности
         let relevance = 0;
         
         if (text.includes(figiLower)) {
             relevance += 0.5;
         }
         
-        // Ключевые слова для финансовых новостей (русские)
         const financialKeywords = [
             'доходы', 'выручка', 'прибыль', 'убыток', 'дивиденды',
             'слияние', 'поглощение', 'партнерство', 'инвестиции',
@@ -241,17 +125,101 @@ class NewsAnalysisService {
     }
 
     /**
-     * Анализ настроений новости
+     * Анализ настроений новости с использованием BERT модели
+     * @param {string} text - Текст для анализа
+     * @param {boolean} useFallback - Использовать упрощенный метод при ошибке (по умолчанию true)
+     * @returns {Promise<number>} - Значение от -1 (отрицательное) до 1 (положительное)
      */
-    analyzeSentiment(text) {
+    async analyzeSentiment(text, useFallback = true) {
+        try {
+            if (!text || typeof text !== 'string' || text.trim().length === 0) {
+                return 0;
+            }
+
+            const model = await this.loadSentimentModel();
+            
+            if (model) {
+                try {
+                    const maxLength = 512;
+                    const truncatedText = text.length > maxLength 
+                        ? text.substring(0, maxLength) 
+                        : text;
+
+                    const result = await model(truncatedText);
+                    const prediction = Array.isArray(result) ? result[0] : result;
+                    
+                    if (prediction && prediction.label) {
+                        const label = (prediction.label || '').toUpperCase();
+                        const score = prediction.score || 0;
+
+                        let sentimentValue;
+                        
+                        if (label === 'POSITIVE' || label === 'POS' || label === 'LABEL_1' || 
+                            label === 'LABEL_2' || label.includes('POSITIVE') || 
+                            label === '5 STARS' || label === '4 STARS') {
+                            sentimentValue = 0.2 + (score - 0.5) * 1.6;
+                        } 
+                        else if (label === 'NEGATIVE' || label === 'NEG' || label === 'LABEL_0' || 
+                                 label.includes('NEGATIVE') || label === '1 STAR' || label === '2 STARS') {
+                            sentimentValue = -1.0 + (score - 0.5) * 1.6;
+                        } 
+                        else if (label === 'NEUTRAL' || label === 'LABEL_1' || label === '3 STARS') {
+                            sentimentValue = 0;
+                        }
+                        else {
+                            sentimentValue = (score - 0.5) * 2;
+                        }
+
+                        return Math.max(-1, Math.min(1, sentimentValue));
+                    }
+
+                    if (useFallback) {
+                        return this.analyzeSentimentFallback(text);
+                    }
+                    return 0;
+
+                } catch (modelError) {
+                    if (useFallback) {
+                        return this.analyzeSentimentFallback(text);
+                    }
+                    return 0;
+                }
+            } else {
+                if (useFallback) {
+                    return this.analyzeSentimentFallback(text);
+                }
+                return 0;
+            }
+
+        } catch (error) {
+            console.error('❌ Ошибка анализа тональности:', error);
+            if (useFallback) {
+                return this.analyzeSentimentFallback(text);
+            }
+            return 0;
+        }
+    }
+
+    /**
+     * Упрощенный метод анализа тональности (fallback)
+     */
+    analyzeSentimentFallback(text) {
         const positiveWords = [
             'good', 'great', 'excellent', 'positive', 'growth', 'profit',
-            'increase', 'rise', 'gain', 'success', 'strong', 'up'
+            'increase', 'rise', 'gain', 'success', 'strong', 'up',
+            'хорошо', 'отлично', 'положительный', 'рост', 'прибыль',
+            'увеличение', 'успех', 'сильный', 'вверх', 'вырос', 'поднялся',
+            'покупка', 'покупать', 'позитив', 'оптимизм', 'надежда', 'уверенность',
+            'доход', 'выручка', 'результаты', 'квартал', 'отчетность'
         ];
         
         const negativeWords = [
             'bad', 'terrible', 'negative', 'loss', 'decline', 'decrease',
-            'fall', 'drop', 'weak', 'failure', 'down', 'crash'
+            'fall', 'drop', 'weak', 'failure', 'down', 'crash',
+            'плохо', 'ужасно', 'отрицательный', 'убыток', 'снижение',
+            'падение', 'слабый', 'провал', 'вниз', 'крах', 'упал',
+            'снизился', 'продажа', 'продавать', 'пессимизм', 'риск', 'опасность',
+            'кризис', 'проблемы', 'сложности', 'негатив'
         ];
         
         const words = text.toLowerCase().split(/\W+/);
@@ -280,19 +248,32 @@ class NewsAnalysisService {
     async getPortfolioNews(portfolio, options = {}) {
         try {
             const allNews = [];
+            const { days = 7, limit = 20 } = options;
             
             for (const position of portfolio) {
-                const news = await this.fetchNews(position.symbol, options);
+                const news = await this.getCachedNews(position.symbol, days, limit);
                 allNews.push(...news);
             }
             
-            // Сортируем по релевантности и времени
             return allNews
                 .sort((a, b) => b.relevance - a.relevance)
-                .slice(0, options.limit || 20);
+                .slice(0, limit);
                 
         } catch (error) {
             console.error('❌ Error getting portfolio news:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Получение новостей по FIGI
+     */
+    async getNewsByFigi(figi, options = {}) {
+        try {
+            const cachedNews = await this.getCachedNews(figi, options.days || 7, options.limit || 10);
+            return cachedNews || [];
+        } catch (error) {
+            console.error('❌ Error getting news by FIGI:', error);
             return [];
         }
     }
@@ -302,7 +283,7 @@ class NewsAnalysisService {
      */
     async analyzeNewsImpact(figi, days = 30) {
         try {
-            const news = await this.fetchNews(figi, { days, limit: 50 });
+            const news = await this.getCachedNews(figi, days, 50);
             const impact = {
                 totalNews: news.length,
                 positiveNews: news.filter(n => n.sentiment > 0.1).length,
@@ -329,35 +310,30 @@ class NewsAnalysisService {
     }
 
     /**
+     * Получение влияния новостей (алиас для совместимости)
+     */
+    async getNewsImpact(figi, days = 30) {
+        return await this.analyzeNewsImpact(figi, days);
+    }
+
+    /**
      * Получение статуса сервиса
      */
     getStatus() {
-        const timeSinceReset = Date.now() - this.lastResetTime;
-        const hoursUntilReset = Math.ceil((this.rateLimitResetInterval - timeSinceReset) / (60 * 60 * 1000));
-        
         return {
             isInitialized: this.isInitialized,
-            hasApiKey: !!this.newsApiKey,
-            cacheSize: this.cache.size,
-            sources: this.newsSources,
-            requestCount: this.requestCount,
-            requestLimit: this.requestLimit,
-            requestsRemaining: Math.max(0, this.requestLimit - this.requestCount),
-            hoursUntilReset: hoursUntilReset > 24 ? 0 : hoursUntilReset,
-            rateLimitExceeded: this.requestCount >= this.requestLimit
+            apiProvider: 'Tinkoff Invest API',
+            cacheSize: this.cache.size
         };
     }
-
-    // ============================================================================
-    // КЕШИРОВАНИЕ В БАЗЕ ДАННЫХ
-    // ============================================================================
 
     /**
      * Получение кешированных новостей из БД
      */
     async getCachedNews(figi, days, limit) {
         try {
-            const CachedNews = (await import('../models/CachedNews.js')).default;
+            const CachedNewsModule = await import('../models/CachedNews.js');
+            const CachedNews = CachedNewsModule.default;
             
             const fromDate = new Date();
             fromDate.setDate(fromDate.getDate() - days);
@@ -366,10 +342,10 @@ class NewsAnalysisService {
                 where: {
                     figi,
                     publishedAt: {
-                        [require('sequelize').Op.gte]: fromDate
+                        [Op.gte]: fromDate
                     },
                     expiresAt: {
-                        [require('sequelize').Op.gt]: new Date()
+                        [Op.gt]: new Date()
                     }
                 },
                 order: [['publishedAt', 'DESC']],
@@ -396,61 +372,1129 @@ class NewsAnalysisService {
     }
 
     /**
+     * Проверка наличия исторических новостей в БД
+     * @param {string|null} figi - FIGI инструмента (опционально)
+     * @returns {Promise<object>} - Объект с датой последней новости и флагом наличия истории
+     */
+    async getLastNewsDate(figi = null) {
+        try {
+            const CachedNewsModule = await import('../models/CachedNews.js');
+            const CachedNews = CachedNewsModule.default;
+            
+            const whereClause = figi ? { figi } : {};
+            
+            const lastNews = await CachedNews.findOne({
+                where: whereClause,
+                order: [['publishedAt', 'DESC']],
+                attributes: ['publishedAt', 'figi']
+            });
+
+            if (lastNews) {
+                return {
+                    date: lastNews.publishedAt,
+                    figi: lastNews.figi,
+                    hasHistory: true
+                };
+            }
+
+            return {
+                date: null,
+                figi: figi || null,
+                hasHistory: false
+            };
+
+        } catch (error) {
+            console.error('❌ Ошибка получения последней даты новостей:', error);
+            return {
+                date: null,
+                figi: figi || null,
+                hasHistory: false
+            };
+        }
+    }
+
+    /**
+     * Проверка наличия новостей за месяц для FIGI
+     */
+    async hasNewsForMonth(figi) {
+        try {
+            const CachedNewsModule = await import('../models/CachedNews.js');
+            const CachedNews = CachedNewsModule.default;
+            
+            const oneMonthAgo = new Date();
+            oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+            
+            const newsCount = await CachedNews.count({
+                where: {
+                    figi,
+                    publishedAt: {
+                        [Op.gte]: oneMonthAgo
+                    }
+                }
+            });
+
+            return newsCount > 0;
+
+        } catch (error) {
+            console.error(`❌ Ошибка проверки новостей за месяц для ${figi}:`, error);
+            return false;
+        }
+    }
+
+    /**
+     * Получение списка FIGI без новостей за месяц
+     */
+    async getFigisWithoutMonthNews() {
+        try {
+            const ServiceManager = (await import('./ServiceManager.js')).default;
+            let CacheService = ServiceManager.getService('CacheService');
+            if (!CacheService) {
+                const CacheServiceModule = await import('./CacheService.js');
+                CacheService = CacheServiceModule.default;
+            }
+
+            const instruments = await CacheService.getAllInstruments();
+            const figisWithoutNews = [];
+
+            for (const instrument of instruments) {
+                const figi = instrument.figi || instrument;
+                const hasNews = await this.hasNewsForMonth(figi);
+                
+                if (!hasNews) {
+                    figisWithoutNews.push({
+                        figi,
+                        ticker: instrument.ticker,
+                        name: instrument.name
+                    });
+                }
+            }
+
+            return figisWithoutNews;
+
+        } catch (error) {
+            console.error('❌ Ошибка получения списка FIGI без новостей:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Проверка статуса исторических новостей
+     */
+    async checkHistoricalNewsStatus(year = null) {
+        try {
+            const ServiceManager = (await import('./ServiceManager.js')).default;
+            let CacheService = ServiceManager.getService('CacheService');
+            if (!CacheService) {
+                const CacheServiceModule = await import('./CacheService.js');
+                CacheService = CacheServiceModule.default;
+            }
+
+            const targetYear = year || new Date().getFullYear();
+            const startDate = new Date(targetYear, 0, 1);
+            const endDate = new Date(targetYear, 11, 31, 23, 59, 59);
+
+            const instruments = await CacheService.getAllInstruments();
+            const status = {
+                year: targetYear,
+                totalInstruments: instruments.length,
+                instrumentsWithNews: 0,
+                instrumentsWithoutNews: 0,
+                lastNewsDate: null
+            };
+
+            for (const instrument of instruments) {
+                const figi = instrument.figi || instrument;
+                const lastNews = await this.getLastNewsDate(figi);
+                
+                if (lastNews.hasHistory && lastNews.date >= startDate && lastNews.date <= endDate) {
+                    status.instrumentsWithNews++;
+                } else {
+                    status.instrumentsWithoutNews++;
+                }
+            }
+
+            const globalLastNews = await this.getLastNewsDate();
+            status.lastNewsDate = globalLastNews.date;
+
+            return status;
+
+        } catch (error) {
+            console.error('❌ Ошибка проверки статуса исторических новостей:', error);
+            throw error;
+        }
+    }
+
+
+    /**
+     * Запрос новостей по названию компании и периоду через NewsAPI.org
+     * @param {string} companyName - Название компании
+     * @param {Date} fromDate - Дата начала периода
+     * @param {Date} toDate - Дата окончания периода
+     * @param {object} options - Дополнительные опции (ticker, sector, apiData и т.д.)
+     * @returns {Promise<Array>} - Массив обработанных новостей
+     */
+    async fetchNewsByCompanyNameAndPeriod(companyName, fromDate, toDate, options = {}) {
+        try {
+            if (!this.isInitialized) {
+                throw new Error('NewsAnalysisService не инициализирован');
+            }
+
+            const NewsApiService = (await import('./NewsApiService.js')).default;
+
+            if (!NewsApiService.isInitialized) {
+                await NewsApiService.initialize();
+            }
+
+            const news = await NewsApiService.fetchNewsByCompanyName(companyName, fromDate, toDate, {
+                ticker: options.ticker || null,
+                sector: options.sector || null,
+                apiData: options.apiData || null,
+                includeFinancialTerms: options.includeFinancialTerms !== false, // По умолчанию true
+                aliases: options.aliases || null,
+                pageSize: options.pageSize || 100
+            });
+
+            if (!news || news.length === 0) {
+                return [];
+            }
+
+            const processedNewsPromises = news
+                .filter(article => article.title || article.description || article.content)
+                .map(async (article) => {
+                    try {
+                        const newsText = article.description || article.content || '';
+                        const newsTitle = article.title || '';
+                        
+                        let newsTime = new Date();
+                        if (article.publishedAt) {
+                            try {
+                                newsTime = new Date(article.publishedAt);
+                                if (isNaN(newsTime.getTime())) {
+                                    newsTime = new Date();
+                                }
+                            } catch (e) {
+                                newsTime = new Date();
+                            }
+                        }
+
+                        // Используем асинхронный анализ тональности
+                        const sentiment = await this.analyzeSentiment(newsTitle + ' ' + newsText);
+
+                        return {
+                            title: newsTitle,
+                            description: newsText,
+                            url: article.url || '',
+                            publishedAt: newsTime,
+                            source: article.source?.name || 'NewsAPI',
+                            sentiment: sentiment,
+                            relevance: options.figi ? this.calculateRelevance({ title: newsTitle, description: newsText }, options.figi) : 0.5,
+                            keywords: this.extractKeywords(newsTitle + ' ' + newsText),
+                            category: 'general',
+                            impact: this.calculateImpact({ title: newsTitle, description: newsText }),
+                            language: 'ru'
+                        };
+                    } catch (articleError) {
+                        console.warn(`⚠️ Ошибка обработки статьи:`, articleError.message);
+                        return null;
+                    }
+                });
+
+            // Ждем завершения всех промисов
+            const processedNews = (await Promise.all(processedNewsPromises))
+                .filter(article => article !== null);
+
+            return processedNews;
+
+        } catch (error) {
+            console.error(`❌ Ошибка загрузки новостей для "${companyName}":`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Получение новостей через NewsAPI.org для одного тикера (тестовый метод)
+     * Использует поиск по ключевым словам вместо прямого поиска по тикеру
+     * @param {string} ticker - Тикер акции (например, 'SBER')
+     * @param {object} options - Опции запроса
+     * @returns {Promise<object>} - Результат загрузки новостей
+     */
+    async fetchNewsFromNewsApiByTicker(ticker, options = {}) {
+        try {
+            if (!this.isInitialized) {
+                throw new Error('NewsAnalysisService не инициализирован');
+            }
+
+            const NewsApiService = (await import('./NewsApiService.js')).default;
+            const CachedInstrumentModule = await import('../models/CachedInstrument.js');
+            const CachedInstrument = CachedInstrumentModule.default;
+
+            if (!NewsApiService.isInitialized) {
+                await NewsApiService.initialize();
+            }
+
+            const tickerUpper = ticker.toUpperCase();
+            let instrument = await CachedInstrument.findOne({
+                where: {
+                    ticker: tickerUpper,
+                    currency: 'RUB'
+                }
+            });
+
+            // Если не нашли, пробуем найти просто по тикеру
+            if (!instrument) {
+                instrument = await CachedInstrument.findOne({
+                    where: {
+                        ticker: tickerUpper
+                    }
+                });
+            }
+
+            if (!instrument) {
+                // Показываем список доступных тикеров для отладки
+                const availableTickers = await CachedInstrument.findAll({
+                    where: {
+                        currency: 'RUB'
+                    },
+                    attributes: ['ticker', 'name'],
+                    limit: 20,
+                    order: [['ticker', 'ASC']]
+                });
+                
+                const tickerList = availableTickers.length > 0 
+                    ? availableTickers.map(i => `${i.ticker} (${i.name || 'без названия'})`).join(', ')
+                    : 'нет данных';
+                
+                throw new Error(`Инструмент с тикером ${ticker} не найден в БД. Доступные тикеры: ${tickerList}`);
+            }
+
+            // Формируем поисковый запрос с дополнительными данными
+            const searchQuery = NewsApiService.buildSearchQuery(
+                instrument.ticker, 
+                instrument.name,
+                {
+                    sector: instrument.sector,
+                    apiData: instrument.apiData,
+                    includeFinancialTerms: true,
+                    aliases: instrument.apiData?.aliases || null
+                }
+            );
+
+            const to = options.to || new Date();
+            const from = options.from || new Date();
+            
+            from.setDate(from.getDate() - 30);
+            from.setHours(0, 0, 0, 0);
+            
+            const now = new Date();
+            if (to > now) {
+                to.setTime(now.getTime());
+            }
+            to.setHours(23, 59, 59, 999);
+
+            const news = await NewsApiService.searchNews(searchQuery, {
+                language: 'ru',
+                from: from,
+                to: to,
+                sortBy: 'relevancy',
+                pageSize: Math.min(options.pageSize || 100, 100)
+            });
+
+            if (!news || news.length === 0) {
+                return {
+                    success: true,
+                    ticker,
+                    figi: instrument.figi,
+                    newsCount: 0,
+                    message: 'Новости не найдены',
+                    searchQuery
+                };
+            }
+
+            const processedNewsPromises = news
+                .filter(article => article.title || article.description || article.content)
+                .map(async (article) => {
+                    try {
+                        const newsText = article.description || article.content || '';
+                        const newsTitle = article.title || '';
+                        
+                        let newsTime = new Date();
+                        if (article.publishedAt) {
+                            try {
+                                newsTime = new Date(article.publishedAt);
+                                if (isNaN(newsTime.getTime())) {
+                                    newsTime = new Date();
+                                }
+                            } catch (e) {
+                                newsTime = new Date();
+                            }
+                        }
+
+                        const sentiment = await this.analyzeSentiment(newsTitle + ' ' + newsText);
+
+                        return {
+                            title: newsTitle,
+                            description: newsText,
+                            url: article.url || '',
+                            publishedAt: newsTime,
+                            source: article.source?.name || 'NewsAPI',
+                            sentiment: sentiment,
+                            relevance: this.calculateRelevance({ title: newsTitle, description: newsText }, instrument.figi),
+                            keywords: this.extractKeywords(newsTitle + ' ' + newsText),
+                            category: 'general',
+                            impact: this.calculateImpact({ title: newsTitle, description: newsText })
+                        };
+                    } catch (articleError) {
+                        console.error(`❌ Ошибка обработки статьи:`, articleError.message);
+                        return null;
+                    }
+                });
+
+            const processedNews = (await Promise.all(processedNewsPromises))
+                .filter(article => article !== null);
+
+            if (processedNews.length > 0) {
+                try {
+                    await this.cacheNews(instrument.figi, processedNews);
+                } catch (cacheError) {
+                    console.error(`❌ Ошибка сохранения новостей в БД для ${ticker}:`, cacheError.message);
+                }
+            }
+
+            return {
+                success: true,
+                ticker,
+                figi: instrument.figi,
+                companyName: instrument.name,
+                searchQuery,
+                newsCount: processedNews.length,
+                news: processedNews.slice(0, 5)
+            };
+
+        } catch (error) {
+            console.error(`❌ Ошибка загрузки новостей для ${ticker}:`, error);
+            
+            if (error.message && (error.message.includes('too far in the past') || error.message.includes('Минимальная доступная дата'))) {
+                const friendlyMessage = `NewsAPI.org: Запрошенный период слишком далеко в прошлом. Используйте период не более 30 дней назад. ${error.message}`;
+                throw new Error(friendlyMessage);
+            }
+            
+            if (error.message && error.message.includes('Network error')) {
+                throw new Error(`Ошибка подключения к NewsAPI.org: ${error.message}`);
+            }
+            
+            if (error.message && error.message.includes('NEWS_API_KEY')) {
+                throw new Error(`NewsAPI.org: API ключ не установлен. Проверьте переменную окружения NEWS_API_KEY.`);
+            }
+            
+            if (error.message && error.message.includes('Failed to parse JSON')) {
+                throw new Error(`NewsAPI.org: Некорректный ответ от сервера. ${error.message}`);
+            }
+            
+            throw error;
+        }
+    }
+
+    /**
      * Кеширование новостей в БД
      */
     async cacheNews(figi, news) {
         try {
-            const CachedNews = (await import('../models/CachedNews.js')).default;
+            const CachedNewsModule = await import('../models/CachedNews.js');
+            const CachedNews = CachedNewsModule.default;
             
-            const newsToCache = news.map(article => ({
-                figi,
-                title: article.title,
-                description: article.description,
-                url: article.url,
-                source: article.source,
-                publishedAt: article.publishedAt,
-                sentiment: article.sentiment,
-                relevance: article.relevance,
-                impact: article.impact,
-                keywords: article.keywords || [],
-                category: article.category,
-                language: 'ru',
-                cachedAt: new Date(),
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 часа
-            }));
+            if (!news || news.length === 0) {
+                return;
+            }
 
-            // Используем bulkCreate с ignoreDuplicates для избежания дубликатов
-            await CachedNews.bulkCreate(newsToCache, {
-                ignoreDuplicates: true,
-                updateOnDuplicate: ['sentiment', 'relevance', 'impact', 'keywords', 'category', 'cachedAt', 'expiresAt']
-            });
+            const validator = (await import('validator')).default;
+            
+            const sanitizeText = (text) => {
+                if (!text || typeof text !== 'string') {
+                    return '';
+                }
+                
+                let cleaned = validator.stripLow(text, true);
+                cleaned = cleaned.replace(/\s+/g, ' ');
+                cleaned = validator.escape(cleaned);
+                
+                return cleaned.trim();
+            };
 
-            console.log(`💾 Кешировано ${newsToCache.length} новостей для ${figi}`);
+            const BATCH_SIZE = 10;
+            let savedCount = 0;
+            let errorCount = 0;
+            
+            for (let i = 0; i < news.length; i += BATCH_SIZE) {
+                const batch = news.slice(i, i + BATCH_SIZE);
+                
+                try {
+                    const newsToCache = batch.map(article => {
+                        let url = article.url || '';
+                        if (url && !validator.isURL(url)) {
+                            url = validator.escape(url);
+                        }
+                        
+                        return {
+                            figi,
+                            title: sanitizeText(article.title || ''),
+                            description: sanitizeText(article.description || ''),
+                            url: url,
+                            source: sanitizeText(article.source || 'unknown'),
+                            publishedAt: article.publishedAt || new Date(),
+                            sentiment: article.sentiment || 0,
+                            relevance: article.relevance || 0.5,
+                            impact: article.impact || 0,
+                            keywords: Array.isArray(article.keywords) ? article.keywords : [],
+                            category: sanitizeText(article.category || 'general'),
+                            language: article.language || 'ru',
+                            cachedAt: new Date(),
+                            expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+                        };
+                    });
+
+                    await CachedNews.bulkCreate(newsToCache, {
+                        ignoreDuplicates: true
+                    });
+
+                    savedCount += newsToCache.length;
+                } catch (batchError) {
+                    errorCount += batch.length;
+                    console.error(`❌ Ошибка сохранения батча новостей (${batch.length} шт.):`, batchError.message);
+                    
+                    for (const article of batch) {
+                        try {
+                            let url = article.url || '';
+                            if (url && !validator.isURL(url)) {
+                                url = validator.escape(url);
+                            }
+                            
+                            const newsData = {
+                                figi,
+                                title: sanitizeText(article.title || ''),
+                                description: sanitizeText(article.description || ''),
+                                url: url,
+                                source: sanitizeText(article.source || 'unknown'),
+                                publishedAt: article.publishedAt || new Date(),
+                                sentiment: article.sentiment || 0,
+                                relevance: article.relevance || 0.5,
+                                impact: article.impact || 0,
+                                keywords: Array.isArray(article.keywords) ? article.keywords : [],
+                                category: sanitizeText(article.category || 'general'),
+                                language: article.language || 'ru',
+                                cachedAt: new Date(),
+                                expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+                            };
+
+                            const [cachedNewsItem, created] = await CachedNews.findOrCreate({
+                                where: {
+                                    figi: newsData.figi,
+                                    url: newsData.url
+                                },
+                                defaults: newsData
+                            });
+
+                            if (!created) {
+                                await cachedNewsItem.update({
+                                    sentiment: newsData.sentiment,
+                                    relevance: newsData.relevance,
+                                    impact: newsData.impact,
+                                    keywords: newsData.keywords,
+                                    category: newsData.category,
+                                    cachedAt: newsData.cachedAt,
+                                    expiresAt: newsData.expiresAt
+                                });
+                            }
+
+                            savedCount++;
+                            errorCount--;
+                        } catch (itemError) {
+                            console.error(`❌ Ошибка сохранения отдельной новости:`, itemError.message);
+                        }
+                    }
+                }
+            }
 
         } catch (error) {
             console.error('❌ Ошибка кеширования новостей:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Проверка самой старой новости в БД
+     * @returns {Promise<Date|null>} - Дата самой старой новости или null
+     */
+    async getOldestNewsDate() {
+        try {
+            const CachedNewsModule = await import('../models/CachedNews.js');
+            const CachedNews = CachedNewsModule.default;
+            
+            const oldestNews = await CachedNews.findOne({
+                order: [['publishedAt', 'ASC']],
+                attributes: ['publishedAt']
+            });
+
+            return oldestNews ? oldestNews.publishedAt : null;
+
+        } catch (error) {
+            console.error('❌ Ошибка получения самой старой новости:', error);
+            return null;
         }
     }
 
     /**
      * Очистка устаревших новостей из кеша
+     * Удаляет новости старше года (по publishedAt), если самая старая новость старше года
      */
     async cleanExpiredNews() {
         try {
-            const CachedNews = (await import('../models/CachedNews.js')).default;
+            const CachedNewsModule = await import('../models/CachedNews.js');
+            const CachedNews = CachedNewsModule.default;
             
-            const deletedCount = await CachedNews.destroy({
-                where: {
-                    expiresAt: {
-                        [require('sequelize').Op.lt]: new Date()
-                    }
-                }
-            });
+            // Проверяем самую старую новость
+            const oldestNewsDate = await this.getOldestNewsDate();
+            
+            if (!oldestNewsDate) {
+                return {
+                    deletedCount: 0,
+                    cutoffDate: null,
+                    oldestNewsDate: null,
+                    needsCleanup: false
+                };
+            }
 
-            console.log(`🧹 Очищено ${deletedCount} устаревших новостей из кеша`);
+            const oneYearAgo = new Date();
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+            
+            if (oldestNewsDate < oneYearAgo) {
+                const deletedCount = await CachedNews.destroy({
+                    where: {
+                        publishedAt: {
+                            [Op.lt]: oneYearAgo
+                        }
+                    }
+                });
+
+                return {
+                    deletedCount,
+                    cutoffDate: oneYearAgo.toISOString(),
+                    oldestNewsDate: oldestNewsDate.toISOString(),
+                    needsCleanup: true
+                };
+            } else {
+                return {
+                    deletedCount: 0,
+                    cutoffDate: oneYearAgo.toISOString(),
+                    oldestNewsDate: oldestNewsDate.toISOString(),
+                    needsCleanup: false
+                };
+            }
 
         } catch (error) {
             console.error('❌ Ошибка очистки кеша новостей:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Загрузка новостей за конкретный год для инструментов
+     * @param {string[]} figis - Массив FIGI инструментов
+     * @param {number} year - Год для загрузки
+     */
+    async fetchNewsForYear(figis, year) {
+        try {
+            if (!this.isInitialized) {
+                throw new Error('NewsAnalysisService не инициализирован');
+            }
+
+            const newsByFigi = {};
+            for (const figi of figis) {
+                newsByFigi[figi] = [];
+            }
+
+            return newsByFigi;
+
+        } catch (error) {
+            console.error(`❌ Ошибка загрузки новостей за год:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Загрузка исторических новостей за год для всех акций
+     * @param {object} options - Опции загрузки
+     * @param {number} options.year - Год для загрузки (по умолчанию текущий год)
+     * @param {function} options.onProgress - Callback для отслеживания прогресса
+     */
+    async loadHistoricalNewsForAllInstruments(options = {}) {
+        try {
+            const ServiceManager = (await import('./ServiceManager.js')).default;
+            let CacheService = ServiceManager.getService('CacheService');
+            if (!CacheService) {
+                const CacheServiceModule = await import('./CacheService.js');
+                CacheService = CacheServiceModule.default;
+            }
+            const { year = new Date().getFullYear(), onProgress } = options;
+            
+            if (!this.isInitialized) {
+                throw new Error('NewsAnalysisService не инициализирован');
+            }
+
+            const instruments = await CacheService.getAllInstruments();
+            const instrumentsToLoad = [];
+            const startDate = new Date(year, 0, 1);
+            const endDate = new Date(year, 11, 31, 23, 59, 59);
+            
+            for (const instrument of instruments) {
+                const figi = instrument.figi || instrument;
+                const lastNews = await this.getLastNewsDate(figi);
+                
+                if (!lastNews.hasHistory || (lastNews.date && lastNews.date < endDate)) {
+                    instrumentsToLoad.push(figi);
+                }
+            }
+
+            let successCount = 0;
+            let errorCount = 0;
+            const results = [];
+
+            const batchSize = 10;
+            const batches = [];
+            for (let i = 0; i < instrumentsToLoad.length; i += batchSize) {
+                batches.push(instrumentsToLoad.slice(i, i + batchSize));
+            }
+
+            for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+                const batch = batches[batchIndex];
+                
+                try {
+                    const newsByFigi = await this.fetchNewsForYear(batch, year);
+                    
+                    for (const figi of batch) {
+                        const news = newsByFigi[figi] || [];
+                        
+                        if (news.length > 0) {
+                            await this.cacheNews(figi, news);
+                            successCount++;
+                            results.push({ figi, success: true, count: news.length });
+                            
+                            if (onProgress) {
+                                onProgress({
+                                    current: batchIndex * batchSize + batch.indexOf(figi) + 1,
+                                    total: instrumentsToLoad.length,
+                                    figi,
+                                    success: true,
+                                    count: news.length
+                                });
+                            }
+                        } else {
+                            results.push({ figi, success: true, count: 0 });
+                            
+                            if (onProgress) {
+                                onProgress({
+                                    current: batchIndex * batchSize + batch.indexOf(figi) + 1,
+                                    total: instrumentsToLoad.length,
+                                    figi,
+                                    success: true,
+                                    count: 0
+                                });
+                            }
+                        }
+                    }
+
+                    if (batchIndex < batches.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
+
+                } catch (error) {
+                    errorCount++;
+                    console.error(`❌ Ошибка загрузки новостей для батча ${batchIndex + 1}:`, error.message);
+                    
+                    for (const figi of batch) {
+                        results.push({ figi, success: false, error: error.message });
+                        
+                        if (onProgress) {
+                            onProgress({
+                                current: batchIndex * batchSize + batch.indexOf(figi) + 1,
+                                total: instrumentsToLoad.length,
+                                figi,
+                                success: false,
+                                error: error.message
+                            });
+                        }
+                    }
+                }
+            }
+
+            return {
+                success: true,
+                total: instrumentsToLoad.length,
+                successCount,
+                errorCount,
+                results
+            };
+
+        } catch (error) {
+            console.error('❌ Ошибка загрузки исторических новостей:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Проверка актуальности новостей
+     * Проверяет, есть ли свежие новости за последние сутки
+     */
+    async checkNewsFreshness(figi = null) {
+        try {
+            const CachedNewsModule = await import('../models/CachedNews.js');
+            const CachedNews = CachedNewsModule.default;
+            
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            yesterday.setHours(0, 0, 0, 0);
+            
+            const whereClause = figi ? { figi } : {};
+            whereClause.publishedAt = {
+                [Op.gte]: yesterday
+            };
+
+            const recentNews = await CachedNews.findAll({
+                where: whereClause,
+                order: [['publishedAt', 'DESC']],
+                limit: 1
+            });
+
+            const hasFreshNews = recentNews.length > 0;
+            const lastNewsDate = hasFreshNews ? recentNews[0].publishedAt : null;
+
+            return {
+                hasFreshNews,
+                lastNewsDate,
+                figi: figi || null
+            };
+
+        } catch (error) {
+            console.error('❌ Ошибка проверки актуальности новостей:', error);
+            return {
+                hasFreshNews: false,
+                lastNewsDate: null,
+                figi: figi || null
+            };
+        }
+    }
+
+    /**
+     * Проверка актуальности новостей для всех инструментов
+     */
+    async checkAllInstrumentsFreshness() {
+        try {
+            const ServiceManager = (await import('./ServiceManager.js')).default;
+            let CacheService = ServiceManager.getService('CacheService');
+            if (!CacheService) {
+                const CacheServiceModule = await import('./CacheService.js');
+                CacheService = CacheServiceModule.default;
+            }
+
+            const instruments = await CacheService.getAllInstruments();
+            const freshnessResults = [];
+
+            for (const instrument of instruments) {
+                const figi = instrument.figi || instrument;
+                const freshness = await this.checkNewsFreshness(figi);
+                freshnessResults.push({
+                    figi,
+                    ...freshness
+                });
+            }
+
+            return freshnessResults;
+
+        } catch (error) {
+            console.error('❌ Ошибка проверки актуальности новостей для всех инструментов:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Инициализация данных: загрузка новостей за месяц для FIGI без данных
+     * Запрашивает по одному, при достижении лимита откладывает на сутки
+     * @param {object} options - Опции инициализации
+     * @param {function} options.onProgress - Callback для отслеживания прогресса
+     * @param {number} options.maxRequestsPerDay - Максимальное количество запросов в день (по умолчанию 100)
+     * @returns {Promise<object>} - Результат инициализации
+     */
+    async initializeNewsData(options = {}) {
+        try {
+            if (!this.isInitialized) {
+                throw new Error('NewsAnalysisService не инициализирован');
+            }
+
+            const NewsApiService = (await import('./NewsApiService.js')).default;
+            if (!NewsApiService.isInitialized) {
+                await NewsApiService.initialize();
+            }
+
+            const { onProgress, maxRequestsPerDay = 100 } = options;
+
+            // Получаем список FIGI без новостей за месяц
+            console.log('📊 Поиск инструментов без новостей за месяц...');
+            const figisWithoutNews = await this.getFigisWithoutMonthNews();
+            
+            console.log(`📈 Найдено ${figisWithoutNews.length} инструментов без новостей за месяц`);
+
+            if (figisWithoutNews.length === 0) {
+                return {
+                    success: true,
+                    message: 'Все инструменты имеют новости за месяц',
+                    processed: 0,
+                    deferred: 0,
+                    total: 0
+                };
+            }
+
+            // Получаем все инструменты для доступа к данным
+            const ServiceManager = (await import('./ServiceManager.js')).default;
+            let CacheService = ServiceManager.getService('CacheService');
+            if (!CacheService) {
+                const CacheServiceModule = await import('./CacheService.js');
+                CacheService = CacheServiceModule.default;
+            }
+
+            const allInstruments = await CacheService.getAllInstruments();
+            const instrumentMap = new Map();
+            allInstruments.forEach(inst => {
+                instrumentMap.set(inst.figi, inst);
+            });
+
+            // Период для запроса - последний месяц
+            const to = new Date();
+            const from = new Date();
+            from.setMonth(from.getMonth() - 1);
+            from.setHours(0, 0, 0, 0);
+            to.setHours(23, 59, 59, 999);
+
+            let processed = 0;
+            let deferred = 0;
+            let requestCount = 0;
+
+            for (const item of figisWithoutNews) {
+                try {
+                    // Проверяем лимит запросов
+                    if (requestCount >= maxRequestsPerDay) {
+                        deferred = figisWithoutNews.length - processed;
+                        break;
+                    }
+
+                    const instrument = instrumentMap.get(item.figi);
+                    if (!instrument) {
+                        continue;
+                    }
+
+                    // Запрашиваем новости за месяц (используем те же данные, что и в тестовом методе)
+                    const news = await this.fetchNewsByCompanyNameAndPeriod(
+                        instrument.name,
+                        from,
+                        to,
+                        {
+                            ticker: instrument.ticker,
+                            sector: instrument.sector,
+                            apiData: instrument.apiData,
+                            aliases: instrument.apiData?.aliases || null,
+                            includeFinancialTerms: true,
+                            figi: item.figi
+                        }
+                    );
+
+                    // Сохраняем в БД
+                    if (news.length > 0) {
+                        await this.cacheNews(item.figi, news);
+                    }
+
+                    requestCount++;
+                    processed++;
+
+                    if (onProgress) {
+                        onProgress({
+                            current: processed,
+                            total: figisWithoutNews.length,
+                            figi: item.figi,
+                            ticker: item.ticker,
+                            success: true,
+                            count: news.length
+                        });
+                    }
+
+                    // Небольшая задержка между запросами
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                } catch (error) {
+                    console.error(`❌ Ошибка загрузки новостей для ${item.figi}:`, error.message);
+                    
+                    // Если это ошибка лимита API, останавливаемся
+                    if (error.message && (error.message.includes('rate limit') || error.message.includes('limit'))) {
+                        deferred = figisWithoutNews.length - processed;
+                        break;
+                    }
+
+                    if (onProgress) {
+                        onProgress({
+                            current: processed,
+                            total: figisWithoutNews.length,
+                            figi: item.figi,
+                            ticker: item.ticker,
+                            success: false,
+                            error: error.message
+                        });
+                    }
+                }
+            }
+
+            return {
+                success: true,
+                processed,
+                deferred,
+                total: figisWithoutNews.length,
+                requestCount
+            };
+
+        } catch (error) {
+            console.error('❌ Ошибка инициализации данных новостей:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Загрузка свежих новостей за последние сутки для всех инструментов через NewsAPI.org
+     * Делает один большой запрос на все акции по name
+     */
+    async loadFreshNewsForAllInstruments(options = {}) {
+        try {
+            const ServiceManager = (await import('./ServiceManager.js')).default;
+            let CacheService = ServiceManager.getService('CacheService');
+            if (!CacheService) {
+                const CacheServiceModule = await import('./CacheService.js');
+                CacheService = CacheServiceModule.default;
+            }
+
+            const { onProgress } = options;
+            
+            if (!this.isInitialized) {
+                throw new Error('NewsAnalysisService не инициализирован');
+            }
+
+            const NewsApiService = (await import('./NewsApiService.js')).default;
+            if (!NewsApiService.isInitialized) {
+                await NewsApiService.initialize();
+            }
+
+            // Получаем все акции в рублях
+            const instruments = await CacheService.getAllInstruments();
+            const shares = instruments.filter(inst => 
+                inst.currency === 'RUB' && 
+                (inst.instrumentType === 'share' || !inst.instrumentType) &&
+                inst.ticker && inst.name
+            );
+
+            console.log(`📊 Загрузка актуальных новостей для ${shares.length} акций...`);
+
+            // Период - последние сутки
+            const to = new Date();
+            const from = new Date();
+            from.setDate(from.getDate() - 1);
+            from.setHours(0, 0, 0, 0);
+            to.setHours(23, 59, 59, 999);
+
+            let updated = 0;
+            let totalNews = 0;
+
+            // Загружаем новости для каждого инструмента
+            for (let i = 0; i < shares.length; i++) {
+                const instrument = shares[i];
+                
+                try {
+                    console.log(`📡 [${i + 1}/${shares.length}] Загрузка новостей для ${instrument.ticker} (${instrument.name})...`);
+                    
+                    // Логируем данные инструмента из CacheService (как в тестовом методе)
+                    console.log(`📋 Данные инструмента из CacheService для loadFreshNewsForAllInstruments:`);
+                    console.log(`   ticker: ${instrument.ticker} (тип: ${typeof instrument.ticker})`);
+                    console.log(`   name: ${instrument.name} (тип: ${typeof instrument.name})`);
+                    console.log(`   sector: ${instrument.sector || 'null'} (тип: ${typeof instrument.sector})`);
+                    console.log(`   apiData: ${instrument.apiData ? (typeof instrument.apiData === 'object' ? `object с ключами: ${Object.keys(instrument.apiData).join(', ')}` : typeof instrument.apiData) : 'null'}`);
+                    if (instrument.apiData && typeof instrument.apiData === 'object') {
+                        console.log(`   apiData содержимое:`, JSON.stringify(instrument.apiData, null, 2).substring(0, 500));
+                    }
+                    console.log(`   apiData?.aliases: ${instrument.apiData?.aliases ? (Array.isArray(instrument.apiData.aliases) ? `массив [${instrument.apiData.aliases.length}]` : typeof instrument.apiData.aliases) : 'null'}`);
+
+                    // Используем те же данные, что и в тестовом методе fetchNewsFromNewsApiByTicker
+                    const news = await this.fetchNewsByCompanyNameAndPeriod(
+                        instrument.name,
+                        from,
+                        to,
+                        {
+                            ticker: instrument.ticker,
+                            sector: instrument.sector,
+                            apiData: instrument.apiData,
+                            aliases: instrument.apiData?.aliases || null,
+                            includeFinancialTerms: true,
+                            figi: instrument.figi,
+                            pageSize: 100
+                        }
+                    );
+
+                    if (news.length > 0) {
+                        await this.cacheNews(instrument.figi, news);
+                        totalNews += news.length;
+                        updated++;
+                    }
+
+                    if (onProgress) {
+                        onProgress({
+                            current: i + 1,
+                            total: shares.length,
+                            figi: instrument.figi,
+                            ticker: instrument.ticker,
+                            success: true,
+                            count: news.length
+                        });
+                    }
+
+                    // Задержка между запросами (1 секунда для бесплатного плана)
+                    if (i < shares.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+
+                } catch (error) {
+                    console.error(`❌ Ошибка загрузки новостей для ${instrument.ticker}:`, error.message);
+                    
+                    // Если это ошибка лимита, останавливаемся
+                    if (error.message && (error.message.includes('rate limit') || error.message.includes('limit'))) {
+                        break;
+                    }
+
+                    if (onProgress) {
+                        onProgress({
+                            current: i + 1,
+                            total: shares.length,
+                            figi: instrument.figi,
+                            ticker: instrument.ticker,
+                            success: false,
+                            error: error.message
+                        });
+                    }
+                }
+            }
+
+            return {
+                success: true,
+                message: `Загружено новостей для ${updated} из ${shares.length} инструментов`,
+                updated,
+                total: shares.length,
+                totalNews
+            };
+
+        } catch (error) {
+            console.error('❌ Ошибка загрузки свежих новостей:', error);
+            throw error;
         }
     }
 
@@ -458,33 +1502,41 @@ class NewsAnalysisService {
      * Извлечение ключевых слов из текста
      */
     extractKeywords(text) {
-        const words = text.toLowerCase()
-            .replace(/[^\u0400-\u04FF\s]/g, '') // Только кириллица и пробелы
-            .split(/\s+/)
-            .filter(word => word.length > 3);
+        const keywords = [];
+        const words = text.toLowerCase().split(/\W+/).filter(w => w.length > 4);
+        const financialTerms = [
+            'доходы', 'выручка', 'прибыль', 'убыток', 'дивиденды',
+            'акции', 'рынок', 'торговля', 'цена', 'результаты',
+            'квартал', 'год', 'отчетность', 'финансы', 'капитал'
+        ];
         
-        const wordCount = {};
-        words.forEach(word => {
-            wordCount[word] = (wordCount[word] || 0) + 1;
+        financialTerms.forEach(term => {
+            if (text.toLowerCase().includes(term)) {
+                keywords.push(term);
+            }
         });
         
-        return Object.entries(wordCount)
-            .sort(([,a], [,b]) => b - a)
-            .slice(0, 10)
-            .map(([word]) => word);
+        return [...new Set(keywords)];
     }
 
     /**
-     * Категоризация новостей
+     * Категоризация новости
      */
     categorizeNews(article) {
-        const text = (article.title + ' ' + article.description).toLowerCase();
+        const text = (article.title + ' ' + (article.description || '')).toLowerCase();
         
-        if (text.includes('дивиденд') || text.includes('выплат')) return 'dividends';
-        if (text.includes('результат') || text.includes('отчет')) return 'earnings';
-        if (text.includes('слияние') || text.includes('поглощение')) return 'merger';
-        if (text.includes('партнерство') || text.includes('соглашение')) return 'partnership';
-        if (text.includes('инвестиц') || text.includes('капитал')) return 'investment';
+        if (text.includes('дивиденд') || text.includes('дивиденды')) {
+            return 'dividends';
+        }
+        if (text.includes('отчет') || text.includes('результаты') || text.includes('квартал')) {
+            return 'earnings';
+        }
+        if (text.includes('слияние') || text.includes('поглощение')) {
+            return 'mergers';
+        }
+        if (text.includes('инвестиции') || text.includes('финансирование')) {
+            return 'investments';
+        }
         
         return 'general';
     }
@@ -493,20 +1545,20 @@ class NewsAnalysisService {
      * Расчет влияния новости
      */
     calculateImpact(article) {
-        const text = (article.title + ' ' + article.description).toLowerCase();
+        const text = (article.title + ' ' + (article.description || '')).toLowerCase();
         let impact = 0.5; // Базовое влияние
         
-        // Ключевые слова высокой важности
-        const highImpactWords = ['кризис', 'рост', 'падение', 'результат', 'дивиденд', 'слияние'];
-        highImpactWords.forEach(word => {
-            if (text.includes(word)) impact += 0.1;
-        });
+        // Высокое влияние для важных событий
+        const highImpactKeywords = [
+            'дивиденды', 'отчет', 'результаты', 'прибыль', 'убыток',
+            'слияние', 'поглощение', 'банкротство', 'IPO'
+        ];
         
-        // Источники высокой важности
-        const highImpactSources = ['РБК', 'Коммерсант', 'Ведомости', 'Интерфакс'];
-        if (highImpactSources.some(source => article.source?.name?.includes(source))) {
-            impact += 0.2;
-        }
+        highImpactKeywords.forEach(keyword => {
+            if (text.includes(keyword)) {
+                impact += 0.2;
+            }
+        });
         
         return Math.min(1, impact);
     }

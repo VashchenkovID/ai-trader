@@ -281,7 +281,8 @@ export const apiService = {
    */
   async getPortfolio(): Promise<Portfolio> {
     try {
-      const response = await api.get('/api/trading/portfolio');
+      // Используем /api/portfolio вместо /api/trading/portfolio
+      const response = await api.get('/api/portfolio');
       return response.data.data;
     } catch (error) {
       console.error('Error fetching portfolio:', error);
@@ -1080,6 +1081,76 @@ export const apiService = {
       return response.data.data;
     } catch (error) {
       console.error('Error fetching news status:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Проверка статуса исторических новостей
+   */
+  async getHistoricalNewsStatus(): Promise<any> {
+    try {
+      const response = await api.get('/api/news/status/historical');
+      return response.data.data;
+    } catch (error) {
+      console.error('Error fetching historical news status:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получение даты последней новости для FIGI
+   */
+  async getLastNewsDate(figi?: string): Promise<any> {
+    try {
+      const url = figi ? `/api/news/last-date/${figi}` : '/api/news/last-date';
+      const response = await api.get(url);
+      return response.data.data;
+    } catch (error) {
+      console.error('Error fetching last news date:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получение списка доступных инструментов для тестирования
+   */
+  async getNewsInstruments(limit: number = 50, currency: string = 'RUB', instrumentType: string = 'share'): Promise<any> {
+    try {
+      const response = await api.get('/api/news/instruments', {
+        params: { limit, currency, instrumentType }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error getting news instruments:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Тестовый запрос новостей через NewsAPI.org для одного тикера
+   */
+  async testNewsApiNews(ticker: string): Promise<any> {
+    try {
+      const response = await api.post('/api/news/test-newsapi', { ticker });
+      return response.data;
+    } catch (error) {
+      console.error('Error testing NewsAPI news:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Загрузка исторических новостей за год для всех акций
+   */
+  async loadHistoricalNews(year?: number): Promise<any> {
+    try {
+      const response = await api.post('/api/news/load-historical', {
+        year: year || new Date().getFullYear()
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error loading historical news:', error);
       throw error;
     }
   },
@@ -2052,10 +2123,11 @@ export const apiService = {
   /**
    * Создать торговую заявку из рекомендации
    */
-  async createTradingRequest(recommendationFigi: string, options?: any): Promise<any> {
+  async createTradingRequest(recommendationFigi: string, options?: any, recommendationData?: any): Promise<any> {
     try {
       const response = await api.post('/api/trading-requests/create', {
         recommendationFigi,
+        recommendationData, // Передаем полные данные рекомендации как fallback
         options
       });
       return response.data.data;
@@ -2200,6 +2272,39 @@ export const apiService = {
     }
   },
 
+  /**
+   * Очистка завершенных заявок (одобренных и отклоненных)
+   */
+  async cleanupCompletedRequests(options?: { olderThanDays?: number; tradingMode?: string }): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      if (options?.olderThanDays) params.append('olderThanDays', options.olderThanDays.toString());
+      if (options?.tradingMode) params.append('tradingMode', options.tradingMode);
+      
+      const response = await api.delete(`/api/trading-requests/cleanup?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error cleaning up completed requests:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить статистику завершенных заявок (перед очисткой)
+   */
+  async getCompletedRequestsStats(tradingMode?: string): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      if (tradingMode) params.append('tradingMode', tradingMode);
+      
+      const response = await api.get(`/api/trading-requests/cleanup/stats?${params.toString()}`);
+      return response.data.data;
+    } catch (error) {
+      console.error('Error getting completed requests stats:', error);
+      throw error;
+    }
+  },
+
   // ============================================================================
   // РЕКОМЕНДАЦИИ (RECOMMENDATIONS)
   // ============================================================================
@@ -2209,6 +2314,7 @@ export const apiService = {
    */
   async getAllRecommendations(): Promise<any> {
     try {
+      // Используем /api/recommendations (из БД) вместо /api/market/recommendations (из кеша)
       const response = await api.get('/api/recommendations');
       return response.data.data;
     } catch (error) {

@@ -14,7 +14,7 @@ import { Message } from 'primereact/message';
 import { Toolbar } from 'primereact/toolbar';
 import { SplitButton } from 'primereact/splitbutton';
 import { Dropdown } from 'primereact/dropdown';
-import apiServiceService from '../services/apiServiceService';
+import { apiService } from '../services/apiService';
 
 interface TradingRequest {
   id: string;
@@ -52,7 +52,10 @@ const TradingRequestManager: React.FC = () => {
   const [comment, setComment] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [stats, setStats] = useState<any>(null);
-  const [statsByMode, setStatsByMode] = useState<any>(null);
+  const [cleanupStats, setCleanupStats] = useState<any>(null);
+  const [showCleanupDialog, setShowCleanupDialog] = useState(false);
+  const [cleanupOlderThanDays, setCleanupOlderThanDays] = useState<number | null>(null);
+  const [cleaningUp, setCleaningUp] = useState(false);
   const toast = React.useRef<Toast>(null);
 
   const modeOptions = [
@@ -80,24 +83,37 @@ const TradingRequestManager: React.FC = () => {
           requestsData = await apiService.getTradingRequests(undefined, 50, tradingMode);
           break;
         case 1: // Ожидающие
-          requestsData = await apiService.getPendingTradingRequests(tradingMode);
+          requestsData = await apiService.getTradingRequests('PENDING', 50, tradingMode);
           break;
         case 2: // Одобренные
-          requestsData = await apiService.getApprovedTradingRequests(tradingMode);
+          requestsData = await apiService.getTradingRequests('APPROVED', 50, tradingMode);
           break;
         default:
           requestsData = await apiService.getTradingRequests(undefined, 50, tradingMode);
       }
       
-      setRequests(requestsData || []);
+      // Обрабатываем ответ - может быть массив или объект с data
+      const requests = Array.isArray(requestsData) ? requestsData : (requestsData?.data || []);
+      setRequests(requests);
       
-      // Загружаем статистику
-      const statsData = await apiService.getTradingRequestStats(tradingMode);
-      setStats(statsData);
-      
-      // Загружаем статистику по всем режимам
-      const statsByModeData = await apiService.getTradingRequestStatsByMode();
-      setStatsByMode(statsByModeData);
+      // Загружаем статистику (опционально, если метод существует)
+      try {
+        const statsData = await apiService.getTradingRequestStats?.(tradingMode);
+        setStats(statsData);
+        
+        // Загружаем статистику по всем режимам (опционально)
+        try {
+          const statsByModeData = await apiService.getTradingRequestStatsByMode?.();
+          if (statsByModeData) {
+            // Можно использовать для отображения статистики по режимам
+            console.log('Stats by mode:', statsByModeData);
+          }
+        } catch (error) {
+          console.warn('Stats by mode not available:', error);
+        }
+      } catch (error) {
+        console.warn('Stats not available:', error);
+      }
       
     } catch (error) {
       console.error('Error loading trading requests:', error);
@@ -199,7 +215,14 @@ const TradingRequestManager: React.FC = () => {
   };
 
   const confirmRejection = async () => {
-    if (!currentRequest || !rejectionReason.trim()) return;
+    if (!currentRequest || !rejectionReason.trim()) {
+      toast.current?.show({
+        severity: 'warn',
+        summary: 'Предупреждение',
+        detail: 'Укажите причину отклонения'
+      });
+      return;
+    }
     
     try {
       await apiService.rejectTradingRequest(currentRequest.id, rejectionReason);
@@ -209,42 +232,20 @@ const TradingRequestManager: React.FC = () => {
         detail: `Заявка ${currentRequest.ticker} отклонена`
       });
       setShowRejectionDialog(false);
-      loadData();
-    } catch (error) {
+      setRejectionReason('');
+      setCurrentRequest(null);
+      await loadData();
+    } catch (error: any) {
       console.error('Error rejecting request:', error);
+      const errorMessage = error?.response?.data?.message || error?.message || 'Не удалось отклонить заявку';
       toast.current?.show({
         severity: 'error',
         summary: 'Ошибка',
-        detail: 'Не удалось отклонить заявку'
+        detail: errorMessage
       });
     }
   };
 
-  const handleExecute = (request: TradingRequest) => {
-    confirmDialog({
-      message: `Исполнить заявку ${request.action} ${request.ticker} (${request.quantity} шт.)?`,
-      header: 'Подтверждение исполнения',
-      icon: 'pi pi-exclamation-triangle',
-      accept: async () => {
-        try {
-          await apiService.executeTradingRequest(request.id);
-          toast.current?.show({
-            severity: 'success',
-            summary: 'Исполнено',
-            detail: `Заявка ${request.ticker} исполнена`
-          });
-          loadData();
-        } catch (error) {
-          console.error('Error executing request:', error);
-          toast.current?.show({
-            severity: 'error',
-            summary: 'Ошибка',
-            detail: 'Не удалось исполнить заявку'
-          });
-        }
-      }
-    });
-  };
 
   const handleCancel = (request: TradingRequest) => {
     confirmDialog({
@@ -345,11 +346,8 @@ const TradingRequestManager: React.FC = () => {
         command: () => handleCancel(rowData)
       });
     } else if (rowData.status === 'APPROVED') {
-      actions.push({
-        label: 'Исполнить',
-        icon: 'pi pi-play',
-        command: () => handleExecute(rowData)
-      });
+      // После одобрения заявка уже считается выполненной пользователем
+      // Кнопка "Исполнить" больше не нужна
       actions.push({
         label: 'Отменить',
         icon: 'pi pi-ban',
@@ -381,6 +379,47 @@ const TradingRequestManager: React.FC = () => {
     return new Date(dateString).toLocaleString('ru-RU');
   };
 
+  const loadCleanupStats = async () => {
+    try {
+      const tradingMode = selectedMode === 'all' ? undefined : selectedMode;
+      const stats = await apiService.getCompletedRequestsStats(tradingMode);
+      setCleanupStats(stats);
+    } catch (error) {
+      console.error('Error loading cleanup stats:', error);
+    }
+  };
+
+  const handleCleanup = async () => {
+    try {
+      setCleaningUp(true);
+      const tradingMode = selectedMode === 'all' ? undefined : selectedMode;
+      const result = await apiService.cleanupCompletedRequests({
+        olderThanDays: cleanupOlderThanDays || undefined,
+        tradingMode
+      });
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Очистка завершена',
+        detail: `Удалено ${result.data?.deletedCount || 0} завершенных заявок`
+      });
+      
+      setShowCleanupDialog(false);
+      setCleanupOlderThanDays(null);
+      await loadData();
+      await loadCleanupStats();
+    } catch (error: any) {
+      console.error('Error cleaning up requests:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Ошибка',
+        detail: error?.response?.data?.message || 'Не удалось очистить заявки'
+      });
+    } finally {
+      setCleaningUp(false);
+    }
+  };
+
   const toolbarTemplate = () => {
     return (
       <div className="flex justify-content-between align-items-center">
@@ -399,6 +438,18 @@ const TradingRequestManager: React.FC = () => {
             onChange={(e: any) => setSelectedMode(e.value)}
             placeholder="Выберите режим"
             className="w-10rem"
+          />
+          
+          <Button
+            label="Очистить завершенные"
+            icon="pi pi-trash"
+            onClick={async () => {
+              await loadCleanupStats();
+              setShowCleanupDialog(true);
+            }}
+            size="small"
+            severity="warning"
+            outlined
           />
           
           {selectedRequests.length > 0 && (
@@ -430,13 +481,6 @@ const TradingRequestManager: React.FC = () => {
             </div>
           )}
           
-          {statsByMode && selectedMode === 'all' && (
-            <div className="flex gap-2">
-              <Badge value={`📝 Paper: ${statsByMode.paper?.total || 0}`} severity="info" />
-              <Badge value={`🔬 Micro: ${statsByMode.micro?.total || 0}`} severity="warning" />
-              <Badge value={`💰 Real: ${statsByMode.real?.total || 0}`} severity="danger" />
-            </div>
-          )}
         </div>
       </div>
     );
@@ -726,6 +770,90 @@ const TradingRequestManager: React.FC = () => {
             </div>
           </div>
         )}
+      </Dialog>
+
+      {/* Диалог очистки завершенных заявок */}
+      <Dialog
+        header="🧹 Очистка завершенных заявок"
+        visible={showCleanupDialog}
+        style={{ width: '500px' }}
+        onHide={() => {
+          setShowCleanupDialog(false);
+          setCleanupOlderThanDays(null);
+        }}
+        footer={
+          <div className="flex justify-content-end gap-2">
+            <Button
+              label="Отмена"
+              icon="pi pi-times"
+              onClick={() => {
+                setShowCleanupDialog(false);
+                setCleanupOlderThanDays(null);
+              }}
+              severity="secondary"
+            />
+            <Button
+              label="Очистить"
+              icon="pi pi-trash"
+              onClick={handleCleanup}
+              loading={cleaningUp}
+              severity="warning"
+            />
+          </div>
+        }
+      >
+        <div>
+          {cleanupStats && (
+            <div className="mb-4">
+              <Message severity="info" className="mb-3">
+                <div>
+                  <strong>Статистика завершенных заявок:</strong>
+                  <ul className="mt-2 mb-0 pl-4">
+                    <li>Всего: <strong>{cleanupStats.total}</strong></li>
+                    <li>Одобренных: <strong>{cleanupStats.approved}</strong></li>
+                    <li>Отклоненных: <strong>{cleanupStats.rejected}</strong></li>
+                    {cleanupStats.oldestDate && (
+                      <li>Самая старая: {new Date(cleanupStats.oldestDate).toLocaleDateString('ru-RU')}</li>
+                    )}
+                    {cleanupStats.newestDate && (
+                      <li>Самая новая: {new Date(cleanupStats.newestDate).toLocaleDateString('ru-RU')}</li>
+                    )}
+                  </ul>
+                </div>
+              </Message>
+            </div>
+          )}
+
+          <div className="mb-3">
+            <label htmlFor="olderThanDays" className="block mb-2">
+              Удалять заявки старше (дней):
+            </label>
+            <div className="flex gap-2 align-items-center">
+              <input
+                id="olderThanDays"
+                type="number"
+                min="0"
+                value={cleanupOlderThanDays || ''}
+                onChange={(e) => setCleanupOlderThanDays(e.target.value ? parseInt(e.target.value) : null)}
+                className="p-inputtext p-component w-full"
+                placeholder="Оставить пустым для удаления всех"
+              />
+            </div>
+            <small className="text-600">
+              Оставьте пустым, чтобы удалить все завершенные заявки (одобренные и отклоненные)
+            </small>
+          </div>
+
+          <Message severity="warn" className="mt-3">
+            <div>
+              <strong>Внимание!</strong> Это действие нельзя отменить. Будут удалены все заявки со статусом:
+              <ul className="mt-2 mb-0 pl-4">
+                <li>APPROVED (Одобренные)</li>
+                <li>REJECTED (Отклоненные)</li>
+              </ul>
+            </div>
+          </Message>
+        </div>
       </Dialog>
     </div>
   );

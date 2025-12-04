@@ -109,6 +109,12 @@ const CachedNews = sequelize.define('CachedNews', {
         },
         {
             fields: ['relevance']
+        },
+        {
+            // Уникальный индекс для предотвращения дубликатов по figi + url
+            unique: true,
+            fields: ['figi', 'url'],
+            name: 'cached_news_figi_url_unique'
         }
     ]
 });

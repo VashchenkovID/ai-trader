@@ -8,6 +8,8 @@ import { useRef } from 'react';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { Message } from 'primereact/message';
 import { Divider } from 'primereact/divider';
+import { Dialog } from 'primereact/dialog';
+import { ProgressBar } from 'primereact/progressbar';
 import { apiService } from '../services/apiService';
 
 interface TradingModeManagerProps {
@@ -379,6 +381,9 @@ const TradingModeManager: React.FC<TradingModeManagerProps> = ({ className = '' 
 
   // Состояние валидации для каждого режима
   const [modeValidations, setModeValidations] = useState<Record<string, any>>({});
+  const [validationDialogVisible, setValidationDialogVisible] = useState(false);
+  const [selectedModeValidation, setSelectedModeValidation] = useState<string | null>(null);
+  const [checkingValidation, setCheckingValidation] = useState(false);
 
   // Загрузка валидации для всех режимов
   const loadModeValidations = async () => {
@@ -397,6 +402,58 @@ const TradingModeManager: React.FC<TradingModeManagerProps> = ({ className = '' 
     }
     
     setModeValidations(validations);
+  };
+
+  // Детальная проверка валидации для конкретного режима
+  const checkValidation = async (mode?: string) => {
+    try {
+      setCheckingValidation(true);
+      const modesToCheck = mode ? [mode] : ['paper', 'micro', 'real'];
+      const validations: Record<string, any> = {};
+      
+      for (const m of modesToCheck) {
+        try {
+          const response = await apiService.canSwitchToMode(m as 'paper' | 'micro' | 'real');
+          validations[m] = response.data || response;
+        } catch (error: any) {
+          console.error(`Error checking validation for ${m}:`, error);
+          validations[m] = {
+            canSwitch: false,
+            reason: error.response?.data?.message || 'Ошибка проверки валидации',
+            checks: null,
+            recommendations: []
+          };
+        }
+      }
+      
+      // Обновляем общие валидации
+      setModeValidations(prev => ({ ...prev, ...validations }));
+      
+      // Если проверяем конкретный режим, показываем диалог
+      if (mode) {
+        setSelectedModeValidation(mode);
+        setValidationDialogVisible(true);
+      } else {
+        // Если проверяем все режимы, показываем общий диалог
+        setSelectedModeValidation(null);
+        setValidationDialogVisible(true);
+      }
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Проверка завершена',
+        detail: 'Валидация обновлена'
+      });
+    } catch (error: any) {
+      console.error('Error checking validation:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Ошибка',
+        detail: 'Не удалось проверить валидацию'
+      });
+    } finally {
+      setCheckingValidation(false);
+    }
   };
 
   // Получение статуса режима
@@ -474,13 +531,23 @@ const TradingModeManager: React.FC<TradingModeManagerProps> = ({ className = '' 
       <Card className="mb-4">
         <div className="flex justify-content-between align-items-center mb-3">
           <h2 className="m-0">🎯 Управление режимами торговли</h2>
-          <Button
-            icon="pi pi-refresh"
-            label="Обновить"
-            loading={refreshing}
-            onClick={loadData}
-            size="small"
-          />
+          <div className="flex gap-2">
+            <Button
+              icon="pi pi-check-circle"
+              label="Проверить валидацию"
+              loading={checkingValidation}
+              onClick={() => checkValidation()}
+              size="small"
+              severity="info"
+            />
+            <Button
+              icon="pi pi-refresh"
+              label="Обновить"
+              loading={refreshing}
+              onClick={loadData}
+              size="small"
+            />
+          </div>
         </div>
         
         {/* Текущий режим и статус движка */}
@@ -641,15 +708,26 @@ const TradingModeManager: React.FC<TradingModeManagerProps> = ({ className = '' 
                         </div>
                       )}
                       
-                      <Button
-                        label={isCurrentMode ? 'Текущий режим' : 'Переключить'}
-                        icon={isCurrentMode ? 'pi pi-check' : 'pi pi-arrow-right'}
-                        disabled={!canSwitch || isCurrentMode || loading}
-                        loading={loading && !isCurrentMode}
-                        onClick={() => switchMode(mode.mode)}
-                        className="w-full"
-                        severity={isCurrentMode ? 'success' : 'info'}
-                      />
+                      <div className="flex gap-2">
+                        <Button
+                          icon="pi pi-info-circle"
+                          label="Проверить"
+                          onClick={() => checkValidation(mode.mode)}
+                          className="flex-1"
+                          size="small"
+                          outlined
+                          severity="info"
+                        />
+                        <Button
+                          label={isCurrentMode ? 'Текущий режим' : 'Переключить'}
+                          icon={isCurrentMode ? 'pi pi-check' : 'pi pi-arrow-right'}
+                          disabled={!canSwitch || isCurrentMode || loading}
+                          loading={loading && !isCurrentMode}
+                          onClick={() => switchMode(mode.mode)}
+                          className="flex-1"
+                          severity={isCurrentMode ? 'success' : 'info'}
+                        />
+                      </div>
                     </div>
                   </Card>
                 </div>
@@ -856,6 +934,321 @@ const TradingModeManager: React.FC<TradingModeManagerProps> = ({ className = '' 
           </div>
         </TabPanel>
       </TabView>
+
+      {/* Диалог детальной валидации */}
+      <Dialog
+        header={selectedModeValidation ? `Валидация режима: ${selectedModeValidation.toUpperCase()}` : 'Детальная проверка валидации'}
+        visible={validationDialogVisible}
+        style={{ width: '90vw', maxWidth: '800px' }}
+        onHide={() => setValidationDialogVisible(false)}
+        footer={
+          <Button
+            label="Закрыть"
+            icon="pi pi-times"
+            onClick={() => setValidationDialogVisible(false)}
+          />
+        }
+      >
+        {selectedModeValidation ? (
+          // Детальная информация для одного режима
+          (() => {
+            const validation = modeValidations[selectedModeValidation];
+            if (!validation) {
+              return <div>Загрузка...</div>;
+            }
+
+            const modeName = tradingModes.find(m => m.mode === selectedModeValidation)?.name || selectedModeValidation.toUpperCase();
+
+            return (
+              <div>
+                <div className="mb-4">
+                  <div className="flex align-items-center gap-2 mb-3">
+                    <Badge
+                      value={validation.canSwitch ? '✅ Готов к переключению' : '❌ Не готов'}
+                      severity={validation.canSwitch ? 'success' : 'danger'}
+                    />
+                    <span className="text-lg font-semibold">{modeName}</span>
+                  </div>
+
+                  {validation.reason && !validation.canSwitch && (
+                    <Message severity="error" className="mb-3">
+                      <strong>Причина блокировки:</strong> {validation.reason}
+                    </Message>
+                  )}
+
+                  {validation.warnings && validation.warnings.length > 0 && (
+                    <Message severity="warn" className="mb-3">
+                      <strong>Предупреждения:</strong>
+                      <ul className="mt-2 mb-0 pl-4">
+                        {validation.warnings.map((warning: string, idx: number) => (
+                          <li key={idx}>{warning}</li>
+                        ))}
+                      </ul>
+                    </Message>
+                  )}
+                </div>
+
+                {/* Детальные проверки */}
+                {validation.checks && (
+                  <div className="mb-4">
+                    <h4 className="mb-3">Детальные проверки:</h4>
+
+                    {/* Прибыльность */}
+                    {validation.checks.profitability && (
+                      <Card className="mb-3">
+                        <div className="flex justify-content-between align-items-center mb-2">
+                          <strong>Прибыльность</strong>
+                          <Badge
+                            value={validation.checks.profitability.passed ? '✅ Пройдено' : '❌ Не пройдено'}
+                            severity={validation.checks.profitability.passed ? 'success' : 'danger'}
+                          />
+                        </div>
+                        {validation.checks.profitability.details && (
+                          <div className="mt-2">
+                            {Object.entries(validation.checks.profitability.details).map(([key, check]: [string, any]) => (
+                              <div key={key} className="flex justify-content-between align-items-center mb-2">
+                                <span className="text-sm">{check.message || key}</span>
+                                <Badge
+                                  value={check.passed ? '✓' : '✗'}
+                                  severity={check.passed ? 'success' : 'danger'}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {validation.checks.profitability.score !== undefined && (
+                          <div className="mt-2">
+                            <div className="flex justify-content-between mb-1">
+                              <span className="text-sm">Прогресс:</span>
+                              <span className="text-sm">{(validation.checks.profitability.score * 100).toFixed(0)}%</span>
+                            </div>
+                            <ProgressBar value={validation.checks.profitability.score * 100} />
+                          </div>
+                        )}
+                      </Card>
+                    )}
+
+                    {/* Консистентность */}
+                    {validation.checks.consistency && (
+                      <Card className="mb-3">
+                        <div className="flex justify-content-between align-items-center mb-2">
+                          <strong>Консистентность</strong>
+                          <Badge
+                            value={validation.checks.consistency.passed ? '✅ Пройдено' : '❌ Не пройдено'}
+                            severity={validation.checks.consistency.passed ? 'success' : 'danger'}
+                          />
+                        </div>
+                        {validation.checks.consistency.details && (
+                          <div className="mt-2">
+                            {Object.entries(validation.checks.consistency.details).map(([key, check]: [string, any]) => (
+                              <div key={key} className="flex justify-content-between align-items-center mb-2">
+                                <span className="text-sm">{check.message || key}</span>
+                                <Badge
+                                  value={check.passed ? '✓' : '✗'}
+                                  severity={check.passed ? 'success' : 'danger'}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {validation.checks.consistency.score !== undefined && (
+                          <div className="mt-2">
+                            <div className="flex justify-content-between mb-1">
+                              <span className="text-sm">Прогресс:</span>
+                              <span className="text-sm">{(validation.checks.consistency.score * 100).toFixed(0)}%</span>
+                            </div>
+                            <ProgressBar value={validation.checks.consistency.score * 100} />
+                          </div>
+                        )}
+                      </Card>
+                    )}
+
+                    {/* Риски */}
+                    {validation.checks.riskMetrics && (
+                      <Card className="mb-3">
+                        <div className="flex justify-content-between align-items-center mb-2">
+                          <strong>Управление рисками</strong>
+                          <Badge
+                            value={validation.checks.riskMetrics.passed ? '✅ Пройдено' : '❌ Не пройдено'}
+                            severity={validation.checks.riskMetrics.passed ? 'success' : 'danger'}
+                          />
+                        </div>
+                        {validation.checks.riskMetrics.details && (
+                          <div className="mt-2">
+                            {Object.entries(validation.checks.riskMetrics.details).map(([key, check]: [string, any]) => (
+                              <div key={key} className="flex justify-content-between align-items-center mb-2">
+                                <span className="text-sm">{check.message || key}</span>
+                                <Badge
+                                  value={check.passed ? '✓' : '✗'}
+                                  severity={check.passed ? 'success' : 'danger'}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {validation.checks.riskMetrics.score !== undefined && (
+                          <div className="mt-2">
+                            <div className="flex justify-content-between mb-1">
+                              <span className="text-sm">Прогресс:</span>
+                              <span className="text-sm">{(validation.checks.riskMetrics.score * 100).toFixed(0)}%</span>
+                            </div>
+                            <ProgressBar value={validation.checks.riskMetrics.score * 100} />
+                          </div>
+                        )}
+                      </Card>
+                    )}
+
+                    {/* Техническая готовность */}
+                    {validation.checks.technicalReadiness && (
+                      <Card className="mb-3">
+                        <div className="flex justify-content-between align-items-center mb-2">
+                          <strong>Техническая готовность</strong>
+                          <Badge
+                            value={validation.checks.technicalReadiness.passed ? '✅ Пройдено' : '❌ Не пройдено'}
+                            severity={validation.checks.technicalReadiness.passed ? 'success' : 'danger'}
+                          />
+                        </div>
+                        {validation.checks.technicalReadiness.details && (
+                          <div className="mt-2">
+                            {Object.entries(validation.checks.technicalReadiness.details).map(([key, value]: [string, any]) => (
+                              <div key={key} className="flex justify-content-between align-items-center mb-2">
+                                <span className="text-sm">{key}</span>
+                                <Badge
+                                  value={value ? '✓' : '✗'}
+                                  severity={value ? 'success' : 'danger'}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {validation.checks.technicalReadiness.score !== undefined && (
+                          <div className="mt-2">
+                            <div className="flex justify-content-between mb-1">
+                              <span className="text-sm">Прогресс:</span>
+                              <span className="text-sm">{(validation.checks.technicalReadiness.score * 100).toFixed(0)}%</span>
+                            </div>
+                            <ProgressBar value={validation.checks.technicalReadiness.score * 100} />
+                          </div>
+                        )}
+                      </Card>
+                    )}
+                  </div>
+                )}
+
+                {/* Рекомендации */}
+                {validation.recommendations && validation.recommendations.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="mb-3">Рекомендации для улучшения:</h4>
+                    {validation.recommendations.map((rec: any, idx: number) => {
+                      let recText: string;
+                      let recCategory: string = '';
+                      let recActions: string[] = [];
+
+                      if (typeof rec === 'string') {
+                        recText = rec;
+                      } else if (rec && typeof rec === 'object') {
+                        if (rec.category && rec.actions && Array.isArray(rec.actions)) {
+                          recCategory = rec.category;
+                          recActions = rec.actions;
+                          recText = `${rec.category}: ${rec.actions.join(', ')}`;
+                        } else if (rec.message) {
+                          recText = rec.message;
+                        } else {
+                          recText = JSON.stringify(rec);
+                        }
+                      } else {
+                        recText = String(rec);
+                      }
+
+                      return (
+                        <Card key={idx} className="mb-2">
+                          <div className="flex align-items-center gap-2 mb-2">
+                            <Badge
+                              value={rec.priority === 'critical' ? '🔴 Критично' : rec.priority === 'high' ? '🟠 Высокий' : '🟡 Средний'}
+                              severity={rec.priority === 'critical' ? 'danger' : rec.priority === 'high' ? 'warning' : 'info'}
+                            />
+                            {recCategory && <strong>{recCategory}</strong>}
+                          </div>
+                          {recActions.length > 0 ? (
+                            <ul className="mt-2 mb-0 pl-4">
+                              {recActions.map((action: string, actionIdx: number) => (
+                                <li key={actionIdx}>{action}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-2 mb-0">{recText}</p>
+                          )}
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Критерии */}
+                {validation.criteria && (
+                  <div>
+                    <h4 className="mb-3">Требуемые критерии:</h4>
+                    <Card>
+                      <div className="grid">
+                        {Object.entries(validation.criteria).map(([key, value]: [string, any]) => (
+                          <div key={key} className="col-12 md:col-6 mb-2">
+                            <div className="text-sm">
+                              <strong>{key}:</strong> {typeof value === 'number' ? value.toFixed(2) : String(value)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </div>
+                )}
+              </div>
+            );
+          })()
+        ) : (
+          // Обзор всех режимов
+          <div>
+            <div className="mb-4">
+              <p>Проверка валидации для всех режимов торговли:</p>
+            </div>
+            {['paper', 'micro', 'real'].map((mode) => {
+              const validation = modeValidations[mode];
+              const modeName = tradingModes.find(m => m.mode === mode)?.name || mode.toUpperCase();
+
+              if (!validation) {
+                return (
+                  <Card key={mode} className="mb-3">
+                    <div>Загрузка валидации для {modeName}...</div>
+                  </Card>
+                );
+              }
+
+              return (
+                <Card key={mode} className="mb-3">
+                  <div className="flex justify-content-between align-items-center mb-2">
+                    <strong>{modeName}</strong>
+                    <Badge
+                      value={validation.canSwitch ? '✅ Готов' : '❌ Не готов'}
+                      severity={validation.canSwitch ? 'success' : 'danger'}
+                    />
+                  </div>
+                  {validation.reason && !validation.canSwitch && (
+                    <div className="text-sm text-red-500 mb-2">{validation.reason}</div>
+                  )}
+                  <Button
+                    label="Детали"
+                    icon="pi pi-info-circle"
+                    size="small"
+                    outlined
+                    onClick={() => {
+                      setSelectedModeValidation(mode);
+                    }}
+                  />
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 };

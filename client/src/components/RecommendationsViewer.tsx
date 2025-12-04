@@ -11,10 +11,8 @@ import { Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { Skeleton } from 'primereact/skeleton';
 import { Message } from 'primereact/message';
-import { Toolbar } from 'primereact/toolbar';
 import { Dropdown } from 'primereact/dropdown';
-import { Checkbox } from 'primereact/checkbox';
-import apiServiceService from '../services/apiServiceService';
+import { apiService } from '../services/apiService';
 
 interface Recommendation {
   figi: string;
@@ -37,6 +35,7 @@ interface Recommendation {
 }
 
 interface CreateRequestOptions {
+  quantity?: number;
   maxAmount?: number;
   stopLoss?: number;
   takeProfit?: number;
@@ -71,7 +70,7 @@ const RecommendationsViewer: React.FC = () => {
     try {
       setLoading(true);
       
-      // Получаем рекомендации (предполагаем, что есть API endpoint)
+      // Получаем рекомендации с сервера
       let data;
       switch (filterType) {
         case 'BUY':
@@ -88,54 +87,48 @@ const RecommendationsViewer: React.FC = () => {
           data = await apiService.getAllRecommendations();
       }
       
-      setRecommendations(data || []);
+      // Обрабатываем ответ - может быть массив или объект с data
+      let recommendations = [];
+      if (Array.isArray(data)) {
+        recommendations = data;
+      } else if (data?.data && Array.isArray(data.data)) {
+        recommendations = data.data;
+      } else if (data && typeof data === 'object') {
+        // Если это один объект, оборачиваем в массив
+        recommendations = [data];
+      }
+      
+      // Нормализуем данные рекомендаций
+      recommendations = recommendations.map((rec: any) => ({
+        figi: rec.figi || rec.id,
+        ticker: rec.ticker || '',
+        name: rec.name || '',
+        recommendation: rec.recommendation || rec.action || 'HOLD',
+        confidence: rec.confidence || 0,
+        score: rec.score || 0,
+        analysis: rec.analysis || {},
+        explanation: rec.explanation || rec.aiExplanation || {},
+        priceAtAnalysis: rec.priceAtAnalysis || rec.price || 0,
+        targetPrice: rec.targetPrice || rec.takeProfit,
+        stopLoss: rec.stopLoss,
+        takeProfit: rec.takeProfit || rec.targetPrice,
+        analysisDate: rec.analysisDate || rec.createdAt || new Date().toISOString(),
+        validUntil: rec.validUntil || rec.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        isActive: rec.isActive !== undefined ? rec.isActive : true,
+        sector: rec.sector,
+        tags: rec.tags || []
+      }));
+      
+      setRecommendations(recommendations);
       
     } catch (error) {
       console.error('Error loading recommendations:', error);
       toast.current?.show({
         severity: 'error',
         summary: 'Ошибка',
-        detail: 'Не удалось загрузить рекомендации'
+        detail: 'Не удалось загрузить рекомендации. Проверьте подключение к серверу.'
       });
-      // Используем моковые данные для демонстрации
-      setRecommendations([
-        {
-          figi: 'BBG004730N88',
-          ticker: 'SBER',
-          name: 'Сбербанк',
-          recommendation: 'BUY',
-          confidence: 0.85,
-          score: 0.78,
-          analysis: { technicalSignals: ['RSI oversold', 'MA crossover'] },
-          explanation: { summary: 'Технические индикаторы показывают потенциал роста' },
-          priceAtAnalysis: 285.50,
-          targetPrice: 320.00,
-          stopLoss: 270.00,
-          analysisDate: new Date().toISOString(),
-          validUntil: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          isActive: true,
-          sector: 'Финансы',
-          tags: ['high-confidence', 'technical-buy']
-        },
-        {
-          figi: 'BBG004731354',
-          ticker: 'GAZP',
-          name: 'Газпром',
-          recommendation: 'SELL',
-          confidence: 0.72,
-          score: 0.25,
-          analysis: { fundamentalFactors: ['Declining margins', 'Regulatory pressure'] },
-          explanation: { summary: 'Фундаментальные факторы указывают на снижение' },
-          priceAtAnalysis: 165.20,
-          targetPrice: 145.00,
-          stopLoss: 175.00,
-          analysisDate: new Date().toISOString(),
-          validUntil: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          isActive: true,
-          sector: 'Энергетика',
-          tags: ['fundamental-sell']
-        }
-      ]);
+      setRecommendations([]); // Устанавливаем пустой массив вместо моковых данных
     } finally {
       setLoading(false);
     }
@@ -185,9 +178,11 @@ const RecommendationsViewer: React.FC = () => {
     if (!currentRecommendation) return;
     
     try {
-      const request = await apiService.createTradingRequest(
+      // Отправляем как FIGI для поиска в БД, и данные рекомендации как fallback
+      await apiService.createTradingRequest(
         currentRecommendation.figi,
-        createOptions
+        createOptions,
+        currentRecommendation as any // Передаем полные данные рекомендации
       );
       
       toast.current?.show({
@@ -199,12 +194,16 @@ const RecommendationsViewer: React.FC = () => {
       setShowCreateDialog(false);
       setCreateOptions({});
       
-    } catch (error) {
+      // Обновляем список рекомендаций после создания заявки
+      await loadRecommendations();
+      
+    } catch (error: any) {
       console.error('Error creating trading request:', error);
+      const errorMessage = error?.response?.data?.message || error?.message || 'Не удалось создать торговую заявку';
       toast.current?.show({
         severity: 'error',
         summary: 'Ошибка',
-        detail: 'Не удалось создать торговую заявку'
+        detail: errorMessage
       });
     }
   };
@@ -230,22 +229,37 @@ const RecommendationsViewer: React.FC = () => {
       accept: async () => {
         try {
           const figis = validRecommendations.map(r => r.figi);
-          const result = await apiService.createBulkTradingRequests(figis);
+          const result = await apiService.createBulkTradingRequests(figis, createOptions);
           
-          toast.current?.show({
-            severity: 'success',
-            summary: 'Заявки созданы',
-            detail: `Создано ${result.requests?.length || 0} заявок`
-          });
+          const successCount = result?.requests?.length || 0;
+          const errorCount = result?.errors?.length || 0;
+          
+          if (successCount > 0) {
+            toast.current?.show({
+              severity: 'success',
+              summary: 'Заявки созданы',
+              detail: `Создано ${successCount} заявок${errorCount > 0 ? `, ошибок: ${errorCount}` : ''}`
+            });
+          } else {
+            toast.current?.show({
+              severity: 'warn',
+              summary: 'Предупреждение',
+              detail: `Не удалось создать заявки. Ошибок: ${errorCount}`
+            });
+          }
           
           setSelectedRecommendations([]);
           
-        } catch (error) {
+          // Обновляем список рекомендаций после создания заявок
+          await loadRecommendations();
+          
+        } catch (error: any) {
           console.error('Error creating bulk requests:', error);
+          const errorMessage = error?.response?.data?.message || error?.message || 'Не удалось создать заявки';
           toast.current?.show({
             severity: 'error',
             summary: 'Ошибка',
-            detail: 'Не удалось создать заявки'
+            detail: errorMessage
           });
         }
       }
@@ -254,7 +268,7 @@ const RecommendationsViewer: React.FC = () => {
 
   const actionBodyTemplate = (rowData: Recommendation) => {
     if (rowData.recommendation === 'HOLD') {
-      return <Badge value="Нет действий" severity="secondary" />;
+      return <Badge value="Нет действий" severity="info" />;
     }
     
     return (
@@ -351,7 +365,9 @@ const RecommendationsViewer: React.FC = () => {
       <ConfirmDialog />
       
       <Card title="📊 Рекомендации AI" className="h-full">
-        <Toolbar template={toolbarTemplate} className="mb-3" />
+        <div className="mb-3">
+          {toolbarTemplate()}
+        </div>
         
         {recommendations.length === 0 ? (
           <Message severity="info" text="Нет доступных рекомендаций" />
@@ -359,7 +375,8 @@ const RecommendationsViewer: React.FC = () => {
           <DataTable
             value={recommendations}
             selection={selectedRecommendations}
-            onSelectionChange={(e) => setSelectedRecommendations(e.value)}
+            onSelectionChange={(e) => setSelectedRecommendations(e.value as Recommendation[])}
+            selectionMode="multiple"
             paginator
             rows={15}
             loading={loading}
@@ -410,7 +427,7 @@ const RecommendationsViewer: React.FC = () => {
               field="priceAtAnalysis"
               header="Цена анализа"
               sortable
-              body={(rowData) => formatCurrency(rowData.priceAtAnalysis)}
+              body={(rowData) => rowData.priceAtAnalysis ? formatCurrency(rowData.priceAtAnalysis) : 'N/A'}
             />
             
             <Column
@@ -418,6 +435,13 @@ const RecommendationsViewer: React.FC = () => {
               header="Целевая цена"
               sortable
               body={(rowData) => rowData.targetPrice ? formatCurrency(rowData.targetPrice) : 'N/A'}
+            />
+            
+            <Column
+              field="stopLoss"
+              header="Stop Loss"
+              sortable
+              body={(rowData) => rowData.stopLoss ? formatCurrency(rowData.stopLoss) : 'N/A'}
             />
             
             <Column
@@ -478,7 +502,26 @@ const RecommendationsViewer: React.FC = () => {
             </div>
             
             <div className="grid">
-              <div className="col-12">
+              <div className="col-6">
+                <label htmlFor="quantity">Количество акций</label>
+                <InputNumber
+                  id="quantity"
+                  value={createOptions.quantity}
+                  onValueChange={(e) => setCreateOptions({...createOptions, quantity: e.value || undefined})}
+                  min={1}
+                  className="w-full"
+                  placeholder="Оставьте пустым для автоматического расчета"
+                  showButtons
+                  buttonLayout="horizontal"
+                  decrementButtonClassName="p-button-secondary"
+                  incrementButtonClassName="p-button-secondary"
+                  incrementButtonIcon="pi pi-plus"
+                  decrementButtonIcon="pi pi-minus"
+                />
+                <small className="text-500">Если не указано, будет рассчитано автоматически</small>
+              </div>
+              
+              <div className="col-6">
                 <label htmlFor="maxAmount">Максимальная сумма (₽)</label>
                 <InputNumber
                   id="maxAmount"
@@ -490,6 +533,7 @@ const RecommendationsViewer: React.FC = () => {
                   className="w-full"
                   placeholder="Оставьте пустым для автоматического расчета"
                 />
+                <small className="text-500">Используется если количество не указано</small>
               </div>
               
               <div className="col-6">

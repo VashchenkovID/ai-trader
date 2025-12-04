@@ -14,6 +14,7 @@ class SchedulerService {
         this.cacheTask = null;
         this.cleanupTask = null;
         this.newsCleanupTask = null;
+        this.newsDailyUpdateTask = null;
         this.telegramCacheTask = null;
         this.trainingTask = null;
         this.quickTrainingTask = null;
@@ -82,6 +83,8 @@ class SchedulerService {
         const trainingSchedule = schedulerSettings.nn_training_schedule || '0 3 * * 1';
         const quickTrainingSchedule = schedulerSettings.nn_training_interval || '*/30 * * * *';
         const newsCacheSchedule = notificationSettings.news_cache_update_interval || '0 */6 * * *';
+        const newsDailyUpdateSchedule = notificationSettings.news_daily_update_schedule || '0 9 * * *'; // Каждый день в 9:00
+        const newsWeeklyCleanupSchedule = notificationSettings.news_weekly_cleanup_schedule || '0 3 * * 0'; // Каждое воскресенье в 3:00
         const telegramCacheSchedule = notificationSettings.telegram_cache_update_interval || '0 */6 * * *';
         const quickTrainingEnabled = nnSettings.nn_quick_training_enabled !== false;
         
@@ -166,14 +169,28 @@ class SchedulerService {
             timezone: "Europe/Moscow"
         });
 
-        // Задача 6: Очистка кеша новостей и настроений (настраиваемое расписание)
-        this.newsCleanupTask = cron.schedule(newsCacheSchedule, async () => {
+        // Задача 6: Еженедельная очистка новостей старше года (каждое воскресенье в 3:00)
+        this.newsCleanupTask = cron.schedule(newsWeeklyCleanupSchedule, async () => {
             try {
-                console.log('📰 Scheduled news cache cleanup started...');
+                console.log('📰 Scheduled weekly news cleanup (older than 1 year) started...');
                 await this.performNewsCacheCleanup();
             } catch (error) {
-                console.error('Error in scheduled news cache cleanup:', error);
-                await OptimizedTelegramService.sendAlert('NEWS_CACHE_CLEANUP_ERROR', error.message, 'warning');
+                console.error('Error in scheduled weekly news cleanup:', error);
+                await OptimizedTelegramService.sendAlert('NEWS_WEEKLY_CLEANUP_ERROR', error.message, 'warning');
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
+        // Задача: Ежедневная проверка и загрузка свежих новостей
+        this.newsDailyUpdateTask = cron.schedule(newsDailyUpdateSchedule, async () => {
+            try {
+                console.log('📰 Scheduled daily news update started...');
+                await this.performDailyNewsUpdate();
+            } catch (error) {
+                console.error('Error in scheduled daily news update:', error);
+                await OptimizedTelegramService.sendAlert('NEWS_DAILY_UPDATE_ERROR', error.message, 'warning');
             }
         }, {
             scheduled: true,
@@ -673,6 +690,12 @@ class SchedulerService {
                 this.newsCleanupTask.destroy();
                 this.newsCleanupTask = null;
                 console.log('✅ News cleanup task stopped and destroyed');
+            }
+            if (this.newsDailyUpdateTask) {
+                this.newsDailyUpdateTask.stop();
+                this.newsDailyUpdateTask.destroy();
+                this.newsDailyUpdateTask = null;
+                console.log('✅ News daily update task stopped and destroyed');
             }
             if (this.telegramCacheTask) {
                 this.telegramCacheTask.stop();
@@ -1269,6 +1292,10 @@ class SchedulerService {
             this.newsCleanupTask.stop();
             console.log('News cleanup task stopped');
         }
+        if (this.newsDailyUpdateTask) {
+            this.newsDailyUpdateTask.stop();
+            console.log('News daily update task stopped');
+        }
         if (this.telegramCacheTask) {
             this.telegramCacheTask.stop();
             console.log('Telegram cache task stopped');
@@ -1291,6 +1318,44 @@ class SchedulerService {
             
         } catch (error) {
             console.error('❌ Error during news cache cleanup:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Ежедневная проверка и загрузка свежих новостей
+     */
+    async performDailyNewsUpdate() {
+        try {
+            console.log('📰 Starting daily news update...');
+            
+            const NewsAnalysisService = (await import('./NewsAnalysisService.js')).default;
+            
+            // Загружаем свежие новости для всех акций (один большой запрос)
+            const result = await NewsAnalysisService.loadFreshNewsForAllInstruments({
+                onProgress: (progress) => {
+                    console.log(`📰 Прогресс загрузки: ${progress.current}/${progress.total} (${progress.ticker || progress.figi})`);
+                }
+            });
+
+            console.log(`✅ Daily news update completed: ${result.updated} instruments updated, ${result.totalNews} news articles loaded`);
+            
+            // Отправляем уведомление через Telegram
+            if (result.updated > 0) {
+                await OptimizedTelegramService.sendAlert(
+                    'NEWS_DAILY_UPDATE',
+                    `📰 Ежедневное обновление новостей завершено\n\n` +
+                    `Обновлено: ${result.updated} инструментов\n` +
+                    `Загружено новостей: ${result.totalNews}\n` +
+                    `Ошибок: ${result.errorCount || 0}`,
+                    'info'
+                );
+            }
+
+            return result;
+
+        } catch (error) {
+            console.error('❌ Error during daily news update:', error);
             throw error;
         }
     }
@@ -1357,6 +1422,10 @@ class SchedulerService {
             if (this.newsCleanupTask) {
                 this.newsCleanupTask.stop();
                 this.newsCleanupTask = null;
+            }
+            if (this.newsDailyUpdateTask) {
+                this.newsDailyUpdateTask.stop();
+                this.newsDailyUpdateTask = null;
             }
             
             if (this.telegramCacheTask) {

@@ -52,6 +52,23 @@ class TinkoffApiService {
             if (!response.ok) {
                 const errorText = await response.text();
                 
+                // Обработка ошибки 404 (Not Found) - метод не существует
+                if (response.status === 404) {
+                    // Для методов получения новостей это нормально - метод может не существовать
+                    if (path.includes('News') || path.includes('GetNews')) {
+                        throw new Error(`HTTP error! status: 404, details: ${errorText}`);
+                    }
+                    // Для других методов логируем ошибку
+                    console.error('API Error details:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        path: path,
+                        body: body,
+                        error: errorText
+                    });
+                    throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
+                }
+                
                 // Обработка ошибки 429 (Too Many Requests)
                 if (response.status === 429) {
                     if (retryCount < this.maxRetries) {
@@ -822,6 +839,7 @@ class TinkoffApiService {
             dealAmount: dealAmount
         };
     }
+
 
 }
 
