@@ -428,13 +428,15 @@ class StandaloneTrainingWorker {
                         
                         // Early stopping и reduce LR on plateau
                         const valLoss = logs.val_loss || logs.loss;
+                        const valAccuracy = logs.val_acc || logs.acc || 0;
+                        const accuracy = logs.acc || 0;
                         
                         if (valLoss < bestValLoss) {
                             // Улучшение - сбрасываем счетчики
                             bestValLoss = valLoss;
                             patienceCount = 0;
                             reduceLRCount = 0;
-                            console.log(`✅ Epoch ${epoch + 1}: Улучшение val_loss = ${valLoss.toFixed(4)}`);
+                            console.log(`✅ Epoch ${epoch + 1}: Улучшение val_loss = ${valLoss.toFixed(4)}, val_acc = ${(valAccuracy * 100).toFixed(2)}%, acc = ${(accuracy * 100).toFixed(2)}%`);
                         } else {
                             // Нет улучшения
                             patienceCount++;

@@ -446,7 +446,7 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
                 'info': 'ℹ️'
             };
 
-            const alertMessage = `${emoji[severity]} <b>АЛЕРТ: ${alertType.toUpperCase()}</b>\n\n${message}\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`;
+            const alertMessage = `<b>Оповещение: ${alertType.toUpperCase()}</b>\n\n${message}\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`;
             await this.safeSendMessage(this.chatId, alertMessage, { parse_mode: 'HTML' });
             console.log(`✅ Alert sent: ${alertType}`);
         } catch (error) {

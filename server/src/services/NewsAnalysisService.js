@@ -526,6 +526,76 @@ class NewsAnalysisService {
 
 
     /**
+     * Проверка, является ли текст валидным описанием новости
+     * Фильтрует мусор, метаданные и служебную информацию
+     */
+    isValidNewsText(text) {
+        if (!text || typeof text !== 'string' || text.trim().length === 0) {
+            return false;
+        }
+
+        const trimmed = text.trim();
+        
+        // Слишком короткий текст (меньше 20 символов) - вероятно мусор
+        if (trimmed.length < 20) {
+            return false;
+        }
+
+        // Проверяем соотношение знаков препинания к словам
+        const punctuationCount = (trimmed.match(/[,.\-:;]/g) || []).length;
+        const wordCount = trimmed.split(/\s+/).filter(w => w.length > 2).length;
+        
+        // Если знаков препинания больше чем слов, или слов меньше 3 - это мусор
+        if (punctuationCount > wordCount || wordCount < 3) {
+            return false;
+        }
+
+        // Проверяем, что текст содержит осмысленные слова (не только цифры и символы)
+        const meaningfulWords = trimmed.match(/[а-яёА-ЯЁa-zA-Z]{3,}/g) || [];
+        if (meaningfulWords.length < 3) {
+            return false;
+        }
+
+        // Фильтруем тексты, которые выглядят как метаданные (много цифр, служебных символов)
+        const digitRatio = (trimmed.match(/\d/g) || []).length / trimmed.length;
+        if (digitRatio > 0.3) {
+            return false;
+        }
+
+        // Фильтруем тексты с множественными запятыми подряд
+        if (trimmed.match(/,\s*,/)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Очистка и нормализация текста новости
+     */
+    cleanNewsText(text) {
+        if (!text || typeof text !== 'string') {
+            return '';
+        }
+
+        let cleaned = text.trim();
+        
+        // Удаляем множественные запятые и пробелы
+        cleaned = cleaned.replace(/,\s*,+/g, ', ');
+        
+        // Удаляем множественные пробелы
+        cleaned = cleaned.replace(/\s+/g, ' ');
+        
+        // Удаляем служебные паттерны (ИНН, ОГРН и т.д.)
+        cleaned = cleaned.replace(/\b\d{10,15}\b/g, '');
+        
+        // Очищаем от лишних пробелов после удаления
+        cleaned = cleaned.replace(/\s+/g, ' ').trim();
+        
+        return cleaned;
+    }
+
+    /**
      * Запрос новостей по названию компании и периоду через NewsAPI.org
      * @param {string} companyName - Название компании
      * @param {Date} fromDate - Дата начала периода
@@ -562,8 +632,16 @@ class NewsAnalysisService {
                 .filter(article => article.title || article.description || article.content)
                 .map(async (article) => {
                     try {
-                        const newsText = article.description || article.content || '';
+                        let newsText = article.description || article.content || '';
                         const newsTitle = article.title || '';
+                        
+                        // Очищаем и валидируем текст
+                        newsText = this.cleanNewsText(newsText);
+                        
+                        // Если текст невалидный, пропускаем статью
+                        if (!this.isValidNewsText(newsText)) {
+                            return null;
+                        }
                         
                         let newsTime = new Date();
                         if (article.publishedAt) {
@@ -577,7 +655,6 @@ class NewsAnalysisService {
                             }
                         }
 
-                        // Используем асинхронный анализ тональности
                         const sentiment = await this.analyzeSentiment(newsTitle + ' ' + newsText);
 
                         return {
@@ -714,8 +791,16 @@ class NewsAnalysisService {
                 .filter(article => article.title || article.description || article.content)
                 .map(async (article) => {
                     try {
-                        const newsText = article.description || article.content || '';
+                        let newsText = article.description || article.content || '';
                         const newsTitle = article.title || '';
+                        
+                        // Очищаем и валидируем текст
+                        newsText = this.cleanNewsText(newsText);
+                        
+                        // Если текст невалидный, пропускаем статью
+                        if (!this.isValidNewsText(newsText)) {
+                            return null;
+                        }
                         
                         let newsTime = new Date();
                         if (article.publishedAt) {

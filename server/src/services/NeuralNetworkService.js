@@ -386,46 +386,13 @@ class NeuralNetworkService {
     // Загрузка модели из файлов (без tfjs-node): архитектура + веса
     async loadModel(figi = null) {
         try {
-            // Попытка 1: Загрузить модель для конкретного FIGI (если указан)
+            // Попытка 0: Загрузить модель через OptimizedTrainingService (если есть в памяти)
             if (figi) {
-                const figiModelFile = path.join(this.modelPath, `${figi}_model.json`);
-                const figiWeightsFile = path.join(this.modelPath, `${figi}_weights.json`);
-                
                 try {
-                    const modelExists = await fs.access(figiModelFile).then(() => true).catch(() => false);
-                    const weightsExist = await fs.access(figiWeightsFile).then(() => true).catch(() => false);
-                    
-                    if (modelExists && weightsExist) {
-                        console.log(`📥 Loading per-FIGI neural model for ${figi}...`);
-                        
-                        // Пытаемся загрузить через ModelManager
-                        const model = await ModelManager.loadModel(`neural/${figi}`);
-                        
-                        if (model) {
-                            this.model = model;
-                            console.log(`✅ Per-FIGI neural model loaded successfully for ${figi} via ModelManager`);
-                        } else {
-                            // Fallback к прямому чтению файлов
-                            try {
-                                const archRaw = await fs.readFile(figiModelFile, 'utf-8');
-                                const arch = JSON.parse(archRaw);
-                                this.model = await tf.models.modelFromJSON(arch);
-                                
-                                const weightsRaw = await fs.readFile(figiWeightsFile, 'utf-8');
-                                const { specs } = JSON.parse(weightsRaw);
-                                const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
-                                this.model.setWeights(tensors);
-                                
-                                console.log(`✅ Per-FIGI neural model loaded for ${figi} with legacy format`);
-                            } catch (legacyError) {
-                                console.warn(`⚠️ Failed to load legacy per-FIGI model for ${figi}: ${legacyError.message}. Deleting corrupted files.`);
-                                // Если файлы повреждены, удаляем их, чтобы не пытаться загружать снова
-                                try { await fs.unlink(figiModelFile); } catch {}
-                                try { await fs.unlink(figiWeightsFile); } catch {}
-                                this.model = null;
-                                return false;
-                            }
-                        }
+                    const modelFromTraining = await OptimizedTrainingService.getModel(figi);
+                    if (modelFromTraining) {
+                        this.model = modelFromTraining;
+                        console.log(`✅ Model loaded from OptimizedTrainingService for ${figi}`);
                         
                         // Гарантируем компиляцию после загрузки
                         if (!this.model.optimizer) {
@@ -438,58 +405,157 @@ class NeuralNetworkService {
                         
                         return true;
                     }
-                } catch (figiError) {
-                    console.warn(`⚠️ Failed to load per-FIGI model for ${figi}:`, figiError.message);
+                } catch (trainingServiceError) {
+                    console.warn(`⚠️ Failed to load model from OptimizedTrainingService: ${trainingServiceError.message}`);
                 }
             }
             
+            // Попытка 1: Загрузить модель для конкретного FIGI (если указан)
+            if (figi) {
+                // Пробуем разные пути для поиска модели
+                const possiblePaths = [
+                    path.join(this.modelPath, `${figi}_model.json`), // Стандартный путь
+                    path.join(process.cwd(), 'models', `${figi}_model.json`), // От корня проекта
+                    path.join('./models', `${figi}_model.json`) // Относительный путь
+                ];
+                
+                for (const figiModelFile of possiblePaths) {
+                    const figiWeightsFile = figiModelFile.replace('_model.json', '_weights.json');
+                    
+                    try {
+                        const modelExists = await fs.access(figiModelFile).then(() => true).catch(() => false);
+                        const weightsExist = await fs.access(figiWeightsFile).then(() => true).catch(() => false);
+                        
+                        if (modelExists && weightsExist) {
+                            console.log(`📥 Loading per-FIGI neural model for ${figi} from ${figiModelFile}...`);
+                            
+                            // Пытаемся загрузить через ModelManager
+                            const model = await ModelManager.loadModel(`neural/${figi}`);
+                            
+                            if (model) {
+                                this.model = model;
+                                console.log(`✅ Per-FIGI neural model loaded successfully for ${figi} via ModelManager`);
+                            } else {
+                                // Fallback к прямому чтению файлов
+                                try {
+                                    const archRaw = await fs.readFile(figiModelFile, 'utf-8');
+                                    const arch = JSON.parse(archRaw);
+                                    this.model = await tf.models.modelFromJSON(arch);
+                                    
+                                    const weightsRaw = await fs.readFile(figiWeightsFile, 'utf-8');
+                                    const weightsData = JSON.parse(weightsRaw);
+                                    const specs = weightsData.specs || weightsData.weights || null;
+                                    
+                                    if (!specs || !Array.isArray(specs) || specs.length === 0) {
+                                        throw new Error('Invalid weights format: specs is not an array');
+                                    }
+                                    
+                                    const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
+                                    this.model.setWeights(tensors);
+                                    
+                                    console.log(`✅ Per-FIGI neural model loaded for ${figi} with legacy format`);
+                                } catch (legacyError) {
+                                    console.warn(`⚠️ Failed to load legacy per-FIGI model for ${figi}: ${legacyError.message}`);
+                                    continue; // Пробуем следующий путь
+                                }
+                            }
+                            
+                            // Гарантируем компиляцию после загрузки
+                            if (!this.model.optimizer) {
+                                this.model.compile({
+                                    optimizer: tf.train.adam(0.001),
+                                    loss: 'binaryCrossentropy',
+                                    metrics: ['accuracy']
+                                });
+                            }
+                            
+                            return true;
+                        }
+                    } catch (pathError) {
+                        // Пробуем следующий путь
+                        continue;
+                    }
+                }
+                
+                // Если не нашли модель для конкретного FIGI, продолжаем поиск общей модели
+                console.warn(`⚠️ Per-FIGI model not found for ${figi}, trying general model...`);
+            }
+            
             // Попытка 2: Загрузить общую модель (fallback)
-            const modelExists = await fs.access(this.modelFile).then(() => true).catch(() => false);
-            const weightsExist = await fs.access(this.weightsFile).then(() => true).catch(() => false);
+            // Пробуем разные пути для поиска общей модели
+            const generalModelNames = [
+                'neural-network-model.json',
+                'neural_model.json'
+            ];
             
-            if (!modelExists || !weightsExist) {
-                console.log('📭 Модель не найдена, будет создана при обучении');
-                return false;
+            for (const modelFileName of generalModelNames) {
+                const possibleModelPaths = [
+                    path.join(this.modelPath, modelFileName),
+                    path.join(process.cwd(), 'models', modelFileName),
+                    path.join('./models', modelFileName)
+                ];
+                
+                for (const modelFile of possibleModelPaths) {
+                    const weightsFile = modelFile.replace('_model.json', '_weights.json').replace('model.json', 'weights.json');
+                    
+                    try {
+                        const modelExists = await fs.access(modelFile).then(() => true).catch(() => false);
+                        const weightsExist = await fs.access(weightsFile).then(() => true).catch(() => false);
+                        
+                        if (modelExists && weightsExist) {
+                            console.log(`📥 Loading general neural model from ${modelFile}...`);
+                            
+                            // Пытаемся загрузить модель через ModelManager
+                            const modelName = path.basename(modelFile, '.json');
+                            const model = await ModelManager.loadModel(`neural/${modelName}`);
+                            
+                            if (model) {
+                                this.model = model;
+                                console.log('✅ General neural model loaded successfully with ModelManager');
+                            } else {
+                                console.warn('⚠️ Failed to load neural model with ModelManager, trying legacy format...');
+                                
+                                // Fallback к старому формату
+                                const archRaw = await fs.readFile(modelFile, 'utf-8');
+                                let arch = JSON.parse(archRaw);
+                                
+                                this.model = await tf.models.modelFromJSON(arch);
+                                const weightsRaw = await fs.readFile(weightsFile, 'utf-8');
+                                const weightsData = JSON.parse(weightsRaw);
+                                const specs = weightsData.specs || weightsData.weights || null;
+                                
+                                if (!specs || !Array.isArray(specs) || specs.length === 0) {
+                                    throw new Error('Invalid weights format: specs is not an array');
+                                }
+                                
+                                const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
+                                this.model.setWeights(tensors);
+                                
+                                console.log('✅ General neural model loaded with legacy format');
+                            }
+                            
+                            // Гарантируем компиляцию после загрузки
+                            if (!this.model.optimizer) {
+                                this.model.compile({
+                                    optimizer: tf.train.adam(0.001),
+                                    loss: 'binaryCrossentropy',
+                                    metrics: ['accuracy']
+                                });
+                            }
+                            
+                            console.log('✅ Модель загружена (архитектура и веса)');
+                            this.modelCreatedAt = new Date().toISOString();
+                            return true;
+                        }
+                    } catch (pathError) {
+                        // Пробуем следующий путь
+                        continue;
+                    }
+                }
             }
-
-            console.log('📥 Loading general neural model with ModelManager...');
             
-            // Пытаемся загрузить модель через ModelManager
-            const modelName = path.basename(this.modelFile, '.json');
-            const model = await ModelManager.loadModel(`neural/${modelName}`);
-            
-            if (model) {
-                this.model = model;
-                console.log('✅ General neural model loaded successfully with ModelManager');
-            } else {
-                console.warn('⚠️ Failed to load neural model with ModelManager, trying legacy format...');
-                
-                // Fallback к старому формату
-                const archRaw = await fs.readFile(this.modelFile, 'utf-8');
-                let arch = JSON.parse(archRaw);
-                
-                this.model = await tf.models.modelFromJSON(arch);
-                const weightsRaw = await fs.readFile(this.weightsFile, 'utf-8');
-                const { specs } = JSON.parse(weightsRaw);
-                const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
-                this.model.setWeights(tensors);
-                
-                console.log('✅ General neural model loaded with legacy format');
-            }
-
-            // Гарантируем компиляцию после загрузки
-            if (!this.model.optimizer) {
-                this.model.compile({
-                    optimizer: tf.train.adam(0.001),
-                    loss: 'binaryCrossentropy',
-                    metrics: ['accuracy']
-                });
-            }
-
-            console.log('✅ Модель загружена (архитектура и веса)');
-            // Сохраняем время загрузки модели
-            this.modelCreatedAt = new Date().toISOString();
-            return true;
+            console.log('📭 Модель не найдена, будет создана при обучении');
+            return false;
         } catch (error) {
             console.error('❌ Ошибка загрузки модели:', error);
             return false;
@@ -1068,16 +1134,17 @@ class NeuralNetworkService {
                 const prediction = await this.predict(item.figi);
                 console.log(`🔍 Portfolio ${item.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
 
-                // Добавляем ВСЕ рекомендации с уверенностью < 100% для фронтенда
-                if (prediction.score < 1.0) {
-                analysis.sellRecommendations.push({
-                    item,
-                    prediction,
-                    reason: prediction.score < 0.2 ? 'Low prediction score' : 'Moderate prediction score'
-                });
-                    console.log(`✅ Added SELL recommendation for ${item.ticker}: ${prediction.score.toFixed(3)}`);
+                // SELL рекомендации: score < 0.3 (как в других местах кода)
+                // Это означает, что модель предсказывает падение цены
+                if (prediction.score < 0.3) {
+                    analysis.sellRecommendations.push({
+                        item,
+                        prediction,
+                        reason: prediction.score < 0.2 ? 'Low prediction score (strong sell signal)' : 'Moderate prediction score (sell signal)'
+                    });
+                    console.log(`✅ Added SELL recommendation for ${item.ticker}: score=${prediction.score.toFixed(3)} (${prediction.recommendation})`);
                 } else {
-                    console.log(`❌ Skipped ${item.ticker}: score too high (${prediction.score.toFixed(3)})`);
+                    console.log(`⏭️ Skipped ${item.ticker}: score=${prediction.score.toFixed(3)} (${prediction.recommendation}) - no sell signal`);
                 }
 
                 // Расчет текущей стоимости портфеля
@@ -1368,10 +1435,18 @@ class NeuralNetworkService {
             return;
         }
 
+        // Попытка загрузить модель, если она не загружена
         if (!this.model) {
-            console.log('❌ Market analysis skipped: no trained model available');
-            // Уведомления о невозможности анализа теперь обрабатываются в IntegratedAIService
-            return;
+            console.log('📥 Model not loaded, attempting to load general model...');
+            const loaded = await this.loadModel();
+            if (!loaded) {
+                console.log('❌ Market analysis skipped: no trained model available');
+                console.log('💡 Tip: Train a model first using the TrainingDebug page or API');
+                // Уведомления о невозможности анализа теперь обрабатываются в IntegratedAIService
+                return;
+            } else {
+                console.log('✅ Model loaded successfully, proceeding with analysis');
+            }
         }
 
         // Устанавливаем флаг анализа
@@ -1381,11 +1456,91 @@ class NeuralNetworkService {
         console.log('🔍 Starting market analysis...');
 
         try {
-            // Получаем текущий портфель
-            const PortfolioItem = (await import('../models/PortfolioItem.js')).default;
-            const portfolioItems = await PortfolioItem.findAll();
-
-            console.log(`📊 Portfolio items found: ${portfolioItems.length}`);
+            // Получаем портфель в зависимости от текущего режима торговли
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const TradingModeManager = (await import('./TradingModeManager.js')).default;
+            
+            const currentMode = TradingModeManager.getCurrentMode();
+            const mode = currentMode.mode || currentMode;
+            console.log(`📊 Current trading mode: ${mode}`);
+            
+            // Получаем портфель для текущего режима
+            const portfolio = await TradingEngine.getPortfolioValue();
+            console.log(`📊 Portfolio mode: ${portfolio.mode || mode}`);
+            
+            // Преобразуем портфель в формат для анализа
+            const CacheService = (await import('./CacheService.js')).default;
+            let portfolioItems = [];
+            
+            // Обрабатываем позиции из портфеля
+            // Виртуальный портфель: positions = {figi: quantity}
+            // Реальный портфель: positions = [{figi, ticker, quantity, ...}]
+            const positions = portfolio.positions || {};
+            
+            if (Array.isArray(positions)) {
+                // Реальный портфель (массив объектов)
+                console.log(`📊 Real portfolio: ${positions.length} positions`);
+                for (const position of positions) {
+                    if (position.quantity > 0 && position.figi) {
+                        try {
+                            const instrument = await CacheService.getInstrument(position.figi);
+                            if (instrument) {
+                                portfolioItems.push({
+                                    figi: position.figi,
+                                    ticker: position.ticker || instrument.ticker,
+                                    name: instrument.name,
+                                    quantity: position.quantity,
+                                    averagePrice: position.averagePositionPrice?.value || 0
+                                });
+                            }
+                        } catch (error) {
+                            console.warn(`Could not get instrument info for ${position.figi}:`, error.message);
+                        }
+                    }
+                }
+            } else if (typeof positions === 'object' && !Array.isArray(positions)) {
+                // Виртуальный портфель (объект {figi: quantity})
+                const positionsCount = Object.keys(positions).length;
+                console.log(`📊 Virtual portfolio: ${positionsCount} positions`);
+                for (const [figi, quantity] of Object.entries(positions)) {
+                    if (quantity > 0) {
+                        try {
+                            const instrument = await CacheService.getInstrument(figi);
+                            if (instrument) {
+                                portfolioItems.push({
+                                    figi: instrument.figi,
+                                    ticker: instrument.ticker,
+                                    name: instrument.name,
+                                    quantity: quantity,
+                                    averagePrice: 0
+                                });
+                            }
+                        } catch (error) {
+                            console.warn(`Could not get instrument info for ${figi}:`, error.message);
+                        }
+                    }
+                }
+            }
+            
+            console.log(`📊 Portfolio items for analysis: ${portfolioItems.length} (mode: ${mode})`);
+            
+            // Если портфель пустой, пробуем получить из БД (для обратной совместимости)
+            if (portfolioItems.length === 0) {
+                console.log('📊 Portfolio is empty, checking DB PortfolioItem table...');
+                const PortfolioItem = (await import('../models/PortfolioItem.js')).default;
+                const dbItems = await PortfolioItem.findAll();
+                
+                if (dbItems.length > 0) {
+                    portfolioItems = dbItems.map(item => ({
+                        figi: item.figi,
+                        ticker: item.ticker,
+                        name: item.name,
+                        quantity: item.quantity,
+                        averagePrice: item.averagePrice || 0
+                    }));
+                    console.log(`📊 Found ${portfolioItems.length} items in DB PortfolioItem table`);
+                }
+            }
 
             // Получаем настройки портфеля
             const portfolioSettings = await SettingsService.getPortfolioSettings();

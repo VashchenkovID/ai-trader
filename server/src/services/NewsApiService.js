@@ -50,6 +50,14 @@ class NewsApiService {
                 apiKey: this.apiKey
             };
 
+            // Логируем параметры запроса (без API ключа для безопасности)
+            const paramsForLog = { ...params };
+            console.log('📡 NewsAPI.org запрос:', {
+                endpoint: `${this.baseUrl}${endpoint}`,
+                method: 'GET',
+                params: paramsForLog
+            });
+
             const queryString = new URLSearchParams(requestParams).toString();
             const url = `${this.baseUrl}${endpoint}?${queryString}`;
             const response = await fetch(url, {
@@ -316,71 +324,6 @@ class NewsApiService {
             parts.push(ticker);
         }
         
-        // 3. Альтернативные названия (если есть)
-        if (options.aliases && Array.isArray(options.aliases) && options.aliases.length > 0) {
-            options.aliases.forEach(alias => {
-                if (alias) {
-                    // Проверяем что alias - строка
-                    const aliasStr = typeof alias === 'string' ? alias.trim() : String(alias).trim();
-        
-                        parts.push(aliasStr);
-            
-                }
-            });
-        }
-        
-        // 4. Извлекаем альтернативные названия из apiData
-        if (options.apiData) {
-            // Проверяем что apiData - объект
-            if (typeof options.apiData === 'object' && !Array.isArray(options.apiData)) {
-                // Пробуем найти альтернативные названия в разных полях
-                const possibleNameFields = ['shortName', 'fullName', 'brand', 'legalName'];
-                possibleNameFields.forEach(field => {
-                    if (options.apiData[field]) {
-                        const fieldValue = options.apiData[field];
-                        // Проверяем что значение - строка
-                        if (typeof fieldValue === 'string' && fieldValue !== companyName) {
-                            const altName = fieldValue.trim();
-                            if (altName && altName.length > 3 && altName !== '[object Object]') {
-                                parts.push(altName);
-                            }
-                        }
-                    }
-                });
-            }
-        }
-        
-        // 5. Финансовые термины (если нужно)
-        if (options.includeFinancialTerms !== false) {
-            const financialTerms = [
-                'акции',
-                'дивиденды',
-                'прибыль',
-                'отчетность',
-                'котировки',
-                'бирже'
-            ];
-            
-            // Добавляем тикер + финансовый термин для более точного поиска
-            if (ticker && typeof ticker === 'string') {
-                financialTerms.forEach(term => {
-                    parts.push(`${ticker} ${term}`);
-                });
-            }
-        }
-        
-        // 6. Сектор/отрасль (опционально, для контекста)
-        if (options.sector) {
-            // Проверяем что sector - строка
-            const sectorStr = typeof options.sector === 'string' ? options.sector.trim() : String(options.sector).trim();
-            if (sectorStr && sectorStr !== '[object Object]') {
-                // Добавляем сектор только если он не слишком общий
-                const generalSectors = ['финансы', 'энергетика', 'технологии', 'промышленность'];
-                if (!generalSectors.includes(sectorStr.toLowerCase())) {
-                    parts.push(sectorStr);
-                }
-            }
-        }
         
         // Объединяем через OR для более широкого поиска
         // Убираем дубликаты и некорректные значения

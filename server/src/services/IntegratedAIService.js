@@ -106,7 +106,7 @@ class IntegratedAIService {
             const recommendations = [];
             const weights = {};
 
-            // 1. Рекомендация от ансамбля
+            // 1. Рекомендация от ансамбля (с горизонтами)
             if (this.activeNetworks.ensemble) {
                 try {
                     const ensembleRec = await EnsembleService.predict(figi, portfolio);
@@ -115,7 +115,10 @@ class IntegratedAIService {
                         score: ensembleRec.score,
                         confidence: ensembleRec.confidence,
                         recommendation: ensembleRec.recommendation,
-                        details: ensembleRec.individualPredictions
+                        agreement: ensembleRec.agreement, // Согласованность между горизонтами
+                        horizons: ensembleRec.horizons, // Детали по горизонтам
+                        summary: ensembleRec.summary, // Понятное резюме
+                        details: ensembleRec.individualPredictions // Для обратной совместимости
                     });
                     weights.ensemble = ensembleRec.confidence;
                 } catch (error) {
@@ -257,17 +260,32 @@ class IntegratedAIService {
         let totalConfidence = 0;
         const sourceDetails = {};
 
+        // Собираем информацию о горизонтах из ансамбля
+        let horizons = null;
+        let agreement = null;
+        let summary = null;
+
         for (const rec of recommendations) {
             const weight = normalizedWeights[rec.source] || 0;
             weightedScore += rec.score * weight;
             totalConfidence += rec.confidence * weight;
+            
+            // Если это ансамбль, извлекаем информацию о горизонтах
+            if (rec.source === 'ensemble' && rec.horizons) {
+                horizons = rec.horizons;
+                agreement = rec.agreement;
+                summary = rec.summary;
+            }
+            
             sourceDetails[rec.source] = {
                 score: rec.score,
                 confidence: rec.confidence,
                 recommendation: rec.recommendation,
                 weight: weight,
                 // Пробрасываем детализированное объяснение, если оно есть
-                rawDetails: rec.details || null
+                rawDetails: rec.details || null,
+                // Пробрасываем горизонты, если есть
+                horizons: rec.horizons || null
             };
         }
 
@@ -279,14 +297,81 @@ class IntegratedAIService {
             recommendation = 'SELL';
         }
 
+        // Генерируем понятное резюме, если есть горизонты
+        let finalSummary = summary;
+        if (!finalSummary && horizons) {
+            finalSummary = this.generateIntegratedSummary(horizons, weightedScore, totalConfidence, agreement, recommendation);
+        }
+
         return {
             score: weightedScore,
             confidence: totalConfidence,
             recommendation,
             sources: recommendations.length,
             details: sourceDetails,
-            weights: normalizedWeights
+            weights: normalizedWeights,
+            // Добавляем информацию о горизонтах, если доступна
+            horizons: horizons,
+            agreement: agreement,
+            summary: finalSummary
         };
+    }
+
+    /**
+     * Генерация интегрированного резюме с горизонтами
+     */
+    generateIntegratedSummary(horizons, score, confidence, agreement, recommendation) {
+        let summary = '';
+        
+        // Основная рекомендация
+        const recEmoji = recommendation === 'BUY' ? '📈' : recommendation === 'SELL' ? '📉' : '⏸️';
+        summary += `${recEmoji} Итоговая рекомендация: ${recommendation}\n`;
+        summary += `Общий сигнал: ${(score * 100).toFixed(1)}% (уверенность: ${(confidence * 100).toFixed(0)}%)\n\n`;
+        
+        // Согласованность горизонтов
+        if (agreement !== null) {
+            if (agreement > 0.7) {
+                summary += `✅ Высокая согласованность (${(agreement * 100).toFixed(0)}%) - все горизонты согласны\n\n`;
+            } else if (agreement > 0.5) {
+                summary += `⚠️ Умеренная согласованность (${(agreement * 100).toFixed(0)}%) - горизонты частично расходятся\n\n`;
+            } else {
+                summary += `❌ Низкая согласованность (${(agreement * 100).toFixed(0)}%) - горизонты дают разные сигналы\n\n`;
+            }
+        }
+        
+        // Детали по горизонтам
+        if (horizons) {
+            summary += '📊 Прогнозы по временным горизонтам:\n\n';
+            
+            // Краткосрочный
+            const shortEmoji = horizons.shortTerm.recommendation === 'BUY' ? '🟢' : 
+                              horizons.shortTerm.recommendation === 'SELL' ? '🔴' : '🟡';
+            summary += `${shortEmoji} ${horizons.shortTerm.name} (${horizons.shortTerm.description})\n`;
+            summary += `   Модель: ${horizons.shortTerm.model}\n`;
+            summary += `   Сигнал: ${horizons.shortTerm.recommendation} (${(horizons.shortTerm.score * 100).toFixed(1)}%)\n`;
+            summary += `   Уверенность: ${(horizons.shortTerm.confidence * 100).toFixed(0)}%\n`;
+            summary += `   ${horizons.shortTerm.explanation}\n\n`;
+            
+            // Среднесрочный
+            const mediumEmoji = horizons.mediumTerm.recommendation === 'BUY' ? '🟢' : 
+                               horizons.mediumTerm.recommendation === 'SELL' ? '🔴' : '🟡';
+            summary += `${mediumEmoji} ${horizons.mediumTerm.name} (${horizons.mediumTerm.description})\n`;
+            summary += `   Модель: ${horizons.mediumTerm.model}\n`;
+            summary += `   Сигнал: ${horizons.mediumTerm.recommendation} (${(horizons.mediumTerm.score * 100).toFixed(1)}%)\n`;
+            summary += `   Уверенность: ${(horizons.mediumTerm.confidence * 100).toFixed(0)}%\n`;
+            summary += `   ${horizons.mediumTerm.explanation}\n\n`;
+            
+            // Долгосрочный
+            const longEmoji = horizons.longTerm.recommendation === 'BUY' ? '🟢' : 
+                             horizons.longTerm.recommendation === 'SELL' ? '🔴' : '🟡';
+            summary += `${longEmoji} ${horizons.longTerm.name} (${horizons.longTerm.description})\n`;
+            summary += `   Модель: ${horizons.longTerm.model}\n`;
+            summary += `   Сигнал: ${horizons.longTerm.recommendation} (${(horizons.longTerm.score * 100).toFixed(1)}%)\n`;
+            summary += `   Уверенность: ${(horizons.longTerm.confidence * 100).toFixed(0)}%\n`;
+            summary += `   ${horizons.longTerm.explanation}\n`;
+        }
+        
+        return summary;
     }
 
     /**

@@ -861,7 +861,7 @@ class SchedulerService {
 
             // Отправляем уведомление в Telegram о завершении
             await OptimizedTelegramService.sendAlert(
-                'CACHE_UPDATED',
+                'Обновление Базы Данных',
                 `Кеш обновлен успешно:\n• Время: ${duration}с\n• Обновлено: ${result.totalUpdated} элементов\n• Статус: ✅ Готов к работе`,
                 'info'
             );

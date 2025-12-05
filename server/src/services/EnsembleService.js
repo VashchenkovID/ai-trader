@@ -758,7 +758,7 @@ class EnsembleService {
                         try {
                             const weights = model.getWeights();
                             bestModelWeights = weights.map(w => w.clone());
-                            console.log(`✅ ${modelType} Epoch ${epoch + 1}: Улучшение val_loss = ${valLoss.toFixed(4)} (улучшение на ${improvement}%, лучший на эпохе ${bestEpoch}) - веса сохранены`);
+                            console.log(`✅ ${modelType} Epoch ${epoch + 1}: Улучшение val_loss = ${valLoss.toFixed(4)}, val_acc = ${(valAccuracy * 100).toFixed(2)}%, acc = ${(accuracy * 100).toFixed(2)}% (улучшение на ${improvement}%, лучший на эпохе ${bestEpoch}) - веса сохранены`);
                         } catch (error) {
                             console.warn(`⚠️ ${modelType} Epoch ${epoch + 1}: Не удалось сохранить веса: ${error.message}`);
                         }
@@ -1034,16 +1034,61 @@ class EnsembleService {
             const variance = this.calculateVariance(predictions);
             const confidence = Math.max(0, 1 - variance);
 
+            // Формируем понятные предсказания по горизонтам
+            const horizons = {
+                shortTerm: {
+                    name: 'Краткосрочный прогноз',
+                    description: 'Прогноз на 1-3 дня',
+                    model: 'LSTM',
+                    score: lstmPred,
+                    confidence: this.performance.lstm?.accuracy || 0.5,
+                    recommendation: lstmPred > 0.7 ? 'BUY' : lstmPred < 0.3 ? 'SELL' : 'HOLD',
+                    weight: this.weights.lstm,
+                    horizonDays: 1,
+                    explanation: this.getHorizonExplanation('short', lstmPred)
+                },
+                mediumTerm: {
+                    name: 'Среднесрочный прогноз',
+                    description: 'Прогноз на 1-4 недели',
+                    model: 'CNN',
+                    score: cnnPred,
+                    confidence: this.performance.cnn?.accuracy || 0.5,
+                    recommendation: cnnPred > 0.7 ? 'BUY' : cnnPred < 0.3 ? 'SELL' : 'HOLD',
+                    weight: this.weights.cnn,
+                    horizonDays: 21,
+                    explanation: this.getHorizonExplanation('medium', cnnPred)
+                },
+                longTerm: {
+                    name: 'Долгосрочный прогноз',
+                    description: 'Прогноз на 2-3 месяца',
+                    model: 'Transformer',
+                    score: transformerPred,
+                    confidence: this.performance.transformer?.accuracy || 0.5,
+                    recommendation: transformerPred > 0.7 ? 'BUY' : transformerPred < 0.3 ? 'SELL' : 'HOLD',
+                    weight: this.weights.transformer,
+                    horizonDays: 84,
+                    explanation: this.getHorizonExplanation('long', transformerPred)
+                }
+            };
+
+            // Общее предсказание с объяснением
+            const overallRecommendation = ensembleScore > 0.7 ? 'BUY' : ensembleScore < 0.3 ? 'SELL' : 'HOLD';
+            const agreement = this.calculateAgreement(horizons);
+            
             return {
                 score: ensembleScore,
                 confidence: confidence,
+                recommendation: overallRecommendation,
+                agreement: agreement, // Согласованность между горизонтами (0-1)
+                horizons: horizons,
+                // Для обратной совместимости
                 individualPredictions: {
                     lstm: lstmPred,
                     cnn: cnnPred,
                     transformer: transformerPred
                 },
                 weights: this.weights,
-                recommendation: ensembleScore > 0.7 ? 'BUY' : ensembleScore < 0.3 ? 'SELL' : 'HOLD'
+                summary: this.generatePredictionSummary(horizons, ensembleScore, confidence, agreement)
             };
 
         } catch (error) {
@@ -1486,6 +1531,92 @@ class EnsembleService {
         const mean = predictions.reduce((sum, pred) => sum + pred, 0) / predictions.length;
         const variance = predictions.reduce((sum, pred) => sum + Math.pow(pred - mean, 2), 0) / predictions.length;
         return variance;
+    }
+
+    /**
+     * Расчет согласованности между горизонтами (0-1, где 1 = полное согласие)
+     */
+    calculateAgreement(horizons) {
+        const recommendations = [
+            horizons.shortTerm.recommendation,
+            horizons.mediumTerm.recommendation,
+            horizons.longTerm.recommendation
+        ];
+        
+        // Подсчитываем количество одинаковых рекомендаций
+        const buyCount = recommendations.filter(r => r === 'BUY').length;
+        const sellCount = recommendations.filter(r => r === 'SELL').length;
+        const holdCount = recommendations.filter(r => r === 'HOLD').length;
+        
+        // Максимальное совпадение
+        const maxMatch = Math.max(buyCount, sellCount, holdCount);
+        
+        // Согласованность = доля моделей с одинаковой рекомендацией
+        return maxMatch / 3;
+    }
+
+    /**
+     * Генерация объяснения для горизонта
+     */
+    getHorizonExplanation(horizon, score) {
+        const explanations = {
+            short: {
+                high: 'Краткосрочные паттерны указывают на быстрый рост цены в ближайшие дни',
+                medium: 'Краткосрочные паттерны показывают умеренное движение цены',
+                low: 'Краткосрочные паттерны указывают на возможное падение цены'
+            },
+            medium: {
+                high: 'Среднесрочные графические паттерны формируют восходящий тренд',
+                medium: 'Среднесрочные паттерны показывают боковое движение',
+                low: 'Среднесрочные графические паттерны формируют нисходящий тренд'
+            },
+            long: {
+                high: 'Долгосрочный контекстный анализ указывает на позитивный фундаментальный тренд',
+                medium: 'Долгосрочный анализ показывает нейтральную динамику',
+                low: 'Долгосрочный контекстный анализ указывает на негативный фундаментальный тренд'
+            }
+        };
+        
+        const category = score > 0.7 ? 'high' : score < 0.3 ? 'low' : 'medium';
+        return explanations[horizon]?.[category] || 'Анализ показывает нейтральную динамику';
+    }
+
+    /**
+     * Генерация понятного резюме предсказания
+     */
+    generatePredictionSummary(horizons, ensembleScore, confidence, agreement) {
+        const recommendation = ensembleScore > 0.7 ? 'BUY' : ensembleScore < 0.3 ? 'SELL' : 'HOLD';
+        
+        let summary = '';
+        
+        // Основная рекомендация
+        if (recommendation === 'BUY') {
+            summary = '📈 Рекомендация: ПОКУПКА\n';
+            summary += `Общий сигнал: ${(ensembleScore * 100).toFixed(1)}% (${(confidence * 100).toFixed(0)}% уверенность)\n\n`;
+        } else if (recommendation === 'SELL') {
+            summary = '📉 Рекомендация: ПРОДАЖА\n';
+            summary += `Общий сигнал: ${(ensembleScore * 100).toFixed(1)}% (${(confidence * 100).toFixed(0)}% уверенность)\n\n`;
+        } else {
+            summary = '⏸️ Рекомендация: УДЕРЖАНИЕ\n';
+            summary += `Общий сигнал: ${(ensembleScore * 100).toFixed(1)}% (${(confidence * 100).toFixed(0)}% уверенность)\n\n`;
+        }
+        
+        // Согласованность
+        if (agreement > 0.7) {
+            summary += `✅ Высокая согласованность (${(agreement * 100).toFixed(0)}%) - все горизонты согласны\n\n`;
+        } else if (agreement > 0.5) {
+            summary += `⚠️ Умеренная согласованность (${(agreement * 100).toFixed(0)}%) - горизонты частично расходятся\n\n`;
+        } else {
+            summary += `❌ Низкая согласованность (${(agreement * 100).toFixed(0)}%) - горизонты дают разные сигналы\n\n`;
+        }
+        
+        // Детали по горизонтам
+        summary += '📊 Прогнозы по горизонтам:\n';
+        summary += `• Краткосрочный (1-3 дня): ${horizons.shortTerm.recommendation} (${(horizons.shortTerm.score * 100).toFixed(1)}%)\n`;
+        summary += `• Среднесрочный (1-4 недели): ${horizons.mediumTerm.recommendation} (${(horizons.mediumTerm.score * 100).toFixed(1)}%)\n`;
+        summary += `• Долгосрочный (2-3 месяца): ${horizons.longTerm.recommendation} (${(horizons.longTerm.score * 100).toFixed(1)}%)\n`;
+        
+        return summary;
     }
 
     /**

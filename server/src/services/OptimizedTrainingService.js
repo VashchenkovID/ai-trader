@@ -156,6 +156,15 @@ class OptimizedTrainingService {
 
             // 6. Сохраняем модель
             await this.saveModel(figi, model);
+            
+            // 6.0. Обновляем модель в NeuralNetworkService для использования в анализе
+            try {
+                const NeuralNetworkService = (await import('./NeuralNetworkService.js')).default;
+                NeuralNetworkService.model = model;
+                console.log(`✅ Model updated in NeuralNetworkService for ${figi}`);
+            } catch (nnError) {
+                console.warn(`⚠️ Failed to update model in NeuralNetworkService: ${nnError.message}`);
+            }
 
             // 6.1. Условительное сохранение лучшей модели по вал. accuracy
             if (validationResult && typeof validationResult.accuracy === 'number') {
@@ -683,14 +692,48 @@ class OptimizedTrainingService {
         // Используем взвешивание через дублирование данных (уже применено в applyDataWeighting)
         const classWeights = this.calculateClassWeights(finalTrainLabels);
         
+        // Валидация данных перед созданием тензоров
+        if (finalTrainFeatures.length === 0 || !finalTrainFeatures[0] || !Array.isArray(finalTrainFeatures[0])) {
+            throw new Error('Invalid training features: empty or not an array of arrays');
+        }
+        
+        const featureSize = finalTrainFeatures[0].length;
+        if (featureSize === 0) {
+            throw new Error('Invalid training features: feature vector is empty');
+        }
+        
+        // Проверяем, что все фичи имеют одинаковый размер
+        for (let i = 0; i < finalTrainFeatures.length; i++) {
+            if (!Array.isArray(finalTrainFeatures[i]) || finalTrainFeatures[i].length !== featureSize) {
+                throw new Error(`Invalid training features at index ${i}: expected size ${featureSize}, got ${finalTrainFeatures[i]?.length || 0}`);
+            }
+            // Проверяем на NaN и Infinity
+            for (let j = 0; j < finalTrainFeatures[i].length; j++) {
+                const val = finalTrainFeatures[i][j];
+                if (typeof val !== 'number' || isNaN(val) || !isFinite(val)) {
+                    throw new Error(`Invalid training feature value at [${i}][${j}]: ${val}`);
+                }
+            }
+        }
+        
         // Создаем тензоры для обучения с явным указанием формы
-        const trainFeaturesShape = [finalTrainFeatures.length, finalTrainFeatures[0]?.length || 0];
+        const trainFeaturesShape = [finalTrainFeatures.length, featureSize];
         const xs = tf.tensor2d(finalTrainFeatures, trainFeaturesShape);
         const trainLabelsArray = finalTrainLabels.map(label => [label]);
         const ys = tf.tensor2d(trainLabelsArray, [trainLabelsArray.length, 1]);
         
+        // Валидация валидационных данных
+        if (split.val.features.length === 0 || !split.val.features[0] || !Array.isArray(split.val.features[0])) {
+            throw new Error('Invalid validation features: empty or not an array of arrays');
+        }
+        
+        const valFeatureSize = split.val.features[0].length;
+        if (valFeatureSize !== featureSize) {
+            throw new Error(`Feature size mismatch: training=${featureSize}, validation=${valFeatureSize}`);
+        }
+        
         // Создаем тензоры для валидации с явным указанием формы
-        const valFeaturesShape = [split.val.features.length, split.val.features[0]?.length || 0];
+        const valFeaturesShape = [split.val.features.length, valFeatureSize];
         const valXs = tf.tensor2d(split.val.features, valFeaturesShape);
         const valLabelsArray = split.val.labels.map(label => [label]);
         const valYs = tf.tensor2d(valLabelsArray, [valLabelsArray.length, 1]);
@@ -748,13 +791,15 @@ class OptimizedTrainingService {
                     
                     // Early stopping и reduce LR on plateau
                     const valLoss = logs.val_loss || logs.loss;
+                    const valAccuracy = logs.val_acc || logs.acc || 0;
+                    const accuracy = logs.acc || 0;
                     
                     if (valLoss < bestValLoss) {
                         // Улучшение - сбрасываем счетчики
                         bestValLoss = valLoss;
                         patienceCount = 0;
                         reduceLRCount = 0;
-                        console.log(`✅ Epoch ${epoch + 1}: Улучшение val_loss = ${valLoss.toFixed(4)}`);
+                        console.log(`✅ Epoch ${epoch + 1}: Улучшение val_loss = ${valLoss.toFixed(4)}, val_acc = ${(valAccuracy * 100).toFixed(2)}%, acc = ${(accuracy * 100).toFixed(2)}%`);
                     } else {
                         // Нет улучшения
                         patienceCount++;
@@ -906,6 +951,14 @@ class OptimizedTrainingService {
             await fs.writeFile(weightsPath, JSON.stringify({ specs }, null, 2));
             
             console.log(`✅ Model saved for ${figi}: ${modelPath}, ${weightsPath}`);
+            
+            // Также сохраняем через ModelManager для совместимости
+            try {
+                await ModelManager.saveModel(model, `neural/${figi}`);
+                console.log(`✅ Model also saved via ModelManager for ${figi}`);
+            } catch (modelManagerError) {
+                console.warn(`⚠️ Failed to save model via ModelManager for ${figi}: ${modelManagerError.message}`);
+            }
             
             // Также сохраняем в памяти для быстрого доступа
             this.currentModel = { figi, model };
