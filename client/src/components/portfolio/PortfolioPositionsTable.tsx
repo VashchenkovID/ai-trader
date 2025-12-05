@@ -5,6 +5,7 @@ import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { Message } from 'primereact/message';
+import { translateSector } from '../../utils/sectorTranslator';
 
 export interface Position {
   figi: string;
@@ -27,6 +28,8 @@ interface PortfolioPositionsTableProps {
   loading?: boolean;
   error?: string | null;
   onRefresh?: () => void;
+  onAnalyze?: () => void;
+  analyzing?: boolean;
   className?: string;
 }
 
@@ -35,6 +38,8 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
   loading = false,
   error = null,
   onRefresh,
+  onAnalyze,
+  analyzing = false,
   className = ''
 }) => {
   const formatCurrency = (amount: number, currency: string = 'RUB') => {
@@ -61,8 +66,8 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
     return (
       <div className="flex align-items-center gap-2">
         <div>
-          <div className="font-medium">{ticker}</div>
-          <div className="text-sm text-600">{name}</div>
+          <div className="font-medium">{name}</div>
+          <div className="text-sm text-600">{ticker}</div>
         </div>
       </div>
     );
@@ -74,7 +79,7 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
       : 0;
     
     return (
-      <div className="text-right">
+      <div className="text-left">
         <div className="font-medium">{quantity > 0 ? quantity.toLocaleString('ru-RU') : '—'}</div>
         <div className="text-sm text-600">шт.</div>
       </div>
@@ -85,17 +90,53 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
     const currentPrice = typeof rowData.currentPrice === 'number' && !isNaN(rowData.currentPrice) && isFinite(rowData.currentPrice) 
       ? rowData.currentPrice 
       : 0;
+    
+    return (
+      <div className="text-left">
+        <div className="font-medium">
+          {currentPrice > 0 ? formatCurrency(currentPrice, rowData.currency) : '—'}
+        </div>
+      </div>
+    );
+  };
+
+  const purchasePriceTemplate = (rowData: Position) => {
     const averagePrice = typeof rowData.averagePrice === 'number' && !isNaN(rowData.averagePrice) && isFinite(rowData.averagePrice)
       ? rowData.averagePrice
       : 0;
     
     return (
-      <div className="text-right">
+      <div className="text-left">
         <div className="font-medium">
-          {currentPrice > 0 ? formatCurrency(currentPrice, rowData.currency) : '—'}
+          {averagePrice > 0 ? formatCurrency(averagePrice, rowData.currency) : '—'}
         </div>
-        <div className="text-sm text-600">
-          Ср: {averagePrice > 0 ? formatCurrency(averagePrice, rowData.currency) : '—'}
+      </div>
+    );
+  };
+
+  const priceDifferenceTemplate = (rowData: Position) => {
+    const currentPrice = typeof rowData.currentPrice === 'number' && !isNaN(rowData.currentPrice) && isFinite(rowData.currentPrice) 
+      ? rowData.currentPrice 
+      : 0;
+    const averagePrice = typeof rowData.averagePrice === 'number' && !isNaN(rowData.averagePrice) && isFinite(rowData.averagePrice)
+      ? rowData.averagePrice
+      : 0;
+    
+    if (averagePrice === 0 || currentPrice === 0) {
+      return <div className="text-left">—</div>;
+    }
+    
+    const difference = currentPrice - averagePrice;
+    const differencePercent = (difference / averagePrice) * 100;
+    const isPositive = difference >= 0;
+    
+    return (
+      <div className="text-left">
+        <div className={`font-medium ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+          {formatCurrency(difference, rowData.currency)}
+        </div>
+        <div className={`text-sm ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+          {formatPercent(differencePercent)}
         </div>
       </div>
     );
@@ -110,7 +151,7 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
       : 0;
     
     return (
-      <div className="text-right">
+      <div className="text-left">
         <div className="font-medium">
           {marketValue > 0 ? formatCurrency(marketValue) : '—'}
         </div>
@@ -120,7 +161,7 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
   };
 
   const pnlTemplate = (rowData: Position) => (
-    <div className="text-right">
+    <div className="text-left">
       <div className={`font-medium ${rowData.unrealizedPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
         {formatCurrency(rowData.unrealizedPnL)}
       </div>
@@ -130,23 +171,38 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
     </div>
   );
 
-  const sectorTemplate = (rowData: Position) => (
-    <Tag value={rowData.sector || 'Неизвестно'} severity="info" />
-  );
+  const sectorTemplate = (rowData: Position) => {
+    const translatedSector = translateSector(rowData.sector);
+    return <Tag value={translatedSector} severity="info" />;
+  };
 
   return (
     <Card title="📋 Позиции" className={className}>
       <div className="flex justify-content-between align-items-center mb-3">
         <h3 className="m-0">Текущие позиции</h3>
-        {onRefresh && (
-          <Button
-            icon="pi pi-refresh"
-            label="Обновить"
-            size="small"
-            loading={loading}
-            onClick={onRefresh}
-          />
-        )}
+        <div className="flex gap-2">
+          {onAnalyze && (
+            <Button
+              icon="pi pi-chart-line"
+              label="Предсказание"
+              size="small"
+              loading={analyzing}
+              onClick={onAnalyze}
+              severity="info"
+              tooltip="Проанализировать портфель и получить рекомендации по продаже/удержанию"
+              tooltipOptions={{ position: 'bottom' }}
+            />
+          )}
+          {onRefresh && (
+            <Button
+              icon="pi pi-refresh"
+              label="Обновить"
+              size="small"
+              loading={loading}
+              onClick={onRefresh}
+            />
+          )}
+        </div>
       </div>
       
       {error && (
@@ -180,10 +236,24 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
         />
         <Column 
           field="currentPrice" 
-          header="Цена" 
+          header="Текущая цена" 
           body={priceTemplate}
           sortable
           style={{ minWidth: '140px' }}
+        />
+        <Column 
+          field="averagePrice" 
+          header="Цена закупки" 
+          body={purchasePriceTemplate}
+          sortable
+          style={{ minWidth: '140px' }}
+        />
+        <Column 
+          field="priceDifference" 
+          header="Разница в цене" 
+          body={priceDifferenceTemplate}
+          sortable
+          style={{ minWidth: '160px' }}
         />
         <Column 
           field="marketValue" 

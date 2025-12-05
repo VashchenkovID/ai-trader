@@ -211,9 +211,22 @@ export const apiService = {
   async getNeuralNetworkStatus(): Promise<any> {
     try {
       const response = await api.get('/api/neural-network/status');
-      return response.data.data;
+      return response.data;
     } catch (error) {
       console.error('Error fetching neural network status:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Активировать нейросеть
+   */
+  async activateNeuralNetwork(): Promise<any> {
+    try {
+      const response = await api.post('/api/neural-network/activate');
+      return response.data;
+    } catch (error) {
+      console.error('Error activating neural network:', error);
       throw error;
     }
   },
@@ -2535,6 +2548,19 @@ export const apiService = {
       return response.data;
     } catch (error) {
       console.error('Error fetching portfolio risk metrics:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Анализ портфеля с рекомендациями по продаже/удержанию
+   */
+  async analyzePortfolio(): Promise<any> {
+    try {
+      const response = await api.post('/api/neural-network/analyze-portfolio');
+      return response.data;
+    } catch (error: any) {
+      console.error('Error analyzing portfolio:', error);
       throw error;
     }
   }

@@ -211,4 +211,106 @@ router.get('/instruments', async (req, res) => {
     }
 });
 
+/**
+ * Анализ портфеля с рекомендациями по продаже/удержанию
+ * Возвращает последний анализ из БД или запускает новый
+ */
+router.post('/analyze-portfolio', async (req, res) => {
+    try {
+        const { portfolioType = 'virtual', forceNew = false } = req.body;
+        
+        // Если не требуется новый анализ, пытаемся получить из БД
+        if (!forceNew) {
+            try {
+                const PortfolioAnalysis = (await import('../models/PortfolioAnalysis.js')).default;
+                
+                // Ищем последний успешный анализ за последний час
+                const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+                const lastAnalysis = await PortfolioAnalysis.findOne({
+                    where: {
+                        portfolioType,
+                        status: 'completed',
+                        analysisDate: {
+                            [require('sequelize').Op.gte]: oneHourAgo
+                        }
+                    },
+                    order: [['analysisDate', 'DESC']]
+                });
+
+                if (lastAnalysis) {
+                    console.log(`📊 Returning cached portfolio analysis from DB (${portfolioType}, ${lastAnalysis.analysisDate})`);
+                    return res.json({
+                        success: true,
+                        message: 'Анализ портфеля из БД',
+                        data: {
+                            portfolioType: lastAnalysis.portfolioType,
+                            analysisDate: lastAnalysis.analysisDate,
+                            portfolioValue: lastAnalysis.portfolioValue,
+                            availableBudget: lastAnalysis.availableBudget,
+                            totalPositions: lastAnalysis.totalPositions,
+                            sellRecommendations: lastAnalysis.sellRecommendations || [],
+                            buyRecommendations: lastAnalysis.buyRecommendations || [],
+                            sellRecommendationsCount: lastAnalysis.sellRecommendationsCount,
+                            buyRecommendationsCount: lastAnalysis.buyRecommendationsCount,
+                            processingTime: lastAnalysis.processingTime,
+                            metadata: lastAnalysis.metadata
+                        }
+                    });
+                }
+            } catch (dbError) {
+                console.warn('Could not fetch analysis from DB, starting new analysis:', dbError.message);
+            }
+        }
+
+        // Если нет свежего анализа в БД или требуется новый, запускаем анализ
+        res.json({
+            success: true,
+            message: 'Анализ портфеля запущен',
+            data: { status: 'analyzing', portfolioType }
+        });
+
+        // Запускаем анализ в фоне с сохранением в БД
+        try {
+            const analysisRecord = await NeuralNetworkService.analyzePortfolioAndSave(portfolioType);
+            
+            // Уведомляем через WebSocket
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'portfolio_analysis_completed',
+                    data: {
+                        portfolioType: analysisRecord.portfolioType,
+                        analysisDate: analysisRecord.analysisDate,
+                        portfolioValue: analysisRecord.portfolioValue,
+                        sellRecommendations: analysisRecord.sellRecommendations || [],
+                        buyRecommendations: analysisRecord.buyRecommendations || [],
+                        sellRecommendationsCount: analysisRecord.sellRecommendationsCount,
+                        buyRecommendationsCount: analysisRecord.buyRecommendationsCount
+                    }
+                });
+            }
+            
+            console.log('✅ Portfolio analysis completed and saved to DB');
+        } catch (analysisError) {
+            console.error('Ошибка анализа портфеля:', analysisError);
+            
+            // Уведомляем через WebSocket об ошибке
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'portfolio_analysis_error',
+                    data: { error: analysisError.message, portfolioType }
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Ошибка запуска анализа портфеля:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка запуска анализа портфеля',
+            error: error.message
+        });
+    }
+});
+
 export default router;

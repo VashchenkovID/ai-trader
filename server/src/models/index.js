@@ -29,3 +29,4 @@ export { default as TradingWatchlist } from './TradingWatchlist.js';
 export { default as TradingWorkflow } from './TradingWorkflow.js';
 export { default as TradingWorkspace } from './TradingWorkspace.js';
 export { default as TradingZone } from './TradingZone.js';
+export { default as PortfolioAnalysis } from './PortfolioAnalysis.js';

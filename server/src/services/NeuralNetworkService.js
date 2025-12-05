@@ -358,24 +358,40 @@ class NeuralNetworkService {
                 }
             } else {
                 // Сохраняем общую модель (для обратной совместимости)
+                console.log(`💾 Сохраняем общую модель в ${this.modelFile}...`);
+                console.log(`📊 Model path: ${this.modelPath}`);
+                console.log(`📊 Model file: ${this.modelFile}`);
+                console.log(`📊 Weights file: ${this.weightsFile}`);
+                
+                if (!modelData || !modelData.architecture) {
+                    console.error('❌ Ошибка: modelData.architecture отсутствует при сохранении общей модели');
+                    return;
+                }
+                
                 await fs.writeFile(this.modelFile, typeof modelData.architecture === 'string' 
                     ? modelData.architecture 
-                    : JSON.stringify(modelData.architecture));
+                    : JSON.stringify(modelData.architecture, null, 2));
 
-                await fs.writeFile(this.weightsFile, JSON.stringify(modelData.weights));
+                await fs.writeFile(this.weightsFile, JSON.stringify(modelData.weights, null, 2));
 
                 console.log('✅ Общая модель сохранена (архитектура и веса)');
+                console.log(`📁 Файлы сохранены: ${this.modelFile}, ${this.weightsFile}`);
 
                 // Дополнительно сохраняем через ModelManager в новом формате,
                 // чтобы последующие загрузки не падали на fallback и не логировали warning
                 try {
                     if (this.model) {
-                        const path = await import('path');
-                        const modelName = path.basename(this.modelFile, '.json');
+                        const pathModule = await import('path');
+                        const modelName = pathModule.basename(this.modelFile, '.json');
+                        console.log(`💾 Сохраняем через ModelManager как neural/${modelName}...`);
                         await ModelManager.saveModel(this.model, `neural/${modelName}`);
+                        console.log(`✅ Общая модель также сохранена через ModelManager`);
+                    } else {
+                        console.warn('⚠️ this.model не установлена, пропускаем сохранение через ModelManager');
                     }
                 } catch (modelManagerError) {
                     console.warn(`⚠️ Failed to save general neural model via ModelManager: ${modelManagerError.message}`);
+                    console.warn(`⚠️ Stack: ${modelManagerError.stack}`);
                 }
             }
         } catch (error) {
@@ -716,13 +732,20 @@ class NeuralNetworkService {
                 const trainedModel = await OptimizedTrainingService.getModel(figi);
                 if (trainedModel) {
                     this.model = trainedModel;
-                    // Сохраняем модель через OptimizedTrainingService (он знает правильный формат)
+                    // Сохраняем per-FIGI модель через OptimizedTrainingService (он знает правильный формат)
                     await OptimizedTrainingService.saveModel(figi, trainedModel);
                     // Также сохраняем через наш метод для совместимости
                     await this.saveModel(figi);
+                    
+                    // Сохраняем также как общую модель (если это единственное обучение или лучшая модель)
+                    // Это важно для случаев, когда обучается только один инструмент
+                    console.log(`💾 Сохраняем модель для ${figi} также как общую модель...`);
+                    await this.saveModel(); // Сохраняет общую модель (без параметра figi)
+                    console.log(`✅ Общая модель также сохранена на основе ${figi}`);
+                    
                     // Обновляем время создания модели
                     this.modelCreatedAt = new Date().toISOString();
-                    console.log(`✅ Model saved successfully for ${figi}`);
+                    console.log(`✅ Model saved successfully for ${figi} (both per-FIGI and general)`);
                 } else {
                     console.warn(`⚠️ Trained model not found for ${figi} after training`);
                 }
@@ -818,7 +841,22 @@ class NeuralNetworkService {
 
                 try {
                     const history = await this.trainForInstrument(instrument.figi, days);
-                    results.push({ figi: instrument.figi, ticker: instrument.ticker, ok: true, epochs: history?.params?.epochs || 50 });
+                    // Сохраняем метрики для выбора лучшей модели
+                    const finalAcc = history?.history?.acc?.length > 0 
+                        ? history.history.acc[history.history.acc.length - 1] 
+                        : null;
+                    const finalLoss = history?.history?.loss?.length > 0 
+                        ? history.history.loss[history.history.loss.length - 1] 
+                        : null;
+                    
+                    results.push({ 
+                        figi: instrument.figi, 
+                        ticker: instrument.ticker, 
+                        ok: true, 
+                        epochs: history?.params?.epochs || 50,
+                        accuracy: finalAcc,
+                        loss: finalLoss
+                    });
                     
                     // Очищаем ошибки для этого инструмента при успешном обучении
                     // Очистка ошибок обучения теперь не нужна в оптимизированном сервисе
@@ -836,8 +874,70 @@ class NeuralNetworkService {
                 timestamp: new Date().toISOString()
             });
 
-            // Сохраняем модель после пакетного обучения
-            await this.saveModel();
+            // Сохраняем общую модель после пакетного обучения
+            // Выбираем модель с лучшей точностью (accuracy) среди всех успешно обученных
+            console.log('💾 Выбираем лучшую модель для сохранения как общей...');
+            
+            try {
+                // Находим модель с лучшей accuracy среди успешно обученных
+                const successfulResults = results.filter(r => r.ok && r.accuracy !== null && r.accuracy !== undefined);
+                
+                if (successfulResults.length > 0) {
+                    // Сортируем по accuracy (по убыванию) и берем лучшую
+                    successfulResults.sort((a, b) => (b.accuracy || 0) - (a.accuracy || 0));
+                    const bestResult = successfulResults[0];
+                    
+                    console.log(`🏆 Лучшая модель: ${bestResult.ticker} (FIGI: ${bestResult.figi}) с accuracy: ${bestResult.accuracy?.toFixed(4) || 'N/A'}`);
+                    
+                    // Загружаем лучшую модель
+                    const bestModel = await OptimizedTrainingService.getModel(bestResult.figi);
+                    if (bestModel) {
+                        this.model = bestModel;
+                        console.log(`💾 Сохраняем лучшую модель (${bestResult.ticker}) как общую модель...`);
+                        await this.saveModel(); // Сохраняет общую модель (без параметра figi)
+                        console.log(`✅ Общая модель сохранена на основе лучшей модели (${bestResult.ticker}, accuracy: ${bestResult.accuracy?.toFixed(4)})`);
+                    } else {
+                        console.warn(`⚠️ Не удалось загрузить модель для ${bestResult.ticker}, пробуем использовать this.model...`);
+                        if (this.model) {
+                            console.log('💾 Сохраняем текущую this.model как общую модель...');
+                            await this.saveModel(); // Сохраняет общую модель (без параметра figi)
+                            console.log('✅ Общая модель сохранена (использована текущая this.model)');
+                        } else {
+                            console.warn('⚠️ this.model не установлена, не можем сохранить общую модель');
+                        }
+                    }
+                } else if (this.model) {
+                    // Если нет метрик, но есть модель - используем её
+                    console.log('⚠️ Нет метрик для выбора лучшей модели, используем текущую this.model');
+                    console.log('💾 Сохраняем текущую this.model как общую модель...');
+                    await this.saveModel(); // Сохраняет общую модель (без параметра figi)
+                    console.log('✅ Общая модель сохранена');
+                } else {
+                    // Пробуем найти любую обученную модель
+                    console.log('⚠️ this.model не установлена, ищем любую обученную модель...');
+                    const instruments = await CacheService.getAllInstruments(10);
+                    for (const instrument of instruments) {
+                        const modelFromTraining = await OptimizedTrainingService.getModel(instrument.figi);
+                        if (modelFromTraining) {
+                            this.model = modelFromTraining;
+                            console.log(`✅ Используем модель для ${instrument.ticker} как общую`);
+                            await this.saveModel();
+                            break;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('⚠️ Ошибка при выборе и сохранении общей модели:', err.message);
+                // Fallback: пробуем сохранить текущую модель
+                if (this.model) {
+                    try {
+                        await this.saveModel();
+                        console.log('✅ Общая модель сохранена (fallback)');
+                    } catch (saveErr) {
+                        console.error('❌ Не удалось сохранить общую модель:', saveErr.message);
+                    }
+                }
+            }
 
             // Отправляем одно сводное уведомление в Telegram (если доступно)
             try {
@@ -1054,8 +1154,40 @@ class NeuralNetworkService {
 
     // Анализ всего портфеля
     async analyzePortfolio(portfolioItems, totalBudget = null) {
+        // Проверяем и загружаем модель, если нужно
+        if (!this.model) {
+            console.log('📥 Model not loaded in analyzePortfolio, attempting to load...');
+            const loaded = await this.loadModel();
+            if (!loaded) {
+                // Пробуем найти любую обученную модель через OptimizedTrainingService
+                try {
+                    const instruments = await CacheService.getAllInstruments(10);
+                    for (const instrument of instruments) {
+                        try {
+                            const modelFromTraining = await OptimizedTrainingService.getModel(instrument.figi);
+                            if (modelFromTraining) {
+                                this.model = modelFromTraining;
+                                console.log(`✅ Loaded model from OptimizedTrainingService for ${instrument.figi}`);
+                                break;
+                            }
+                        } catch (err) {
+                            // Продолжаем поиск
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Could not load model from OptimizedTrainingService:', err.message);
+                }
+            }
+            
+            if (!this.model) {
+                throw new Error('No trained model available. Please train a model first.');
+            }
+        }
+        
+        // Активируем нейросеть, если она неактивна
         if (!this.isActive) {
-            throw new Error('Neural network is not active');
+            console.log('⚠️ Neural network is not active, activating...');
+            await this.setStatus('active');
         }
 
         // Получаем настройки портфеля
@@ -1165,6 +1297,177 @@ class NeuralNetworkService {
         analysis.sellRecommendations.sort((a, b) => a.prediction.score - b.prediction.score);
 
         return analysis;
+    }
+
+    /**
+     * Анализ портфеля с сохранением в БД
+     * Выполняется автоматически раз в час
+     */
+    async analyzePortfolioAndSave(portfolioType = 'virtual') {
+        const startTime = Date.now();
+        let analysisRecord = null;
+
+        try {
+            console.log(`📊 Starting portfolio analysis for ${portfolioType} portfolio...`);
+
+            // Создаем запись в БД со статусом pending
+            const PortfolioAnalysis = (await import('../models/PortfolioAnalysis.js')).default;
+            analysisRecord = await PortfolioAnalysis.create({
+                portfolioType,
+                status: 'pending',
+                analysisDate: new Date()
+            });
+
+            // Получаем портфель в зависимости от типа
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const CacheService = (await import('./CacheService.js')).default;
+            let portfolioItems = [];
+
+            if (portfolioType === 'real') {
+                // Реальный портфель
+                const portfolio = await TradingEngine.getRealPortfolioValue();
+                const positions = portfolio?.positions || [];
+                
+                if (Array.isArray(positions)) {
+                    for (const position of positions) {
+                        if (position.quantity > 0 && position.figi) {
+                            try {
+                                const instrument = await CacheService.getInstrument(position.figi);
+                                if (instrument) {
+                                    portfolioItems.push({
+                                        figi: position.figi,
+                                        ticker: position.ticker || instrument.ticker,
+                                        name: instrument.name,
+                                        quantity: position.quantity,
+                                        averagePrice: position.averagePositionPrice?.value || 0
+                                    });
+                                }
+                            } catch (error) {
+                                console.warn(`Could not get instrument info for ${position.figi}:`, error.message);
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Виртуальный портфель (virtual/paper)
+                const portfolio = await TradingEngine.getPortfolioValue();
+                const positions = portfolio?.positions || {};
+                
+                if (typeof positions === 'object' && !Array.isArray(positions)) {
+                    for (const [figi, quantity] of Object.entries(positions)) {
+                        if (quantity > 0) {
+                            try {
+                                const instrument = await CacheService.getInstrument(figi);
+                                if (instrument) {
+                                    portfolioItems.push({
+                                        figi: instrument.figi,
+                                        ticker: instrument.ticker,
+                                        name: instrument.name,
+                                        quantity: quantity,
+                                        averagePrice: 0
+                                    });
+                                }
+                            } catch (error) {
+                                console.warn(`Could not get instrument info for ${figi}:`, error.message);
+                            }
+                        }
+                    }
+                }
+            }
+
+            console.log(`📊 Portfolio items for analysis: ${portfolioItems.length} (type: ${portfolioType})`);
+
+            // Получаем настройки портфеля
+            const SettingsService = (await import('./SettingsService.js')).default;
+            const portfolioSettings = await SettingsService.getPortfolioSettings();
+            const totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
+
+            // Проверяем, активна ли нейросеть, и активируем если нужно
+            if (!this.isActive) {
+                console.log('⚠️ Neural network is not active, activating...');
+                await this.setStatus('active');
+            }
+
+            // Пытаемся загрузить модель, если она не загружена
+            if (!this.model) {
+                console.log('📥 Model not loaded, attempting to load...');
+                
+                // Пробуем загрузить общую модель
+                const loaded = await this.loadModel();
+                if (!loaded) {
+                    // Пробуем найти любую обученную модель через OptimizedTrainingService
+                    try {
+                        // Получаем список инструментов и пробуем загрузить модель для первого
+                        const instruments = await CacheService.getAllInstruments(10);
+                        for (const instrument of instruments) {
+                            try {
+                                const modelFromTraining = await OptimizedTrainingService.getModel(instrument.figi);
+                                if (modelFromTraining) {
+                                    this.model = modelFromTraining;
+                                    console.log(`✅ Loaded model from OptimizedTrainingService for ${instrument.figi}`);
+                                    break;
+                                }
+                            } catch (err) {
+                                // Продолжаем поиск
+                            }
+                        }
+                    } catch (err) {
+                        console.warn('Could not load model from OptimizedTrainingService:', err.message);
+                    }
+                }
+                
+                if (!this.model) {
+                    throw new Error('No trained model available. Please train a model first.');
+                }
+            }
+
+            // Выполняем анализ
+            const analysis = await this.analyzePortfolio(portfolioItems, totalBudget);
+
+            const processingTime = Date.now() - startTime;
+
+            // Сохраняем результаты в БД
+            await analysisRecord.update({
+                status: 'completed',
+                portfolioValue: analysis.portfolioValue || 0,
+                availableBudget: analysis.availableBudget || 0,
+                totalPositions: portfolioItems.length,
+                sellRecommendations: analysis.sellRecommendations || [],
+                buyRecommendations: analysis.buyRecommendations || [],
+                sellRecommendationsCount: analysis.sellRecommendations?.length || 0,
+                buyRecommendationsCount: analysis.buyRecommendations?.length || 0,
+                processingTime,
+                metadata: {
+                    mode: portfolioType,
+                    analyzedAt: new Date().toISOString()
+                }
+            });
+
+            console.log(`✅ Portfolio analysis completed and saved for ${portfolioType} portfolio:`);
+            console.log(`   - Sell recommendations: ${analysis.sellRecommendations?.length || 0}`);
+            console.log(`   - Buy recommendations: ${analysis.buyRecommendations?.length || 0}`);
+            console.log(`   - Processing time: ${processingTime}ms`);
+
+            return analysisRecord;
+
+        } catch (error) {
+            console.error(`❌ Error analyzing ${portfolioType} portfolio:`, error);
+            
+            // Обновляем запись с ошибкой
+            if (analysisRecord) {
+                try {
+                    await analysisRecord.update({
+                        status: 'failed',
+                        error: error.message,
+                        processingTime: Date.now() - startTime
+                    });
+                } catch (updateError) {
+                    console.error('Failed to update analysis record with error:', updateError);
+                }
+            }
+
+            throw error;
+        }
     }
 
     // Вспомогательные методы
@@ -1658,10 +1961,16 @@ class NeuralNetworkService {
             
             // Сохраняем BUY рекомендации
             for (const rec of buyRecommendations) {
+                // Проверяем наличие instrument
+                if (!rec.instrument || !rec.instrument.figi) {
+                    console.warn('⚠️ Skipping BUY recommendation: missing instrument or figi', rec);
+                    continue;
+                }
+                
                 const recommendationData = {
                     figi: rec.instrument.figi,
-                    ticker: rec.instrument.ticker,
-                    name: rec.instrument.name,
+                    ticker: rec.instrument.ticker || 'UNKNOWN',
+                    name: rec.instrument.name || 'Unknown',
                     recommendation: 'BUY',
                     confidence: rec.prediction.score,
                     score: rec.prediction.score,
@@ -1703,10 +2012,16 @@ class NeuralNetworkService {
 
             // Сохраняем SELL рекомендации
             for (const rec of sellRecommendations) {
+                // Проверяем наличие instrument
+                if (!rec.instrument || !rec.instrument.figi) {
+                    console.warn('⚠️ Skipping SELL recommendation: missing instrument or figi', rec);
+                    continue;
+                }
+                
                 const recommendationData = {
                     figi: rec.instrument.figi,
-                    ticker: rec.instrument.ticker,
-                    name: rec.instrument.name,
+                    ticker: rec.instrument.ticker || 'UNKNOWN',
+                    name: rec.instrument.name || 'Unknown',
                     recommendation: 'SELL',
                     confidence: 1 - rec.prediction.score, // Инвертируем для SELL
                     score: rec.prediction.score,
@@ -1773,8 +2088,76 @@ class NeuralNetworkService {
     // Инициализация при старте сервера
     async initialize() {
         console.log('🧠 Инициализация нейросети...');
-        const loaded = await this.loadModel();
-        if (loaded) {
+        let loaded = await this.loadModel();
+        
+        // Если общая модель не найдена, пробуем загрузить любую per-FIGI модель из файлов
+        if (!loaded || !this.model) {
+            console.log('📥 Общая модель не найдена, сканируем папку models для поиска per-FIGI моделей...');
+            try {
+                // Сканируем папку models напрямую
+                const files = await fs.readdir(this.modelPath);
+                const modelFiles = files.filter(f => f.endsWith('_model.json') && !f.includes('_best_'));
+                
+                console.log(`📂 Найдено ${modelFiles.length} per-FIGI моделей в папке models`);
+                
+                if (modelFiles.length > 0) {
+                    // Берем первую найденную модель
+                    const firstModelFile = modelFiles[0];
+                    const figi = firstModelFile.replace('_model.json', '');
+                    
+                    console.log(`📥 Пытаемся загрузить модель для FIGI: ${figi}`);
+                    loaded = await this.loadModel(figi);
+                    
+                    if (loaded && this.model) {
+                        console.log(`✅ Загружена per-FIGI модель для ${figi} как общая модель`);
+                    } else {
+                        // Пробуем через OptimizedTrainingService
+                        console.log('📥 Пробуем загрузить через OptimizedTrainingService...');
+                        const instruments = await CacheService.getAllInstruments(20);
+                        
+                        for (const instrument of instruments) {
+                            try {
+                                const modelFromTraining = await OptimizedTrainingService.getModel(instrument.figi);
+                                if (modelFromTraining) {
+                                    this.model = modelFromTraining;
+                                    loaded = true;
+                                    console.log(`✅ Загружена модель для ${instrument.ticker} (${instrument.figi}) через OptimizedTrainingService`);
+                                    break;
+                                }
+                            } catch (err) {
+                                // Продолжаем поиск
+                            }
+                        }
+                    }
+                } else {
+                    // Если файлов нет, пробуем через OptimizedTrainingService
+                    console.log('📥 Файлов моделей не найдено, пробуем через OptimizedTrainingService...');
+                    const instruments = await CacheService.getAllInstruments(20);
+                    
+                    for (const instrument of instruments) {
+                        try {
+                            const modelFromTraining = await OptimizedTrainingService.getModel(instrument.figi);
+                            if (modelFromTraining) {
+                                this.model = modelFromTraining;
+                                loaded = true;
+                                console.log(`✅ Загружена модель для ${instrument.ticker} (${instrument.figi})`);
+                                break;
+                            }
+                        } catch (err) {
+                            // Продолжаем поиск
+                        }
+                    }
+                }
+                
+                if (!loaded || !this.model) {
+                    console.log('⚠️ Обученные модели не найдены ни в файлах, ни в OptimizedTrainingService');
+                }
+            } catch (err) {
+                console.warn('⚠️ Ошибка при поиске моделей:', err.message);
+            }
+        }
+        
+        if (loaded && this.model) {
             console.log('✅ Нейросеть готова к работе');
             console.log(`🧠 Model status: ${this.model ? 'loaded' : 'not loaded'}`);
             console.log(`🧠 Model inputs: ${this.model?.inputs?.length || 0}`);
@@ -1785,12 +2168,21 @@ class NeuralNetworkService {
             if (!this.modelCreatedAt) {
                 this.modelCreatedAt = new Date().toISOString();
             }
+            
+            // Активируем нейросеть, если модель загружена
+            if (!this.isActive) {
+                await this.setStatus('active');
+                console.log('✅ Нейросеть автоматически активирована');
+            }
         } else {
             console.log('⚠️ Модель не найдена, будет создана при первом обучении');
             // Не создаем модель заранее, так как размер входных данных зависит от prepareTrainingData
             // Модель будет создана автоматически при обучении с правильным размером входных данных
             console.log('📝 Модель будет создана при обучении с адаптивным размером входных данных');
         }
+        
+        // Устанавливаем флаг инициализации
+        this.isInitialized = true;
     }
 
     // Возвращает статус модели для системного эндпоинта

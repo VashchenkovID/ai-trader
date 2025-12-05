@@ -21,6 +21,7 @@ class SchedulerService {
         this.tradingHoursTask = null;
         this.tradingHoursCacheTask = null;
         this.degradationCheckTask = null;
+        this.portfolioAnalysisTask = null;
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -238,6 +239,20 @@ class SchedulerService {
             timezone: "Europe/Moscow"
         });
 
+        // Задача 10: Автоматический анализ портфеля (каждый час)
+        this.portfolioAnalysisTask = cron.schedule('0 * * * *', async () => {
+            try {
+                console.log('📊 Scheduled portfolio analysis started...');
+                await this.performPortfolioAnalysis();
+            } catch (error) {
+                console.error('Error in scheduled portfolio analysis:', error);
+                await OptimizedTelegramService.sendAlert('PORTFOLIO_ANALYSIS_ERROR', error.message, 'warning');
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
         // Первое обновление при запуске (через 1 минуту) - ОТКЛЮЧЕНО для отладки
         // setTimeout(() => {
         //     this.performCacheUpdate();
@@ -256,6 +271,7 @@ class SchedulerService {
         console.log(`   - Trading hours cache update: ${tradingHoursSchedule}`);
         console.log('   - Trading hours notifications: every 5 minutes');
         console.log(`   - Model degradation check: ${degradationCheckSchedule}`);
+        console.log('   - Portfolio analysis: every hour');
         
         // Запускаем периодическую отправку данных через WebSocket
         this.startWebSocketBroadcasts();
@@ -1299,6 +1315,51 @@ class SchedulerService {
         if (this.telegramCacheTask) {
             this.telegramCacheTask.stop();
             console.log('Telegram cache task stopped');
+        }
+        if (this.portfolioAnalysisTask) {
+            this.portfolioAnalysisTask.stop();
+            console.log('Portfolio analysis task stopped');
+        }
+    }
+
+    /**
+     * Выполняет анализ портфеля для всех типов (real, virtual)
+     */
+    async performPortfolioAnalysis() {
+        try {
+            // Проверяем, активна ли нейросеть
+            if (!NeuralNetworkService.isActive) {
+                console.log('⚠️ Neural network is not active, skipping portfolio analysis');
+                return;
+            }
+
+            // Анализируем виртуальный портфель
+            try {
+                await NeuralNetworkService.analyzePortfolioAndSave('virtual');
+            } catch (error) {
+                console.error('Error analyzing virtual portfolio:', error);
+            }
+
+            // Анализируем реальный портфель (если есть)
+            try {
+                const TradingEngine = (await import('./TradingEngine.js')).default;
+                const realPortfolio = await TradingEngine.getRealPortfolioValue();
+                if (realPortfolio && realPortfolio.positions) {
+                    const positions = Array.isArray(realPortfolio.positions) 
+                        ? realPortfolio.positions 
+                        : Object.keys(realPortfolio.positions);
+                    if (positions.length > 0) {
+                        await NeuralNetworkService.analyzePortfolioAndSave('real');
+                    }
+                }
+            } catch (error) {
+                console.error('Error analyzing real portfolio:', error);
+            }
+
+            console.log('✅ Portfolio analysis completed for all portfolio types');
+        } catch (error) {
+            console.error('❌ Error performing portfolio analysis:', error);
+            throw error;
         }
     }
 

@@ -358,25 +358,54 @@ class StandaloneTrainingWorker {
             const classWeights = this.calculateClassWeights(finalLabels);
             
             // Конвертируем данные в тензоры для обучения
-            const xs = tf.tensor2d(finalFeatures);
-            const ys = tf.tensor2d(finalLabels.map(label => [label]));
+            // Убеждаемся, что данные имеют правильную форму (2D массив)
+            if (!Array.isArray(finalFeatures[0])) {
+                throw new Error(`Invalid features format: expected 2D array, got flat array. Features length: ${finalFeatures.length}`);
+            }
             
-            // Создаем тензоры для валидации
-            const valXs = tf.tensor2d(split.val.features);
-            const valYs = tf.tensor2d(split.val.labels.map(label => [label]));
+            if (finalFeatures.length === 0) {
+                throw new Error(`Invalid training features: empty array`);
+            }
+            
+            const trainFeaturesShape = [finalFeatures.length, finalFeatures[0].length];
+            const xs = tf.tensor2d(finalFeatures, trainFeaturesShape);
+            
+            const trainLabelsArray = finalLabels.map(label => [label]);
+            const trainLabelsShape = [finalLabels.length, 1];
+            const ys = tf.tensor2d(trainLabelsArray, trainLabelsShape);
+            
+            // Создаем тензоры для валидации (если есть данные)
+            let valXs = null;
+            let valYs = null;
+            
+            if (split.val.features.length > 0) {
+                if (!Array.isArray(split.val.features[0])) {
+                    throw new Error(`Invalid validation features format: expected 2D array, got flat array. Features length: ${split.val.features.length}`);
+                }
+                
+                const valFeaturesShape = [split.val.features.length, split.val.features[0].length];
+                valXs = tf.tensor2d(split.val.features, valFeaturesShape);
+                
+                const valLabelsArray = split.val.labels.map(label => [label]);
+                const valLabelsShape = [split.val.labels.length, 1];
+                valYs = tf.tensor2d(valLabelsArray, valLabelsShape);
+            } else {
+                console.warn('⚠️ Validation set is empty, training without validation');
+            }
 
-            // Настройки для early stopping и reduce LR on plateau
+            // Настройки для early stopping и reduce LR on plateau (только если есть валидация)
+            const hasValidation = valXs && valYs;
             let bestValLoss = Infinity;
-            let patience = 10; // Количество эпох без улучшения для early stopping
+            let patience = hasValidation ? 10 : Infinity; // Количество эпох без улучшения для early stopping
             let patienceCount = 0;
-            let reduceLRPatience = 5; // Количество эпох без улучшения для снижения LR
+            let reduceLRPatience = hasValidation ? 5 : Infinity; // Количество эпох без улучшения для снижения LR
             let reduceLRCount = 0;
             let currentLR = 0.001; // Начальный learning rate
             let lrReductionFactor = 0.5; // Коэффициент уменьшения LR
             let minLR = 1e-6; // Минимальный learning rate
             let lrHistory = []; // История изменений LR
             let lrReductionCount = 0; // Количество уменьшений LR
-            let maxLRReductions = 3; // Максимальное количество уменьшений LR
+            let maxLRReductions = hasValidation ? 3 : 0; // Максимальное количество уменьшений LR
             
             // Получаем текущий learning rate из оптимизатора
             // Примечание: В TensorFlow.js learning rate может быть тензором или числом
@@ -405,11 +434,14 @@ class StandaloneTrainingWorker {
             }
 
             // Обучение
+            // Подготавливаем validationData только если есть валидационные данные
+            const validationData = (valXs && valYs) ? [valXs, valYs] : undefined;
+            
             const history = await model.fit(xs, ys, {
                 epochs: epochs,
                 batchSize: batchSize,
                 // sampleWeight не поддерживается в TensorFlow.js - используем взвешивание через дублирование данных
-                validationData: [valXs, valYs], // Используем time-based validation set
+                validationData: validationData, // Используем time-based validation set (если есть)
                 verbose: 0,
                 callbacks: {
                     onEpochEnd: async (epoch, logs) => {

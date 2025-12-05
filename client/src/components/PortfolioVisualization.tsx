@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { TabView, TabPanel } from 'primereact/tabview';
 import { Message } from 'primereact/message';
+import { Toast } from 'primereact/toast';
 import { apiService } from '../services/apiService';
 import { useWebSocketData } from './WebSocketDataProvider';
+import useWebSocket from '../hooks/useWebSocket';
 import PortfolioSummaryCard, { PortfolioSummary } from './portfolio/PortfolioSummaryCard';
 import PortfolioPositionsTable, { Position } from './portfolio/PortfolioPositionsTable';
 import PortfolioCharts from './portfolio/PortfolioCharts';
 import PortfolioAnalytics from './portfolio/PortfolioAnalytics';
+import PortfolioAnalysisResults, { SellRecommendation } from './portfolio/PortfolioAnalysisResults';
 
 interface PortfolioVisualizationProps {
   className?: string;
@@ -17,8 +19,45 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
   const [positions, setPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisResults, setAnalysisResults] = useState<{
+    sellRecommendations: SellRecommendation[];
+    buyRecommendations?: any[];
+  } | null>(null);
+  const [showAnalysisResults, setShowAnalysisResults] = useState(false);
+  const toast = React.useRef<Toast>(null);
   
   const { isConnected, tradingStats } = useWebSocketData();
+
+  // WebSocket для получения результатов анализа
+  useWebSocket({
+    onMessage: (message) => {
+      if (message.type === 'portfolio_analysis_completed') {
+        console.log('📊 Portfolio analysis completed:', message.data);
+        setAnalysisResults({
+          sellRecommendations: message.data?.sellRecommendations || []
+        });
+        setAnalyzing(false);
+        setShowAnalysisResults(true);
+        
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Анализ завершен',
+          detail: `Найдено ${message.data?.sellRecommendations?.length || 0} рекомендаций на продажу`,
+          life: 5000
+        });
+      } else if (message.type === 'portfolio_analysis_error') {
+        console.error('❌ Portfolio analysis error:', message.data);
+        setAnalyzing(false);
+        toast.current?.show({
+          severity: 'error',
+          summary: 'Ошибка анализа',
+          detail: message.data?.error || 'Произошла ошибка при анализе портфеля',
+          life: 5000
+        });
+      }
+    }
+  });
 
   // Преобразование данных портфеля из API в формат PortfolioSummary
   const transformPortfolioData = async (portfolioData: any, positionsData: Position[]): Promise<PortfolioSummary | null> => {
@@ -224,8 +263,103 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
     return () => clearInterval(interval);
   }, [isConnected]);
 
+  // Обработка анализа портфеля
+  const handleAnalyzePortfolio = async () => {
+    try {
+      setAnalyzing(true);
+      setError(null);
+      
+      toast.current?.show({
+        severity: 'info',
+        summary: 'Проверка нейросети',
+        detail: 'Проверяем статус нейросети...',
+        life: 2000
+      });
+
+      // Проверяем статус нейросети
+      try {
+        const status = await apiService.getNeuralNetworkStatus();
+        console.log('Neural network status:', status);
+        
+        // Если нейросеть неактивна, активируем её
+        const isActive = status.data?.isActive || status.isActive || false;
+        if (!isActive) {
+          toast.current?.show({
+            severity: 'info',
+            summary: 'Активация нейросети',
+            detail: 'Нейросеть отключена. Активируем...',
+            life: 2000
+          });
+          
+          await apiService.activateNeuralNetwork();
+          
+          // Ждем немного, чтобы нейросеть активировалась
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          toast.current?.show({
+            severity: 'success',
+            summary: 'Нейросеть активирована',
+            detail: 'Нейросеть успешно активирована. Запускаем анализ...',
+            life: 2000
+          });
+        }
+      } catch (statusError: any) {
+        console.warn('Could not check neural network status, trying to activate:', statusError);
+        // Пробуем активировать напрямую
+        try {
+          await apiService.activateNeuralNetwork();
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (activateError) {
+          console.error('Could not activate neural network:', activateError);
+        }
+      }
+
+      toast.current?.show({
+        severity: 'info',
+        summary: 'Анализ запущен',
+        detail: 'Анализ портфеля начат. Результаты будут доступны после завершения.',
+        life: 3000
+      });
+
+      const response = await apiService.analyzePortfolio();
+      
+      // Если анализ уже есть в БД, сразу показываем результаты
+      if (response.data && response.data.sellRecommendations) {
+        setAnalysisResults({
+          sellRecommendations: response.data.sellRecommendations || []
+        });
+        setShowAnalysisResults(true);
+        setAnalyzing(false);
+        
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Анализ получен',
+          detail: `Найдено ${response.data.sellRecommendations?.length || 0} рекомендаций на продажу`,
+          life: 3000
+        });
+        return;
+      }
+      
+    } catch (error: any) {
+      console.error('Error analyzing portfolio:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Ошибка анализа портфеля';
+      setError(errorMessage);
+      
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Ошибка анализа',
+        detail: errorMessage,
+        life: 5000
+      });
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   return (
     <div className={`portfolio-visualization ${className}`}>
+      <Toast ref={toast} />
+      
       {/* Сводка портфеля */}
       <PortfolioSummaryCard
         portfolio={portfolio}
@@ -240,35 +374,42 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
         </div>
       )}
 
-      <TabView>
-        {/* Позиции */}
-        <TabPanel header="📋 Позиции" leftIcon="pi pi-list">
-          <PortfolioPositionsTable
-            positions={positions}
-            loading={loading}
-            error={error}
-            onRefresh={loadPortfolioData}
-          />
-        </TabPanel>
+      {/* Карточка Позиции */}
+      <div className="mb-4">
+        <PortfolioPositionsTable
+          positions={positions}
+          loading={loading}
+          error={error}
+          onRefresh={loadPortfolioData}
+          onAnalyze={handleAnalyzePortfolio}
+          analyzing={analyzing}
+        />
+      </div>
 
-        {/* Диаграммы */}
-        <TabPanel header="📊 Аналитика" leftIcon="pi pi-chart-pie">
-          <div className="grid">
-            <div className="col-12 lg:col-8">
-              <PortfolioCharts
-                positions={positions}
-                portfolio={portfolio}
-              />
-            </div>
-            <div className="col-12 lg:col-4">
-              <PortfolioAnalytics
-                portfolio={portfolio}
-                positions={positions}
-              />
-            </div>
-          </div>
-        </TabPanel>
-      </TabView>
+      {/* Карточка Аналитика */}
+      <div className="grid">
+        <div className="col-12 lg:col-8">
+          <PortfolioCharts
+            positions={positions}
+            portfolio={portfolio}
+          />
+        </div>
+        <div className="col-12 lg:col-4">
+          <PortfolioAnalytics
+            portfolio={portfolio}
+            positions={positions}
+          />
+        </div>
+      </div>
+
+      {/* Модальное окно с результатами анализа */}
+      {analysisResults && (
+        <PortfolioAnalysisResults
+          visible={showAnalysisResults}
+          onHide={() => setShowAnalysisResults(false)}
+          sellRecommendations={analysisResults.sellRecommendations}
+        />
+      )}
     </div>
   );
 };

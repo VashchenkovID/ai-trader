@@ -3,6 +3,7 @@ import { Card } from 'primereact/card';
 import { Chart } from 'primereact/chart';
 import { Position } from './PortfolioPositionsTable';
 import { PortfolioSummary } from './PortfolioSummaryCard';
+import { translateSector } from '../../utils/sectorTranslator';
 
 interface PortfolioChartsProps {
   positions: Position[];
@@ -121,7 +122,7 @@ const PortfolioCharts: React.FC<PortfolioChartsProps> = ({
     if (!positions.length) return null;
 
     const sectorData = positions.reduce((acc, pos) => {
-      const sector = pos.sector || 'Неизвестно';
+      const sector = translateSector(pos.sector || 'Неизвестно');
       acc[sector] = (acc[sector] || 0) + pos.marketValue;
       return acc;
     }, {} as Record<string, number>);
