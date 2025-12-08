@@ -23,6 +23,7 @@ class SchedulerService {
         this.degradationCheckTask = null;
         this.portfolioAnalysisTask = null;
         this.predictionsUpdateTask = null;
+        this.signalsUpdateTask = null;
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -262,6 +263,20 @@ class SchedulerService {
             } catch (error) {
                 console.error('Error in scheduled predictions update:', error);
                 // Не отправляем в Telegram, чтобы не спамить при частых обновлениях
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
+        // Задача 12: Обновление сигналов аналитиков раз в день (в 6:00)
+        this.signalsUpdateTask = cron.schedule('0 6 * * *', async () => {
+            try {
+                console.log('⚡ Scheduled signals update started...');
+                await this.performSignalsUpdate();
+            } catch (error) {
+                console.error('Error in scheduled signals update:', error);
+                await OptimizedTelegramService.sendAlert('SIGNALS_UPDATE_ERROR', error.message, 'warning');
             }
         }, {
             scheduled: true,
@@ -1344,6 +1359,12 @@ class SchedulerService {
                 this.predictionsUpdateTask = null;
                 console.log('✅ Predictions update task stopped and destroyed');
             }
+            if (this.signalsUpdateTask) {
+                this.signalsUpdateTask.stop();
+                this.signalsUpdateTask.destroy();
+                this.signalsUpdateTask = null;
+                console.log('✅ Signals update task stopped and destroyed');
+            }
     }
 
     /**
@@ -1552,6 +1573,164 @@ class SchedulerService {
 
         } catch (error) {
             console.error('❌ Error during daily news update:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Обновление сигналов аналитиков для всех активных инструментов
+     */
+    async performSignalsUpdate() {
+        try {
+            console.log('⚡ Starting signals update...');
+            
+            const SignalCacheService = (await import('./SignalCacheService.js')).default;
+            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+            
+            // Диагностика: проверяем количество инструментов с разными условиями
+            const totalInstruments = await CachedInstrument.count();
+            const rubInstruments = await CachedInstrument.count({
+                where: {
+                    [Op.or]: [
+                        { currency: 'RUB' },
+                        { currency: 'rub' }
+                    ]
+                }
+            });
+            const shareInstruments = await CachedInstrument.count({
+                where: {
+                    instrumentType: 'share'
+                }
+            });
+            const activeInstruments = await CachedInstrument.count({
+                where: {
+                    isActive: true
+                }
+            });
+            
+            console.log(`📊 Instruments statistics:`);
+            console.log(`   Total: ${totalInstruments}`);
+            console.log(`   RUB currency: ${rubInstruments}`);
+            console.log(`   Share type: ${shareInstruments}`);
+            console.log(`   Active: ${activeInstruments}`);
+            
+            // Получаем список активных инструментов (более гибкий запрос)
+            const instruments = await CachedInstrument.findAll({
+                where: {
+                    [Op.and]: [
+                        {
+                            [Op.or]: [
+                                { currency: 'RUB' },
+                                { currency: 'rub' }
+                            ]
+                        },
+                        {
+                            instrumentType: 'share'
+                        },
+                        {
+                            [Op.or]: [
+                                { isActive: true },
+                                { isActive: null } // Если поле не установлено, считаем активным
+                            ]
+                        }
+                    ]
+                },
+                attributes: ['figi', 'ticker', 'name', 'currency', 'instrumentType', 'isActive'],
+                limit: 100 // Ограничиваем количество для производительности
+            });
+
+            let instrumentsToProcess = instruments;
+            
+            if (instruments.length === 0) {
+                console.log('⚠️ No active instruments found for signals update');
+                console.log('💡 Trying fallback: searching without isActive filter...');
+                
+                // Fallback: пробуем без фильтра isActive
+                const fallbackInstruments = await CachedInstrument.findAll({
+                    where: {
+                        [Op.or]: [
+                            { currency: 'RUB' },
+                            { currency: 'rub' }
+                        ],
+                        instrumentType: 'share'
+                    },
+                    attributes: ['figi', 'ticker', 'name', 'currency', 'instrumentType', 'isActive'],
+                    limit: 100
+                });
+                
+                if (fallbackInstruments.length === 0) {
+                    console.log('❌ No instruments found even without isActive filter');
+                    return;
+                }
+                
+                console.log(`✅ Found ${fallbackInstruments.length} instruments (fallback mode)`);
+                instrumentsToProcess = fallbackInstruments;
+            } else {
+                console.log(`✅ Found ${instruments.length} active instruments`);
+            }
+
+            console.log(`📊 Updating signals for ${instrumentsToProcess.length} instruments...`);
+
+            let updatedCount = 0;
+            let errorCount = 0;
+            const batchSize = 5; // Обрабатываем по 5 инструментов параллельно
+
+            // Обрабатываем инструменты батчами
+            for (let i = 0; i < instrumentsToProcess.length; i += batchSize) {
+                const batch = instrumentsToProcess.slice(i, i + batchSize);
+                
+                await Promise.all(batch.map(async (instrument) => {
+                    try {
+                        // Проверяем, нужно ли обновлять кэш
+                        const shouldUpdate = await SignalCacheService.shouldUpdateCache(instrument.figi);
+                        
+                        if (shouldUpdate) {
+                            // Загружаем сигналы за последние 30 дней
+                            const from = new Date();
+                            from.setDate(from.getDate() - 30);
+                            const to = new Date();
+                            
+                            const result = await SignalCacheService.fetchAndCacheSignals(instrument.figi, {
+                                from: from,
+                                to: to,
+                                active: 'SIGNAL_STATE_ALL'
+                            });
+
+                            if (result.success) {
+                                updatedCount++;
+                                console.log(`✅ Updated signals for ${instrument.ticker} (${instrument.figi}): ${result.savedCount} signals`);
+                            }
+                        } else {
+                            console.log(`⏭️ Skipping ${instrument.ticker} - cache is fresh`);
+                        }
+                    } catch (error) {
+                        errorCount++;
+                        console.error(`❌ Error updating signals for ${instrument.ticker}:`, error.message);
+                    }
+                }));
+
+                // Небольшая задержка между батчами для избежания rate limiting
+                if (i + batchSize < instrumentsToProcess.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            console.log(`✅ Signals update completed: ${updatedCount} instruments updated, ${errorCount} errors`);
+
+            // Отправляем уведомление через Telegram
+            if (updatedCount > 0) {
+                await OptimizedTelegramService.sendAlert(
+                    'SIGNALS_UPDATE_COMPLETE',
+                    `⚡ Обновление сигналов завершено\n\n` +
+                    `Обновлено: ${updatedCount} инструментов\n` +
+                    `Ошибок: ${errorCount}`,
+                    'info'
+                );
+            }
+
+            return { updatedCount, errorCount, total: instruments.length };
+        } catch (error) {
+            console.error('❌ Error during signals update:', error);
             throw error;
         }
     }

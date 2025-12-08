@@ -12,6 +12,7 @@ import PortfolioItem from '../models/PortfolioItem.js';
 import Recommendation from '../models/Recommendation.js';
 import TradingRequest from '../models/TradingRequest.js';
 import VirtualPortfolio from '../models/VirtualPortfolio.js';
+import CachedSignal from '../models/CachedSignal.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
@@ -71,6 +72,11 @@ export async function initDatabase() {
         console.log('💼 Создание таблицы виртуального портфеля...');
         await VirtualPortfolio.sync({ force: false });
         console.log('✅ Таблица виртуального портфеля создана/обновлена');
+        
+        // Создаем таблицу кэшированных сигналов
+        console.log('⚡ Создание таблицы кэшированных сигналов...');
+        await CachedSignal.sync({ force: false });
+        console.log('✅ Таблица кэшированных сигналов создана/обновлена');
 
         // Инициализация настроек
         console.log('\n🔧 Инициализация настроек...');
@@ -1680,6 +1686,9 @@ async function showDatabaseStats() {
         
         const recommendationsCount = await Recommendation.count();
         console.log(`   🎯 Рекомендации: ${recommendationsCount}`);
+        
+        const signalsCount = await CachedSignal.count();
+        console.log(`   ⚡ Сигналы: ${signalsCount}`);
 
         // Группировка настроек по категориям
         const settings = await Settings.findAll({

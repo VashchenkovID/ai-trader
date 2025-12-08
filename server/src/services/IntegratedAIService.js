@@ -5,6 +5,8 @@ import NeuralNetworkService from './NeuralNetworkService.js';
 import WebSocketService from './WebSocketService.js';
 import CacheService from './CacheService.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
+import SignalCacheService from './SignalCacheService.js';
+import SignalValidationService from './SignalValidationService.js';
 
 /**
  * Интегрированный сервис для управления всеми тремя нейросетями
@@ -181,8 +183,81 @@ class IntegratedAIService {
                 }
             }
 
+            // 5. Получаем сигналы аналитиков и валидируем предсказание
+            let signalsRecommendation = null;
+            let validationResult = null;
+            try {
+                const signals = await SignalCacheService.getSignalsByDate(figi, new Date());
+                if (signals.length > 0) {
+                    // Создаем временное предсказание для валидации
+                    const tempPrediction = {
+                        score: recommendations.length > 0 
+                            ? recommendations.reduce((sum, r) => sum + r.score, 0) / recommendations.length 
+                            : 0.5,
+                        confidence: recommendations.length > 0
+                            ? recommendations.reduce((sum, r) => sum + r.confidence, 0) / recommendations.length
+                            : 0.5,
+                        recommendation: recommendations.length > 0
+                            ? recommendations[0].recommendation || 'HOLD'
+                            : 'HOLD'
+                    };
+
+                    // Валидируем предсказание против сигналов
+                    validationResult = await SignalValidationService.validatePredictionAgainstSignals(
+                        figi,
+                        tempPrediction,
+                        new Date()
+                    );
+
+                    // Добавляем рекомендацию от сигналов аналитиков
+                    if (validationResult.success && validationResult.hasSignals) {
+                        const dominantDirection = validationResult.signalsSummary.dominantDirection;
+                        const avgProbability = validationResult.signalsSummary.averageProbability;
+                        
+                        // Конвертируем направление сигналов в score
+                        let signalsScore = 0.5; // HOLD по умолчанию
+                        if (dominantDirection === 'SIGNAL_DIRECTION_BUY') {
+                            signalsScore = 0.5 + (avgProbability * 0.5); // 0.5 - 1.0
+                        } else if (dominantDirection === 'SIGNAL_DIRECTION_SELL') {
+                            signalsScore = 0.5 - (avgProbability * 0.5); // 0.0 - 0.5
+                        }
+
+                        signalsRecommendation = {
+                            source: 'signals',
+                            score: signalsScore,
+                            confidence: avgProbability,
+                            recommendation: dominantDirection === 'SIGNAL_DIRECTION_BUY' ? 'BUY' :
+                                          dominantDirection === 'SIGNAL_DIRECTION_SELL' ? 'SELL' : 'HOLD',
+                            details: {
+                                signalsCount: validationResult.signalsSummary.total,
+                                buySignals: validationResult.signalsSummary.buy,
+                                sellSignals: validationResult.signalsSummary.sell,
+                                validation: validationResult.metrics
+                            }
+                        };
+
+                        recommendations.push(signalsRecommendation);
+                        // Вес сигналов аналитиков зависит от их согласованности
+                        weights.signals = avgProbability * validationResult.metrics.overallAgreement;
+                    }
+                }
+            } catch (error) {
+                console.warn('⚠️ Signals validation failed:', error.message);
+            }
+
             // Вычисляем интегрированную рекомендацию
             const integratedRec = this.calculateIntegratedRecommendation(recommendations, weights);
+            
+            // Добавляем информацию о валидации, если она была выполнена
+            if (validationResult && validationResult.success && validationResult.hasSignals) {
+                integratedRec.signalsValidation = {
+                    directionMatch: validationResult.metrics.directionMatch,
+                    directionAgreement: validationResult.metrics.directionAgreement,
+                    probabilityCorrelation: validationResult.metrics.probabilityCorrelation,
+                    overallAgreement: validationResult.metrics.overallAgreement,
+                    signalsCount: validationResult.signalsSummary.total
+                };
+            }
             
             // Сохраняем рекомендацию
             this.recommendations.push({

@@ -2,11 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
-import { MultiSelect } from 'primereact/multiselect';
+import { Dropdown } from 'primereact/dropdown';
 import { ProgressBar } from 'primereact/progressbar';
-import { DataTable } from 'primereact/datatable';
-import { Column } from 'primereact/column';
-import { Badge } from 'primereact/badge';
 import { Divider } from 'primereact/divider';
 import { apiService } from '../services/apiService';
 
@@ -16,47 +13,18 @@ interface Instrument {
   name: string;
 }
 
-interface NewsTestResult {
-  ticker: string;
-  figi: string;
-  success: boolean;
-  newsCount: number;
+interface TrainingStatus {
+  type: string;
+  status: 'idle' | 'loading' | 'success' | 'error';
   message?: string;
   error?: string;
-}
-
-interface TrainingResult {
-  figi: string;
-  ticker: string;
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
-interface AllNetworksTrainingResult {
-  figi: string;
-  ticker: string;
-  networks: {
-    name: string;
-    success: boolean;
-    message?: string;
-    error?: string;
-  }[];
 }
 
 const TrainingDebug: React.FC = () => {
   const [availableInstruments, setAvailableInstruments] = useState<Instrument[]>([]);
-  const [selectedInstruments, setSelectedInstruments] = useState<Instrument[]>([]);
+  const [selectedInstrument, setSelectedInstrument] = useState<Instrument | null>(null);
   const [isLoadingInstruments, setIsLoadingInstruments] = useState(false);
-  const [isLoadingNews, setIsLoadingNews] = useState(false);
-  const [isTraining, setIsTraining] = useState(false);
-  const [isTrainingAllNetworks, setIsTrainingAllNetworks] = useState(false);
-  const [newsResults, setNewsResults] = useState<NewsTestResult[]>([]);
-  const [trainingResults, setTrainingResults] = useState<TrainingResult[]>([]);
-  const [allNetworksResults, setAllNetworksResults] = useState<AllNetworksTrainingResult[]>([]);
-  const [newsProgress, setNewsProgress] = useState<{ current: number; total: number } | null>(null);
-  const [trainingProgress, setTrainingProgress] = useState<{ current: number; total: number } | null>(null);
-  const [allNetworksProgress, setAllNetworksProgress] = useState<{ current: number; total: number; network?: string } | null>(null);
+  const [trainingStatuses, setTrainingStatuses] = useState<Record<string, TrainingStatus>>({});
   const toast = useRef<Toast>(null);
 
   // Загрузка доступных инструментов
@@ -100,262 +68,204 @@ const TrainingDebug: React.FC = () => {
     loadInstruments();
   }, []);
 
-  // Тестирование получения новостей для выбранных инструментов
-  const handleTestNews = async () => {
-    if (selectedInstruments.length === 0) {
+  // Обновление статуса обучения
+  const updateTrainingStatus = (type: string, status: TrainingStatus['status'], message?: string, error?: string) => {
+    setTrainingStatuses(prev => ({
+      ...prev,
+      [type]: { type, status, message, error }
+    }));
+  };
+
+  // Обработчик обучения
+  const handleTraining = async (type: string, trainingFunction: () => Promise<any>) => {
+    if (!selectedInstrument) {
       toast.current?.show({
         severity: 'warn',
         summary: 'Предупреждение',
-        detail: 'Выберите хотя бы один инструмент'
+        detail: 'Выберите инструмент для обучения'
       });
       return;
     }
 
-    setIsLoadingNews(true);
-    setNewsResults([]);
-    setNewsProgress({ current: 0, total: selectedInstruments.length });
+    updateTrainingStatus(type, 'loading', 'Запуск обучения...');
 
-    const results: NewsTestResult[] = [];
-
-    for (let i = 0; i < selectedInstruments.length; i++) {
-      const instrument = selectedInstruments[i];
-      setNewsProgress({ current: i + 1, total: selectedInstruments.length });
-
-      try {
-        console.log(`📡 Загрузка новостей для ${instrument.ticker}...`);
-        console.log(`📋 Отправляемые данные:`, {
-          ticker: instrument.ticker,
-          figi: instrument.figi,
-          name: instrument.name
-        });
-        const result = await apiService.testNewsApiNews(instrument.ticker);
-
-        results.push({
-          ticker: instrument.ticker,
-          figi: instrument.figi,
-          success: result.success || false,
-          newsCount: result.data?.newsCount || 0,
-          message: result.message || 'Успешно'
-        });
-
-        toast.current?.show({
-          severity: 'success',
-          summary: 'Успешно',
-          detail: `Новости для ${instrument.ticker}: ${result.data?.newsCount || 0} статей`,
-          life: 2000
-        });
-
-        // Небольшая задержка между запросами
-        if (i < selectedInstruments.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      } catch (error: any) {
-        console.error(`❌ Ошибка загрузки новостей для ${instrument.ticker}:`, error);
-        results.push({
-          ticker: instrument.ticker,
-          figi: instrument.figi,
-          success: false,
-          newsCount: 0,
-          error: error.message || 'Неизвестная ошибка'
-        });
-
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Ошибка',
-          detail: `${instrument.ticker}: ${error.message || 'Ошибка загрузки новостей'}`,
-          life: 3000
-        });
-      }
-    }
-
-    setNewsResults(results);
-    setIsLoadingNews(false);
-    setNewsProgress(null);
-  };
-
-  // Запуск обучения для выбранных инструментов
-  const handleTrainWithNews = async () => {
-    if (selectedInstruments.length === 0) {
+    try {
+      const result = await trainingFunction();
+      updateTrainingStatus(type, 'success', result.message || 'Обучение успешно запущено');
       toast.current?.show({
-        severity: 'warn',
-        summary: 'Предупреждение',
-        detail: 'Выберите хотя бы один инструмент'
+        severity: 'success',
+        summary: 'Успешно',
+        detail: `${type} для ${selectedInstrument.ticker}: обучение запущено`,
+        life: 3000
       });
-      return;
-    }
-
-    setIsTraining(true);
-    setTrainingResults([]);
-    setTrainingProgress({ current: 0, total: selectedInstruments.length });
-
-    const results: TrainingResult[] = [];
-
-    for (let i = 0; i < selectedInstruments.length; i++) {
-      const instrument = selectedInstruments[i];
-      setTrainingProgress({ current: i + 1, total: selectedInstruments.length });
-
-      try {
-        console.log(`🧠 Запуск обучения для ${instrument.ticker}...`);
-        const result = await apiService.trainNeuralNetwork(instrument.figi, {
-          useNews: true, // Использовать новости при обучении
-          epochs: 10
-        });
-
-        results.push({
-          figi: instrument.figi,
-          ticker: instrument.ticker,
-          success: result.success || false,
-          message: result.message || 'Обучение запущено'
-        });
-
-        toast.current?.show({
-          severity: 'success',
-          summary: 'Успешно',
-          detail: `Обучение для ${instrument.ticker} запущено`,
-          life: 2000
-        });
-
-        // Небольшая задержка между запросами
-        if (i < selectedInstruments.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      } catch (error: any) {
-        console.error(`❌ Ошибка обучения для ${instrument.ticker}:`, error);
-        results.push({
-          figi: instrument.figi,
-          ticker: instrument.ticker,
-          success: false,
-          error: error.message || 'Неизвестная ошибка'
-        });
-
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Ошибка',
-          detail: `${instrument.ticker}: ${error.message || 'Ошибка обучения'}`,
-          life: 3000
-        });
-      }
-    }
-
-    setTrainingResults(results);
-    setIsTraining(false);
-    setTrainingProgress(null);
-  };
-
-  // Запуск обучения всех нейросетей по одному инструменту
-  const handleTrainAllNetworks = async () => {
-    if (selectedInstruments.length === 0) {
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Неизвестная ошибка';
+      updateTrainingStatus(type, 'error', undefined, errorMessage);
       toast.current?.show({
-        severity: 'warn',
-        summary: 'Предупреждение',
-        detail: 'Выберите хотя бы один инструмент'
+        severity: 'error',
+        summary: 'Ошибка',
+        detail: `${type} для ${selectedInstrument.ticker}: ${errorMessage}`,
+        life: 5000
       });
-      return;
     }
-
-    setIsTrainingAllNetworks(true);
-    setAllNetworksResults([]);
-    setAllNetworksProgress({ current: 0, total: selectedInstruments.length });
-
-    const results: AllNetworksTrainingResult[] = [];
-
-    for (let i = 0; i < selectedInstruments.length; i++) {
-      const instrument = selectedInstruments[i];
-      setAllNetworksProgress({ current: i + 1, total: selectedInstruments.length });
-
-      const networkResults: { name: string; success: boolean; message?: string; error?: string }[] = [];
-
-      // Список нейросетей для обучения
-      const networks = [
-        { name: 'Основная нейросеть', method: () => apiService.trainNeuralNetwork(instrument.figi, { useNews: true, epochs: 10 }) },
-        { name: 'Ансамбль', method: () => apiService.trainEnsemble(instrument.figi, { useNews: true }) },
-        { name: 'Мета-обучение', method: () => apiService.trainMetaLearning(instrument.figi, { useNews: true }) },
-        { name: 'Обучение с подкреплением', method: () => apiService.trainReinforcementLearning(instrument.figi, { useNews: true }) }
-      ];
-
-      for (const network of networks) {
-        setAllNetworksProgress({ 
-          current: i + 1, 
-          total: selectedInstruments.length,
-          network: `${instrument.ticker} - ${network.name}`
-        });
-
-        try {
-          console.log(`🧠 Запуск обучения ${network.name} для ${instrument.ticker}...`);
-          const result = await network.method();
-
-          networkResults.push({
-            name: network.name,
-            success: result?.success !== false,
-            message: result?.message || 'Обучение запущено'
-          });
-
-          toast.current?.show({
-            severity: 'success',
-            summary: 'Успешно',
-            detail: `${instrument.ticker} - ${network.name}: запущено`,
-            life: 2000
-          });
-
-          // Небольшая задержка между запусками нейросетей
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (error: any) {
-          console.error(`❌ Ошибка обучения ${network.name} для ${instrument.ticker}:`, error);
-          networkResults.push({
-            name: network.name,
-            success: false,
-            error: error.message || 'Неизвестная ошибка'
-          });
-
-          toast.current?.show({
-            severity: 'error',
-            summary: 'Ошибка',
-            detail: `${instrument.ticker} - ${network.name}: ${error.message || 'Ошибка обучения'}`,
-            life: 3000
-          });
-        }
-      }
-
-      results.push({
-        figi: instrument.figi,
-        ticker: instrument.ticker,
-        networks: networkResults
-      });
-
-      // Небольшая задержка между инструментами
-      if (i < selectedInstruments.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-
-    setAllNetworksResults(results);
-    setIsTrainingAllNetworks(false);
-    setAllNetworksProgress(null);
   };
 
-  // Форматирование опций для MultiSelect
+  // Виды обучения
+  const trainingTypes = [
+    {
+      key: 'neural',
+      label: 'Основная нейросеть',
+      icon: 'pi pi-brain',
+      description: 'Обучение традиционной нейросети для одного инструмента',
+      handler: () => handleTraining('neural', () => 
+        apiService.trainNeuralNetwork(selectedInstrument!.figi, { useNews: true, epochs: 10 })
+      ),
+      severity: 'success' as const
+    },
+    {
+      key: 'ensemble',
+      label: 'Ансамбль',
+      icon: 'pi pi-sitemap',
+      description: 'Обучение ансамбля моделей (LSTM, CNN, Transformer)',
+      handler: () => handleTraining('ensemble', () => 
+        apiService.trainEnsemble(selectedInstrument!.figi, { useNews: true })
+      ),
+      severity: 'info' as const
+    },
+    {
+      key: 'meta',
+      label: 'Мета-обучение',
+      icon: 'pi pi-cog',
+      description: 'Обучение модели мета-обучения для адаптации к новым задачам',
+      handler: () => handleTraining('meta', () => 
+        apiService.trainMetaLearning(selectedInstrument!.figi, { useNews: true })
+      ),
+      severity: 'warning' as const
+    },
+    {
+      key: 'reinforcement',
+      label: 'Обучение с подкреплением',
+      icon: 'pi pi-android',
+      description: 'Обучение RL агента для принятия торговых решений',
+      handler: () => handleTraining('reinforcement', () => 
+        apiService.trainReinforcementLearning(selectedInstrument!.figi, { useNews: true })
+      ),
+      severity: 'help' as const
+    },
+    {
+      key: 'all',
+      label: 'Все AI сети',
+      icon: 'pi pi-th-large',
+      description: 'Обучение всех AI сетей одновременно (Integrated AI)',
+      handler: () => handleTraining('all', () => 
+        apiService.trainAllAI(selectedInstrument!.figi, { useNews: true })
+      ),
+      severity: 'secondary' as const
+    }
+  ];
+
+  // Пакетное обучение
+  const batchTrainingTypes = [
+    {
+      key: 'batch-neural',
+      label: 'Пакетное обучение нейросетей',
+      icon: 'pi pi-list',
+      description: 'Обучение нейросетей для нескольких инструментов',
+      handler: () => handleTraining('batch-neural', () => 
+        apiService.trainBatchNeuralNetwork([selectedInstrument!.figi], { useNews: true })
+      ),
+      severity: 'success' as const
+    },
+    {
+      key: 'batch-ensemble',
+      label: 'Пакетное обучение ансамбля',
+      icon: 'pi pi-list',
+      description: 'Пакетное обучение ансамбля для нескольких инструментов',
+      handler: () => handleTraining('batch-ensemble', () => 
+        apiService.trainBatchEnsemble([selectedInstrument!.figi], { useNews: true })
+      ),
+      severity: 'info' as const
+    },
+    {
+      key: 'batch-meta',
+      label: 'Пакетное обучение мета-обучения',
+      icon: 'pi pi-list',
+      description: 'Пакетное обучение мета-обучения для нескольких инструментов',
+      handler: () => handleTraining('batch-meta', () => 
+        apiService.trainBatchMetaLearning([selectedInstrument!.figi], { useNews: true })
+      ),
+      severity: 'warning' as const
+    },
+    {
+      key: 'batch-reinforcement',
+      label: 'Пакетное обучение RL',
+      icon: 'pi pi-list',
+      description: 'Пакетное обучение RL для нескольких инструментов',
+      handler: () => handleTraining('batch-reinforcement', () => 
+        apiService.trainBatchReinforcementLearning([selectedInstrument!.figi], { useNews: true })
+      ),
+      severity: 'help' as const
+    }
+  ];
+
+  // Форматирование опций для Dropdown
   const instrumentOptions = availableInstruments.map(inst => ({
     label: `${inst.ticker} - ${inst.name}`,
-    value: inst
+    value: inst.figi,
+    instrument: inst
   }));
 
-  // Шаблон для отображения статуса в таблице новостей
-  const newsStatusTemplate = (rowData: NewsTestResult) => {
-    return (
-      <Badge 
-        value={rowData.success ? 'Успешно' : 'Ошибка'} 
-        severity={rowData.success ? 'success' : 'danger'} 
-      />
-    );
+  // Получение статуса для типа обучения
+  const getStatusForType = (type: string): TrainingStatus => {
+    return trainingStatuses[type] || { type, status: 'idle' };
   };
 
-  // Шаблон для отображения статуса в таблице обучения
-  const trainingStatusTemplate = (rowData: TrainingResult) => {
+  // Рендер кнопки обучения
+  const renderTrainingButton = (trainingType: typeof trainingTypes[0]) => {
+    const status = getStatusForType(trainingType.key);
+    const isLoading = status.status === 'loading';
+    const isDisabled = !selectedInstrument || isLoading;
+
     return (
-      <Badge 
-        value={rowData.success ? 'Запущено' : 'Ошибка'} 
-        severity={rowData.success ? 'success' : 'danger'} 
-      />
+      <div key={trainingType.key} className="col-12 md:col-6 lg:col-4">
+        <Card className="h-full">
+          <div className="flex flex-column gap-3">
+            <div className="flex align-items-center gap-2">
+              <i className={`pi ${trainingType.icon} text-2xl`}></i>
+              <h3 className="text-lg font-semibold m-0">{trainingType.label}</h3>
+            </div>
+            <p className="text-sm text-500 m-0">{trainingType.description}</p>
+            
+            <Button
+              label={isLoading ? 'Обучение...' : 'Запустить обучение'}
+              icon={isLoading ? 'pi pi-spin pi-spinner' : 'pi pi-play'}
+              onClick={trainingType.handler}
+              disabled={isDisabled}
+              loading={isLoading}
+              severity={trainingType.severity}
+              className="w-full"
+            />
+
+            {status.status === 'loading' && (
+              <ProgressBar mode="indeterminate" style={{ height: '4px' }} />
+            )}
+
+            {status.status === 'success' && status.message && (
+              <div className="text-sm text-green-500">
+                <i className="pi pi-check-circle mr-2"></i>
+                {status.message}
+              </div>
+            )}
+
+            {status.status === 'error' && status.error && (
+              <div className="text-sm text-red-500">
+                <i className="pi pi-times-circle mr-2"></i>
+                {status.error}
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
     );
   };
 
@@ -364,167 +274,72 @@ const TrainingDebug: React.FC = () => {
       <div className="col-12">
         <Toast ref={toast} />
         
-        <Card title="🔧 Отладка обучения с новостями" className="mb-4">
+        <Card title="🔧 Отладка обучения нейросетей" className="mb-4">
           <div className="grid">
-            {/* Выбор инструментов */}
+            {/* Выбор инструмента */}
             <div className="col-12">
               <div className="field">
-                <label htmlFor="instruments" className="font-semibold mb-2 block">
-                  Выберите инструменты для тестирования
+                <label htmlFor="instrument" className="font-semibold mb-2 block">
+                  Выберите инструмент для обучения
                 </label>
-                <MultiSelect
-                  id="instruments"
-                  value={selectedInstruments}
-                  onChange={(e) => setSelectedInstruments(e.value || [])}
+                <Dropdown
+                  id="instrument"
+                  value={selectedInstrument?.figi || null}
+                  onChange={(e) => {
+                    const figi = e.value;
+                    if (figi) {
+                      const instrument = availableInstruments.find(inst => inst.figi === figi);
+                      setSelectedInstrument(instrument || null);
+                    } else {
+                      setSelectedInstrument(null);
+                    }
+                  }}
                   options={instrumentOptions}
                   optionLabel="label"
                   optionValue="value"
-                  placeholder={isLoadingInstruments ? "Загрузка..." : "Выберите инструменты"}
+                  placeholder={isLoadingInstruments ? "Загрузка..." : "Выберите инструмент"}
                   disabled={isLoadingInstruments}
                   className="w-full"
-                  display="chip"
                   filter
-                  maxSelectedLabels={5}
-                  selectedItemsLabel="{0} инструментов выбрано"
+                  showClear
                 />
                 <div className="text-xs text-500 mt-1">
                   Доступно инструментов: {availableInstruments.length}
+                  {selectedInstrument && (
+                    <span className="ml-2">
+                      | Выбрано: {selectedInstrument.ticker} ({selectedInstrument.figi})
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
             <Divider />
 
-            {/* Тестирование новостей */}
+            {/* Обучение по одному инструменту */}
             <div className="col-12">
-              <h3 className="text-xl font-semibold mb-3">📰 Тестирование получения новостей</h3>
-              <p className="text-500 mb-3">
-                Проверка получения новостей для выбранных инструментов через NewsAPI.org
+              <h2 className="text-2xl font-semibold mb-3">🎓 Обучение по одному инструменту</h2>
+              <p className="text-500 mb-4">
+                Выберите инструмент и запустите обучение выбранного типа нейросети
               </p>
               
-              <Button
-                label="Запросить новости"
-                icon="pi pi-search"
-                onClick={handleTestNews}
-                disabled={isLoadingNews || selectedInstruments.length === 0}
-                loading={isLoadingNews}
-                className="mb-3"
-              />
-
-              {newsProgress && (
-                <div className="mb-3">
-                  <ProgressBar 
-                    value={(newsProgress.current / newsProgress.total) * 100} 
-                    showValue={false}
-                  />
-                  <div className="text-sm text-500 mt-1">
-                    Обработано: {newsProgress.current} / {newsProgress.total}
-                  </div>
-                </div>
-              )}
-
-              {newsResults.length > 0 && (
-                <div className="mt-4">
-                  <DataTable value={newsResults} responsiveLayout="scroll" className="text-sm">
-                    <Column field="ticker" header="Тикер" style={{ minWidth: '100px' }} />
-                    <Column field="newsCount" header="Количество новостей" style={{ minWidth: '150px' }} />
-                    <Column 
-                      body={newsStatusTemplate} 
-                      header="Статус" 
-                      style={{ minWidth: '120px' }} 
-                    />
-                    <Column field="message" header="Сообщение" style={{ minWidth: '200px' }} />
-                    <Column field="error" header="Ошибка" style={{ minWidth: '200px' }} />
-                  </DataTable>
-                </div>
-              )}
+              <div className="grid">
+                {trainingTypes.map(renderTrainingButton)}
+              </div>
             </div>
 
             <Divider />
 
-            {/* Запуск обучения */}
+            {/* Пакетное обучение */}
             <div className="col-12">
-              <h3 className="text-xl font-semibold mb-3">🧠 Запуск обучения с новостями</h3>
-              <p className="text-500 mb-3">
-                Запуск обучения нейросети для выбранных инструментов с использованием данных новостей
+              <h2 className="text-2xl font-semibold mb-3">📦 Пакетное обучение</h2>
+              <p className="text-500 mb-4">
+                Пакетное обучение для нескольких инструментов (в текущей версии используется один выбранный инструмент)
               </p>
               
-              <div className="flex gap-2 mb-3">
-                <Button
-                  label="Запустить обучение (одна нейросеть)"
-                  icon="pi pi-play"
-                  onClick={handleTrainWithNews}
-                  disabled={isTraining || isTrainingAllNetworks || selectedInstruments.length === 0}
-                  loading={isTraining}
-                  className="flex-1"
-                  severity="success"
-                />
-                <Button
-                  label="Запустить все нейросети"
-                  icon="pi pi-th-large"
-                  onClick={handleTrainAllNetworks}
-                  disabled={isTraining || isTrainingAllNetworks || selectedInstruments.length === 0}
-                  loading={isTrainingAllNetworks}
-                  className="flex-1"
-                  severity="info"
-                />
+              <div className="grid">
+                {batchTrainingTypes.map(renderTrainingButton)}
               </div>
-
-              {(trainingProgress || allNetworksProgress) && (
-                <div className="mb-3">
-                  <ProgressBar 
-                    value={((trainingProgress?.current || allNetworksProgress?.current || 0) / (trainingProgress?.total || allNetworksProgress?.total || 1)) * 100} 
-                    showValue={false}
-                  />
-                  <div className="text-sm text-500 mt-1">
-                    Обработано: {trainingProgress?.current || allNetworksProgress?.current || 0} / {trainingProgress?.total || allNetworksProgress?.total || 0}
-                    {allNetworksProgress?.network && (
-                      <span className="ml-2">({allNetworksProgress.network})</span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {trainingResults.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-lg font-semibold mb-2">Результаты обучения (одна нейросеть)</h4>
-                  <DataTable value={trainingResults} responsiveLayout="scroll" className="text-sm">
-                    <Column field="ticker" header="Тикер" style={{ minWidth: '100px' }} />
-                    <Column 
-                      body={trainingStatusTemplate} 
-                      header="Статус" 
-                      style={{ minWidth: '120px' }} 
-                    />
-                    <Column field="message" header="Сообщение" style={{ minWidth: '200px' }} />
-                    <Column field="error" header="Ошибка" style={{ minWidth: '200px' }} />
-                  </DataTable>
-                </div>
-              )}
-
-              {allNetworksResults.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-lg font-semibold mb-2">Результаты обучения всех нейросетей</h4>
-                  {allNetworksResults.map((result, idx) => (
-                    <Card key={idx} title={`${result.ticker} (${result.figi})`} className="mb-3">
-                      <DataTable value={result.networks} responsiveLayout="scroll" className="text-sm">
-                        <Column field="name" header="Нейросеть" style={{ minWidth: '200px' }} />
-                        <Column 
-                          body={(rowData) => (
-                            <Badge 
-                              value={rowData.success ? 'Успешно' : 'Ошибка'} 
-                              severity={rowData.success ? 'success' : 'danger'} 
-                            />
-                          )}
-                          header="Статус" 
-                          style={{ minWidth: '120px' }} 
-                        />
-                        <Column field="message" header="Сообщение" style={{ minWidth: '200px' }} />
-                        <Column field="error" header="Ошибка" style={{ minWidth: '200px' }} />
-                      </DataTable>
-                    </Card>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </Card>

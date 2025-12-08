@@ -2,6 +2,7 @@ import express from 'express';
 import IntegratedAIService from '../services/IntegratedAIService.js';
 import ServiceManager from '../services/ServiceManager.js';
 import OptimizedTelegramService from '../services/OptimizedTelegramService.js';
+import SignalValidationService from '../services/SignalValidationService.js';
 
 const router = express.Router();
 
@@ -197,6 +198,97 @@ router.post('/save-models', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Ошибка сохранения моделей',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Валидация предсказания модели против сигналов аналитиков
+ * POST /api/ai/validate-prediction
+ */
+router.post('/validate-prediction', async (req, res) => {
+    try {
+        const { figi, prediction, timestamp } = req.body;
+        
+        if (!figi || !prediction) {
+            return res.status(400).json({
+                success: false,
+                message: 'FIGI and prediction are required'
+            });
+        }
+
+        const validationResult = await SignalValidationService.validatePredictionAgainstSignals(
+            figi,
+            prediction,
+            timestamp ? new Date(timestamp) : new Date()
+        );
+        
+        res.json({
+            success: validationResult.success,
+            data: validationResult
+        });
+    } catch (error) {
+        console.error('Ошибка валидации предсказания:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка валидации предсказания',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Получение метрик качества предсказаний
+ * GET /api/ai/quality-metrics?figi=XXX&from=2024-01-01&to=2024-12-31
+ */
+router.get('/quality-metrics', async (req, res) => {
+    try {
+        const { figi, from, to } = req.query;
+        
+        const metrics = await SignalValidationService.getQualityMetrics(
+            figi || null,
+            from ? new Date(from) : null,
+            to ? new Date(to) : null
+        );
+        
+        res.json({
+            success: metrics.success,
+            data: metrics
+        });
+    } catch (error) {
+        console.error('Ошибка получения метрик качества:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения метрик качества',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Оценка исторических сигналов
+ * GET /api/ai/historical-signals?figi=XXX&from=2024-01-01&to=2024-12-31
+ */
+router.get('/historical-signals', async (req, res) => {
+    try {
+        const { figi, from, to } = req.query;
+        
+        const evaluation = await SignalValidationService.evaluateHistoricalSignals(
+            figi || null,
+            from ? new Date(from) : null,
+            to ? new Date(to) : null
+        );
+        
+        res.json({
+            success: evaluation.success,
+            data: evaluation
+        });
+    } catch (error) {
+        console.error('Ошибка оценки исторических сигналов:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка оценки исторических сигналов',
             error: error.message
         });
     }

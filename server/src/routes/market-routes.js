@@ -191,11 +191,19 @@ router.get('/stock/:figi/predictions', async (req, res) => {
 router.get('/stock/:figi/signals', async (req, res) => {
     try {
         const { figi } = req.params;
+        const { from, to, direction, active } = req.query;
         
         console.log(`🔍 Запрос сигналов для FIGI: ${figi}`);
         
+        // Формируем опции запроса
+        const options = {};
+        if (from) options.from = new Date(from);
+        if (to) options.to = new Date(to);
+        if (direction) options.direction = direction;
+        if (active) options.active = active;
+        
         // Пробуем получить сигналы через Tinkoff API
-        const result = await TinkoffApiService.getSignals(figi);
+        const result = await TinkoffApiService.getSignals(figi, options);
         
         if (result.success) {
             res.json({
@@ -222,6 +230,58 @@ router.get('/stock/:figi/signals', async (req, res) => {
             message: 'Ошибка получения сигналов',
             error: error.message,
             stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
+
+/**
+ * Получение сигналов из БД по FIGI
+ * GET /api/market/signals/:figi?from=2024-01-01&to=2024-12-31&direction=BUY&activeOnly=true
+ */
+router.get('/signals/:figi', async (req, res) => {
+    try {
+        const { figi } = req.params;
+        const { from, to, direction, activeOnly } = req.query;
+        
+        const SignalCacheService = (await import('../services/SignalCacheService.js')).default;
+        
+        const options = {};
+        if (from) options.from = new Date(from);
+        if (to) options.to = new Date(to);
+        if (direction) options.direction = direction;
+        if (activeOnly === 'true') options.activeOnly = true;
+        
+        const signals = await SignalCacheService.getSignalsByFigi(figi, options);
+        
+        // Преобразуем сигналы в формат для фронтенда
+        const formattedSignals = signals.map(signal => ({
+            signalId: signal.signalId,
+            strategyId: signal.strategyId,
+            strategyName: signal.strategyName,
+            instrumentUid: signal.instrumentUid,
+            figi: signal.figi,
+            createDt: signal.createDt,
+            endDt: signal.endDt,
+            direction: signal.direction,
+            initialPrice: signal.initialPrice,
+            targetPrice: signal.targetPrice,
+            stoploss: signal.stoploss,
+            probability: signal.probability,
+            name: signal.name,
+            info: signal.info
+        }));
+        
+        res.json({
+            success: true,
+            data: formattedSignals,
+            count: formattedSignals.length
+        });
+    } catch (error) {
+        console.error('Ошибка получения сигналов из БД:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения сигналов из БД',
+            error: error.message
         });
     }
 });

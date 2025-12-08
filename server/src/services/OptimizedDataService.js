@@ -101,9 +101,18 @@ class OptimizedDataService {
                             continue;
                         }
                         
-                        // Создаем лейбл (рост > 1%)
-                        const priceChange = ((futureCandle.close - window[window.length - 1].close) / window[window.length - 1].close) * 100;
-                        const label = priceChange > 1 ? 1 : 0;
+                        // Создаем лейбл
+                        // Сначала пробуем использовать исторические сигналы как метки
+                        let label = null;
+                        if (figi) {
+                            label = await this.getLabelFromSignals(figi, futureCandle.time);
+                        }
+                        
+                        // Если сигналов нет, используем стандартную логику (рост > 1%)
+                        if (label === null) {
+                            const priceChange = ((futureCandle.close - window[window.length - 1].close) / window[window.length - 1].close) * 100;
+                            label = priceChange > 1 ? 1 : 0;
+                        }
                         
                         features.push(featureVector);
                         labels.push(label);
@@ -191,6 +200,9 @@ class OptimizedDataService {
             // Telegram настроения
             const telegramFeatures = await this.getTelegramFeatures(figi, window[window.length - 1].time);
             
+            // Сигналы аналитиков
+            const signalsFeatures = await this.getSignalsFeatures(figi, window[window.length - 1].time);
+            
             // Объединяем все фичи
             features.push(...normalizedPrices);
             features.push(...normalizedVolumes);
@@ -199,10 +211,11 @@ class OptimizedDataService {
             features.push(...marketFeatures);
             features.push(...newsFeatures);
             features.push(...telegramFeatures);
+            features.push(...signalsFeatures);
             
             // Логирование и исправление размеров фичей
-            // Упрощенный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) = 25
-            const expectedSize = 25;
+            // Упрощенный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) = 30
+            const expectedSize = 30;
             if (features.length !== expectedSize) {
                 console.warn(`⚠️ Unexpected feature size: ${features.length}, expected ${expectedSize}`);
                 
@@ -224,8 +237,8 @@ class OptimizedDataService {
         } catch (error) {
             console.error('Error creating feature vector:', error);
             // Возвращаем нулевой вектор при ошибке с правильным размером
-            // Упрощенный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 = 25
-            return new Array(25).fill(0);
+            // Упрощенный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 = 30
+            return new Array(30).fill(0);
         }
     }
 
@@ -847,6 +860,128 @@ class OptimizedDataService {
     }
 
     /**
+     * Получение фичей сигналов аналитиков
+     * ВАЖНО: Фильтруем сигналы только до переданного timestamp для предотвращения утечки данных
+     * @param {string} figi - FIGI инструмента
+     * @param {Date|string} timestamp - Временная метка для фильтрации сигналов
+     * @returns {Promise<Array>} - Массив из 5 фичей сигналов
+     */
+    async getSignalsFeatures(figi, timestamp) {
+        try {
+            if (!figi) {
+                return [0, 0, 0, 0, 0]; // Нет FIGI - возвращаем 5 нулевых фичей
+            }
+
+            const SignalCacheService = (await import('./SignalCacheService.js')).default;
+            
+            // Получаем активные сигналы на указанную дату (только до timestamp!)
+            const timestampDate = new Date(timestamp);
+            const signals = await SignalCacheService.getSignalsByDate(figi, timestampDate);
+            
+            if (signals.length === 0) {
+                return [0, 0, 0, 0, 0]; // Нет сигналов - возвращаем 5 нулевых фичей
+            }
+
+            // Конвертируем цены из формата Tinkoff API
+            const convertPrice = (priceObj) => {
+                if (!priceObj) return 0;
+                const units = parseFloat(priceObj.units || 0);
+                const nano = parseFloat(priceObj.nano || 0);
+                return units + nano / 1e9;
+            };
+
+            // Получаем текущую цену из последней свечи (если доступна)
+            let currentPrice = 0;
+            try {
+                const candles = await CacheService.getCandles(figi, 'DAY', 1);
+                if (candles && candles.length > 0) {
+                    // Берем последнюю свечу до timestamp
+                    const filteredCandles = candles.filter(c => new Date(c.time) <= timestampDate);
+                    if (filteredCandles.length > 0) {
+                        currentPrice = filteredCandles[filteredCandles.length - 1].close;
+                    }
+                }
+            } catch (error) {
+                // Если не удалось получить цену, используем initialPrice первого сигнала
+                if (signals.length > 0 && signals[0].initialPrice) {
+                    currentPrice = convertPrice(signals[0].initialPrice);
+                }
+            }
+
+            // Рассчитываем фичи
+            let buySignalsCount = 0;
+            let sellSignalsCount = 0;
+            let totalProbability = 0;
+            let totalTargetPriceRatio = 0;
+            let totalTimeRemaining = 0;
+            let validSignalsCount = 0;
+
+            for (const signal of signals) {
+                // Направление сигнала
+                if (signal.direction === 'SIGNAL_DIRECTION_BUY') {
+                    buySignalsCount++;
+                } else if (signal.direction === 'SIGNAL_DIRECTION_SELL') {
+                    sellSignalsCount++;
+                }
+
+                // Вероятность (нормализуем от 0-100 к 0-1)
+                const probability = (signal.probability || 0) / 100;
+                totalProbability += probability;
+
+                // Целевая цена относительно текущей (если есть текущая цена)
+                if (currentPrice > 0 && signal.targetPrice) {
+                    const targetPrice = convertPrice(signal.targetPrice);
+                    const priceRatio = targetPrice / currentPrice;
+                    totalTargetPriceRatio += priceRatio;
+                }
+
+                // Время до окончания сигнала (нормализуем: дни / 365)
+                const endDate = new Date(signal.endDt);
+                const timeRemaining = Math.max(0, (endDate - timestampDate) / (365 * 24 * 60 * 60 * 1000)); // В годах
+                totalTimeRemaining += Math.min(1, timeRemaining); // Ограничиваем максимум 1 год
+
+                validSignalsCount++;
+            }
+
+            if (validSignalsCount === 0) {
+                return [0, 0, 0, 0, 0];
+            }
+
+            // Нормализуем фичи
+            const avgDirection = (buySignalsCount - sellSignalsCount) / Math.max(1, signals.length); // -1 до 1
+            const avgProbability = totalProbability / validSignalsCount; // 0 до 1
+            const signalsCountNormalized = Math.min(1, signals.length / 10); // Нормализуем: 10 сигналов = 1.0
+            const avgTargetPriceRatio = currentPrice > 0 ? (totalTargetPriceRatio / validSignalsCount) : 0; // Отношение целевой к текущей
+            const avgTimeRemaining = totalTimeRemaining / validSignalsCount; // 0 до 1
+
+            const features = [
+                avgDirection,           // Среднее направление (-1 до 1): положительное = больше BUY
+                avgProbability,         // Средняя вероятность (0 до 1)
+                signalsCountNormalized, // Количество сигналов (нормализованное 0 до 1)
+                avgTargetPriceRatio,    // Среднее отношение целевой цены к текущей
+                avgTimeRemaining        // Среднее время до окончания сигналов (0 до 1)
+            ];
+
+            // Убеждаемся, что возвращаем ровно 5 фичей
+            if (features.length !== 5) {
+                console.warn(`⚠️ Signals features count mismatch: expected 5, got ${features.length}`);
+                while (features.length < 5) {
+                    features.push(0);
+                }
+                if (features.length > 5) {
+                    features.splice(5);
+                }
+            }
+
+            return features;
+            
+        } catch (error) {
+            console.error('❌ Ошибка получения фичей сигналов:', error);
+            return [0, 0, 0, 0, 0]; // Возвращаем 5 нулевых фичей при ошибке
+        }
+    }
+
+    /**
      * Получение расширенных новостных фичей для портфеля
      */
     async getPortfolioNewsFeatures(portfolio, timestamp) {
@@ -922,6 +1057,97 @@ class OptimizedDataService {
         const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
         
         return Math.sqrt(variance);
+    }
+
+    /**
+     * Получение метки для обучения на основе исторических сигналов
+     * @param {string} figi - FIGI инструмента
+     * @param {Date|string} timestamp - Временная метка для проверки сигналов
+     * @returns {Promise<number|null>} - Метка (1 если сигнал сработал, 0 если нет, null если сигналов нет)
+     */
+    async getLabelFromSignals(figi, timestamp) {
+        try {
+            if (!figi) return null;
+
+            const SignalCacheService = (await import('./SignalCacheService.js')).default;
+            const CacheService = (await import('./CacheService.js')).default;
+            
+            // Получаем сигналы, которые были активны на эту дату
+            const timestampDate = new Date(timestamp);
+            const signals = await SignalCacheService.getSignalsByDate(figi, timestampDate);
+            
+            if (signals.length === 0) {
+                return null; // Нет сигналов - используем стандартную логику
+            }
+
+            // Получаем цену на момент timestamp
+            const candles = await CacheService.getCandles(figi, 'DAY', 365);
+            if (!candles || candles.length === 0) {
+                return null;
+            }
+
+            const relevantCandles = candles.filter(c => {
+                const candleDate = new Date(c.time);
+                return candleDate <= timestampDate;
+            });
+
+            if (relevantCandles.length === 0) {
+                return null;
+            }
+
+            const currentPrice = relevantCandles[relevantCandles.length - 1].close;
+
+            // Проверяем, сработал ли хотя бы один сигнал
+            for (const signal of signals) {
+                const initialPrice = signal.initialPrice || 0;
+                const targetPrice = signal.targetPrice || 0;
+                const stoploss = signal.stoploss || 0;
+
+                if (initialPrice === 0 || targetPrice === 0) {
+                    continue;
+                }
+
+                let signalWorked = false;
+
+                if (signal.direction === 'SIGNAL_DIRECTION_BUY') {
+                    // Для BUY: цена должна достичь targetPrice или выше
+                    if (currentPrice >= targetPrice) {
+                        signalWorked = true;
+                    } else if (stoploss > 0 && currentPrice <= stoploss) {
+                        // Сработал стоп-лосс - сигнал не сработал
+                        signalWorked = false;
+                    }
+                } else if (signal.direction === 'SIGNAL_DIRECTION_SELL') {
+                    // Для SELL: цена должна достичь targetPrice или ниже
+                    if (currentPrice <= targetPrice) {
+                        signalWorked = true;
+                    } else if (stoploss > 0 && currentPrice >= stoploss) {
+                        // Сработал стоп-лосс - сигнал не сработал
+                        signalWorked = false;
+                    }
+                }
+
+                // Если хотя бы один сигнал сработал, возвращаем 1
+                if (signalWorked) {
+                    return 1;
+                }
+            }
+
+            // Если ни один сигнал не сработал, возвращаем 0
+            // Но только если были сигналы с достаточными данными
+            const signalsWithData = signals.filter(s => 
+                s.initialPrice && s.targetPrice && s.initialPrice > 0 && s.targetPrice > 0
+            );
+
+            if (signalsWithData.length > 0) {
+                return 0; // Сигналы были, но не сработали
+            }
+
+            return null; // Недостаточно данных для оценки - используем стандартную логику
+        } catch (error) {
+            console.warn('⚠️ Ошибка получения метки из сигналов:', error.message);
+            return null; // При ошибке используем стандартную логику
+        }
     }
 }
 

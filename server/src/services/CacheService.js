@@ -16,9 +16,7 @@ class CacheService {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация CacheService...');
             this.isInitialized = true;
-            console.log('✅ CacheService инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации CacheService:', error);
             throw error;
@@ -28,11 +26,9 @@ class CacheService {
     // Кеширование инструментов (акций) - УПРОЩЕННАЯ ВЕРСИЯ
     async cacheInstruments() {
         try {
-            console.log('Starting instruments cache update...');
             const response = await TinkoffApiService.getStocks();
 
             if (!response.instruments) {
-                console.log('No instruments in response, using empty array');
                 response.instruments = [];
             }
 
@@ -119,7 +115,6 @@ class CacheService {
                     // DividendService.addPriorityInstrument(instrument.figi); // Временно отключено
 
                     cachedCount++;
-                    console.log(`Cached instrument: ${instrument.ticker}`);
 
                     // Небольшая задержка чтобы не перегружать API
                     await new Promise(resolve => setTimeout(resolve, 100));
@@ -129,7 +124,6 @@ class CacheService {
                 }
             }
 
-            console.log(`Successfully cached ${cachedCount} instruments`);
             return response.instruments;
         } catch (error) {
             console.error('Error caching instruments:', error);
@@ -149,7 +143,6 @@ class CacheService {
             }
 
             if (!instrument || new Date() - new Date(instrument.lastUpdated) > this.cacheTimeout) {
-                console.log(`Cache miss or outdated for ${figi}, updating...`);
                 try {
                     await this.cacheInstruments();
                     instrument = await CachedInstrument.findOne({ where: { figi } });
@@ -205,7 +198,6 @@ class CacheService {
                 return [];
             }
             
-            console.log(`🔄 Starting cache for ${figi} (${interval}) - ${effectiveDays} days`);
             this.lastFetchMap.set(key, nowTs);
 
             const to = new Date();
@@ -214,7 +206,6 @@ class CacheService {
 
             const candlesFromApi = await this.fetchCandlesRangeBatched(figi, interval, from, to);
             if (!Array.isArray(candlesFromApi) || candlesFromApi.length === 0) {
-                console.log('No candles in response');
                 return [];
             }
 
@@ -243,9 +234,6 @@ class CacheService {
             const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
             if (toInsert.length > 0) {
                 await CachedCandle.bulkCreate(toInsert);
-                console.log(`Cached ${toInsert.length} new candles for ${figi} (${interval})`);
-            } else {
-                console.log(`No new candles to cache for ${figi} (${interval})`);
             }
 
             return toInsert;
@@ -263,8 +251,6 @@ class CacheService {
         let iterationCount = 0;
         const maxIterations = 10; // Максимум 10 итераций для предотвращения бесконечного цикла
 
-        console.log(`🔄 Fetching candles for ${figi} from ${from.toISOString()} to ${to.toISOString()}`);
-
         while (cursor < to && iterationCount < maxIterations) {
             iterationCount++;
             
@@ -272,18 +258,14 @@ class CacheService {
             next.setDate(next.getDate() + chunkDays);
             if (next > to) next.setTime(to.getTime());
 
-            console.log(`📊 Iteration ${iterationCount}: fetching ${figi} from ${cursor.toISOString()} to ${next.toISOString()}`);
-
             try {
                 const resp = await TinkoffApiService.getCandles(figi, cursor, next, interval);
                 const candles = Array.isArray(resp?.candles) ? resp.candles : [];
                 
                 if (candles.length === 0) {
-                    console.log(`⚠️ No candles returned for ${figi}, moving cursor forward`);
                     // если пусто, сдвигаем курсор, чтобы не зациклиться
                     cursor.setDate(cursor.getDate() + chunkDays);
                 } else {
-                    console.log(`✅ Got ${candles.length} candles for ${figi}`);
                     all.push(...candles);
                     // ставим курсор к последней свече + 1 день
                     const lastTime = new Date(candles[candles.length - 1].time);
@@ -300,7 +282,6 @@ class CacheService {
             console.warn(`⚠️ Reached max iterations (${maxIterations}) for ${figi}, stopping`);
         }
 
-        console.log(`✅ Total candles fetched for ${figi}: ${all.length}`);
         return all;
     }
 
@@ -337,11 +318,8 @@ class CacheService {
                 from.setDate(from.getDate() - 1); // Начинаем с 1 дня до последней свечи (на случай пропусков)
                 const to = new Date();
                 
-                console.log(`🔄 Incremental cache update for ${figi} (${interval}) from ${from.toISOString()} to ${to.toISOString()}`);
-                
                 const candlesFromApi = await this.fetchCandlesRangeBatched(figi, interval, from, to);
                 if (!Array.isArray(candlesFromApi) || candlesFromApi.length === 0) {
-                    console.log(`No new candles for ${figi} (${interval})`);
                     return [];
                 }
 
@@ -370,15 +348,11 @@ class CacheService {
                 const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
                 if (toInsert.length > 0) {
                     await CachedCandle.bulkCreate(toInsert);
-                    console.log(`✅ Incremental update: cached ${toInsert.length} new candles for ${figi} (${interval})`);
-                } else {
-                    console.log(`✅ Incremental update: no new candles for ${figi} (${interval})`);
                 }
 
                 return toInsert;
             } else {
                 // Если нет последней свечи, делаем полное кеширование
-                console.log(`🔄 No existing candles for ${figi} (${interval}), performing full cache`);
                 return await this.cacheCandles(figi, interval, days);
             }
         } catch (error) {
@@ -411,7 +385,6 @@ class CacheService {
             if (candles.length === 0 || rangeInsufficient) {
                 // Увеличиваем период для догрузки, но не более 730 дней (2 года)
                 const extendDays = Math.min(days * 2, 730);
-                console.log(`📊 Insufficient candles for ${figi}: found ${candles.length}, required ${minRequired}, extending to ${extendDays} days`);
                 await this.cacheCandles(figi, interval, extendDays);
                 candles = await CachedCandle.findAll({
                     where: {
@@ -429,6 +402,30 @@ class CacheService {
         } catch (error) {
             console.error('Error getting candles from cache:', error);
             return [];
+        }
+    }
+
+    /**
+     * Обновление всего кеша (инструменты, свечи, сигналы)
+     * Вызывает SchedulerService.performCacheUpdate() для полного обновления
+     */
+    async updateCache() {
+        try {
+            const SchedulerService = (await import('./SchedulerService.js')).default;
+            const result = await SchedulerService.performCacheUpdate();
+            
+            // После обновления кеша также обновляем сигналы
+            try {
+                await SchedulerService.performSignalsUpdate();
+            } catch (signalsError) {
+                console.warn('⚠️ Ошибка обновления сигналов (не критично):', signalsError.message);
+                // Не прерываем процесс, если обновление сигналов не удалось
+            }
+            
+            return result;
+        } catch (error) {
+            console.error('❌ Ошибка обновления кеша:', error);
+            throw error;
         }
     }
 }

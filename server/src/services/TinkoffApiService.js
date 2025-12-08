@@ -52,10 +52,14 @@ class TinkoffApiService {
             if (!response.ok) {
                 const errorText = await response.text();
                 
-                // Обработка ошибки 404 (Not Found) - метод не существует
+                // Обработка ошибки 404 (Not Found) - метод не существует или инструмент не найден
                 if (response.status === 404) {
                     // Для методов получения новостей это нормально - метод может не существовать
                     if (path.includes('News') || path.includes('GetNews')) {
+                        throw new Error(`HTTP error! status: 404, details: ${errorText}`);
+                    }
+                    // Для GetInstrumentBy 404 - это нормально (инструмент не найден), не логируем детали
+                    if (path.includes('GetInstrumentBy')) {
                         throw new Error(`HTTP error! status: 404, details: ${errorText}`);
                     }
                     // Для других методов логируем ошибку
@@ -128,6 +132,18 @@ class TinkoffApiService {
     // Вспомогательная функция для задержки
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
+     * Конвертация цены из формата Tinkoff API (units + nano) в число
+     * @param {Object} priceObject - Объект с полями units (string) и nano (number)
+     * @returns {number} - Цена как число
+     */
+    convertPriceToNumber(priceObject) {
+        if (!priceObject) return 0;
+        const units = parseFloat(priceObject.units || 0);
+        const nano = parseFloat(priceObject.nano || 0);
+        return units + nano / 1e9;
     }
 
     // Получение списка акций с пагинацией
@@ -218,7 +234,7 @@ class TinkoffApiService {
         }
     }
 
-    // Получение информации по конкретному инструменту
+    // Получение информации по конкретному инструменту по FIGI
     async getInstrumentByFigi(figi) {
         try {
             const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetInstrumentBy', {
@@ -228,7 +244,32 @@ class TinkoffApiService {
 
             return response;
         } catch (error) {
+            // 404 - это нормально, инструмент просто не найден (не логируем как ошибку)
+            if (error.message && error.message.includes('404')) {
+                return null;
+            }
+            // Другие ошибки логируем
             console.error(`Error getting instrument ${figi}:`, error);
+            return null;
+        }
+    }
+
+    // Получение информации по конкретному инструменту по UID
+    async getInstrumentByUid(uid) {
+        try {
+            const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetInstrumentBy', {
+                id: uid,
+                idType: 'INSTRUMENT_ID_TYPE_UID'
+            });
+
+            return response;
+        } catch (error) {
+            // 404 - это нормально, инструмент просто не найден (не логируем как ошибку)
+            if (error.message && error.message.includes('404')) {
+                return null;
+            }
+            // Другие ошибки логируем
+            console.error(`Error getting instrument by UID ${uid}:`, error);
             return null;
         }
     }
@@ -842,26 +883,61 @@ class TinkoffApiService {
 
     /**
      * Получение торговых сигналов для инструмента
-     * Метод GetSignals может быть доступен в SignalsService или MarketDataService
-     * @param {string} figi - FIGI инструмента
+     * Документация: https://developer.tbank.ru/invest/api/signal-service-get-signals
+     * @param {string} figi - FIGI инструмента (или instrumentUid)
+     * @param {Object} options - Опции запроса
+     * @param {Date} options.from - Дата начала периода (опционально)
+     * @param {Date} options.to - Дата окончания периода (опционально)
+     * @param {string} options.direction - Направление сигнала (SIGNAL_DIRECTION_BUY, SIGNAL_DIRECTION_SELL, SIGNAL_DIRECTION_UNSPECIFIED)
+     * @param {string} options.active - Статус сигнала (SIGNAL_STATE_ACTIVE, SIGNAL_STATE_CLOSED, SIGNAL_STATE_ALL)
+     * @param {number} options.limit - Максимальное количество сигналов (по умолчанию 20)
+     * @param {number} options.pageNumber - Номер страницы (по умолчанию 0)
      * @returns {Promise<Object>} - Объект с сигналами
      */
-    async getSignals(figi) {
+    async getSignals(figi, options = {}) {
         try {
-            // Пробуем разные возможные пути для GetSignals
-            const possiblePaths = [
-                '/tinkoff.public.invest.api.contract.v1.SignalService/GetSignals',
+            const path = '/tinkoff.public.invest.api.contract.v1.SignalService/GetSignals';
+            
+            // Формируем тело запроса
+            const requestBody = {};
+            
+            // Пробуем использовать figi или instrumentUid
+            // Сначала пробуем как figi, потом как instrumentUid
+            const possibleBodies = [
+                { figi: figi },
+                { instrumentUid: figi }
             ];
 
-            for (const path of possiblePaths) {
-                try {
-                    console.log(`🔍 Пробуем получить сигналы через ${path} для FIGI: ${figi}`);
-                    
-                    const response = await this.makeRequest(path, {
-                        figi: figi
-                    });
+            // Добавляем опциональные параметры
+            if (options.from) {
+                requestBody.from = options.from instanceof Date ? options.from.toISOString() : options.from;
+            }
+            if (options.to) {
+                requestBody.to = options.to instanceof Date ? options.to.toISOString() : options.to;
+            }
+            if (options.direction) {
+                requestBody.direction = options.direction;
+            }
+            if (options.active) {
+                requestBody.active = options.active;
+            }
+            if (options.limit) {
+                requestBody.paging = {
+                    limit: options.limit,
+                    pageNumber: options.pageNumber || 0
+                };
+            }
 
-                    console.log(`✅ Успешно получены сигналы через ${path}:`, JSON.stringify(response, null, 2));
+            for (const body of possibleBodies) {
+                try {
+                    const fullBody = { ...body, ...requestBody };
+                    console.log(`🔍 Получаем сигналы через ${path} для ${Object.keys(body)[0]}: ${figi}`, 
+                        options.from ? `с ${options.from.toISOString()}` : '', 
+                        options.to ? `по ${options.to.toISOString()}` : '');
+                    
+                    const response = await this.makeRequest(path, fullBody);
+
+                    console.log(`✅ Успешно получены сигналы: ${response.signals?.length || 0} сигналов`);
                     
                     return {
                         success: true,
@@ -869,19 +945,18 @@ class TinkoffApiService {
                         data: response
                     };
                 } catch (error) {
-                    // Если метод не найден (404), пробуем следующий путь
-                    if (error.message.includes('404') || error.message.includes('Not Found')) {
-                        console.log(`⚠️ Метод ${path} не найден, пробуем следующий...`);
+                    // Если это ошибка валидации (не 404), значит метод существует, но формат неправильный
+                    if (!error.message.includes('404') && !error.message.includes('Not Found')) {
+                        console.warn(`⚠️ Ошибка при запросе с ${Object.keys(body)[0]}:`, error.message);
+                        // Продолжаем пробовать другие форматы
                         continue;
                     }
-                    // Для других ошибок пробуем следующий путь
-                    console.warn(`⚠️ Ошибка при запросе ${path}:`, error.message);
-                    continue;
+                    // Если 404, значит метод не существует или формат неправильный
+                    throw new Error(`Метод GetSignals не найден или неправильный формат запроса: ${error.message}`);
                 }
             }
 
-            // Если ни один путь не сработал
-            throw new Error('Метод GetSignals не найден ни в одном из проверенных сервисов');
+            throw new Error('Не удалось получить сигналы ни с одним форматом запроса');
             
         } catch (error) {
             console.error('❌ Ошибка получения сигналов:', error);
