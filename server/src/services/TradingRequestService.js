@@ -6,6 +6,7 @@ import ServiceManager from './ServiceManager.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
 import TinkoffApiService from './TinkoffApiService.js';
 import SettingsService from './SettingsService.js';
+import { Op } from 'sequelize';
 
 /**
  * Сервис для управления торговыми заявками
@@ -169,6 +170,9 @@ class TradingRequestService {
 
             // Получаем текущий режим торговли
             const currentMode = TradingModeManager.getCurrentMode().mode;
+            
+            // Валидация для режима торговли (для SELL операций валидация пропускается)
+            await this.validateTradingMode(currentMode, recommendationData);
             
             // Получаем текущую цену
             let currentPrice = await this.getCurrentPrice(recommendationData.figi);
@@ -613,7 +617,7 @@ class TradingRequestService {
 
             let whereClause = {
                 status: {
-                    [TradingRequest.sequelize.Op.in]: ['APPROVED', 'REJECTED']
+                    [Op.in]: ['APPROVED', 'REJECTED']
                 }
             };
 
@@ -672,7 +676,7 @@ class TradingRequestService {
         try {
             let whereClause = {
                 status: {
-                    [TradingRequest.sequelize.Op.in]: ['APPROVED', 'REJECTED']
+                    [Op.in]: ['APPROVED', 'REJECTED']
                 }
             };
 
@@ -838,23 +842,32 @@ class TradingRequestService {
         try {
             const modeSettings = await TradingModeManager.getModeSettings();
             
+            // Для SELL операций (продажа) не требуем минимальную уверенность,
+            // так как это решение пользователя продать свои акции
+            const isSell = recommendation.recommendation === 'SELL' || recommendation.action === 'SELL';
+            
+            if (isSell) {
+                console.log(`✅ SELL операция: пропускаем валидацию уверенности (пользовательское решение)`);
+                return; // Пропускаем валидацию для продаж
+            }
+            
             switch (mode) {
                 case 'paper':
-                    // Paper режим - минимальные ограничения
+                    // Paper режим - минимальные ограничения только для покупок
                     if (recommendation.confidence < 0.3) {
                         throw new Error('Paper режим: минимальная уверенность 30%');
                     }
                     break;
                     
                 case 'micro':
-                    // Micro режим - средние ограничения
+                    // Micro режим - средние ограничения только для покупок
                     if (recommendation.confidence < modeSettings.minConfidence) {
                         throw new Error(`Micro режим: требуется уверенность минимум ${(modeSettings.minConfidence * 100).toFixed(0)}%`);
                     }
                     break;
                     
                 case 'real':
-                    // Real режим - строгие ограничения
+                    // Real режим - строгие ограничения только для покупок
                     if (recommendation.confidence < modeSettings.minConfidence) {
                         throw new Error(`Real режим: требуется уверенность минимум ${(modeSettings.minConfidence * 100).toFixed(0)}%`);
                     }

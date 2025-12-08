@@ -6,11 +6,15 @@ const router = express.Router();
 
 /**
  * Новости по FIGI
+ * GET /api/news/:figi?limit=20&days=30
  */
 router.get('/:figi', async (req, res) => {
     try {
         const { figi } = req.params;
-        const news = await NewsAnalysisService.getNewsByFigi(figi);
+        const limit = parseInt(req.query.limit) || 20;
+        const days = parseInt(req.query.days) || 30;
+        
+        const news = await NewsAnalysisService.getNewsByFigi(figi, { limit, days });
         res.json({
             success: true,
             data: news

@@ -22,6 +22,7 @@ class SchedulerService {
         this.tradingHoursCacheTask = null;
         this.degradationCheckTask = null;
         this.portfolioAnalysisTask = null;
+        this.predictionsUpdateTask = null;
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -253,6 +254,20 @@ class SchedulerService {
             timezone: "Europe/Moscow"
         });
 
+        // Задача 11: Обновление предсказаний в рекомендациях каждые 20 минут
+        this.predictionsUpdateTask = cron.schedule('*/20 * * * *', async () => {
+            try {
+                console.log('🔄 Scheduled predictions update started...');
+                await this.updateRecommendationsPredictions();
+            } catch (error) {
+                console.error('Error in scheduled predictions update:', error);
+                // Не отправляем в Telegram, чтобы не спамить при частых обновлениях
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
         // Первое обновление при запуске (через 1 минуту) - ОТКЛЮЧЕНО для отладки
         // setTimeout(() => {
         //     this.performCacheUpdate();
@@ -270,6 +285,7 @@ class SchedulerService {
         }
         console.log(`   - Trading hours cache update: ${tradingHoursSchedule}`);
         console.log('   - Trading hours notifications: every 5 minutes');
+        console.log('   - Predictions update: every 20 minutes');
         console.log(`   - Model degradation check: ${degradationCheckSchedule}`);
         console.log('   - Portfolio analysis: every hour');
         
@@ -1316,15 +1332,134 @@ class SchedulerService {
             this.telegramCacheTask.stop();
             console.log('Telegram cache task stopped');
         }
-        if (this.portfolioAnalysisTask) {
-            this.portfolioAnalysisTask.stop();
-            console.log('Portfolio analysis task stopped');
-        }
+            if (this.portfolioAnalysisTask) {
+                this.portfolioAnalysisTask.stop();
+                this.portfolioAnalysisTask.destroy();
+                this.portfolioAnalysisTask = null;
+                console.log('✅ Portfolio analysis task stopped and destroyed');
+            }
+            if (this.predictionsUpdateTask) {
+                this.predictionsUpdateTask.stop();
+                this.predictionsUpdateTask.destroy();
+                this.predictionsUpdateTask = null;
+                console.log('✅ Predictions update task stopped and destroyed');
+            }
     }
 
     /**
      * Выполняет анализ портфеля для всех типов (real, virtual)
      */
+    /**
+     * Обновление предсказаний в таблице Recommendations каждые 20 минут
+     */
+    async updateRecommendationsPredictions() {
+        try {
+            const Recommendation = (await import('../models/Recommendation.js')).default;
+            
+            // Получаем IntegratedAIService через ServiceManager или прямой импорт
+            let IntegratedAIService = getService('IntegratedAIService');
+            if (!IntegratedAIService) {
+                IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+            }
+            
+            // Проверяем и инициализируем, если нужно
+            if (!IntegratedAIService) {
+                console.log('⚠️ IntegratedAIService not found, skipping predictions update');
+                return;
+            }
+            
+            if (!IntegratedAIService.isInitialized) {
+                console.log('🔄 IntegratedAIService not initialized, initializing...');
+                try {
+                    await IntegratedAIService.initialize();
+                } catch (initError) {
+                    console.warn(`⚠️ Failed to initialize IntegratedAIService:`, initError.message);
+                    return;
+                }
+            }
+
+            // Получаем все активные рекомендации, которые старше 20 минут
+            const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
+            const recommendationsToUpdate = await Recommendation.findAll({
+                where: {
+                    isActive: true,
+                    [Op.or]: [
+                        { analysisDate: { [Op.lt]: twentyMinutesAgo } },
+                        { analysisDate: null }
+                    ]
+                },
+                limit: 50 // Обновляем максимум 50 за раз, чтобы не перегрузить систему
+            });
+
+            if (recommendationsToUpdate.length === 0) {
+                console.log('✅ No recommendations need updating (all are fresh)');
+                return;
+            }
+
+            console.log(`🔄 Updating ${recommendationsToUpdate.length} recommendations...`);
+
+            let updatedCount = 0;
+            let errorCount = 0;
+
+            // Обновляем предсказания параллельно (батчами по 5)
+            const batchSize = 5;
+            for (let i = 0; i < recommendationsToUpdate.length; i += batchSize) {
+                const batch = recommendationsToUpdate.slice(i, i + batchSize);
+                
+                await Promise.allSettled(
+                    batch.map(async (rec) => {
+                        try {
+                            // Получаем актуальное предсказание через IntegratedAIService
+                            const freshPrediction = await IntegratedAIService.getIntegratedRecommendation(rec.figi);
+                            
+                            if (freshPrediction && freshPrediction.score !== undefined) {
+                                // Обновляем рекомендацию актуальными данными
+                                await rec.update({
+                                    score: freshPrediction.score,
+                                    confidence: freshPrediction.confidence ?? freshPrediction.score,
+                                    recommendation: freshPrediction.recommendation || rec.recommendation,
+                                    analysisDate: new Date(),
+                                    explanation: freshPrediction.summary || freshPrediction.details || rec.explanation
+                                });
+
+                                updatedCount++;
+                                console.log(`✅ Updated prediction for ${rec.ticker}: ${freshPrediction.recommendation} (score: ${freshPrediction.score.toFixed(3)})`);
+                            }
+                        } catch (error) {
+                            errorCount++;
+                            console.warn(`⚠️ Failed to update prediction for ${rec.ticker}:`, error.message);
+                        }
+                    })
+                );
+
+                // Небольшая задержка между батчами, чтобы не перегрузить систему
+                if (i + batchSize < recommendationsToUpdate.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            console.log(`✅ Predictions update completed: ${updatedCount} updated, ${errorCount} errors`);
+
+            // Отправляем уведомление через WebSocket
+            const WebSocketService = this.getWebSocketService();
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'predictions_updated',
+                    data: {
+                        updatedCount,
+                        errorCount,
+                        totalProcessed: recommendationsToUpdate.length,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+
+        } catch (error) {
+            console.error('❌ Error updating recommendations predictions:', error);
+            throw error;
+        }
+    }
+
     async performPortfolioAnalysis() {
         try {
             // Проверяем, активна ли нейросеть

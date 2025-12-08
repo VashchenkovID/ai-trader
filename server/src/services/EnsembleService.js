@@ -1017,10 +1017,26 @@ class EnsembleService {
             const cnnData = await this.prepareCNNData(candles);
             const transformerData = await this.prepareTransformerData(candles);
 
+            // Проверяем наличие данных перед получением предсказаний
+            if (!lstmData.features || lstmData.features.length === 0) {
+                console.warn('⚠️ No LSTM features prepared');
+            }
+            if (!cnnData.features || cnnData.features.length === 0) {
+                console.warn('⚠️ No CNN features prepared');
+            }
+            if (!transformerData.features || transformerData.features.length === 0) {
+                console.warn('⚠️ No Transformer features prepared');
+            }
+
             // Получаем предсказания от каждой модели
-            const lstmPred = await this.getModelPrediction('lstm', lstmData.features.slice(-1)[0]);
-            const cnnPred = await this.getModelPrediction('cnn', cnnData.features.slice(-1)[0]);
-            const transformerPred = await this.getModelPrediction('transformer', transformerData.features.slice(-1)[0]);
+            // Используем последний элемент features, который должен быть 2D массивом
+            const lstmFeatures = lstmData.features && lstmData.features.length > 0 ? lstmData.features[lstmData.features.length - 1] : null;
+            const cnnFeatures = cnnData.features && cnnData.features.length > 0 ? cnnData.features[cnnData.features.length - 1] : null;
+            const transformerFeatures = transformerData.features && transformerData.features.length > 0 ? transformerData.features[transformerData.features.length - 1] : null;
+
+            const lstmPred = lstmFeatures ? await this.getModelPrediction('lstm', lstmFeatures) : 0.5;
+            const cnnPred = cnnFeatures ? await this.getModelPrediction('cnn', cnnFeatures) : 0.5;
+            const transformerPred = transformerFeatures ? await this.getModelPrediction('transformer', transformerFeatures) : 0.5;
 
             // Взвешенное голосование
             const ensembleScore = (
@@ -1102,16 +1118,51 @@ class EnsembleService {
      */
     async getModelPrediction(modelType, features) {
         const model = this.models[modelType];
+        if (!model) {
+            console.warn(`⚠️ Model ${modelType} not loaded`);
+            return 0.5; // Возвращаем нейтральное значение
+        }
+        
         const inputShape = this.getModelInputShape(modelType);
         
-        const inputTensor = tf.tensor3d([features], [1, ...inputShape]);
-        const prediction = model.predict(inputTensor);
-        const score = (await prediction.data())[0];
+        // Проверяем формат features
+        if (!features || !Array.isArray(features)) {
+            console.error(`❌ Invalid features format for ${modelType}:`, typeof features, features);
+            return 0.5;
+        }
         
-        inputTensor.dispose();
-        prediction.dispose();
+        // Проверяем, что features - это 2D массив (массив массивов)
+        const is2DArray = Array.isArray(features[0]);
+        if (!is2DArray) {
+            console.error(`❌ Features should be 2D array for ${modelType}, got 1D array`);
+            return 0.5;
+        }
         
-        return score;
+        // Проверяем размерность
+        const expectedElements = inputShape[0] * inputShape[1];
+        const actualElements = features.length * features[0].length;
+        
+        if (actualElements !== expectedElements) {
+            console.error(`❌ Features shape mismatch for ${modelType}: expected ${expectedElements} elements (${inputShape[0]}x${inputShape[1]}), got ${actualElements} (${features.length}x${features[0].length})`);
+            return 0.5;
+        }
+        
+        try {
+            // Формируем тензор: [1, time_steps, features_per_step]
+            const inputTensor = tf.tensor3d([features], [1, ...inputShape]);
+            const prediction = model.predict(inputTensor);
+            const score = (await prediction.data())[0];
+            
+            inputTensor.dispose();
+            prediction.dispose();
+            
+            return score;
+        } catch (error) {
+            console.error(`❌ Error in getModelPrediction for ${modelType}:`, error.message);
+            console.error(`   Features length: ${features.length}, first element length: ${features[0]?.length}`);
+            console.error(`   Expected shape: [1, ${inputShape[0]}, ${inputShape[1]}]`);
+            return 0.5; // Возвращаем нейтральное значение при ошибке
+        }
     }
 
     /**

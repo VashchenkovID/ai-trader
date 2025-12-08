@@ -29,14 +29,43 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
   
   const { isConnected, tradingStats } = useWebSocketData();
 
+  // Присваиваем предсказания позициям по FIGI
+  const attachPredictionsToPositions = (
+    basePositions: Position[],
+    recommendations: any[] = []
+  ): Position[] => {
+    if (!Array.isArray(basePositions) || basePositions.length === 0) return basePositions;
+    const map = new Map<string, { recommendation: any; score?: number; confidence?: number }>();
+    for (const rec of recommendations) {
+      const figi = rec?.item?.figi || rec?.figi;
+      if (!figi) continue;
+      const score = rec?.prediction?.score ?? rec?.score;
+      const confidence = rec?.prediction?.confidence ?? rec?.confidence;
+      // Отбрасываем бессодержательные записи с нулями, чтобы не затирать актуальные данные
+      if (score === 0 && confidence === 0) continue;
+      map.set(figi, {
+        recommendation: rec?.prediction?.recommendation || rec?.recommendation || rec?.action || 'HOLD',
+        score,
+        confidence
+      });
+    }
+    return basePositions.map((p) => {
+      const pred = map.get(p.figi);
+      return pred ? { ...p, prediction: pred } : p;
+    });
+  };
+
   // WebSocket для получения результатов анализа
   useWebSocket({
     onMessage: (message) => {
       if (message.type === 'portfolio_analysis_completed') {
         console.log('📊 Portfolio analysis completed:', message.data);
+        const sellRecs = message.data?.sellRecommendations || [];
         setAnalysisResults({
-          sellRecommendations: message.data?.sellRecommendations || []
+          sellRecommendations: sellRecs
         });
+        // Обновляем предсказания в строках позиций
+        setPositions((prev) => attachPredictionsToPositions(prev, sellRecs));
         setAnalyzing(false);
         setShowAnalysisResults(true);
         
@@ -197,7 +226,20 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
       }
       
       const transformedPositions = await transformPositionsData(positionsData);
-      setPositions(transformedPositions);
+
+      // Подтягиваем сохраненные рекомендации из БД и прикрепляем к позициям
+      // Предсказания обновляются автоматически на бэкенде каждые 20 минут через планировщик
+      let recommendationsForPositions: any[] = [];
+      try {
+        const recResp = await apiService.getAllRecommendations();
+        const recData = Array.isArray(recResp) ? recResp : (recResp?.data || []);
+        recommendationsForPositions = recData;
+      } catch (recErr) {
+        console.warn('Could not load recommendations for positions:', recErr);
+      }
+
+      const positionsWithPredictions = attachPredictionsToPositions(transformedPositions, recommendationsForPositions);
+      setPositions(positionsWithPredictions);
 
       // Обрабатываем данные портфеля
       if (portfolioResponse.status === 'fulfilled' && portfolioResponse.value) {
@@ -321,13 +363,16 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
         life: 3000
       });
 
-      const response = await apiService.analyzePortfolio();
+      const response = await apiService.analyzePortfolioPositionsOnly();
       
       // Если анализ уже есть в БД, сразу показываем результаты
       if (response.data && response.data.sellRecommendations) {
+        const sellRecs = response.data.sellRecommendations || [];
         setAnalysisResults({
-          sellRecommendations: response.data.sellRecommendations || []
+          sellRecommendations: sellRecs
         });
+        // Обновляем предсказания в таблице
+        setPositions((prev) => attachPredictionsToPositions(prev, sellRecs));
         setShowAnalysisResults(true);
         setAnalyzing(false);
         
@@ -383,6 +428,7 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
           onRefresh={loadPortfolioData}
           onAnalyze={handleAnalyzePortfolio}
           analyzing={analyzing}
+          onSellSuccess={loadPortfolioData}
         />
       </div>
 

@@ -9,7 +9,7 @@
     "dev": "nodemon src/app.js",
     "init-db": "node src/utils/initDatabase.js",
     "clear-db": "node src/utils/clearDatabase.js",
-    "migrate:instrument-type": "node migrations/add-instrument-type-column.js",
+    "migrate:instrument-type": "node migrations/create-portfolio-analysis-table.js",
     "start:optimized": "node src/app-optimized.js",
     "start:backup": "node src/app-backup.js",
     "cleanup": "node cleanup-unused-files.js"

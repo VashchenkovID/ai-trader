@@ -1,4 +1,6 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { translateRecommendation } from '../../utils/recommendationTranslator';
 import { Card } from 'primereact/card';
 import { Skeleton } from 'primereact/skeleton';
 import { Button } from 'primereact/button';
@@ -14,6 +16,8 @@ const formatCurrency = (value: number) =>
   );
 
 export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingStats }) => {
+  const navigate = useNavigate();
+  
   return (
     <Card title="📈 Торговая сводка" className="h-full">
       {!tradingStats ? (
@@ -63,14 +67,18 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
                       key={rec.figi}
                       className="flex align-items-center justify-content-between text-sm border-round surface-0 px-2 py-1"
                     >
-                      <div>
+                      <div 
+                        className="cursor-pointer hover:text-primary transition-colors flex-1"
+                        onClick={() => navigate(`/stock/${rec.figi}`)}
+                        title="Нажмите для просмотра детальной информации"
+                      >
                         <div className="font-medium">
                           {rec.ticker} <span className="text-500">• {rec.name}</span>
                         </div>
                         <div className="text-xs text-500">FIGI: {rec.figi}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-green-500 font-semibold text-xs">BUY</div>
+                        <div className="text-green-500 font-semibold text-xs">{translateRecommendation('BUY')}</div>
                         <div className="text-500 text-xs">
                           conf: {(rec.confidence * 100).toFixed(0)}% / score: {rec.score.toFixed(2)}
                         </div>

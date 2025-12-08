@@ -13,6 +13,7 @@ import { Skeleton } from 'primereact/skeleton';
 import { Message } from 'primereact/message';
 import { Dropdown } from 'primereact/dropdown';
 import { apiService } from '../services/apiService';
+import { translateRecommendation } from '../utils/recommendationTranslator';
 
 interface Recommendation {
   figi: string;
@@ -54,8 +55,8 @@ const RecommendationsViewer: React.FC = () => {
 
   const filterOptions = [
     { label: 'Все рекомендации', value: 'all' },
-    { label: 'Только BUY', value: 'BUY' },
-    { label: 'Только SELL', value: 'SELL' },
+    { label: `Только ${translateRecommendation('BUY')}`, value: 'BUY' },
+    { label: `Только ${translateRecommendation('SELL')}`, value: 'SELL' },
     { label: 'Высокая уверенность (>80%)', value: 'high_confidence' },
     { label: 'Недавние (сегодня)', value: 'recent' }
   ];
@@ -136,13 +137,13 @@ const RecommendationsViewer: React.FC = () => {
 
   const getRecommendationBadge = (recommendation: string) => {
     const config = {
-      BUY: { severity: 'success', label: 'ПОКУПКА' },
-      SELL: { severity: 'danger', label: 'ПРОДАЖА' },
-      HOLD: { severity: 'info', label: 'ДЕРЖАТЬ' }
+      BUY: { severity: 'success' },
+      SELL: { severity: 'danger' },
+      HOLD: { severity: 'info' }
     };
     
-    const rec = config[recommendation as keyof typeof config] || { severity: 'secondary', label: recommendation };
-    return <Badge value={rec.label} severity={rec.severity as any} />;
+    const rec = config[recommendation as keyof typeof config] || { severity: 'secondary' };
+    return <Badge value={translateRecommendation(recommendation)} severity={rec.severity as any} />;
   };
 
   const getConfidenceBadge = (confidence: number) => {
@@ -326,12 +327,12 @@ const RecommendationsViewer: React.FC = () => {
         <div className="flex gap-2">
           <Badge value={`Всего: ${recommendations.length}`} severity="info" />
           <Badge 
-            value={`BUY: ${recommendations.filter(r => r.recommendation === 'BUY').length}`} 
+            value={`${translateRecommendation('BUY')}: ${recommendations.filter(r => r.recommendation === 'BUY').length}`} 
             severity="success" 
           />
           <Badge 
-            value={`SELL: ${recommendations.filter(r => r.recommendation === 'SELL').length}`} 
-            severity="danger" 
+            value={`${translateRecommendation('SELL')}: ${recommendations.filter(r => r.recommendation === 'SELL').length}`} 
+            severity="danger"
           />
         </div>
       </div>

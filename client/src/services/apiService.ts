@@ -1073,6 +1073,19 @@ export const apiService = {
   },
 
   /**
+   * Запросить свежие новости для инструмента по FIGI
+   */
+  async fetchFreshNews(figi: string): Promise<any> {
+    try {
+      const response = await api.post(`/api/news/${figi}/fresh`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching fresh news:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Анализ влияния новостей
    */
   async analyzeNewsImpact(figi: string, days: number = 30): Promise<any> {
@@ -2561,6 +2574,77 @@ export const apiService = {
       return response.data;
     } catch (error: any) {
       console.error('Error analyzing portfolio:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Анализ только позиций портфеля (без сканирования рынка), сразу с результатом
+   */
+  async analyzePortfolioPositionsOnly(portfolioType: 'real' | 'virtual' | 'paper' = 'virtual'): Promise<any> {
+    try {
+      const response = await api.post('/api/neural-network/analyze-portfolio/positions-only', { portfolioType });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error analyzing portfolio positions only:', error);
+      throw error;
+    }
+  },
+
+  // ============================================================================
+  // ДЕТАЛЬНАЯ ИНФОРМАЦИЯ ОБ АКЦИИ
+  // ============================================================================
+
+  /**
+   * Получить детальную информацию об акции
+   */
+  async getStockDetail(figi: string): Promise<any> {
+    try {
+      const response = await api.get(`/api/market/stock/${figi}`);
+      return response.data.data;
+    } catch (error: any) {
+      console.error('Error getting stock detail:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить свечи для акции
+   */
+  async getStockCandles(figi: string, days: number = 365, interval: string = 'DAY'): Promise<any[]> {
+    try {
+      const response = await api.get(`/api/market/stock/${figi}/candles`, {
+        params: { days, interval }
+      });
+      return response.data.data || [];
+    } catch (error: any) {
+      console.error('Error getting stock candles:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить историю предсказаний для акции
+   */
+  async getStockPredictionHistory(figi: string): Promise<any[]> {
+    try {
+      const response = await api.get(`/api/market/stock/${figi}/predictions`);
+      return response.data.data || [];
+    } catch (error: any) {
+      console.error('Error getting stock prediction history:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить торговые сигналы для инструмента
+   */
+  async getStockSignals(figi: string): Promise<any> {
+    try {
+      const response = await api.get(`/api/market/stock/${figi}/signals`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error getting stock signals:', error);
       throw error;
     }
   }

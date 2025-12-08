@@ -1,7 +1,10 @@
-'use strict';
+import { DataTypes } from 'sequelize';
+import sequelize from '../src/config/database.js';
+import { fileURLToPath } from 'url';
 
-module.exports = {
-  async up(queryInterface, Sequelize) {
+const migration = {
+  async up(queryInterface, Sequelize = DataTypes) {
+    const literal = (value) => queryInterface.sequelize.literal(value);
     await queryInterface.createTable('portfolio_analyses', {
       id: {
         type: Sequelize.INTEGER,
@@ -16,7 +19,7 @@ module.exports = {
       analysisDate: {
         type: Sequelize.DATE,
         allowNull: false,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
+        defaultValue: literal('CURRENT_TIMESTAMP'),
         comment: 'Дата и время анализа'
       },
       portfolioValue: {
@@ -84,24 +87,41 @@ module.exports = {
       createdAt: {
         type: Sequelize.DATE,
         allowNull: false,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
+        defaultValue: literal('CURRENT_TIMESTAMP')
       },
       updatedAt: {
         type: Sequelize.DATE,
         allowNull: false,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
+        defaultValue: literal('CURRENT_TIMESTAMP')
       }
     });
 
-    // Создаем индексы
     await queryInterface.addIndex('portfolio_analyses', ['portfolioType']);
     await queryInterface.addIndex('portfolio_analyses', ['analysisDate']);
     await queryInterface.addIndex('portfolio_analyses', ['status']);
     await queryInterface.addIndex('portfolio_analyses', ['portfolioType', 'analysisDate']);
   },
 
-  async down(queryInterface, Sequelize) {
+  async down(queryInterface, Sequelize = DataTypes) {
     await queryInterface.dropTable('portfolio_analyses');
   }
 };
 
+export default migration;
+
+// Позволяет запускать миграцию напрямую командой `node migrations/create-portfolio-analysis-table.js`
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const run = async () => {
+    const queryInterface = sequelize.getQueryInterface();
+    try {
+      await migration.up(queryInterface, DataTypes);
+      console.log('✅ Migration applied: portfolio_analyses');
+    } catch (err) {
+      console.error('❌ Migration failed:', err);
+      process.exitCode = 1;
+    } finally {
+      await sequelize.close();
+    }
+  };
+  run();
+}

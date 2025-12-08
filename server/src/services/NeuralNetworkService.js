@@ -1057,6 +1057,8 @@ class NeuralNetworkService {
             // Учитываем дивидендную доходность (приоритет 1)
             const dividendBonus = dividendYield * 0.1; // Увеличиваем score на 10% от dividend yield
             const finalScore = Math.min(1, score + dividendBonus);
+            const boundedScore = Math.min(0.99, Math.max(0.01, finalScore)); // избегаем 0/1 для более гладкой шкалы
+            const boundedConfidence = Math.min(0.99, Math.max(0.01, score));
 
             // Получаем текущую цену
             const currentPrice = closingPrices[closingPrices.length - 1];
@@ -1064,9 +1066,9 @@ class NeuralNetworkService {
             // Генерируем объяснение предсказания
             const explanation = await this.generateExplanation(
                 {
-                    score: finalScore,
-                    confidence: score,
-                    recommendation: finalScore > 0.7 ? 'BUY' : finalScore < 0.3 ? 'SELL' : 'HOLD',
+                    score: boundedScore,
+                    confidence: boundedConfidence,
+                    recommendation: boundedScore > 0.7 ? 'BUY' : boundedScore < 0.3 ? 'SELL' : 'HOLD',
                     dividendImpact: dividendBonus
                 },
                 indicators,
@@ -1077,10 +1079,10 @@ class NeuralNetworkService {
             );
 
             return {
-                score: finalScore,
-                confidence: score,
+                score: boundedScore,
+                confidence: boundedConfidence,
                 dividendImpact: dividendBonus,
-                recommendation: finalScore > 0.7 ? 'BUY' : finalScore < 0.3 ? 'SELL' : 'HOLD',
+                recommendation: boundedScore > 0.7 ? 'BUY' : boundedScore < 0.3 ? 'SELL' : 'HOLD',
                 currentPrice: currentPrice,
                 explanation: explanation
             };
@@ -1114,6 +1116,8 @@ class NeuralNetworkService {
 
             const dividendBonus = dividendYield * 0.1;
             const finalScore = Math.min(1, score + dividendBonus);
+            const boundedScore = Math.min(0.99, Math.max(0.01, finalScore));
+            const boundedConfidence = Math.min(0.99, Math.max(0.01, score));
             
             // Генерируем объяснение предсказания
             const volumes = candles.map(c => c.volume || 0);
@@ -1127,9 +1131,9 @@ class NeuralNetworkService {
             );
             const explanation = await this.generateExplanation(
                 {
-                    score: finalScore,
-                    confidence: score,
-                    recommendation: finalScore > 0.7 ? 'BUY' : finalScore < 0.3 ? 'SELL' : 'HOLD',
+                    score: boundedScore,
+                    confidence: boundedConfidence,
+                    recommendation: boundedScore > 0.7 ? 'BUY' : boundedScore < 0.3 ? 'SELL' : 'HOLD',
                     dividendImpact: dividendBonus
                 },
                 indicators,
@@ -1140,10 +1144,10 @@ class NeuralNetworkService {
             );
             
             return {
-                score: finalScore,
-                confidence: score,
+                score: boundedScore,
+                confidence: boundedConfidence,
                 dividendImpact: dividendBonus,
-                recommendation: finalScore > 0.7 ? 'BUY' : finalScore < 0.3 ? 'SELL' : 'HOLD',
+                recommendation: boundedScore > 0.7 ? 'BUY' : boundedScore < 0.3 ? 'SELL' : 'HOLD',
                 explanation: explanation
             };
         } catch (error) {
@@ -1226,13 +1230,53 @@ class NeuralNetworkService {
                     continue;
                 }
 
-                const prediction = await this.predict(instrument.figi, instrument.dividendYield);
-                console.log(`🔍 ${instrument.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
+                // Используем IntegratedAIService для получения актуального предсказания (как на странице нейросетей)
+                let prediction;
+                try {
+                    // Получаем сервис через GlobalServiceManager для надежности
+                    let IntegratedAIService = getService('IntegratedAIService');
+                    if (!IntegratedAIService) {
+                        // Если не найден в ServiceManager, пробуем прямой импорт
+                        IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+                    }
+                    
+                    // Проверяем и инициализируем, если нужно
+                    if (IntegratedAIService && !IntegratedAIService.isInitialized) {
+                        console.log(`🔄 IntegratedAIService not initialized, initializing...`);
+                        try {
+                            await IntegratedAIService.initialize();
+                        } catch (initError) {
+                            console.warn(`⚠️ Failed to initialize IntegratedAIService:`, initError.message);
+                        }
+                    }
+                    
+                    if (IntegratedAIService && IntegratedAIService.isInitialized) {
+                        const integratedRec = await IntegratedAIService.getIntegratedRecommendation(instrument.figi);
+                        prediction = {
+                            score: integratedRec.score || 0,
+                            confidence: integratedRec.confidence || integratedRec.score || 0,
+                            recommendation: integratedRec.recommendation || 'HOLD',
+                            explanation: integratedRec.summary || integratedRec.details || {},
+                            summary: integratedRec.summary, // Сохраняем summary отдельно для использования в explanation
+                            details: integratedRec.details || {}
+                        };
+                        console.log(`🔍 [IntegratedAI] ${instrument.ticker}: score=${prediction.score.toFixed(3)}, confidence=${prediction.confidence.toFixed(3)}, recommendation=${prediction.recommendation}`);
+                    } else {
+                        // Fallback к обычному предсказанию
+                        console.log(`⚠️ IntegratedAIService not available, using NeuralNetwork for ${instrument.ticker}`);
+                        prediction = await this.predict(instrument.figi, instrument.dividendYield);
+                        console.log(`🔍 [NeuralNetwork] ${instrument.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
+                    }
+                } catch (integratedError) {
+                    // Fallback к обычному предсказанию при ошибке
+                    console.warn(`⚠️ IntegratedAI failed for ${instrument.ticker}, using NeuralNetwork:`, integratedError.message);
+                    prediction = await this.predict(instrument.figi, instrument.dividendYield);
+                    console.log(`🔍 [NeuralNetwork] ${instrument.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
+                }
 
-                // Добавляем ВСЕ рекомендации с уверенностью > 0% для фронтенда
-                if (prediction.score > 0) {
+                // Добавляем только явные BUY сигналы (>0.6) — остальное считаем HOLD/skip
+                if (prediction.recommendation === 'BUY' && prediction.score >= 0.6) {
                     validPredictions++;
-                    // Проверяем бюджет
                     const currentPrice = candidatePrice;
                     const affordableQuantity = Math.floor(analysis.availableBudget / Math.max(currentPrice, 1));
 
@@ -1249,7 +1293,7 @@ class NeuralNetworkService {
                         console.log(`💰 Skipped ${instrument.ticker}: no budget (need ${currentPrice}, have ${analysis.availableBudget})`);
                     }
                 } else {
-                    console.log(`❌ Skipped ${instrument.ticker}: score too low (${prediction.score.toFixed(3)})`);
+                    console.log(`⏭️ Skipped ${instrument.ticker}: recommendation=${prediction.recommendation}, score=${prediction.score.toFixed(3)}`);
                 }
             } catch (error) {
                 console.warn(`Could not analyze ${instrument.ticker}:`, error.message);
@@ -1263,20 +1307,70 @@ class NeuralNetworkService {
         
         for (const item of portfolioItems) {
             try {
-                const prediction = await this.predict(item.figi);
-                console.log(`🔍 Portfolio ${item.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
+                // Используем IntegratedAIService для получения актуального предсказания (как на странице нейросетей)
+                let prediction;
+                try {
+                    // Получаем сервис через GlobalServiceManager для надежности
+                    let IntegratedAIService = getService('IntegratedAIService');
+                    if (!IntegratedAIService) {
+                        // Если не найден в ServiceManager, пробуем прямой импорт
+                        IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+                    }
+                    
+                    // Проверяем и инициализируем, если нужно
+                    if (IntegratedAIService && !IntegratedAIService.isInitialized) {
+                        console.log(`🔄 IntegratedAIService not initialized, initializing...`);
+                        try {
+                            await IntegratedAIService.initialize();
+                        } catch (initError) {
+                            console.warn(`⚠️ Failed to initialize IntegratedAIService:`, initError.message);
+                        }
+                    }
+                    
+                    if (IntegratedAIService && IntegratedAIService.isInitialized) {
+                        const integratedRec = await IntegratedAIService.getIntegratedRecommendation(item.figi);
+                        prediction = {
+                            score: integratedRec.score || 0,
+                            confidence: integratedRec.confidence || integratedRec.score || 0,
+                            recommendation: integratedRec.recommendation || 'HOLD',
+                            explanation: integratedRec.summary || integratedRec.details || {},
+                            summary: integratedRec.summary, // Сохраняем summary отдельно для использования в explanation
+                            details: integratedRec.details || {}
+                        };
+                        console.log(`🔍 [IntegratedAI] Portfolio ${item.ticker}: score=${prediction.score.toFixed(3)}, confidence=${prediction.confidence.toFixed(3)}, recommendation=${prediction.recommendation}`);
+                    } else {
+                        // Fallback к обычному предсказанию
+                        console.log(`⚠️ IntegratedAIService not available, using NeuralNetwork for portfolio ${item.ticker}`);
+                        prediction = await this.predict(item.figi);
+                        console.log(`🔍 [NeuralNetwork] Portfolio ${item.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
+                    }
+                } catch (integratedError) {
+                    // Fallback к обычному предсказанию при ошибке
+                    console.warn(`⚠️ IntegratedAI failed for portfolio ${item.ticker}, using NeuralNetwork:`, integratedError.message);
+                    prediction = await this.predict(item.figi);
+                    console.log(`🔍 [NeuralNetwork] Portfolio ${item.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
+                }
 
-                // SELL рекомендации: score < 0.3 (как в других местах кода)
-                // Это означает, что модель предсказывает падение цены
+                // Добавляем запись для каждой позиции, классифицируя причину
+                let reason = 'Hold';
+                if (prediction.score < 0.2) {
+                    reason = 'Low prediction score (strong sell signal)';
+                } else if (prediction.score < 0.3) {
+                    reason = 'Moderate prediction score (sell signal)';
+                } else if (prediction.score >= 0.7) {
+                    reason = 'Hold (good prospects)';
+                }
+
+                analysis.sellRecommendations.push({
+                    item,
+                    prediction,
+                    reason
+                });
+
                 if (prediction.score < 0.3) {
-                    analysis.sellRecommendations.push({
-                        item,
-                        prediction,
-                        reason: prediction.score < 0.2 ? 'Low prediction score (strong sell signal)' : 'Moderate prediction score (sell signal)'
-                    });
                     console.log(`✅ Added SELL recommendation for ${item.ticker}: score=${prediction.score.toFixed(3)} (${prediction.recommendation})`);
                 } else {
-                    console.log(`⏭️ Skipped ${item.ticker}: score=${prediction.score.toFixed(3)} (${prediction.recommendation}) - no sell signal`);
+                    console.log(`ℹ️ Added HOLD entry for ${item.ticker}: score=${prediction.score.toFixed(3)} (${prediction.recommendation})`);
                 }
 
                 // Расчет текущей стоимости портфеля
@@ -1382,6 +1476,24 @@ class NeuralNetworkService {
             const portfolioSettings = await SettingsService.getPortfolioSettings();
             const totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
 
+            // ВАЖНО: Убеждаемся, что IntegratedAIService инициализирован перед анализом
+            // Это гарантирует, что везде используются одинаковые предсказания
+            let IntegratedAIService = getService('IntegratedAIService');
+            if (!IntegratedAIService) {
+                IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+            }
+            
+            if (!IntegratedAIService.isInitialized) {
+                console.log('🔄 IntegratedAIService not initialized, initializing before analysis...');
+                try {
+                    await IntegratedAIService.initialize();
+                    console.log('✅ IntegratedAIService initialized successfully');
+                } catch (initError) {
+                    console.error('❌ Failed to initialize IntegratedAIService:', initError);
+                    throw new Error(`Cannot perform analysis: IntegratedAIService initialization failed: ${initError.message}`);
+                }
+            }
+
             // Проверяем, активна ли нейросеть, и активируем если нужно
             if (!this.isActive) {
                 console.log('⚠️ Neural network is not active, activating...');
@@ -1443,6 +1555,15 @@ class NeuralNetworkService {
                 }
             });
 
+            // Сохраняем рекомендации в таблицу Recommendations для отображения на странице рекомендаций
+            try {
+                await this.saveRecommendationsToDatabase(analysis.buyRecommendations || [], analysis.sellRecommendations || []);
+                console.log(`✅ Saved ${(analysis.buyRecommendations?.length || 0) + (analysis.sellRecommendations?.length || 0)} recommendations to Recommendations table`);
+            } catch (recErr) {
+                console.warn('⚠️ Failed to save recommendations to Recommendations table:', recErr.message);
+                // Не прерываем выполнение, анализ сохранен в PortfolioAnalysis
+            }
+
             console.log(`✅ Portfolio analysis completed and saved for ${portfolioType} portfolio:`);
             console.log(`   - Sell recommendations: ${analysis.sellRecommendations?.length || 0}`);
             console.log(`   - Buy recommendations: ${analysis.buyRecommendations?.length || 0}`);
@@ -1468,6 +1589,167 @@ class NeuralNetworkService {
 
             throw error;
         }
+    }
+
+    /**
+     * Анализ только позиций портфеля (без сканирования всего рынка)
+     * Сохраняет SELL/HOLD рекомендации в Recommendation
+     */
+    async analyzePortfolioPositionsOnly(portfolioType = 'virtual', saveToDb = true) {
+        console.log(`🔍 [POSITIONS-ONLY] Starting positions-only analysis (portfolioType: ${portfolioType}, saveToDb: ${saveToDb})`);
+        const startTime = Date.now();
+        const TradingEngine = (await import('./TradingEngine.js')).default;
+        const CacheService = (await import('./CacheService.js')).default;
+
+        // Собираем позиции портфеля
+        let portfolioItems = [];
+        try {
+            if (portfolioType === 'real') {
+                const portfolio = await TradingEngine.getRealPortfolioValue();
+                const positions = portfolio?.positions || [];
+                if (Array.isArray(positions)) {
+                    for (const position of positions) {
+                        if (position.quantity > 0 && position.figi) {
+                            try {
+                                const instrument = await CacheService.getInstrument(position.figi);
+                                if (instrument) {
+                                    portfolioItems.push({
+                                        figi: position.figi,
+                                        ticker: position.ticker || instrument.ticker,
+                                        name: instrument.name,
+                                        quantity: position.quantity,
+                                        averagePrice: position.averagePositionPrice?.value || 0
+                                    });
+                                }
+                            } catch (error) {
+                                console.warn(`Could not get instrument info for ${position.figi}:`, error.message);
+                            }
+                        }
+                    }
+                }
+            } else {
+                const portfolio = await TradingEngine.getPortfolioValue();
+                const positions = portfolio?.positions || {};
+                if (typeof positions === 'object' && !Array.isArray(positions)) {
+                    for (const [figi, quantity] of Object.entries(positions)) {
+                        if (quantity > 0) {
+                            try {
+                                const instrument = await CacheService.getInstrument(figi);
+                                if (instrument) {
+                                    portfolioItems.push({
+                                        figi: instrument.figi,
+                                        ticker: instrument.ticker,
+                                        name: instrument.name,
+                                        quantity: quantity,
+                                        averagePrice: 0
+                                    });
+                                }
+                            } catch (error) {
+                                console.warn(`Could not get instrument info for ${figi}:`, error.message);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('❌ Failed to load portfolio positions:', err);
+            throw err;
+        }
+
+        console.log(`📊 Positions-only analysis: ${portfolioItems.length} items (${portfolioType})`);
+
+        // Анализируем только позиции, без BUY по рынку
+        const sellRecommendations = [];
+        let portfolioValue = 0;
+        for (const item of portfolioItems) {
+            try {
+                // Используем IntegratedAIService для получения актуального предсказания (как на странице нейросетей)
+                let prediction;
+                try {
+                    // Получаем сервис через GlobalServiceManager для надежности
+                    let IntegratedAIService = getService('IntegratedAIService');
+                    if (!IntegratedAIService) {
+                        // Если не найден в ServiceManager, пробуем прямой импорт
+                        IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+                    }
+                    
+                    // Проверяем и инициализируем, если нужно
+                    if (IntegratedAIService && !IntegratedAIService.isInitialized) {
+                        console.log(`🔄 IntegratedAIService not initialized, initializing...`);
+                        try {
+                            await IntegratedAIService.initialize();
+                        } catch (initError) {
+                            console.warn(`⚠️ Failed to initialize IntegratedAIService:`, initError.message);
+                        }
+                    }
+                    
+                    if (IntegratedAIService && IntegratedAIService.isInitialized) {
+                        const integratedRec = await IntegratedAIService.getIntegratedRecommendation(item.figi);
+                        prediction = {
+                            score: integratedRec.score || 0,
+                            confidence: integratedRec.confidence || integratedRec.score || 0,
+                            recommendation: integratedRec.recommendation || 'HOLD',
+                            explanation: integratedRec.summary || integratedRec.details || {},
+                            summary: integratedRec.summary, // Сохраняем summary отдельно для использования в explanation
+                            details: integratedRec.details || {}
+                        };
+                        console.log(`🔍 [IntegratedAI] ${item.ticker}: score=${prediction.score.toFixed(3)}, confidence=${prediction.confidence.toFixed(3)}, recommendation=${prediction.recommendation}`);
+                    } else {
+                        // Fallback к обычному предсказанию
+                        console.log(`⚠️ IntegratedAIService not available, using NeuralNetwork for ${item.ticker}`);
+                        prediction = await this.predict(item.figi);
+                    }
+                } catch (integratedError) {
+                    // Fallback к обычному предсказанию при ошибке
+                    console.warn(`⚠️ IntegratedAI failed for ${item.ticker}, using NeuralNetwork:`, integratedError.message);
+                    prediction = await this.predict(item.figi);
+                }
+                
+                const currentPrice = await this.getCurrentPrice(item.figi);
+                portfolioValue += currentPrice * item.quantity;
+
+                sellRecommendations.push({
+                    item,
+                    currentPrice,
+                    prediction,
+                    reason:
+                        prediction.score < 0.2
+                            ? 'Low prediction score (strong sell signal)'
+                            : prediction.score < 0.3
+                                ? 'Moderate prediction score (sell signal)'
+                                : 'Hold'
+                });
+                console.log(`🔍 ${item.ticker}: score=${prediction.score.toFixed(3)} rec=${prediction.recommendation}`);
+            } catch (err) {
+                console.warn(`Could not analyze ${item.ticker}:`, err.message);
+            }
+        }
+
+        const result = {
+            portfolioType,
+            analysisDate: new Date(),
+            portfolioValue,
+            availableBudget: 0,
+            totalPositions: portfolioItems.length,
+            sellRecommendations,
+            buyRecommendations: [],
+            sellRecommendationsCount: sellRecommendations.length,
+            buyRecommendationsCount: 0,
+            processingTime: Date.now() - startTime
+        };
+
+        if (saveToDb) {
+            try {
+                console.log(`💾 [POSITIONS-ONLY] Saving ${sellRecommendations.length} recommendations to DB...`);
+                await this.saveRecommendationsToDatabase([], sellRecommendations);
+                console.log(`✅ [POSITIONS-ONLY] Successfully saved ${sellRecommendations.length} position recommendations to DB`);
+            } catch (dbErr) {
+                console.error('❌ [POSITIONS-ONLY] Failed to save position recommendations:', dbErr);
+                throw dbErr; // Пробрасываем ошибку, чтобы пользователь знал о проблеме
+            }
+        }
+
+        return result;
     }
 
     // Вспомогательные методы
@@ -1738,6 +2020,24 @@ class NeuralNetworkService {
             return;
         }
 
+        // ВАЖНО: Убеждаемся, что IntegratedAIService инициализирован перед анализом
+        // Это гарантирует, что везде используются одинаковые предсказания
+        let IntegratedAIService = getService('IntegratedAIService');
+        if (!IntegratedAIService) {
+            IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+        }
+        
+        if (!IntegratedAIService.isInitialized) {
+            console.log('🔄 IntegratedAIService not initialized, initializing before market analysis...');
+            try {
+                await IntegratedAIService.initialize();
+                console.log('✅ IntegratedAIService initialized successfully');
+            } catch (initError) {
+                console.error('❌ Failed to initialize IntegratedAIService:', initError);
+                console.log('⚠️ Market analysis will continue with fallback methods');
+            }
+        }
+
         // Попытка загрузить модель, если она не загружена
         if (!this.model) {
             console.log('📥 Model not loaded, attempting to load general model...');
@@ -1757,6 +2057,19 @@ class NeuralNetworkService {
         SchedulerService.isAnalyzing = true;
 
         console.log('🔍 Starting market analysis...');
+
+        // Отправляем уведомление о старте анализа
+        try {
+            if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
+                await OptimizedTelegramService.sendAlert('MARKET_ANALYSIS_START', 
+                    `🔍 Запущен анализ рынка и портфеля\n` +
+                    `Время: ${new Date().toLocaleString('ru-RU')}\n` +
+                    `Статус: Анализ начат...`
+                );
+            }
+        } catch (telegramError) {
+            console.warn('Failed to send Telegram notification about analysis start:', telegramError.message);
+        }
 
         try {
             // Получаем портфель в зависимости от текущего режима торговли
@@ -1874,6 +2187,28 @@ class NeuralNetworkService {
             // Сохраняем рекомендации в базу данных
             await this.saveRecommendationsToDatabase(analysis.buyRecommendations || [], analysis.sellRecommendations || []);
 
+            // Отправляем уведомление о завершении анализа
+            try {
+                if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
+                    const buyCount = analysis.buyRecommendations?.length || 0;
+                    const sellCount = analysis.sellRecommendations?.length || 0;
+                    const portfolioValue = analysis.portfolioValue || 0;
+                    const availableBudget = analysis.availableBudget || 0;
+                    
+                    let message = `✅ Анализ рынка завершен\n\n`;
+                    message += `📊 Результаты:\n`;
+                    message += `• Рекомендаций на покупку: ${buyCount}\n`;
+                    message += `• Рекомендаций на продажу: ${sellCount}\n`;
+                    message += `• Стоимость портфеля: ${portfolioValue.toFixed(2)} ₽\n`;
+                    message += `• Доступный бюджет: ${availableBudget.toFixed(2)} ₽\n`;
+                    message += `\nВремя: ${new Date().toLocaleString('ru-RU')}`;
+                    
+                    await OptimizedTelegramService.sendAlert('MARKET_ANALYSIS_COMPLETE', message);
+                }
+            } catch (telegramError) {
+                console.warn('Failed to send Telegram notification about analysis completion:', telegramError.message);
+            }
+
             // Отправляем только СИЛЬНЫЕ рекомендации в Telegram
             let telegramSent = 0;
             
@@ -1967,20 +2302,55 @@ class NeuralNetworkService {
                     continue;
                 }
                 
-                const recommendationData = {
-                    figi: rec.instrument.figi,
-                    ticker: rec.instrument.ticker || 'UNKNOWN',
-                    name: rec.instrument.name || 'Unknown',
-                    recommendation: 'BUY',
-                    confidence: rec.prediction.score,
-                    score: rec.prediction.score,
-                    explanation: rec.prediction.explanation || {
-                        summary: 'Анализ на основе нейросети',
+                // Правильно извлекаем confidence и score из prediction
+                // ВАЖНО: score и confidence должны быть разными значениями!
+                const score = typeof rec.prediction?.score === 'number' && !isNaN(rec.prediction.score) 
+                    ? Math.max(0, Math.min(1, rec.prediction.score)) // Ограничиваем 0-1
+                    : 0;
+                
+                // Для confidence используем значение из prediction, если оно есть и валидно
+                // Если confidence отсутствует или равен 0, используем score * 0.8 (немного ниже score)
+                // Это предотвращает ситуацию, когда confidence = score = 0.99
+                let confidence;
+                if (typeof rec.prediction?.confidence === 'number' && !isNaN(rec.prediction.confidence) && rec.prediction.confidence > 0) {
+                    confidence = Math.max(0, Math.min(1, rec.prediction.confidence));
+                } else {
+                    // Если confidence отсутствует, используем score с небольшим коэффициентом
+                    confidence = Math.max(0, Math.min(1, score * 0.9)); // 90% от score
+                }
+                
+                // Формируем explanation из данных IntegratedAIService
+                let explanation = {};
+                if (rec.prediction?.explanation && typeof rec.prediction.explanation === 'object') {
+                    explanation = rec.prediction.explanation;
+                } else if (rec.prediction?.summary) {
+                    explanation = {
+                        summary: rec.prediction.summary,
+                        details: rec.prediction.details || {}
+                    };
+                } else {
+                    explanation = {
+                        summary: 'Анализ на основе интегрированной AI системы',
                         keyFactors: ['Технический анализ', 'Фундаментальный анализ'],
                         risks: ['Рыночная волатильность'],
                         opportunities: ['Потенциальный рост'],
                         timeframe: '1-3 месяца'
-                    },
+                    };
+                }
+
+                const recommendation = rec.prediction?.recommendation || 'BUY';
+                
+                console.log(`💾 Saving BUY recommendation for ${rec.instrument.ticker}: score=${score.toFixed(3)}, confidence=${confidence.toFixed(3)}, recommendation=${recommendation}`);
+
+                const recommendationData = {
+                    figi: rec.instrument.figi,
+                    ticker: rec.instrument.ticker || 'UNKNOWN',
+                    name: rec.instrument.name || 'Unknown',
+                    recommendation: recommendation,
+                    confidence: confidence,
+                    score: score,
+                    explanation: explanation,
+                    analysisDate: new Date(), // Обновляем дату анализа
                     modelVersion: '1.0',
                     priceAtAnalysis: rec.currentPrice,
                     targetPrice: rec.currentPrice * 1.1, // +10% как цель
@@ -2010,42 +2380,88 @@ class NeuralNetworkService {
                 }
             }
 
-            // Сохраняем SELL рекомендации
+            // Сохраняем SELL рекомендации (в том числе HOLD для позиций)
             for (const rec of sellRecommendations) {
-                // Проверяем наличие instrument
-                if (!rec.instrument || !rec.instrument.figi) {
-                    console.warn('⚠️ Skipping SELL recommendation: missing instrument or figi', rec);
+                const instrument = rec.instrument || rec.item;
+                if (!instrument || !instrument.figi) {
+                    console.warn('⚠️ Skipping SELL recommendation: missing instrument/item or figi', rec);
                     continue;
                 }
+
+                // Правильно извлекаем score и confidence из prediction
+                // ВАЖНО: score и confidence должны быть разными значениями!
+                const score = typeof rec.prediction?.score === 'number' && !isNaN(rec.prediction.score)
+                    ? Math.max(0, Math.min(1, rec.prediction.score)) // Ограничиваем 0-1
+                    : 0;
                 
-                const recommendationData = {
-                    figi: rec.instrument.figi,
-                    ticker: rec.instrument.ticker || 'UNKNOWN',
-                    name: rec.instrument.name || 'Unknown',
-                    recommendation: 'SELL',
-                    confidence: 1 - rec.prediction.score, // Инвертируем для SELL
-                    score: rec.prediction.score,
-                    explanation: rec.prediction.explanation || {
-                        summary: 'Анализ на основе нейросети',
+                // Для confidence используем значение из prediction, если оно есть и валидно
+                // Если confidence отсутствует или равен 0, используем score * 0.8 (немного ниже score)
+                // Это предотвращает ситуацию, когда confidence = score = 0.99
+                let confidence;
+                if (typeof rec.prediction?.confidence === 'number' && !isNaN(rec.prediction.confidence) && rec.prediction.confidence > 0) {
+                    confidence = Math.max(0, Math.min(1, rec.prediction.confidence));
+                } else {
+                    // Если confidence отсутствует, используем score с небольшим коэффициентом
+                    confidence = Math.max(0, Math.min(1, score * 0.9)); // 90% от score
+                }
+                const currentPrice = rec.currentPrice ?? instrument.lastPrice ?? instrument.averagePrice ?? 0;
+                
+                // Определяем recommendation на основе score, если не указан явно
+                let recommendation = rec.prediction?.recommendation;
+                if (!recommendation) {
+                    // Для позиций портфеля: SELL если score < 0.3, иначе HOLD
+                    recommendation = score < 0.3 ? 'SELL' : 'HOLD';
+                }
+
+                // Формируем explanation из данных IntegratedAIService
+                let explanation = {};
+                if (rec.prediction?.explanation && typeof rec.prediction.explanation === 'object') {
+                    explanation = rec.prediction.explanation;
+                } else if (rec.prediction?.summary) {
+                    explanation = {
+                        summary: rec.prediction.summary,
+                        details: rec.prediction.details || {}
+                    };
+                } else {
+                    explanation = {
+                        summary: 'Анализ на основе интегрированной AI системы',
                         keyFactors: ['Технический анализ', 'Фундаментальный анализ'],
                         risks: ['Потенциальное падение'],
                         opportunities: ['Защита капитала'],
                         timeframe: '1-3 месяца'
-                    },
+                    };
+                }
+
+                console.log(`💾 Saving ${recommendation} recommendation for ${instrument.ticker}: score=${score.toFixed(3)}, confidence=${confidence.toFixed(3)}, recommendation=${recommendation}`);
+                console.log(`   📊 Prediction data:`, JSON.stringify({
+                    score: rec.prediction?.score,
+                    confidence: rec.prediction?.confidence,
+                    recommendation: rec.prediction?.recommendation
+                }, null, 2));
+
+                const recommendationData = {
+                    figi: instrument.figi,
+                    ticker: instrument.ticker || 'UNKNOWN',
+                    name: instrument.name || 'Unknown',
+                    recommendation: recommendation,
+                    confidence: confidence,
+                    score: score,
+                    explanation: explanation,
+                    analysisDate: new Date(), // Обновляем дату анализа
                     modelVersion: '1.0',
-                    priceAtAnalysis: rec.currentPrice,
-                    targetPrice: rec.currentPrice * 0.9, // -10% как цель
-                    stopLoss: rec.currentPrice * 1.1, // +10% как стоп-лосс
-                    takeProfit: rec.currentPrice * 0.8, // -20% как тейк-профит
-                    sector: rec.instrument.sector || 'Unknown',
-                    marketCap: rec.instrument.marketCap || 'Unknown',
+                    priceAtAnalysis: currentPrice,
+                    targetPrice: currentPrice ? currentPrice * 0.9 : null, // -10% как цель
+                    stopLoss: currentPrice ? currentPrice * 1.1 : null, // +10% как стоп-лосс
+                    takeProfit: currentPrice ? currentPrice * 0.8 : null, // -20% как тейк-профит
+                    sector: instrument.sector || 'Unknown',
+                    marketCap: instrument.marketCap || 'Unknown',
                     isActive: true
                 };
 
                 // Ищем существующую рекомендацию
                 const existing = await Recommendation.findOne({
                     where: {
-                        figi: rec.instrument.figi,
+                        figi: instrument.figi,
                         isActive: true
                     }
                 });
@@ -2053,11 +2469,11 @@ class NeuralNetworkService {
                 if (existing) {
                     // Обновляем существующую
                     await existing.update(recommendationData);
-                    console.log(`🔄 Updated SELL recommendation for ${rec.instrument.ticker}`);
+                    console.log(`🔄 Updated SELL recommendation for ${instrument.ticker}`);
                 } else {
                     // Создаем новую
                     await Recommendation.create(recommendationData);
-                    console.log(`✅ Created SELL recommendation for ${rec.instrument.ticker}`);
+                    console.log(`✅ Created SELL recommendation for ${instrument.ticker}`);
                 }
             }
 

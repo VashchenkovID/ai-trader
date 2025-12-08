@@ -313,4 +313,39 @@ router.post('/analyze-portfolio', async (req, res) => {
     }
 });
 
+/**
+ * Анализ только позиций портфеля (без сканирования рынка)
+ * Сохраняет рекомендации в БД и возвращает результат сразу
+ */
+router.post('/analyze-portfolio/positions-only', async (req, res) => {
+    try {
+        const { portfolioType = 'virtual' } = req.body;
+
+        console.log(`📊 [POSITIONS-ONLY] Starting analysis for ${portfolioType} portfolio (positions only, no market scan)`);
+        const result = await NeuralNetworkService.analyzePortfolioPositionsOnly(portfolioType, true);
+        console.log(`✅ [POSITIONS-ONLY] Analysis completed: ${result.sellRecommendationsCount} recommendations`);
+
+        // Шлём через WebSocket, чтобы фронт получил обновление
+        const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+        if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+            WebSocketService.broadcast({
+                type: 'portfolio_analysis_completed',
+                data: result
+            });
+        }
+
+        res.json({
+            success: true,
+            data: result
+        });
+    } catch (error) {
+        console.error('Ошибка анализа позиций портфеля:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка анализа позиций портфеля',
+            error: error.message
+        });
+    }
+});
+
 export default router;

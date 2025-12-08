@@ -15,6 +15,7 @@ import { Toolbar } from 'primereact/toolbar';
 import { SplitButton } from 'primereact/splitbutton';
 import { Dropdown } from 'primereact/dropdown';
 import { apiService } from '../services/apiService';
+import { translateRecommendation } from '../utils/recommendationTranslator';
 
 interface TradingRequest {
   id: string;
@@ -57,6 +58,9 @@ const TradingRequestManager: React.FC = () => {
   const [cleanupOlderThanDays, setCleanupOlderThanDays] = useState<number | null>(null);
   const [cleaningUp, setCleaningUp] = useState(false);
   const toast = React.useRef<Toast>(null);
+
+  // Фильтр по направлению сделки (BUY/SELL)
+  const [actionFilter, setActionFilter] = useState<'all' | 'BUY' | 'SELL'>('all');
 
   const modeOptions = [
     { label: 'Все режимы', value: 'all' },
@@ -439,6 +443,18 @@ const TradingRequestManager: React.FC = () => {
             placeholder="Выберите режим"
             className="w-10rem"
           />
+
+          <Dropdown
+            value={actionFilter}
+            options={[
+              { label: 'Все', value: 'all' },
+              { label: translateRecommendation('BUY'), value: 'BUY' },
+              { label: translateRecommendation('SELL'), value: 'SELL' }
+            ]}
+            onChange={(e: any) => setActionFilter(e.value)}
+            placeholder="Действие"
+            className="w-10rem"
+          />
           
           <Button
             label="Очистить завершенные"
@@ -507,6 +523,12 @@ const TradingRequestManager: React.FC = () => {
     );
   }
 
+  // Применяем фильтр по действию перед рендером
+  const filteredRequests = requests.filter((r) => {
+    if (actionFilter === 'all') return true;
+    return r.action === actionFilter;
+  });
+
   return (
     <div className="trading-request-manager">
       <Toast ref={toast} />
@@ -517,11 +539,11 @@ const TradingRequestManager: React.FC = () => {
           <TabPanel header="Все заявки">
             <Toolbar start={toolbarTemplate} className="mb-3" />
             
-            {requests.length === 0 ? (
+            {filteredRequests.length === 0 ? (
               <Message severity="info" text="Нет торговых заявок" />
             ) : (
               <DataTable
-                value={requests}
+                value={filteredRequests}
                 selection={selectedRequests}
                 onSelectionChange={(e: any) => setSelectedRequests(e.value)}
                 selectionMode="multiple"
@@ -552,7 +574,7 @@ const TradingRequestManager: React.FC = () => {
                   sortable
                   body={(rowData) => (
                     <Badge
-                      value={rowData.action}
+                      value={translateRecommendation(rowData.action)}
                       severity={rowData.action === 'BUY' ? 'success' : 'danger'}
                     />
                   )}
@@ -625,11 +647,11 @@ const TradingRequestManager: React.FC = () => {
           <TabPanel header="Ожидающие">
             <Toolbar start={toolbarTemplate} className="mb-3" />
             
-            {requests.length === 0 ? (
+            {filteredRequests.length === 0 ? (
               <Message severity="info" text="Нет ожидающих заявок" />
             ) : (
               <DataTable
-                value={requests}
+                value={filteredRequests}
                 selection={selectedRequests}
                 onSelectionChange={(e: any) => setSelectedRequests(e.value)}
                 selectionMode="multiple"
@@ -641,7 +663,7 @@ const TradingRequestManager: React.FC = () => {
                 <Column selectionMode="multiple" headerStyle={{ width: '3rem' }} />
                 <Column field="ticker" header="Инструмент" sortable />
                 <Column field="action" header="Действие" sortable body={(rowData) => (
-                  <Badge value={rowData.action} severity={rowData.action === 'BUY' ? 'success' : 'danger'} />
+                  <Badge value={translateRecommendation(rowData.action)} severity={rowData.action === 'BUY' ? 'success' : 'danger'} />
                 )} />
                 <Column field="quantity" header="Количество" sortable />
                 <Column field="estimatedAmount" header="Сумма" sortable body={(rowData) => formatCurrency(rowData.estimatedAmount)} />
@@ -655,11 +677,11 @@ const TradingRequestManager: React.FC = () => {
           <TabPanel header="Одобренные">
             <Toolbar start={toolbarTemplate} className="mb-3" />
             
-            {requests.length === 0 ? (
+            {filteredRequests.length === 0 ? (
               <Message severity="info" text="Нет одобренных заявок" />
             ) : (
               <DataTable
-                value={requests}
+                value={filteredRequests}
                 paginator
                 rows={10}
                 loading={loading}
@@ -667,7 +689,7 @@ const TradingRequestManager: React.FC = () => {
               >
                 <Column field="ticker" header="Инструмент" sortable />
                 <Column field="action" header="Действие" sortable body={(rowData) => (
-                  <Badge value={rowData.action} severity={rowData.action === 'BUY' ? 'success' : 'danger'} />
+                  <Badge value={translateRecommendation(rowData.action)} severity={rowData.action === 'BUY' ? 'success' : 'danger'} />
                 )} />
                 <Column field="quantity" header="Количество" sortable />
                 <Column field="estimatedAmount" header="Сумма" sortable body={(rowData) => formatCurrency(rowData.estimatedAmount)} />

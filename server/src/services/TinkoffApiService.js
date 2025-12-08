@@ -840,6 +840,113 @@ class TinkoffApiService {
         };
     }
 
+    /**
+     * Получение торговых сигналов для инструмента
+     * Метод GetSignals может быть доступен в SignalsService или MarketDataService
+     * @param {string} figi - FIGI инструмента
+     * @returns {Promise<Object>} - Объект с сигналами
+     */
+    async getSignals(figi) {
+        try {
+            // Пробуем разные возможные пути для GetSignals
+            const possiblePaths = [
+                '/tinkoff.public.invest.api.contract.v1.SignalService/GetSignals',
+            ];
+
+            for (const path of possiblePaths) {
+                try {
+                    console.log(`🔍 Пробуем получить сигналы через ${path} для FIGI: ${figi}`);
+                    
+                    const response = await this.makeRequest(path, {
+                        figi: figi
+                    });
+
+                    console.log(`✅ Успешно получены сигналы через ${path}:`, JSON.stringify(response, null, 2));
+                    
+                    return {
+                        success: true,
+                        path: path,
+                        data: response
+                    };
+                } catch (error) {
+                    // Если метод не найден (404), пробуем следующий путь
+                    if (error.message.includes('404') || error.message.includes('Not Found')) {
+                        console.log(`⚠️ Метод ${path} не найден, пробуем следующий...`);
+                        continue;
+                    }
+                    // Для других ошибок пробуем следующий путь
+                    console.warn(`⚠️ Ошибка при запросе ${path}:`, error.message);
+                    continue;
+                }
+            }
+
+            // Если ни один путь не сработал
+            throw new Error('Метод GetSignals не найден ни в одном из проверенных сервисов');
+            
+        } catch (error) {
+            console.error('❌ Ошибка получения сигналов:', error);
+            return {
+                success: false,
+                error: error.message,
+                details: error
+            };
+        }
+    }
+
+    /**
+     * Получение торговых сигналов для инструмента (альтернативный вариант с instrumentId)
+     * @param {string} figi - FIGI инструмента
+     * @returns {Promise<Object>} - Объект с сигналами
+     */
+    async getSignalsByInstrumentId(figi) {
+        try {
+            const possiblePaths = [
+                '/tinkoff.public.invest.api.contract.v1.SignalsService/GetSignals',
+                '/tinkoff.public.invest.api.contract.v1.MarketDataService/GetSignals'
+            ];
+
+            const possibleBodies = [
+                { figi: figi },
+                { instrumentId: figi, idType: 'INSTRUMENT_ID_TYPE_FIGI' },
+                { figi: [figi] } // Возможно, принимает массив
+            ];
+
+            for (const path of possiblePaths) {
+                for (const body of possibleBodies) {
+                    try {
+                        console.log(`🔍 Пробуем получить сигналы через ${path} с телом:`, JSON.stringify(body));
+                        
+                        const response = await this.makeRequest(path, body);
+
+                        console.log(`✅ Успешно получены сигналы:`, JSON.stringify(response, null, 2));
+                        
+                        return {
+                            success: true,
+                            path: path,
+                            body: body,
+                            data: response
+                        };
+                    } catch (error) {
+                        if (error.message.includes('404') || error.message.includes('Not Found')) {
+                            continue;
+                        }
+                        console.warn(`⚠️ Ошибка:`, error.message);
+                        continue;
+                    }
+                }
+            }
+
+            throw new Error('Метод GetSignals не найден');
+            
+        } catch (error) {
+            console.error('❌ Ошибка получения сигналов:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
 
 }
 

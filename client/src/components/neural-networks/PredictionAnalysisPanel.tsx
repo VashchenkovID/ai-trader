@@ -4,6 +4,7 @@ import { Dropdown } from 'primereact/dropdown';
 import { Button } from 'primereact/button';
 import { Message } from 'primereact/message';
 import { apiService } from '../../services/apiService';
+import { formatFullPrediction } from '../../utils/predictionFormatter';
 
 interface Instrument {
   figi: string;
@@ -64,11 +65,11 @@ const PredictionAnalysisPanel: React.FC<PredictionAnalysisPanelProps> = ({ class
     const confidence = prediction.confidence ?? null;
     const recommendation = prediction.recommendation ?? prediction.actionName ?? prediction.action ?? null;
 
-    // Объяснение от традиционной нейросети, если оно есть внутри интегрированного ответа
-    const traditionalDetails = prediction.details?.traditional?.rawDetails;
-    const explanationSummary = traditionalDetails?.summary as string | undefined;
-    const explanationConfidence = traditionalDetails?.confidence as string | undefined;
-    const explanationRisk = traditionalDetails?.risk as string | undefined;
+    // Используем summary из интегрированного ответа (приоритет)
+    // Если его нет, используем explanation из traditional как fallback
+    const explanationSummary = prediction.summary || prediction.explanation?.summary || prediction.details?.traditional?.rawDetails?.summary as string | undefined;
+    const explanationConfidence = prediction.explanation?.confidence || prediction.details?.traditional?.rawDetails?.confidence as string | undefined;
+    const explanationRisk = prediction.explanation?.risk || prediction.details?.traditional?.rawDetails?.risk as string | undefined;
 
     return (
       <div className="mt-3">
@@ -120,12 +121,15 @@ const PredictionAnalysisPanel: React.FC<PredictionAnalysisPanelProps> = ({ class
               </p>
             )}
             {explanationRisk && (
-              <p className="mb-0">
+              <p className="mb-2">
                 <strong>Оценка риска:</strong> {explanationRisk}
               </p>
             )}
           </div>
         )}
+        
+        {/* Детальная информация о предсказании */}
+        {formatFullPrediction(prediction)}
       </div>
     );
   };
