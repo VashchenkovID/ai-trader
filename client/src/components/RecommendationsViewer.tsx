@@ -51,6 +51,7 @@ const RecommendationsViewer: React.FC = () => {
   const [currentRecommendation, setCurrentRecommendation] = useState<Recommendation | null>(null);
   const [createOptions, setCreateOptions] = useState<CreateRequestOptions>({});
   const [filterType, setFilterType] = useState<string>('all');
+  const [userReason, setUserReason] = useState<string>('');
   const toast = React.useRef<Toast>(null);
 
   const filterOptions = [
@@ -158,20 +159,12 @@ const RecommendationsViewer: React.FC = () => {
   };
 
   const handleCreateRequest = (recommendation: Recommendation) => {
-    if (recommendation.recommendation === 'HOLD') {
-      toast.current?.show({
-        severity: 'warn',
-        summary: 'Предупреждение',
-        detail: 'Нельзя создать заявку для рекомендации HOLD'
-      });
-      return;
-    }
-    
     setCurrentRecommendation(recommendation);
     setCreateOptions({
       stopLoss: recommendation.stopLoss,
       takeProfit: recommendation.targetPrice
     });
+    setUserReason('');
     setShowCreateDialog(true);
   };
 
@@ -180,9 +173,14 @@ const RecommendationsViewer: React.FC = () => {
     
     try {
       // Отправляем как FIGI для поиска в БД, и данные рекомендации как fallback
+      const optionsWithComment = {
+        ...createOptions,
+        comment: userReason ? `Причина отклонения AI-рекомендации: ${userReason}` : undefined
+      };
+      
       await apiService.createTradingRequest(
         currentRecommendation.figi,
-        createOptions,
+        optionsWithComment,
         currentRecommendation as any // Передаем полные данные рекомендации
       );
       
@@ -194,6 +192,7 @@ const RecommendationsViewer: React.FC = () => {
       
       setShowCreateDialog(false);
       setCreateOptions({});
+      setUserReason('');
       
       // Обновляем список рекомендаций после создания заявки
       await loadRecommendations();
@@ -212,15 +211,28 @@ const RecommendationsViewer: React.FC = () => {
   const handleBulkCreateRequests = async () => {
     if (selectedRecommendations.length === 0) return;
     
-    const validRecommendations = selectedRecommendations.filter(r => r.recommendation !== 'HOLD');
+    // Разрешаем создание заявок для всех рекомендаций, включая HOLD
+    const validRecommendations = selectedRecommendations;
     
     if (validRecommendations.length === 0) {
       toast.current?.show({
         severity: 'warn',
         summary: 'Предупреждение',
-        detail: 'Нет подходящих рекомендаций для создания заявок'
+        detail: 'Нет выбранных рекомендаций для создания заявок'
       });
       return;
+    }
+    
+    // Предупреждаем, если есть HOLD рекомендации
+    const holdRecommendations = validRecommendations.filter(r => r.recommendation === 'HOLD');
+    if (holdRecommendations.length > 0) {
+      const holdTickers = holdRecommendations.map(r => r.ticker).join(', ');
+      toast.current?.show({
+        severity: 'warn',
+        summary: 'Предупреждение',
+        detail: `Создаются заявки для ${holdRecommendations.length} инструментов с рекомендацией HOLD: ${holdTickers}`,
+        life: 5000
+      });
     }
     
     confirmDialog({
@@ -268,16 +280,24 @@ const RecommendationsViewer: React.FC = () => {
   };
 
   const actionBodyTemplate = (rowData: Recommendation) => {
-    if (rowData.recommendation === 'HOLD') {
-      return <Badge value="Нет действий" severity="info" />;
-    }
+    // Показываем кнопку для всех типов рекомендаций (BUY, SELL, HOLD)
+    const buttonSeverity = rowData.recommendation === 'BUY' 
+      ? 'success' 
+      : rowData.recommendation === 'SELL'
+      ? 'warning'
+      : 'info'; // Для HOLD используем info цвет
     
     return (
       <Button
         label="Создать заявку"
         icon="pi pi-plus"
         size="small"
+        severity={buttonSeverity}
         onClick={() => handleCreateRequest(rowData)}
+        tooltip={rowData.recommendation === 'HOLD' 
+          ? 'Создать заявку (AI рекомендует удержание)' 
+          : 'Создать торговую заявку'}
+        tooltipOptions={{ position: 'top' }}
       />
     );
   };
@@ -479,7 +499,10 @@ const RecommendationsViewer: React.FC = () => {
       <Dialog
         header="Создание торговой заявки"
         visible={showCreateDialog}
-        onHide={() => setShowCreateDialog(false)}
+        onHide={() => {
+          setShowCreateDialog(false);
+          setUserReason('');
+        }}
         style={{ width: '500px' }}
       >
         {currentRecommendation && (
@@ -501,6 +524,36 @@ const RecommendationsViewer: React.FC = () => {
                 </div>
               </div>
             </div>
+            
+            {currentRecommendation.recommendation === 'HOLD' && (
+              <div className="mb-4 p-3 bg-yellow-50 border-round border-yellow-200 border-2">
+                <div className="flex align-items-start gap-2">
+                  <i className="pi pi-exclamation-triangle text-yellow-600 mt-1"></i>
+                  <div className="flex-1">
+                    <div className="font-bold text-yellow-800 mb-2">
+                      ⚠️ Внимание: AI рекомендует HOLD
+                    </div>
+                    <div className="text-sm text-yellow-700 mb-2">
+                      Вы создаете заявку, хотя AI рекомендует удержание позиции. 
+                      Убедитесь, что у вас есть веские причины для этого решения.
+                    </div>
+                    <div>
+                      <label htmlFor="userReason" className="block mb-2 text-sm font-medium text-yellow-800">
+                        Причина отклонения рекомендации AI (необязательно):
+                      </label>
+                      <InputTextarea
+                        id="userReason"
+                        value={userReason}
+                        onChange={(e) => setUserReason(e.target.value)}
+                        rows={3}
+                        placeholder="Например: Дополнительный анализ показал потенциал роста..."
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             
             <div className="grid">
               <div className="col-6">
@@ -580,7 +633,10 @@ const RecommendationsViewer: React.FC = () => {
               <Button
                 label="Отмена"
                 icon="pi pi-times"
-                onClick={() => setShowCreateDialog(false)}
+                onClick={() => {
+                  setShowCreateDialog(false);
+                  setUserReason('');
+                }}
                 severity="secondary"
               />
               <Button

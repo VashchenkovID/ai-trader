@@ -61,17 +61,17 @@ class CacheService {
                 console.warn('Could not prefetch last prices:', e.message);
             }
 
-            for (const instrument of instruments) { // Ограничиваем для теста
+            console.log(`📊 Всего инструментов для обработки: ${instruments.length}`);
+            
+            for (const instrument of instruments) {
                 try {
                     // Пропускаем инструменты без FIGI или тикера
                     if (!instrument.figi || !instrument.ticker) {
                         continue;
                     }
 
-                    // Берем только инструменты в рублях (российские)
-                    if (!instrument.currency || instrument.currency.toLowerCase() !== 'rub') {
-                        continue;
-                    }
+                    // Убрали строгую фильтрацию по валюте - фильтрация уже выполнена в getStocks()
+                    // Сохраняем все инструменты, которые прошли фильтрацию в API
 
                     // Пропускаем запрос дивидендов для всех инструментов, чтобы избежать rate limiting
                     // Дивиденды можно запрашивать отдельно по требованию
@@ -165,13 +165,27 @@ class CacheService {
     }
 
     // Получение всех инструментов из кеша
-    async getAllInstruments(limit = 100) {
+    async getAllInstruments(limit = null) {
         try {
-            const instruments = await CachedInstrument.findAll({
-                where: { currency: 'rub' },
-                limit: limit,
+            const whereClause = {
+                [Op.or]: [
+                    { currency: 'RUB' },
+                    { currency: 'rub' },
+                    { currency: null } // Для старых записей без валюты
+                ]
+            };
+            
+            const queryOptions = {
+                where: whereClause,
                 order: [['ticker', 'ASC']]
-            });
+            };
+            
+            // Добавляем лимит только если он явно указан
+            if (limit !== null && limit > 0) {
+                queryOptions.limit = limit;
+            }
+            
+            const instruments = await CachedInstrument.findAll(queryOptions);
 
             // ВАЖНО: Не дергаем внешнее API из этого метода.
             // Обновление кеша выполняет планировщик или ручной POST /api/market/refresh.

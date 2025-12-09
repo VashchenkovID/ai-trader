@@ -1407,8 +1407,7 @@ class OptimizedTrainingService {
             
             const instruments = await CachedInstrument.findAll({
                 where: { isActive: true },
-                order: [['name', 'ASC']],
-                limit: 100
+                order: [['name', 'ASC']]
             });
 
             console.log(`📋 Found ${instruments.length} active instruments`);

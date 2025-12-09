@@ -83,8 +83,10 @@ class SchedulerService {
         const nnSettings = await SettingsService.getNeuralNetworkSettings();
         const notificationSettings = await SettingsService.getNotificationSettings();
         const cacheSchedule = schedulerSettings.cache_update_interval || '0 */4 * * *';
-        const trainingSchedule = schedulerSettings.nn_training_schedule || '0 3 * * 1';
-        const quickTrainingSchedule = schedulerSettings.nn_training_interval || '*/30 * * * *';
+        // Полное обучение ночью в 02:00 (последовательно: Базовая → Ансамбль → Мета-обучение → RL)
+        const trainingSchedule = schedulerSettings.nn_training_schedule || '0 2 * * *';
+        // Быстрое обучение каждые 2 часа: 08:00, 10:00, 12:00, 14:00, 16:00, 18:00
+        const quickTrainingSchedule = schedulerSettings.nn_training_interval || '0 8,10,12,14,16,18 * * *';
         const newsCacheSchedule = notificationSettings.news_cache_update_interval || '0 */6 * * *';
         const newsDailyUpdateSchedule = notificationSettings.news_daily_update_schedule || '0 9 * * *'; // Каждый день в 9:00
         const newsWeeklyCleanupSchedule = notificationSettings.news_weekly_cleanup_schedule || '0 3 * * 0'; // Каждое воскресенье в 3:00
@@ -143,13 +145,15 @@ class SchedulerService {
         });
 
         // Задача 4: Быстрое обучение нейросети (если включено)
+        // Расписание: каждые 2 часа (08:00, 10:00, 12:00, 14:00, 16:00, 18:00)
         if (quickTrainingEnabled) {
             this.quickTrainingTask = cron.schedule(quickTrainingSchedule, async () => {
                 try {
-                    console.log('⚡ Quick neural network training started...');
-                    await this.performQuickTraining();
+                    console.log('⚡ Scheduled quick neural network training started...');
+                    const QuickTrainingService = (await import('./QuickTrainingService.js')).default;
+                    await QuickTrainingService.performQuickTraining();
                 } catch (error) {
-                    console.error('Error in quick training:', error);
+                    console.error('Error in scheduled quick training:', error);
                     // Не отправляем в Telegram для быстрого обучения, чтобы не спамить
                 }
             }, {
@@ -986,61 +990,87 @@ class SchedulerService {
                 return;
             }
 
-            console.log('🧠 Starting scheduled neural network training...');
+            console.log('🧠 Starting scheduled FULL training (sequential: Base → Ensemble → Meta → RL)...');
             
-            // Запускаем обучение всех AI сетей по скользящему окну последних N дней
+            // Получаем настройки
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
             const trainingDays = nnSettings.nn_retrain_days || parseInt(process.env.NN_TRAINING_DAYS) || 180;
-            const trainingLimit = parseInt(process.env.NN_TRAINING_LIMIT) || 50;
             
-            // Получаем топ инструменты для обучения
-            const instruments = await CacheService.getAllInstruments(trainingLimit);
+            // Получаем все инструменты для обучения
+            const instruments = await CacheService.getAllInstruments();
             
             let totalTrained = 0;
             let successes = 0;
             let failures = 0;
             
-            // Обучаем каждый инструмент через IntegratedAIService
+            // ПОСЛЕДОВАТЕЛЬНОЕ ОБУЧЕНИЕ: Базовая → Ансамбль → Мета-обучение → RL
+            // Этап 1: Базовая нейросеть для всех инструментов
+            console.log('📊 Stage 1/4: Training Base Neural Network for all instruments...');
             for (const instrument of instruments) {
                 try {
-                    // Проверяем, нужно ли переобучение для этого инструмента
                     const shouldRetrain = await this.shouldRetrainModel(instrument.figi);
                     if (!shouldRetrain) {
-                        console.log(`🧠 Model for ${instrument.ticker} is up to date, skipping`);
                         continue;
                     }
-
-                    console.log(`🧠 Training all networks for ${instrument.ticker}...`);
-                    const results = await IntegratedAIService.trainAllNetworks(instrument.figi, {
-                        days: trainingDays,
-                        epochs: 50,
-                        batchSize: 16
-                    });
                     
-                    // Проверяем результаты
-                    const hasSuccess = Object.values(results).some(result => result.success !== false);
-                    if (hasSuccess) {
-                        successes++;
-                    } else {
-                        failures++;
-                    }
+                    console.log(`🧠 [Base] Training ${instrument.ticker}...`);
+                    await NeuralNetworkService.trainForInstrument(instrument.figi, trainingDays);
+                    successes++;
                     totalTrained++;
-                    
                 } catch (error) {
-                    console.warn(`❌ Training failed for ${instrument.ticker}:`, error.message);
+                    console.warn(`❌ [Base] Training failed for ${instrument.ticker}:`, error.message);
                     failures++;
                     totalTrained++;
-                    
-                    // Отправляем алерт об ошибке обучения конкретного инструмента
-                    try {
-                        await OptimizedTelegramService.sendAlert(
-                            'QUICK_TRAINING_INSTRUMENT_ERROR',
-                            `⚠️ <b>ОШИБКА ОБУЧЕНИЯ ИНСТРУМЕНТА</b>\n\n📈 Инструмент: <b>${instrument.ticker} (${instrument.figi})</b>\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
-                            'warning'
-                        );
-                    } catch (telegramError) {
-                        console.warn('Failed to send instrument training error alert:', telegramError.message);
-                    }
+                }
+            }
+            
+            // Этап 2: Ансамбль для всех инструментов
+            console.log('📊 Stage 2/4: Training Ensemble for all instruments...');
+            const EnsembleService = (await import('./EnsembleService.js')).default;
+            for (const instrument of instruments) {
+                try {
+                    console.log(`🧠 [Ensemble] Training ${instrument.ticker}...`);
+                    await EnsembleService.train(instrument.figi, {
+                        days: trainingDays,
+                        epochs: 50
+                    });
+                    successes++;
+                } catch (error) {
+                    console.warn(`❌ [Ensemble] Training failed for ${instrument.ticker}:`, error.message);
+                    failures++;
+                }
+            }
+            
+            // Этап 3: Мета-обучение для всех инструментов
+            console.log('📊 Stage 3/4: Training Meta-Learning for all instruments...');
+            const MetaLearningService = (await import('./MetaLearningService.js')).default;
+            for (const instrument of instruments) {
+                try {
+                    console.log(`🧠 [Meta] Training ${instrument.ticker}...`);
+                    await MetaLearningService.train(instrument.figi, {
+                        days: trainingDays
+                    });
+                    successes++;
+                } catch (error) {
+                    console.warn(`❌ [Meta] Training failed for ${instrument.ticker}:`, error.message);
+                    failures++;
+                }
+            }
+            
+            // Этап 4: Обучение с подкреплением для всех инструментов
+            console.log('📊 Stage 4/4: Training Reinforcement Learning for all instruments...');
+            const ReinforcementLearningService = (await import('./ReinforcementLearningService.js')).default;
+            for (const instrument of instruments) {
+                try {
+                    console.log(`🧠 [RL] Training ${instrument.ticker}...`);
+                    await ReinforcementLearningService.train(instrument.figi, {
+                        days: trainingDays,
+                        episodes: 50
+                    });
+                    successes++;
+                } catch (error) {
+                    console.warn(`❌ [RL] Training failed for ${instrument.ticker}:`, error.message);
+                    failures++;
                 }
             }
             
@@ -1077,15 +1107,13 @@ class SchedulerService {
         try {
             // Получаем настройки быстрого обучения
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
-            const quickTrainingLimit = nnSettings.nn_quick_training_limit || 10;
             const quickTrainingDays = nnSettings.nn_quick_training_days || nnSettings.nn_retrain_days || 30;
 
-            console.log(`⚡ Starting quick training: ${quickTrainingLimit} instruments, ${quickTrainingDays} days`);
+            console.log(`⚡ Starting quick training: all instruments, ${quickTrainingDays} days`);
 
-            // Получаем случайные инструменты для быстрого обучения
-            const instruments = await CacheService.getAllInstruments(quickTrainingLimit * 2);
-            const shuffled = instruments.sort(() => 0.5 - Math.random());
-            const selectedInstruments = shuffled.slice(0, quickTrainingLimit);
+            // Получаем все инструменты для быстрого обучения
+            const instruments = await CacheService.getAllInstruments();
+            const selectedInstruments = instruments;
 
             let successCount = 0;
             let failCount = 0;
@@ -1260,7 +1288,7 @@ class SchedulerService {
             console.log('🔍 Checking model degradation for all instruments...');
             
             // Получаем все инструменты
-            const instruments = await CacheService.getAllInstruments(100);
+            const instruments = await CacheService.getAllInstruments();
             let checked = 0;
             let degraded = 0;
             let restored = 0;

@@ -154,12 +154,17 @@ class TinkoffApiService {
                 instrumentStatus: 'INSTRUMENT_STATUS_BASE'
             });
 
-            // Фильтруем российские акции (валюта рубль или риск-страна RU)
-            const instruments = (response?.instruments || []).filter(inst => {
-                const currency = (inst.currency || '').toLowerCase();
-                const country = (inst.countryOfRisk || inst.country || '').toUpperCase();
-                return currency === 'rub' || country === 'RU';
+            const allInstruments = response?.instruments || [];
+            console.log(`📊 Получено из API: ${allInstruments.length} инструментов`);
+
+            // Мягкая фильтрация: берем все инструменты, которые имеют FIGI и ticker
+            // Фильтруем только инструменты без обязательных полей
+            const instruments = allInstruments.filter(inst => {
+                // Берем все инструменты, у которых есть FIGI и ticker
+                return inst && inst.figi && inst.ticker;
             });
+
+            console.log(`✅ После фильтрации (только с FIGI и ticker): ${instruments.length} инструментов`);
 
             return { ...response, instruments };
         } catch (error) {

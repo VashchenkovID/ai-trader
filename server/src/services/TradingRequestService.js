@@ -49,9 +49,8 @@ class TradingRequestService {
                 throw new Error(`Recommendation not found: ${recommendationFigi}`);
             }
 
-            if (recommendation.recommendation === 'HOLD') {
-                throw new Error('Cannot create trading request for HOLD recommendation');
-            }
+            // Разрешаем создание заявок для HOLD рекомендаций (с предупреждением на фронтенде)
+            // Пользователь может действовать вопреки рекомендации AI
 
             // Получаем текущий режим торговли
             const currentMode = TradingModeManager.getCurrentMode().mode;

@@ -6,6 +6,7 @@ import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { Dialog } from 'primereact/dialog';
 import { InputNumber } from 'primereact/inputnumber';
+import { InputTextarea } from 'primereact/inputtextarea';
 import { Toast } from 'primereact/toast';
 import { Dropdown } from 'primereact/dropdown';
 import { Message } from 'primereact/message';
@@ -42,6 +43,8 @@ const Recommendations: React.FC = () => {
   const [buyQuantity, setBuyQuantity] = useState<number>(0);
   const [creatingRequest, setCreatingRequest] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');
+  const [userReason, setUserReason] = useState<string>('');
+  const [showHoldWarning, setShowHoldWarning] = useState(false);
   const toast = useRef<Toast>(null);
 
   const filterOptions = [
@@ -257,6 +260,9 @@ const Recommendations: React.FC = () => {
       ? Math.floor((100000 / recommendation.priceAtAnalysis) * 0.1) // Примерно 10к рублей
       : 1;
     setBuyQuantity(estimatedQuantity);
+    setUserReason('');
+    // Показываем предупреждение для HOLD рекомендаций
+    setShowHoldWarning(recommendation.recommendation === 'HOLD');
     setShowBuyDialog(true);
   };
 
@@ -278,7 +284,7 @@ const Recommendations: React.FC = () => {
         figi: selectedRecommendation.figi,
         ticker: selectedRecommendation.ticker,
         name: selectedRecommendation.name,
-        recommendation: 'BUY',
+        recommendation: 'BUY', // Всегда создаем заявку на покупку
         confidence: selectedRecommendation.confidence,
         score: selectedRecommendation.score,
         priceAtAnalysis: selectedRecommendation.priceAtAnalysis,
@@ -290,7 +296,10 @@ const Recommendations: React.FC = () => {
 
       await apiService.createTradingRequest(
         selectedRecommendation.figi,
-        { quantity: Math.floor(buyQuantity) },
+        { 
+          quantity: Math.floor(buyQuantity),
+          comment: userReason ? `Причина отклонения AI-рекомендации: ${userReason}` : undefined
+        },
         recommendationData
       );
 
@@ -304,6 +313,8 @@ const Recommendations: React.FC = () => {
       setShowBuyDialog(false);
       setSelectedRecommendation(null);
       setBuyQuantity(0);
+      setUserReason('');
+      setShowHoldWarning(false);
       
       // Обновляем список рекомендаций
       loadRecommendations();
@@ -321,19 +332,32 @@ const Recommendations: React.FC = () => {
   };
 
   const buyButtonTemplate = (rowData: Recommendation) => {
-    if (rowData.recommendation !== 'BUY') {
-      return <span className="text-500">—</span>;
-    }
+    // Показываем кнопку для всех типов рекомендаций (BUY, SELL, HOLD)
+    const buttonLabel = rowData.recommendation === 'BUY' 
+      ? 'Купить' 
+      : rowData.recommendation === 'SELL'
+      ? 'Купить' // Для SELL тоже можно создать заявку на покупку (контринтуитивно, но пользователь может)
+      : 'Купить'; // Для HOLD тоже показываем кнопку
+    
+    const buttonSeverity = rowData.recommendation === 'BUY' 
+      ? 'success' 
+      : rowData.recommendation === 'SELL'
+      ? 'warning'
+      : 'info'; // Для HOLD используем info цвет
+    
+    const tooltipText = rowData.recommendation === 'HOLD'
+      ? 'Создать заявку на покупку (AI рекомендует удержание)'
+      : 'Создать заявку на покупку';
 
     return (
       <Button
         icon="pi pi-shopping-cart"
-        label="Купить"
+        label={buttonLabel}
         size="small"
-        severity="success"
+        severity={buttonSeverity}
         onClick={() => handleBuyClick(rowData)}
         disabled={!rowData.priceAtAnalysis || rowData.priceAtAnalysis <= 0}
-        tooltip="Создать заявку на покупку"
+        tooltip={tooltipText}
         tooltipOptions={{ position: 'top' }}
       />
     );
@@ -487,6 +511,8 @@ const Recommendations: React.FC = () => {
           setShowBuyDialog(false);
           setSelectedRecommendation(null);
           setBuyQuantity(0);
+          setUserReason('');
+          setShowHoldWarning(false);
         }}
         modal
       >
@@ -504,6 +530,11 @@ const Recommendations: React.FC = () => {
             </div>
             <div>
               <label className="block mb-2 font-medium">
+                Рекомендация AI: <strong>{translateRecommendation(selectedRecommendation.recommendation)}</strong>
+              </label>
+            </div>
+            <div>
+              <label className="block mb-2 font-medium">
                 Уверенность: <strong>{formatPercent(selectedRecommendation.confidence)}</strong>
               </label>
             </div>
@@ -512,6 +543,35 @@ const Recommendations: React.FC = () => {
                 <label className="block mb-2 font-medium">
                   Целевая цена: <strong className="text-green-500">{formatCurrency(selectedRecommendation.targetPrice)}</strong>
                 </label>
+              </div>
+            )}
+            {showHoldWarning && (
+              <div className="p-3 bg-yellow-50 border-round border-yellow-200 border-2">
+                <div className="flex align-items-start gap-2">
+                  <i className="pi pi-exclamation-triangle text-yellow-600 mt-1"></i>
+                  <div className="flex-1">
+                    <div className="font-bold text-yellow-800 mb-2">
+                      ⚠️ Внимание: AI рекомендует HOLD
+                    </div>
+                    <div className="text-sm text-yellow-700 mb-2">
+                      Вы создаете заявку на покупку, хотя AI рекомендует удержание позиции. 
+                      Убедитесь, что у вас есть веские причины для этого решения.
+                    </div>
+                    <div>
+                      <label htmlFor="userReason" className="block mb-2 text-sm font-medium text-yellow-800">
+                        Причина отклонения рекомендации AI (необязательно):
+                      </label>
+                      <InputTextarea
+                        id="userReason"
+                        value={userReason}
+                        onChange={(e) => setUserReason(e.target.value)}
+                        rows={3}
+                        placeholder="Например: Дополнительный анализ показал потенциал роста..."
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
             <div>

@@ -13,6 +13,7 @@ import Recommendation from '../models/Recommendation.js';
 import TradingRequest from '../models/TradingRequest.js';
 import VirtualPortfolio from '../models/VirtualPortfolio.js';
 import CachedSignal from '../models/CachedSignal.js';
+import TrainingState from '../models/TrainingState.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
@@ -77,6 +78,16 @@ export async function initDatabase() {
         console.log('⚡ Создание таблицы кэшированных сигналов...');
         await CachedSignal.sync({ force: false });
         console.log('✅ Таблица кэшированных сигналов создана/обновлена');
+        
+        // Создаем таблицу состояния обучения
+        console.log('📊 Создание таблицы состояния обучения...');
+        await TrainingState.sync({ force: false });
+        console.log('✅ Таблица состояния обучения создана/обновлена');
+        
+        // Создаем таблицу состояния обучения
+        console.log('📊 Создание таблицы состояния обучения...');
+        await TrainingState.sync({ force: false });
+        console.log('✅ Таблица состояния обучения создана/обновлена');
 
         // Инициализация настроек
         console.log('\n🔧 Инициализация настроек...');

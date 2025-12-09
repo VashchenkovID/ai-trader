@@ -578,6 +578,39 @@ class NeuralNetworkService {
         }
     }
 
+    /**
+     * Быстрое обучение модели с оптимизированными параметрами
+     * Используется для периодического обновления моделей в течение дня
+     */
+    async trainQuick(figi, options = {}) {
+        const {
+            epochs = 15, // Меньше эпох для скорости
+            dataDays = 60, // Меньше данных (последние 60 дней)
+            skipValidation = true // Пропускаем валидацию
+        } = options;
+
+        try {
+            console.log(`⚡ Quick training for ${figi}: epochs=${epochs}, days=${dataDays}`);
+            
+            // Используем OptimizedTrainingService для быстрого обучения
+            const OptimizedTrainingService = (await import('./OptimizedTrainingService.js')).default;
+            
+            const result = await OptimizedTrainingService.trainInstrument(figi, {
+                epochs,
+                days: dataDays,
+                enableValidation: !skipValidation,
+                useWorker: false, // Локальное обучение быстрее для малых батчей
+                batchSize: 32
+            });
+
+            console.log(`✅ Quick training completed for ${figi}`);
+            return result;
+        } catch (error) {
+            console.error(`❌ Quick training failed for ${figi}:`, error.message);
+            throw error;
+        }
+    }
+
     // Обучение модели на данных конкретной акции (с использованием worker'а)
     async trainForInstrument(figi, days = 180) {
         try {
@@ -815,9 +848,9 @@ class NeuralNetworkService {
             // Получаем настройки нейросети
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
             const trainingDays = days || nnSettings.nn_training_days || 180;
-            const trainingLimit = limit || nnSettings.nn_training_limit || 50;
             
-            const instruments = await CacheService.getAllInstruments(trainingLimit);
+            // Получаем все инструменты для обучения (лимит игнорируется)
+            const instruments = await CacheService.getAllInstruments();
             for (let index = 0; index < instruments.length; index++) {
                 const instrument = instruments[index];
                 try {
@@ -1216,7 +1249,8 @@ class NeuralNetworkService {
         let processedCount = 0;
         let validPredictions = 0;
 
-        for (const instrument of instruments.slice(0, 50)) { // Ограничиваем для теста
+        // Анализируем все инструменты без ограничений
+        for (const instrument of instruments) {
             try {
                 processedCount++;
                 
@@ -1274,26 +1308,44 @@ class NeuralNetworkService {
                     console.log(`🔍 [NeuralNetwork] ${instrument.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
                 }
 
-                // Добавляем только явные BUY сигналы (>0.6) — остальное считаем HOLD/skip
-                if (prediction.recommendation === 'BUY' && prediction.score >= 0.6) {
-                    validPredictions++;
-                    const currentPrice = candidatePrice;
+                // Сохраняем ВСЕ рекомендации (BUY, SELL, HOLD) без фильтрации по score
+                validPredictions++;
+                const currentPrice = candidatePrice;
+                const recommendation = prediction.recommendation || 'HOLD';
+                
+                // Распределяем рекомендации по соответствующим массивам
+                if (recommendation === 'BUY') {
                     const affordableQuantity = Math.floor(analysis.availableBudget / Math.max(currentPrice, 1));
-
-                    if (affordableQuantity > 0) {
-                        analysis.buyRecommendations.push({
-                            instrument,
-                            prediction,
-                            currentPrice,
-                            suggestedQuantity: affordableQuantity,
-                            estimatedCost: affordableQuantity * currentPrice
-                        });
-                        console.log(`✅ Added BUY recommendation for ${instrument.ticker}: ${prediction.score.toFixed(3)}`);
-                    } else {
-                        console.log(`💰 Skipped ${instrument.ticker}: no budget (need ${currentPrice}, have ${analysis.availableBudget})`);
-                    }
+                    analysis.buyRecommendations.push({
+                        instrument,
+                        prediction,
+                        currentPrice,
+                        suggestedQuantity: affordableQuantity,
+                        estimatedCost: affordableQuantity * currentPrice
+                    });
+                    console.log(`✅ Added BUY recommendation for ${instrument.ticker}: score=${prediction.score.toFixed(3)}`);
+                } else if (recommendation === 'SELL') {
+                    // SELL рекомендации для новых инструментов (не из портфеля)
+                    analysis.sellRecommendations.push({
+                        instrument,
+                        prediction,
+                        currentPrice
+                    });
+                    console.log(`✅ Added SELL recommendation for ${instrument.ticker}: score=${prediction.score.toFixed(3)}`);
                 } else {
-                    console.log(`⏭️ Skipped ${instrument.ticker}: recommendation=${prediction.recommendation}, score=${prediction.score.toFixed(3)}`);
+                    // HOLD рекомендации - добавляем в buyRecommendations с пометкой HOLD
+                    // Это позволит сохранить их в БД как отдельные записи
+                    analysis.buyRecommendations.push({
+                        instrument,
+                        prediction: {
+                            ...prediction,
+                            recommendation: 'HOLD'
+                        },
+                        currentPrice,
+                        suggestedQuantity: 0,
+                        estimatedCost: 0
+                    });
+                    console.log(`✅ Added HOLD recommendation for ${instrument.ticker}: score=${prediction.score.toFixed(3)}`);
                 }
             } catch (error) {
                 console.warn(`Could not analyze ${instrument.ticker}:`, error.message);
@@ -2294,11 +2346,11 @@ class NeuralNetworkService {
         try {
             const Recommendation = (await import('../models/Recommendation.js')).default;
             
-            // Сохраняем BUY рекомендации
+            // Сохраняем BUY и HOLD рекомендации (все из buyRecommendations)
             for (const rec of buyRecommendations) {
                 // Проверяем наличие instrument
                 if (!rec.instrument || !rec.instrument.figi) {
-                    console.warn('⚠️ Skipping BUY recommendation: missing instrument or figi', rec);
+                    console.warn('⚠️ Skipping recommendation: missing instrument or figi', rec);
                     continue;
                 }
                 
@@ -2340,7 +2392,24 @@ class NeuralNetworkService {
 
                 const recommendation = rec.prediction?.recommendation || 'BUY';
                 
-                console.log(`💾 Saving BUY recommendation for ${rec.instrument.ticker}: score=${score.toFixed(3)}, confidence=${confidence.toFixed(3)}, recommendation=${recommendation}`);
+                console.log(`💾 Saving ${recommendation} recommendation for ${rec.instrument.ticker}: score=${score.toFixed(3)}, confidence=${confidence.toFixed(3)}`);
+
+                // Рассчитываем targetPrice, stopLoss и takeProfit в зависимости от типа рекомендации
+                let targetPrice, stopLoss, takeProfit;
+                if (recommendation === 'BUY') {
+                    targetPrice = rec.currentPrice ? rec.currentPrice * 1.1 : null; // +10% как цель
+                    stopLoss = rec.currentPrice ? rec.currentPrice * 0.9 : null; // -10% как стоп-лосс
+                    takeProfit = rec.currentPrice ? rec.currentPrice * 1.2 : null; // +20% как тейк-профит
+                } else if (recommendation === 'SELL') {
+                    targetPrice = rec.currentPrice ? rec.currentPrice * 0.9 : null; // -10% как цель
+                    stopLoss = rec.currentPrice ? rec.currentPrice * 1.1 : null; // +10% как стоп-лосс
+                    takeProfit = rec.currentPrice ? rec.currentPrice * 0.8 : null; // -20% как тейк-профит
+                } else {
+                    // HOLD - нейтральные значения
+                    targetPrice = rec.currentPrice ? rec.currentPrice * 1.05 : null; // +5% как цель
+                    stopLoss = rec.currentPrice ? rec.currentPrice * 0.95 : null; // -5% как стоп-лосс
+                    takeProfit = rec.currentPrice ? rec.currentPrice * 1.1 : null; // +10% как тейк-профит
+                }
 
                 const recommendationData = {
                     figi: rec.instrument.figi,
@@ -2353,9 +2422,9 @@ class NeuralNetworkService {
                     analysisDate: new Date(), // Обновляем дату анализа
                     modelVersion: '1.0',
                     priceAtAnalysis: rec.currentPrice,
-                    targetPrice: rec.currentPrice * 1.1, // +10% как цель
-                    stopLoss: rec.currentPrice * 0.9, // -10% как стоп-лосс
-                    takeProfit: rec.currentPrice * 1.2, // +20% как тейк-профит
+                    targetPrice: targetPrice,
+                    stopLoss: stopLoss,
+                    takeProfit: takeProfit,
                     sector: rec.instrument.sector || 'Unknown',
                     marketCap: rec.instrument.marketCap || 'Unknown',
                     isActive: true
@@ -2372,11 +2441,11 @@ class NeuralNetworkService {
                 if (existing) {
                     // Обновляем существующую
                     await existing.update(recommendationData);
-                    console.log(`🔄 Updated BUY recommendation for ${rec.instrument.ticker}`);
+                    console.log(`🔄 Updated ${recommendation} recommendation for ${rec.instrument.ticker}`);
                 } else {
                     // Создаем новую
                     await Recommendation.create(recommendationData);
-                    console.log(`✅ Created BUY recommendation for ${rec.instrument.ticker}`);
+                    console.log(`✅ Created ${recommendation} recommendation for ${rec.instrument.ticker}`);
                 }
             }
 
@@ -2469,15 +2538,23 @@ class NeuralNetworkService {
                 if (existing) {
                     // Обновляем существующую
                     await existing.update(recommendationData);
-                    console.log(`🔄 Updated SELL recommendation for ${instrument.ticker}`);
+                    console.log(`🔄 Updated ${recommendation} recommendation for ${instrument.ticker}`);
                 } else {
                     // Создаем новую
                     await Recommendation.create(recommendationData);
-                    console.log(`✅ Created SELL recommendation for ${instrument.ticker}`);
+                    console.log(`✅ Created ${recommendation} recommendation for ${instrument.ticker}`);
                 }
             }
 
-            console.log(`💾 Saved ${buyRecommendations.length} BUY and ${sellRecommendations.length} SELL recommendations to database`);
+            const buyCount = buyRecommendations.filter(r => r.prediction?.recommendation === 'BUY').length;
+            const holdCount = buyRecommendations.filter(r => r.prediction?.recommendation === 'HOLD').length;
+            const sellCount = sellRecommendations.length;
+            
+            console.log(`💾 Saved recommendations to database:`);
+            console.log(`   ✅ BUY: ${buyCount}`);
+            console.log(`   ⏸️ HOLD: ${holdCount}`);
+            console.log(`   ❌ SELL: ${sellCount}`);
+            console.log(`   📊 Total: ${buyRecommendations.length + sellRecommendations.length}`);
 
             // Отправляем уведомление через WebSocket о новых рекомендациях
             try {
