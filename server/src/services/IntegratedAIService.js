@@ -113,19 +113,71 @@ class IntegratedAIService {
             if (this.activeNetworks.ensemble) {
                 try {
                     const ensembleRec = await EnsembleService.predict(figi, portfolio);
+                    // Всегда добавляем рекомендацию ансамбля, даже если есть ошибка или недостаточно данных
+                    // Горизонты теперь всегда присутствуют (с дефолтными значениями при проблемах)
                     recommendations.push({
                         source: 'ensemble',
-                        score: ensembleRec.score,
-                        confidence: ensembleRec.confidence,
-                        recommendation: ensembleRec.recommendation,
-                        agreement: ensembleRec.agreement, // Согласованность между горизонтами
-                        horizons: ensembleRec.horizons, // Детали по горизонтам
-                        summary: ensembleRec.summary, // Понятное резюме
-                        details: ensembleRec.individualPredictions // Для обратной совместимости
+                        score: ensembleRec.score || 0.5,
+                        confidence: ensembleRec.confidence || 0.3,
+                        recommendation: ensembleRec.recommendation || 'HOLD',
+                        agreement: ensembleRec.agreement || 1.0, // Согласованность между горизонтами
+                        horizons: ensembleRec.horizons || null, // Детали по горизонтам
+                        summary: ensembleRec.summary || null, // Понятное резюме
+                        details: ensembleRec.individualPredictions || null, // Для обратной совместимости
+                        error: ensembleRec.error || null, // Сохраняем ошибку, если есть
+                        reason: ensembleRec.reason || null // Сохраняем причину, если есть
                     });
-                    weights.ensemble = ensembleRec.confidence;
+                    weights.ensemble = ensembleRec.confidence || 0.3;
                 } catch (error) {
                     console.warn('⚠️ Ensemble recommendation failed:', error.message);
+                    // Даже при ошибке добавляем дефолтную рекомендацию с горизонтами
+                    const defaultHorizons = {
+                        shortTerm: {
+                            name: 'Краткосрочный прогноз',
+                            description: 'Прогноз на 1-3 дня',
+                            model: 'LSTM',
+                            score: 0.5,
+                            confidence: 0.3,
+                            recommendation: 'HOLD',
+                            weight: 0.4,
+                            horizonDays: 1,
+                            explanation: `Ошибка: ${error.message}`
+                        },
+                        mediumTerm: {
+                            name: 'Среднесрочный прогноз',
+                            description: 'Прогноз на 1-4 недели',
+                            model: 'CNN',
+                            score: 0.5,
+                            confidence: 0.3,
+                            recommendation: 'HOLD',
+                            weight: 0.35,
+                            horizonDays: 21,
+                            explanation: `Ошибка: ${error.message}`
+                        },
+                        longTerm: {
+                            name: 'Долгосрочный прогноз',
+                            description: 'Прогноз на 2-3 месяца',
+                            model: 'Transformer',
+                            score: 0.5,
+                            confidence: 0.3,
+                            recommendation: 'HOLD',
+                            weight: 0.25,
+                            horizonDays: 84,
+                            explanation: `Ошибка: ${error.message}`
+                        }
+                    };
+                    recommendations.push({
+                        source: 'ensemble',
+                        score: 0.5,
+                        confidence: 0.3,
+                        recommendation: 'HOLD',
+                        agreement: 1.0,
+                        horizons: defaultHorizons,
+                        summary: null,
+                        details: null,
+                        error: error.message
+                    });
+                    weights.ensemble = 0.3;
                 }
             }
 

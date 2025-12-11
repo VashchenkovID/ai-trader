@@ -2708,39 +2708,83 @@ class NeuralNetworkService {
                 
                 console.log(`💾 Saving ${recommendation} recommendation for ${rec.instrument.ticker}: score=${score.toFixed(3)}, confidence=${confidence.toFixed(3)}`);
 
-                // Рассчитываем targetPrice, stopLoss и takeProfit в зависимости от типа рекомендации
-                let targetPrice, stopLoss, takeProfit;
-                if (recommendation === 'BUY') {
-                    targetPrice = rec.currentPrice ? rec.currentPrice * 1.1 : null; // +10% как цель
-                    stopLoss = rec.currentPrice ? rec.currentPrice * 0.9 : null; // -10% как стоп-лосс
-                    takeProfit = rec.currentPrice ? rec.currentPrice * 1.2 : null; // +20% как тейк-профит
-                } else if (recommendation === 'SELL') {
-                    targetPrice = rec.currentPrice ? rec.currentPrice * 0.9 : null; // -10% как цель
-                    stopLoss = rec.currentPrice ? rec.currentPrice * 1.1 : null; // +10% как стоп-лосс
-                    takeProfit = rec.currentPrice ? rec.currentPrice * 0.8 : null; // -20% как тейк-профит
-                } else {
-                    // HOLD - нейтральные значения
-                    targetPrice = rec.currentPrice ? rec.currentPrice * 1.05 : null; // +5% как цель
-                    stopLoss = rec.currentPrice ? rec.currentPrice * 0.95 : null; // -5% как стоп-лосс
-                    takeProfit = rec.currentPrice ? rec.currentPrice * 1.1 : null; // +10% как тейк-профит
-                }
-
                 // Определяем стратегию для рекомендации
                 // Сначала проверяем, есть ли стратегия в самой рекомендации (для позиций портфеля)
                 let strategyId = null;
+                let strategy = null;
                 if (rec.strategy && rec.strategy.id) {
                     strategyId = rec.strategy.id;
+                    try {
+                        const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+                        strategy = await TradingStrategy.findByPk(strategyId);
+                    } catch (e) {
+                        // Игнорируем ошибки загрузки стратегии
+                    }
                 } else {
                     // Если стратегии нет в рекомендации, определяем её автоматически (для новых BUY)
                     try {
                         const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
-                        const strategy = await StrategyAllocationService.getStrategyForRecommendation({ confidence, score });
+                        strategy = await StrategyAllocationService.getStrategyForRecommendation({ confidence, score });
                         if (strategy) {
                             strategyId = strategy.id;
                         }
                     } catch (strategyError) {
                         // Игнорируем ошибки определения стратегии
                     }
+                }
+
+                // Рассчитываем targetPrice, stopLoss и takeProfit
+                // Используем динамический стоп-лосс на основе ATR, если доступен
+                let targetPrice, stopLoss, takeProfit;
+                
+                if (rec.currentPrice) {
+                    // Пытаемся использовать динамический стоп-лосс на основе ATR
+                    try {
+                        const RiskManagementService = (await import('./RiskManagementService.js')).default;
+                        if (RiskManagementService && RiskManagementService.isInitialized && strategy) {
+                            stopLoss = await RiskManagementService.calculateDynamicStopLoss(
+                                rec.instrument.figi,
+                                rec.currentPrice,
+                                strategy,
+                                recommendation === 'SELL' ? 'SELL' : 'BUY'
+                            );
+                        } else {
+                            // Fallback к фиксированным процентам
+                            if (recommendation === 'BUY') {
+                                stopLoss = rec.currentPrice * (1 - (strategy?.stopLossPercent || 10) / 100);
+                            } else if (recommendation === 'SELL') {
+                                stopLoss = rec.currentPrice * (1 + (strategy?.stopLossPercent || 10) / 100);
+                            } else {
+                                stopLoss = rec.currentPrice * (1 - (strategy?.stopLossPercent || 5) / 100);
+                            }
+                        }
+                    } catch (error) {
+                        // Fallback к фиксированным процентам при ошибке
+                        if (recommendation === 'BUY') {
+                            stopLoss = rec.currentPrice * 0.9; // -10% как стоп-лосс
+                        } else if (recommendation === 'SELL') {
+                            stopLoss = rec.currentPrice * 1.1; // +10% как стоп-лосс
+                        } else {
+                            stopLoss = rec.currentPrice * 0.95; // -5% как стоп-лосс
+                        }
+                    }
+                    
+                    // Рассчитываем targetPrice и takeProfit
+                    if (recommendation === 'BUY') {
+                        targetPrice = rec.currentPrice * 1.1; // +10% как цель
+                        takeProfit = rec.currentPrice * 1.2; // +20% как тейк-профит
+                    } else if (recommendation === 'SELL') {
+                        targetPrice = rec.currentPrice * 0.9; // -10% как цель
+                        takeProfit = rec.currentPrice * 0.8; // -20% как тейк-профит
+                    } else {
+                        // HOLD - нейтральные значения
+                        targetPrice = rec.currentPrice * 1.05; // +5% как цель
+                        takeProfit = rec.currentPrice * 1.1; // +10% как тейк-профит
+                    }
+                } else {
+                    targetPrice = null;
+                    stopLoss = null;
+                    takeProfit = null;
                 }
 
                 const recommendationData = {
@@ -2868,18 +2912,42 @@ class NeuralNetworkService {
                     };
                 }
 
-                console.log(`💾 Saving ${recommendation} recommendation for ${instrument.ticker}: score=${score.toFixed(3)}, confidence=${confidence.toFixed(3)}, recommendation=${recommendation}`);
-                console.log(`   📊 Prediction data:`, JSON.stringify({
-                    score: rec.prediction?.score,
-                    confidence: rec.prediction?.confidence,
-                    recommendation: rec.prediction?.recommendation
-                }, null, 2));
 
                 // Определяем стратегию для SELL рекомендации (из позиции портфеля)
                 let strategyId = null;
+                let strategy = null;
                 if (rec.strategy && rec.strategy.id) {
                     // Используем стратегию из рекомендации (если позиция была куплена по стратегии)
                     strategyId = rec.strategy.id;
+                    try {
+                        const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+                        strategy = await TradingStrategy.findByPk(strategyId);
+                    } catch (e) {
+                        // Игнорируем ошибки загрузки стратегии
+                    }
+                }
+
+                // Рассчитываем стоп-лосс: используем динамический ATR-based стоп-лосс, если доступен
+                let stopLoss = null;
+                if (currentPrice) {
+                    try {
+                        const RiskManagementService = (await import('./RiskManagementService.js')).default;
+                        if (RiskManagementService && RiskManagementService.isInitialized && strategy) {
+                            // Используем динамический стоп-лосс на основе ATR
+                            stopLoss = await RiskManagementService.calculateDynamicStopLoss(
+                                instrument.figi,
+                                currentPrice,
+                                strategy,
+                                'SELL'
+                            );
+                        } else {
+                            // Fallback к фиксированному проценту
+                            stopLoss = currentPrice * (1 + (strategy?.stopLossPercent || 10) / 100);
+                        }
+                    } catch (error) {
+                        // Fallback к фиксированному проценту при ошибке
+                        stopLoss = currentPrice * 1.1; // +10% как стоп-лосс
+                    }
                 }
 
                 const recommendationData = {
@@ -2894,7 +2962,7 @@ class NeuralNetworkService {
                     modelVersion: '1.0',
                     priceAtAnalysis: currentPrice,
                     targetPrice: currentPrice ? currentPrice * 0.9 : null, // -10% как цель
-                    stopLoss: currentPrice ? currentPrice * 1.1 : null, // +10% как стоп-лосс
+                    stopLoss: stopLoss,
                     takeProfit: currentPrice ? currentPrice * 0.8 : null, // -20% как тейк-профит
                     sector: instrument.sector || 'Unknown',
                     marketCap: instrument.marketCap || 'Unknown',

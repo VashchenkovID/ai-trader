@@ -60,7 +60,7 @@ const TradingStrategy = sequelize.define('TradingStrategy', {
         }
     },
     
-    // Процент стоп-лосса
+    // Процент стоп-лосса (используется как fallback, если ATR недоступен)
     stopLossPercent: {
         type: DataTypes.FLOAT,
         allowNull: false,
@@ -69,6 +69,20 @@ const TradingStrategy = sequelize.define('TradingStrategy', {
             min: 0,
             max: 50
         }
+    },
+    
+    // Множитель ATR для расчета динамического стоп-лосса
+    // Стоп-лосс = текущая цена - (ATR × atrMultiplier)
+    // Для консервативных: 1.5-2.0, для умеренных: 2.0-2.5, для агрессивных: 2.5-3.0
+    atrMultiplier: {
+        type: DataTypes.FLOAT,
+        allowNull: true,
+        defaultValue: null, // null = использовать фиксированный процент
+        validate: {
+            min: 0.5,
+            max: 5.0
+        },
+        comment: 'Множитель ATR для динамического стоп-лосса. Если null, используется stopLossPercent'
     },
     
     // Процент тейк-профита
@@ -169,6 +183,7 @@ TradingStrategy.initializeDefaultStrategies = async function() {
             minScore: 0.5,
             stopLossPercent: 12,
             takeProfitPercent: 25,
+            atrMultiplier: 1.8, // Консервативный множитель ATR
             maxPositions: null,
             isActive: true,
             priority: 1,
@@ -186,6 +201,7 @@ TradingStrategy.initializeDefaultStrategies = async function() {
             minScore: 0.6,
             stopLossPercent: 6,
             takeProfitPercent: 12,
+            atrMultiplier: 2.2, // Умеренный множитель ATR
             maxPositions: null,
             isActive: true,
             priority: 2,
@@ -203,6 +219,7 @@ TradingStrategy.initializeDefaultStrategies = async function() {
             minScore: 0.75,
             stopLossPercent: 3,
             takeProfitPercent: 6,
+            atrMultiplier: 2.7, // Агрессивный множитель ATR
             maxPositions: null,
             isActive: true,
             priority: 3,

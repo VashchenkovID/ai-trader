@@ -523,6 +523,63 @@ class OptimizedDataService {
     }
 
     /**
+     * Расчет Average True Range (ATR) - средний истинный диапазон
+     * ATR используется для измерения волатильности и расчета динамических стоп-лоссов
+     * @param {Array} candles - Массив свечей с полями high, low, close
+     * @param {number} period - Период для расчета ATR (по умолчанию 14)
+     * @returns {number} - Значение ATR
+     */
+    calculateATR(candles, period = 14) {
+        try {
+            if (!candles || candles.length < period + 1) {
+                // Если данных недостаточно, возвращаем приблизительное значение на основе доступных данных
+                if (candles && candles.length > 0) {
+                    const avgRange = candles.reduce((sum, candle, index) => {
+                        if (index === 0) return sum;
+                        const range = Math.abs(candle.high - candle.low);
+                        return sum + range;
+                    }, 0) / (candles.length - 1);
+                    return avgRange;
+                }
+                return 0;
+            }
+
+            const trueRanges = [];
+            
+            for (let i = 1; i < candles.length; i++) {
+                const current = candles[i];
+                const previous = candles[i - 1];
+                
+                // True Range = максимум из:
+                // 1. High - Low
+                // 2. |High - Previous Close|
+                // 3. |Low - Previous Close|
+                const tr1 = current.high - current.low;
+                const tr2 = Math.abs(current.high - previous.close);
+                const tr3 = Math.abs(current.low - previous.close);
+                
+                const trueRange = Math.max(tr1, tr2, tr3);
+                trueRanges.push(trueRange);
+            }
+            
+            // Если у нас достаточно данных для полного периода, используем скользящее среднее
+            if (trueRanges.length >= period) {
+                // Берем последние period значений для расчета ATR
+                const recentTRs = trueRanges.slice(-period);
+                const atr = recentTRs.reduce((sum, tr) => sum + tr, 0) / period;
+                return atr;
+            } else {
+                // Если данных меньше периода, используем простое среднее доступных значений
+                const atr = trueRanges.reduce((sum, tr) => sum + tr, 0) / trueRanges.length;
+                return atr;
+            }
+        } catch (error) {
+            console.error('Error calculating ATR:', error);
+            return 0;
+        }
+    }
+
+    /**
      * Создание временных фичей (упрощенный набор - только важные)
      */
     createTimeFeatures(timestamp) {

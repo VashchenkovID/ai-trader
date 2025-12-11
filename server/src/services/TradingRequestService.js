@@ -7,8 +7,10 @@ import OptimizedTelegramService from './OptimizedTelegramService.js';
 import TinkoffApiService from './TinkoffApiService.js';
 import SettingsService from './SettingsService.js';
 import StrategyAllocationService from './StrategyAllocationService.js';
+import RiskManagementService from './RiskManagementService.js';
 import PortfolioAllocation from '../models/PortfolioAllocation.js';
 import PositionStrategy from '../models/PositionStrategy.js';
+import TradingStrategy from '../models/TradingStrategy.js';
 import { Op } from 'sequelize';
 
 /**
@@ -192,8 +194,32 @@ class TradingRequestService {
                 throw new Error(`Invalid estimated amount: ${estimatedAmount}. Price: ${currentPrice}, Quantity: ${quantity}`);
             }
 
-            // Используем параметры стратегии для stop-loss и take-profit, если они не указаны явно
-            const stopLoss = options.stopLoss || recommendation.stopLoss || (strategy ? currentPrice * (1 - strategy.stopLossPercent / 100) : null);
+            // Рассчитываем стоп-лосс: используем динамический ATR-based стоп-лосс, если доступен
+            let stopLoss = options.stopLoss || recommendation.stopLoss;
+            if (!stopLoss && strategy && currentPrice) {
+                try {
+                    const riskManagementService = (await import('./RiskManagementService.js')).default;
+                    if (riskManagementService && riskManagementService.isInitialized) {
+                        // Используем динамический стоп-лосс на основе ATR
+                        stopLoss = await riskManagementService.calculateDynamicStopLoss(
+                            recommendation.figi,
+                            currentPrice,
+                            strategy,
+                            recommendation.recommendation === 'SELL' ? 'SELL' : 'BUY'
+                        );
+                    } else {
+                        // Fallback к фиксированному проценту
+                        stopLoss = currentPrice * (1 - strategy.stopLossPercent / 100);
+                    }
+                } catch (error) {
+                    console.warn(`⚠️ Ошибка расчета динамического стоп-лосса, используем фиксированный процент: ${error.message}`);
+                    stopLoss = currentPrice * (1 - strategy.stopLossPercent / 100);
+                }
+            } else if (!stopLoss && currentPrice) {
+                // Если стратегии нет, используем фиксированный процент по умолчанию
+                stopLoss = currentPrice * 0.95; // -5% по умолчанию
+            }
+            
             const takeProfit = options.takeProfit || recommendation.takeProfit || (strategy ? currentPrice * (1 + strategy.takeProfitPercent / 100) : null);
             
             // Определяем action: для HOLD рекомендаций создаем BUY заявку (пользователь хочет купить, несмотря на HOLD)

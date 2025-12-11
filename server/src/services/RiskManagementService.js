@@ -1,4 +1,6 @@
 import OptimizedTelegramService from './OptimizedTelegramService.js';
+import OptimizedDataService from './OptimizedDataService.js';
+import CacheService from './CacheService.js';
 
 /**
  * Сервис управления рисками для торговли
@@ -145,6 +147,89 @@ class RiskManagementService {
             validation.isValid = false;
             validation.errors.push(`Ошибка валидации: ${error.message}`);
             return validation;
+        }
+    }
+
+    /**
+     * Расчет динамического стоп-лосса на основе ATR (Average True Range)
+     * @param {string} figi - FIGI инструмента
+     * @param {number} currentPrice - Текущая цена инструмента
+     * @param {Object} strategy - Объект стратегии с полями atrMultiplier и stopLossPercent
+     * @param {string} direction - Направление сделки: 'BUY' или 'SELL'
+     * @returns {Promise<number>} - Цена стоп-лосса
+     */
+    async calculateDynamicStopLoss(figi, currentPrice, strategy = null, direction = 'BUY') {
+        try {
+            // Если стратегия не передана или atrMultiplier не задан, используем фиксированный процент
+            if (!strategy || strategy.atrMultiplier === null || strategy.atrMultiplier === undefined) {
+                const stopLossPercent = strategy?.stopLossPercent || 5.0;
+                if (direction === 'BUY') {
+                    return currentPrice * (1 - stopLossPercent / 100);
+                } else {
+                    return currentPrice * (1 + stopLossPercent / 100);
+                }
+            }
+
+            // Получаем свечи для расчета ATR (нужно минимум 15 свечей для периода 14)
+            const candles = await CacheService.getCandles(figi, 'DAY', 30);
+            
+            if (!candles || candles.length < 15) {
+                // Если данных недостаточно, используем фиксированный процент
+                const stopLossPercent = strategy?.stopLossPercent || 5.0;
+                if (direction === 'BUY') {
+                    return currentPrice * (1 - stopLossPercent / 100);
+                } else {
+                    return currentPrice * (1 + stopLossPercent / 100);
+                }
+            }
+
+            // Рассчитываем ATR
+            const atr = OptimizedDataService.calculateATR(candles, 14);
+            
+            if (atr === 0 || !isFinite(atr)) {
+                // Если ATR не удалось рассчитать, используем фиксированный процент
+                const stopLossPercent = strategy?.stopLossPercent || 5.0;
+                if (direction === 'BUY') {
+                    return currentPrice * (1 - stopLossPercent / 100);
+                } else {
+                    return currentPrice * (1 + stopLossPercent / 100);
+                }
+            }
+
+            // Рассчитываем динамический стоп-лосс
+            // Для BUY: стоп-лосс = текущая цена - (ATR × множитель)
+            // Для SELL: стоп-лосс = текущая цена + (ATR × множитель)
+            const atrMultiplier = strategy.atrMultiplier;
+            let stopLoss;
+            
+            if (direction === 'BUY') {
+                stopLoss = currentPrice - (atr * atrMultiplier);
+                // Защита: стоп-лосс не должен быть больше текущей цены
+                stopLoss = Math.min(stopLoss, currentPrice * 0.95); // Минимум -5%
+            } else {
+                stopLoss = currentPrice + (atr * atrMultiplier);
+                // Защита: стоп-лосс не должен быть меньше текущей цены
+                stopLoss = Math.max(stopLoss, currentPrice * 1.05); // Минимум +5%
+            }
+
+            // Проверяем, что стоп-лосс не слишком близко к цене (минимум 1% от цены)
+            const minDistance = currentPrice * 0.01;
+            if (direction === 'BUY' && (currentPrice - stopLoss) < minDistance) {
+                stopLoss = currentPrice - minDistance;
+            } else if (direction === 'SELL' && (stopLoss - currentPrice) < minDistance) {
+                stopLoss = currentPrice + minDistance;
+            }
+
+            return stopLoss;
+        } catch (error) {
+            console.error(`❌ Ошибка расчета динамического стоп-лосса для ${figi}:`, error.message);
+            // Fallback к фиксированному проценту при ошибке
+            const stopLossPercent = strategy?.stopLossPercent || 5.0;
+            if (direction === 'BUY') {
+                return currentPrice * (1 - stopLossPercent / 100);
+            } else {
+                return currentPrice * (1 + stopLossPercent / 100);
+            }
         }
     }
 
