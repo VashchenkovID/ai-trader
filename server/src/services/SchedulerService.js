@@ -16,6 +16,7 @@ class SchedulerService {
         this.cleanupTask = null;
         this.newsCleanupTask = null;
         this.newsDailyUpdateTask = null;
+        this.newsCacheUpdateTask = null; // Периодическое обновление кеша новостей
         this.telegramCacheTask = null;
         this.trainingTask = null;
         this.quickTrainingTask = null;
@@ -37,6 +38,8 @@ class SchedulerService {
         this.intervals = new Set(); // Храним все интервалы для очистки
         this.workers = new Set(); // Храним все worker'ы для завершения
         this.webSocketService = null; // Кэшируем WebSocketService
+        this.startTime = Date.now(); // Время старта сервиса для отслеживания первого запуска
+        this.skipFirstRun = new Set(); // Задачи, которые должны пропустить первый запуск
     }
 
     /**
@@ -82,6 +85,10 @@ class SchedulerService {
 
     async start() {
         console.log('Starting scheduled tasks...');
+        
+        // Сохраняем время старта для предотвращения немедленного запуска задач
+        // ВАЖНО: устанавливаем время старта ДО создания cron задач
+        this.startTime = Date.now();
 
         // Получаем настройки планировщика
         const schedulerSettings = await SettingsService.getSchedulerSettings();
@@ -104,6 +111,13 @@ class SchedulerService {
 
         // Задача 1: Обновление кеша акций
         this.cacheTask = cron.schedule(cacheSchedule, async () => {
+            // Пропускаем первый запуск при старте (минимум 10 минут с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 10 * 60 * 1000) {
+                console.log('⏭️ Skipping first cache update run (too soon after startup)');
+                return;
+            }
+            
             try {
                 console.log('⏰ Scheduled cache update started...');
                 
@@ -126,6 +140,13 @@ class SchedulerService {
         const priceUpdateIntervalMinutes = schedulerSettings.price_update_interval_minutes || 20;
         const priceUpdateSchedule = `*/${priceUpdateIntervalMinutes} * * * *`; // Каждые N минут
         this.priceUpdateTask = cron.schedule(priceUpdateSchedule, async () => {
+            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 60 * 1000) {
+                console.log('⏭️ Skipping first price update run (too soon after startup)');
+                return;
+            }
+            
             try {
                 console.log('💰 Scheduled price update started...');
                 await this.performPriceUpdate();
@@ -186,6 +207,13 @@ class SchedulerService {
         // Задача 5: Обновление кеша торговых часов
         const tradingHoursSchedule = schedulerSettings.trading_hours_update_interval || '*/15 * * * *';
         this.tradingHoursCacheTask = cron.schedule(tradingHoursSchedule, async () => {
+            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 60 * 1000) {
+                console.log('⏭️ Skipping first trading hours cache update run (too soon after startup)');
+                return;
+            }
+            
             try {
                 console.log('🕐 Scheduled trading hours cache update started...');
                 await TradingHoursCacheService.updateTradingHoursCache();
@@ -205,6 +233,27 @@ class SchedulerService {
             } catch (error) {
                 console.error('Error in scheduled weekly news cleanup:', error);
                 await OptimizedTelegramService.sendAlert('NEWS_WEEKLY_CLEANUP_ERROR', error.message, 'warning');
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
+        // Задача: Периодическое обновление кеша новостей (каждые 6 часов по умолчанию)
+        this.newsCacheUpdateTask = cron.schedule(newsCacheSchedule, async () => {
+            // Пропускаем первый запуск при старте (минимум 10 минут с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 10 * 60 * 1000) {
+                console.log('⏭️ Skipping first news cache update run (too soon after startup)');
+                return;
+            }
+            
+            try {
+                console.log('📰 Scheduled news cache update started...');
+                await this.performDailyNewsUpdate();
+            } catch (error) {
+                console.error('Error in scheduled news cache update:', error);
+                await OptimizedTelegramService.sendAlert('NEWS_CACHE_UPDATE_ERROR', error.message, 'warning');
             }
         }, {
             scheduled: true,
@@ -267,7 +316,15 @@ class SchedulerService {
         });
 
         // Задача 10: Автоматический анализ портфеля (каждый час)
+        // Пропускаем первый запуск, так как он будет выполнен через 30 минут после старта
         this.portfolioAnalysisTask = cron.schedule('0 * * * *', async () => {
+            // Проверяем, прошло ли достаточно времени с момента старта (минимум 35 минут)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 35 * 60 * 1000) {
+                console.log('⏭️ Skipping first portfolio analysis run (will run after 30 minutes from startup)');
+                return;
+            }
+            
             try {
                 console.log('📊 Scheduled portfolio analysis started...');
                 await this.performPortfolioAnalysis();
@@ -282,6 +339,13 @@ class SchedulerService {
 
         // Задача 11: Обновление предсказаний в рекомендациях каждые 20 минут
         this.predictionsUpdateTask = cron.schedule('*/20 * * * *', async () => {
+            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 60 * 1000) {
+                console.log('⏭️ Skipping first predictions update run (too soon after startup)');
+                return;
+            }
+            
             try {
                 console.log('🔄 Scheduled predictions update started...');
                 await this.updateRecommendationsPredictions();
@@ -323,32 +387,21 @@ class SchedulerService {
             scheduled: true,
             timezone: "Europe/Moscow"
         });
-
-        // Первое обновление при запуске (через 1 минуту) - ОТКЛЮЧЕНО для отладки
-        // setTimeout(() => {
-        //     this.performCacheUpdate();
-        // }, 60000);
-        console.log('🚫 Startup cache update DISABLED for debugging');
-
-        console.log('✅ Scheduled tasks started:');
-        console.log(`   - Cache update: ${cacheSchedule} (interval: ${cacheUpdateIntervalHours}h)`);
-        console.log('   - Cleanup: daily at 2:00 AM');
-        console.log(`   - News cache cleanup: ${newsCacheSchedule}`);
-        console.log(`   - Telegram cache update: ${telegramCacheSchedule}`);
-        console.log(`   - Neural network training: ${trainingSchedule}`);
-        if (quickTrainingEnabled) {
-            console.log(`   - Quick neural network training: ${quickTrainingSchedule}`);
-        }
-        console.log(`   - Trading hours cache update: ${tradingHoursSchedule}`);
-        console.log('   - Trading hours notifications: every 5 minutes');
-        console.log('   - Predictions update: every 20 minutes');
-        console.log(`   - Model degradation check: ${degradationCheckSchedule}`);
-        console.log('   - Portfolio analysis: every hour');
-        console.log('   - Real portfolio sync: every 3 hours');
-        console.log('   - Virtual portfolio update: daily at 1:00 AM');
         
         // Запускаем периодическую отправку данных через WebSocket
         this.startWebSocketBroadcasts();
+        
+        // Первый анализ портфеля через 30 минут после старта
+        setTimeout(async () => {
+            try {
+                console.log('📊 Starting initial portfolio analysis (30 minutes after startup)...');
+                await this.performPortfolioAnalysis();
+            } catch (error) {
+                console.error('Error in initial portfolio analysis:', error);
+                await OptimizedTelegramService.sendAlert('PORTFOLIO_ANALYSIS_ERROR', error.message, 'warning');
+            }
+        }, 30 * 60 * 1000); // 30 минут = 30 * 60 * 1000 миллисекунд
+        console.log('⏰ Initial portfolio analysis scheduled in 30 minutes');
     }
 
     /**
@@ -763,7 +816,15 @@ class SchedulerService {
         this.intervals.add(modelMetricsTask);
         
         // Добавляем частую проверку кеша (каждые 30 минут) - включено обратно
+        // Добавляем частую проверку кеша (каждые 30 минут)
         const cacheCheckTask = cron.schedule('*/30 * * * *', async () => {
+            // Пропускаем первый запуск при старте (минимум 5 минут с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 5 * 60 * 1000) {
+                console.log('⏭️ Skipping first cache check run (too soon after startup)');
+                return;
+            }
+            
             try {
                 console.log('🔍 Checking cache update need...');
                 
@@ -776,9 +837,8 @@ class SchedulerService {
             } catch (error) {
                 console.error('❌ Error in cache check:', error);
             }
-        }, { scheduled: false });
+        }, { scheduled: true, timezone: "Europe/Moscow" });
         this.intervals.add(cacheCheckTask);
-        console.log('🚫 Cache check task DISABLED for debugging');
         
         // Запускаем все cron задачи
         console.log('🚀 Starting cron tasks...');
@@ -789,22 +849,20 @@ class SchedulerService {
             }
         });
         
-        // Проверяем кеш при запуске
-        // Обновление кеша при старте (включено обратно)
-        console.log('⏰ Enabling startup cache update...');
-        setTimeout(async () => {
-            try {
-                console.log('🔍 Initial cache check on startup...');
-                if (await this.shouldUpdateCache()) {
-                    console.log('🔄 Cache update needed on startup, starting update...');
-                    await this.performCacheUpdate();
-                } else {
-                    console.log('✅ Cache is up to date');
-                }
-            } catch (error) {
-                console.error('❌ Error in startup cache check:', error);
-            }
-        }, 5000); // 5 секунд после запуска
+        // Проверка кеша при старте ОТКЛЮЧЕНА - не запускаем сразу при старте
+        // setTimeout(async () => {
+        //     try {
+        //         console.log('🔍 Initial cache check on startup...');
+        //         if (await this.shouldUpdateCache()) {
+        //             console.log('🔄 Cache update needed on startup, starting update...');
+        //             await this.performCacheUpdate();
+        //         } else {
+        //             console.log('✅ Cache is up to date');
+        //         }
+        //     } catch (error) {
+        //         console.error('❌ Error in startup cache check:', error);
+        //     }
+        // }, 5000); // 5 секунд после запуска
     }
 
     /**
@@ -873,6 +931,12 @@ class SchedulerService {
                 this.newsCleanupTask.destroy();
                 this.newsCleanupTask = null;
                 console.log('✅ News cleanup task stopped and destroyed');
+            }
+            if (this.newsCacheUpdateTask) {
+                this.newsCacheUpdateTask.stop();
+                this.newsCacheUpdateTask.destroy();
+                this.newsCacheUpdateTask = null;
+                console.log('✅ News cache update task stopped and destroyed');
             }
             if (this.newsDailyUpdateTask) {
                 this.newsDailyUpdateTask.stop();
@@ -1615,6 +1679,10 @@ class SchedulerService {
             this.newsCleanupTask.stop();
             console.log('News cleanup task stopped');
         }
+        if (this.newsCacheUpdateTask) {
+            this.newsCacheUpdateTask.stop();
+            console.log('News cache update task stopped');
+        }
         if (this.newsDailyUpdateTask) {
             this.newsDailyUpdateTask.stop();
             console.log('News daily update task stopped');
@@ -1770,12 +1838,21 @@ class SchedulerService {
     }
 
     async performPortfolioAnalysis() {
+        // Проверяем, не идет ли уже анализ
+        if (this.isAnalyzing) {
+            console.log('⚠️ Portfolio analysis already in progress, skipping duplicate start');
+            return;
+        }
+
+        // Проверяем, активна ли нейросеть
+        if (!NeuralNetworkService.isActive) {
+            console.log('⚠️ Neural network is not active, skipping portfolio analysis');
+            return;
+        }
+
+        this.isAnalyzing = true;
+        
         try {
-            // Проверяем, активна ли нейросеть
-            if (!NeuralNetworkService.isActive) {
-                console.log('⚠️ Neural network is not active, skipping portfolio analysis');
-                return;
-            }
 
             // Анализируем виртуальный портфель
             try {
@@ -1804,6 +1881,8 @@ class SchedulerService {
         } catch (error) {
             console.error('❌ Error performing portfolio analysis:', error);
             throw error;
+        } finally {
+            this.isAnalyzing = false;
         }
     }
 
@@ -2085,6 +2164,10 @@ class SchedulerService {
             if (this.newsCleanupTask) {
                 this.newsCleanupTask.stop();
                 this.newsCleanupTask = null;
+            }
+            if (this.newsCacheUpdateTask) {
+                this.newsCacheUpdateTask.stop();
+                this.newsCacheUpdateTask = null;
             }
             if (this.newsDailyUpdateTask) {
                 this.newsDailyUpdateTask.stop();

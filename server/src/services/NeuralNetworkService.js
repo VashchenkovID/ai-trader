@@ -2366,10 +2366,6 @@ class NeuralNetworkService {
             }
         }, 30 * 60 * 1000); // 30 минут
 
-        // Первый анализ сразу после запуска
-        setTimeout(() => {
-            this.performMarketAnalysis();
-        }, 5000);
     }
 
     // Остановка периодического анализа
