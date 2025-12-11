@@ -261,28 +261,58 @@ class OptimizedTelegramService {
 
         // Обработчик callback_query для inline кнопок
         this.bot.on('callback_query', async (query) => {
+            let callbackAnswered = false;
+            let isOldQuery = false;
+
+            // Пытаемся ответить на callback сразу
+            try {
+                await this.bot.answerCallbackQuery(query.id);
+                callbackAnswered = true;
+            } catch (answerError) {
+                // Проверяем, является ли callback устаревшим
+                const errorMsg = answerError.message || answerError.description || '';
+                if (errorMsg.includes('too old') || errorMsg.includes('timeout expired') || errorMsg.includes('invalid')) {
+                    isOldQuery = true;
+                } else {
+                    // Для других ошибок пытаемся ответить с предупреждением
+                    try {
+                        await this.bot.answerCallbackQuery(query.id, { 
+                            text: 'Ошибка обработки запроса', 
+                            show_alert: false 
+                        });
+                        callbackAnswered = true;
+                    } catch (e) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+
             try {
                 const data = query.data;
                 const chatId = query.message.chat.id;
                 const messageId = query.message.message_id;
 
                 // Обрабатываем callback для подтверждения/отклонения заявок
+                // Передаем флаг isOldQuery, чтобы методы знали, что callback уже устарел
                 if (data.startsWith('approve_request_')) {
                     const requestId = data.replace('approve_request_', '');
-                    await this.handleRequestApproval(requestId, chatId, messageId, query.id);
+                    await this.handleRequestApproval(requestId, chatId, messageId, query.id, isOldQuery);
                 } else if (data.startsWith('reject_request_')) {
                     const requestId = data.replace('reject_request_', '');
-                    await this.handleRequestRejection(requestId, chatId, messageId, query.id);
+                    await this.handleRequestRejection(requestId, chatId, messageId, query.id, isOldQuery);
                 }
-
-                // Подтверждаем получение callback
-                await this.bot.answerCallbackQuery(query.id);
             } catch (error) {
-                console.error('❌ Error handling callback query:', error);
-                try {
-                    await this.bot.answerCallbackQuery(query.id, { text: 'Ошибка обработки запроса', show_alert: true });
-                } catch (e) {
-                    // Игнорируем ошибки при ответе на callback
+                console.error('❌ Error handling callback query:', error.message);
+                // Если callback еще не был отвечен и не устарел, пытаемся ответить с ошибкой
+                if (!callbackAnswered && !isOldQuery) {
+                    try {
+                        await this.bot.answerCallbackQuery(query.id, { 
+                            text: 'Ошибка обработки запроса', 
+                            show_alert: true 
+                        });
+                    } catch (e) {
+                        // Игнорируем ошибки при ответе на callback
+                    }
                 }
             }
         });
@@ -779,7 +809,7 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
             const actionEmoji = action === 'BUY' ? '📈' : action === 'SELL' ? '📉' : '⏸️';
             const actionText = action === 'BUY' ? 'ПОКУПКА' : action === 'SELL' ? 'ПРОДАЖА' : 'УДЕРЖАНИЕ';
 
-            let message = `🎯 <b>АВТОМАТИЧЕСКАЯ ЗАЯВКА</b>\n\n`;
+            let message = `🎯 <b>ЗАЯВКА</b>\n\n`;
             message += `${actionEmoji} <b>${actionText}</b>\n\n`;
             message += `📊 <b>Инструмент:</b> ${ticker} (${name})\n`;
             message += `💰 <b>Цена:</b> ${priceAtRequest.toFixed(2)}₽\n`;
@@ -835,34 +865,140 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
     /**
      * Обработка подтверждения заявки
      */
-    async handleRequestApproval(requestId, chatId, messageId, callbackQueryId) {
+    async handleRequestApproval(requestId, chatId, messageId, callbackQueryId, isOldQuery = false) {
         try {
             const TradingRequestService = (await import('./TradingRequestService.js')).default;
             const TradingRequest = (await import('../models/TradingRequest.js')).default;
 
-            // Находим заявку
-            const request = await TradingRequest.findByPk(requestId);
+            // Проверяем, является ли requestId валидным UUID (для тестовых случаев может быть строка)
+            // Проверяем формат UUID перед запросом к БД
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (!uuidRegex.test(requestId)) {
+                // Это тестовый ID, не валидный UUID
+                const testMessage = `✅ <b>ТЕСТОВАЯ ЗАЯВКА ПОДТВЕРЖДЕНА</b>\n\n` +
+                    `Это тестовая заявка для проверки функционала.\n\n` +
+                    `В реальной системе заявка будет обработана автоматически при подтверждении.\n\n` +
+                    `⏰ Подтверждено: ${new Date().toLocaleString('ru-RU')}`;
+                
+                try {
+                    // Удаляем кнопки при обновлении сообщения
+                    await this.bot.editMessageText(testMessage, {
+                        chat_id: chatId,
+                        message_id: messageId,
+                        parse_mode: 'HTML',
+                        reply_markup: { inline_keyboard: [] } // Удаляем кнопки
+                    });
+                } catch (editError) {
+                    const errorMsg = editError.message || editError.description || '';
+                    if (!errorMsg.includes('not modified')) {
+                        try {
+                            await this.bot.sendMessage(chatId, testMessage, {
+                                parse_mode: 'HTML'
+                            });
+                        } catch (sendError) {
+                            // Игнорируем ошибки отправки
+                        }
+                    }
+                }
+                return;
+            }
+
+            let request = null;
+            try {
+                request = await TradingRequest.findByPk(requestId);
+            } catch (dbError) {
+                // Дополнительная проверка на случай, если ошибка все же произошла
+                const errorMessage = dbError.message || dbError.original?.message || dbError.parent?.message || '';
+                if (errorMessage.includes('uuid') || errorMessage.includes('UUID')) {
+                    const testMessage = `⚠️ <b>ТЕСТОВАЯ ЗАЯВКА</b>\n\n` +
+                        `Это тестовая заявка для проверки функционала.\n\n` +
+                        `В реальной системе заявка будет обработана автоматически при подтверждении.\n\n` +
+                        `⏰ Обработано: ${new Date().toLocaleString('ru-RU')}`;
+                    
+                    try {
+                        await this.bot.editMessageText(testMessage, {
+                            chat_id: chatId,
+                            message_id: messageId,
+                            parse_mode: 'HTML'
+                        });
+                    } catch (editError) {
+                        const errorMsg = editError.message || editError.description || '';
+                        if (!errorMsg.includes('not modified')) {
+                            try {
+                                await this.bot.sendMessage(chatId, testMessage, {
+                                    parse_mode: 'HTML'
+                                });
+                            } catch (sendError) {
+                                // Игнорируем ошибки отправки
+                            }
+                        }
+                    }
+                    return;
+                }
+                throw dbError;
+            }
+
             if (!request) {
                 await this.bot.editMessageText('❌ Заявка не найдена', {
                     chat_id: chatId,
-                    message_id: messageId
+                    message_id: messageId,
+                    reply_markup: { inline_keyboard: [] } // Удаляем кнопки
                 });
                 return;
             }
 
             // Если заявка уже обработана
-            if (request.status !== 'pending') {
-                await this.bot.editMessageText(`⚠️ Заявка уже обработана (статус: ${request.status})`, {
+            if (request.status !== 'PENDING' && request.status !== 'pending') {
+                // Формируем полное сообщение о заявке
+                const actionEmoji = request.action === 'BUY' ? '📈' : request.action === 'SELL' ? '📉' : '⏸️';
+                const actionText = request.action === 'BUY' ? 'ПОКУПКА' : request.action === 'SELL' ? 'ПРОДАЖА' : 'УДЕРЖАНИЕ';
+                const statusText = (request.status === 'approved' || request.status === 'APPROVED') ? '✅ Принято' : 
+                                   (request.status === 'rejected' || request.status === 'REJECTED') ? '❌ Отклонено' : 
+                                   `⚠️ Статус: ${request.status}`;
+                
+                let message = `🎯 <b>ЗАЯВКА</b>\n\n`;
+                message += `${actionEmoji} <b>${actionText}</b>\n\n`;
+                message += `📊 <b>Инструмент:</b> ${request.ticker}${request.name ? ` (${request.name})` : ''}\n`;
+                message += `💰 <b>Цена:</b> ${request.priceAtRequest.toFixed(2)}₽\n`;
+                message += `📦 <b>Количество:</b> ${request.quantity} шт.\n`;
+                message += `💵 <b>Сумма:</b> ${(request.priceAtRequest * request.quantity).toFixed(2)}₽\n\n`;
+                message += `📈 <b>Параметры:</b>\n`;
+                if (request.confidence !== null && request.confidence !== undefined) {
+                    message += `• Уверенность: ${(request.confidence * 100).toFixed(1)}%\n`;
+                }
+                if (request.score !== null && request.score !== undefined) {
+                    message += `• Оценка: ${(request.score * 100).toFixed(1)}%\n`;
+                }
+                if (request.stopLoss) {
+                    message += `• Стоп-лосс: ${request.stopLoss.toFixed(2)}₽\n`;
+                }
+                if (request.takeProfit) {
+                    message += `• Тейк-профит: ${request.takeProfit.toFixed(2)}₽\n`;
+                }
+                if (request.strategyId) {
+                    try {
+                        const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+                        const strategy = await TradingStrategy.findByPk(request.strategyId);
+                        if (strategy) {
+                            message += `• Стратегия: ${strategy.name}\n`;
+                        }
+                    } catch (e) {
+                        // Игнорируем ошибки получения стратегии
+                    }
+                }
+                message += `\n⏰ Время: ${request.createdAt ? new Date(request.createdAt).toLocaleString('ru-RU') : new Date().toLocaleString('ru-RU')}\n\n`;
+                message += `${statusText}`;
+                
+                await this.bot.editMessageText(message, {
                     chat_id: chatId,
-                    message_id: messageId
+                    message_id: messageId,
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: [] } // Удаляем кнопки
                 });
                 return;
             }
 
-            // Подтверждаем заявку
-            await TradingRequestService.approveRequest(requestId);
-
-            // Обновляем сообщение
+            // Сначала быстро обновляем сообщение в Telegram (убираем кнопки)
             const updatedMessage = `✅ <b>ЗАЯВКА ПОДТВЕРЖДЕНА</b>\n\n` +
                 `📊 Инструмент: ${request.ticker}\n` +
                 `💰 Цена: ${request.priceAtRequest.toFixed(2)}₽\n` +
@@ -871,75 +1007,232 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
                 `⏰ Подтверждено: ${new Date().toLocaleString('ru-RU')}\n\n` +
                 `🔄 Заявка будет исполнена в ближайшее время`;
 
-            await this.bot.editMessageText(updatedMessage, {
-                chat_id: chatId,
-                message_id: messageId,
-                parse_mode: 'HTML'
-            });
+            try {
+                // Сразу обновляем сообщение и убираем кнопки
+                await this.bot.editMessageText(updatedMessage, {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: [] } // Удаляем кнопки
+                });
+            } catch (editError) {
+                // Если не удалось обновить, продолжаем обработку
+                const errorMsg = editError.message || editError.description || '';
+                if (!errorMsg.includes('not modified') && !errorMsg.includes('message to edit not found')) {
+                    console.warn('⚠️ Could not update Telegram message:', errorMsg);
+                }
+            }
+
+            // Подтверждаем заявку в фоне (не блокируем ответ пользователю)
+            (async () => {
+                try {
+                    await TradingRequestService.approveRequest(requestId);
+                } catch (error) {
+                    console.error('❌ Error approving request:', error.message);
+                }
+            })();
 
             console.log(`✅ Trading request ${requestId} approved via Telegram`);
         } catch (error) {
-            console.error('❌ Error handling request approval:', error);
-            await this.bot.editMessageText(`❌ Ошибка подтверждения заявки: ${error.message}`, {
-                chat_id: chatId,
-                message_id: messageId
-            });
+            console.error('❌ Error handling request approval:', error.message);
+            try {
+                await this.bot.editMessageText(`❌ Ошибка подтверждения заявки: ${error.message}`, {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    reply_markup: { inline_keyboard: [] } // Удаляем кнопки
+                });
+            } catch (editError) {
+                // Игнорируем ошибки при обновлении сообщения
+                console.warn('⚠️ Could not update message:', editError.message);
+            }
         }
     }
 
     /**
      * Обработка отклонения заявки
+     * @param {string} requestId - ID заявки
+     * @param {number} chatId - ID чата
+     * @param {number} messageId - ID сообщения
+     * @param {string} callbackQueryId - ID callback query (может быть устаревшим)
+     * @param {boolean} isOldQuery - Флаг, указывающий что callback query устарел
      */
-    async handleRequestRejection(requestId, chatId, messageId, callbackQueryId) {
+    async handleRequestRejection(requestId, chatId, messageId, callbackQueryId, isOldQuery = false) {
         try {
             const TradingRequest = (await import('../models/TradingRequest.js')).default;
 
-            // Находим заявку
-            const request = await TradingRequest.findByPk(requestId);
+            // Проверяем, является ли requestId валидным UUID (для тестовых случаев может быть строка)
+            // Проверяем формат UUID перед запросом к БД
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (!uuidRegex.test(requestId)) {
+                // Это тестовый ID, не валидный UUID
+                const testMessage = `❌ <b>ТЕСТОВАЯ ЗАЯВКА ОТКЛОНЕНА</b>\n\n` +
+                    `Это тестовая заявка для проверки функционала.\n\n` +
+                    `В реальной системе заявка будет отклонена автоматически.\n\n` +
+                    `⏰ Отклонено: ${new Date().toLocaleString('ru-RU')}`;
+                
+                try {
+                    // Удаляем кнопки при обновлении сообщения
+                    await this.bot.editMessageText(testMessage, {
+                        chat_id: chatId,
+                        message_id: messageId,
+                        parse_mode: 'HTML',
+                        reply_markup: { inline_keyboard: [] } // Удаляем кнопки
+                    });
+                } catch (editError) {
+                    const errorMsg = editError.message || editError.description || '';
+                    if (!errorMsg.includes('not modified')) {
+                        try {
+                            await this.bot.sendMessage(chatId, testMessage, {
+                                parse_mode: 'HTML'
+                            });
+                        } catch (sendError) {
+                            // Игнорируем ошибки отправки
+                        }
+                    }
+                }
+                return;
+            }
+
+            let request = null;
+            try {
+                request = await TradingRequest.findByPk(requestId);
+            } catch (dbError) {
+                // Дополнительная проверка на случай, если ошибка все же произошла
+                const errorMessage = dbError.message || dbError.original?.message || dbError.parent?.message || '';
+                if (errorMessage.includes('uuid') || errorMessage.includes('UUID')) {
+                    const testMessage = `❌ <b>ТЕСТОВАЯ ЗАЯВКА ОТКЛОНЕНА</b>\n\n` +
+                        `Это тестовая заявка для проверки функционала.\n\n` +
+                        `В реальной системе заявка будет отклонена автоматически.\n\n` +
+                        `⏰ Отклонено: ${new Date().toLocaleString('ru-RU')}`;
+                    
+                    try {
+                        await this.bot.editMessageText(testMessage, {
+                            chat_id: chatId,
+                            message_id: messageId,
+                            parse_mode: 'HTML'
+                        });
+                    } catch (editError) {
+                        const errorMsg = editError.message || editError.description || '';
+                        if (!errorMsg.includes('not modified')) {
+                            try {
+                                await this.bot.sendMessage(chatId, testMessage, {
+                                    parse_mode: 'HTML'
+                                });
+                            } catch (sendError) {
+                                // Игнорируем ошибки отправки
+                            }
+                        }
+                    }
+                    return;
+                }
+                throw dbError;
+            }
+
             if (!request) {
                 await this.bot.editMessageText('❌ Заявка не найдена', {
                     chat_id: chatId,
-                    message_id: messageId
+                    message_id: messageId,
+                    reply_markup: { inline_keyboard: [] } // Удаляем кнопки
                 });
                 return;
             }
 
             // Если заявка уже обработана
-            if (request.status !== 'pending') {
-                await this.bot.editMessageText(`⚠️ Заявка уже обработана (статус: ${request.status})`, {
+            if (request.status !== 'PENDING' && request.status !== 'pending') {
+                // Формируем полное сообщение о заявке
+                const actionEmoji = request.action === 'BUY' ? '📈' : request.action === 'SELL' ? '📉' : '⏸️';
+                const actionText = request.action === 'BUY' ? 'ПОКУПКА' : request.action === 'SELL' ? 'ПРОДАЖА' : 'УДЕРЖАНИЕ';
+                const statusText = (request.status === 'approved' || request.status === 'APPROVED') ? '✅ Принято' : 
+                                   (request.status === 'rejected' || request.status === 'REJECTED') ? '❌ Отклонено' : 
+                                   `⚠️ Статус: ${request.status}`;
+                
+                let message = `🎯 <b>ЗАЯВКА</b>\n\n`;
+                message += `${actionEmoji} <b>${actionText}</b>\n\n`;
+                message += `📊 <b>Инструмент:</b> ${request.ticker}${request.name ? ` (${request.name})` : ''}\n`;
+                message += `💰 <b>Цена:</b> ${request.priceAtRequest.toFixed(2)}₽\n`;
+                message += `📦 <b>Количество:</b> ${request.quantity} шт.\n`;
+                message += `💵 <b>Сумма:</b> ${(request.priceAtRequest * request.quantity).toFixed(2)}₽\n\n`;
+                message += `📈 <b>Параметры:</b>\n`;
+                if (request.confidence !== null && request.confidence !== undefined) {
+                    message += `• Уверенность: ${(request.confidence * 100).toFixed(1)}%\n`;
+                }
+                if (request.score !== null && request.score !== undefined) {
+                    message += `• Оценка: ${(request.score * 100).toFixed(1)}%\n`;
+                }
+                if (request.stopLoss) {
+                    message += `• Стоп-лосс: ${request.stopLoss.toFixed(2)}₽\n`;
+                }
+                if (request.takeProfit) {
+                    message += `• Тейк-профит: ${request.takeProfit.toFixed(2)}₽\n`;
+                }
+                if (request.strategyId) {
+                    try {
+                        const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+                        const strategy = await TradingStrategy.findByPk(request.strategyId);
+                        if (strategy) {
+                            message += `• Стратегия: ${strategy.name}\n`;
+                        }
+                    } catch (e) {
+                        // Игнорируем ошибки получения стратегии
+                    }
+                }
+                message += `\n⏰ Время: ${request.createdAt ? new Date(request.createdAt).toLocaleString('ru-RU') : new Date().toLocaleString('ru-RU')}\n\n`;
+                message += `${statusText}`;
+                
+                await this.bot.editMessageText(message, {
                     chat_id: chatId,
-                    message_id: messageId
+                    message_id: messageId,
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: [] } // Удаляем кнопки
                 });
                 return;
             }
 
-            // Отклоняем заявку
-            await request.update({
-                status: 'rejected',
-                rejectionReason: 'Отклонено пользователем через Telegram',
-                rejectedAt: new Date()
-            });
-
-            // Обновляем сообщение
+            // Сначала быстро обновляем сообщение в Telegram (убираем кнопки)
             const updatedMessage = `❌ <b>ЗАЯВКА ОТКЛОНЕНА</b>\n\n` +
                 `📊 Инструмент: ${request.ticker}\n` +
                 `💰 Цена: ${request.priceAtRequest.toFixed(2)}₽\n` +
                 `📦 Количество: ${request.quantity} шт.\n\n` +
                 `⏰ Отклонено: ${new Date().toLocaleString('ru-RU')}`;
 
-            await this.bot.editMessageText(updatedMessage, {
-                chat_id: chatId,
-                message_id: messageId,
-                parse_mode: 'HTML'
-            });
+            try {
+                // Сразу обновляем сообщение и убираем кнопки
+                await this.bot.editMessageText(updatedMessage, {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: [] } // Удаляем кнопки
+                });
+            } catch (editError) {
+                // Если не удалось обновить, продолжаем обработку
+                const errorMsg = editError.message || editError.description || '';
+                if (!errorMsg.includes('not modified') && !errorMsg.includes('message to edit not found')) {
+                    console.warn('⚠️ Could not update Telegram message:', errorMsg);
+                }
+            }
+
+            // Отклоняем заявку в фоне (не блокируем ответ пользователю)
+            (async () => {
+                try {
+                    await request.reject('Отклонено пользователем через Telegram');
+                } catch (error) {
+                    console.error('❌ Error rejecting request:', error.message);
+                }
+            })();
 
             console.log(`✅ Trading request ${requestId} rejected via Telegram`);
         } catch (error) {
-            console.error('❌ Error handling request rejection:', error);
-            await this.bot.editMessageText(`❌ Ошибка отклонения заявки: ${error.message}`, {
-                chat_id: chatId,
-                message_id: messageId
-            });
+            console.error('❌ Error handling request rejection:', error.message);
+            try {
+                await this.bot.editMessageText(`❌ Ошибка отклонения заявки: ${error.message}`, {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    reply_markup: { inline_keyboard: [] } // Удаляем кнопки
+                });
+            } catch (editError) {
+                // Игнорируем ошибки при обновлении сообщения
+                console.warn('⚠️ Could not update message:', editError.message);
+            }
         }
     }
 

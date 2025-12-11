@@ -232,10 +232,6 @@ class WebSocketService {
             this.clients.delete(client);
             decrementConnectionCount();
         });
-        
-        if (sentCount > 0) {
-            console.log(`📡 Broadcast sent to ${sentCount} client(s): ${message.type}`);
-        }
     }
 
     broadcastSystemStatus(status) {

@@ -278,31 +278,32 @@ class TradingRequestService {
                 }
             }
 
-            // Создаем трейлинг-стоп для BUY позиций
+            // Создаем трейлинг-стоп для BUY позиций - неблокирующе
             if (action === 'BUY' && tradingRequest.status === 'pending') {
-                try {
-                    const instrument = await CacheService.getInstrument(recommendation.figi, true);
-                    
-                    if (instrument) {
-                        await RiskManagementService.createTrailingStop({
-                            figi: recommendation.figi,
-                            ticker: recommendation.ticker,
-                            entryPrice: currentPrice,
-                            quantity: quantity,
-                            direction: 'BUY',
-                            activationProfitPercent: 5.0, // Активация при +5%
-                            trailingDistancePercent: 2.5, // Отступ 2.5% по умолчанию
-                            useATR: strategy && strategy.atrMultiplier ? true : false, // Используем ATR, если есть стратегия с ATR
-                            portfolioType: currentMode === 'real' ? 'real' : 'virtual',
-                            tradingRequestId: tradingRequest.id,
-                            strategyId: strategy ? strategy.id : null
-                        });
-                        console.log(`✅ Трейлинг-стоп создан для ${recommendation.ticker}`);
+                // Выполняем в фоне, чтобы не блокировать создание заявки
+                (async () => {
+                    try {
+                        const instrument = await CacheService.getInstrument(recommendation.figi, true);
+                        
+                        if (instrument) {
+                            await RiskManagementService.createTrailingStop({
+                                figi: recommendation.figi,
+                                ticker: recommendation.ticker,
+                                entryPrice: currentPrice,
+                                quantity: quantity,
+                                direction: 'BUY',
+                                activationProfitPercent: 5.0, // Активация при +5%
+                                trailingDistancePercent: 2.5, // Отступ 2.5% по умолчанию
+                                useATR: strategy && strategy.atrMultiplier ? true : false, // Используем ATR, если есть стратегия с ATR
+                                portfolioType: currentMode === 'real' ? 'real' : 'virtual',
+                                tradingRequestId: tradingRequest.id,
+                                strategyId: strategy ? strategy.id : null
+                            });
+                        }
+                    } catch (trailingStopError) {
+                        // Игнорируем ошибки создания трейлинг-стопа
                     }
-                } catch (trailingStopError) {
-                    console.warn(`⚠️ Не удалось создать трейлинг-стоп для ${recommendation.ticker}:`, trailingStopError.message);
-                    // Не блокируем создание заявки, если не удалось создать трейлинг-стоп
-                }
+                })();
             }
 
             // Уведомляем через WebSocket (если доступен)
@@ -318,21 +319,25 @@ class TradingRequestService {
                 console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
             }
 
-            // Проверяем, нужно ли отправить заявку в Telegram для подтверждения
-            const shouldSendForApproval = await this.shouldSendForTelegramApproval(recommendation, tradingRequest);
-            
-            if (shouldSendForApproval) {
+            // Отправляем заявку в Telegram для подтверждения (для всех заявок) - неблокирующе
+            // Выполняем в фоне, чтобы не блокировать создание заявки
+            (async () => {
                 try {
-                    // Получаем agreement из IntegratedAIService, если доступно
+                    // Получаем agreement из IntegratedAIService, если доступно (с таймаутом)
                     let agreement = null;
                     try {
                         const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
                         if (IntegratedAIService.isInitialized) {
-                            const integratedRec = await IntegratedAIService.getIntegratedRecommendation(recommendation.figi);
-                            agreement = integratedRec.agreement || null;
+                            // Используем Promise.race для таймаута в 2 секунды
+                            const agreementPromise = IntegratedAIService.getIntegratedRecommendation(recommendation.figi);
+                            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 2000));
+                            const integratedRec = await Promise.race([agreementPromise, timeoutPromise]);
+                            if (integratedRec && integratedRec.agreement !== undefined) {
+                                agreement = integratedRec.agreement;
+                            }
                         }
                     } catch (error) {
-                        console.warn('⚠️ Could not get agreement from IntegratedAIService:', error.message);
+                        // Игнорируем ошибки получения agreement
                     }
 
                     // Отправляем заявку в Telegram с кнопками подтверждения
@@ -350,19 +355,10 @@ class TradingRequestService {
                         takeProfit: takeProfit,
                         strategyName: strategy ? strategy.name : null
                     });
-                    console.log(`📱 Trading request sent to Telegram for approval: ${tradingRequest.id}`);
                 } catch (telegramError) {
-                    console.warn('⚠️ Could not send trading request to Telegram:', telegramError.message);
-                    // Продолжаем выполнение, даже если не удалось отправить в Telegram
+                    // Игнорируем ошибки отправки в Telegram, не блокируем создание заявки
                 }
-            } else {
-                // Обычное уведомление в Telegram (без кнопок)
-                try {
-                    await this.sendTelegramNotification(tradingRequest, 'CREATED');
-                } catch (telegramError) {
-                    console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
-                }
-            }
+            })();
 
             console.log(`📝 Trading request created: ${tradingRequest.id} (${tradingRequest.action} ${tradingRequest.ticker})`);
             
@@ -598,17 +594,49 @@ class TradingRequestService {
                     });
                 }
             } catch (wsError) {
-                console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
+                // Игнорируем ошибки WebSocket
             }
 
-            // Отправляем уведомление в Telegram (опционально)
-            try {
-                await this.sendTelegramNotification(tradingRequest, 'CREATED');
-            } catch (telegramError) {
-                console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
-            }
+            // Отправляем заявку в Telegram для подтверждения - неблокирующе
+            // Выполняем в фоне, чтобы не блокировать создание заявки
+            (async () => {
+                try {
+                    // Получаем agreement из IntegratedAIService, если доступно (с таймаутом)
+                    let agreement = null;
+                    try {
+                        const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+                        if (IntegratedAIService.isInitialized) {
+                            // Используем Promise.race для таймаута в 2 секунды
+                            const agreementPromise = IntegratedAIService.getIntegratedRecommendation(recommendationData.figi);
+                            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 2000));
+                            const integratedRec = await Promise.race([agreementPromise, timeoutPromise]);
+                            if (integratedRec && integratedRec.agreement !== undefined) {
+                                agreement = integratedRec.agreement;
+                            }
+                        }
+                    } catch (error) {
+                        // Игнорируем ошибки получения agreement
+                    }
 
-            console.log(`📝 Trading request created from data: ${tradingRequest.id} (${tradingRequest.action} ${tradingRequest.ticker})`);
+                    // Отправляем заявку в Telegram с кнопками подтверждения
+                    await OptimizedTelegramService.sendTradingRequestForApproval(tradingRequest.id, {
+                        ticker: recommendationData.ticker,
+                        name: recommendationData.name,
+                        action: action,
+                        quantity: quantity,
+                        priceAtRequest: currentPrice,
+                        estimatedAmount: estimatedAmount,
+                        confidence: recommendationData.confidence || 0.5,
+                        score: recommendationData.score || 0.5,
+                        agreement: agreement,
+                        stopLoss: options.stopLoss || recommendationData.stopLoss,
+                        takeProfit: options.takeProfit || recommendationData.targetPrice || recommendationData.takeProfit,
+                        strategyName: strategy ? strategy.name : null
+                    });
+                } catch (telegramError) {
+                    // Игнорируем ошибки отправки в Telegram, не блокируем создание заявки
+                }
+            })();
             
             // Возвращаем заявку с предупреждением о стратегии, если есть
             const result = tradingRequest.toJSON ? tradingRequest.toJSON() : tradingRequest;
@@ -1206,7 +1234,17 @@ class TradingRequestService {
      */
     async getCurrentPrice(figi) {
         try {
-            // Используем getLastPrices вместо getOrderBook
+            // Сначала пробуем получить из кеша (быстро)
+            const instrument = await CacheService.getInstrument(figi, true); // skipUpdate = true для скорости
+            if (instrument && typeof instrument.lastPrice === 'number' && instrument.lastPrice > 0) {
+                // Проверяем, не устарела ли цена (если старше 5 минут, запрашиваем свежую)
+                const priceAge = instrument.lastPriceTime ? new Date() - new Date(instrument.lastPriceTime) : Infinity;
+                if (priceAge < 5 * 60 * 1000) { // 5 минут
+                    return instrument.lastPrice;
+                }
+            }
+            
+            // Если нет в кеше или цена устарела, запрашиваем через API
             const response = await TinkoffApiService.getLastPrices([figi]);
             const lastPrices = response?.lastPrices || [];
             
