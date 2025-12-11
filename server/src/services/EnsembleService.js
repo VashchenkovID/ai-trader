@@ -1007,9 +1007,29 @@ class EnsembleService {
             await this.ensureModelsReady();
 
             // Получаем последние данные
-            const candles = await CacheService.getCandles(figi, 'DAY', 100);
-            if (candles.length < 84) {
-                return { score: 0, confidence: 0, reason: 'Insufficient data' };
+            // Запрашиваем больше данных (200 дней), чтобы получить максимум доступных свечей
+            let candles = await CacheService.getCandles(figi, 'DAY', 200);
+            
+            // Если данных мало, пытаемся расширить период для получения большего количества данных
+            if (candles.length < 50) {
+                console.warn(`⚠️ Few candles for ${figi}: ${candles.length}, trying extended period...`);
+                candles = await CacheService.getCandles(figi, 'DAY', 365);
+            }
+            
+            // Если данных все еще мало, пытаемся максимальный период
+            if (candles.length < 50) {
+                console.warn(`⚠️ Still few candles for ${figi}: ${candles.length}, trying max period...`);
+                candles = await CacheService.getCandles(figi, 'DAY', 730);
+            }
+            
+            // Работаем с тем количеством данных, которое есть
+            // Модели адаптируются под доступное количество свечей
+            if (candles.length === 0) {
+                throw new Error(`No candles available for ${figi}`);
+            }
+            
+            if (candles.length < 10) {
+                console.warn(`⚠️ Very few candles for ${figi}: ${candles.length}. Predictions may be less accurate.`);
             }
 
             // Подготавливаем данные для каждой модели

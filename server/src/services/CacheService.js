@@ -267,6 +267,8 @@ class CacheService {
         const all = [];
         let iterationCount = 0;
         const maxIterations = 10; // Максимум 10 итераций для предотвращения бесконечного цикла
+        let rateLimitErrors = 0;
+        const maxRateLimitErrors = 3; // Максимум 3 ошибки rate limit подряд
 
         while (cursor < to && iterationCount < maxIterations) {
             iterationCount++;
@@ -276,8 +278,16 @@ class CacheService {
             if (next > to) next.setTime(to.getTime());
 
             try {
+                // Добавляем задержку между запросами для избежания rate limit
+                if (iterationCount > 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 секунды между запросами
+                }
+                
                 const resp = await TinkoffApiService.getCandles(figi, cursor, next, interval);
                 const candles = Array.isArray(resp?.candles) ? resp.candles : [];
+                
+                // Сбрасываем счетчик ошибок rate limit при успешном запросе
+                rateLimitErrors = 0;
                 
                 if (candles.length === 0) {
                     // если пусто, сдвигаем курсор, чтобы не зациклиться
@@ -289,14 +299,36 @@ class CacheService {
                     cursor = new Date(lastTime.getTime() + 24 * 60 * 60 * 1000); // +1 день
                 }
             } catch (error) {
-                console.error(`❌ Error fetching candles for ${figi}:`, error.message);
-                // При ошибке сдвигаем курсор и продолжаем
-                cursor.setDate(cursor.getDate() + chunkDays);
+                // Проверяем, является ли это ошибкой rate limit
+                if (error.message && error.message.includes('Rate limit exceeded')) {
+                    rateLimitErrors++;
+                    console.warn(`⚠️ Rate limit error ${rateLimitErrors}/${maxRateLimitErrors} for ${figi}`);
+                    
+                    // Если слишком много ошибок rate limit подряд, останавливаемся
+                    if (rateLimitErrors >= maxRateLimitErrors) {
+                        console.warn(`⚠️ Too many rate limit errors for ${figi}, stopping batch fetch. Returning ${all.length} candles collected so far.`);
+                        break;
+                    }
+                    
+                    // При rate limit делаем более длинную паузу перед следующим запросом
+                    console.warn(`⏳ Waiting 10 seconds before retrying due to rate limit...`);
+                    await new Promise(resolve => setTimeout(resolve, 10000));
+                    // Не сдвигаем курсор, пытаемся повторить тот же запрос
+                    continue;
+                } else {
+                    // Для других ошибок просто логируем и продолжаем
+                    console.error(`❌ Error fetching candles for ${figi}:`, error.message);
+                    cursor.setDate(cursor.getDate() + chunkDays);
+                }
             }
         }
 
         if (iterationCount >= maxIterations) {
             console.warn(`⚠️ Reached max iterations (${maxIterations}) for ${figi}, stopping`);
+        }
+
+        if (all.length > 0) {
+            console.log(`✅ Collected ${all.length} candles for ${figi} (out of ${maxIterations} iterations)`);
         }
 
         return all;

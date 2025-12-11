@@ -113,8 +113,7 @@ class IntegratedAIService {
             if (this.activeNetworks.ensemble) {
                 try {
                     const ensembleRec = await EnsembleService.predict(figi, portfolio);
-                    // Всегда добавляем рекомендацию ансамбля, даже если есть ошибка или недостаточно данных
-                    // Горизонты теперь всегда присутствуют (с дефолтными значениями при проблемах)
+                    // Добавляем рекомендацию ансамбля с реальными данными
                     recommendations.push({
                         source: 'ensemble',
                         score: ensembleRec.score || 0.5,
@@ -130,54 +129,7 @@ class IntegratedAIService {
                     weights.ensemble = ensembleRec.confidence || 0.3;
                 } catch (error) {
                     console.warn('⚠️ Ensemble recommendation failed:', error.message);
-                    // Даже при ошибке добавляем дефолтную рекомендацию с горизонтами
-                    const defaultHorizons = {
-                        shortTerm: {
-                            name: 'Краткосрочный прогноз',
-                            description: 'Прогноз на 1-3 дня',
-                            model: 'LSTM',
-                            score: 0.5,
-                            confidence: 0.3,
-                            recommendation: 'HOLD',
-                            weight: 0.4,
-                            horizonDays: 1,
-                            explanation: `Ошибка: ${error.message}`
-                        },
-                        mediumTerm: {
-                            name: 'Среднесрочный прогноз',
-                            description: 'Прогноз на 1-4 недели',
-                            model: 'CNN',
-                            score: 0.5,
-                            confidence: 0.3,
-                            recommendation: 'HOLD',
-                            weight: 0.35,
-                            horizonDays: 21,
-                            explanation: `Ошибка: ${error.message}`
-                        },
-                        longTerm: {
-                            name: 'Долгосрочный прогноз',
-                            description: 'Прогноз на 2-3 месяца',
-                            model: 'Transformer',
-                            score: 0.5,
-                            confidence: 0.3,
-                            recommendation: 'HOLD',
-                            weight: 0.25,
-                            horizonDays: 84,
-                            explanation: `Ошибка: ${error.message}`
-                        }
-                    };
-                    recommendations.push({
-                        source: 'ensemble',
-                        score: 0.5,
-                        confidence: 0.3,
-                        recommendation: 'HOLD',
-                        agreement: 1.0,
-                        horizons: defaultHorizons,
-                        summary: null,
-                        details: null,
-                        error: error.message
-                    });
-                    weights.ensemble = 0.3;
+                    // При ошибке просто пропускаем ансамбль, используем другие источники
                 }
             }
 

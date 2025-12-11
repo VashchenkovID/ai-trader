@@ -9,16 +9,11 @@ class TinkoffApiService {
     constructor() {
         this.baseUrl = process.env.TINKOFF_API_URL || 'https://invest-public-api.tinkoff.ru/rest';
         this.token = process.env.TINKOFF_TOKEN || 't.1234567890abcdef';
-        this.requestDelay = 500; // Задержка между запросами в мс (увеличено для избежания rate limiting)
-        this.maxRetries = 3;
-        this.retryDelay = 1000; // Задержка перед повтором в мс
+        this.requestDelay = 1000; // Задержка между запросами в мс (увеличено для избежания rate limiting)
+        this.maxRetries = 5; // Увеличено количество повторов
+        this.retryDelay = 2000; // Задержка перед повтором в мс (увеличено)
         this.lastRequestTime = 0;
         
-        // Отладочная информация
-        console.log('🔑 TinkoffApiService initialized:');
-        console.log(`   Base URL: ${this.baseUrl}`);
-        console.log(`   Token: ${this.token ? this.token.substring(0, 10) + '...' : 'NOT SET'}`);
-        console.log(`   Account ID: ${process.env.TINKOFF_ACCOUNT_ID || 'NOT SET'}`);
     }
 
     async makeRequest(path, body = {}, retryCount = 0) {
@@ -76,12 +71,19 @@ class TinkoffApiService {
                 // Обработка ошибки 429 (Too Many Requests)
                 if (response.status === 429) {
                     if (retryCount < this.maxRetries) {
-                        const waitTime = this.retryDelay * Math.pow(2, retryCount); // Exponential backoff
-                        console.warn(`Rate limit exceeded. Retrying in ${waitTime}ms... (attempt ${retryCount + 1}/${this.maxRetries})`);
+                        // Exponential backoff с минимальной задержкой 5 секунд для rate limit
+                        const waitTime = Math.max(5000, this.retryDelay * Math.pow(2, retryCount));
+                        console.warn(`⚠️ Rate limit exceeded. Retrying in ${Math.round(waitTime/1000)}s... (attempt ${retryCount + 1}/${this.maxRetries})`);
                         await this.delay(waitTime);
                         return this.makeRequest(path, body, retryCount + 1);
                     } else {
-                        console.error('Max retries exceeded for rate limit');
+                        // При превышении лимита повторов возвращаем пустой результат вместо ошибки
+                        console.error(`❌ Rate limit exceeded. Max retries (${this.maxRetries}) exceeded for ${path}`);
+                        // Для некоторых методов возвращаем пустой результат вместо ошибки
+                        if (path.includes('GetCandles')) {
+                            console.warn(`⚠️ Returning empty candles array due to rate limit`);
+                            return {candles: []};
+                        }
                         throw new Error(`Rate limit exceeded. Max retries (${this.maxRetries}) exceeded.`);
                     }
                 }
