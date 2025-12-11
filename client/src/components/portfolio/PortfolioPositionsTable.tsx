@@ -32,6 +32,15 @@ export interface Position {
     score?: number;
     confidence?: number;
   };
+  strategy?: {
+    id: number;
+    name: string;
+    type: 'conservative' | 'moderate' | 'aggressive';
+  };
+  positionStrategy?: {
+    id: number;
+    strategyId: number;
+  };
 }
 
 interface PortfolioPositionsTableProps {
@@ -220,6 +229,26 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
   const sectorTemplate = (rowData: Position) => {
     const translatedSector = translateSector(rowData.sector);
     return <Tag value={translatedSector} severity="info" />;
+  };
+
+  const strategyTemplate = (rowData: Position) => {
+    
+    if (!rowData.strategy) return <span className="text-500">—</span>;
+    
+    const typeMap: Record<string, { severity: string }> = {
+      conservative: { severity: 'info' },
+      moderate: { severity: 'warning' },
+      aggressive: { severity: 'danger' }
+    };
+    const typeInfo = typeMap[rowData.strategy.type] || { severity: 'secondary' };
+    
+    return (
+      <Tag 
+        value={rowData.strategy.name} 
+        severity={typeInfo.severity as any}
+        title={`Тип: ${rowData.strategy.type}`}
+      />
+    );
   };
 
   const handleSellClick = (position: Position) => {
@@ -535,6 +564,13 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
           body={sectorTemplate}
           sortable
           style={{ minWidth: '120px' }}
+        />
+        <Column 
+          field="strategy" 
+          header="Стратегия" 
+          body={strategyTemplate}
+          sortable
+          style={{ minWidth: '150px' }}
         />
         <Column 
           field="prediction" 

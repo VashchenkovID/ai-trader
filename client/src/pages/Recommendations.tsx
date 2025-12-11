@@ -3,18 +3,19 @@ import { Card } from 'primereact/card';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
-import { Tag } from 'primereact/tag';
-import { Dialog } from 'primereact/dialog';
-import { InputNumber } from 'primereact/inputnumber';
-import { InputTextarea } from 'primereact/inputtextarea';
 import { Toast } from 'primereact/toast';
 import { Dropdown } from 'primereact/dropdown';
 import { Message } from 'primereact/message';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
-import { translateSector } from '../utils/sectorTranslator';
 import { translateRecommendation } from '../utils/recommendationTranslator';
-import { getConfidenceDescription } from '../utils/confidenceTranslator';
+import HorizonsTemplate from '../components/recommendations/HorizonsTemplate';
+import BuyButton from '../components/recommendations/BuyButton';
+import RecommendationTemplate from '../components/recommendations/RecommendationTemplate';
+import ConfidenceTemplate from '../components/recommendations/ConfidenceTemplate';
+import StrategyTemplate from '../components/recommendations/StrategyTemplate';
+import PriceTemplate from '../components/recommendations/PriceTemplate';
+import SectorTemplate from '../components/recommendations/SectorTemplate';
 
 interface Recommendation {
   figi: string;
@@ -31,20 +32,49 @@ interface Recommendation {
   analysisDate: string;
   isActive: boolean;
   explanation?: any; // JSON с объяснением стратегии
-  analysis?: any; // JSON с деталями анализа
+  analysis?: any;
+  horizons?: {
+    shortTerm?: {
+      recommendation: 'BUY' | 'SELL' | 'HOLD';
+      score: number;
+      confidence: number;
+      name: string;
+      description: string;
+    };
+    mediumTerm?: {
+      recommendation: 'BUY' | 'SELL' | 'HOLD';
+      score: number;
+      confidence: number;
+      name: string;
+      description: string;
+    };
+    longTerm?: {
+      recommendation: 'BUY' | 'SELL' | 'HOLD';
+      score: number;
+      confidence: number;
+      name: string;
+      description: string;
+    };
+  }; // JSON с деталями анализа
+  strategy?: {
+    id: number;
+    name: string;
+    type: 'conservative' | 'moderate' | 'aggressive';
+  };
+  suggestedStrategy?: {
+    id: number;
+    name: string;
+    type: 'conservative' | 'moderate' | 'aggressive';
+  };
 }
 
 const Recommendations: React.FC = () => {
   const navigate = useNavigate();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showBuyDialog, setShowBuyDialog] = useState(false);
-  const [selectedRecommendation, setSelectedRecommendation] = useState<Recommendation | null>(null);
-  const [buyQuantity, setBuyQuantity] = useState<number>(0);
-  const [creatingRequest, setCreatingRequest] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');
-  const [userReason, setUserReason] = useState<string>('');
-  const [showHoldWarning, setShowHoldWarning] = useState(false);
+  const [filterStrategy, setFilterStrategy] = useState<number | null>(null);
+  const [strategies, setStrategies] = useState<any[]>([]);
   const toast = useRef<Toast>(null);
 
   const filterOptions = [
@@ -55,10 +85,32 @@ const Recommendations: React.FC = () => {
   ];
 
   useEffect(() => {
-    loadRecommendations(); // Просто загружаем из БД без обновления предсказаний
-    const interval = setInterval(() => loadRecommendations(), 60000); // Обновляем каждую минуту
+    loadStrategies();
+  }, []);
+
+  useEffect(() => {
+    if (strategies.length > 0) {
+      loadRecommendations(); // Загружаем рекомендации только после загрузки стратегий
+    }
+  }, [strategies.length, filterType, filterStrategy]);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (strategies.length > 0) {
+        loadRecommendations();
+      }
+    }, 60000); // Обновляем каждую минуту
     return () => clearInterval(interval);
-  }, [filterType]);
+  }, [strategies.length]);
+
+  const loadStrategies = async () => {
+    try {
+      const data = await apiService.getAllStrategies();
+      setStrategies(data || []);
+    } catch (error) {
+      console.error('Error loading strategies:', error);
+    }
+  };
 
   const loadRecommendations = async () => {
     try {
@@ -81,9 +133,46 @@ const Recommendations: React.FC = () => {
       
       // Фильтруем только активные рекомендации и просто отображаем данные из БД
       // Предсказания обновляются автоматически на бэкенде каждые 20 минут через планировщик
-      recommendationsData = recommendationsData
-        .filter((rec: any) => rec.isActive !== false)
-        .map((rec: any) => ({
+      const filteredData = recommendationsData.filter((rec: any) => rec.isActive !== false);
+      
+      // Определяем стратегии для всех рекомендаций (синхронно, так как strategies уже загружены)
+      const recommendationsWithStrategies = filteredData.map((rec: any) => {
+          // Используем стратегию из БД, если она есть
+          let strategy = null;
+          
+          // Проверяем, есть ли стратегия в объекте rec.strategy (из include)
+          if (rec.strategy && typeof rec.strategy === 'object' && rec.strategy !== null) {
+            // Если strategy - объект с данными стратегии (из include)
+            if (rec.strategy.id || rec.strategy.name) {
+              strategy = rec.strategy;
+            }
+          }
+          
+          // Если стратегия не найдена, проверяем strategyId
+          if (!strategy && rec.strategyId) {
+            strategy = strategies.find((s: any) => s.id === rec.strategyId);
+          }
+          
+          // Если стратегия не найдена в БД, определяем на основе confidence и score
+          let suggestedStrategy = strategy;
+          if (!suggestedStrategy && strategies.length > 0) {
+            try {
+              const confidence = rec.confidence || 0;
+              const score = rec.score || 0;
+              
+              if (confidence > 0.8 && score > 0.75) {
+                suggestedStrategy = strategies.find((s: any) => s.type === 'aggressive');
+              } else if (confidence >= 0.6 && score >= 0.6) {
+                suggestedStrategy = strategies.find((s: any) => s.type === 'moderate');
+              } else if (confidence >= 0.5 && score >= 0.5) {
+                suggestedStrategy = strategies.find((s: any) => s.type === 'conservative');
+              }
+            } catch (error) {
+              // Игнорируем ошибки определения стратегии
+            }
+          }
+          
+        return {
           figi: rec.figi || rec.id,
           ticker: rec.ticker || '',
           name: rec.name || 'Неизвестно',
@@ -98,10 +187,43 @@ const Recommendations: React.FC = () => {
           analysisDate: rec.analysisDate || rec.createdAt || new Date().toISOString(),
           isActive: rec.isActive !== undefined ? rec.isActive : true,
           explanation: rec.explanation || null,
-          analysis: rec.analysis || null
-        }));
+          analysis: rec.analysis || null,
+          strategy: strategy,
+          suggestedStrategy: suggestedStrategy,
+          strategyId: rec.strategyId || strategy?.id || suggestedStrategy?.id || null,
+          // Извлекаем горизонты из разных мест, учитывая что explanation может быть строкой JSON
+          horizons: (() => {
+            // Сначала проверяем прямое поле horizons
+            if (rec.horizons) return rec.horizons;
+            
+            // Затем проверяем explanation (может быть объектом или строкой JSON)
+            let explanationObj = rec.explanation;
+            if (typeof explanationObj === 'string') {
+              try {
+                explanationObj = JSON.parse(explanationObj);
+              } catch (e) {
+                return null;
+              }
+            }
+            
+            if (explanationObj && typeof explanationObj === 'object') {
+              return explanationObj.details?.horizons || explanationObj.horizons || null;
+            }
+            
+            return null;
+          })()
+        };
+      });
       
-      setRecommendations(recommendationsData);
+      // Фильтруем по стратегии, если выбран фильтр
+      let filteredRecommendations = recommendationsWithStrategies;
+      if (filterStrategy !== null) {
+        filteredRecommendations = recommendationsWithStrategies.filter((rec: Recommendation) => 
+          rec.strategy?.id === filterStrategy || rec.suggestedStrategy?.id === filterStrategy
+        );
+      }
+      
+      setRecommendations(filteredRecommendations);
     } catch (error: any) {
       console.error('Error loading recommendations:', error);
       toast.current?.show({
@@ -114,22 +236,6 @@ const Recommendations: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    if (typeof amount !== 'number' || isNaN(amount) || !isFinite(amount)) {
-      return '—';
-    }
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amount);
-  };
-
-  const formatPercent = (value: number) => {
-    return `${(value * 100).toFixed(1)}%`;
   };
 
   const formatDate = (dateString: string) => {
@@ -147,246 +253,6 @@ const Recommendations: React.FC = () => {
     }
   };
 
-  const recommendationTemplate = (rowData: Recommendation) => {
-    const severity =
-      rowData.recommendation === 'BUY' ? 'success' :
-      rowData.recommendation === 'SELL' ? 'danger' : 'info';
-    
-    return (
-      <Tag value={translateRecommendation(rowData.recommendation)} severity={severity as any} />
-    );
-  };
-
-  const confidenceTemplate = (rowData: Recommendation) => {
-    const confidenceDesc = getConfidenceDescription(rowData.confidence, 'confidence');
-    const scoreDesc = getConfidenceDescription(rowData.score, 'score');
-    
-    return (
-      <div className="flex flex-column">
-        <div className={`font-medium ${confidenceDesc.color}`}>
-          Уверенность: {confidenceDesc.text} ({confidenceDesc.percentage})
-        </div>
-        <div className={`text-sm ${scoreDesc.color}`}>
-          Оценка: {scoreDesc.text} ({scoreDesc.percentage})
-        </div>
-      </div>
-    );
-  };
-
-  const strategyTemplate = (rowData: Recommendation) => {
-    // Извлекаем описание стратегии из explanation
-    let strategyText = '';
-    
-    if (rowData.explanation) {
-      if (typeof rowData.explanation === 'string') {
-        strategyText = rowData.explanation;
-      } else if (typeof rowData.explanation === 'object') {
-        // Приоритет: summary > краткое описание из других полей
-        if (rowData.explanation.summary) {
-          strategyText = rowData.explanation.summary;
-        } else if (rowData.explanation.brief) {
-          strategyText = rowData.explanation.brief;
-        } else if (rowData.explanation.keyFactors && Array.isArray(rowData.explanation.keyFactors)) {
-          strategyText = `Ключевые факторы: ${rowData.explanation.keyFactors.slice(0, 2).join(', ')}`;
-        } else if (rowData.explanation.reason) {
-          strategyText = rowData.explanation.reason;
-        }
-      }
-    }
-    
-    // Если нет explanation, используем данные из analysis
-    if (!strategyText && rowData.analysis) {
-      if (typeof rowData.analysis === 'object') {
-        if (rowData.analysis.strategy) {
-          strategyText = rowData.analysis.strategy;
-        } else if (rowData.analysis.reason) {
-          strategyText = rowData.analysis.reason;
-        }
-      }
-    }
-    
-    // Если все еще нет текста, используем дефолтное описание на основе рекомендации
-    if (!strategyText) {
-      if (rowData.recommendation === 'BUY') {
-        strategyText = 'Сигнал на покупку на основе технического и фундаментального анализа';
-      } else if (rowData.recommendation === 'SELL') {
-        strategyText = 'Рекомендация к продаже для защиты капитала';
-      } else {
-        strategyText = 'Рекомендация к удержанию позиции';
-      }
-    }
-    
-    // Ограничиваем длину текста для таблицы
-    const maxLength = 100;
-    const displayText = strategyText.length > maxLength 
-      ? strategyText.substring(0, maxLength) + '...' 
-      : strategyText;
-    
-    return (
-      <div className="flex flex-column" style={{ maxWidth: '300px' }}>
-        <div className="text-sm text-600" title={strategyText}>
-          {displayText}
-        </div>
-        {rowData.explanation?.timeframe && (
-          <div className="text-xs text-500 mt-1">
-            Горизонт: {rowData.explanation.timeframe}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const priceTemplate = (rowData: Recommendation) => {
-    return (
-      <div>
-        <div className="font-medium">{formatCurrency(rowData.priceAtAnalysis)}</div>
-        {rowData.targetPrice && (
-          <div className="text-sm text-green-500">Цель: {formatCurrency(rowData.targetPrice)}</div>
-        )}
-      </div>
-    );
-  };
-
-  const sectorTemplate = (rowData: Recommendation) => {
-    if (!rowData.sector) return <span>—</span>;
-    const translatedSector = translateSector(rowData.sector);
-    return <Tag value={translatedSector} severity="info" />;
-  };
-
-  const handleBuyClick = (recommendation: Recommendation) => {
-    setSelectedRecommendation(recommendation);
-    // Рассчитываем примерное количество акций (на 10% от бюджета, если есть цена)
-    const estimatedQuantity = recommendation.priceAtAnalysis > 0 
-      ? Math.floor((100000 / recommendation.priceAtAnalysis) * 0.1) // Примерно 10к рублей
-      : 1;
-    setBuyQuantity(estimatedQuantity);
-    setUserReason('');
-    // Показываем предупреждение для HOLD рекомендаций
-    setShowHoldWarning(recommendation.recommendation === 'HOLD');
-    setShowBuyDialog(true);
-  };
-
-  const handleBuyConfirm = async () => {
-    if (!selectedRecommendation || !buyQuantity || buyQuantity <= 0) {
-      toast.current?.show({
-        severity: 'warn',
-        summary: 'Ошибка',
-        detail: 'Укажите количество акций для покупки',
-        life: 3000
-      });
-      return;
-    }
-
-    try {
-      setCreatingRequest(true);
-      
-      const recommendationData = {
-        figi: selectedRecommendation.figi,
-        ticker: selectedRecommendation.ticker,
-        name: selectedRecommendation.name,
-        recommendation: 'BUY', // Всегда создаем заявку на покупку
-        confidence: selectedRecommendation.confidence,
-        score: selectedRecommendation.score,
-        priceAtAnalysis: selectedRecommendation.priceAtAnalysis,
-        price: selectedRecommendation.priceAtAnalysis,
-        targetPrice: selectedRecommendation.targetPrice,
-        stopLoss: selectedRecommendation.stopLoss,
-        takeProfit: selectedRecommendation.takeProfit
-      };
-
-      await apiService.createTradingRequest(
-        selectedRecommendation.figi,
-        { 
-          quantity: Math.floor(buyQuantity),
-          comment: userReason ? `Причина отклонения AI-рекомендации: ${userReason}` : undefined
-        },
-        recommendationData
-      );
-
-      toast.current?.show({
-        severity: 'success',
-        summary: 'Заявка создана',
-        detail: `Заявка на покупку ${Math.floor(buyQuantity)} шт. ${selectedRecommendation.ticker} успешно создана`,
-        life: 3000
-      });
-
-      setShowBuyDialog(false);
-      setSelectedRecommendation(null);
-      setBuyQuantity(0);
-      setUserReason('');
-      setShowHoldWarning(false);
-      
-      // Обновляем список рекомендаций
-      loadRecommendations();
-    } catch (error: any) {
-      console.error('Error creating buy request:', error);
-      toast.current?.show({
-        severity: 'error',
-        summary: 'Ошибка',
-        detail: error.response?.data?.message || error.message || 'Не удалось создать заявку на покупку',
-        life: 5000
-      });
-    } finally {
-      setCreatingRequest(false);
-    }
-  };
-
-  const buyButtonTemplate = (rowData: Recommendation) => {
-    // Показываем кнопку для всех типов рекомендаций (BUY, SELL, HOLD)
-    const buttonLabel = rowData.recommendation === 'BUY' 
-      ? 'Купить' 
-      : rowData.recommendation === 'SELL'
-      ? 'Купить' // Для SELL тоже можно создать заявку на покупку (контринтуитивно, но пользователь может)
-      : 'Купить'; // Для HOLD тоже показываем кнопку
-    
-    const buttonSeverity = rowData.recommendation === 'BUY' 
-      ? 'success' 
-      : rowData.recommendation === 'SELL'
-      ? 'warning'
-      : 'info'; // Для HOLD используем info цвет
-    
-    const tooltipText = rowData.recommendation === 'HOLD'
-      ? 'Создать заявку на покупку (AI рекомендует удержание)'
-      : 'Создать заявку на покупку';
-
-    return (
-      <Button
-        icon="pi pi-shopping-cart"
-        label={buttonLabel}
-        size="small"
-        severity={buttonSeverity}
-        onClick={() => handleBuyClick(rowData)}
-        disabled={!rowData.priceAtAnalysis || rowData.priceAtAnalysis <= 0}
-        tooltip={tooltipText}
-        tooltipOptions={{ position: 'top' }}
-      />
-    );
-  };
-
-  const buyDialogFooter = (
-    <div>
-      <Button 
-        label="Отмена" 
-        icon="pi pi-times" 
-        onClick={() => {
-          setShowBuyDialog(false);
-          setSelectedRecommendation(null);
-          setBuyQuantity(0);
-        }} 
-        className="p-button-text" 
-        disabled={creatingRequest}
-      />
-      <Button 
-        label="Создать заявку" 
-        icon="pi pi-check" 
-        onClick={handleBuyConfirm} 
-        severity="success"
-        loading={creatingRequest}
-        disabled={!buyQuantity || buyQuantity <= 0}
-      />
-    </div>
-  );
-
   return (
     <div className="recommendations-page p-4">
       <Toast ref={toast} />
@@ -399,14 +265,24 @@ const Recommendations: React.FC = () => {
               value={filterType}
               options={filterOptions}
               onChange={(e) => setFilterType(e.value)}
-              placeholder="Выберите фильтр"
+              placeholder="Тип рекомендации"
+              style={{ minWidth: '200px' }}
+            />
+            <Dropdown
+              value={filterStrategy}
+              options={[
+                { label: 'Все стратегии', value: null },
+                ...strategies.map((s: any) => ({ label: s.name, value: s.id }))
+              ]}
+              onChange={(e) => setFilterStrategy(e.value)}
+              placeholder="Стратегия"
               style={{ minWidth: '200px' }}
             />
             <Button
               icon="pi pi-refresh"
               label="Обновить"
               size="small"
-                      onClick={() => loadRecommendations()}
+              onClick={() => loadRecommendations()}
               loading={loading}
             />
           </div>
@@ -451,37 +327,37 @@ const Recommendations: React.FC = () => {
           />
           <Column
             field="recommendation"
-            header="Рекомендация"
-            body={recommendationTemplate}
+            header="Общая рекомендация"
+            body={(rowData: Recommendation) => <RecommendationTemplate rowData={rowData} />}
             sortable
             style={{ minWidth: '150px' }}
           />
           <Column
+            field="horizons"
+            header="Рекомендации по горизонтам"
+            body={(rowData: Recommendation) => <HorizonsTemplate rowData={rowData} />}
+            style={{ minWidth: '250px' }}
+          />
+          <Column
             field="confidence"
             header="Уверенность / Score"
-            body={confidenceTemplate}
+            body={(rowData: Recommendation) => <ConfidenceTemplate rowData={rowData} />}
             sortable
             style={{ minWidth: '180px' }}
           />
           <Column
             field="priceAtAnalysis"
             header="Цена"
-            body={priceTemplate}
+            body={(rowData: Recommendation) => <PriceTemplate rowData={rowData} />}
             sortable
             style={{ minWidth: '150px' }}
           />
           <Column
             field="sector"
             header="Сектор"
-            body={sectorTemplate}
+            body={(rowData: Recommendation) => <SectorTemplate rowData={rowData} />}
             sortable
             style={{ minWidth: '150px' }}
-          />
-          <Column
-            field="explanation"
-            header="Описание стратегии"
-            body={strategyTemplate}
-            style={{ minWidth: '300px', maxWidth: '400px' }}
           />
           <Column
             field="analysisDate"
@@ -493,116 +369,13 @@ const Recommendations: React.FC = () => {
           <Column
             field="action"
             header="Действие"
-            body={buyButtonTemplate}
+            body={(rowData: Recommendation) => <BuyButton rowData={rowData} onRequestCreated={loadRecommendations} />}
             style={{ minWidth: '120px' }}
             frozen
             alignFrozen="right"
           />
         </DataTable>
       </Card>
-
-      {/* Диалог покупки */}
-      <Dialog
-        header="Создание заявки на покупку"
-        visible={showBuyDialog}
-        style={{ width: '500px' }}
-        footer={buyDialogFooter}
-        onHide={() => {
-          setShowBuyDialog(false);
-          setSelectedRecommendation(null);
-          setBuyQuantity(0);
-          setUserReason('');
-          setShowHoldWarning(false);
-        }}
-        modal
-      >
-        {selectedRecommendation && (
-          <div className="flex flex-column gap-3">
-            <div>
-              <label className="block mb-2 font-medium">
-                Инструмент: <strong>{selectedRecommendation.name} ({selectedRecommendation.ticker})</strong>
-              </label>
-            </div>
-            <div>
-              <label className="block mb-2 font-medium">
-                Текущая цена: <strong>{formatCurrency(selectedRecommendation.priceAtAnalysis)}</strong>
-              </label>
-            </div>
-            <div>
-              <label className="block mb-2 font-medium">
-                Рекомендация AI: <strong>{translateRecommendation(selectedRecommendation.recommendation)}</strong>
-              </label>
-            </div>
-            <div>
-              <label className="block mb-2 font-medium">
-                Уверенность: <strong>{formatPercent(selectedRecommendation.confidence)}</strong>
-              </label>
-            </div>
-            {selectedRecommendation.targetPrice && (
-              <div>
-                <label className="block mb-2 font-medium">
-                  Целевая цена: <strong className="text-green-500">{formatCurrency(selectedRecommendation.targetPrice)}</strong>
-                </label>
-              </div>
-            )}
-            {showHoldWarning && (
-              <div className="p-3 bg-yellow-50 border-round border-yellow-200 border-2">
-                <div className="flex align-items-start gap-2">
-                  <i className="pi pi-exclamation-triangle text-yellow-600 mt-1"></i>
-                  <div className="flex-1">
-                    <div className="font-bold text-yellow-800 mb-2">
-                      ⚠️ Внимание: AI рекомендует HOLD
-                    </div>
-                    <div className="text-sm text-yellow-700 mb-2">
-                      Вы создаете заявку на покупку, хотя AI рекомендует удержание позиции. 
-                      Убедитесь, что у вас есть веские причины для этого решения.
-                    </div>
-                    <div>
-                      <label htmlFor="userReason" className="block mb-2 text-sm font-medium text-yellow-800">
-                        Причина отклонения рекомендации AI (необязательно):
-                      </label>
-                      <InputTextarea
-                        id="userReason"
-                        value={userReason}
-                        onChange={(e) => setUserReason(e.target.value)}
-                        rows={3}
-                        placeholder="Например: Дополнительный анализ показал потенциал роста..."
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div>
-              <label htmlFor="buyQuantity" className="block mb-2 font-medium">
-                Количество акций для покупки:
-              </label>
-              <InputNumber
-                id="buyQuantity"
-                value={buyQuantity}
-                onValueChange={(e) => setBuyQuantity(e.value || 0)}
-                min={1}
-                showButtons
-                buttonLayout="horizontal"
-                decrementButtonClassName="p-button-danger"
-                incrementButtonClassName="p-button-success"
-                incrementButtonIcon="pi pi-plus"
-                decrementButtonIcon="pi pi-minus"
-                className="w-full"
-              />
-            </div>
-            {buyQuantity > 0 && selectedRecommendation.priceAtAnalysis > 0 && (
-              <div className="mt-2 p-3 bg-blue-50 border-round">
-                <div className="text-sm text-600 mb-1">Сумма покупки:</div>
-                <div className="text-xl font-bold text-blue-600">
-                  {formatCurrency(buyQuantity * selectedRecommendation.priceAtAnalysis)}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </Dialog>
     </div>
   );
 };

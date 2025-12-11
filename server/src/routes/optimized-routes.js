@@ -11,6 +11,7 @@ import riskManagementRoutes from './risk-management-routes.js';
 import capitalScalingRoutes from './capital-scaling-routes.js';
 import telegramRoutes from './telegram-routes.js';
 import tradingRequestsRoutes from './trading-requests-routes.js';
+import strategiesRoutes from './strategies-routes.js';
 import tradingModeRoutes from './trading-mode-routes.js';
 import switchValidatorRoutes from './switch-validator-routes.js';
 import riskAdjustmentRoutes from './risk-adjustment-routes.js';
@@ -25,6 +26,7 @@ import notificationsRoutes from './notifications-routes.js';
 import errorsRoutes from './errors-routes.js';
 import ServiceManager from '../services/ServiceManager.js';
 import Recommendation from '../models/Recommendation.js';
+import { Op } from 'sequelize';
 
 const router = express.Router();
 
@@ -41,6 +43,7 @@ router.use('/risk-management', riskManagementRoutes);
 router.use('/capital-scaling', capitalScalingRoutes);
 router.use('/telegram', telegramRoutes);
 router.use('/trading-requests', tradingRequestsRoutes);
+router.use('/strategies', strategiesRoutes);
 router.use('/trading-mode', tradingModeRoutes);
 router.use('/switch-validator', switchValidatorRoutes);
 router.use('/risk-adjustment', riskAdjustmentRoutes);
@@ -225,16 +228,39 @@ router.get('/recommendations/type/:type', async (req, res) => {
             });
         }
         
+        const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
         const recommendations = await Recommendation.findAll({
             where: { 
                 isActive: true,
                 recommendation: type
             },
-            order: [['confidence', 'DESC'], ['analysisDate', 'DESC']]
+            include: [{
+                model: TradingStrategy,
+                as: 'strategy',
+                required: false
+            }],
+            order: [['confidence', 'DESC'], ['analysisDate', 'DESC']],
+            raw: false // Важно: не использовать raw, чтобы получить связанные данные
         });
+        
+        // Преобразуем в JSON, чтобы включить связанные данные
+        const recommendationsData = recommendations.map(rec => {
+            const recData = rec.toJSON();
+            // Убеждаемся, что strategy включена в ответ
+            if (recData.strategy) {
+                recData.strategy = {
+                    id: recData.strategy.id,
+                    name: recData.strategy.name,
+                    type: recData.strategy.type,
+                    timeframe: recData.strategy.timeframe
+                };
+            }
+            return recData;
+        });
+        
         res.json({
             success: true,
-            data: recommendations
+            data: recommendationsData
         });
     } catch (error) {
         console.error('Ошибка получения рекомендаций по типу:', error);
@@ -296,13 +322,36 @@ router.get('/recommendations/recent', async (req, res) => {
  */
 router.get('/recommendations', async (req, res) => {
     try {
+        const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
         const recommendations = await Recommendation.findAll({
             where: { isActive: true },
-            order: [['analysisDate', 'DESC']]
+            include: [{
+                model: TradingStrategy,
+                as: 'strategy',
+                required: false
+            }],
+            order: [['analysisDate', 'DESC']],
+            raw: false // Важно: не использовать raw, чтобы получить связанные данные
         });
+        
+        // Преобразуем в JSON, чтобы включить связанные данные
+        const recommendationsData = recommendations.map(rec => {
+            const recData = rec.toJSON();
+            // Убеждаемся, что strategy включена в ответ
+            if (recData.strategy) {
+                recData.strategy = {
+                    id: recData.strategy.id,
+                    name: recData.strategy.name,
+                    type: recData.strategy.type,
+                    timeframe: recData.strategy.timeframe
+                };
+            }
+            return recData;
+        });
+        
         res.json({
             success: true,
-            data: recommendations
+            data: recommendationsData
         });
     } catch (error) {
         console.error('Ошибка получения рекомендаций:', error);

@@ -96,6 +96,63 @@ export interface TrainingStatus {
   };
 }
 
+export interface TradingSignal {
+  figi: string;
+  ticker: string;
+  name: string;
+  signalType: 'BUY' | 'SELL';
+  confidence: number;
+  entryPrice: number;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  strategy?: any;
+  timestamp: string;
+}
+
+export interface Alert {
+  id: string;
+  type: 'info' | 'warning' | 'error' | 'success';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  message: string;
+  title?: string;
+  category?: string;
+  timestamp: string;
+  details?: any;
+}
+
+export interface ModelMetrics {
+  modelType: string;
+  instrument?: string;
+  figi?: string;
+  accuracy: number | null;
+  mae: number | null;
+  rmse: number | null;
+  mape: number | null;
+  sharpeRatio: number | null;
+  winRate: number | null;
+  totalPredictions: number;
+  correctPredictions: number;
+  marketComparison?: any;
+  lastUpdated: string;
+  timestamp: string;
+}
+
+export interface TrainingProgress {
+  modelType: string;
+  instrument?: string;
+  currentEpoch: number;
+  totalEpochs: number;
+  loss: number | null;
+  accuracy: number | null;
+  valLoss: number | null;
+  valAccuracy: number | null;
+  eta: number | null;
+  learningRate: number | null;
+  speed: number | null;
+  stage: string;
+  timestamp: string;
+}
+
 // Контекст для WebSocket данных
 interface WebSocketDataContextType {
   // Состояние подключения
@@ -111,8 +168,16 @@ interface WebSocketDataContextType {
   trainingStatus: TrainingStatus | null;
   analysisStatus: AnalysisStatus | null;
   
+  // Новые данные
+  tradingSignals: TradingSignal[];
+  alerts: Alert[];
+  modelMetrics: ModelMetrics[];
+  trainingProgress: TrainingProgress | null;
+  
   // Методы
   reconnect: () => void;
+  clearAlerts: () => void;
+  clearTradingSignals: () => void;
 }
 
 const WebSocketDataContext = createContext<WebSocketDataContextType | undefined>(undefined);
@@ -138,63 +203,224 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
   const [trainingStatus, setTrainingStatus] = useState<TrainingStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus | null>(null);
+  
+  // Новые состояния для новых каналов
+  const [tradingSignals, setTradingSignals] = useState<TradingSignal[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [modelMetrics, setModelMetrics] = useState<ModelMetrics[]>([]);
+  const [trainingProgress, setTrainingProgress] = useState<TrainingProgress | null>(null);
 
-  // Отладка изменений состояния
-  useEffect(() => {
-    console.log('🔍 WebSocketDataProvider - systemStatus changed:', systemStatus);
-  }, [systemStatus]);
-
-  useEffect(() => {
-    console.log('🔍 WebSocketDataProvider - cacheStatus changed:', cacheStatus);
-  }, [cacheStatus]);
 
   // Обработка WebSocket сообщений
   const handleWebSocketMessage = (message: any) => {
-    console.log('🔍 WebSocket message received:', message);
-    switch (message.type) {
-      case 'system_status_update':
-        console.log('🔍 Setting system status:', message.data);
-        console.log('🔍 Previous system status:', systemStatus);
-        setSystemStatus(message.data);
-        console.log('🔍 System status set, new value will be:', message.data);
-        break;
-      case 'cache_status_update':
-        setCacheStatus(message.data);
-        break;
-      case 'system_resources_update':
-        setSystemResources(message.data);
-        break;
-      case 'trading_stats_update':
-        setTradingStats(message.data);
-        break;
-      case 'performance_metrics_update':
-        setPerformanceMetrics(message.data);
-        break;
-      case 'training_status_update':
-        console.log('🎯 Training status update received:', message.data);
-        setTrainingStatus(message.data);
-        break;
+    // Валидация входящего сообщения
+    if (!message || typeof message !== 'object') {
+      console.warn('Invalid WebSocket message received:', message);
+      return;
+    }
+    
+    if (!message.type) {
+      console.warn('WebSocket message missing type field:', message);
+      return;
+    }
+    
+    try {
+      switch (message.type) {
+        case 'system_status_update':
+          if (message.data) {
+            setSystemStatus(message.data);
+          }
+          break;
+        case 'cache_status_update':
+          if (message.data) {
+            setCacheStatus(message.data);
+          }
+          break;
+        case 'system_resources_update':
+          if (message.data) {
+            setSystemResources(message.data);
+          }
+          break;
+        case 'trading_stats_update':
+          if (message.data) {
+            // Валидация структуры trading stats
+            const stats = message.data;
+            setTradingStats({
+              portfolioValue: typeof stats.portfolioValue === 'number' ? stats.portfolioValue : 0,
+              cash: typeof stats.cash === 'number' ? stats.cash : 0,
+              totalPnL: typeof stats.totalPnL === 'number' ? stats.totalPnL : 0,
+              winRate: typeof stats.winRate === 'number' ? stats.winRate : 0,
+              totalTrades: typeof stats.totalTrades === 'number' ? stats.totalTrades : 0,
+              successfulTrades: typeof stats.successfulTrades === 'number' ? stats.successfulTrades : 0,
+              recommendations: Array.isArray(stats.recommendations) ? stats.recommendations : []
+            });
+          }
+          break;
+        case 'performance_metrics_update':
+          if (message.data) {
+            setPerformanceMetrics(message.data);
+          }
+          break;
+        case 'training_status_update':
+          if (message.data) {
+            setTrainingStatus(message.data);
+          }
+          break;
       case 'analysis_status_update':
-        setAnalysisStatus(message.data);
-        break;
-      case 'batch_training_started':
-      case 'batch_training_completed':
-      case 'batch_training_failed':
-      case 'meta_learning_batch_started':
-      case 'meta_learning_batch_completed':
-      case 'meta_learning_batch_failed':
-      case 'rl_batch_started':
-      case 'rl_batch_completed':
-      case 'rl_batch_failed':
-        // Обновляем статус обучения только если есть полная структура
-        if (message.data && message.data.neuralNetwork && message.data.ensemble && message.data.metaLearning && message.data.reinforcementLearning) {
-          setTrainingStatus(message.data);
-        } else {
-          console.log('🔍 Batch training message without full structure, ignoring:', message.type, message.data);
+        if (message.data) {
+          setAnalysisStatus(message.data);
         }
         break;
-      default:
-        console.log('Unknown WebSocket message type:', message.type);
+      case 'trading_signal':
+        // Сохраняем торговые сигналы
+        if (message.data) {
+          const signal: TradingSignal = {
+            figi: message.data.figi || '',
+            ticker: message.data.ticker || '',
+            name: message.data.name || '',
+            signalType: message.data.signalType || 'BUY',
+            confidence: typeof message.data.confidence === 'number' ? message.data.confidence : 0,
+            entryPrice: typeof message.data.entryPrice === 'number' ? message.data.entryPrice : 0,
+            stopLoss: message.data.stopLoss || null,
+            takeProfit: message.data.takeProfit || null,
+            strategy: message.data.strategy || null,
+            timestamp: message.data.timestamp || message.timestamp || new Date().toISOString()
+          };
+          
+          setTradingSignals(prev => [signal, ...prev.slice(0, 49)]); // Храним последние 50
+          
+          // Показываем уведомление для важных сигналов
+          if (signal.confidence > 0.7) {
+            console.log(`📊 Новый торговый сигнал: ${signal.signalType} ${signal.ticker} (уверенность: ${(signal.confidence * 100).toFixed(1)}%)`);
+          }
+        }
+        break;
+      case 'training_progress':
+        // Сохраняем детальный прогресс обучения
+        if (message.data) {
+          const progress: TrainingProgress = {
+            modelType: message.data.modelType || 'neural_network',
+            instrument: message.data.instrument || null,
+            currentEpoch: typeof message.data.currentEpoch === 'number' ? message.data.currentEpoch : 0,
+            totalEpochs: typeof message.data.totalEpochs === 'number' ? message.data.totalEpochs : 0,
+            loss: message.data.loss || null,
+            accuracy: message.data.accuracy || null,
+            valLoss: message.data.valLoss || null,
+            valAccuracy: message.data.valAccuracy || null,
+            eta: message.data.eta || null,
+            learningRate: message.data.learningRate || null,
+            speed: message.data.speed || null,
+            stage: message.data.stage || 'training',
+            timestamp: message.data.timestamp || message.timestamp || new Date().toISOString()
+          };
+          
+          setTrainingProgress(progress);
+          
+          // Обновляем trainingStatus для совместимости
+          const modelType = progress.modelType;
+          const progressPercent = progress.totalEpochs > 0 
+            ? (progress.currentEpoch / progress.totalEpochs) * 100 
+            : 0;
+          
+          setTrainingStatus(prev => {
+            const baseStatus = prev || {
+              neuralNetwork: { isTraining: false, stage: 'idle', progress: 0 },
+              ensemble: { isTraining: false, stage: 'idle', progress: 0 },
+              metaLearning: { isTraining: false, stage: 'idle', progress: 0 },
+              reinforcementLearning: { isTraining: false, stage: 'idle', progress: 0 }
+            };
+            
+            return {
+              ...baseStatus,
+              [modelType]: {
+                isTraining: true,
+                stage: progress.stage,
+                progress: progressPercent
+              }
+            };
+          });
+        }
+        break;
+      case 'alert':
+        // Сохраняем системные алерты
+        if (message.data) {
+          const alert: Alert = {
+            id: message.data.id || Date.now().toString(),
+            type: message.data.type || 'info',
+            severity: message.data.severity || 'medium',
+            message: message.data.message || '',
+            title: message.data.title || null,
+            category: message.data.category || 'system',
+            timestamp: message.data.timestamp || message.timestamp || new Date().toISOString(),
+            details: message.data.details || null
+          };
+          
+          setAlerts(prev => [alert, ...prev.slice(0, 99)]); // Храним последние 100
+          
+          // Логируем важные алерты
+          if (alert.severity === 'high' || alert.severity === 'critical') {
+            console.warn(`⚠️ Критический алерт: ${alert.message}`, alert);
+          }
+        }
+        break;
+      case 'model_metrics':
+        // Сохраняем метрики моделей
+        if (message.data) {
+          const metrics: ModelMetrics = {
+            modelType: message.data.modelType || 'neural_network',
+            instrument: message.data.instrument || null,
+            figi: message.data.figi || null,
+            accuracy: message.data.accuracy || null,
+            mae: message.data.mae || null,
+            rmse: message.data.rmse || null,
+            mape: message.data.mape || null,
+            sharpeRatio: message.data.sharpeRatio || null,
+            winRate: message.data.winRate || null,
+            totalPredictions: typeof message.data.totalPredictions === 'number' ? message.data.totalPredictions : 0,
+            correctPredictions: typeof message.data.correctPredictions === 'number' ? message.data.correctPredictions : 0,
+            marketComparison: message.data.marketComparison || null,
+            lastUpdated: message.data.lastUpdated || new Date().toISOString(),
+            timestamp: message.data.timestamp || message.timestamp || new Date().toISOString()
+          };
+          
+          // Обновляем или добавляем метрики для инструмента
+          setModelMetrics(prev => {
+            const existingIndex = prev.findIndex(m => m.figi === metrics.figi && m.modelType === metrics.modelType);
+            if (existingIndex >= 0) {
+              const updated = [...prev];
+              updated[existingIndex] = metrics;
+              return updated;
+            } else {
+              return [metrics, ...prev.slice(0, 49)]; // Храним последние 50
+            }
+          });
+        }
+        break;
+      case 'error':
+        console.error('WebSocket error received:', message.data);
+        setError(message.data?.message || 'Unknown error');
+        break;
+      case 'batch_training_started':
+        case 'batch_training_completed':
+        case 'batch_training_failed':
+        case 'meta_learning_batch_started':
+        case 'meta_learning_batch_completed':
+        case 'meta_learning_batch_failed':
+        case 'rl_batch_started':
+        case 'rl_batch_completed':
+        case 'rl_batch_failed':
+          // Обновляем статус обучения только если есть полная структура
+          if (message.data && message.data.neuralNetwork && message.data.ensemble && message.data.metaLearning && message.data.reinforcementLearning) {
+            setTrainingStatus(message.data);
+          } 
+          break;
+        default:
+          // Логируем неизвестные типы сообщений для отладки
+          console.log('Unknown WebSocket message type:', message.type);
+          break;
+      }
+    } catch (error) {
+      console.error('Error processing WebSocket message:', error, message);
     }
   };
 
@@ -232,7 +458,6 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
         
         ws.onclose = (event) => {
           if (!mounted) return;
-          console.log(`🔌 WebSocket disconnected (code: ${event.code}, reason: ${event.reason})`);
           setIsConnected(false);
           setSocket(null);
           isConnecting = false;
@@ -240,7 +465,6 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
           // Переподключение только если это не было намеренное закрытие
           if (event.code !== 1000 && event.code !== 1001 && reconnectAttempts < 3) {
             const delay = Math.min(2000 * Math.pow(2, reconnectAttempts), 10000);
-            console.log(`⏳ Reconnecting in ${delay}ms... (attempt ${reconnectAttempts + 1}/3)`);
             
             const timeout = setTimeout(() => {
               if (mounted) {
@@ -250,7 +474,6 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
             }, delay);
             setReconnectTimeout(timeout);
           } else if (reconnectAttempts >= 3) {
-            console.error('❌ Max reconnection attempts reached');
             setError('Не удалось подключиться к серверу');
           }
         };
@@ -295,6 +518,15 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
     setError(null);
   };
 
+  // Методы для очистки данных
+  const clearAlerts = () => {
+    setAlerts([]);
+  };
+
+  const clearTradingSignals = () => {
+    setTradingSignals([]);
+  };
+
   const contextValue: WebSocketDataContextType = {
     isConnected,
     error,
@@ -305,7 +537,13 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
     performanceMetrics,
     trainingStatus,
     analysisStatus,
-    reconnect
+    tradingSignals,
+    alerts,
+    modelMetrics,
+    trainingProgress,
+    reconnect,
+    clearAlerts,
+    clearTradingSignals
   };
 
   return (

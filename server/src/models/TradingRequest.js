@@ -18,6 +18,16 @@ const TradingRequest = sequelize.define('TradingRequest', {
         }
     },
     
+    // Связь со стратегией торговли
+    strategyId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'trading_strategies',
+            key: 'id'
+        }
+    },
+    
     // Основная информация об инструменте
     figi: {
         type: DataTypes.STRING,

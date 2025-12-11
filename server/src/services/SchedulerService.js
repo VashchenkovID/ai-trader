@@ -24,6 +24,8 @@ class SchedulerService {
         this.portfolioAnalysisTask = null;
         this.predictionsUpdateTask = null;
         this.signalsUpdateTask = null;
+        this.realPortfolioSyncTask = null;
+        this.virtualPortfolioUpdateTask = null;
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -287,6 +289,22 @@ class SchedulerService {
             timezone: "Europe/Moscow"
         });
 
+        // Задача 13: Автоматическая перебалансировка стратегий (каждое воскресенье в 3:00)
+        this.strategyRebalanceTask = cron.schedule('0 3 * * 0', async () => {
+            try {
+                console.log('🔄 Scheduled strategy rebalancing started...');
+                const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+                await StrategyAllocationService.rebalanceStrategies();
+                await OptimizedTelegramService.sendAlert('STRATEGY_REBALANCE_COMPLETE', 'Стратегии перебалансированы', 'info');
+            } catch (error) {
+                console.error('Error in scheduled strategy rebalancing:', error);
+                await OptimizedTelegramService.sendAlert('STRATEGY_REBALANCE_ERROR', error.message, 'warning');
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
         // Первое обновление при запуске (через 1 минуту) - ОТКЛЮЧЕНО для отладки
         // setTimeout(() => {
         //     this.performCacheUpdate();
@@ -307,6 +325,8 @@ class SchedulerService {
         console.log('   - Predictions update: every 20 minutes');
         console.log(`   - Model degradation check: ${degradationCheckSchedule}`);
         console.log('   - Portfolio analysis: every hour');
+        console.log('   - Real portfolio sync: every 3 hours');
+        console.log('   - Virtual portfolio update: daily at 1:00 AM');
         
         // Запускаем периодическую отправку данных через WebSocket
         this.startWebSocketBroadcasts();
@@ -582,22 +602,30 @@ class SchedulerService {
 
                     // Получаем топ-3 активные BUY-рекомендации
                     const Recommendation = (await import('../models/Recommendation.js')).default;
-                    const topBuys = await Recommendation.getTopRecommendations(3, 'BUY');
+                    // Используем прямой запрос без include, чтобы избежать ошибок ассоциаций
+                    const topBuys = await Recommendation.findAll({
+                        where: {
+                            isActive: true,
+                            recommendation: 'BUY'
+                        },
+                        order: [['confidence', 'DESC'], ['score', 'DESC']],
+                        limit: 3
+                    });
 
                     const tradingStats = {
-                        portfolioValue: portfolio.totalValue,
-                        cash: portfolio.cash,
-                        totalPnL: stats.totalReturn || 0,
-                        winRate: (stats.winRate || 0) * 100,
-                        totalTrades: stats.totalTrades || 0,
-                        successfulTrades: Math.round((stats.totalTrades || 0) * (stats.winRate || 0)),
-                        recommendations: topBuys.map(rec => ({
-                            figi: rec.figi,
-                            ticker: rec.ticker,
-                            name: rec.name,
-                            recommendation: rec.recommendation,
-                            confidence: rec.confidence,
-                            score: rec.score
+                        portfolioValue: portfolio?.totalValue || 0,
+                        cash: portfolio?.cash || 0,
+                        totalPnL: stats?.totalReturn || 0,
+                        winRate: (stats?.winRate || 0) * 100,
+                        totalTrades: stats?.totalTrades || 0,
+                        successfulTrades: Math.round((stats?.totalTrades || 0) * (stats?.winRate || 0)),
+                        recommendations: (topBuys || []).map(rec => ({
+                            figi: rec.figi || '',
+                            ticker: rec.ticker || '',
+                            name: rec.name || '',
+                            recommendation: rec.recommendation || 'HOLD',
+                            confidence: rec.confidence || 0,
+                            score: rec.score || 0
                         }))
                     };
                     
@@ -635,6 +663,85 @@ class SchedulerService {
             }
         }, { scheduled: false });
         this.intervals.add(trainingStatusTask);
+
+        // Отправляем метрики моделей каждую минуту (cron: каждую минуту)
+        const modelMetricsTask = cron.schedule('0 * * * * *', async () => {
+            try {
+                const WebSocketService = this.getWebSocketService();
+                if (!WebSocketService || !this.isInitialized) {
+                    return;
+                }
+
+                const OptimizedTrainingService = getService('OptimizedTrainingService');
+                const PerformanceAnalyzer = getService('PerformanceAnalyzer');
+                
+                if (!OptimizedTrainingService && !PerformanceAnalyzer) {
+                    return;
+                }
+
+                // Получаем метрики производительности
+                try {
+                    if (PerformanceAnalyzer && typeof PerformanceAnalyzer.getPerformanceMetrics === 'function') {
+                        const performanceMetrics = await PerformanceAnalyzer.getPerformanceMetrics();
+                        
+                        if (performanceMetrics && performanceMetrics.trading) {
+                            // Отправляем метрики для каждой модели
+                            const CacheService = (await import('./CacheService.js')).default;
+                            const instruments = await CacheService.getAllInstruments(10); // Берем первые 10 инструментов
+                            
+                            for (const instrument of instruments) {
+                                try {
+                                    // Получаем метрики для конкретного инструмента
+                                    const predictions = await PerformanceAnalyzer.getPredictionData(30);
+                                    const instrumentPredictions = predictions.filter(p => p.figi === instrument.figi);
+                                    
+                                    if (instrumentPredictions.length > 0) {
+                                        const correct = instrumentPredictions.filter(p => p.correct).length;
+                                        const accuracy = correct / instrumentPredictions.length;
+                                        
+                                        // Рассчитываем MAE и RMSE если есть данные
+                                        let mae = null;
+                                        let rmse = null;
+                                        
+                                        if (instrumentPredictions.length > 0) {
+                                            const errors = instrumentPredictions
+                                                .filter(p => p.actualPrice && p.predictedPrice)
+                                                .map(p => Math.abs(p.actualPrice - p.predictedPrice));
+                                            
+                                            if (errors.length > 0) {
+                                                mae = errors.reduce((sum, e) => sum + e, 0) / errors.length;
+                                                rmse = Math.sqrt(
+                                                    errors.reduce((sum, e) => sum + e * e, 0) / errors.length
+                                                );
+                                            }
+                                        }
+                                        
+                                        WebSocketService.broadcastModelMetrics({
+                                            modelType: 'neural_network',
+                                            figi: instrument.figi,
+                                            instrument: instrument.ticker,
+                                            accuracy: accuracy,
+                                            mae: mae,
+                                            rmse: rmse,
+                                            totalPredictions: instrumentPredictions.length,
+                                            correctPredictions: correct,
+                                            winRate: performanceMetrics.trading.winRate || null
+                                        });
+                                    }
+                                } catch (error) {
+                                    console.warn(`Error getting metrics for ${instrument.figi}:`, error.message);
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('❌ Error broadcasting model metrics:', error);
+                }
+            } catch (error) {
+                console.error('❌ Error in model metrics task:', error);
+            }
+        }, { scheduled: false });
+        this.intervals.add(modelMetricsTask);
         
         // Добавляем частую проверку кеша (каждые 30 минут) - включено обратно
         const cacheCheckTask = cron.schedule('*/30 * * * *', async () => {
@@ -1393,6 +1500,18 @@ class SchedulerService {
                 this.signalsUpdateTask = null;
                 console.log('✅ Signals update task stopped and destroyed');
             }
+            if (this.realPortfolioSyncTask) {
+                this.realPortfolioSyncTask.stop();
+                this.realPortfolioSyncTask.destroy();
+                this.realPortfolioSyncTask = null;
+                console.log('✅ Real portfolio sync task stopped and destroyed');
+            }
+            if (this.virtualPortfolioUpdateTask) {
+                this.virtualPortfolioUpdateTask.stop();
+                this.virtualPortfolioUpdateTask.destroy();
+                this.virtualPortfolioUpdateTask = null;
+                console.log('✅ Virtual portfolio update task stopped and destroyed');
+            }
     }
 
     /**
@@ -1861,6 +1980,128 @@ class SchedulerService {
             
         } catch (error) {
             console.error('❌ Error stopping Scheduler Service:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Синхронизация реального портфеля из Tinkoff API
+     */
+    async performRealPortfolioSync() {
+        try {
+            console.log('💼 Starting real portfolio sync from Tinkoff API...');
+            
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const RealPortfolio = (await import('../models/RealPortfolio.js')).default;
+            
+            // Получаем актуальные данные из Tinkoff API
+            const portfolioData = await TradingEngine.getRealPortfolioValue();
+            
+            if (!portfolioData) {
+                console.warn('⚠️ No portfolio data received from Tinkoff API');
+                return;
+            }
+            
+            // Рассчитываем стоимость позиций
+            let positionsValue = 0;
+            const rawPositions = portfolioData.positions || {};
+            
+            // Если positionsValue уже есть в данных, используем его
+            if (portfolioData.positionsValue) {
+                positionsValue = portfolioData.positionsValue;
+            } else {
+                // Иначе рассчитываем вручную
+                const CacheService = (await import('./CacheService.js')).default;
+                for (const [figi, quantity] of Object.entries(rawPositions)) {
+                    if (typeof quantity === 'number' && quantity > 0) {
+                        try {
+                            const instrument = await CacheService.getInstrument(figi, true);
+                            const currentPrice = instrument?.lastPrice || 0;
+                            if (currentPrice > 0) {
+                                positionsValue += currentPrice * quantity;
+                            }
+                        } catch (error) {
+                            console.warn(`⚠️ Не удалось получить цену для ${figi}:`, error.message);
+                        }
+                    }
+                }
+            }
+            
+            const cash = portfolioData.cash || 0;
+            const totalValue = cash + positionsValue;
+            
+            // Сохраняем в БД
+            await RealPortfolio.savePortfolio({
+                cash,
+                positions: rawPositions,
+                trades: portfolioData.trades || [],
+                totalValue,
+                positionsValue,
+                initialCapital: portfolioData.initialCapital || null
+            });
+            
+            console.log(`✅ Real portfolio synced: totalValue=${totalValue.toLocaleString('ru-RU')} RUB, cash=${cash.toLocaleString('ru-RU')} RUB, positions=${Object.keys(rawPositions).length}`);
+            
+            // Обновляем распределение стратегий на основе актуального totalValue
+            try {
+                const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+                await StrategyAllocationService.updateAllocationsFromPortfolioValue(totalValue);
+            } catch (error) {
+                console.warn('⚠️ Failed to update strategy allocations:', error.message);
+            }
+            
+        } catch (error) {
+            console.error('❌ Error syncing real portfolio:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Обновление виртуального портфеля - пересчет totalValue на основе текущих цен
+     */
+    async performVirtualPortfolioUpdate() {
+        try {
+            console.log('💼 Starting virtual portfolio update (recalculating totalValue)...');
+            
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const VirtualPortfolio = (await import('../models/VirtualPortfolio.js')).default;
+            
+            // Получаем текущий виртуальный портфель из БД
+            const savedPortfolio = await VirtualPortfolio.getCurrent();
+            
+            if (!savedPortfolio) {
+                console.warn('⚠️ No virtual portfolio found in DB, skipping update');
+                return;
+            }
+            
+            // Пересчитываем totalValue на основе текущих цен
+            const portfolioValue = await TradingEngine.getVirtualPortfolioValue();
+            
+            // Сохраняем обновленный портфель
+            await VirtualPortfolio.savePortfolio({
+                cash: portfolioValue.cash,
+                positions: portfolioValue.positions,
+                trades: portfolioValue.trades || [],
+                totalValue: portfolioValue.totalValue,
+                initialCapital: savedPortfolio.initialCapital || 1000000
+            });
+            
+            console.log(`✅ Virtual portfolio updated: totalValue=${portfolioValue.totalValue.toLocaleString('ru-RU')} RUB`);
+            
+            // Обновляем распределение стратегий на основе актуального totalValue (только если режим виртуальный)
+            try {
+                const TradingModeManager = (await import('./TradingModeManager.js')).default;
+                const currentMode = TradingModeManager.getCurrentMode();
+                if (currentMode.mode === 'paper' || currentMode === 'paper') {
+                    const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+                    await StrategyAllocationService.updateAllocationsFromPortfolioValue(portfolioValue.totalValue);
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to update strategy allocations:', error.message);
+            }
+            
+        } catch (error) {
+            console.error('❌ Error updating virtual portfolio:', error);
             throw error;
         }
     }

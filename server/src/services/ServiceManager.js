@@ -69,6 +69,7 @@ class ServiceManager {
             await this.initializeService('TradingModeManager', () => import('./TradingModeManager.js'));
             await this.initializeService('TrainingStatusService', () => import('./TrainingStatusService.js'));
             await this.initializeService('TradingRequestService', () => import('./TradingRequestService.js'));
+            await this.initializeService('StrategyAllocationService', () => import('./StrategyAllocationService.js'));
 
             // 5. Инициализируем WebSocket с сервером (если передан)
             if (server) {

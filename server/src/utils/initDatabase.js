@@ -12,8 +12,12 @@ import PortfolioItem from '../models/PortfolioItem.js';
 import Recommendation from '../models/Recommendation.js';
 import TradingRequest from '../models/TradingRequest.js';
 import VirtualPortfolio from '../models/VirtualPortfolio.js';
+import RealPortfolio from '../models/RealPortfolio.js';
 import CachedSignal from '../models/CachedSignal.js';
 import TrainingState from '../models/TrainingState.js';
+import TradingStrategy from '../models/TradingStrategy.js';
+import PortfolioAllocation from '../models/PortfolioAllocation.js';
+import PositionStrategy from '../models/PositionStrategy.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
@@ -74,6 +78,11 @@ export async function initDatabase() {
         await VirtualPortfolio.sync({ force: false });
         console.log('✅ Таблица виртуального портфеля создана/обновлена');
         
+        // Создаем таблицу реального портфеля
+        console.log('💼 Создание таблицы реального портфеля...');
+        await RealPortfolio.sync({ force: false });
+        console.log('✅ Таблица реального портфеля создана/обновлена');
+        
         // Создаем таблицу кэшированных сигналов
         console.log('⚡ Создание таблицы кэшированных сигналов...');
         await CachedSignal.sync({ force: false });
@@ -84,10 +93,59 @@ export async function initDatabase() {
         await TrainingState.sync({ force: false });
         console.log('✅ Таблица состояния обучения создана/обновлена');
         
-        // Создаем таблицу состояния обучения
-        console.log('📊 Создание таблицы состояния обучения...');
-        await TrainingState.sync({ force: false });
-        console.log('✅ Таблица состояния обучения создана/обновлена');
+        // Создаем таблицы для стратегий торговли
+        console.log('📈 Создание таблиц торговых стратегий...');
+        await TradingStrategy.sync({ force: false });
+        await PortfolioAllocation.sync({ force: false });
+        await PositionStrategy.sync({ force: false });
+        console.log('✅ Таблицы торговых стратегий созданы/обновлены');
+        
+        // Инициализируем стратегии по умолчанию
+        await TradingStrategy.initializeDefaultStrategies();
+        
+        // Устанавливаем ассоциации между моделями
+        console.log('🔗 Установка ассоциаций между моделями...');
+        try {
+            // Ассоциации для Recommendation
+            Recommendation.belongsTo(TradingStrategy, {
+                foreignKey: 'strategyId',
+                as: 'strategy'
+            });
+            
+            // Ассоциации для TradingStrategy
+            TradingStrategy.hasMany(Recommendation, {
+                foreignKey: 'strategyId',
+                as: 'recommendations'
+            });
+            TradingStrategy.hasMany(PortfolioAllocation, {
+                foreignKey: 'strategyId',
+                as: 'allocation'
+            });
+            TradingStrategy.hasMany(PositionStrategy, {
+                foreignKey: 'strategyId',
+                as: 'positions'
+            });
+            
+            // Ассоциации для PositionStrategy
+            PositionStrategy.belongsTo(TradingRequest, {
+                foreignKey: 'positionId',
+                as: 'position'
+            });
+            PositionStrategy.belongsTo(TradingStrategy, {
+                foreignKey: 'strategyId',
+                as: 'strategy'
+            });
+            
+            // Ассоциации для TradingRequest
+            TradingRequest.belongsTo(TradingStrategy, {
+                foreignKey: 'strategyId',
+                as: 'strategy'
+            });
+            
+            console.log('✅ Ассоциации установлены');
+        } catch (assocError) {
+            console.warn('⚠️ Предупреждение при установке ассоциаций:', assocError.message);
+        }
 
         // Инициализация настроек
         console.log('\n🔧 Инициализация настроек...');

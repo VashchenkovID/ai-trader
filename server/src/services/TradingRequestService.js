@@ -6,6 +6,9 @@ import ServiceManager from './ServiceManager.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
 import TinkoffApiService from './TinkoffApiService.js';
 import SettingsService from './SettingsService.js';
+import StrategyAllocationService from './StrategyAllocationService.js';
+import PortfolioAllocation from '../models/PortfolioAllocation.js';
+import PositionStrategy from '../models/PositionStrategy.js';
 import { Op } from 'sequelize';
 
 /**
@@ -74,10 +77,87 @@ class TradingRequestService {
                 throw new Error(`Invalid price for ${recommendation.figi}: ${currentPrice}. Cannot create trading request. Please provide a valid price.`);
             }
             
+            // Определяем стратегию для рекомендации
+            let strategy = null;
+            let positionSize = null;
+            let strategyValidation = null;
+            
+            // Если стратегия указана явно в options, используем её
+            if (options.strategyId) {
+                try {
+                    const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+                    strategy = await TradingStrategy.findByPk(options.strategyId);
+                    if (strategy) {
+                        // Проверяем соответствие стратегии и рекомендации
+                        strategyValidation = await StrategyAllocationService.validateStrategyRecommendationMatch(
+                            strategy.id,
+                            recommendation
+                        );
+                        
+                        if (!strategyValidation.isValid && !options.ignoreStrategyValidation) {
+                            const warnings = [];
+                            if (!strategyValidation.meetsMinConfidence) {
+                                warnings.push(`Уверенность (${recommendation.confidence.toFixed(2)}) ниже минимальной для стратегии (${strategy.minConfidence})`);
+                            }
+                            if (!strategyValidation.meetsMinScore) {
+                                warnings.push(`Оценка (${recommendation.score.toFixed(2)}) ниже минимальной для стратегии (${strategy.minScore})`);
+                            }
+                            if (!strategyValidation.typeMatch) {
+                                warnings.push('Тип стратегии не соответствует типу рекомендации');
+                            }
+                            if (!strategyValidation.timeframeMatch) {
+                                warnings.push('Временной горизонт стратегии не соответствует рекомендации');
+                            }
+                            
+                            // Сохраняем предупреждение для возврата клиенту вместо ошибки
+                            strategyValidation.warnings = warnings;
+                            strategyValidation.warningMessage = `Стратегия "${strategy.name}" не соответствует рекомендации: ${warnings.join('; ')}. ${strategyValidation.warning || ''}`;
+                            // Не выбрасываем ошибку, а продолжаем выполнение с предупреждением
+                        }
+                        
+                        // Рассчитываем размер позиции с учетом стратегии
+                        const portfolioSettings = await SettingsService.getPortfolioSettings();
+                        const totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
+                        positionSize = await StrategyAllocationService.calculatePositionSize(
+                            strategy.id,
+                            recommendation,
+                            totalBudget
+                        );
+                    }
+                } catch (strategyError) {
+                    if (strategyError.message.includes('не соответствует рекомендации')) {
+                        throw strategyError; // Пробрасываем ошибки валидации
+                    }
+                    console.warn('⚠️ Could not use specified strategy:', strategyError.message);
+                }
+            }
+            
+            // Если стратегия не указана явно, определяем автоматически
+            if (!strategy) {
+                try {
+                    strategy = await StrategyAllocationService.getStrategyForRecommendation(recommendation);
+                    if (strategy) {
+                        // Рассчитываем размер позиции с учетом стратегии
+                        const portfolioSettings = await SettingsService.getPortfolioSettings();
+                        const totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
+                        positionSize = await StrategyAllocationService.calculatePositionSize(
+                            strategy.id,
+                            recommendation,
+                            totalBudget
+                        );
+                    }
+                } catch (strategyError) {
+                    console.warn('⚠️ Could not determine strategy for recommendation:', strategyError.message);
+                }
+            }
+
             // Используем указанное количество или рассчитываем автоматически
             let quantity;
             if (options.quantity && options.quantity > 0 && !isNaN(options.quantity)) {
                 quantity = Math.floor(Math.abs(options.quantity)); // Округляем вниз до целого числа
+            } else if (positionSize && positionSize.amount > 0) {
+                // Используем размер позиции из стратегии
+                quantity = Math.floor(positionSize.amount / currentPrice);
             } else {
                 // Рассчитываем количество акций с учетом режима
                 quantity = await this.calculateQuantity(
@@ -98,18 +178,34 @@ class TradingRequestService {
 
             const estimatedAmount = currentPrice * quantity;
             
+            // Проверяем доступный бюджет стратегии, если стратегия определена
+            if (strategy && positionSize) {
+                const availableBudget = await StrategyAllocationService.getAvailableBudget(strategy.id);
+                if (estimatedAmount > availableBudget) {
+                    console.warn(`⚠️ Requested amount (${estimatedAmount}) exceeds available budget (${availableBudget}) for strategy ${strategy.name}`);
+                    // Не блокируем создание заявки, но предупреждаем
+                }
+            }
+            
             // Валидация суммы
             if (!estimatedAmount || estimatedAmount <= 0 || isNaN(estimatedAmount) || !isFinite(estimatedAmount)) {
                 throw new Error(`Invalid estimated amount: ${estimatedAmount}. Price: ${currentPrice}, Quantity: ${quantity}`);
             }
 
+            // Используем параметры стратегии для stop-loss и take-profit, если они не указаны явно
+            const stopLoss = options.stopLoss || recommendation.stopLoss || (strategy ? currentPrice * (1 - strategy.stopLossPercent / 100) : null);
+            const takeProfit = options.takeProfit || recommendation.takeProfit || (strategy ? currentPrice * (1 + strategy.takeProfitPercent / 100) : null);
+            
+            // Определяем action: для HOLD рекомендаций создаем BUY заявку (пользователь хочет купить, несмотря на HOLD)
+            const action = recommendation.recommendation === 'HOLD' ? 'BUY' : recommendation.recommendation;
+            
             // Создаем заявку
             const tradingRequest = await TradingRequest.create({
                 recommendationId: recommendation.figi,
                 figi: recommendation.figi,
                 ticker: recommendation.ticker,
                 name: recommendation.name,
-                action: recommendation.recommendation,
+                action: action,
                 quantity,
                 priceAtRequest: currentPrice,
                 estimatedAmount,
@@ -118,11 +214,42 @@ class TradingRequestService {
                 reasoning: this.generateReasoning(recommendation),
                 aiExplanation: recommendation.explanation,
                 tradingMode: currentMode,
-                stopLoss: options.stopLoss || recommendation.stopLoss,
-                takeProfit: options.takeProfit || recommendation.takeProfit,
+                strategyId: strategy ? strategy.id : null,
+                stopLoss,
+                takeProfit,
                 maxLoss: options.maxLoss,
                 userComment: options.comment
             });
+            
+            // Создаем запись PositionStrategy, если стратегия определена
+            if (strategy) {
+                try {
+                    await PositionStrategy.create({
+                        positionId: tradingRequest.id,
+                        strategyId: strategy.id,
+                        entryReason: {
+                            confidence: recommendation.confidence,
+                            score: recommendation.score,
+                            signalsMatch: false, // TODO: проверка соответствия сигналам
+                            aiRecommendation: recommendation.recommendation
+                        },
+                        targetTimeframe: strategy.timeframe === 'short' ? 7 : strategy.timeframe === 'medium' ? 30 : 90,
+                        entryDate: new Date(),
+                        expectedExitDate: strategy.timeframe === 'short' 
+                            ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                            : strategy.timeframe === 'medium'
+                            ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                            : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+                    });
+                    
+                    // Используем бюджет стратегии
+                    await PortfolioAllocation.useBudget(strategy.id, estimatedAmount);
+                    console.log(`💰 Used ${estimatedAmount} RUB from strategy ${strategy.name} budget`);
+                } catch (positionError) {
+                    console.warn('⚠️ Could not create PositionStrategy or use budget:', positionError.message);
+                    // Не блокируем создание заявки, если не удалось создать PositionStrategy
+                }
+            }
 
             // Уведомляем через WebSocket (если доступен)
             try {
@@ -146,7 +273,17 @@ class TradingRequestService {
 
             console.log(`📝 Trading request created: ${tradingRequest.id} (${tradingRequest.action} ${tradingRequest.ticker})`);
             
-            return tradingRequest;
+            // Возвращаем заявку с предупреждением о стратегии, если есть
+            const result = tradingRequest.toJSON ? tradingRequest.toJSON() : tradingRequest;
+            if (strategyValidation && !strategyValidation.isValid) {
+                result.strategyWarning = {
+                    message: strategyValidation.warningMessage,
+                    warnings: strategyValidation.warnings,
+                    isValid: false
+                };
+            }
+            
+            return result;
 
         } catch (error) {
             console.error('❌ Error creating trading request:', error);
@@ -163,9 +300,8 @@ class TradingRequestService {
                 throw new Error('FIGI is required in recommendationData');
             }
 
-            if (recommendationData.recommendation === 'HOLD') {
-                throw new Error('Cannot create trading request for HOLD recommendation');
-            }
+            // Разрешаем создание заявок для HOLD рекомендаций (с предупреждением на фронтенде)
+            // Пользователь может действовать вопреки рекомендации AI
 
             // Получаем текущий режим торговли
             const currentMode = TradingModeManager.getCurrentMode().mode;
@@ -218,21 +354,75 @@ class TradingRequestService {
                 throw new Error(`Invalid estimated amount: ${estimatedAmount}. Price: ${currentPrice}, Quantity: ${quantity}`);
             }
 
+            // Определяем стратегию, если указана явно
+            let strategy = null;
+            let strategyValidation = null;
+            
+            if (options.strategyId) {
+                try {
+                    const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+                    strategy = await TradingStrategy.findByPk(options.strategyId);
+                    if (strategy) {
+                        // Проверяем соответствие стратегии и рекомендации
+                        strategyValidation = await StrategyAllocationService.validateStrategyRecommendationMatch(
+                            strategy.id,
+                            recommendationData
+                        );
+                        
+                        if (!strategyValidation.isValid && !options.ignoreStrategyValidation) {
+                            const warnings = [];
+                            if (!strategyValidation.meetsMinConfidence) {
+                                warnings.push(`Уверенность (${(recommendationData.confidence || 0).toFixed(2)}) ниже минимальной для стратегии (${strategy.minConfidence})`);
+                            }
+                            if (!strategyValidation.meetsMinScore) {
+                                warnings.push(`Оценка (${(recommendationData.score || 0).toFixed(2)}) ниже минимальной для стратегии (${strategy.minScore})`);
+                            }
+                            if (!strategyValidation.typeMatch) {
+                                warnings.push('Тип стратегии не соответствует типу рекомендации');
+                            }
+                            if (!strategyValidation.timeframeMatch) {
+                                warnings.push('Временной горизонт стратегии не соответствует рекомендации');
+                            }
+                            
+                            // Сохраняем предупреждение для возврата клиенту вместо ошибки
+                            strategyValidation.warnings = warnings;
+                            strategyValidation.warningMessage = `Стратегия "${strategy.name}" не соответствует рекомендации: ${warnings.join('; ')}. ${strategyValidation.warning || ''}`;
+                            // Не выбрасываем ошибку, а продолжаем выполнение с предупреждением
+                        }
+                    }
+                } catch (strategyError) {
+                    if (strategyError.message.includes('не соответствует рекомендации')) {
+                        throw strategyError; // Пробрасываем ошибки валидации
+                    }
+                    console.warn('⚠️ Could not use specified strategy:', strategyError.message);
+                }
+            }
+            
+            // Определяем action: для HOLD рекомендаций создаем BUY заявку (пользователь хочет купить, несмотря на HOLD)
+            const action = recommendationData.recommendation === 'HOLD' ? 'BUY' : recommendationData.recommendation;
+            
+            // Формируем reasoning с информацией о валидации стратегии
+            let reasoning = this.generateReasoning(recommendationData);
+            if (strategyValidation && strategyValidation.warning) {
+                reasoning += `\n\n⚠️ Предупреждение: ${strategyValidation.warning}`;
+            }
+            
             // Создаем заявку
             const tradingRequest = await TradingRequest.create({
                 recommendationId: recommendationData.figi, // Используем FIGI как ID рекомендации
                 figi: recommendationData.figi,
                 ticker: recommendationData.ticker,
                 name: recommendationData.name,
-                action: recommendationData.recommendation,
+                action: action,
                 quantity,
                 priceAtRequest: currentPrice,
                 estimatedAmount,
                 confidence: recommendationData.confidence || 0.5,
                 score: recommendationData.score || 0.5,
-                reasoning: this.generateReasoning(recommendationData),
+                reasoning: reasoning,
                 aiExplanation: recommendationData.explanation || recommendationData.analysis,
                 tradingMode: currentMode,
+                strategyId: strategy ? strategy.id : null,
                 stopLoss: options.stopLoss || recommendationData.stopLoss,
                 takeProfit: options.takeProfit || recommendationData.targetPrice || recommendationData.takeProfit,
                 maxLoss: options.maxLoss,
@@ -261,7 +451,17 @@ class TradingRequestService {
 
             console.log(`📝 Trading request created from data: ${tradingRequest.id} (${tradingRequest.action} ${tradingRequest.ticker})`);
             
-            return tradingRequest;
+            // Возвращаем заявку с предупреждением о стратегии, если есть
+            const result = tradingRequest.toJSON ? tradingRequest.toJSON() : tradingRequest;
+            if (strategyValidation && !strategyValidation.isValid) {
+                result.strategyWarning = {
+                    message: strategyValidation.warningMessage,
+                    warnings: strategyValidation.warnings,
+                    isValid: false
+                };
+            }
+            
+            return result;
 
         } catch (error) {
             console.error('❌ Error creating trading request from data:', error);
@@ -454,6 +654,9 @@ class TradingRequestService {
      */
     async getRequests(status = null, limit = 50, tradingMode = null) {
         try {
+            const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
+            const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+            
             let whereClause = {};
             
             if (status) {
@@ -464,15 +667,55 @@ class TradingRequestService {
                 whereClause.tradingMode = tradingMode;
             }
             
+            let requests;
             if (Object.keys(whereClause).length > 0) {
-                return await TradingRequest.findAll({
+                requests = await TradingRequest.findAll({
                     where: whereClause,
                     order: [['createdAt', 'DESC']],
                     limit
                 });
             } else {
-                return await TradingRequest.getRequestHistory(limit);
+                requests = await TradingRequest.findAll({
+                    order: [['createdAt', 'DESC']],
+                    limit
+                });
             }
+            
+            // Получаем стратегии для заявок
+            const requestsWithStrategies = await Promise.all(requests.map(async (req) => {
+                const reqData = req.toJSON();
+                
+                // Если есть strategyId, получаем стратегию напрямую
+                if (reqData.strategyId) {
+                    try {
+                        const strategy = await TradingStrategy.findByPk(reqData.strategyId);
+                        if (strategy) {
+                            reqData.strategy = strategy.toJSON();
+                        }
+                    } catch (error) {
+                        console.warn(`Could not load strategy for request ${reqData.id}:`, error.message);
+                    }
+                } else {
+                    // Пытаемся найти через PositionStrategy
+                    try {
+                        const positionStrategy = await PositionStrategy.findOne({
+                            where: { positionId: reqData.id }
+                        });
+                        if (positionStrategy && positionStrategy.strategyId) {
+                            const strategy = await TradingStrategy.findByPk(positionStrategy.strategyId);
+                            if (strategy) {
+                                reqData.strategy = strategy.toJSON();
+                            }
+                        }
+                    } catch (error) {
+                        // Игнорируем ошибки при поиске стратегии
+                    }
+                }
+                
+                return reqData;
+            }));
+            
+            return requestsWithStrategies;
         } catch (error) {
             console.error('❌ Error getting trading requests:', error);
             throw error;

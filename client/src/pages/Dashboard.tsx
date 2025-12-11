@@ -1,14 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from 'primereact/card';
 import { Badge } from 'primereact/badge';
 import { Skeleton } from 'primereact/skeleton';
 import { Message } from 'primereact/message';
+import { Toast } from 'primereact/toast';
 import { apiService } from '../services/apiService';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { useWebSocketData } from '../components/WebSocketDataProvider';
 import CacheStatusCard from '../components/dashboard/CacheStatusCard';
 import TradingSummaryCard from '../components/dashboard/TradingSummaryCard';
 import NeuralNetworksControlCard from '../components/dashboard/NeuralNetworksControlCard';
+import TradingSignalsWidget from '../components/websocket/TradingSignalsWidget';
+import AlertsWidget from '../components/websocket/AlertsWidget';
+import ModelMetricsWidget from '../components/websocket/ModelMetricsWidget';
+import TrainingProgressWidget from '../components/websocket/TrainingProgressWidget';
 
 interface DashboardProps {
   className?: string;
@@ -23,14 +28,18 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
     cacheStatus, 
     systemResources,
     tradingStats, 
-    trainingStatus, 
+    trainingStatus,
+    trainingProgress,
+    tradingSignals,
+    alerts,
+    modelMetrics,
     isConnected 
   } = useWebSocketData();
   
   // Локальное состояние
   const [error, setError] = useState<string | null>(null);
   const [trainLoading, setTrainLoading] = useState(false);
-  const [trainingProgress, setTrainingProgress] = useState<string>('');
+  const [trainingProgressText, setTrainingProgressText] = useState<string>('');
   const [trainingStage, setTrainingStage] = useState<string>('');
   const [trainingStages, setTrainingStages] = useState<{
     neuralNetwork: 'pending' | 'in_progress' | 'completed' | 'failed';
@@ -43,6 +52,10 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
     metaLearning: 'pending',
     reinforcementLearning: 'pending'
   });
+  
+  const toast = useRef<Toast>(null);
+  const lastSignalRef = useRef<string>('');
+  const lastAlertRef = useRef<string>('');
 
   // Обработка статуса обучения из WebSocket
   useEffect(() => {
@@ -463,9 +476,37 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
         {/* Информация о кеше */}
         <div className="col-12 xl:col-6">
           <CacheStatusCard cacheStatus={cacheStatus} />
-              </div>
-
+        </div>
       </div>
+
+      {/* Новые WebSocket виджеты */}
+      <div className="grid mt-3">
+        {/* Торговые сигналы */}
+        <div className="col-12 lg:col-6">
+          <TradingSignalsWidget maxSignals={10} />
+        </div>
+
+        {/* Системные алерты */}
+        <div className="col-12 lg:col-6">
+          <AlertsWidget maxAlerts={20} showClearButton={true} />
+        </div>
+
+        {/* Прогресс обучения */}
+        {trainingProgress && (
+          <div className="col-12 lg:col-6">
+            <TrainingProgressWidget />
+          </div>
+        )}
+
+        {/* Метрики моделей */}
+        {modelMetrics.length > 0 && (
+          <div className="col-12 lg:col-6">
+            <ModelMetricsWidget maxMetrics={10} />
+          </div>
+        )}
+      </div>
+
+      <Toast ref={toast} />
       <ConfirmDialog />
     </div>
   );

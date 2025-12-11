@@ -9,6 +9,7 @@ import PortfolioPositionsTable, { Position } from './portfolio/PortfolioPosition
 import PortfolioCharts from './portfolio/PortfolioCharts';
 import PortfolioAnalytics from './portfolio/PortfolioAnalytics';
 import PortfolioAnalysisResults, { SellRecommendation } from './portfolio/PortfolioAnalysisResults';
+import StrategyPositionsTable from './portfolio/StrategyPositionsTable';
 
 interface PortfolioVisualizationProps {
   className?: string;
@@ -25,17 +26,28 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
     buyRecommendations?: any[];
   } | null>(null);
   const [showAnalysisResults, setShowAnalysisResults] = useState(false);
+  const [strategies, setStrategies] = useState<any[]>([]);
+  const [strategyPositions, setStrategyPositions] = useState<Record<number, Position[]>>({});
   const toast = React.useRef<Toast>(null);
   
   const { isConnected, tradingStats } = useWebSocketData();
 
-  // Присваиваем предсказания позициям по FIGI
+  // Присваиваем предсказания и стратегии позициям по FIGI
   const attachPredictionsToPositions = (
     basePositions: Position[],
     recommendations: any[] = []
   ): Position[] => {
     if (!Array.isArray(basePositions) || basePositions.length === 0) return basePositions;
-    const map = new Map<string, { recommendation: any; score?: number; confidence?: number }>();
+    const map = new Map<string, { 
+      recommendation: any; 
+      score?: number; 
+      confidence?: number;
+      strategy?: {
+        id: number;
+        name: string;
+        type: 'conservative' | 'moderate' | 'aggressive';
+      };
+    }>();
     for (const rec of recommendations) {
       const figi = rec?.item?.figi || rec?.figi;
       if (!figi) continue;
@@ -43,15 +55,44 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
       const confidence = rec?.prediction?.confidence ?? rec?.confidence;
       // Отбрасываем бессодержательные записи с нулями, чтобы не затирать актуальные данные
       if (score === 0 && confidence === 0) continue;
+      
+      // Извлекаем стратегию из рекомендации
+      let strategy = null;
+      if (rec?.strategy) {
+        // Если стратегия уже объект
+        strategy = {
+          id: rec.strategy.id,
+          name: rec.strategy.name,
+          type: rec.strategy.type
+        };
+      } else if (rec?.strategyId && rec?.strategy) {
+        // Если есть и strategyId и объект strategy
+        strategy = {
+          id: rec.strategy.id || rec.strategyId,
+          name: rec.strategy.name,
+          type: rec.strategy.type
+        };
+      }
+      
       map.set(figi, {
         recommendation: rec?.prediction?.recommendation || rec?.recommendation || rec?.action || 'HOLD',
         score,
-        confidence
+        confidence,
+        strategy: strategy || undefined
       });
     }
     return basePositions.map((p) => {
-      const pred = map.get(p.figi);
-      return pred ? { ...p, prediction: pred } : p;
+      const data = map.get(p.figi);
+      if (data) {
+        const { strategy, ...prediction } = data;
+        return {
+          ...p,
+          prediction,
+          // Присваиваем стратегию только если её еще нет в позиции или если она из рекомендации
+          strategy: strategy || p.strategy
+        };
+      }
+      return p;
     });
   };
 
@@ -176,7 +217,8 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
             weight: typeof pos.weight === 'number' && !isNaN(pos.weight) ? pos.weight : 0,
             sector: (pos.sector && pos.sector !== 'Неизвестно') ? pos.sector : 'Неизвестно',
             currency: pos.currency || 'RUB',
-            lastUpdate: pos.lastUpdate || new Date().toISOString()
+            lastUpdate: pos.lastUpdate || new Date().toISOString(),
+            strategy: pos.strategy || null // Сохраняем стратегию из исходных данных
           };
         });
     }
@@ -240,6 +282,119 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
 
       const positionsWithPredictions = attachPredictionsToPositions(transformedPositions, recommendationsForPositions);
       setPositions(positionsWithPredictions);
+      
+      // Отладочный вывод для проверки стратегий в позициях
+      const positionsWithStrategy = positionsWithPredictions.filter(p => p.strategy?.id);
+      console.log('📊 Positions with strategy:', positionsWithStrategy.length, 'out of', positionsWithPredictions.length);
+      if (positionsWithStrategy.length > 0) {
+        console.log('📊 Sample position with strategy:', positionsWithStrategy[0]);
+      }
+
+      // Загружаем стратегии и группируем позиции по стратегиям
+      try {
+        // Загружаем стратегии с информацией о распределении бюджета
+        const strategiesResp = await apiService.getStrategyAllocations();
+        
+        // API возвращает: { success: true, data: { strategies: [...], totalAllocated, ... } }
+        let strategiesData = [];
+        if (strategiesResp) {
+          if (Array.isArray(strategiesResp)) {
+            strategiesData = strategiesResp;
+          } else if (strategiesResp.strategies && Array.isArray(strategiesResp.strategies)) {
+            strategiesData = strategiesResp.strategies;
+          } else if (strategiesResp.data) {
+            if (Array.isArray(strategiesResp.data)) {
+              strategiesData = strategiesResp.data;
+            } else if (strategiesResp.data.strategies && Array.isArray(strategiesResp.data.strategies)) {
+              strategiesData = strategiesResp.data.strategies;
+            }
+          }
+        }
+        
+        // Преобразуем формат данных: API возвращает стратегии с прямыми полями,
+        // но компоненты ожидают объект allocation
+        const transformedStrategies = strategiesData.map((strategy: any) => {
+          // Если уже есть allocation, оставляем как есть
+          if (strategy.allocation) {
+            return strategy;
+          }
+          
+          // Иначе создаем объект allocation из прямых полей
+          return {
+            ...strategy,
+            allocation: {
+              allocatedAmount: strategy.allocatedAmount || 0,
+              usedAmount: strategy.usedAmount || 0,
+              availableAmount: strategy.availableAmount || 0,
+              realUsedAmount: strategy.realUsedAmount || strategy.usedAmount || 0,
+              positionsCount: strategy.positionsCount || 0
+            }
+          };
+        });
+        
+        console.log('📊 Loaded strategies:', transformedStrategies.length, transformedStrategies);
+        setStrategies(transformedStrategies);
+
+        // Группируем позиции по стратегиям и фильтруем рекомендации по стратегиям
+        const positionsByStrategy: Record<number, Position[]> = {};
+
+        // Группируем позиции по стратегиям (используем positionsWithPredictions, чтобы сохранить стратегию)
+        positionsWithPredictions.forEach(pos => {
+          if (pos.strategy?.id) {
+            const strategyId = pos.strategy.id;
+            if (!positionsByStrategy[strategyId]) {
+              positionsByStrategy[strategyId] = [];
+            }
+            positionsByStrategy[strategyId].push(pos);
+          }
+        });
+
+        // Фильтруем рекомендации по стратегиям из уже загруженных рекомендаций
+        const finalStrategyPositions: Record<number, Position[]> = {};
+        Object.keys(positionsByStrategy).forEach(strategyIdStr => {
+          const strategyId = parseInt(strategyIdStr);
+          const strategyPositionsList = positionsByStrategy[strategyId];
+          const figis = new Set(strategyPositionsList.map(p => p.figi));
+          
+          // Фильтруем рекомендации для этой стратегии и позиций
+          const strategyRecs = recommendationsForPositions.filter(rec => {
+            const recFigi = rec?.item?.figi || rec?.figi;
+            const recStrategyId = rec?.strategyId || rec?.strategy?.id;
+            return figis.has(recFigi) && recStrategyId === strategyId;
+          });
+          
+          // Группируем по FIGI, беря самую свежую рекомендацию
+          const recsMap = new Map<string, any>();
+          strategyRecs.forEach(rec => {
+            const recFigi = rec?.item?.figi || rec?.figi;
+            if (!recFigi) return;
+            
+            const existingRec = recsMap.get(recFigi);
+            const recDate = new Date(rec?.analysisDate || rec?.createdAt || 0);
+            const existingDate = existingRec ? new Date(existingRec?.analysisDate || existingRec?.createdAt || 0) : new Date(0);
+            
+            if (!existingRec || recDate > existingDate) {
+              recsMap.set(recFigi, rec);
+            }
+          });
+          
+          finalStrategyPositions[strategyId] = attachPredictionsToPositions(
+            strategyPositionsList, 
+            Array.from(recsMap.values())
+          );
+        });
+
+        setStrategyPositions(finalStrategyPositions);
+        
+        // Отладочный вывод
+        console.log('📊 Strategies loaded:', strategiesData.length);
+        console.log('📊 Positions by strategy:', Object.keys(finalStrategyPositions).length);
+        Object.keys(finalStrategyPositions).forEach(strategyId => {
+          console.log(`  Strategy ${strategyId}: ${finalStrategyPositions[parseInt(strategyId)].length} positions`);
+        });
+      } catch (strategiesErr) {
+        console.warn('Could not load strategies:', strategiesErr);
+      }
 
       // Обрабатываем данные портфеля
       if (portfolioResponse.status === 'fulfilled' && portfolioResponse.value) {
@@ -411,6 +566,7 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
         loading={loading}
         isConnected={isConnected}
         className="mb-4"
+        strategies={strategies}
       />
 
       {error && (
@@ -431,6 +587,27 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
           onSellSuccess={loadPortfolioData}
         />
       </div>
+
+      {/* Таблицы по стратегиям */}
+      {strategies.length > 0 && (
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold mb-3">Позиции по стратегиям</h2>
+          {strategies.map((strategy) => {
+            const strategyPositionsList = strategyPositions[strategy.id] || [];
+            return (
+              <div key={strategy.id} className="mb-4">
+                <StrategyPositionsTable
+                  strategyId={strategy.id}
+                  strategyName={strategy.name}
+                  strategyType={strategy.type}
+                  positions={strategyPositionsList}
+                  loading={loading}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Карточка Аналитика */}
       <div className="grid">

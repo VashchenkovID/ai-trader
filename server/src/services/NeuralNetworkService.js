@@ -1292,7 +1292,8 @@ class NeuralNetworkService {
                             recommendation: integratedRec.recommendation || 'HOLD',
                             explanation: integratedRec.summary || integratedRec.details || {},
                             summary: integratedRec.summary, // Сохраняем summary отдельно для использования в explanation
-                            details: integratedRec.details || {}
+                            details: integratedRec.details || {},
+                            horizons: integratedRec.horizons || null // Сохраняем горизонты отдельно
                         };
                         console.log(`🔍 [IntegratedAI] ${instrument.ticker}: score=${prediction.score.toFixed(3)}, confidence=${prediction.confidence.toFixed(3)}, recommendation=${prediction.recommendation}`);
                     } else {
@@ -1313,17 +1314,51 @@ class NeuralNetworkService {
                 const currentPrice = candidatePrice;
                 const recommendation = prediction.recommendation || 'HOLD';
                 
+                // Определяем стратегию для рекомендации и рассчитываем размер позиции с учетом стратегии
+                let suggestedStrategy = null;
+                let suggestedQuantity = 0;
+                let estimatedCost = 0;
+                
+                try {
+                    const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+                    suggestedStrategy = await StrategyAllocationService.getStrategyForRecommendation(
+                        prediction.confidence || confidence, 
+                        prediction.score || score
+                    );
+                    
+                    if (suggestedStrategy && recommendation === 'BUY') {
+                        // Рассчитываем размер позиции с учетом стратегии
+                        const positionSize = await StrategyAllocationService.calculatePositionSize(
+                            suggestedStrategy.id,
+                            { confidence: prediction.confidence || confidence, score: prediction.score || score },
+                            totalBudget
+                        );
+                        suggestedQuantity = Math.floor(positionSize.amount / Math.max(currentPrice, 1));
+                        estimatedCost = suggestedQuantity * currentPrice;
+                    } else {
+                        // Fallback к обычному расчету
+                        suggestedQuantity = Math.floor(analysis.availableBudget / Math.max(currentPrice, 1));
+                        estimatedCost = suggestedQuantity * currentPrice;
+                    }
+                } catch (strategyError) {
+                    // Fallback к обычному расчету при ошибке
+                    suggestedQuantity = Math.floor(analysis.availableBudget / Math.max(currentPrice, 1));
+                    estimatedCost = suggestedQuantity * currentPrice;
+                }
+                
                 // Распределяем рекомендации по соответствующим массивам
                 if (recommendation === 'BUY') {
-                    const affordableQuantity = Math.floor(analysis.availableBudget / Math.max(currentPrice, 1));
                     analysis.buyRecommendations.push({
                         instrument,
-                        prediction,
+                        prediction: {
+                            ...prediction,
+                            strategyId: suggestedStrategy?.id || null
+                        },
                         currentPrice,
-                        suggestedQuantity: affordableQuantity,
-                        estimatedCost: affordableQuantity * currentPrice
+                        suggestedQuantity,
+                        estimatedCost
                     });
-                    console.log(`✅ Added BUY recommendation for ${instrument.ticker}: score=${prediction.score.toFixed(3)}`);
+                    console.log(`✅ Added BUY recommendation for ${instrument.ticker}: score=${prediction.score.toFixed(3)}, strategy=${suggestedStrategy?.name || 'none'}`);
                 } else if (recommendation === 'SELL') {
                     // SELL рекомендации для новых инструментов (не из портфеля)
                     analysis.sellRecommendations.push({
@@ -2411,6 +2446,18 @@ class NeuralNetworkService {
                     takeProfit = rec.currentPrice ? rec.currentPrice * 1.1 : null; // +10% как тейк-профит
                 }
 
+                // Определяем стратегию для рекомендации
+                let strategyId = null;
+                try {
+                    const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+                    const strategy = await StrategyAllocationService.getStrategyForRecommendation(confidence, score);
+                    if (strategy) {
+                        strategyId = strategy.id;
+                    }
+                } catch (strategyError) {
+                    // Игнорируем ошибки определения стратегии
+                }
+
                 const recommendationData = {
                     figi: rec.instrument.figi,
                     ticker: rec.instrument.ticker || 'UNKNOWN',
@@ -2427,7 +2474,8 @@ class NeuralNetworkService {
                     takeProfit: takeProfit,
                     sector: rec.instrument.sector || 'Unknown',
                     marketCap: rec.instrument.marketCap || 'Unknown',
-                    isActive: true
+                    isActive: true,
+                    strategyId: strategyId // Добавляем ID стратегии
                 };
 
                 // Ищем существующую рекомендацию
@@ -2444,7 +2492,28 @@ class NeuralNetworkService {
                     console.log(`🔄 Updated ${recommendation} recommendation for ${rec.instrument.ticker}`);
                 } else {
                     // Создаем новую
-                    await Recommendation.create(recommendationData);
+                    const createdRecommendation = await Recommendation.create(recommendationData);
+                    
+                    // Отправляем торговый сигнал через WebSocket для BUY/SELL рекомендаций
+                    if (createdRecommendation && (createdRecommendation.recommendation === 'BUY' || createdRecommendation.recommendation === 'SELL')) {
+                        try {
+                            const WebSocketService = getService('WebSocketService');
+                            if (WebSocketService && typeof WebSocketService.broadcastTradingSignal === 'function') {
+                                WebSocketService.broadcastTradingSignal({
+                                    figi: createdRecommendation.figi,
+                                    ticker: createdRecommendation.ticker,
+                                    name: createdRecommendation.name,
+                                    signalType: createdRecommendation.recommendation,
+                                    confidence: createdRecommendation.confidence,
+                                    entryPrice: createdRecommendation.priceAtAnalysis || currentPrice,
+                                    stopLoss: createdRecommendation.stopLoss,
+                                    takeProfit: createdRecommendation.takeProfit || createdRecommendation.targetPrice
+                                });
+                            }
+                        } catch (wsError) {
+                            console.warn('⚠️ Could not broadcast trading signal:', wsError.message);
+                        }
+                    }
                     console.log(`✅ Created ${recommendation} recommendation for ${rec.instrument.ticker}`);
                 }
             }
@@ -2486,11 +2555,24 @@ class NeuralNetworkService {
                 let explanation = {};
                 if (rec.prediction?.explanation && typeof rec.prediction.explanation === 'object') {
                     explanation = rec.prediction.explanation;
+                    // Убеждаемся, что горизонты включены в details
+                    if (rec.prediction.details?.horizons) {
+                        explanation.details = explanation.details || {};
+                        explanation.details.horizons = rec.prediction.details.horizons;
+                    } else if (rec.prediction.horizons) {
+                        explanation.details = explanation.details || {};
+                        explanation.details.horizons = rec.prediction.horizons;
+                    }
                 } else if (rec.prediction?.summary) {
                     explanation = {
                         summary: rec.prediction.summary,
                         details: rec.prediction.details || {}
                     };
+                    // Добавляем горизонты, если они есть
+                    if (rec.prediction.horizons) {
+                        explanation.details = explanation.details || {};
+                        explanation.details.horizons = rec.prediction.horizons;
+                    }
                 } else {
                     explanation = {
                         summary: 'Анализ на основе интегрированной AI системы',
@@ -2541,7 +2623,28 @@ class NeuralNetworkService {
                     console.log(`🔄 Updated ${recommendation} recommendation for ${instrument.ticker}`);
                 } else {
                     // Создаем новую
-                    await Recommendation.create(recommendationData);
+                    const createdRecommendation = await Recommendation.create(recommendationData);
+                    
+                    // Отправляем торговый сигнал через WebSocket для BUY/SELL рекомендаций
+                    if (createdRecommendation && (createdRecommendation.recommendation === 'BUY' || createdRecommendation.recommendation === 'SELL')) {
+                        try {
+                            const WebSocketService = getService('WebSocketService');
+                            if (WebSocketService && typeof WebSocketService.broadcastTradingSignal === 'function') {
+                                WebSocketService.broadcastTradingSignal({
+                                    figi: createdRecommendation.figi,
+                                    ticker: createdRecommendation.ticker,
+                                    name: createdRecommendation.name,
+                                    signalType: createdRecommendation.recommendation,
+                                    confidence: createdRecommendation.confidence,
+                                    entryPrice: createdRecommendation.priceAtAnalysis || currentPrice,
+                                    stopLoss: createdRecommendation.stopLoss,
+                                    takeProfit: createdRecommendation.takeProfit || createdRecommendation.targetPrice
+                                });
+                            }
+                        } catch (wsError) {
+                            console.warn('⚠️ Could not broadcast trading signal:', wsError.message);
+                        }
+                    }
                     console.log(`✅ Created ${recommendation} recommendation for ${instrument.ticker}`);
                 }
             }

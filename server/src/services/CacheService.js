@@ -34,6 +34,7 @@ class CacheService {
 
             let cachedCount = 0;
             // Дедупликация инструментов по FIGI
+            // Фильтрация по стране уже выполнена в TinkoffApiService.getStocks()
             const seenFigi = new Set();
             const instruments = response.instruments
                 .filter(i => i && i.figi && i.ticker)
@@ -41,7 +42,9 @@ class CacheService {
                     if (seenFigi.has(i.figi)) return false;
                     seenFigi.add(i.figi);
                     return true;
-                })
+                });
+            
+            console.log(`📊 Всего инструментов для кеширования: ${instruments.length}`);
 
             // Попробуем получить последние цены пачкой заранее
             let priceMap = {};

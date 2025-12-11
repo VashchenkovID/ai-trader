@@ -1,0 +1,180 @@
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/database.js';
+
+const RealPortfolio = sequelize.define('RealPortfolio', {
+    id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true
+    },
+    
+    // Денежные средства
+    cash: {
+        type: DataTypes.FLOAT,
+        allowNull: false,
+        defaultValue: 0,
+        comment: 'Денежные средства в реальном портфеле'
+    },
+    
+    // Позиции (JSON: { FIGI: quantity })
+    positions: {
+        type: DataTypes.JSON,
+        allowNull: false,
+        defaultValue: {},
+        comment: 'Позиции в портфеле: { FIGI: quantity }'
+    },
+    
+    // История сделок (JSON массив)
+    trades: {
+        type: DataTypes.JSON,
+        allowNull: false,
+        defaultValue: [],
+        comment: 'История сделок реального портфеля'
+    },
+    
+    // Общая стоимость портфеля
+    totalValue: {
+        type: DataTypes.FLOAT,
+        allowNull: false,
+        defaultValue: 0,
+        comment: 'Общая стоимость портфеля (cash + positions value)'
+    },
+    
+    // Стоимость позиций
+    positionsValue: {
+        type: DataTypes.FLOAT,
+        allowNull: false,
+        defaultValue: 0,
+        comment: 'Стоимость всех позиций'
+    },
+    
+    // Начальный капитал (для расчета PnL)
+    initialCapital: {
+        type: DataTypes.FLOAT,
+        allowNull: true,
+        comment: 'Начальный капитал при создании портфеля (если известен)'
+    },
+    
+    // Метаданные
+    version: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 1,
+        comment: 'Версия структуры портфеля (для миграций)'
+    },
+    
+    lastUpdated: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW,
+        comment: 'Время последнего обновления портфеля из Tinkoff API'
+    }
+}, {
+    tableName: 'real_portfolio',
+    timestamps: true,
+    indexes: [
+        {
+            fields: ['lastUpdated']
+        }
+    ]
+});
+
+// Статические методы
+RealPortfolio.getCurrent = async function() {
+    try {
+        // У нас всегда один реальный портфель, ищем по ID=1 или просто первую запись
+        let portfolio = await this.findByPk(1);
+        
+        // Если нет записи с ID=1, ищем любую запись
+        if (!portfolio) {
+            portfolio = await this.findOne();
+        }
+        
+        if (portfolio) {
+            // Проверяем, что positions правильно десериализованы
+            let positions = portfolio.positions;
+            if (typeof positions === 'string') {
+                try {
+                    positions = JSON.parse(positions);
+                } catch (e) {
+                    console.warn('⚠️ Ошибка парсинга positions в getCurrent:', e.message);
+                    positions = {};
+                }
+            }
+            const positionsCount = positions && typeof positions === 'object' && !Array.isArray(positions) 
+                ? Object.keys(positions).length 
+                : 0;
+            console.log(`📊 Найден реальный портфель в БД: ID=${portfolio.id}, cash=${portfolio.cash}, позиций=${positionsCount}, totalValue=${portfolio.totalValue}`);
+        } else {
+            console.log('📊 Реальный портфель не найден в БД');
+        }
+        
+        return portfolio;
+    } catch (error) {
+        console.error('❌ Ошибка получения реального портфеля:', error);
+        return null;
+    }
+};
+
+RealPortfolio.savePortfolio = async function(portfolioData) {
+    try {
+        // У нас всегда один реальный портфель, ищем по ID=1 или просто первую запись
+        let portfolio = await this.findByPk(1);
+        
+        // Если нет записи с ID=1, ищем любую запись
+        if (!portfolio) {
+            portfolio = await this.findOne();
+        }
+        
+        if (!portfolio) {
+            // Создаем новый портфель с ID=1
+            console.log('📊 Создание нового реального портфеля в БД...');
+            portfolio = await this.create({
+                id: 1, // Явно указываем ID=1
+                cash: portfolioData.cash || 0,
+                positions: portfolioData.positions || {},
+                trades: portfolioData.trades || [],
+                totalValue: portfolioData.totalValue || 0,
+                positionsValue: portfolioData.positionsValue || 0,
+                initialCapital: portfolioData.initialCapital || null,
+                version: 1,
+                lastUpdated: new Date()
+            });
+            console.log(`✅ Новый реальный портфель создан в БД: ID=${portfolio.id}, totalValue=${portfolio.totalValue}`);
+        } else {
+            // Обновляем существующий портфель
+            console.log(`📊 Обновление реального портфеля в БД: ID=${portfolio.id}`);
+            const positionsCount = portfolioData.positions && typeof portfolioData.positions === 'object' && !Array.isArray(portfolioData.positions)
+                ? Object.keys(portfolioData.positions).length
+                : 0;
+            const tradesCount = Array.isArray(portfolioData.trades) ? portfolioData.trades.length : 0;
+            
+            console.log(`   💰 Наличные: ${portfolioData.cash}`);
+            console.log(`   📈 Позиций: ${positionsCount}`);
+            console.log(`   💼 Общая стоимость: ${portfolioData.totalValue}`);
+            console.log(`   📊 Сделок: ${tradesCount}`);
+            
+            await portfolio.update({
+                cash: portfolioData.cash || 0,
+                positions: portfolioData.positions || {},
+                trades: portfolioData.trades || [],
+                totalValue: portfolioData.totalValue || 0,
+                positionsValue: portfolioData.positionsValue || 0,
+                initialCapital: portfolioData.initialCapital || portfolio.initialCapital,
+                lastUpdated: new Date()
+            });
+            
+            // Проверяем, что данные действительно обновились
+            await portfolio.reload();
+            console.log(`✅ Реальный портфель обновлен в БД: ID=${portfolio.id}, totalValue=${portfolio.totalValue}`);
+        }
+        
+        return portfolio;
+    } catch (error) {
+        console.error('❌ Ошибка сохранения реального портфеля:', error);
+        throw error;
+    }
+};
+
+export default RealPortfolio;
+

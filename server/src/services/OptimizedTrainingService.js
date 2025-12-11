@@ -1365,9 +1365,22 @@ class OptimizedTrainingService {
         // Вызываем обработчики событий
         this.emit('training_progress', progressData);
 
-        // Отправляем прогресс через WebSocket
+        // Отправляем прогресс через WebSocket используя новый метод
         const WebSocketService = getService('WebSocketService');
-        if (WebSocketService) {
+        if (WebSocketService && typeof WebSocketService.broadcastTrainingProgress === 'function') {
+            WebSocketService.broadcastTrainingProgress({
+                modelType: 'neural_network',
+                instrument: this.currentTrainingInstrument || null,
+                currentEpoch: progressData.epoch,
+                totalEpochs: progressData.epochs,
+                loss: progressData.loss,
+                accuracy: progressData.accuracy,
+                valLoss: progressData.valLoss,
+                valAccuracy: progressData.valAccuracy,
+                stage: 'training'
+            });
+        } else if (WebSocketService) {
+            // Fallback к старому формату для совместимости
             WebSocketService.broadcast({
                 type: 'training_progress',
                 data: progressData,

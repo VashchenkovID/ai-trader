@@ -157,16 +157,45 @@ class TinkoffApiService {
             const allInstruments = response?.instruments || [];
             console.log(`📊 Получено из API: ${allInstruments.length} инструментов`);
 
-            // Мягкая фильтрация: берем все инструменты, которые имеют FIGI и ticker
-            // Фильтруем только инструменты без обязательных полей
-            const instruments = allInstruments.filter(inst => {
-                // Берем все инструменты, у которых есть FIGI и ticker
+            // Сначала фильтруем по наличию обязательных полей
+            const validInstruments = allInstruments.filter(inst => {
                 return inst && inst.figi && inst.ticker;
             });
+            console.log(`✅ С FIGI и ticker: ${validInstruments.length} инструментов`);
 
-            console.log(`✅ После фильтрации (только с FIGI и ticker): ${instruments.length} инструментов`);
 
-            return { ...response, instruments };
+            // Фильтруем только российские акции по стране и валюте
+            const russianInstruments = validInstruments.filter(inst => {
+                // Проверяем различные поля для определения страны
+                const countryOfRisk = (inst.countryOfRisk || '').toUpperCase();
+                const countryOfRiskCode = (inst.countryOfRiskCode || '').toUpperCase();
+                const currency = (inst.currency || '').toUpperCase();
+                const exchange = (inst.exchange || '').toUpperCase();
+                
+                // Российские акции определяются по:
+                // 1. Явному указанию страны: "RU" или "RUS"
+                // 2. Бирже MOEX (Московская биржа)
+                // 3. Валюте RUB/RUR (только российские рубли)
+                
+                const hasRussianCountry = countryOfRisk === 'RU' || 
+                                        countryOfRisk === 'RUS' ||
+                                        countryOfRiskCode === 'RU' ||
+                                        countryOfRiskCode === 'RUS';
+                
+                const isMoexExchange = exchange.includes('MOEX') || exchange.includes('MOSCOW');
+                const hasRussianCurrency = currency === 'RUB' || currency === 'RUR';
+                
+                // Российская акция если:
+                // - явно указана страна RU/RUS И валюта RUB/RUR, ИЛИ
+                // - биржа MOEX И валюта RUB/RUR
+                const isRussian = (hasRussianCountry || isMoexExchange) && hasRussianCurrency;
+                
+                return isRussian;
+            });
+
+            console.log(`🇷🇺 Российских акций после фильтрации по стране: ${russianInstruments.length}`);
+
+            return { ...response, instruments: russianInstruments };
         } catch (error) {
             console.error('Error getting stocks:', error);
             // Возвращаем пустой результат при ошибке

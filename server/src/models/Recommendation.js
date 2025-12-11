@@ -96,6 +96,16 @@ const Recommendation = sequelize.define('Recommendation', {
         allowNull: true
     },
     
+    // Связь со стратегией торговли
+    strategyId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'trading_strategies',
+            key: 'id'
+        }
+    },
+    
     // Теги для категоризации (JSON array)
     tags: {
         type: DataTypes.JSON,
@@ -237,5 +247,20 @@ Recommendation.beforeCreate((recommendation) => {
         if (recommendation.score > 0.8) recommendation.tags.push('strong-buy');
     }
 });
+
+// Ассоциации - устанавливаем напрямую после определения модели
+// Используем асинхронную функцию для избежания циклических зависимостей
+(async () => {
+    try {
+        const TradingStrategy = (await import('./TradingStrategy.js')).default;
+        Recommendation.belongsTo(TradingStrategy, {
+            foreignKey: 'strategyId',
+            as: 'strategy'
+        });
+    } catch (error) {
+        // Игнорируем ошибки при установке ассоциаций
+        console.warn('⚠️ Could not set Recommendation associations immediately:', error.message);
+    }
+})();
 
 export default Recommendation;

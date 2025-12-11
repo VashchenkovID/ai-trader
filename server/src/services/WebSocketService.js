@@ -153,7 +153,25 @@ class WebSocketService {
     sendToClient(ws, message) {
         if (ws && ws.readyState === ws.OPEN) {
             try {
-                ws.send(JSON.stringify(message));
+                // Валидация сообщения перед отправкой
+                if (!message || typeof message !== 'object') {
+                    console.error('Invalid WebSocket message format:', message);
+                    return;
+                }
+                
+                // Убеждаемся, что есть type и data
+                if (!message.type) {
+                    console.warn('WebSocket message missing type field:', message);
+                    message.type = 'unknown';
+                }
+                
+                // Убеждаемся, что есть timestamp
+                if (!message.timestamp) {
+                    message.timestamp = new Date().toISOString();
+                }
+                
+                const messageStr = JSON.stringify(message);
+                ws.send(messageStr);
             } catch (error) {
                 console.error('Error sending message to client:', error);
                 // Удаляем клиента при ошибке отправки
@@ -169,22 +187,55 @@ class WebSocketService {
             return;
         }
 
-        const messageStr = JSON.stringify(message);
+        // Валидация сообщения перед рассылкой
+        if (!message || typeof message !== 'object') {
+            console.error('Invalid WebSocket broadcast message format:', message);
+            return;
+        }
+        
+        // Убеждаемся, что есть type и data
+        if (!message.type) {
+            console.warn('WebSocket broadcast message missing type field:', message);
+            message.type = 'unknown';
+        }
+        
+        // Убеждаемся, что есть timestamp
+        if (!message.timestamp) {
+            message.timestamp = new Date().toISOString();
+        }
+        
+        // Убеждаемся, что data существует
+        if (!message.data) {
+            message.data = {};
+        }
+
         let sentCount = 0;
+        const clientsToRemove = [];
 
         this.clients.forEach(client => {
             if (client.readyState === client.OPEN) {
                 try {
+                    const messageStr = JSON.stringify(message);
                     client.send(messageStr);
                     sentCount++;
                 } catch (error) {
-                    console.error('Error sending message to client:', error);
-                    this.clients.delete(client);
+                    console.error('Error sending broadcast message to client:', error);
+                    clientsToRemove.push(client);
                 }
             } else {
-                this.clients.delete(client);
+                clientsToRemove.push(client);
             }
         });
+        
+        // Удаляем неактивных клиентов
+        clientsToRemove.forEach(client => {
+            this.clients.delete(client);
+            decrementConnectionCount();
+        });
+        
+        if (sentCount > 0) {
+            console.log(`📡 Broadcast sent to ${sentCount} client(s): ${message.type}`);
+        }
     }
 
     broadcastSystemStatus(status) {
@@ -203,11 +254,94 @@ class WebSocketService {
         });
     }
 
+    broadcastTradingSignal(signal) {
+        this.broadcast({
+            type: 'trading_signal',
+            data: {
+                figi: signal.figi || '',
+                ticker: signal.ticker || '',
+                name: signal.name || '',
+                signalType: signal.signalType || signal.type || 'BUY', // BUY/SELL
+                confidence: signal.confidence || 0,
+                entryPrice: signal.entryPrice || signal.price || 0,
+                stopLoss: signal.stopLoss || 0,
+                takeProfit: signal.takeProfit || 0,
+                strategy: signal.strategy || null,
+                timestamp: new Date().toISOString()
+            },
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    broadcastTrainingProgress(progress) {
+        this.broadcast({
+            type: 'training_progress',
+            data: {
+                modelType: progress.modelType || 'neural_network', // neural_network, ensemble, meta_learning, reinforcement_learning
+                instrument: progress.instrument || null,
+                currentEpoch: progress.currentEpoch || 0,
+                totalEpochs: progress.totalEpochs || 0,
+                loss: progress.loss || null,
+                accuracy: progress.accuracy || null,
+                valLoss: progress.valLoss || null,
+                valAccuracy: progress.valAccuracy || null,
+                eta: progress.eta || null, // Estimated time to completion in seconds
+                learningRate: progress.learningRate || null,
+                speed: progress.speed || null, // samples per second
+                stage: progress.stage || 'training', // training, validation, etc.
+                timestamp: new Date().toISOString()
+            },
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    broadcastAlert(alert) {
+        this.broadcast({
+            type: 'alert',
+            data: {
+                id: alert.id || Date.now().toString(),
+                type: alert.type || 'info', // info, warning, error, success
+                severity: alert.severity || 'medium', // low, medium, high, critical
+                message: alert.message || '',
+                title: alert.title || null,
+                category: alert.category || 'system', // system, trading, training, cache, etc.
+                timestamp: new Date().toISOString(),
+                details: alert.details || null
+            },
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    broadcastModelMetrics(metrics) {
+        this.broadcast({
+            type: 'model_metrics',
+            data: {
+                modelType: metrics.modelType || 'neural_network',
+                instrument: metrics.instrument || null,
+                figi: metrics.figi || null,
+                accuracy: metrics.accuracy || null,
+                mae: metrics.mae || null, // Mean Absolute Error
+                rmse: metrics.rmse || null, // Root Mean Square Error
+                mape: metrics.mape || null, // Mean Absolute Percentage Error
+                sharpeRatio: metrics.sharpeRatio || null,
+                winRate: metrics.winRate || null,
+                totalPredictions: metrics.totalPredictions || 0,
+                correctPredictions: metrics.correctPredictions || 0,
+                marketComparison: metrics.marketComparison || null, // vs market performance
+                lastUpdated: metrics.lastUpdated || new Date().toISOString(),
+                timestamp: new Date().toISOString()
+            },
+            timestamp: new Date().toISOString()
+        });
+    }
+
     broadcastError(error) {
         this.broadcast({
             type: 'error',
             data: {
-                message: error.message,
+                message: error?.message || 'Unknown error',
+                error: error?.toString() || 'Unknown error',
+                stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
                 timestamp: new Date().toISOString()
             }
         });

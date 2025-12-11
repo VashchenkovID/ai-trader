@@ -1,4 +1,5 @@
 import express from 'express';
+import { Op } from 'sequelize';
 import TradingEngine from '../services/TradingEngine.js';
 import ServiceManager from '../services/ServiceManager.js';
 import TinkoffApiService from '../services/TinkoffApiService.js';
@@ -82,16 +83,10 @@ router.get('/positions', async (req, res) => {
                     // Пробуем получить инструмент из кеша (быстро, без обновления)
                     let instrument = await CacheService.getInstrument(figi, true);
                     
-                    // Если нет в кеше, создаем базовую информацию
+                    // Если инструмент не найден в кеше, пропускаем позицию
                     if (!instrument) {
-                        instrument = {
-                            figi: figi,
-                            ticker: figi.substring(0, 10),
-                            name: 'Инструмент не найден',
-                            currency: 'RUB',
-                            sector: null,
-                            lastPrice: null
-                        };
+                        console.warn(`⚠️ Пропущена позиция ${figi}: инструмент не найден в кеше`);
+                        continue;
                     }
                     
                     // Получаем цену из кеша
@@ -106,6 +101,12 @@ router.get('/positions', async (req, res) => {
                         if (totalQuantity > 0) {
                             averagePrice = totalCost / totalQuantity;
                         }
+                    }
+                    
+                    // Если нет ни цены из кеша, ни данных из сделок, пропускаем позицию
+                    if (!currentPrice && !averagePrice) {
+                        console.warn(`⚠️ Пропущена позиция ${figi}: нет данных о цене`);
+                        continue;
                     }
                     
                     const marketValue = currentPrice > 0 ? currentPrice * quantity : 0;
@@ -131,6 +132,47 @@ router.get('/positions', async (req, res) => {
                         }
                     }
                     
+                    // Получаем стратегию для позиции через торговые заявки
+                    let strategy = null;
+                    try {
+                        const TradingRequest = (await import('../models/TradingRequest.js')).default;
+                        const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
+                        const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+                        
+                        // Ищем последнюю выполненную заявку на покупку для этого инструмента
+                        // Сначала ищем через strategyId в TradingRequest
+                        const buyRequest = await TradingRequest.findOne({
+                            where: {
+                                figi,
+                                action: 'BUY',
+                                status: {
+                                    [Op.in]: ['EXECUTED', 'APPROVED', 'PENDING']
+                                }
+                            },
+                            order: [['executedAt', 'DESC'], ['createdAt', 'DESC']]
+                        });
+                        
+                        if (buyRequest) {
+                            // Сначала проверяем strategyId в самой заявке
+                            if (buyRequest.strategyId) {
+                                strategy = await TradingStrategy.findByPk(buyRequest.strategyId);
+                            }
+                            
+                            // Если не найдено, пытаемся найти через PositionStrategy
+                            if (!strategy) {
+                                const positionStrategy = await PositionStrategy.findOne({
+                                    where: { positionId: buyRequest.id }
+                                });
+                                if (positionStrategy && positionStrategy.strategyId) {
+                                    strategy = await TradingStrategy.findByPk(positionStrategy.strategyId);
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        // Игнорируем ошибки при поиске стратегии
+                        console.warn(`Could not load strategy for position ${figi}:`, error.message);
+                    }
+                    
                     positions.push({
                         figi,
                         ticker: instrument.ticker || figi.substring(0, 10),
@@ -144,25 +186,17 @@ router.get('/positions', async (req, res) => {
                         weight: 0,
                         sector,
                         currency: instrument.currency || 'RUB',
-                        lastUpdate: new Date().toISOString()
+                        lastUpdate: new Date().toISOString(),
+                        strategy: strategy ? {
+                            id: strategy.id,
+                            name: strategy.name,
+                            type: strategy.type
+                        } : null
                     });
                 } catch (error) {
-                    // Даже при ошибке создаем базовую позицию
-                    positions.push({
-                        figi,
-                        ticker: figi.substring(0, 10),
-                        name: 'Ошибка загрузки',
-                        quantity,
-                        averagePrice: 0,
-                        currentPrice: 0,
-                        marketValue: 0,
-                        unrealizedPnL: 0,
-                        unrealizedPnLPercent: 0,
-                        weight: 0,
-                        sector: 'Неизвестно',
-                        currency: 'RUB',
-                        lastUpdate: new Date().toISOString()
-                    });
+                    // Пропускаем позицию при ошибке загрузки данных
+                    console.warn(`⚠️ Пропущена позиция ${figi} из-за ошибки загрузки:`, error.message);
+                    continue;
                 }
             }
         }

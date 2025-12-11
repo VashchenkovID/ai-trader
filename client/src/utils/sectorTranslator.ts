@@ -34,6 +34,8 @@ const sectorTranslations: Record<string, string> = {
   'Basic Materials': 'Сырьевые материалы',
   'basic_materials': 'Сырьевые материалы',
   'basic materials': 'Сырьевые материалы',
+  'Materials': 'Сырьевые материалы',
+  'materials': 'Сырьевые материалы',
   'Consumer Goods': 'Потребительские товары',
   'consumer_goods': 'Потребительские товары',
   'consumer goods': 'Потребительские товары',

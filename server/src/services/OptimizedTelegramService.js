@@ -554,21 +554,107 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
             const MetaLearningService = getService('MetaLearningService');
             const ReinforcementLearningService = getService('ReinforcementLearningService');
             
-            // Получаем статусы сервисов
-            const aiStatus = IntegratedAIService ? IntegratedAIService.getStatus() : { isInitialized: false, activeNetworks: {} };
-            const tradingStatus = TradingEngine ? TradingEngine.getStatus() : { isInitialized: false };
-            const websocketStatus = WebSocketService ? WebSocketService.getStatus() : { isConnected: false };
+            // Проверка статуса базы данных
+            let databaseStatus = false;
+            try {
+                const sequelize = (await import('../config/database.js')).default;
+                if (sequelize && typeof sequelize.authenticate === 'function') {
+                    await sequelize.authenticate();
+                    databaseStatus = true;
+                }
+            } catch (dbError) {
+                console.warn('Database connection check failed:', dbError.message);
+                databaseStatus = false;
+            }
             
+            // Получаем статусы сервисов с безопасной обработкой
+            let aiStatus = { isInitialized: false, activeNetworks: {} };
+            try {
+                if (IntegratedAIService && typeof IntegratedAIService.getStatus === 'function') {
+                    aiStatus = IntegratedAIService.getStatus();
+                }
+            } catch (error) {
+                console.warn('Error getting IntegratedAIService status:', error.message);
+            }
+
+            let tradingStatus = { isInitialized: false };
+            try {
+                if (TradingEngine && typeof TradingEngine.getStatus === 'function') {
+                    tradingStatus = TradingEngine.getStatus();
+                }
+            } catch (error) {
+                console.warn('Error getting TradingEngine status:', error.message);
+            }
+
+            let websocketStatus = { isConnected: false, clientsCount: 0 };
+            try {
+                if (WebSocketService && typeof WebSocketService.getStatus === 'function') {
+                    websocketStatus = WebSocketService.getStatus();
+                }
+            } catch (error) {
+                console.warn('Error getting WebSocketService status:', error.message);
+            }
+            
+            // Безопасное получение статусов с обработкой ошибок
+            let neuralNetworkStatus = { isActive: false };
+            try {
+                if (NeuralNetworkService && typeof NeuralNetworkService.getStatus === 'function') {
+                    neuralNetworkStatus = NeuralNetworkService.getStatus();
+                }
+            } catch (error) {
+                console.warn('Error getting NeuralNetworkService status:', error.message);
+            }
+
+            let ensembleStatus = { isInitialized: false };
+            try {
+                if (EnsembleService && typeof EnsembleService.getStatus === 'function') {
+                    ensembleStatus = EnsembleService.getStatus();
+                }
+            } catch (error) {
+                console.warn('Error getting EnsembleService status:', error.message);
+            }
+
+            let metaLearningStatus = { isInitialized: false };
+            try {
+                if (MetaLearningService && typeof MetaLearningService.getStatus === 'function') {
+                    metaLearningStatus = MetaLearningService.getStatus();
+                }
+            } catch (error) {
+                console.warn('Error getting MetaLearningService status:', error.message);
+            }
+
+            let reinforcementLearningStatus = { isInitialized: false };
+            try {
+                if (ReinforcementLearningService) {
+                    // ReinforcementLearningService использует getStats(), а не getStatus()
+                    if (typeof ReinforcementLearningService.getStats === 'function') {
+                        const rlStats = ReinforcementLearningService.getStats();
+                        reinforcementLearningStatus = {
+                            isInitialized: rlStats.isInitialized || false
+                        };
+                    } else if (typeof ReinforcementLearningService.getStatus === 'function') {
+                        reinforcementLearningStatus = ReinforcementLearningService.getStatus();
+                    } else {
+                        // Fallback: проверяем свойство напрямую
+                        reinforcementLearningStatus = {
+                            isInitialized: ReinforcementLearningService.isInitialized || false
+                        };
+                    }
+                }
+            } catch (error) {
+                console.warn('Error getting ReinforcementLearningService status:', error.message);
+            }
+
             return {
-                database: true, // Предполагаем, что БД работает
+                database: databaseStatus,
                 websocket: websocketStatus.isConnected || websocketStatus.clientsCount > 0,
                 ai: aiStatus.isInitialized || false,
                 trading: tradingStatus.isInitialized || false,
                 neuralNetworks: {
-                    traditional: NeuralNetworkService ? NeuralNetworkService.getStatus().isActive : false,
-                    ensemble: EnsembleService ? EnsembleService.getStatus().isInitialized : false,
-                    metaLearning: MetaLearningService ? MetaLearningService.getStatus().isInitialized : false,
-                    reinforcementLearning: ReinforcementLearningService ? ReinforcementLearningService.getStatus().isInitialized : false
+                    traditional: neuralNetworkStatus.isActive || false,
+                    ensemble: ensembleStatus.isInitialized || false,
+                    metaLearning: metaLearningStatus.isInitialized || false,
+                    reinforcementLearning: reinforcementLearningStatus.isInitialized || false
                 },
                 memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
             };

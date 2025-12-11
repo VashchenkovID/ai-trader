@@ -7,6 +7,7 @@ import Portfolio from '../pages/Portfolio'
 import Market from '../pages/Market'
 import NeuralNetwork from '../pages/NeuralNetwork'
 import Settings from '../pages/Settings'
+import Strategies from '../pages/Strategies'
 import ServerMonitoring from '../pages/ServerMonitoring'
 import TradingHours from '../pages/TradingHours'
 
@@ -23,6 +24,7 @@ const AppRouter: FC = () => {
                 <Route path="/market" element={<Market/>}/>
                 <Route path="/neural-network" element={<NeuralNetwork/>}/>
                 <Route path="/settings" element={<Settings/>}/>
+                <Route path="/strategies" element={<Strategies/>}/>
                 <Route path="/server-monitoring" element={<ServerMonitoring/>}/>
                 <Route path="/trading-hours" element={<TradingHours/>}/>
                 <Route path="*" element={<>Нет роута</>}/>

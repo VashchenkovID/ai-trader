@@ -21,6 +21,7 @@ import Recommendations from './pages/Recommendations';
 import Portfolio from './pages/Portfolio';
 import TrainingDebug from './pages/TrainingDebug';
 import StockDetail from './pages/StockDetail';
+import Strategies from './pages/Strategies';
 
 function App() {
   // Инициализируем глобальный обработчик ошибок
@@ -42,6 +43,7 @@ function App() {
                 <Route path="/trading-requests" element={<TradingRequests />} />
                 <Route path="/recommendations" element={<Recommendations />} />
                 <Route path="/portfolio" element={<Portfolio />} />
+                <Route path="/strategies" element={<Strategies />} />
                 <Route path="/training-debug" element={<TrainingDebug />} />
                 <Route path="/stock/:figi" element={<StockDetail />} />
               </Routes>
