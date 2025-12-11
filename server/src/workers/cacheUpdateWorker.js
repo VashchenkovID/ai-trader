@@ -1,12 +1,22 @@
 import { parentPort, workerData } from 'worker_threads';
 import CacheService from '../services/CacheService.js';
+import SignalCacheService from '../services/SignalCacheService.js';
 
 async function performCacheUpdate() {
     try {
-        const { updateInstruments, updateCandles, instrumentsLimit, candlesDays, incrementalUpdate } = workerData;
+        const { 
+            updateInstruments, 
+            updateCandles, 
+            updateSignals,
+            instrumentsLimit, 
+            candlesDays, 
+            incrementalUpdate,
+            signalsLimit
+        } = workerData;
         const startTime = Date.now();
         let totalUpdated = 0;
         let totalCandlesCached = 0;
+        let totalSignalsCached = 0;
 
         console.log('🔄 Starting cache update in worker...');
 
@@ -70,6 +80,59 @@ async function performCacheUpdate() {
             }
         }
 
+        // Этап 3: Обновление сигналов
+        if (updateSignals) {
+            console.log('📊 Updating signals...');
+            
+            try {
+                // Получаем список инструментов для обновления сигналов
+                const instruments = await CacheService.getAllInstruments(signalsLimit || instrumentsLimit);
+                
+                console.log(`📊 Updating signals for ${instruments.length} instruments...`);
+                
+                for (let i = 0; i < instruments.length; i++) {
+                    const instrument = instruments[i];
+                    
+                    try {
+                        // Получаем активные сигналы для инструмента
+                        const result = await SignalCacheService.fetchAndCacheSignals(instrument.figi, {
+                            active: true,
+                            limit: 100
+                        });
+                        
+                        if (result.success) {
+                            totalSignalsCached += result.savedCount || 0;
+                            totalUpdated++;
+                        }
+                        
+                        // Отправляем прогресс каждые 10 инструментов
+                        if (i % 10 === 0) {
+                            parentPort.postMessage({
+                                type: 'progress',
+                                data: {
+                                    stage: 'signals',
+                                    processed: i + 1,
+                                    total: instruments.length,
+                                    signalsCached: totalSignalsCached
+                                }
+                            });
+                        }
+                        
+                        // Небольшая задержка чтобы не перегружать API
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    } catch (error) {
+                        console.error(`❌ Error updating signals for ${instrument.figi}:`, error.message);
+                        // Продолжаем с другими инструментами
+                    }
+                }
+                
+                console.log(`✅ Updated signals for ${instruments.length} instruments (total signals cached: ${totalSignalsCached})`);
+            } catch (error) {
+                console.error('❌ Error updating signals:', error);
+                // Не прерываем выполнение, сигналы не критичны
+            }
+        }
+
         const duration = Math.round((Date.now() - startTime) / 1000);
         console.log(`✅ Cache update completed in ${duration}s. Total updated: ${totalUpdated}`);
 
@@ -81,6 +144,7 @@ async function performCacheUpdate() {
                 message: `Cache updated successfully in ${duration}s`,
                 totalUpdated,
                 totalCandlesCached,
+                totalSignalsCached,
                 duration
             }
         });

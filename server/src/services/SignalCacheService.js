@@ -136,11 +136,6 @@ class SignalCacheService {
                     figi = await this.convertInstrumentUidToFigi(signal.instrumentUid);
                 }
 
-                // Проверяем, существует ли сигнал
-                const existingSignal = await CachedSignal.findOne({
-                    where: { signalId: signal.signalId }
-                });
-
                 const signalData = {
                     signalId: signal.signalId,
                     strategyId: signal.strategyId,
@@ -158,19 +153,55 @@ class SignalCacheService {
                     info: signal.info || null
                 };
 
-                if (existingSignal) {
-                    await existingSignal.update(signalData);
+                // Используем findOrCreate для предотвращения race condition
+                const [cachedSignal, created] = await CachedSignal.findOrCreate({
+                    where: { signalId: signal.signalId },
+                    defaults: signalData
+                });
+
+                if (!created) {
+                    // Обновляем существующий сигнал
+                    await cachedSignal.update(signalData);
                     updatedCount++;
                 } else {
-                    await CachedSignal.create(signalData);
                     savedCount++;
                     if (!figi) {
                         skippedCount++; // Считаем как пропущенный, если нет FIGI
                     }
                 }
             } catch (error) {
-                console.error(`❌ Ошибка сохранения сигнала ${signal.signalId}:`, error.message);
-                skippedCount++;
+                // Игнорируем ошибки уникальности (race condition)
+                if (error.name === 'SequelizeUniqueConstraintError' || error.message.includes('cached_signals_signalId_key')) {
+                    // Сигнал уже существует, пытаемся обновить
+                    try {
+                        const existingSignal = await CachedSignal.findOne({
+                            where: { signalId: signal.signalId }
+                        });
+                        if (existingSignal) {
+                            await existingSignal.update({
+                                strategyId: signal.strategyId,
+                                strategyName: signal.strategyName,
+                                instrumentUid: signal.instrumentUid,
+                                figi: figi,
+                                createDt: new Date(signal.createDt),
+                                endDt: new Date(signal.endDt),
+                                direction: signal.direction || 'SIGNAL_DIRECTION_UNSPECIFIED',
+                                initialPrice: signal.initialPrice,
+                                targetPrice: signal.targetPrice,
+                                stoploss: signal.stoploss || { units: "0", nano: 0 },
+                                probability: signal.probability || 0,
+                                name: signal.name || '',
+                                info: signal.info || null
+                            });
+                            updatedCount++;
+                        }
+                    } catch (updateError) {
+                        // Игнорируем ошибки обновления при race condition
+                    }
+                } else {
+                    console.error(`❌ Ошибка сохранения сигнала ${signal.signalId}:`, error.message);
+                    skippedCount++;
+                }
             }
         }
 

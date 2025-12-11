@@ -400,20 +400,86 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
         console.error('WebSocket error received:', message.data);
         setError(message.data?.message || 'Unknown error');
         break;
+      case 'portfolio_analysis_started':
+      case 'analysis_started':
+        // Начало анализа портфеля
+        if (message.data) {
+          setAnalysisStatus({
+            isAnalyzing: true,
+            lastRunAt: message.data.timestamp || new Date().toISOString()
+          });
+        }
+        break;
+      case 'portfolio_analysis_completed':
+      case 'analysis_completed':
+        // Завершение анализа портфеля
+        if (message.data) {
+          setAnalysisStatus({
+            isAnalyzing: false,
+            lastRunAt: message.data.analysisDate || message.data.timestamp || new Date().toISOString()
+          });
+        }
+        break;
+      case 'portfolio_analysis_error':
+      case 'analysis_error':
+        // Ошибка анализа портфеля
+        if (message.data) {
+          setAnalysisStatus({
+            isAnalyzing: false,
+            lastRunAt: new Date().toISOString()
+          });
+          // Также создаем алерт об ошибке
+          const errorAlert: Alert = {
+            id: `analysis_error_${Date.now()}`,
+            type: 'error',
+            severity: 'high',
+            message: message.data.error || 'Ошибка при анализе портфеля',
+            title: 'Ошибка анализа',
+            category: 'analysis',
+            timestamp: new Date().toISOString(),
+            details: message.data
+          };
+          setAlerts(prev => [errorAlert, ...prev.slice(0, 99)]);
+        }
+        break;
       case 'batch_training_started':
-        case 'batch_training_completed':
-        case 'batch_training_failed':
-        case 'meta_learning_batch_started':
-        case 'meta_learning_batch_completed':
-        case 'meta_learning_batch_failed':
-        case 'rl_batch_started':
-        case 'rl_batch_completed':
-        case 'rl_batch_failed':
-          // Обновляем статус обучения только если есть полная структура
-          if (message.data && message.data.neuralNetwork && message.data.ensemble && message.data.metaLearning && message.data.reinforcementLearning) {
-            setTrainingStatus(message.data);
-          } 
-          break;
+      case 'meta_learning_batch_started':
+      case 'rl_batch_started':
+        // Начало обучения
+        if (message.data && message.data.neuralNetwork && message.data.ensemble && message.data.metaLearning && message.data.reinforcementLearning) {
+          setTrainingStatus(message.data);
+        }
+        break;
+      case 'batch_training_completed':
+      case 'meta_learning_batch_completed':
+      case 'rl_batch_completed':
+        // Завершение обучения
+        if (message.data && message.data.neuralNetwork && message.data.ensemble && message.data.metaLearning && message.data.reinforcementLearning) {
+          setTrainingStatus(message.data);
+        }
+        break;
+      case 'batch_training_failed':
+      case 'meta_learning_batch_failed':
+      case 'rl_batch_failed':
+        // Ошибка обучения
+        if (message.data && message.data.neuralNetwork && message.data.ensemble && message.data.metaLearning && message.data.reinforcementLearning) {
+          setTrainingStatus(message.data);
+        }
+        // Создаем алерт об ошибке обучения
+        if (message.data?.error) {
+          const trainingErrorAlert: Alert = {
+            id: `training_error_${Date.now()}`,
+            type: 'error',
+            severity: 'high',
+            message: message.data.error || 'Ошибка при обучении модели',
+            title: 'Ошибка обучения',
+            category: 'training',
+            timestamp: new Date().toISOString(),
+            details: message.data
+          };
+          setAlerts(prev => [trainingErrorAlert, ...prev.slice(0, 99)]);
+        }
+        break;
         default:
           // Логируем неизвестные типы сообщений для отладки
           console.log('Unknown WebSocket message type:', message.type);

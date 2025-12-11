@@ -7,6 +7,7 @@ import CacheService from './CacheService.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
 import SignalCacheService from './SignalCacheService.js';
 import SignalValidationService from './SignalValidationService.js';
+import NewsAnalysisService from './NewsAnalysisService.js';
 
 /**
  * Интегрированный сервис для управления всеми тремя нейросетями
@@ -245,10 +246,72 @@ class IntegratedAIService {
                 console.warn('⚠️ Signals validation failed:', error.message);
             }
 
+            // 6. Получаем новости и рассчитываем рекомендацию на основе сентимента
+            let newsRecommendation = null;
+            try {
+                // Получаем новости за последние 7 дней
+                const news = await NewsAnalysisService.getCachedNews(figi, 7, 20);
+                
+                if (news && news.length > 0) {
+                    // Рассчитываем средний сентимент и релевантность
+                    const sentiments = news.map(n => n.sentiment || 0).filter(s => s !== 0);
+                    const relevances = news.map(n => n.relevance || 0).filter(r => r > 0);
+                    
+                    if (sentiments.length > 0) {
+                        const avgSentiment = sentiments.reduce((sum, s) => sum + s, 0) / sentiments.length;
+                        const avgRelevance = relevances.length > 0 
+                            ? relevances.reduce((sum, r) => sum + r, 0) / relevances.length 
+                            : 0.5;
+                        
+                        // Конвертируем сентимент (-1 до 1) в score (0 до 1)
+                        // Положительный сентимент -> BUY (0.5 - 1.0)
+                        // Отрицательный сентимент -> SELL (0.0 - 0.5)
+                        let newsScore = 0.5; // HOLD по умолчанию
+                        let newsRecommendationType = 'HOLD';
+                        
+                        if (avgSentiment > 0.1) {
+                            // Положительный сентимент
+                            newsScore = 0.5 + (avgSentiment * 0.5); // 0.5 - 1.0
+                            newsRecommendationType = 'BUY';
+                        } else if (avgSentiment < -0.1) {
+                            // Отрицательный сентимент
+                            newsScore = 0.5 + (avgSentiment * 0.5); // 0.0 - 0.5
+                            newsRecommendationType = 'SELL';
+                        }
+                        
+                        // Уверенность зависит от количества новостей и их релевантности
+                        const newsConfidence = Math.min(0.9, 
+                            Math.max(0.3, avgRelevance * Math.min(1, news.length / 10))
+                        );
+                        
+                        newsRecommendation = {
+                            source: 'news',
+                            score: newsScore,
+                            confidence: newsConfidence,
+                            recommendation: newsRecommendationType,
+                            details: {
+                                newsCount: news.length,
+                                avgSentiment: avgSentiment,
+                                avgRelevance: avgRelevance,
+                                positiveNews: sentiments.filter(s => s > 0).length,
+                                negativeNews: sentiments.filter(s => s < 0).length,
+                                neutralNews: sentiments.filter(s => s === 0).length
+                            }
+                        };
+                        
+                        recommendations.push(newsRecommendation);
+                        // Вес новостей зависит от релевантности и количества
+                        weights.news = newsConfidence * Math.min(1, news.length / 15);
+                    }
+                }
+            } catch (error) {
+                console.warn('⚠️ News analysis failed:', error.message);
+            }
+
             // Вычисляем интегрированную рекомендацию
             const integratedRec = this.calculateIntegratedRecommendation(recommendations, weights);
             
-            // Добавляем информацию о валидации, если она была выполнена
+            // Добавляем информацию о валидации сигналов, если она была выполнена
             if (validationResult && validationResult.success && validationResult.hasSignals) {
                 integratedRec.signalsValidation = {
                     directionMatch: validationResult.metrics.directionMatch,
@@ -256,6 +319,20 @@ class IntegratedAIService {
                     probabilityCorrelation: validationResult.metrics.probabilityCorrelation,
                     overallAgreement: validationResult.metrics.overallAgreement,
                     signalsCount: validationResult.signalsSummary.total
+                };
+            }
+            
+            // Добавляем информацию о новостях, если они были проанализированы
+            if (newsRecommendation) {
+                integratedRec.newsAnalysis = {
+                    newsCount: newsRecommendation.details.newsCount,
+                    avgSentiment: newsRecommendation.details.avgSentiment,
+                    avgRelevance: newsRecommendation.details.avgRelevance,
+                    positiveNews: newsRecommendation.details.positiveNews,
+                    negativeNews: newsRecommendation.details.negativeNews,
+                    neutralNews: newsRecommendation.details.neutralNews,
+                    recommendation: newsRecommendation.recommendation,
+                    confidence: newsRecommendation.confidence
                 };
             }
             

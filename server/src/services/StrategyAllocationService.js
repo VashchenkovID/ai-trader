@@ -2,6 +2,7 @@ import TradingStrategy from '../models/TradingStrategy.js';
 import PortfolioAllocation from '../models/PortfolioAllocation.js';
 import PositionStrategy from '../models/PositionStrategy.js';
 import SettingsService from './SettingsService.js';
+import { Op } from 'sequelize';
 
 /**
  * Сервис для управления распределением бюджета по торговым стратегиям

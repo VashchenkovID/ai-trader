@@ -12,6 +12,7 @@ import { getService } from './GlobalServiceManager.js';
 class SchedulerService {
     constructor() {
         this.cacheTask = null;
+        this.priceUpdateTask = null; // Задача обновления цен
         this.cleanupTask = null;
         this.newsCleanupTask = null;
         this.newsDailyUpdateTask = null;
@@ -30,7 +31,9 @@ class SchedulerService {
         this.isTraining = false;
         this.isAnalyzing = false;
         this.lastCacheUpdate = null; // Время последнего обновления кеша
+        this.lastPriceUpdate = null; // Время последнего обновления цен
         this.cacheUpdateInterval = 4 * 60 * 60 * 1000; // 4 часа в миллисекундах
+        this.priceUpdateInterval = 20 * 60 * 1000; // 20 минут в миллисекундах
         this.intervals = new Set(); // Храним все интервалы для очистки
         this.workers = new Set(); // Храним все worker'ы для завершения
         this.webSocketService = null; // Кэшируем WebSocketService
@@ -113,6 +116,22 @@ class SchedulerService {
             } catch (error) {
                 console.error('Error in scheduled cache update:', error);
                 await OptimizedTelegramService.sendAlert('CACHE_UPDATE_ERROR', error.message, 'critical');
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
+        // Задача 1.5: Обновление цен акций (каждые 20 минут)
+        const priceUpdateIntervalMinutes = schedulerSettings.price_update_interval_minutes || 20;
+        const priceUpdateSchedule = `*/${priceUpdateIntervalMinutes} * * * *`; // Каждые N минут
+        this.priceUpdateTask = cron.schedule(priceUpdateSchedule, async () => {
+            try {
+                console.log('💰 Scheduled price update started...');
+                await this.performPriceUpdate();
+            } catch (error) {
+                console.error('Error in scheduled price update:', error);
+                // Не отправляем критическое уведомление для обновления цен
             }
         }, {
             scheduled: true,
@@ -837,6 +856,12 @@ class SchedulerService {
                 this.cacheTask = null;
                 console.log('✅ Cache task stopped and destroyed');
             }
+            if (this.priceUpdateTask) {
+                this.priceUpdateTask.stop();
+                this.priceUpdateTask.destroy();
+                this.priceUpdateTask = null;
+                console.log('✅ Price update task stopped and destroyed');
+            }
             if (this.cleanupTask) {
                 this.cleanupTask.stop();
                 this.cleanupTask.destroy();
@@ -963,9 +988,11 @@ class SchedulerService {
                 workerData: {
                     updateInstruments: true,
                     updateCandles: true,
+                    updateSignals: true, // Включаем обновление сигналов
                     instrumentsLimit: 100,
                     candlesDays: cacheDays, // Увеличенный объём свечей
-                    incrementalUpdate: true // Используем инкрементальное обновление
+                    incrementalUpdate: true, // Используем инкрементальное обновление
+                    signalsLimit: 100 // Лимит инструментов для обновления сигналов
                 }
             });
             
@@ -1012,6 +1039,8 @@ class SchedulerService {
                         message: `Кеш обновлен успешно за ${duration}с`,
                         duration,
                         totalUpdated: result.totalUpdated,
+                        totalCandlesCached: result.totalCandlesCached || 0,
+                        totalSignalsCached: result.totalSignalsCached || 0,
                         timestamp: new Date().toISOString()
                     }
                 });
@@ -1046,6 +1075,118 @@ class SchedulerService {
                 `Ошибка обновления кеша:\n• Ошибка: ${error.message}\n• Время: ${new Date().toLocaleString('ru-RU')}`,
                 'warning'
             );
+            
+            throw error;
+        }
+    }
+
+    /**
+     * Обновление цен акций через worker thread
+     */
+    async performPriceUpdate() {
+        const startTime = Date.now();
+
+        try {
+            console.log('💰 Starting price update in worker...');
+            
+            // Отправляем уведомление о начале обновления через WebSocket
+            const WebSocketService = await this.getWebSocketService();
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'price_update_started',
+                    data: {
+                        message: 'Обновление цен запущено',
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+            
+            // Создаем worker для обновления цен
+            const { Worker } = await import('worker_threads');
+            const { fileURLToPath } = await import('url');
+            const { dirname, join } = await import('path');
+            
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = dirname(__filename);
+            const workerPath = join(__dirname, '../workers/priceUpdateWorker.js');
+            
+            const worker = new Worker(workerPath, {
+                workerData: {
+                    instrumentsLimit: 1000 // Обновляем цены для всех инструментов
+                }
+            });
+            
+            // Добавляем worker в список для отслеживания
+            this.workers.add(worker);
+            
+            // Обрабатываем результат
+            const result = await new Promise((resolve, reject) => {
+                worker.on('message', (msg) => {
+                    if (msg.type === 'done') {
+                        resolve(msg.data);
+                    } else if (msg.type === 'error') {
+                        reject(new Error(msg.data.error));
+                    } else if (msg.type === 'progress') {
+                        // Отправляем прогресс через WebSocket
+                        if (WebSocketService) {
+                            WebSocketService.broadcast({
+                                type: 'price_update_progress',
+                                data: msg.data,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+                });
+                
+                worker.on('error', reject);
+                worker.on('exit', (code) => {
+                    this.workers.delete(worker);
+                    if (code !== 0) {
+                        reject(new Error(`Worker stopped with exit code ${code}`));
+                    }
+                });
+            });
+            
+            // Удаляем worker из списка после завершения
+            this.workers.delete(worker);
+            worker.terminate();
+
+            const duration = Math.round((Date.now() - startTime) / 1000);
+            console.log(`✅ Price update completed in ${duration}s. Updated: ${result.totalUpdated}, Failed: ${result.totalFailed || 0}`);
+
+            // Обновляем время последнего обновления цен
+            this.lastPriceUpdate = Date.now();
+            console.log(`📅 Price update timestamp updated: ${new Date(this.lastPriceUpdate).toISOString()}`);
+
+            // Отправляем уведомление о завершении через WebSocket
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'price_update_completed',
+                    data: {
+                        message: `Цены обновлены успешно за ${duration}с`,
+                        duration,
+                        totalUpdated: result.totalUpdated,
+                        totalFailed: result.totalFailed || 0,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+
+            return result;
+        } catch (error) {
+            console.error('❌ Price update failed:', error);
+            
+            // Отправляем уведомление об ошибке через WebSocket
+            const WebSocketService = await this.getWebSocketService();
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'price_update_error',
+                    data: {
+                        error: error.message,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
             
             throw error;
         }

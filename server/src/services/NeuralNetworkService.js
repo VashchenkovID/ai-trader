@@ -33,6 +33,9 @@ class NeuralNetworkService {
         this.totalPredictions = 0;
         this.successfulPredictions = 0;
         this.modelCreatedAt = null; // Время создания/загрузки модели
+        // Управление worker процессами для анализа
+        this.analysisWorkers = new Set();
+        this.isAnalyzing = false; // Флаг выполнения анализа
     }
 
     /**
@@ -40,7 +43,6 @@ class NeuralNetworkService {
      */
     setWebSocketService(webSocketService) {
         this.webSocketService = webSocketService;
-        console.log('🔌 WebSocketService set in NeuralNetworkService');
     }
 
     /**
@@ -48,14 +50,12 @@ class NeuralNetworkService {
      */
     getWebSocketService() {
         if (!this.webSocketService) {
-            console.warn('⚠️ WebSocketService not set, getting from global ServiceManager');
             // Получаем уже инициализированный экземпляр из глобального ServiceManager
             this.webSocketService = getService('WebSocketService');
             if (!this.webSocketService) {
                 console.warn('⚠️ WebSocketService not available, skipping broadcast');
                 return null;
             }
-            console.log('🔌 WebSocketService retrieved from global ServiceManager');
         }
         return this.webSocketService;
     }
@@ -67,8 +67,6 @@ class NeuralNetworkService {
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
             const dropoutRate = nnSettings.nn_dropout_rate || 0.2;
             const learningRate = nnSettings.nn_learning_rate || 0.0005;
-            
-            console.log(`🏗️ Creating model with input shape: ${inputShape}`);
             
             const model = tf.sequential();
 
@@ -91,10 +89,6 @@ class NeuralNetworkService {
                 featuresPerTimestep = Math.ceil(inputShape / sequenceLength);
                 actualSequenceLength = Math.floor(inputShape / featuresPerTimestep);
             }
-            
-            console.log(`📊 Reshape: inputShape=${inputShape}, sequenceLength=${sequenceLength}`);
-            console.log(`📊 Reshape: featuresPerTimestep=${featuresPerTimestep}, actualSequenceLength=${actualSequenceLength}`);
-            console.log(`📊 Проверка: ${actualSequenceLength} * ${featuresPerTimestep} = ${actualSequenceLength * featuresPerTimestep} (inputShape=${inputShape})`);
             
             model.add(tf.layers.reshape({
                 targetShape: [actualSequenceLength, featuresPerTimestep],
@@ -170,7 +164,6 @@ class NeuralNetworkService {
             }));
 
             // Компиляция модели с настраиваемыми параметрами
-            console.log('🔧 Compiling model...');
             model.compile({
                 optimizer: tf.train.adam(learningRate),
                 loss: 'binaryCrossentropy',
@@ -218,10 +211,6 @@ class NeuralNetworkService {
             featuresPerTimestep = Math.ceil(inputShape / sequenceLength);
             actualSequenceLength = Math.floor(inputShape / featuresPerTimestep);
         }
-        
-        console.log(`📊 Attention Reshape: inputShape=${inputShape}, sequenceLength=${sequenceLength}`);
-        console.log(`📊 Attention Reshape: featuresPerTimestep=${featuresPerTimestep}, actualSequenceLength=${actualSequenceLength}`);
-        console.log(`📊 Проверка: ${actualSequenceLength} * ${featuresPerTimestep} = ${actualSequenceLength * featuresPerTimestep} (inputShape=${inputShape})`);
         
         model.add(tf.layers.reshape({
             targetShape: [actualSequenceLength, featuresPerTimestep],
@@ -274,7 +263,6 @@ class NeuralNetworkService {
             
             if (figi) {
                 // Получаем модель из worker'а
-                console.log(`📥 Получаем модель из worker'а для ${figi}...`);
                 modelData = await OptimizedTrainingService.getModel(figi);
                 
                 // Проверяем, что модель была получена
@@ -358,11 +346,6 @@ class NeuralNetworkService {
                 }
             } else {
                 // Сохраняем общую модель (для обратной совместимости)
-                console.log(`💾 Сохраняем общую модель в ${this.modelFile}...`);
-                console.log(`📊 Model path: ${this.modelPath}`);
-                console.log(`📊 Model file: ${this.modelFile}`);
-                console.log(`📊 Weights file: ${this.weightsFile}`);
-                
                 if (!modelData || !modelData.architecture) {
                     console.error('❌ Ошибка: modelData.architecture отсутствует при сохранении общей модели');
                     return;
@@ -375,7 +358,6 @@ class NeuralNetworkService {
                 await fs.writeFile(this.weightsFile, JSON.stringify(modelData.weights, null, 2));
 
                 console.log('✅ Общая модель сохранена (архитектура и веса)');
-                console.log(`📁 Файлы сохранены: ${this.modelFile}, ${this.weightsFile}`);
 
                 // Дополнительно сохраняем через ModelManager в новом формате,
                 // чтобы последующие загрузки не падали на fallback и не логировали warning
@@ -383,7 +365,6 @@ class NeuralNetworkService {
                     if (this.model) {
                         const pathModule = await import('path');
                         const modelName = pathModule.basename(this.modelFile, '.json');
-                        console.log(`💾 Сохраняем через ModelManager как neural/${modelName}...`);
                         await ModelManager.saveModel(this.model, `neural/${modelName}`);
                         console.log(`✅ Общая модель также сохранена через ModelManager`);
                     } else {
@@ -443,7 +424,6 @@ class NeuralNetworkService {
                         const weightsExist = await fs.access(figiWeightsFile).then(() => true).catch(() => false);
                         
                         if (modelExists && weightsExist) {
-                            console.log(`📥 Loading per-FIGI neural model for ${figi} from ${figiModelFile}...`);
                             
                             // Пытаемся загрузить через ModelManager
                             const model = await ModelManager.loadModel(`neural/${figi}`);
@@ -519,7 +499,6 @@ class NeuralNetworkService {
                         const weightsExist = await fs.access(weightsFile).then(() => true).catch(() => false);
                         
                         if (modelExists && weightsExist) {
-                            console.log(`📥 Loading general neural model from ${modelFile}...`);
                             
                             // Пытаемся загрузить модель через ModelManager
                             const modelName = path.basename(modelFile, '.json');
@@ -570,7 +549,6 @@ class NeuralNetworkService {
                 }
             }
             
-            console.log('📭 Модель не найдена, будет создана при обучении');
             return false;
         } catch (error) {
             console.error('❌ Ошибка загрузки модели:', error);
@@ -590,7 +568,6 @@ class NeuralNetworkService {
         } = options;
 
         try {
-            console.log(`⚡ Quick training for ${figi}: epochs=${epochs}, days=${dataDays}`);
             
             // Используем OptimizedTrainingService для быстрого обучения
             const OptimizedTrainingService = (await import('./OptimizedTrainingService.js')).default;
@@ -623,7 +600,6 @@ class NeuralNetworkService {
                 }
             }
 
-            console.log(`🚀 Starting training for ${figi} in worker...`);
 
             // Получаем исторические данные
             let candles = await CacheService.getCandles(figi, 'DAY', days);
@@ -772,7 +748,6 @@ class NeuralNetworkService {
                     
                     // Сохраняем также как общую модель (если это единственное обучение или лучшая модель)
                     // Это важно для случаев, когда обучается только один инструмент
-                    console.log(`💾 Сохраняем модель для ${figi} также как общую модель...`);
                     await this.saveModel(); // Сохраняет общую модель (без параметра figi)
                     console.log(`✅ Общая модель также сохранена на основе ${figi}`);
                     
@@ -909,7 +884,6 @@ class NeuralNetworkService {
 
             // Сохраняем общую модель после пакетного обучения
             // Выбираем модель с лучшей точностью (accuracy) среди всех успешно обученных
-            console.log('💾 Выбираем лучшую модель для сохранения как общей...');
             
             try {
                 // Находим модель с лучшей accuracy среди успешно обученных
@@ -926,13 +900,11 @@ class NeuralNetworkService {
                     const bestModel = await OptimizedTrainingService.getModel(bestResult.figi);
                     if (bestModel) {
                         this.model = bestModel;
-                        console.log(`💾 Сохраняем лучшую модель (${bestResult.ticker}) как общую модель...`);
                         await this.saveModel(); // Сохраняет общую модель (без параметра figi)
                         console.log(`✅ Общая модель сохранена на основе лучшей модели (${bestResult.ticker}, accuracy: ${bestResult.accuracy?.toFixed(4)})`);
                     } else {
                         console.warn(`⚠️ Не удалось загрузить модель для ${bestResult.ticker}, пробуем использовать this.model...`);
                         if (this.model) {
-                            console.log('💾 Сохраняем текущую this.model как общую модель...');
                             await this.saveModel(); // Сохраняет общую модель (без параметра figi)
                             console.log('✅ Общая модель сохранена (использована текущая this.model)');
                         } else {
@@ -942,7 +914,6 @@ class NeuralNetworkService {
                 } else if (this.model) {
                     // Если нет метрик, но есть модель - используем её
                     console.log('⚠️ Нет метрик для выбора лучшей модели, используем текущую this.model');
-                    console.log('💾 Сохраняем текущую this.model как общую модель...');
                     await this.saveModel(); // Сохраняет общую модель (без параметра figi)
                     console.log('✅ Общая модель сохранена');
                 } else {
@@ -1017,19 +988,17 @@ class NeuralNetworkService {
             }
             const featureVector = features[features.length - 1];
 
-            console.log(`🔍 Prediction input shape: ${featureVector.length} features`);
             
             // Выбираем подходящую модель для предсказания
             // Пытаемся взять актуальную per-FIGI модель из OptimizedTrainingService (соответствует текущему размеру фичей)
             // Если не удалось — не используем устаревшую this.model с другой размерностью, а мягко возвращаем ошибку
             let model = null;
             try {
-                const OptimizedTrainingService = getService('OptimizedTrainingService');
-                if (OptimizedTrainingService) {
-                    const loadedModel = await OptimizedTrainingService.loadModel(figi, featureVector.length);
-                    if (loadedModel) {
-                        model = loadedModel;
-                    }
+                // Используем прямой импорт, так как метод может вызываться из worker'а
+                const OptimizedTrainingService = (await import('./OptimizedTrainingService.js')).default;
+                const loadedModel = await OptimizedTrainingService.loadModel(figi, featureVector.length);
+                if (loadedModel) {
+                    model = loadedModel;
                 }
             } catch (serviceError) {
                 console.warn(`⚠️ Failed to load per-FIGI model for prediction via OptimizedTrainingService: ${serviceError.message}`);
@@ -1043,7 +1012,6 @@ class NeuralNetworkService {
                 
                 if (modelInputSize === null || modelInputSize === featureVector.length) {
                     model = this.model;
-                    console.log(`📥 Using general model for prediction (FIGI: ${figi})`);
                 } else {
                     console.warn(`⚠️ General model input size mismatch: expected ${modelInputSize}, got ${featureVector.length}`);
                     // Пытаемся создать временную модель с правильным размером для предсказания
@@ -1142,7 +1110,6 @@ class NeuralNetworkService {
             }
             const featureVector = features[features.length - 1];
 
-            console.log(`🔍 PredictFromCandles input shape: ${featureVector.length} features`);
 
             // Используем worker/OptimizedTrainingService для предсказания по последнему сэмплу
             const score = await OptimizedTrainingService.predict(figi, featureVector);
@@ -1190,10 +1157,96 @@ class NeuralNetworkService {
     }
 
     // Анализ всего портфеля
+    /**
+     * Запуск анализа портфеля через worker thread
+     */
+    async analyzePortfolioViaWorker(portfolioItems, totalBudget = null, analysisType = 'full') {
+        // Проверяем, не идет ли уже анализ
+        if (this.isAnalyzing) {
+            throw new Error('Portfolio analysis is already in progress');
+        }
+
+        this.isAnalyzing = true;
+
+        try {
+            const { Worker } = await import('worker_threads');
+            const { fileURLToPath } = await import('url');
+            const { dirname, join } = await import('path');
+            
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = dirname(__filename);
+            const workerPath = join(__dirname, '../workers/portfolioAnalysisWorker.js');
+            
+            // Определяем portfolioType на основе данных
+            let portfolioType = 'virtual';
+            if (portfolioItems.length > 0 && portfolioItems[0].averagePrice !== undefined && portfolioItems[0].averagePrice > 0) {
+                portfolioType = 'real';
+            }
+            
+            
+            const worker = new Worker(workerPath, {
+                workerData: {
+                    portfolioType,
+                    portfolioItems,
+                    totalBudget,
+                    analysisType
+                }
+            });
+            
+            // Добавляем worker в список для отслеживания
+            this.analysisWorkers.add(worker);
+            
+            // Обрабатываем результат
+            const result = await new Promise((resolve, reject) => {
+                worker.on('message', (msg) => {
+                    if (msg.type === 'done') {
+                        resolve(msg.data.analysis);
+                    } else if (msg.type === 'error') {
+                        reject(new Error(msg.data.error));
+                    } else if (msg.type === 'progress') {
+                        // Отправляем прогресс через WebSocket
+                        const webSocketService = this.getWebSocketService();
+                        if (webSocketService && typeof webSocketService.broadcast === 'function') {
+                            webSocketService.broadcast({
+                                type: 'analysis_progress',
+                                data: msg.data,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+                });
+                
+                worker.on('error', (error) => {
+                    console.error('❌ [Worker] Error:', error);
+                    reject(error);
+                });
+                
+                worker.on('exit', (code) => {
+                    this.analysisWorkers.delete(worker);
+                    if (code !== 0) {
+                        reject(new Error(`Worker stopped with exit code ${code}`));
+                    }
+                });
+            });
+            
+            // Удаляем worker из списка после завершения
+            this.analysisWorkers.delete(worker);
+            worker.terminate();
+            
+            console.log(`✅ [Worker] Portfolio analysis completed`);
+            return result;
+            
+        } catch (error) {
+            console.error('❌ [Worker] Portfolio analysis failed:', error);
+            throw error;
+        } finally {
+            this.isAnalyzing = false;
+        }
+    }
+
     async analyzePortfolio(portfolioItems, totalBudget = null) {
         // Проверяем и загружаем модель, если нужно
         if (!this.model) {
-            console.log('📥 Model not loaded in analyzePortfolio, attempting to load...');
             const loaded = await this.loadModel();
             if (!loaded) {
                 // Пробуем найти любую обученную модель через OptimizedTrainingService
@@ -1242,7 +1295,6 @@ class NeuralNetworkService {
 
         // Анализ акций для покупки
         const instruments = await CacheService.getAllInstruments();
-        console.log(`📊 Found ${instruments.length} instruments for analysis`);
 
         console.log(`💰 Price range: ${minPrice} - ${maxPrice === Infinity ? 'unlimited' : maxPrice}`);
 
@@ -1267,15 +1319,11 @@ class NeuralNetworkService {
                 // Используем IntegratedAIService для получения актуального предсказания (как на странице нейросетей)
                 let prediction;
                 try {
-                    // Получаем сервис через GlobalServiceManager для надежности
-                    let IntegratedAIService = getService('IntegratedAIService');
-                    if (!IntegratedAIService) {
-                        // Если не найден в ServiceManager, пробуем прямой импорт
-                        IntegratedAIService = (await import('./IntegratedAIService.js')).default;
-                    }
+                    // Используем прямой импорт, так как метод может вызываться из worker'а
+                    const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
                     
                     // Проверяем и инициализируем, если нужно
-                    if (IntegratedAIService && !IntegratedAIService.isInitialized) {
+                    if (!IntegratedAIService.isInitialized) {
                         console.log(`🔄 IntegratedAIService not initialized, initializing...`);
                         try {
                             await IntegratedAIService.initialize();
@@ -1284,7 +1332,7 @@ class NeuralNetworkService {
                         }
                     }
                     
-                    if (IntegratedAIService && IntegratedAIService.isInitialized) {
+                    if (IntegratedAIService.isInitialized) {
                         const integratedRec = await IntegratedAIService.getIntegratedRecommendation(instrument.figi);
                         prediction = {
                             score: integratedRec.score || 0,
@@ -1295,18 +1343,15 @@ class NeuralNetworkService {
                             details: integratedRec.details || {},
                             horizons: integratedRec.horizons || null // Сохраняем горизонты отдельно
                         };
-                        console.log(`🔍 [IntegratedAI] ${instrument.ticker}: score=${prediction.score.toFixed(3)}, confidence=${prediction.confidence.toFixed(3)}, recommendation=${prediction.recommendation}`);
                     } else {
                         // Fallback к обычному предсказанию
                         console.log(`⚠️ IntegratedAIService not available, using NeuralNetwork for ${instrument.ticker}`);
                         prediction = await this.predict(instrument.figi, instrument.dividendYield);
-                        console.log(`🔍 [NeuralNetwork] ${instrument.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
                     }
                 } catch (integratedError) {
                     // Fallback к обычному предсказанию при ошибке
                     console.warn(`⚠️ IntegratedAI failed for ${instrument.ticker}, using NeuralNetwork:`, integratedError.message);
                     prediction = await this.predict(instrument.figi, instrument.dividendYield);
-                    console.log(`🔍 [NeuralNetwork] ${instrument.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
                 }
 
                 // Сохраняем ВСЕ рекомендации (BUY, SELL, HOLD) без фильтрации по score
@@ -1387,25 +1432,65 @@ class NeuralNetworkService {
             }
         }
 
-        console.log(`📈 Analysis complete: processed ${processedCount}, valid predictions ${validPredictions}, buy recommendations ${analysis.buyRecommendations.length}`);
 
         // Анализ текущего портфеля на продажу
         console.log(`💼 Analyzing ${portfolioItems.length} portfolio items for sell recommendations`);
         
+        // Загружаем модели для работы со стратегиями
+        const TradingRequest = (await import('../models/TradingRequest.js')).default;
+        const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
+        const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+        const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+        const { Op } = await import('sequelize');
+        
+        const recommendationsByStrategy = {}; // Группировка по стратегиям
+        
         for (const item of portfolioItems) {
             try {
+                // Получаем стратегию для позиции
+                let positionStrategy = null;
+                let strategyInfo = null;
+                try {
+                    // Ищем последнюю BUY заявку для этого FIGI
+                    const buyRequest = await TradingRequest.findOne({
+                        where: {
+                            figi: item.figi,
+                            action: 'BUY',
+                            status: {
+                                [Op.in]: ['APPROVED', 'EXECUTED', 'PENDING']
+                            }
+                        },
+                        order: [['executedAt', 'DESC'], ['createdAt', 'DESC']]
+                    });
+                    
+                    if (buyRequest) {
+                        // Сначала проверяем strategyId в самой заявке
+                        if (buyRequest.strategyId) {
+                            strategyInfo = await TradingStrategy.findByPk(buyRequest.strategyId);
+                        }
+                        
+                        // Если не найдено, пытаемся найти через PositionStrategy
+                        if (!strategyInfo) {
+                            positionStrategy = await PositionStrategy.findOne({
+                                where: { positionId: buyRequest.id }
+                            });
+                            if (positionStrategy && positionStrategy.strategyId) {
+                                strategyInfo = await TradingStrategy.findByPk(positionStrategy.strategyId);
+                            }
+                        }
+                    }
+                } catch (strategyError) {
+                    console.warn(`⚠️ Could not load strategy for ${item.ticker}:`, strategyError.message);
+                }
+
                 // Используем IntegratedAIService для получения актуального предсказания (как на странице нейросетей)
                 let prediction;
                 try {
-                    // Получаем сервис через GlobalServiceManager для надежности
-                    let IntegratedAIService = getService('IntegratedAIService');
-                    if (!IntegratedAIService) {
-                        // Если не найден в ServiceManager, пробуем прямой импорт
-                        IntegratedAIService = (await import('./IntegratedAIService.js')).default;
-                    }
+                    // Используем прямой импорт, так как метод может вызываться из worker'а
+                    const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
                     
                     // Проверяем и инициализируем, если нужно
-                    if (IntegratedAIService && !IntegratedAIService.isInitialized) {
+                    if (!IntegratedAIService.isInitialized) {
                         console.log(`🔄 IntegratedAIService not initialized, initializing...`);
                         try {
                             await IntegratedAIService.initialize();
@@ -1414,7 +1499,7 @@ class NeuralNetworkService {
                         }
                     }
                     
-                    if (IntegratedAIService && IntegratedAIService.isInitialized) {
+                    if (IntegratedAIService.isInitialized) {
                         const integratedRec = await IntegratedAIService.getIntegratedRecommendation(item.figi);
                         prediction = {
                             score: integratedRec.score || 0,
@@ -1424,18 +1509,15 @@ class NeuralNetworkService {
                             summary: integratedRec.summary, // Сохраняем summary отдельно для использования в explanation
                             details: integratedRec.details || {}
                         };
-                        console.log(`🔍 [IntegratedAI] Portfolio ${item.ticker}: score=${prediction.score.toFixed(3)}, confidence=${prediction.confidence.toFixed(3)}, recommendation=${prediction.recommendation}`);
                     } else {
                         // Fallback к обычному предсказанию
                         console.log(`⚠️ IntegratedAIService not available, using NeuralNetwork for portfolio ${item.ticker}`);
                         prediction = await this.predict(item.figi);
-                        console.log(`🔍 [NeuralNetwork] Portfolio ${item.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
                     }
                 } catch (integratedError) {
                     // Fallback к обычному предсказанию при ошибке
                     console.warn(`⚠️ IntegratedAI failed for portfolio ${item.ticker}, using NeuralNetwork:`, integratedError.message);
                     prediction = await this.predict(item.figi);
-                    console.log(`🔍 [NeuralNetwork] Portfolio ${item.ticker}: score=${prediction.score.toFixed(3)}, recommendation=${prediction.recommendation}`);
                 }
 
                 // Добавляем запись для каждой позиции, классифицируя причину
@@ -1448,20 +1530,69 @@ class NeuralNetworkService {
                     reason = 'Hold (good prospects)';
                 }
 
-                analysis.sellRecommendations.push({
+                // Если есть стратегия, добавляем информацию о бюджете стратегии
+                let strategyBudgetInfo = null;
+                if (strategyInfo) {
+                    try {
+                        const allocation = await StrategyAllocationService.getAvailableBudget(strategyInfo.id);
+                        const currentPrice = await this.getCurrentPrice(item.figi);
+                        strategyBudgetInfo = {
+                            strategyId: strategyInfo.id,
+                            strategyName: strategyInfo.name,
+                            strategyType: strategyInfo.type,
+                            availableBudget: allocation,
+                            positionValue: currentPrice * item.quantity
+                        };
+                    } catch (budgetError) {
+                        console.warn(`⚠️ Could not get budget info for strategy ${strategyInfo.id}:`, budgetError.message);
+                    }
+                }
+
+                const recommendation = {
                     item,
                     prediction,
-                    reason
-                });
+                    reason,
+                    strategy: strategyInfo ? {
+                        id: strategyInfo.id,
+                        name: strategyInfo.name,
+                        type: strategyInfo.type
+                    } : null,
+                    strategyBudgetInfo
+                };
+
+                analysis.sellRecommendations.push(recommendation);
+
+                // Группируем по стратегиям
+                const strategyKey = strategyInfo ? strategyInfo.id : 'no_strategy';
+                if (!recommendationsByStrategy[strategyKey]) {
+                    recommendationsByStrategy[strategyKey] = {
+                        strategy: strategyInfo ? {
+                            id: strategyInfo.id,
+                            name: strategyInfo.name,
+                            type: strategyInfo.type
+                        } : null,
+                        recommendations: [],
+                        totalValue: 0,
+                        sellCount: 0,
+                        holdCount: 0
+                    };
+                }
+                const currentPrice = await this.getCurrentPrice(item.figi);
+                recommendationsByStrategy[strategyKey].recommendations.push(recommendation);
+                recommendationsByStrategy[strategyKey].totalValue += currentPrice * item.quantity;
+                if (prediction.recommendation === 'SELL' || prediction.score < 0.3) {
+                    recommendationsByStrategy[strategyKey].sellCount++;
+                } else {
+                    recommendationsByStrategy[strategyKey].holdCount++;
+                }
 
                 if (prediction.score < 0.3) {
-                    console.log(`✅ Added SELL recommendation for ${item.ticker}: score=${prediction.score.toFixed(3)} (${prediction.recommendation})`);
+                    console.log(`✅ Added SELL recommendation for ${item.ticker}: score=${prediction.score.toFixed(3)} (${prediction.recommendation})${strategyInfo ? ` [${strategyInfo.name}]` : ''}`);
                 } else {
-                    console.log(`ℹ️ Added HOLD entry for ${item.ticker}: score=${prediction.score.toFixed(3)} (${prediction.recommendation})`);
+                    console.log(`ℹ️ Added HOLD entry for ${item.ticker}: score=${prediction.score.toFixed(3)} (${prediction.recommendation})${strategyInfo ? ` [${strategyInfo.name}]` : ''}`);
                 }
 
                 // Расчет текущей стоимости портфеля
-                const currentPrice = await this.getCurrentPrice(item.figi);
                 analysis.portfolioValue += currentPrice * item.quantity;
 
             } catch (error) {
@@ -1472,6 +1603,22 @@ class NeuralNetworkService {
         console.log(`📉 Sell recommendations: ${analysis.sellRecommendations.length}`);
 
         analysis.availableBudget = totalBudget - analysis.portfolioValue;
+
+        // Рассчитываем статистику по стратегиям для позиций портфеля
+        const strategyStats = Object.values(recommendationsByStrategy).map(group => ({
+            strategy: group.strategy,
+            positionsCount: group.recommendations.length,
+            totalValue: group.totalValue,
+            sellCount: group.sellCount,
+            holdCount: group.holdCount,
+            sellPercentage: group.recommendations.length > 0 
+                ? (group.sellCount / group.recommendations.length) * 100 
+                : 0
+        }));
+
+        // Добавляем группировку и статистику по стратегиям в результат
+        analysis.recommendationsByStrategy = recommendationsByStrategy;
+        analysis.strategyStats = strategyStats;
 
         // Сортируем рекомендации по уверенности (от высокой к низкой)
         analysis.buyRecommendations.sort((a, b) => b.prediction.score - a.prediction.score);
@@ -1489,7 +1636,6 @@ class NeuralNetworkService {
         let analysisRecord = null;
 
         try {
-            console.log(`📊 Starting portfolio analysis for ${portfolioType} portfolio...`);
 
             // Создаем запись в БД со статусом pending
             const PortfolioAnalysis = (await import('../models/PortfolioAnalysis.js')).default;
@@ -1556,7 +1702,6 @@ class NeuralNetworkService {
                 }
             }
 
-            console.log(`📊 Portfolio items for analysis: ${portfolioItems.length} (type: ${portfolioType})`);
 
             // Получаем настройки портфеля
             const SettingsService = (await import('./SettingsService.js')).default;
@@ -1565,10 +1710,8 @@ class NeuralNetworkService {
 
             // ВАЖНО: Убеждаемся, что IntegratedAIService инициализирован перед анализом
             // Это гарантирует, что везде используются одинаковые предсказания
-            let IntegratedAIService = getService('IntegratedAIService');
-            if (!IntegratedAIService) {
-                IntegratedAIService = (await import('./IntegratedAIService.js')).default;
-            }
+            // Используем прямой импорт, так как метод может вызываться из worker'а
+            const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
             
             if (!IntegratedAIService.isInitialized) {
                 console.log('🔄 IntegratedAIService not initialized, initializing before analysis...');
@@ -1620,8 +1763,8 @@ class NeuralNetworkService {
                 }
             }
 
-            // Выполняем анализ
-            const analysis = await this.analyzePortfolio(portfolioItems, totalBudget);
+            // Выполняем анализ через worker
+            const analysis = await this.analyzePortfolioViaWorker(portfolioItems, totalBudget, 'full');
 
             const processingTime = Date.now() - startTime;
 
@@ -1745,23 +1888,92 @@ class NeuralNetworkService {
 
         console.log(`📊 Positions-only analysis: ${portfolioItems.length} items (${portfolioType})`);
 
+        // Проверяем, не идет ли уже анализ
+        if (this.isAnalyzing) {
+            throw new Error('Portfolio analysis is already in progress');
+        }
+
+        // Выполняем анализ через worker
+        const result = await this.analyzePortfolioViaWorker(portfolioItems, null, 'positions-only');
+        
+        // Сохраняем результаты в БД если требуется
+        if (saveToDb) {
+            try {
+                console.log(`💾 [POSITIONS-ONLY] Saving ${result.sellRecommendations.length} recommendations to DB...`);
+                await this.saveRecommendationsToDatabase([], result.sellRecommendations);
+                console.log(`✅ [POSITIONS-ONLY] Successfully saved ${result.sellRecommendations.length} position recommendations to DB`);
+            } catch (dbErr) {
+                console.error('❌ [POSITIONS-ONLY] Failed to save position recommendations:', dbErr);
+                throw dbErr;
+            }
+        }
+
+        const processingTime = Date.now() - startTime;
+        console.log(`✅ [POSITIONS-ONLY] Analysis completed in ${processingTime}ms`);
+        console.log(`   - Sell recommendations: ${result.sellRecommendations?.length || 0}`);
+        console.log(`   - Strategy stats: ${result.strategyStats?.length || 0} strategies`);
+
+        return result;
+    }
+
+    // Вспомогательные методы
+    async getCurrentPrice(figi) {
+        const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
+        const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+        const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+        const { Op } = await import('sequelize');
+
         // Анализируем только позиции, без BUY по рынку
         const sellRecommendations = [];
+        const recommendationsByStrategy = {}; // Группировка по стратегиям
         let portfolioValue = 0;
+        
         for (const item of portfolioItems) {
             try {
+                // Получаем стратегию для позиции
+                let positionStrategy = null;
+                let strategyInfo = null;
+                try {
+                    // Ищем последнюю BUY заявку для этого FIGI
+                    const buyRequest = await TradingRequest.findOne({
+                        where: {
+                            figi: item.figi,
+                            action: 'BUY',
+                            status: {
+                                [Op.in]: ['APPROVED', 'EXECUTED', 'PENDING']
+                            }
+                        },
+                        order: [['executedAt', 'DESC'], ['createdAt', 'DESC']]
+                    });
+                    
+                    if (buyRequest) {
+                        // Сначала проверяем strategyId в самой заявке
+                        if (buyRequest.strategyId) {
+                            strategyInfo = await TradingStrategy.findByPk(buyRequest.strategyId);
+                        }
+                        
+                        // Если не найдено, пытаемся найти через PositionStrategy
+                        if (!strategyInfo) {
+                            positionStrategy = await PositionStrategy.findOne({
+                                where: { positionId: buyRequest.id }
+                            });
+                            if (positionStrategy && positionStrategy.strategyId) {
+                                strategyInfo = await TradingStrategy.findByPk(positionStrategy.strategyId);
+                            }
+                        }
+                    }
+                } catch (strategyError) {
+                    console.warn(`⚠️ Could not load strategy for ${item.ticker}:`, strategyError.message);
+                }
+
                 // Используем IntegratedAIService для получения актуального предсказания (как на странице нейросетей)
                 let prediction;
                 try {
-                    // Получаем сервис через GlobalServiceManager для надежности
-                    let IntegratedAIService = getService('IntegratedAIService');
-                    if (!IntegratedAIService) {
-                        // Если не найден в ServiceManager, пробуем прямой импорт
-                        IntegratedAIService = (await import('./IntegratedAIService.js')).default;
-                    }
+                    // Используем прямой импорт, так как метод может вызываться из worker'а
+                    const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
                     
                     // Проверяем и инициализируем, если нужно
-                    if (IntegratedAIService && !IntegratedAIService.isInitialized) {
+                    if (!IntegratedAIService.isInitialized) {
                         console.log(`🔄 IntegratedAIService not initialized, initializing...`);
                         try {
                             await IntegratedAIService.initialize();
@@ -1770,7 +1982,7 @@ class NeuralNetworkService {
                         }
                     }
                     
-                    if (IntegratedAIService && IntegratedAIService.isInitialized) {
+                    if (IntegratedAIService.isInitialized) {
                         const integratedRec = await IntegratedAIService.getIntegratedRecommendation(item.figi);
                         prediction = {
                             score: integratedRec.score || 0,
@@ -1795,22 +2007,88 @@ class NeuralNetworkService {
                 const currentPrice = await this.getCurrentPrice(item.figi);
                 portfolioValue += currentPrice * item.quantity;
 
-                sellRecommendations.push({
+                // Определяем причину рекомендации с учетом стратегии
+                let reason = 'Hold';
+                if (prediction.score < 0.2) {
+                    reason = 'Low prediction score (strong sell signal)';
+                } else if (prediction.score < 0.3) {
+                    reason = 'Moderate prediction score (sell signal)';
+                } else if (prediction.score >= 0.7) {
+                    reason = 'Hold (good prospects)';
+                }
+
+                // Если есть стратегия, добавляем информацию о бюджете стратегии
+                let strategyBudgetInfo = null;
+                if (strategyInfo) {
+                    try {
+                        const allocation = await StrategyAllocationService.getAvailableBudget(strategyInfo.id);
+                        strategyBudgetInfo = {
+                            strategyId: strategyInfo.id,
+                            strategyName: strategyInfo.name,
+                            strategyType: strategyInfo.type,
+                            availableBudget: allocation,
+                            positionValue: currentPrice * item.quantity
+                        };
+                    } catch (budgetError) {
+                        console.warn(`⚠️ Could not get budget info for strategy ${strategyInfo.id}:`, budgetError.message);
+                    }
+                }
+
+                const recommendation = {
                     item,
                     currentPrice,
                     prediction,
-                    reason:
-                        prediction.score < 0.2
-                            ? 'Low prediction score (strong sell signal)'
-                            : prediction.score < 0.3
-                                ? 'Moderate prediction score (sell signal)'
-                                : 'Hold'
-                });
-                console.log(`🔍 ${item.ticker}: score=${prediction.score.toFixed(3)} rec=${prediction.recommendation}`);
+                    reason,
+                    strategy: strategyInfo ? {
+                        id: strategyInfo.id,
+                        name: strategyInfo.name,
+                        type: strategyInfo.type
+                    } : null,
+                    strategyBudgetInfo
+                };
+
+                sellRecommendations.push(recommendation);
+
+                // Группируем по стратегиям
+                const strategyKey = strategyInfo ? strategyInfo.id : 'no_strategy';
+                if (!recommendationsByStrategy[strategyKey]) {
+                    recommendationsByStrategy[strategyKey] = {
+                        strategy: strategyInfo ? {
+                            id: strategyInfo.id,
+                            name: strategyInfo.name,
+                            type: strategyInfo.type
+                        } : null,
+                        recommendations: [],
+                        totalValue: 0,
+                        sellCount: 0,
+                        holdCount: 0
+                    };
+                }
+                recommendationsByStrategy[strategyKey].recommendations.push(recommendation);
+                recommendationsByStrategy[strategyKey].totalValue += currentPrice * item.quantity;
+                if (prediction.recommendation === 'SELL' || prediction.score < 0.3) {
+                    recommendationsByStrategy[strategyKey].sellCount++;
+                } else {
+                    recommendationsByStrategy[strategyKey].holdCount++;
+                }
+
+                console.log(`🔍 ${item.ticker}: score=${prediction.score.toFixed(3)} rec=${prediction.recommendation}${strategyInfo ? ` [${strategyInfo.name}]` : ' [No strategy]'}`);
             } catch (err) {
                 console.warn(`Could not analyze ${item.ticker}:`, err.message);
             }
         }
+
+        // Рассчитываем статистику по стратегиям
+        const strategyStats = Object.values(recommendationsByStrategy).map(group => ({
+            strategy: group.strategy,
+            positionsCount: group.recommendations.length,
+            totalValue: group.totalValue,
+            sellCount: group.sellCount,
+            holdCount: group.holdCount,
+            sellPercentage: group.recommendations.length > 0 
+                ? (group.sellCount / group.recommendations.length) * 100 
+                : 0
+        }));
 
         const result = {
             portfolioType,
@@ -1822,6 +2100,8 @@ class NeuralNetworkService {
             buyRecommendations: [],
             sellRecommendationsCount: sellRecommendations.length,
             buyRecommendationsCount: 0,
+            recommendationsByStrategy, // Группировка по стратегиям
+            strategyStats, // Статистика по стратегиям
             processingTime: Date.now() - startTime
         };
 
@@ -2109,10 +2389,8 @@ class NeuralNetworkService {
 
         // ВАЖНО: Убеждаемся, что IntegratedAIService инициализирован перед анализом
         // Это гарантирует, что везде используются одинаковые предсказания
-        let IntegratedAIService = getService('IntegratedAIService');
-        if (!IntegratedAIService) {
-            IntegratedAIService = (await import('./IntegratedAIService.js')).default;
-        }
+        // Используем прямой импорт, так как метод может вызываться из worker'а
+        const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
         
         if (!IntegratedAIService.isInitialized) {
             console.log('🔄 IntegratedAIService not initialized, initializing before market analysis...');
@@ -2249,7 +2527,8 @@ class NeuralNetworkService {
             const portfolioSettings = await SettingsService.getPortfolioSettings();
             const totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
 
-            const analysis = await this.analyzePortfolio(portfolioItems, totalBudget);
+            // Выполняем анализ через worker
+            const analysis = await this.analyzePortfolioViaWorker(portfolioItems, totalBudget, 'full');
 
             console.log(`📈 Buy recommendations: ${analysis.buyRecommendations?.length || 0}`);
             console.log(`📉 Sell recommendations: ${analysis.sellRecommendations?.length || 0}`);
@@ -2447,15 +2726,21 @@ class NeuralNetworkService {
                 }
 
                 // Определяем стратегию для рекомендации
+                // Сначала проверяем, есть ли стратегия в самой рекомендации (для позиций портфеля)
                 let strategyId = null;
-                try {
-                    const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
-                    const strategy = await StrategyAllocationService.getStrategyForRecommendation(confidence, score);
-                    if (strategy) {
-                        strategyId = strategy.id;
+                if (rec.strategy && rec.strategy.id) {
+                    strategyId = rec.strategy.id;
+                } else {
+                    // Если стратегии нет в рекомендации, определяем её автоматически (для новых BUY)
+                    try {
+                        const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+                        const strategy = await StrategyAllocationService.getStrategyForRecommendation({ confidence, score });
+                        if (strategy) {
+                            strategyId = strategy.id;
+                        }
+                    } catch (strategyError) {
+                        // Игнорируем ошибки определения стратегии
                     }
-                } catch (strategyError) {
-                    // Игнорируем ошибки определения стратегии
                 }
 
                 const recommendationData = {
@@ -2590,6 +2875,13 @@ class NeuralNetworkService {
                     recommendation: rec.prediction?.recommendation
                 }, null, 2));
 
+                // Определяем стратегию для SELL рекомендации (из позиции портфеля)
+                let strategyId = null;
+                if (rec.strategy && rec.strategy.id) {
+                    // Используем стратегию из рекомендации (если позиция была куплена по стратегии)
+                    strategyId = rec.strategy.id;
+                }
+
                 const recommendationData = {
                     figi: instrument.figi,
                     ticker: instrument.ticker || 'UNKNOWN',
@@ -2606,7 +2898,8 @@ class NeuralNetworkService {
                     takeProfit: currentPrice ? currentPrice * 0.8 : null, // -20% как тейк-профит
                     sector: instrument.sector || 'Unknown',
                     marketCap: instrument.marketCap || 'Unknown',
-                    isActive: true
+                    isActive: true,
+                    strategyId: strategyId // Добавляем ID стратегии для позиций портфеля
                 };
 
                 // Ищем существующую рекомендацию
@@ -2970,6 +3263,17 @@ class NeuralNetworkService {
             this.isTraining = false;
             this.isBatchTraining = false;
             this.status = 'idle';
+            
+            // Завершаем все worker процессы анализа
+            if (this.analysisWorkers && this.analysisWorkers.size > 0) {
+                console.log(`🛑 Terminating ${this.analysisWorkers.size} analysis worker(s)...`);
+                this.analysisWorkers.forEach(worker => {
+                    if (worker && worker.terminate) {
+                        worker.terminate();
+                    }
+                });
+                this.analysisWorkers.clear();
+            }
             
             console.log('✅ Neural Network Service stopped');
         } catch (error) {

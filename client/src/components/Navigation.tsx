@@ -6,6 +6,7 @@ import { Divider } from 'primereact/divider';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
 import WebSocketStatus from './WebSocketStatus';
+import NotificationPanel from './NotificationPanel';
 
 interface NavigationProps {
   className?: string;
@@ -72,7 +73,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
             {systemStatus?.timestamp && new Date(systemStatus.timestamp).toLocaleTimeString()}
           </small>
           <div className="flex align-items-center gap-1">
-            {/* <RealTimeNotifications /> */}
+            <NotificationPanel />
             <Button
               icon="pi pi-refresh"
               className="p-button-rounded p-button-text p-button-sm"
