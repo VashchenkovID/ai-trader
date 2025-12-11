@@ -2838,6 +2838,47 @@ class NeuralNetworkService {
                         } catch (wsError) {
                             console.warn('⚠️ Could not broadcast trading signal:', wsError.message);
                         }
+
+                        // Автоматическое создание заявки для высокоуверенных сигналов
+                        try {
+                            const SettingsService = (await import('./SettingsService.js')).default;
+                            const TradingRequestService = (await import('./TradingRequestService.js')).default;
+                            const settings = await SettingsService.getSettings();
+                            const autoTradeEnabled = settings.auto_trade_enabled !== false; // По умолчанию включено
+                            const minConfidence = settings.auto_trade_min_confidence || 0.85;
+                            const minScore = settings.auto_trade_min_score || 0.8;
+                            const minAgreement = settings.auto_trade_min_agreement || 0.9;
+
+                            if (autoTradeEnabled && 
+                                createdRecommendation.confidence >= minConfidence && 
+                                createdRecommendation.score >= minScore) {
+                                
+                                // Получаем agreement из IntegratedAIService
+                                let agreement = null;
+                                try {
+                                    const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+                                    if (IntegratedAIService.isInitialized) {
+                                        const integratedRec = await IntegratedAIService.getIntegratedRecommendation(createdRecommendation.figi);
+                                        agreement = integratedRec.agreement || null;
+                                    }
+                                } catch (error) {
+                                    console.warn('⚠️ Could not get agreement for auto-trade:', error.message);
+                                }
+
+                                const meetsAgreement = agreement === null || agreement >= minAgreement;
+
+                                if (meetsAgreement) {
+                                    // Автоматически создаем заявку
+                                    console.log(`🤖 Auto-creating trading request for ${createdRecommendation.ticker} (confidence=${createdRecommendation.confidence.toFixed(2)}, score=${createdRecommendation.score.toFixed(2)})`);
+                                    await TradingRequestService.createTradingRequest(createdRecommendation.figi, {
+                                        strategyId: strategyId || undefined
+                                    });
+                                }
+                            }
+                        } catch (autoTradeError) {
+                            console.warn('⚠️ Could not auto-create trading request:', autoTradeError.message);
+                            // Не прерываем выполнение, если не удалось создать заявку
+                        }
                     }
                     console.log(`✅ Created ${recommendation} recommendation for ${rec.instrument.ticker}`);
                 }

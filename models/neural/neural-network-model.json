@@ -1,0 +1,60 @@
+{
+  "format": "layers-model",
+  "generatedBy": "IvashkaTradeHelper-ModelManager",
+  "convertedBy": null,
+  "modelTopology": "{\"class_name\":\"Sequential\",\"config\":{\"name\":\"sequential_23\",\"layers\":[{\"class_name\":\"Dense\",\"config\":{\"units\":60,\"activation\":\"relu\",\"use_bias\":true,\"kernel_initializer\":{\"class_name\":\"VarianceScaling\",\"config\":{\"scale\":2,\"mode\":\"fan_in\",\"distribution\":\"uniform\",\"seed\":null}},\"bias_initializer\":{\"class_name\":\"Zeros\",\"config\":{}},\"kernel_regularizer\":{\"class_name\":\"L1L2\",\"config\":{\"l1\":0,\"l2\":0.001}},\"bias_regularizer\":null,\"activity_regularizer\":null,\"kernel_constraint\":null,\"bias_constraint\":null,\"name\":\"dense_Dense68\",\"trainable\":true,\"batch_input_shape\":[null,30],\"dtype\":\"float32\"}},{\"class_name\":\"Dropout\",\"config\":{\"rate\":0.25,\"noise_shape\":null,\"seed\":null,\"name\":\"dropout_Dropout43\",\"trainable\":true}},{\"class_name\":\"Dense\",\"config\":{\"units\":30,\"activation\":\"relu\",\"use_bias\":true,\"kernel_initializer\":{\"class_name\":\"VarianceScaling\",\"config\":{\"scale\":2,\"mode\":\"fan_in\",\"distribution\":\"uniform\",\"seed\":null}},\"bias_initializer\":{\"class_name\":\"Zeros\",\"config\":{}},\"kernel_regularizer\":{\"class_name\":\"L1L2\",\"config\":{\"l1\":0,\"l2\":0.001}},\"bias_regularizer\":null,\"activity_regularizer\":null,\"kernel_constraint\":null,\"bias_constraint\":null,\"name\":\"dense_Dense69\",\"trainable\":true}},{\"class_name\":\"Dropout\",\"config\":{\"rate\":0.2,\"noise_shape\":null,\"seed\":null,\"name\":\"dropout_Dropout44\",\"trainable\":true}},{\"class_name\":\"Dense\",\"config\":{\"units\":1,\"activation\":\"sigmoid\",\"use_bias\":true,\"kernel_initializer\":{\"class_name\":\"VarianceScaling\",\"config\":{\"scale\":1,\"mode\":\"fan_avg\",\"distribution\":\"uniform\",\"seed\":null}},\"bias_initializer\":{\"class_name\":\"Zeros\",\"config\":{}},\"kernel_regularizer\":null,\"bias_regularizer\":null,\"activity_regularizer\":null,\"kernel_constraint\":null,\"bias_constraint\":null,\"name\":\"dense_Dense70\",\"trainable\":true}}]},\"keras_version\":\"tfjs-layers 4.22.0\",\"backend\":\"tensor_flow.js\"}",
+  "weightsManifest": [
+    {
+      "paths": [
+        "neural-network-model.weights.bin"
+      ],
+      "weights": [
+        {
+          "name": "dense_Dense68/kernel_1",
+          "shape": [
+            30,
+            60
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "dense_Dense68/bias_1",
+          "shape": [
+            60
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "dense_Dense69/kernel_1",
+          "shape": [
+            60,
+            30
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "dense_Dense69/bias_1",
+          "shape": [
+            30
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "dense_Dense70/kernel_1",
+          "shape": [
+            30,
+            1
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "dense_Dense70/bias_1",
+          "shape": [
+            1
+          ],
+          "dtype": "float32"
+        }
+      ]
+    }
+  ]
+}

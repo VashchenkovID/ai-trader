@@ -32,3 +32,4 @@ export { default as TradingZone } from './TradingZone.js';
 export { default as PortfolioAnalysis } from './PortfolioAnalysis.js';
 export { default as Recommendation } from './Recommendation.js';
 export { default as CachedSignal } from './CachedSignal.js';
+export { default as TrailingStop } from './TrailingStop.js';

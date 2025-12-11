@@ -1,0 +1,30 @@
+{
+  "weights": {
+    "lstm": 0.4,
+    "cnn": 0.35,
+    "transformer": 0.25
+  },
+  "performance": {
+    "lstm": {
+      "accuracy": 0,
+      "precision": 0,
+      "recall": 0,
+      "f1Score": 0
+    },
+    "cnn": {
+      "accuracy": 0,
+      "precision": 0,
+      "recall": 0,
+      "f1Score": 0
+    },
+    "transformer": {
+      "accuracy": 0,
+      "precision": 0,
+      "recall": 0,
+      "f1Score": 0
+    }
+  },
+  "lastTrained": "2025-12-11T12:21:16.374Z",
+  "version": "2.0",
+  "format": "tensorflow-js-standard"
+}

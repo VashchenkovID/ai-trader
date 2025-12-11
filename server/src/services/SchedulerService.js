@@ -26,6 +26,7 @@ class SchedulerService {
         this.portfolioAnalysisTask = null;
         this.predictionsUpdateTask = null;
         this.signalsUpdateTask = null;
+        this.trailingStopsCheckTask = null;
         this.realPortfolioSyncTask = null;
         this.virtualPortfolioUpdateTask = null;
         this.isInitialized = null;
@@ -372,7 +373,26 @@ class SchedulerService {
             timezone: "Europe/Moscow"
         });
 
-        // Задача 13: Автоматическая перебалансировка стратегий (каждое воскресенье в 3:00)
+        // Задача 13: Проверка трейлинг-стопов (каждые 5 минут)
+        this.trailingStopsCheckTask = cron.schedule('*/5 * * * *', async () => {
+            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 60 * 1000) {
+                console.log('⏭️ Skipping first trailing stops check run (too soon after startup)');
+                return;
+            }
+            
+            try {
+                await this.checkTrailingStops();
+            } catch (error) {
+                console.error('Error in trailing stops check:', error);
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
+        // Задача 14: Автоматическая перебалансировка стратегий (каждое воскресенье в 3:00)
         this.strategyRebalanceTask = cron.schedule('0 3 * * 0', async () => {
             try {
                 console.log('🔄 Scheduled strategy rebalancing started...');
@@ -1709,6 +1729,12 @@ class SchedulerService {
                 this.signalsUpdateTask = null;
                 console.log('✅ Signals update task stopped and destroyed');
             }
+            if (this.trailingStopsCheckTask) {
+                this.trailingStopsCheckTask.stop();
+                this.trailingStopsCheckTask.destroy();
+                this.trailingStopsCheckTask = null;
+                console.log('✅ Trailing stops check task stopped and destroyed');
+            }
             if (this.realPortfolioSyncTask) {
                 this.realPortfolioSyncTask.stop();
                 this.realPortfolioSyncTask.destroy();
@@ -1940,6 +1966,87 @@ class SchedulerService {
 
         } catch (error) {
             console.error('❌ Error during daily news update:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Проверка и обработка трейлинг-стопов
+     */
+    async checkTrailingStops() {
+        try {
+            const RiskManagementService = (await import('./RiskManagementService.js')).default;
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const WebSocketService = this.getWebSocketService();
+
+            // Проверяем трейлинг-стопы для виртуального портфеля
+            const virtualTriggered = await RiskManagementService.checkAllTrailingStops('virtual');
+            
+            // Проверяем трейлинг-стопы для реального портфеля
+            const realTriggered = await RiskManagementService.checkAllTrailingStops('real');
+
+            const allTriggered = [...virtualTriggered, ...realTriggered];
+
+            if (allTriggered.length > 0) {
+                console.log(`🛑 Обнаружено ${allTriggered.length} сработавших трейлинг-стопов`);
+
+                // Закрываем позиции для каждого сработавшего трейлинг-стопа
+                for (const stop of allTriggered) {
+                    try {
+                        const signal = {
+                            figi: stop.figi,
+                            ticker: stop.ticker,
+                            action: stop.direction === 'BUY' ? 'SELL' : 'BUY', // Обратное действие для закрытия
+                            quantity: stop.quantity,
+                            price: stop.triggerPrice,
+                            confidence: 1.0,
+                            reason: 'trailing_stop_triggered',
+                            trailingStopId: stop.id
+                        };
+
+                        // Исполняем ордер через TradingEngine
+                        const result = await TradingEngine.executeOrder(signal);
+
+                        console.log(`✅ Позиция закрыта по трейлинг-стопу для ${stop.ticker}: ${stop.quantity} шт. по цене ${stop.triggerPrice.toFixed(2)}`);
+
+                        // Отправляем уведомление через WebSocket
+                        if (WebSocketService) {
+                            WebSocketService.broadcast({
+                                type: 'trailing_stop_triggered',
+                                data: {
+                                    figi: stop.figi,
+                                    ticker: stop.ticker,
+                                    quantity: stop.quantity,
+                                    triggerPrice: stop.triggerPrice,
+                                    entryPrice: stop.entryPrice,
+                                    profit: stop.direction === 'BUY' 
+                                        ? ((stop.triggerPrice - stop.entryPrice) / stop.entryPrice) * 100
+                                        : ((stop.entryPrice - stop.triggerPrice) / stop.entryPrice) * 100,
+                                    portfolioType: stop.portfolioType
+                                },
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+
+                        // Отправляем уведомление в Telegram
+                        await OptimizedTelegramService.sendAlert(
+                            'TRAILING_STOP_TRIGGERED',
+                            `🛑 Трейлинг-стоп сработал для ${stop.ticker}\n\n` +
+                            `Цена входа: ${stop.entryPrice.toFixed(2)}₽\n` +
+                            `Цена закрытия: ${stop.triggerPrice.toFixed(2)}₽\n` +
+                            `Количество: ${stop.quantity} шт.\n` +
+                            `Прибыль: ${(stop.direction === 'BUY' 
+                                ? ((stop.triggerPrice - stop.entryPrice) / stop.entryPrice) * 100
+                                : ((stop.entryPrice - stop.triggerPrice) / stop.entryPrice) * 100).toFixed(2)}%`,
+                            'info'
+                        );
+                    } catch (error) {
+                        console.error(`❌ Ошибка закрытия позиции по трейлинг-стопу для ${stop.ticker}:`, error);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('❌ Ошибка проверки трейлинг-стопов:', error);
             throw error;
         }
     }

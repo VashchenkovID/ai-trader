@@ -8,6 +8,7 @@ import TinkoffApiService from './TinkoffApiService.js';
 import SettingsService from './SettingsService.js';
 import StrategyAllocationService from './StrategyAllocationService.js';
 import RiskManagementService from './RiskManagementService.js';
+import CacheService from './CacheService.js';
 import PortfolioAllocation from '../models/PortfolioAllocation.js';
 import PositionStrategy from '../models/PositionStrategy.js';
 import TradingStrategy from '../models/TradingStrategy.js';
@@ -277,6 +278,33 @@ class TradingRequestService {
                 }
             }
 
+            // Создаем трейлинг-стоп для BUY позиций
+            if (action === 'BUY' && tradingRequest.status === 'pending') {
+                try {
+                    const instrument = await CacheService.getInstrument(recommendation.figi, true);
+                    
+                    if (instrument) {
+                        await RiskManagementService.createTrailingStop({
+                            figi: recommendation.figi,
+                            ticker: recommendation.ticker,
+                            entryPrice: currentPrice,
+                            quantity: quantity,
+                            direction: 'BUY',
+                            activationProfitPercent: 5.0, // Активация при +5%
+                            trailingDistancePercent: 2.5, // Отступ 2.5% по умолчанию
+                            useATR: strategy && strategy.atrMultiplier ? true : false, // Используем ATR, если есть стратегия с ATR
+                            portfolioType: currentMode === 'real' ? 'real' : 'virtual',
+                            tradingRequestId: tradingRequest.id,
+                            strategyId: strategy ? strategy.id : null
+                        });
+                        console.log(`✅ Трейлинг-стоп создан для ${recommendation.ticker}`);
+                    }
+                } catch (trailingStopError) {
+                    console.warn(`⚠️ Не удалось создать трейлинг-стоп для ${recommendation.ticker}:`, trailingStopError.message);
+                    // Не блокируем создание заявки, если не удалось создать трейлинг-стоп
+                }
+            }
+
             // Уведомляем через WebSocket (если доступен)
             try {
                 const WebSocketService = ServiceManager.getService('WebSocketService');
@@ -290,11 +318,50 @@ class TradingRequestService {
                 console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
             }
 
-            // Отправляем уведомление в Telegram (опционально)
-            try {
-                await this.sendTelegramNotification(tradingRequest, 'CREATED');
-            } catch (telegramError) {
-                console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
+            // Проверяем, нужно ли отправить заявку в Telegram для подтверждения
+            const shouldSendForApproval = await this.shouldSendForTelegramApproval(recommendation, tradingRequest);
+            
+            if (shouldSendForApproval) {
+                try {
+                    // Получаем agreement из IntegratedAIService, если доступно
+                    let agreement = null;
+                    try {
+                        const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+                        if (IntegratedAIService.isInitialized) {
+                            const integratedRec = await IntegratedAIService.getIntegratedRecommendation(recommendation.figi);
+                            agreement = integratedRec.agreement || null;
+                        }
+                    } catch (error) {
+                        console.warn('⚠️ Could not get agreement from IntegratedAIService:', error.message);
+                    }
+
+                    // Отправляем заявку в Telegram с кнопками подтверждения
+                    await OptimizedTelegramService.sendTradingRequestForApproval(tradingRequest.id, {
+                        ticker: recommendation.ticker,
+                        name: recommendation.name,
+                        action: action,
+                        quantity: quantity,
+                        priceAtRequest: currentPrice,
+                        estimatedAmount: estimatedAmount,
+                        confidence: recommendation.confidence,
+                        score: recommendation.score,
+                        agreement: agreement,
+                        stopLoss: stopLoss,
+                        takeProfit: takeProfit,
+                        strategyName: strategy ? strategy.name : null
+                    });
+                    console.log(`📱 Trading request sent to Telegram for approval: ${tradingRequest.id}`);
+                } catch (telegramError) {
+                    console.warn('⚠️ Could not send trading request to Telegram:', telegramError.message);
+                    // Продолжаем выполнение, даже если не удалось отправить в Telegram
+                }
+            } else {
+                // Обычное уведомление в Telegram (без кнопок)
+                try {
+                    await this.sendTelegramNotification(tradingRequest, 'CREATED');
+                } catch (telegramError) {
+                    console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
+                }
             }
 
             console.log(`📝 Trading request created: ${tradingRequest.id} (${tradingRequest.action} ${tradingRequest.ticker})`);
@@ -314,6 +381,72 @@ class TradingRequestService {
         } catch (error) {
             console.error('❌ Error creating trading request:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Проверка, нужно ли отправить заявку в Telegram для подтверждения
+     * @param {Object} recommendation - Рекомендация
+     * @param {Object} tradingRequest - Торговая заявка
+     * @returns {Promise<boolean>}
+     */
+    async shouldSendForTelegramApproval(recommendation, tradingRequest) {
+        try {
+            // Получаем настройки автоматического создания заявок
+            const settings = await SettingsService.getSettings();
+            const autoTradeEnabled = settings.auto_trade_enabled !== false; // По умолчанию включено
+            const minConfidence = settings.auto_trade_min_confidence || 0.85;
+            const minScore = settings.auto_trade_min_score || 0.8;
+            const minAgreement = settings.auto_trade_min_agreement || 0.9;
+
+            if (!autoTradeEnabled) {
+                return false;
+            }
+
+            // Проверяем условия для автоматического создания заявки
+            const meetsConfidence = recommendation.confidence >= minConfidence;
+            const meetsScore = recommendation.score >= minScore;
+
+            // Получаем agreement из IntegratedAIService
+            let agreement = null;
+            try {
+                const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+                if (IntegratedAIService.isInitialized) {
+                    const integratedRec = await IntegratedAIService.getIntegratedRecommendation(recommendation.figi);
+                    agreement = integratedRec.agreement || null;
+                }
+            } catch (error) {
+                console.warn('⚠️ Could not get agreement for auto-trade check:', error.message);
+            }
+
+            const meetsAgreement = agreement === null || agreement >= minAgreement;
+
+            // Проверяем, что все условия выполнены
+            if (meetsConfidence && meetsScore && meetsAgreement) {
+                // Проверяем, что заявка прошла все проверки RiskManagement
+                try {
+                    const RiskManagementService = (await import('./RiskManagementService.js')).default;
+                    const validation = await RiskManagementService.validateOrder({
+                        symbol: recommendation.figi,
+                        action: tradingRequest.action,
+                        quantity: tradingRequest.quantity,
+                        price: tradingRequest.priceAtRequest,
+                        confidence: recommendation.confidence
+                    }, null, { [recommendation.figi]: tradingRequest.priceAtRequest });
+
+                    if (validation.isValid) {
+                        console.log(`✅ Auto-trade conditions met for ${recommendation.ticker}: confidence=${recommendation.confidence.toFixed(2)}, score=${recommendation.score.toFixed(2)}, agreement=${agreement !== null ? agreement.toFixed(2) : 'N/A'}`);
+                        return true;
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Could not validate order for auto-trade:', error.message);
+                }
+            }
+
+            return false;
+        } catch (error) {
+            console.error('❌ Error checking auto-trade conditions:', error);
+            return false;
         }
     }
 

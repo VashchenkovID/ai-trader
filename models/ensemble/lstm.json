@@ -1,0 +1,91 @@
+{
+  "format": "layers-model",
+  "generatedBy": "IvashkaTradeHelper-ModelManager",
+  "convertedBy": null,
+  "modelTopology": "{\"class_name\":\"Sequential\",\"config\":{\"name\":\"sequential_7\",\"layers\":[{\"class_name\":\"LSTM\",\"config\":{\"name\":\"lstm_LSTM3\",\"trainable\":true,\"batch_input_shape\":[null,24,10],\"dtype\":\"float32\",\"units\":64,\"activation\":\"tanh\",\"recurrent_activation\":\"hard_sigmoid\",\"use_bias\":true,\"kernel_initializer\":{\"class_name\":\"VarianceScaling\",\"config\":{\"scale\":1,\"mode\":\"fan_avg\",\"distribution\":\"uniform\",\"seed\":null}},\"recurrent_initializer\":{\"class_name\":\"VarianceScaling\",\"config\":{\"scale\":1,\"mode\":\"fan_avg\",\"distribution\":\"uniform\",\"seed\":null}},\"bias_initializer\":{\"class_name\":\"Zeros\",\"config\":{}},\"unit_forget_bias\":null,\"kernel_regularizer\":null,\"recurrent_regularizer\":null,\"bias_regularizer\":null,\"activity_regularizer\":null,\"kernel_constraint\":null,\"recurrent_constraint\":null,\"bias_constraint\":null,\"dropout\":0.2,\"recurrent_dropout\":0.2,\"implementation\":null,\"return_sequences\":true,\"return_state\":false,\"go_backwards\":false,\"stateful\":false,\"unroll\":false}},{\"class_name\":\"LSTM\",\"config\":{\"name\":\"lstm_LSTM4\",\"trainable\":true,\"units\":32,\"activation\":\"tanh\",\"recurrent_activation\":\"hard_sigmoid\",\"use_bias\":true,\"kernel_initializer\":{\"class_name\":\"VarianceScaling\",\"config\":{\"scale\":1,\"mode\":\"fan_avg\",\"distribution\":\"uniform\",\"seed\":null}},\"recurrent_initializer\":{\"class_name\":\"VarianceScaling\",\"config\":{\"scale\":1,\"mode\":\"fan_avg\",\"distribution\":\"uniform\",\"seed\":null}},\"bias_initializer\":{\"class_name\":\"Zeros\",\"config\":{}},\"unit_forget_bias\":null,\"kernel_regularizer\":null,\"recurrent_regularizer\":null,\"bias_regularizer\":null,\"activity_regularizer\":null,\"kernel_constraint\":null,\"recurrent_constraint\":null,\"bias_constraint\":null,\"dropout\":0.2,\"recurrent_dropout\":0,\"implementation\":null,\"return_sequences\":false,\"return_state\":false,\"go_backwards\":false,\"stateful\":false,\"unroll\":false}},{\"class_name\":\"Dense\",\"config\":{\"units\":16,\"activation\":\"relu\",\"use_bias\":true,\"kernel_initializer\":{\"class_name\":\"VarianceScaling\",\"config\":{\"scale\":2,\"mode\":\"fan_in\",\"distribution\":\"uniform\",\"seed\":null}},\"bias_initializer\":{\"class_name\":\"Zeros\",\"config\":{}},\"kernel_regularizer\":{\"class_name\":\"L1L2\",\"config\":{\"l1\":0,\"l2\":0.001}},\"bias_regularizer\":null,\"activity_regularizer\":null,\"kernel_constraint\":null,\"bias_constraint\":null,\"name\":\"dense_Dense22\",\"trainable\":true}},{\"class_name\":\"Dropout\",\"config\":{\"rate\":0.3,\"noise_shape\":null,\"seed\":null,\"name\":\"dropout_Dropout13\",\"trainable\":true}},{\"class_name\":\"Dense\",\"config\":{\"units\":1,\"activation\":\"sigmoid\",\"use_bias\":true,\"kernel_initializer\":{\"class_name\":\"VarianceScaling\",\"config\":{\"scale\":1,\"mode\":\"fan_avg\",\"distribution\":\"uniform\",\"seed\":null}},\"bias_initializer\":{\"class_name\":\"Zeros\",\"config\":{}},\"kernel_regularizer\":null,\"bias_regularizer\":null,\"activity_regularizer\":null,\"kernel_constraint\":null,\"bias_constraint\":null,\"name\":\"dense_Dense23\",\"trainable\":true}}]},\"keras_version\":\"tfjs-layers 4.22.0\",\"backend\":\"tensor_flow.js\"}",
+  "weightsManifest": [
+    {
+      "paths": [
+        "lstm.weights.bin"
+      ],
+      "weights": [
+        {
+          "name": "lstm_LSTM3/kernel_1",
+          "shape": [
+            10,
+            256
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "lstm_LSTM3/recurrent_kernel_1",
+          "shape": [
+            64,
+            256
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "lstm_LSTM3/bias_1",
+          "shape": [
+            256
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "lstm_LSTM4/kernel_1",
+          "shape": [
+            64,
+            128
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "lstm_LSTM4/recurrent_kernel_1",
+          "shape": [
+            32,
+            128
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "lstm_LSTM4/bias_1",
+          "shape": [
+            128
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "dense_Dense22/kernel_1",
+          "shape": [
+            32,
+            16
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "dense_Dense22/bias_1",
+          "shape": [
+            16
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "dense_Dense23/kernel_1",
+          "shape": [
+            16,
+            1
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "dense_Dense23/bias_1",
+          "shape": [
+            1
+          ],
+          "dtype": "float32"
+        }
+      ]
+    }
+  ]
+}

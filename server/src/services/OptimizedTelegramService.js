@@ -253,9 +253,38 @@ class OptimizedTelegramService {
                 '• Обучение нейросетей (полное/частичное)\n' +
                 '• Сильные рекомендации (BUY/SELL)\n' +
                 '• Системные отчеты (каждые 12ч)\n' +
-                '• Критические алерты',
+                '• Критические алерты\n' +
+                '• Автоматические заявки (требуют подтверждения)',
                 { parse_mode: 'HTML' }
             );
+        });
+
+        // Обработчик callback_query для inline кнопок
+        this.bot.on('callback_query', async (query) => {
+            try {
+                const data = query.data;
+                const chatId = query.message.chat.id;
+                const messageId = query.message.message_id;
+
+                // Обрабатываем callback для подтверждения/отклонения заявок
+                if (data.startsWith('approve_request_')) {
+                    const requestId = data.replace('approve_request_', '');
+                    await this.handleRequestApproval(requestId, chatId, messageId, query.id);
+                } else if (data.startsWith('reject_request_')) {
+                    const requestId = data.replace('reject_request_', '');
+                    await this.handleRequestRejection(requestId, chatId, messageId, query.id);
+                }
+
+                // Подтверждаем получение callback
+                await this.bot.answerCallbackQuery(query.id);
+            } catch (error) {
+                console.error('❌ Error handling callback query:', error);
+                try {
+                    await this.bot.answerCallbackQuery(query.id, { text: 'Ошибка обработки запроса', show_alert: true });
+                } catch (e) {
+                    // Игнорируем ошибки при ответе на callback
+                }
+            }
         });
     }
 
@@ -717,6 +746,201 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
     getTrainingCount() {
         // Получаем реальный счетчик тренировок из кеша
         return this.trainingCount || 0;
+    }
+
+    /**
+     * Отправка сообщения с inline кнопками для подтверждения заявки
+     * @param {string} requestId - ID торговой заявки
+     * @param {Object} requestData - Данные заявки
+     * @returns {Promise<Object>} - Результат отправки сообщения
+     */
+    async sendTradingRequestForApproval(requestId, requestData) {
+        if (!this.isInitialized || !this.bot) {
+            console.warn('⚠️ Telegram bot not initialized, cannot send approval request');
+            return null;
+        }
+
+        try {
+            const {
+                ticker,
+                name,
+                action,
+                quantity,
+                priceAtRequest,
+                estimatedAmount,
+                confidence,
+                score,
+                agreement,
+                stopLoss,
+                takeProfit,
+                strategyName
+            } = requestData;
+
+            const actionEmoji = action === 'BUY' ? '📈' : action === 'SELL' ? '📉' : '⏸️';
+            const actionText = action === 'BUY' ? 'ПОКУПКА' : action === 'SELL' ? 'ПРОДАЖА' : 'УДЕРЖАНИЕ';
+
+            let message = `🎯 <b>АВТОМАТИЧЕСКАЯ ЗАЯВКА</b>\n\n`;
+            message += `${actionEmoji} <b>${actionText}</b>\n\n`;
+            message += `📊 <b>Инструмент:</b> ${ticker} (${name})\n`;
+            message += `💰 <b>Цена:</b> ${priceAtRequest.toFixed(2)}₽\n`;
+            message += `📦 <b>Количество:</b> ${quantity} шт.\n`;
+            message += `💵 <b>Сумма:</b> ${estimatedAmount.toFixed(2)}₽\n\n`;
+            message += `📈 <b>Параметры:</b>\n`;
+            message += `• Уверенность: ${(confidence * 100).toFixed(1)}%\n`;
+            message += `• Оценка: ${(score * 100).toFixed(1)}%\n`;
+            if (agreement !== null && agreement !== undefined) {
+                message += `• Согласованность моделей: ${(agreement * 100).toFixed(1)}%\n`;
+            }
+            if (stopLoss) {
+                message += `• Стоп-лосс: ${stopLoss.toFixed(2)}₽\n`;
+            }
+            if (takeProfit) {
+                message += `• Тейк-профит: ${takeProfit.toFixed(2)}₽\n`;
+            }
+            if (strategyName) {
+                message += `• Стратегия: ${strategyName}\n`;
+            }
+            message += `\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n\n`;
+            message += `⚠️ <b>Требуется подтверждение</b>`;
+
+            // Создаем inline клавиатуру с кнопками
+            const keyboard = {
+                inline_keyboard: [
+                    [
+                        {
+                            text: '✅ Подтвердить',
+                            callback_data: `approve_request_${requestId}`
+                        },
+                        {
+                            text: '❌ Отклонить',
+                            callback_data: `reject_request_${requestId}`
+                        }
+                    ]
+                ]
+            };
+
+            const sentMessage = await this.bot.sendMessage(this.chatId, message, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+
+            console.log(`✅ Trading request approval message sent for ${ticker} (requestId: ${requestId})`);
+            return sentMessage;
+        } catch (error) {
+            console.error('❌ Error sending trading request for approval:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Обработка подтверждения заявки
+     */
+    async handleRequestApproval(requestId, chatId, messageId, callbackQueryId) {
+        try {
+            const TradingRequestService = (await import('./TradingRequestService.js')).default;
+            const TradingRequest = (await import('../models/TradingRequest.js')).default;
+
+            // Находим заявку
+            const request = await TradingRequest.findByPk(requestId);
+            if (!request) {
+                await this.bot.editMessageText('❌ Заявка не найдена', {
+                    chat_id: chatId,
+                    message_id: messageId
+                });
+                return;
+            }
+
+            // Если заявка уже обработана
+            if (request.status !== 'pending') {
+                await this.bot.editMessageText(`⚠️ Заявка уже обработана (статус: ${request.status})`, {
+                    chat_id: chatId,
+                    message_id: messageId
+                });
+                return;
+            }
+
+            // Подтверждаем заявку
+            await TradingRequestService.approveRequest(requestId);
+
+            // Обновляем сообщение
+            const updatedMessage = `✅ <b>ЗАЯВКА ПОДТВЕРЖДЕНА</b>\n\n` +
+                `📊 Инструмент: ${request.ticker}\n` +
+                `💰 Цена: ${request.priceAtRequest.toFixed(2)}₽\n` +
+                `📦 Количество: ${request.quantity} шт.\n` +
+                `💵 Сумма: ${(request.priceAtRequest * request.quantity).toFixed(2)}₽\n\n` +
+                `⏰ Подтверждено: ${new Date().toLocaleString('ru-RU')}\n\n` +
+                `🔄 Заявка будет исполнена в ближайшее время`;
+
+            await this.bot.editMessageText(updatedMessage, {
+                chat_id: chatId,
+                message_id: messageId,
+                parse_mode: 'HTML'
+            });
+
+            console.log(`✅ Trading request ${requestId} approved via Telegram`);
+        } catch (error) {
+            console.error('❌ Error handling request approval:', error);
+            await this.bot.editMessageText(`❌ Ошибка подтверждения заявки: ${error.message}`, {
+                chat_id: chatId,
+                message_id: messageId
+            });
+        }
+    }
+
+    /**
+     * Обработка отклонения заявки
+     */
+    async handleRequestRejection(requestId, chatId, messageId, callbackQueryId) {
+        try {
+            const TradingRequest = (await import('../models/TradingRequest.js')).default;
+
+            // Находим заявку
+            const request = await TradingRequest.findByPk(requestId);
+            if (!request) {
+                await this.bot.editMessageText('❌ Заявка не найдена', {
+                    chat_id: chatId,
+                    message_id: messageId
+                });
+                return;
+            }
+
+            // Если заявка уже обработана
+            if (request.status !== 'pending') {
+                await this.bot.editMessageText(`⚠️ Заявка уже обработана (статус: ${request.status})`, {
+                    chat_id: chatId,
+                    message_id: messageId
+                });
+                return;
+            }
+
+            // Отклоняем заявку
+            await request.update({
+                status: 'rejected',
+                rejectionReason: 'Отклонено пользователем через Telegram',
+                rejectedAt: new Date()
+            });
+
+            // Обновляем сообщение
+            const updatedMessage = `❌ <b>ЗАЯВКА ОТКЛОНЕНА</b>\n\n` +
+                `📊 Инструмент: ${request.ticker}\n` +
+                `💰 Цена: ${request.priceAtRequest.toFixed(2)}₽\n` +
+                `📦 Количество: ${request.quantity} шт.\n\n` +
+                `⏰ Отклонено: ${new Date().toLocaleString('ru-RU')}`;
+
+            await this.bot.editMessageText(updatedMessage, {
+                chat_id: chatId,
+                message_id: messageId,
+                parse_mode: 'HTML'
+            });
+
+            console.log(`✅ Trading request ${requestId} rejected via Telegram`);
+        } catch (error) {
+            console.error('❌ Error handling request rejection:', error);
+            await this.bot.editMessageText(`❌ Ошибка отклонения заявки: ${error.message}`, {
+                chat_id: chatId,
+                message_id: messageId
+            });
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 import OptimizedTelegramService from './OptimizedTelegramService.js';
 import OptimizedDataService from './OptimizedDataService.js';
 import CacheService from './CacheService.js';
+import TrailingStop from '../models/TrailingStop.js';
 
 /**
  * Сервис управления рисками для торговли
@@ -547,6 +548,279 @@ class RiskManagementService {
     updateLimits(newLimits) {
         this.limits = { ...this.limits, ...newLimits };
         console.log('⚙️ Лимиты риск-менеджмента обновлены:', newLimits);
+    }
+
+    /**
+     * Создание трейлинг-стопа для позиции
+     * @param {Object} params - Параметры трейлинг-стопа
+     * @param {string} params.figi - FIGI инструмента
+     * @param {string} params.ticker - Тикер инструмента
+     * @param {number} params.entryPrice - Цена входа в позицию
+     * @param {number} params.quantity - Количество акций
+     * @param {string} params.direction - Направление позиции ('BUY' или 'SELL')
+     * @param {number} params.activationProfitPercent - Процент прибыли для активации (по умолчанию 5%)
+     * @param {number} params.trailingDistancePercent - Отступ в процентах (2-3% по умолчанию)
+     * @param {boolean} params.useATR - Использовать ATR для расчета отступа
+     * @param {string} params.portfolioType - Тип портфеля ('virtual' или 'real')
+     * @param {UUID} params.tradingRequestId - ID торгового запроса (опционально)
+     * @param {number} params.strategyId - ID стратегии (опционально)
+     * @returns {Promise<Object>} - Созданный трейлинг-стоп
+     */
+    async createTrailingStop(params) {
+        try {
+            const {
+                figi,
+                ticker,
+                entryPrice,
+                quantity,
+                direction = 'BUY',
+                activationProfitPercent = 5.0,
+                trailingDistancePercent = 2.5,
+                useATR = false,
+                portfolioType = 'virtual',
+                tradingRequestId = null,
+                strategyId = null
+            } = params;
+
+            // Рассчитываем отступ на основе ATR, если требуется
+            let trailingDistanceATR = null;
+            if (useATR) {
+                try {
+                    const candles = await CacheService.getCandles(figi, 'DAY', 30);
+                    if (candles && candles.length >= 15) {
+                        const atr = OptimizedDataService.calculateATR(candles, 14);
+                        trailingDistanceATR = atr; // Используем 1×ATR
+                    }
+                } catch (error) {
+                    console.warn(`⚠️ Не удалось рассчитать ATR для ${ticker}, используем процентный метод`);
+                }
+            }
+
+            const trailingStop = await TrailingStop.create({
+                figi,
+                ticker,
+                entryPrice,
+                quantity,
+                direction,
+                activationProfitPercent,
+                trailingDistancePercent: useATR ? null : trailingDistancePercent,
+                trailingDistanceATR,
+                useATR,
+                isActive: false,
+                status: 'pending',
+                portfolioType,
+                tradingRequestId,
+                strategyId
+            });
+
+            console.log(`✅ Трейлинг-стоп создан для ${ticker}: активация при +${activationProfitPercent}%`);
+            return trailingStop;
+        } catch (error) {
+            console.error(`❌ Ошибка создания трейлинг-стопа для ${params.ticker}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Обновление трейлинг-стопа на основе текущей цены
+     * @param {number} trailingStopId - ID трейлинг-стопа
+     * @param {number} currentPrice - Текущая цена инструмента
+     * @returns {Promise<Object>} - Обновленный трейлинг-стоп или null, если сработал
+     */
+    async updateTrailingStop(trailingStopId, currentPrice) {
+        try {
+            const trailingStop = await TrailingStop.findByPk(trailingStopId);
+            if (!trailingStop) {
+                throw new Error(`Трейлинг-стоп с ID ${trailingStopId} не найден`);
+            }
+
+            if (trailingStop.status !== 'pending' && trailingStop.status !== 'active') {
+                return trailingStop; // Уже сработал или отменен
+            }
+
+            const { entryPrice, direction, activationProfitPercent, trailingDistancePercent, trailingDistanceATR, useATR } = trailingStop;
+
+            // Рассчитываем текущую прибыль
+            let profitPercent;
+            if (direction === 'BUY') {
+                profitPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+            } else {
+                profitPercent = ((entryPrice - currentPrice) / entryPrice) * 100;
+            }
+
+            // Активация трейлинг-стопа при достижении порога прибыли
+            if (!trailingStop.isActive && profitPercent >= activationProfitPercent) {
+                trailingStop.isActive = true;
+                trailingStop.status = 'active';
+                
+                if (direction === 'BUY') {
+                    trailingStop.highestPrice = currentPrice;
+                } else {
+                    trailingStop.lowestPrice = currentPrice;
+                }
+
+                // Рассчитываем начальную цену стоп-лосса
+                let stopPrice;
+                if (useATR && trailingDistanceATR) {
+                    if (direction === 'BUY') {
+                        stopPrice = currentPrice - trailingDistanceATR;
+                    } else {
+                        stopPrice = currentPrice + trailingDistanceATR;
+                    }
+                } else {
+                    const distance = currentPrice * (trailingDistancePercent / 100);
+                    if (direction === 'BUY') {
+                        stopPrice = currentPrice - distance;
+                    } else {
+                        stopPrice = currentPrice + distance;
+                    }
+                }
+
+                trailingStop.currentStopPrice = stopPrice;
+                await trailingStop.save();
+
+                console.log(`✅ Трейлинг-стоп активирован для ${trailingStop.ticker} при цене ${currentPrice.toFixed(2)}`);
+            }
+
+            // Обновление трейлинг-стопа, если он активен
+            if (trailingStop.isActive) {
+                let shouldUpdate = false;
+                let newStopPrice = trailingStop.currentStopPrice;
+
+                if (direction === 'BUY') {
+                    // Обновляем максимальную цену и стоп-лосс только вверх
+                    if (currentPrice > trailingStop.highestPrice) {
+                        trailingStop.highestPrice = currentPrice;
+                        shouldUpdate = true;
+
+                        // Пересчитываем стоп-лосс
+                        if (useATR && trailingDistanceATR) {
+                            newStopPrice = currentPrice - trailingDistanceATR;
+                        } else {
+                            const distance = currentPrice * (trailingDistancePercent / 100);
+                            newStopPrice = currentPrice - distance;
+                        }
+
+                        // Стоп-лосс может только повышаться, не понижаться
+                        if (newStopPrice > trailingStop.currentStopPrice) {
+                            trailingStop.currentStopPrice = newStopPrice;
+                        }
+                    }
+
+                    // Проверка срабатывания стоп-лосса
+                    if (currentPrice <= trailingStop.currentStopPrice) {
+                        trailingStop.status = 'triggered';
+                        trailingStop.triggeredAt = new Date();
+                        trailingStop.triggerPrice = currentPrice;
+                        await trailingStop.save();
+
+                        console.log(`🛑 Трейлинг-стоп сработал для ${trailingStop.ticker}: цена ${currentPrice.toFixed(2)} <= стоп ${trailingStop.currentStopPrice.toFixed(2)}`);
+                        return trailingStop;
+                    }
+                } else {
+                    // Для SELL позиций логика обратная
+                    if (currentPrice < trailingStop.lowestPrice) {
+                        trailingStop.lowestPrice = currentPrice;
+                        shouldUpdate = true;
+
+                        // Пересчитываем стоп-лосс
+                        if (useATR && trailingDistanceATR) {
+                            newStopPrice = currentPrice + trailingDistanceATR;
+                        } else {
+                            const distance = currentPrice * (trailingDistancePercent / 100);
+                            newStopPrice = currentPrice + distance;
+                        }
+
+                        // Стоп-лосс может только понижаться, не повышаться
+                        if (newStopPrice < trailingStop.currentStopPrice) {
+                            trailingStop.currentStopPrice = newStopPrice;
+                        }
+                    }
+
+                    // Проверка срабатывания стоп-лосса
+                    if (currentPrice >= trailingStop.currentStopPrice) {
+                        trailingStop.status = 'triggered';
+                        trailingStop.triggeredAt = new Date();
+                        trailingStop.triggerPrice = currentPrice;
+                        await trailingStop.save();
+
+                        console.log(`🛑 Трейлинг-стоп сработал для ${trailingStop.ticker}: цена ${currentPrice.toFixed(2)} >= стоп ${trailingStop.currentStopPrice.toFixed(2)}`);
+                        return trailingStop;
+                    }
+                }
+
+                if (shouldUpdate) {
+                    await trailingStop.save();
+                }
+            }
+
+            return trailingStop;
+        } catch (error) {
+            console.error(`❌ Ошибка обновления трейлинг-стопа ${trailingStopId}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Проверка всех активных трейлинг-стопов
+     * @param {string} portfolioType - Тип портфеля ('virtual' или 'real')
+     * @returns {Promise<Array>} - Массив сработавших трейлинг-стопов
+     */
+    async checkAllTrailingStops(portfolioType = 'virtual') {
+        try {
+            const activeStops = await TrailingStop.findAll({
+                where: {
+                    status: ['pending', 'active'],
+                    portfolioType
+                }
+            });
+
+            const triggeredStops = [];
+
+            for (const stop of activeStops) {
+                try {
+                    // Получаем текущую цену
+                    const instrument = await CacheService.getInstrument(stop.figi, true);
+                    if (!instrument || !instrument.lastPrice) {
+                        console.warn(`⚠️ Не удалось получить цену для ${stop.ticker}`);
+                        continue;
+                    }
+
+                    const currentPrice = instrument.lastPrice;
+                    const updatedStop = await this.updateTrailingStop(stop.id, currentPrice);
+
+                    if (updatedStop.status === 'triggered') {
+                        triggeredStops.push(updatedStop);
+                    }
+                } catch (error) {
+                    console.error(`❌ Ошибка проверки трейлинг-стопа ${stop.id}:`, error.message);
+                }
+            }
+
+            return triggeredStops;
+        } catch (error) {
+            console.error('❌ Ошибка проверки трейлинг-стопов:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Отмена трейлинг-стопа
+     * @param {number} trailingStopId - ID трейлинг-стопа
+     * @returns {Promise<void>}
+     */
+    async cancelTrailingStop(trailingStopId) {
+        try {
+            const trailingStop = await TrailingStop.findByPk(trailingStopId);
+            if (trailingStop) {
+                trailingStop.status = 'cancelled';
+                await trailingStop.save();
+                console.log(`✅ Трейлинг-стоп ${trailingStopId} отменен`);
+            }
+        } catch (error) {
+            console.error(`❌ Ошибка отмены трейлинг-стопа ${trailingStopId}:`, error);
+            throw error;
+        }
     }
 }
 
