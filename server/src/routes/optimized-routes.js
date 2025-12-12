@@ -323,7 +323,10 @@ router.get('/recommendations/recent', async (req, res) => {
 router.get('/recommendations', async (req, res) => {
     try {
         const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
-        const recommendations = await Recommendation.findAll({
+        const { Op } = await import('sequelize');
+        
+        // Получаем все активные рекомендации
+        const allRecommendations = await Recommendation.findAll({
             where: { isActive: true },
             include: [{
                 model: TradingStrategy,
@@ -331,23 +334,39 @@ router.get('/recommendations', async (req, res) => {
                 required: false
             }],
             order: [['analysisDate', 'DESC']],
-            raw: false // Важно: не использовать raw, чтобы получить связанные данные
+            raw: false
         });
         
-        // Преобразуем в JSON, чтобы включить связанные данные
-        const recommendationsData = recommendations.map(rec => {
-            const recData = rec.toJSON();
-            // Убеждаемся, что strategy включена в ответ
-            if (recData.strategy) {
-                recData.strategy = {
-                    id: recData.strategy.id,
-                    name: recData.strategy.name,
-                    type: recData.strategy.type,
-                    timeframe: recData.strategy.timeframe
-                };
+        // Группируем по FIGI и берем только самую свежую для каждого FIGI
+        const recommendationsMap = new Map();
+        for (const rec of allRecommendations) {
+            const figi = rec.figi;
+            if (!recommendationsMap.has(figi)) {
+                recommendationsMap.set(figi, rec);
+            } else {
+                // Если уже есть запись, сравниваем по дате анализа
+                const existing = recommendationsMap.get(figi);
+                if (new Date(rec.analysisDate) > new Date(existing.analysisDate)) {
+                    recommendationsMap.set(figi, rec);
+                }
             }
-            return recData;
-        });
+        }
+        
+        // Преобразуем в массив и сортируем по дате анализа
+        const recommendationsData = Array.from(recommendationsMap.values())
+            .map(rec => {
+                const recData = rec.toJSON();
+                if (recData.strategy) {
+                    recData.strategy = {
+                        id: recData.strategy.id,
+                        name: recData.strategy.name,
+                        type: recData.strategy.type,
+                        timeframe: recData.strategy.timeframe
+                    };
+                }
+                return recData;
+            })
+            .sort((a, b) => new Date(b.analysisDate) - new Date(a.analysisDate));
         
         res.json({
             success: true,

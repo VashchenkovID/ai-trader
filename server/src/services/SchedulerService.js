@@ -241,25 +241,27 @@ class SchedulerService {
         });
 
         // Задача: Периодическое обновление кеша новостей (каждые 6 часов по умолчанию)
-        this.newsCacheUpdateTask = cron.schedule(newsCacheSchedule, async () => {
-            // Пропускаем первый запуск при старте (минимум 10 минут с момента старта)
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 10 * 60 * 1000) {
-                console.log('⏭️ Skipping first news cache update run (too soon after startup)');
-                return;
-            }
-            
-            try {
-                console.log('📰 Scheduled news cache update started...');
-                await this.performDailyNewsUpdate();
-            } catch (error) {
-                console.error('Error in scheduled news cache update:', error);
-                await OptimizedTelegramService.sendAlert('NEWS_CACHE_UPDATE_ERROR', error.message, 'warning');
-            }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        // ОТКЛЮЧЕНО: Новости теперь обновляются в performCacheUpdate и performDailyNewsUpdate
+        // чтобы не превысить лимит в 100 запросов в день
+        // this.newsCacheUpdateTask = cron.schedule(newsCacheSchedule, async () => {
+        //     // Пропускаем первый запуск при старте (минимум 10 минут с момента старта)
+        //     const timeSinceStart = Date.now() - this.startTime;
+        //     if (timeSinceStart < 10 * 60 * 1000) {
+        //         console.log('⏭️ Skipping first news cache update run (too soon after startup)');
+        //         return;
+        //     }
+        //     
+        //     try {
+        //         console.log('📰 Scheduled news cache update started...');
+        //         await this.performDailyNewsUpdate();
+        //     } catch (error) {
+        //         console.error('Error in scheduled news cache update:', error);
+        //         await OptimizedTelegramService.sendAlert('NEWS_CACHE_UPDATE_ERROR', error.message, 'warning');
+        //     }
+        // }, {
+        //     scheduled: true,
+        //     timezone: "Europe/Moscow"
+        // });
 
         // Задача: Ежедневная проверка и загрузка свежих новостей
         this.newsDailyUpdateTask = cron.schedule(newsDailyUpdateSchedule, async () => {
@@ -1108,6 +1110,18 @@ class SchedulerService {
             const duration = Math.round((Date.now() - startTime) / 1000);
             console.log(`✅ Cache update completed in ${duration}s. ${result.message}`);
 
+            // Обновляем новости для ограниченного количества инструментов (чтобы не превысить лимит в 100 запросов в день)
+            // Обновляем только для инструментов без свежих новостей (старше 24 часов)
+            // Ограничиваем до 10 запросов за раз, так как performCacheUpdate вызывается каждые 4 часа (6 раз в день)
+            // Итого: 10 * 6 = 60 запросов в день + 30 из performDailyNewsUpdate = 90 запросов (в пределах лимита)
+            try {
+                console.log('📰 Starting news cache update (limited to avoid API limits)...');
+                await this.performLimitedNewsUpdate(10); // Максимум 10 запросов за раз
+            } catch (newsError) {
+                console.warn('⚠️ News cache update failed (non-critical):', newsError.message);
+                // Не прерываем процесс, если обновление новостей не удалось
+            }
+
             // Обновляем время последнего обновления кеша
             this.lastCacheUpdate = Date.now();
             console.log(`📅 Cache update timestamp updated: ${new Date(this.lastCacheUpdate).toISOString()}`);
@@ -1513,14 +1527,13 @@ class SchedulerService {
             // Получаем настройки из базы данных
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
             const modelAge = nnSettings.nn_model_max_age_days || 7;
-            const modelPath = './models/neural-network-model.json';
             
             try {
                 const fs = await import('fs/promises');
                 const path = await import('path');
                 const { fileURLToPath } = await import('url');
                 
-                // Получаем правильный путь к модели
+                // Получаем правильный путь к модели относительно server директории
                 const __filename = fileURLToPath(import.meta.url);
                 const __dirname = path.dirname(__filename);
                 const fullModelPath = path.join(__dirname, '..', '..', 'models', 'neural-network-model.json');
@@ -1553,7 +1566,12 @@ class SchedulerService {
             // 1. Проверяем возраст модели
             const fs = await import('fs/promises');
             const path = await import('path');
-            const modelsDir = './models';
+            const { fileURLToPath } = await import('url');
+            
+            // Используем правильный путь относительно server директории
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const modelsDir = path.join(__dirname, '..', '..', 'models');
             const modelPath = path.join(modelsDir, `${figi}_model.json`);
             
             try {
@@ -1817,12 +1835,38 @@ class SchedulerService {
                             
                             if (freshPrediction && freshPrediction.score !== undefined) {
                                 // Обновляем рекомендацию актуальными данными
+                                // Формируем explanation в едином формате: объект с summary и details
+                                let explanation = rec.explanation || {};
+                                if (freshPrediction.summary) {
+                                    // Если summary - строка, создаем объект
+                                    if (typeof freshPrediction.summary === 'string') {
+                                        explanation = {
+                                            summary: freshPrediction.summary,
+                                            details: freshPrediction.details || {}
+                                        };
+                                    } else {
+                                        // Если summary - объект, используем его
+                                        explanation = freshPrediction.summary;
+                                    }
+                                } else if (freshPrediction.details) {
+                                    explanation = {
+                                        summary: explanation.summary || 'Анализ обновлен',
+                                        details: freshPrediction.details
+                                    };
+                                } else if (typeof explanation === 'string') {
+                                    // Если explanation - строка, преобразуем в объект
+                                    explanation = {
+                                        summary: explanation,
+                                        details: {}
+                                    };
+                                }
+                                
                                 await rec.update({
                                     score: freshPrediction.score,
                                     confidence: freshPrediction.confidence ?? freshPrediction.score,
                                     recommendation: freshPrediction.recommendation || rec.recommendation,
                                     analysisDate: new Date(),
-                                    explanation: freshPrediction.summary || freshPrediction.details || rec.explanation
+                                    explanation: explanation
                                 });
 
                                 updatedCount++;
@@ -1933,6 +1977,141 @@ class SchedulerService {
     }
 
     /**
+     * Ограниченное обновление новостей (для использования в performCacheUpdate)
+     * Обновляет новости только для инструментов без свежих новостей (старше 24 часов)
+     * Использует ротацию: каждый день обновляются следующие инструменты в очереди
+     * @param {number} maxRequests - Максимальное количество запросов (по умолчанию 10)
+     */
+    async performLimitedNewsUpdate(maxRequests = 10) {
+        try {
+            const NewsAnalysisService = (await import('./NewsAnalysisService.js')).default;
+            const CacheService = (await import('./CacheService.js')).default;
+            const CachedNews = (await import('../models/CachedNews.js')).default;
+            const { Op } = await import('sequelize');
+            
+            // Получаем все акции в рублях
+            const instruments = await CacheService.getAllInstruments();
+            const shares = instruments.filter(inst => 
+                inst.currency === 'RUB' && 
+                (inst.instrumentType === 'share' || !inst.instrumentType) &&
+                inst.ticker && inst.name
+            );
+            
+            if (shares.length === 0) {
+                console.log('⚠️ No shares found for news update');
+                return { success: true, updated: 0, message: 'No shares found' };
+            }
+            
+            // Получаем индекс последнего обновленного инструмента из настроек (ротация)
+            const lastNewsUpdateIndex = await SettingsService.getSetting('news_update_last_index', 0);
+            const startIndex = parseInt(lastNewsUpdateIndex) || 0;
+            
+            // Проверяем, какие инструменты нуждаются в обновлении новостей (нет новостей за последние 24 часа)
+            const oneDayAgo = new Date();
+            oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+            
+            const instrumentsNeedingUpdate = [];
+            let checkedCount = 0;
+            let currentIndex = startIndex;
+            
+            // Проверяем инструменты начиная с сохраненного индекса (ротация)
+            // Проверяем больше инструментов, чем maxRequests, чтобы найти те, которым действительно нужно обновление
+            while (instrumentsNeedingUpdate.length < maxRequests && checkedCount < shares.length * 2) {
+                const instrument = shares[currentIndex % shares.length];
+                currentIndex++;
+                checkedCount++;
+                
+                const lastNews = await CachedNews.findOne({
+                    where: {
+                        figi: instrument.figi,
+                        publishedAt: { [Op.gte]: oneDayAgo }
+                    },
+                    order: [['publishedAt', 'DESC']]
+                });
+                
+                if (!lastNews) {
+                    instrumentsNeedingUpdate.push(instrument);
+                }
+            }
+            
+            if (instrumentsNeedingUpdate.length === 0) {
+                console.log('✅ All instruments have fresh news, skipping update');
+                // Сохраняем текущий индекс для следующего раза
+                await SettingsService.setSetting('news_update_last_index', currentIndex % shares.length);
+                return { success: true, updated: 0, message: 'No instruments need news update' };
+            }
+            
+            console.log(`📰 Updating news for ${instrumentsNeedingUpdate.length} instruments (rotation: starting from index ${startIndex}, limited to ${maxRequests} requests to avoid API limits)...`);
+            
+            // Обновляем новости только для инструментов, которым это нужно
+            const to = new Date();
+            const from = new Date();
+            from.setDate(from.getDate() - 1);
+            from.setHours(0, 0, 0, 0);
+            to.setHours(23, 59, 59, 999);
+            
+            let updated = 0;
+            let totalNews = 0;
+            
+            for (let i = 0; i < Math.min(instrumentsNeedingUpdate.length, maxRequests); i++) {
+                const instrument = instrumentsNeedingUpdate[i];
+                
+                try {
+                    const news = await NewsAnalysisService.fetchNewsByCompanyNameAndPeriod(
+                        instrument.name,
+                        from,
+                        to,
+                        {
+                            ticker: instrument.ticker,
+                            sector: instrument.sector,
+                            apiData: instrument.apiData,
+                            aliases: instrument.apiData?.aliases || null,
+                            includeFinancialTerms: true,
+                            figi: instrument.figi,
+                            pageSize: 100
+                        }
+                    );
+                    
+                    if (news.length > 0) {
+                        await NewsAnalysisService.cacheNews(instrument.figi, news);
+                        totalNews += news.length;
+                        updated++;
+                    }
+                    
+                    // Задержка между запросами (1 секунда для бесплатного плана)
+                    if (i < Math.min(instrumentsNeedingUpdate.length, maxRequests) - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                } catch (error) {
+                    console.error(`❌ Ошибка загрузки новостей для ${instrument.ticker}:`, error.message);
+                    
+                    // Если это ошибка лимита, останавливаемся
+                    if (error.message && (error.message.includes('rate limit') || error.message.includes('limit'))) {
+                        console.warn('⚠️ API rate limit reached, stopping news update');
+                        break;
+                    }
+                }
+            }
+            
+            // Сохраняем индекс последнего обновленного инструмента для ротации
+            await SettingsService.setSetting('news_update_last_index', currentIndex % shares.length);
+            
+            console.log(`✅ Limited news update completed: ${updated} instruments updated, ${totalNews} news articles loaded (next update will start from index ${currentIndex % shares.length})`);
+            
+            return {
+                success: true,
+                updated,
+                totalNews,
+                nextIndex: currentIndex % shares.length,
+                message: `Updated news for ${updated} instruments (rotation: next update starts from index ${currentIndex % shares.length})`
+            };
+        } catch (error) {
+            console.error('❌ Error during limited news update:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Ежедневная проверка и загрузка свежих новостей
      */
     async performDailyNewsUpdate() {
@@ -1941,12 +2120,29 @@ class SchedulerService {
             
             const NewsAnalysisService = (await import('./NewsAnalysisService.js')).default;
             
-            // Загружаем свежие новости для всех акций (один большой запрос)
+            // Загружаем свежие новости для всех акций с ротацией
+            // Ограничиваем до 30 инструментов, чтобы не превысить лимит в 100 запросов в день
+            // performCacheUpdate делает 10 запросов * 6 раз в день = 60 запросов
+            // performDailyNewsUpdate делает 30 запросов * 1 раз в день = 30 запросов
+            // Итого: 60 + 30 = 90 запросов (в пределах лимита в 100 запросов)
+            // Используем ротацию: каждый день обновляем следующие 30 инструментов
+            const lastDailyNewsUpdateIndex = await SettingsService.getSetting('daily_news_update_last_index', 0);
+            const startIndex = parseInt(lastDailyNewsUpdateIndex) || 0;
+            
             const result = await NewsAnalysisService.loadFreshNewsForAllInstruments({
+                limit: 30, // Ограничиваем количество инструментов
+                startIndex: startIndex, // Начинаем с сохраненного индекса (ротация)
                 onProgress: (progress) => {
                     console.log(`📰 Прогресс загрузки: ${progress.current}/${progress.total} (${progress.ticker || progress.figi})`);
                 }
             });
+            
+            // Сохраняем индекс для следующего дня (ротация)
+            if (result.total !== undefined) {
+                const nextIndex = (startIndex + 30) % result.total;
+                await SettingsService.setSetting('daily_news_update_last_index', nextIndex);
+                console.log(`📰 Daily news update rotation: next update will start from index ${nextIndex}`);
+            }
 
             console.log(`✅ Daily news update completed: ${result.updated} instruments updated, ${result.totalNews} news articles loaded`);
             

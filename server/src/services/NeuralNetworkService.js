@@ -1334,14 +1334,40 @@ class NeuralNetworkService {
                     
                     if (IntegratedAIService.isInitialized) {
                         const integratedRec = await IntegratedAIService.getIntegratedRecommendation(instrument.figi);
+                        // Формируем explanation в едином формате: объект с summary и details
+                        let explanation = {};
+                        if (integratedRec.summary) {
+                            // Если summary - строка, создаем объект
+                            if (typeof integratedRec.summary === 'string') {
+                                explanation = {
+                                    summary: integratedRec.summary,
+                                    details: integratedRec.details || {}
+                                };
+                            } else {
+                                // Если summary - объект, используем его
+                                explanation = integratedRec.summary;
+                            }
+                        } else if (integratedRec.details) {
+                            explanation = {
+                                summary: 'Анализ на основе интегрированной AI системы',
+                                details: integratedRec.details
+                            };
+                        } else {
+                            explanation = {
+                                summary: 'Анализ на основе интегрированной AI системы',
+                                details: {}
+                            };
+                        }
+                        
                         prediction = {
                             score: integratedRec.score || 0,
                             confidence: integratedRec.confidence || integratedRec.score || 0,
                             recommendation: integratedRec.recommendation || 'HOLD',
-                            explanation: integratedRec.summary || integratedRec.details || {},
-                            summary: integratedRec.summary, // Сохраняем summary отдельно для использования в explanation
+                            explanation: explanation,
+                            summary: typeof integratedRec.summary === 'string' ? integratedRec.summary : (integratedRec.summary?.summary || ''),
                             details: integratedRec.details || {},
-                            horizons: integratedRec.horizons || null // Сохраняем горизонты отдельно
+                            horizons: integratedRec.horizons || null, // Сохраняем горизонты отдельно
+                            agreement: integratedRec.agreement || null
                         };
                     } else {
                         // Fallback к обычному предсказанию
@@ -1501,13 +1527,40 @@ class NeuralNetworkService {
                     
                     if (IntegratedAIService.isInitialized) {
                         const integratedRec = await IntegratedAIService.getIntegratedRecommendation(item.figi);
+                        // Формируем explanation в едином формате: объект с summary и details
+                        let explanation = {};
+                        if (integratedRec.summary) {
+                            // Если summary - строка, создаем объект
+                            if (typeof integratedRec.summary === 'string') {
+                                explanation = {
+                                    summary: integratedRec.summary,
+                                    details: integratedRec.details || {}
+                                };
+                            } else {
+                                // Если summary - объект, используем его
+                                explanation = integratedRec.summary;
+                            }
+                        } else if (integratedRec.details) {
+                            explanation = {
+                                summary: 'Анализ на основе интегрированной AI системы',
+                                details: integratedRec.details
+                            };
+                        } else {
+                            explanation = {
+                                summary: 'Анализ на основе интегрированной AI системы',
+                                details: {}
+                            };
+                        }
+                        
                         prediction = {
                             score: integratedRec.score || 0,
                             confidence: integratedRec.confidence || integratedRec.score || 0,
                             recommendation: integratedRec.recommendation || 'HOLD',
-                            explanation: integratedRec.summary || integratedRec.details || {},
-                            summary: integratedRec.summary, // Сохраняем summary отдельно для использования в explanation
-                            details: integratedRec.details || {}
+                            explanation: explanation,
+                            summary: typeof integratedRec.summary === 'string' ? integratedRec.summary : (integratedRec.summary?.summary || ''),
+                            details: integratedRec.details || {},
+                            horizons: integratedRec.horizons || null,
+                            agreement: integratedRec.agreement || null
                         };
                     } else {
                         // Fallback к обычному предсказанию
@@ -1984,13 +2037,40 @@ class NeuralNetworkService {
                     
                     if (IntegratedAIService.isInitialized) {
                         const integratedRec = await IntegratedAIService.getIntegratedRecommendation(item.figi);
+                        // Формируем explanation в едином формате: объект с summary и details
+                        let explanation = {};
+                        if (integratedRec.summary) {
+                            // Если summary - строка, создаем объект
+                            if (typeof integratedRec.summary === 'string') {
+                                explanation = {
+                                    summary: integratedRec.summary,
+                                    details: integratedRec.details || {}
+                                };
+                            } else {
+                                // Если summary - объект, используем его
+                                explanation = integratedRec.summary;
+                            }
+                        } else if (integratedRec.details) {
+                            explanation = {
+                                summary: 'Анализ на основе интегрированной AI системы',
+                                details: integratedRec.details
+                            };
+                        } else {
+                            explanation = {
+                                summary: 'Анализ на основе интегрированной AI системы',
+                                details: {}
+                            };
+                        }
+                        
                         prediction = {
                             score: integratedRec.score || 0,
                             confidence: integratedRec.confidence || integratedRec.score || 0,
                             recommendation: integratedRec.recommendation || 'HOLD',
-                            explanation: integratedRec.summary || integratedRec.details || {},
-                            summary: integratedRec.summary, // Сохраняем summary отдельно для использования в explanation
-                            details: integratedRec.details || {}
+                            explanation: explanation,
+                            summary: typeof integratedRec.summary === 'string' ? integratedRec.summary : (integratedRec.summary?.summary || ''),
+                            details: integratedRec.details || {},
+                            horizons: integratedRec.horizons || null,
+                            agreement: integratedRec.agreement || null
                         };
                         console.log(`🔍 [IntegratedAI] ${item.ticker}: score=${prediction.score.toFixed(3)}, confidence=${prediction.confidence.toFixed(3)}, recommendation=${prediction.recommendation}`);
                     } else {
@@ -2681,23 +2761,87 @@ class NeuralNetworkService {
                     confidence = Math.max(0, Math.min(1, score * 0.9)); // 90% от score
                 }
                 
-                // Формируем explanation из данных IntegratedAIService
+                // Формируем explanation в едином формате: объект с summary и details
                 let explanation = {};
-                if (rec.prediction?.explanation && typeof rec.prediction.explanation === 'object') {
-                    explanation = rec.prediction.explanation;
+                if (rec.prediction?.explanation) {
+                    if (typeof rec.prediction.explanation === 'string') {
+                        // Если explanation - строка, преобразуем в объект
+                        explanation = {
+                            summary: rec.prediction.explanation,
+                            details: rec.prediction.details || {}
+                        };
+                    } else if (typeof rec.prediction.explanation === 'object') {
+                        // Если explanation - объект, проверяем структуру
+                        if (rec.prediction.explanation.summary !== undefined) {
+                            explanation = rec.prediction.explanation;
+                        } else {
+                            // Если нет summary, создаем его из объекта
+                            explanation = {
+                                summary: JSON.stringify(rec.prediction.explanation),
+                                details: rec.prediction.explanation
+                            };
+                        }
+                    }
                 } else if (rec.prediction?.summary) {
+                    // Если есть summary (строка или объект)
+                    const summaryValue = typeof rec.prediction.summary === 'string' 
+                        ? rec.prediction.summary 
+                        : rec.prediction.summary.summary || JSON.stringify(rec.prediction.summary);
                     explanation = {
-                        summary: rec.prediction.summary,
+                        summary: summaryValue,
                         details: rec.prediction.details || {}
                     };
                 } else {
                     explanation = {
                         summary: 'Анализ на основе интегрированной AI системы',
-                        keyFactors: ['Технический анализ', 'Фундаментальный анализ'],
-                        risks: ['Рыночная волатильность'],
-                        opportunities: ['Потенциальный рост'],
-                        timeframe: '1-3 месяца'
+                        details: {}
                     };
+                }
+                
+                // Формируем analysis с данными о горизонтах
+                let analysis = {};
+                if (rec.prediction?.horizons) {
+                    // Сохраняем структурированные данные о горизонтах в analysis
+                    analysis = {
+                        horizons: {
+                            shortTerm: {
+                                name: rec.prediction.horizons.shortTerm?.name || 'Краткосрочный прогноз',
+                                description: rec.prediction.horizons.shortTerm?.description || 'Прогноз на 1-3 дня',
+                                model: rec.prediction.horizons.shortTerm?.model || 'LSTM',
+                                score: rec.prediction.horizons.shortTerm?.score || 0,
+                                confidence: rec.prediction.horizons.shortTerm?.confidence || 0,
+                                recommendation: rec.prediction.horizons.shortTerm?.recommendation || 'HOLD',
+                                weight: rec.prediction.horizons.shortTerm?.weight || 0,
+                                horizonDays: rec.prediction.horizons.shortTerm?.horizonDays || 1
+                            },
+                            mediumTerm: {
+                                name: rec.prediction.horizons.mediumTerm?.name || 'Среднесрочный прогноз',
+                                description: rec.prediction.horizons.mediumTerm?.description || 'Прогноз на 1-4 недели',
+                                model: rec.prediction.horizons.mediumTerm?.model || 'CNN',
+                                score: rec.prediction.horizons.mediumTerm?.score || 0,
+                                confidence: rec.prediction.horizons.mediumTerm?.confidence || 0,
+                                recommendation: rec.prediction.horizons.mediumTerm?.recommendation || 'HOLD',
+                                weight: rec.prediction.horizons.mediumTerm?.weight || 0,
+                                horizonDays: rec.prediction.horizons.mediumTerm?.horizonDays || 21
+                            },
+                            longTerm: {
+                                name: rec.prediction.horizons.longTerm?.name || 'Долгосрочный прогноз',
+                                description: rec.prediction.horizons.longTerm?.description || 'Прогноз на 2-3 месяца',
+                                model: rec.prediction.horizons.longTerm?.model || 'Transformer',
+                                score: rec.prediction.horizons.longTerm?.score || 0,
+                                confidence: rec.prediction.horizons.longTerm?.confidence || 0,
+                                recommendation: rec.prediction.horizons.longTerm?.recommendation || 'HOLD',
+                                weight: rec.prediction.horizons.longTerm?.weight || 0,
+                                horizonDays: rec.prediction.horizons.longTerm?.horizonDays || 84
+                            }
+                        },
+                        agreement: rec.prediction.agreement || null
+                    };
+                }
+                
+                // Добавляем details в explanation, если они есть и еще не добавлены
+                if (rec.prediction?.details && !explanation.details) {
+                    explanation.details = rec.prediction.details;
                 }
 
                 const recommendation = rec.prediction?.recommendation || 'BUY';
@@ -2791,6 +2935,7 @@ class NeuralNetworkService {
                     confidence: confidence,
                     score: score,
                     explanation: explanation,
+                    analysis: analysis, // Сохраняем структурированные данные о горизонтах
                     analysisDate: new Date(), // Обновляем дату анализа
                     modelVersion: '1.0',
                     priceAtAnalysis: rec.currentPrice,
@@ -2917,36 +3062,87 @@ class NeuralNetworkService {
                     recommendation = score < 0.3 ? 'SELL' : 'HOLD';
                 }
 
-                // Формируем explanation из данных IntegratedAIService
+                // Формируем explanation в едином формате: объект с summary и details
                 let explanation = {};
-                if (rec.prediction?.explanation && typeof rec.prediction.explanation === 'object') {
-                    explanation = rec.prediction.explanation;
-                    // Убеждаемся, что горизонты включены в details
-                    if (rec.prediction.details?.horizons) {
-                        explanation.details = explanation.details || {};
-                        explanation.details.horizons = rec.prediction.details.horizons;
-                    } else if (rec.prediction.horizons) {
-                        explanation.details = explanation.details || {};
-                        explanation.details.horizons = rec.prediction.horizons;
+                if (rec.prediction?.explanation) {
+                    if (typeof rec.prediction.explanation === 'string') {
+                        // Если explanation - строка, преобразуем в объект
+                        explanation = {
+                            summary: rec.prediction.explanation,
+                            details: rec.prediction.details || {}
+                        };
+                    } else if (typeof rec.prediction.explanation === 'object') {
+                        // Если explanation - объект, проверяем структуру
+                        if (rec.prediction.explanation.summary !== undefined) {
+                            explanation = rec.prediction.explanation;
+                        } else {
+                            // Если нет summary, создаем его из объекта
+                            explanation = {
+                                summary: JSON.stringify(rec.prediction.explanation),
+                                details: rec.prediction.explanation
+                            };
+                        }
                     }
                 } else if (rec.prediction?.summary) {
+                    // Если есть summary (строка или объект)
+                    const summaryValue = typeof rec.prediction.summary === 'string' 
+                        ? rec.prediction.summary 
+                        : rec.prediction.summary.summary || JSON.stringify(rec.prediction.summary);
                     explanation = {
-                        summary: rec.prediction.summary,
+                        summary: summaryValue,
                         details: rec.prediction.details || {}
                     };
-                    // Добавляем горизонты, если они есть
-                    if (rec.prediction.horizons) {
-                        explanation.details = explanation.details || {};
-                        explanation.details.horizons = rec.prediction.horizons;
-                    }
                 } else {
                     explanation = {
                         summary: 'Анализ на основе интегрированной AI системы',
-                        keyFactors: ['Технический анализ', 'Фундаментальный анализ'],
-                        risks: ['Потенциальное падение'],
-                        opportunities: ['Защита капитала'],
-                        timeframe: '1-3 месяца'
+                        details: {}
                     };
+                }
+                
+                // Формируем analysis с данными о горизонтах
+                let analysis = {};
+                if (rec.prediction?.horizons) {
+                    // Сохраняем структурированные данные о горизонтах в analysis
+                    analysis = {
+                        horizons: {
+                            shortTerm: {
+                                name: rec.prediction.horizons.shortTerm?.name || 'Краткосрочный прогноз',
+                                description: rec.prediction.horizons.shortTerm?.description || 'Прогноз на 1-3 дня',
+                                model: rec.prediction.horizons.shortTerm?.model || 'LSTM',
+                                score: rec.prediction.horizons.shortTerm?.score || 0,
+                                confidence: rec.prediction.horizons.shortTerm?.confidence || 0,
+                                recommendation: rec.prediction.horizons.shortTerm?.recommendation || 'HOLD',
+                                weight: rec.prediction.horizons.shortTerm?.weight || 0,
+                                horizonDays: rec.prediction.horizons.shortTerm?.horizonDays || 1
+                            },
+                            mediumTerm: {
+                                name: rec.prediction.horizons.mediumTerm?.name || 'Среднесрочный прогноз',
+                                description: rec.prediction.horizons.mediumTerm?.description || 'Прогноз на 1-4 недели',
+                                model: rec.prediction.horizons.mediumTerm?.model || 'CNN',
+                                score: rec.prediction.horizons.mediumTerm?.score || 0,
+                                confidence: rec.prediction.horizons.mediumTerm?.confidence || 0,
+                                recommendation: rec.prediction.horizons.mediumTerm?.recommendation || 'HOLD',
+                                weight: rec.prediction.horizons.mediumTerm?.weight || 0,
+                                horizonDays: rec.prediction.horizons.mediumTerm?.horizonDays || 21
+                            },
+                            longTerm: {
+                                name: rec.prediction.horizons.longTerm?.name || 'Долгосрочный прогноз',
+                                description: rec.prediction.horizons.longTerm?.description || 'Прогноз на 2-3 месяца',
+                                model: rec.prediction.horizons.longTerm?.model || 'Transformer',
+                                score: rec.prediction.horizons.longTerm?.score || 0,
+                                confidence: rec.prediction.horizons.longTerm?.confidence || 0,
+                                recommendation: rec.prediction.horizons.longTerm?.recommendation || 'HOLD',
+                                weight: rec.prediction.horizons.longTerm?.weight || 0,
+                                horizonDays: rec.prediction.horizons.longTerm?.horizonDays || 84
+                            }
+                        },
+                        agreement: rec.prediction.agreement || null
+                    };
+                }
+                
+                // Добавляем details в explanation, если они есть и еще не добавлены
+                if (rec.prediction?.details && !explanation.details) {
+                    explanation.details = rec.prediction.details;
                 }
 
 
@@ -2995,6 +3191,7 @@ class NeuralNetworkService {
                     confidence: confidence,
                     score: score,
                     explanation: explanation,
+                    analysis: analysis, // Сохраняем структурированные данные о горизонтах
                     analysisDate: new Date(), // Обновляем дату анализа
                     modelVersion: '1.0',
                     priceAtAnalysis: currentPrice,

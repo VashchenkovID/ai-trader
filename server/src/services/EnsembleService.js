@@ -860,33 +860,38 @@ class EnsembleService {
     }
 
     /**
-     * Подготовка данных для LSTM (24 часа)
+     * Подготовка данных для LSTM (фиксированный размер окна: 24 свечи)
      */
     async prepareLSTMData(candles) {
         const features = [];
         const labels = [];
 
-        for (let i = 24; i < candles.length - 1; i++) {
-            const window = candles.slice(i - 24, i);
+        const windowSize = 24; // Фиксированный размер окна для LSTM
+        if (candles.length < windowSize + 1) {
+            return { features, labels };
+        }
+        
+        for (let i = windowSize; i < candles.length - 1; i++) {
+            const window = candles.slice(i - windowSize, i);
             const nextCandle = candles[i + 1];
             
-            // Подготавливаем фичи
-            const windowFeatures = window.map(candle => [
+            // Подготавливаем фичи (всегда 24 свечи)
+            const windowFeatures = window.map((candle, idx) => [
                 candle.close,
                 candle.volume,
                 candle.high,
                 candle.low,
                 candle.open,
-                (candle.high - candle.low) / candle.close, // волатильность
-                (candle.close - candle.open) / candle.open, // изменение цены
-                candle.volume / (window.reduce((sum, c) => sum + c.volume, 0) / 24), // нормализованный объем
-                i % 24 / 24, // час дня
+                (candle.high - candle.low) / (candle.close || 1), // волатильность
+                (candle.close - candle.open) / (candle.open || 1), // изменение цены
+                candle.volume / (window.reduce((sum, c) => sum + c.volume, 0) / window.length || 1), // нормализованный объем
+                idx / windowSize, // позиция в окне
                 i % 7 / 7 // день недели
             ]);
 
             // Создаем лейбл (рост > 1%)
             const currentCandle = candles[i];
-            const priceChange = (nextCandle.close - currentCandle.close) / currentCandle.close;
+            const priceChange = (nextCandle.close - currentCandle.close) / (currentCandle.close || 1);
             const label = priceChange > 0.01 ? 1 : 0;
 
             features.push(windowFeatures);
@@ -897,32 +902,39 @@ class EnsembleService {
     }
 
     /**
-     * Подготовка данных для CNN (30 дней)
+     * Подготовка данных для CNN (фиксированный размер окна: 30 свечей)
      */
     async prepareCNNData(candles) {
         const features = [];
         const labels = [];
 
+        const windowSize = 30; // Фиксированный размер окна для CNN
+        if (candles.length < windowSize + 1) {
+            return { features, labels };
+        }
+
         // Нормализация данных для CNN
         const allValues = [];
-        for (let i = 30; i < candles.length - 1; i++) {
-            const window = candles.slice(i - 30, i);
+        for (let i = windowSize; i < candles.length - 1; i++) {
+            const window = candles.slice(i - windowSize, i);
             window.forEach(candle => {
                 allValues.push(candle.close, candle.volume, candle.high, candle.low, candle.open);
             });
         }
         
-        const mean = allValues.reduce((a, b) => a + b, 0) / allValues.length;
-        const std = Math.sqrt(allValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allValues.length);
-        const maxVol = Math.max(...candles.map(c => c.volume));
-        const minVol = Math.min(...candles.map(c => c.volume));
+        const mean = allValues.length > 0 ? allValues.reduce((a, b) => a + b, 0) / allValues.length : 0;
+        const std = allValues.length > 0 
+            ? Math.sqrt(allValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allValues.length)
+            : 1;
+        const maxVol = candles.length > 0 ? Math.max(...candles.map(c => c.volume)) : 1;
+        const minVol = candles.length > 0 ? Math.min(...candles.map(c => c.volume)) : 0;
         const volRange = maxVol - minVol || 1;
 
-        for (let i = 30; i < candles.length - 1; i++) {
-            const window = candles.slice(i - 30, i);
+        for (let i = windowSize; i < candles.length - 1; i++) {
+            const window = candles.slice(i - windowSize, i);
             const nextCandle = candles[i + 1];
             
-            // Подготавливаем фичи с нормализацией
+            // Подготавливаем фичи с нормализацией (всегда 30 свечей)
             const windowFeatures = window.map((candle, idx) => {
                 // Z-score нормализация для цен
                 const normalizedClose = (candle.close - mean) / (std || 1);
@@ -939,16 +951,16 @@ class EnsembleService {
                     normalizedHigh,
                     normalizedLow,
                     normalizedOpen,
-                    (candle.high - candle.low) / (candle.close || 1), // волатильность (уже нормализована)
-                    (candle.close - candle.open) / (candle.open || 1), // изменение цены (уже нормализовано)
-                    candle.volume / window.reduce((sum, c) => sum + c.volume, 0) / 30, // нормализованный объем
-                    idx / 30, // позиция в окне (0-1)
+                    (candle.high - candle.low) / (candle.close || 1), // волатильность
+                    (candle.close - candle.open) / (candle.open || 1), // изменение цены
+                    candle.volume / (window.reduce((sum, c) => sum + c.volume, 0) / window.length || 1), // нормализованный объем
+                    idx / windowSize, // позиция в окне (0-1)
                     i % 7 / 7 // день недели (0-1)
                 ];
             });
 
             const currentCandle = candles[i];
-            const priceChange = (nextCandle.close - currentCandle.close) / currentCandle.close;
+            const priceChange = (nextCandle.close - currentCandle.close) / (currentCandle.close || 1);
             const label = priceChange > 0.01 ? 1 : 0;
 
             features.push(windowFeatures);
@@ -959,32 +971,37 @@ class EnsembleService {
     }
 
     /**
-     * Подготовка данных для Transformer (12 недель)
+     * Подготовка данных для Transformer (фиксированный размер окна: 84 свечи)
      */
     async prepareTransformerData(candles) {
         const features = [];
         const labels = [];
 
-        for (let i = 84; i < candles.length - 1; i++) {
-            const window = candles.slice(i - 84, i);
+        const windowSize = 84; // Фиксированный размер окна для Transformer
+        if (candles.length < windowSize + 1) {
+            return { features, labels };
+        }
+
+        for (let i = windowSize; i < candles.length - 1; i++) {
+            const window = candles.slice(i - windowSize, i);
             const nextCandle = candles[i + 1];
             
-            // Подготавливаем фичи
-            const windowFeatures = window.map(candle => [
+            // Подготавливаем фичи (всегда 84 свечи)
+            const windowFeatures = window.map((candle, idx) => [
                 candle.close,
                 candle.volume,
                 candle.high,
                 candle.low,
                 candle.open,
-                (candle.high - candle.low) / candle.close,
-                (candle.close - candle.open) / candle.open,
-                candle.volume / window.reduce((sum, c) => sum + c.volume, 0) / 84,
-                i % 84 / 84,
+                (candle.high - candle.low) / (candle.close || 1),
+                (candle.close - candle.open) / (candle.open || 1),
+                candle.volume / (window.reduce((sum, c) => sum + c.volume, 0) / window.length || 1),
+                idx / windowSize,
                 i % 7 / 7
             ]);
 
             const currentCandle = candles[i];
-            const priceChange = (nextCandle.close - currentCandle.close) / currentCandle.close;
+            const priceChange = (nextCandle.close - currentCandle.close) / (currentCandle.close || 1);
             const label = priceChange > 0.01 ? 1 : 0;
 
             features.push(windowFeatures);
@@ -992,6 +1009,121 @@ class EnsembleService {
         }
 
         return { features, labels };
+    }
+
+    /**
+     * Упрощенное предсказание на основе технических индикаторов
+     * Используется когда недостаточно данных для нейросетевых моделей
+     */
+    async simpleTechnicalPrediction(candles) {
+        // Если данных нет или очень мало, возвращаем консервативную рекомендацию
+        if (!candles || candles.length === 0) {
+            return { score: 0.5, confidence: 0.1, recommendation: 'HOLD', method: 'no_data' };
+        }
+        
+        if (candles.length < 3) {
+            return { score: 0.5, confidence: 0.2, recommendation: 'HOLD', method: 'minimal_data' };
+        }
+
+        try {
+            const OptimizedDataService = (await import('./OptimizedDataService.js')).default;
+            // OptimizedDataService экспортируется как singleton экземпляр
+            
+            const closingPrices = candles.map(c => c.close);
+            const volumes = candles.map(c => c.volume || 0);
+            const highs = candles.map(c => c.high);
+            const lows = candles.map(c => c.low);
+
+            // Простая логика на основе индикаторов
+            let score = 0.5; // HOLD по умолчанию
+            let confidence = 0.3; // Низкая уверенность для упрощенной модели
+
+            // RSI анализ
+            try {
+                const rsi = OptimizedDataService.calculateRSI(closingPrices);
+                if (rsi !== null && rsi !== undefined && !isNaN(rsi)) {
+                    // RSI нормализован в [0, 1], где 0 = перепроданность, 1 = перекупленность
+                    if (rsi < 0.3) {
+                        score += 0.2; // Перепроданность -> BUY сигнал
+                    } else if (rsi > 0.7) {
+                        score -= 0.2; // Перекупленность -> SELL сигнал
+                    }
+                }
+            } catch (e) {
+                // Игнорируем ошибки расчета RSI
+            }
+
+            // Тренд на основе SMA
+            try {
+                const sma5Period = Math.min(5, Math.floor(closingPrices.length / 2));
+                const sma20Period = Math.min(20, Math.floor(closingPrices.length / 2));
+                const sma5 = sma5Period >= 2 ? OptimizedDataService.calculateSMA(closingPrices, sma5Period) : null;
+                const sma20 = sma20Period >= 2 ? OptimizedDataService.calculateSMA(closingPrices, sma20Period) : null;
+                const currentPrice = closingPrices[closingPrices.length - 1];
+
+                if (sma5 && sma20 && currentPrice) {
+                    if (currentPrice > sma5 && sma5 > sma20) {
+                        score += 0.15; // Восходящий тренд
+                    } else if (currentPrice < sma5 && sma5 < sma20) {
+                        score -= 0.15; // Нисходящий тренд
+                    }
+                } else if (sma5 && currentPrice) {
+                    // Если есть только SMA5, используем его
+                    if (currentPrice > sma5) {
+                        score += 0.1; // Краткосрочный восходящий тренд
+                    } else {
+                        score -= 0.1; // Краткосрочный нисходящий тренд
+                    }
+                }
+            } catch (e) {
+                // Игнорируем ошибки расчета SMA
+            }
+
+            // MACD анализ
+            try {
+                const macd = OptimizedDataService.calculateMACD(closingPrices);
+                if (macd && Array.isArray(macd) && macd.length >= 2) {
+                    const macdLine = macd[0];
+                    const macdSignal = macd[1];
+                    if (macdLine !== null && macdSignal !== null && !isNaN(macdLine) && !isNaN(macdSignal)) {
+                        if (macdLine > macdSignal) {
+                            score += 0.1; // Бычий сигнал
+                        } else {
+                            score -= 0.1; // Медвежий сигнал
+                        }
+                    }
+                }
+            } catch (e) {
+                // Игнорируем ошибки расчета MACD
+            }
+
+            // Простой анализ тренда на основе последних цен
+            if (closingPrices.length >= 3) {
+                const recentPrices = closingPrices.slice(-3);
+                const trend = recentPrices[2] - recentPrices[0];
+                const avgPrice = recentPrices.reduce((a, b) => a + b, 0) / recentPrices.length;
+                if (avgPrice > 0) {
+                    const trendPercent = trend / avgPrice;
+                    score += Math.max(-0.1, Math.min(0.1, trendPercent * 5)); // Ограничиваем влияние тренда
+                }
+            }
+
+            // Нормализуем score в диапазон [0, 1]
+            score = Math.max(0, Math.min(1, score));
+
+            // Определяем рекомендацию
+            const recommendation = score > 0.6 ? 'BUY' : score < 0.4 ? 'SELL' : 'HOLD';
+
+            return {
+                score,
+                confidence,
+                recommendation,
+                method: 'technical_indicators'
+            };
+        } catch (error) {
+            console.warn('⚠️ Error in simple technical prediction:', error.message);
+            return { score: 0.5, confidence: 0.1, recommendation: 'HOLD', method: 'fallback' };
+        }
     }
 
     /**
@@ -1010,53 +1142,209 @@ class EnsembleService {
             // Запрашиваем больше данных (200 дней), чтобы получить максимум доступных свечей
             let candles = await CacheService.getCandles(figi, 'DAY', 200);
             
-            // Если данных мало, пытаемся расширить период для получения большего количества данных
+            // Минимальные требования для моделей:
+            // LSTM: минимум 25 свечей (окно 24 + 1 для лейбла)
+            // CNN: минимум 31 свеча (окно 30 + 1 для лейбла)
+            // Transformer: минимум 85 свечей (окно 84 + 1 для лейбла)
+            const minRequiredForLSTM = 25;
+            const minRequiredForCNN = 31;
+            const minRequiredForTransformer = 85;
+            const minRequired = Math.max(minRequiredForLSTM, minRequiredForCNN, minRequiredForTransformer);
+            
+            // Если данных недостаточно, дозапрашиваем из API и сохраняем в БД
+            if (candles.length < minRequired) {
+                console.log(`📥 Insufficient candles for ${figi}: ${candles.length} < ${minRequired}, fetching from API...`);
+                
+                try {
+                    // Пытаемся получить данные за максимальный период (730 дней = 2 года)
+                    const newCandles = await CacheService.cacheCandles(figi, 'DAY', 730);
+                    if (newCandles && newCandles.length > 0) {
+                        console.log(`✅ Fetched ${newCandles.length} new candles from API for ${figi}`);
+                        // Получаем обновленные данные из кеша
+                        candles = await CacheService.getCandles(figi, 'DAY', 730);
+                    } else {
+                        // Если не получили новые данные, пробуем меньший период
+                        console.log(`⚠️ No new candles from 730 days, trying 365 days...`);
+                        const newCandles365 = await CacheService.cacheCandles(figi, 'DAY', 365);
+                        if (newCandles365 && newCandles365.length > 0) {
+                            console.log(`✅ Fetched ${newCandles365.length} new candles from API for ${figi}`);
+                            candles = await CacheService.getCandles(figi, 'DAY', 365);
+                        }
+                    }
+                } catch (fetchError) {
+                    console.warn(`⚠️ Failed to fetch candles from API for ${figi}:`, fetchError.message);
+                    // Продолжаем с имеющимися данными
+                }
+            }
+            
+            // Если данных все еще мало, пытаемся расширить период для получения большего количества данных из кеша
             if (candles.length < 50) {
-                console.warn(`⚠️ Few candles for ${figi}: ${candles.length}, trying extended period...`);
+                console.warn(`⚠️ Few candles for ${figi}: ${candles.length}, trying extended period from cache...`);
                 candles = await CacheService.getCandles(figi, 'DAY', 365);
             }
             
-            // Если данных все еще мало, пытаемся максимальный период
+            // Если данных все еще мало, пытаемся максимальный период из кеша
             if (candles.length < 50) {
-                console.warn(`⚠️ Still few candles for ${figi}: ${candles.length}, trying max period...`);
+                console.warn(`⚠️ Still few candles for ${figi}: ${candles.length}, trying max period from cache...`);
                 candles = await CacheService.getCandles(figi, 'DAY', 730);
             }
             
             // Работаем с тем количеством данных, которое есть
-            // Модели адаптируются под доступное количество свечей
             if (candles.length === 0) {
-                throw new Error(`No candles available for ${figi}`);
+                console.warn(`⚠️ No candles available for ${figi}, using simple technical prediction with minimal data`);
+                // Возвращаем консервативную рекомендацию на основе упрощенной модели
+                const simplePred = await this.simpleTechnicalPrediction([]);
+                return {
+                    score: simplePred.score,
+                    confidence: 0.1, // Очень низкая уверенность при отсутствии данных
+                    recommendation: 'HOLD', // Консервативная рекомендация
+                    agreement: 0,
+                    horizons: {
+                        shortTerm: {
+                            name: 'Краткосрочный прогноз',
+                            description: 'Прогноз на 1-3 дня',
+                            model: 'Technical Indicators',
+                            score: simplePred.score,
+                            confidence: 0.1,
+                            recommendation: 'HOLD',
+                            weight: this.weights.lstm,
+                            horizonDays: 1,
+                            explanation: 'Недостаточно данных для анализа. Рекомендуется воздержаться от торговли.'
+                        },
+                        mediumTerm: {
+                            name: 'Среднесрочный прогноз',
+                            description: 'Прогноз на 1-4 недели',
+                            model: 'Technical Indicators',
+                            score: simplePred.score,
+                            confidence: 0.1,
+                            recommendation: 'HOLD',
+                            weight: this.weights.cnn,
+                            horizonDays: 21,
+                            explanation: 'Недостаточно данных для анализа. Рекомендуется воздержаться от торговли.'
+                        },
+                        longTerm: {
+                            name: 'Долгосрочный прогноз',
+                            description: 'Прогноз на 2-3 месяца',
+                            model: 'Technical Indicators',
+                            score: simplePred.score,
+                            confidence: 0.1,
+                            recommendation: 'HOLD',
+                            weight: this.weights.transformer,
+                            horizonDays: 84,
+                            explanation: 'Недостаточно данных для анализа. Рекомендуется воздержаться от торговли.'
+                        }
+                    },
+                    individualPredictions: {
+                        lstm: simplePred.score,
+                        cnn: simplePred.score,
+                        transformer: simplePred.score
+                    },
+                    weights: this.weights,
+                    summary: `Недостаточно данных для анализа инструмента ${figi}. Рекомендуется воздержаться от торговли до появления достаточного количества исторических данных.`
+                };
             }
             
-            if (candles.length < 10) {
-                console.warn(`⚠️ Very few candles for ${figi}: ${candles.length}. Predictions may be less accurate.`);
+            if (candles.length < minRequired) {
+                console.warn(`⚠️ Very few candles for ${figi}: ${candles.length} < ${minRequired}. Some models may not work.`);
             }
 
-            // Подготавливаем данные для каждой модели
-            const lstmData = await this.prepareLSTMData(candles);
-            const cnnData = await this.prepareCNNData(candles);
-            const transformerData = await this.prepareTransformerData(candles);
+            // Проверяем минимальные требования для фиксированных размеров окон моделей
+            // Модели ожидают фиксированные размеры: LSTM=24, CNN=30, Transformer=84
+            // Используем уже объявленные переменные minRequiredForLSTM, minRequiredForCNN, minRequiredForTransformer
+            
+            const hasEnoughDataForLSTM = candles.length >= minRequiredForLSTM;
+            const hasEnoughDataForCNN = candles.length >= minRequiredForCNN;
+            const hasEnoughDataForTransformer = candles.length >= minRequiredForTransformer;
 
-            // Проверяем наличие данных перед получением предсказаний
-            if (!lstmData.features || lstmData.features.length === 0) {
-                console.warn('⚠️ No LSTM features prepared');
-            }
-            if (!cnnData.features || cnnData.features.length === 0) {
-                console.warn('⚠️ No CNN features prepared');
-            }
-            if (!transformerData.features || transformerData.features.length === 0) {
-                console.warn('⚠️ No Transformer features prepared');
-            }
+            let lstmPred = 0.5;
+            let cnnPred = 0.5;
+            let transformerPred = 0.5;
+            let useSimpleModel = false;
 
-            // Получаем предсказания от каждой модели
-            // Используем последний элемент features, который должен быть 2D массивом
-            const lstmFeatures = lstmData.features && lstmData.features.length > 0 ? lstmData.features[lstmData.features.length - 1] : null;
-            const cnnFeatures = cnnData.features && cnnData.features.length > 0 ? cnnData.features[cnnData.features.length - 1] : null;
-            const transformerFeatures = transformerData.features && transformerData.features.length > 0 ? transformerData.features[transformerData.features.length - 1] : null;
+            // Если данных недостаточно для всех моделей, используем упрощенную модель
+            if (!hasEnoughDataForLSTM && !hasEnoughDataForCNN && !hasEnoughDataForTransformer) {
+                console.log(`📊 Insufficient data for neural networks (${candles.length} candles, need ${minRequiredForLSTM}/${minRequiredForCNN}/${minRequiredForTransformer}), using simple technical prediction`);
+                const simplePred = await this.simpleTechnicalPrediction(candles);
+                lstmPred = simplePred.score;
+                cnnPred = simplePred.score;
+                transformerPred = simplePred.score;
+                useSimpleModel = true;
+            } else {
+                // Подготавливаем данные для каждой модели только если данных достаточно для фиксированных размеров
+                // Используем стандартные методы подготовки данных (не адаптивные), так как модели ожидают фиксированные размеры
+                
+                if (hasEnoughDataForLSTM) {
+                    const lstmData = await this.prepareLSTMData(candles);
+                    if (lstmData.features && lstmData.features.length > 0) {
+                        const lstmFeatures = lstmData.features[lstmData.features.length - 1];
+                        // Проверяем размер фичей перед вызовом модели
+                        const lstmInputShape = this.getModelInputShape('lstm');
+                        const expectedLSTMElements = lstmInputShape[0] * lstmInputShape[1];
+                        const actualLSTMElements = lstmFeatures.length * (lstmFeatures[0]?.length || 0);
+                        
+                        if (actualLSTMElements === expectedLSTMElements && lstmFeatures.length === lstmInputShape[0]) {
+                            lstmPred = await this.getModelPrediction('lstm', lstmFeatures);
+                        } else {
+                            // Размеры не совпадают - используем упрощенную модель
+                            console.log(`📊 LSTM features shape mismatch (${actualLSTMElements} vs ${expectedLSTMElements}), using simple technical prediction`);
+                            const simplePred = await this.simpleTechnicalPrediction(candles);
+                            lstmPred = simplePred.score;
+                        }
+                    }
+                } else if (candles.length >= 3) {
+                    // Fallback на упрощенную модель для LSTM
+                    const simplePred = await this.simpleTechnicalPrediction(candles);
+                    lstmPred = simplePred.score;
+                }
 
-            const lstmPred = lstmFeatures ? await this.getModelPrediction('lstm', lstmFeatures) : 0.5;
-            const cnnPred = cnnFeatures ? await this.getModelPrediction('cnn', cnnFeatures) : 0.5;
-            const transformerPred = transformerFeatures ? await this.getModelPrediction('transformer', transformerFeatures) : 0.5;
+                if (hasEnoughDataForCNN) {
+                    const cnnData = await this.prepareCNNData(candles);
+                    if (cnnData.features && cnnData.features.length > 0) {
+                        const cnnFeatures = cnnData.features[cnnData.features.length - 1];
+                        // Проверяем размер фичей перед вызовом модели
+                        const cnnInputShape = this.getModelInputShape('cnn');
+                        const expectedCNNElements = cnnInputShape[0] * cnnInputShape[1];
+                        const actualCNNElements = cnnFeatures.length * (cnnFeatures[0]?.length || 0);
+                        
+                        if (actualCNNElements === expectedCNNElements && cnnFeatures.length === cnnInputShape[0]) {
+                            cnnPred = await this.getModelPrediction('cnn', cnnFeatures);
+                        } else {
+                            // Размеры не совпадают - используем упрощенную модель
+                            console.log(`📊 CNN features shape mismatch (${actualCNNElements} vs ${expectedCNNElements}), using simple technical prediction`);
+                            const simplePred = await this.simpleTechnicalPrediction(candles);
+                            cnnPred = simplePred.score;
+                        }
+                    }
+                } else if (candles.length >= 3) {
+                    // Fallback на упрощенную модель для CNN
+                    const simplePred = await this.simpleTechnicalPrediction(candles);
+                    cnnPred = simplePred.score;
+                }
+
+                if (hasEnoughDataForTransformer) {
+                    const transformerData = await this.prepareTransformerData(candles);
+                    if (transformerData.features && transformerData.features.length > 0) {
+                        const transformerFeatures = transformerData.features[transformerData.features.length - 1];
+                        // Проверяем размер фичей перед вызовом модели
+                        const transformerInputShape = this.getModelInputShape('transformer');
+                        const expectedTransformerElements = transformerInputShape[0] * transformerInputShape[1];
+                        const actualTransformerElements = transformerFeatures.length * (transformerFeatures[0]?.length || 0);
+                        
+                        if (actualTransformerElements === expectedTransformerElements && transformerFeatures.length === transformerInputShape[0]) {
+                            transformerPred = await this.getModelPrediction('transformer', transformerFeatures);
+                        } else {
+                            // Размеры не совпадают - используем упрощенную модель
+                            console.log(`📊 Transformer features shape mismatch (${actualTransformerElements} vs ${expectedTransformerElements}), using simple technical prediction`);
+                            const simplePred = await this.simpleTechnicalPrediction(candles);
+                            transformerPred = simplePred.score;
+                        }
+                    }
+                } else if (candles.length >= 3) {
+                    // Fallback на упрощенную модель для Transformer
+                    const simplePred = await this.simpleTechnicalPrediction(candles);
+                    transformerPred = simplePred.score;
+                }
+            }
 
             // Взвешенное голосование
             const ensembleScore = (
@@ -1065,45 +1353,70 @@ class EnsembleService {
                 transformerPred * this.weights.transformer
             );
 
-            // Рассчитываем уверенность на основе согласованности моделей
+            // Рассчитываем уверенность на основе согласованности моделей и количества данных
             const predictions = [lstmPred, cnnPred, transformerPred];
             const variance = this.calculateVariance(predictions);
-            const confidence = Math.max(0, 1 - variance);
+            let confidence = Math.max(0, 1 - variance);
+            
+            // Снижаем уверенность при использовании упрощенных моделей или недостатке данных
+            if (useSimpleModel) {
+                confidence = Math.min(confidence, 0.3); // Максимум 30% уверенности для упрощенных моделей
+            } else {
+                // Снижаем уверенность пропорционально недостатку данных
+                const dataCompleteness = Math.min(1, candles.length / minRequired);
+                confidence = confidence * (0.5 + 0.5 * dataCompleteness); // От 50% до 100% уверенности
+            }
 
             // Формируем понятные предсказания по горизонтам
+            const shortTermModel = hasEnoughDataForLSTM ? 'LSTM' : 'Technical Indicators';
+            const mediumTermModel = hasEnoughDataForCNN ? 'CNN' : 'Technical Indicators';
+            const longTermModel = hasEnoughDataForTransformer ? 'Transformer' : 'Technical Indicators';
+
             const horizons = {
                 shortTerm: {
                     name: 'Краткосрочный прогноз',
                     description: 'Прогноз на 1-3 дня',
-                    model: 'LSTM',
+                    model: shortTermModel,
                     score: lstmPred,
-                    confidence: this.performance.lstm?.accuracy || 0.5,
+                    confidence: hasEnoughDataForLSTM 
+                        ? (this.performance.lstm?.accuracy || 0.5)
+                        : 0.3, // Низкая уверенность для упрощенных моделей
                     recommendation: lstmPred > 0.7 ? 'BUY' : lstmPred < 0.3 ? 'SELL' : 'HOLD',
                     weight: this.weights.lstm,
                     horizonDays: 1,
-                    explanation: this.getHorizonExplanation('short', lstmPred)
+                    explanation: hasEnoughDataForLSTM 
+                        ? this.getHorizonExplanation('short', lstmPred)
+                        : 'Упрощенный анализ на основе технических индикаторов (недостаточно данных для LSTM)'
                 },
                 mediumTerm: {
                     name: 'Среднесрочный прогноз',
                     description: 'Прогноз на 1-4 недели',
-                    model: 'CNN',
+                    model: mediumTermModel,
                     score: cnnPred,
-                    confidence: this.performance.cnn?.accuracy || 0.5,
+                    confidence: hasEnoughDataForCNN 
+                        ? (this.performance.cnn?.accuracy || 0.5)
+                        : 0.3, // Низкая уверенность для упрощенных моделей
                     recommendation: cnnPred > 0.7 ? 'BUY' : cnnPred < 0.3 ? 'SELL' : 'HOLD',
                     weight: this.weights.cnn,
                     horizonDays: 21,
-                    explanation: this.getHorizonExplanation('medium', cnnPred)
+                    explanation: hasEnoughDataForCNN 
+                        ? this.getHorizonExplanation('medium', cnnPred)
+                        : 'Упрощенный анализ на основе технических индикаторов (недостаточно данных для CNN)'
                 },
                 longTerm: {
                     name: 'Долгосрочный прогноз',
                     description: 'Прогноз на 2-3 месяца',
-                    model: 'Transformer',
+                    model: longTermModel,
                     score: transformerPred,
-                    confidence: this.performance.transformer?.accuracy || 0.5,
+                    confidence: hasEnoughDataForTransformer 
+                        ? (this.performance.transformer?.accuracy || 0.5)
+                        : 0.3, // Низкая уверенность для упрощенных моделей
                     recommendation: transformerPred > 0.7 ? 'BUY' : transformerPred < 0.3 ? 'SELL' : 'HOLD',
                     weight: this.weights.transformer,
                     horizonDays: 84,
-                    explanation: this.getHorizonExplanation('long', transformerPred)
+                    explanation: hasEnoughDataForTransformer 
+                        ? this.getHorizonExplanation('long', transformerPred)
+                        : 'Упрощенный анализ на основе технических индикаторов (недостаточно данных для Transformer)'
                 }
             };
 
@@ -1822,7 +2135,13 @@ class EnsembleService {
             // Сохраняем метаданные ансамбля
             const fs = await import('fs/promises');
             const path = await import('path');
-            const ensembleDir = './models/ensemble';
+            const { fileURLToPath } = await import('url');
+            
+            // Используем правильный путь относительно server директории
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const modelsDir = path.join(__dirname, '../../models');
+            const ensembleDir = path.join(modelsDir, 'ensemble');
             await fs.mkdir(ensembleDir, { recursive: true });
             
             const metadata = {

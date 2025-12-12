@@ -146,6 +146,76 @@ router.get('/stock/:figi/candles', async (req, res) => {
 });
 
 /**
+ * Последняя рекомендация для инструмента (если свежая)
+ * GET /api/market/stock/:figi/latest-recommendation?maxAgeHours=1
+ */
+router.get('/stock/:figi/latest-recommendation', async (req, res) => {
+    try {
+        const { figi } = req.params;
+        const maxAgeHours = parseInt(req.query.maxAgeHours) || 1; // По умолчанию 1 час
+        const Recommendation = (await import('../models/Recommendation.js')).default;
+        
+        // Получаем последнюю активную рекомендацию
+        const latestRec = await Recommendation.findOne({
+            where: { 
+                figi,
+                isActive: true
+            },
+            order: [['analysisDate', 'DESC']]
+        });
+        
+        if (!latestRec) {
+            return res.json({
+                success: true,
+                data: null,
+                isFresh: false,
+                reason: 'No recommendation found in database'
+            });
+        }
+        
+        // Проверяем, свежая ли рекомендация
+        const ageHours = (Date.now() - new Date(latestRec.analysisDate).getTime()) / (1000 * 60 * 60);
+        const isFresh = ageHours < maxAgeHours;
+        
+        if (isFresh) {
+            // Возвращаем данные в формате, совместимом с IntegratedAIService
+            res.json({
+                success: true,
+                data: {
+                    recommendation: latestRec.recommendation,
+                    score: latestRec.score,
+                    confidence: latestRec.confidence,
+                    explanation: latestRec.explanation,
+                    analysis: latestRec.analysis,
+                    agreement: latestRec.analysis?.agreement || 0,
+                    horizons: latestRec.analysis?.horizons || null,
+                    summary: latestRec.explanation?.summary || latestRec.explanation?.details?.summary || '',
+                    analysisDate: latestRec.analysisDate,
+                    isFromDatabase: true
+                },
+                isFresh: true,
+                ageHours: ageHours.toFixed(2)
+            });
+        } else {
+            res.json({
+                success: true,
+                data: null,
+                isFresh: false,
+                reason: `Recommendation is too old (${ageHours.toFixed(2)} hours, max ${maxAgeHours} hours)`,
+                ageHours: ageHours.toFixed(2)
+            });
+        }
+    } catch (error) {
+        console.error('Ошибка получения последней рекомендации:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения последней рекомендации',
+            error: error.message
+        });
+    }
+});
+
+/**
  * История предсказаний для инструмента
  * GET /api/market/stock/:figi/predictions
  */
@@ -185,51 +255,66 @@ router.get('/stock/:figi/predictions', async (req, res) => {
 });
 
 /**
- * Получение торговых сигналов для инструмента через Tinkoff API
- * GET /api/market/stock/:figi/signals
+ * Получение торговых сигналов для инструмента из БД
+ * GET /api/market/stock/:figi/signals?limit=20&activeOnly=true
  */
 router.get('/stock/:figi/signals', async (req, res) => {
     try {
         const { figi } = req.params;
-        const { from, to, direction, active } = req.query;
+        const { from, to, direction, activeOnly, limit } = req.query;
         
-        console.log(`🔍 Запрос сигналов для FIGI: ${figi}`);
+        const SignalCacheService = (await import('../services/SignalCacheService.js')).default;
         
-        // Формируем опции запроса
-        const options = {};
+        const options = {
+            limit: limit ? parseInt(limit) : 20 // По умолчанию 20 сигналов
+        };
         if (from) options.from = new Date(from);
         if (to) options.to = new Date(to);
         if (direction) options.direction = direction;
-        if (active) options.active = active;
+        if (activeOnly === 'true') options.activeOnly = true;
         
-        // Пробуем получить сигналы через Tinkoff API
-        const result = await TinkoffApiService.getSignals(figi, options);
+        const signals = await SignalCacheService.getSignalsByFigi(figi, options);
         
-        if (result.success) {
-            res.json({
-                success: true,
-                message: 'Сигналы успешно получены',
-                data: result.data,
-                path: result.path,
-                rawResponse: result
-            });
-        } else {
-            // Если метод не найден, возвращаем информацию об ошибке
-            res.status(404).json({
-                success: false,
-                message: 'Метод GetSignals не найден или недоступен',
-                error: result.error,
-                details: result.details,
-                note: 'Возможно, метод GetSignals недоступен в текущей версии API или требует специальных прав доступа'
-            });
-        }
+        // Преобразуем сигналы в формат для фронтенда
+        const formattedSignals = signals.map(signal => {
+            // Преобразуем цену из формата {units, nano} в число
+            const formatPrice = (priceObj) => {
+                if (!priceObj) return null;
+                if (typeof priceObj === 'number') return priceObj;
+                const units = parseFloat(priceObj.units || 0);
+                const nano = parseFloat(priceObj.nano || 0) / 1000000000;
+                return units + nano;
+            };
+            
+            return {
+                signalId: signal.signalId,
+                strategyId: signal.strategyId,
+                strategyName: signal.strategyName,
+                instrumentUid: signal.instrumentUid,
+                figi: signal.figi,
+                createDt: signal.createDt,
+                endDt: signal.endDt,
+                direction: signal.direction,
+                initialPrice: formatPrice(signal.initialPrice),
+                targetPrice: formatPrice(signal.targetPrice),
+                stoploss: formatPrice(signal.stoploss),
+                probability: signal.probability,
+                name: signal.name,
+                info: signal.info,
+                isActive: new Date(signal.endDt) >= new Date()
+            };
+        });
+        
+        res.json({
+            success: true,
+            data: formattedSignals
+        });
     } catch (error) {
-        console.error('Ошибка получения сигналов:', error);
+        console.error('Ошибка получения сигналов из БД:', error);
         res.status(500).json({
             success: false,
-            message: 'Ошибка получения сигналов',
-            error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            message: 'Ошибка получения сигналов из БД',
+            error: error.message
         });
     }
 });

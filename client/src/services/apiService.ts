@@ -2737,6 +2737,21 @@ export const apiService = {
   /**
    * Получить историю предсказаний для акции
    */
+  /**
+   * Получить последнюю рекомендацию из БД (если свежая, меньше maxAgeHours)
+   */
+  async getLatestStockRecommendation(figi: string, maxAgeHours: number = 1): Promise<any> {
+    try {
+      const response = await api.get(`/api/market/stock/${figi}/latest-recommendation`, {
+        params: { maxAgeHours }
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error getting latest stock recommendation:', error);
+      throw error;
+    }
+  },
+
   async getStockPredictionHistory(figi: string): Promise<any[]> {
     try {
       const response = await api.get(`/api/market/stock/${figi}/predictions`);
@@ -2748,11 +2763,15 @@ export const apiService = {
   },
 
   /**
-   * Получить торговые сигналы для инструмента
+   * Получить торговые сигналы для инструмента из БД
    */
-  async getStockSignals(figi: string): Promise<any> {
+  async getStockSignals(figi: string, limit: number = 20, activeOnly: boolean = false): Promise<any> {
     try {
-      const response = await api.get(`/api/market/stock/${figi}/signals`);
+      const params = new URLSearchParams();
+      if (limit) params.append('limit', limit.toString());
+      if (activeOnly) params.append('activeOnly', 'true');
+      
+      const response = await api.get(`/api/market/stock/${figi}/signals?${params.toString()}`);
       return response.data;
     } catch (error: any) {
       console.error('Error getting stock signals:', error);

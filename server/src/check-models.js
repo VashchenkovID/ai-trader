@@ -6,16 +6,22 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 async function checkModels() {
     console.log('🔍 Проверка моделей нейросетей...\n');
     
+    // Используем правильный путь относительно server директории
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const modelsDir = path.join(__dirname, '..', 'models');
+    
     const modelPaths = [
-        './models/neural-network-model.json',
-        './models/neural-network-weights.json',
-        './models/ensemble/',
-        './models/rl_agent/',
-        './models/meta_model/'
+        path.join(modelsDir, 'neural-network-model.json'),
+        path.join(modelsDir, 'neural-network-weights.json'),
+        path.join(modelsDir, 'ensemble'),
+        path.join(modelsDir, 'rl_agent'),
+        path.join(modelsDir, 'meta_model')
     ];
     
     for (const modelPath of modelPaths) {

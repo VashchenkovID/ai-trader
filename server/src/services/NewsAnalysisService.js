@@ -1467,7 +1467,7 @@ class NewsAnalysisService {
                 CacheService = CacheServiceModule.default;
             }
 
-            const { onProgress } = options;
+            const { onProgress, limit, startIndex = 0 } = options; // Добавляем поддержку limit и startIndex для ротации
             
             if (!this.isInitialized) {
                 throw new Error('NewsAnalysisService не инициализирован');
@@ -1480,13 +1480,26 @@ class NewsAnalysisService {
 
             // Получаем все акции в рублях
             const instruments = await CacheService.getAllInstruments();
-            const shares = instruments.filter(inst => 
+            let shares = instruments.filter(inst => 
                 inst.currency === 'RUB' && 
                 (inst.instrumentType === 'share' || !inst.instrumentType) &&
                 inst.ticker && inst.name
             );
-
-            console.log(`📊 Загрузка актуальных новостей для ${shares.length} акций...`);
+            
+            const totalShares = shares.length;
+            
+            // Применяем ротацию: начинаем с startIndex
+            if (startIndex > 0 && startIndex < shares.length) {
+                shares = [...shares.slice(startIndex), ...shares.slice(0, startIndex)];
+            }
+            
+            // Ограничиваем количество инструментов, если указан limit
+            if (limit && limit > 0) {
+                shares = shares.slice(0, limit);
+                console.log(`📊 Загрузка актуальных новостей для ${shares.length} акций (ротация: начиная с индекса ${startIndex}, всего ${totalShares} акций, ограничено до ${limit} для соблюдения лимита API)...`);
+            } else {
+                console.log(`📊 Загрузка актуальных новостей для ${shares.length} акций (ротация: начиная с индекса ${startIndex})...`);
+            }
 
             // Период - последние сутки
             const to = new Date();
@@ -1579,7 +1592,8 @@ class NewsAnalysisService {
                 success: true,
                 message: `Загружено новостей для ${updated} из ${shares.length} инструментов`,
                 updated,
-                total: shares.length,
+                total: totalShares, // Возвращаем общее количество инструментов для ротации
+                processed: shares.length, // Количество обработанных в этом запуске
                 totalNews
             };
 

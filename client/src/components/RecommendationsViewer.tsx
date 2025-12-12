@@ -90,7 +90,7 @@ const RecommendationsViewer: React.FC = () => {
       }
       
       // Обрабатываем ответ - может быть массив или объект с data
-      let recommendations = [];
+      let recommendations: any[] = [];
       if (Array.isArray(data)) {
         recommendations = data;
       } else if (data?.data && Array.isArray(data.data)) {
@@ -101,27 +101,64 @@ const RecommendationsViewer: React.FC = () => {
       }
       
       // Нормализуем данные рекомендаций
-      recommendations = recommendations.map((rec: any) => ({
-        figi: rec.figi || rec.id,
-        ticker: rec.ticker || '',
-        name: rec.name || '',
-        recommendation: rec.recommendation || rec.action || 'HOLD',
-        confidence: rec.confidence || 0,
-        score: rec.score || 0,
-        analysis: rec.analysis || {},
-        explanation: rec.explanation || rec.aiExplanation || {},
-        priceAtAnalysis: rec.priceAtAnalysis || rec.price || 0,
-        targetPrice: rec.targetPrice || rec.takeProfit,
-        stopLoss: rec.stopLoss,
-        takeProfit: rec.takeProfit || rec.targetPrice,
-        analysisDate: rec.analysisDate || rec.createdAt || new Date().toISOString(),
-        validUntil: rec.validUntil || rec.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        isActive: rec.isActive !== undefined ? rec.isActive : true,
-        sector: rec.sector,
-        tags: rec.tags || []
-      }));
+      const normalizedRecommendations = recommendations.map((rec: any, index: number) => {
+        // Нормализуем confidence: если больше 1, значит это процент (0-100), делим на 100
+        let normalizedConfidence = rec.confidence || 0;
+        if (typeof normalizedConfidence === 'number' && !isNaN(normalizedConfidence)) {
+          if (normalizedConfidence > 1) {
+            normalizedConfidence = normalizedConfidence / 100;
+          }
+          normalizedConfidence = Math.max(0, Math.min(1, normalizedConfidence));
+        } else {
+          normalizedConfidence = 0;
+        }
+        
+        // Нормализуем score аналогично
+        let normalizedScore = rec.score || 0;
+        if (typeof normalizedScore === 'number' && !isNaN(normalizedScore)) {
+          if (normalizedScore > 1) {
+            normalizedScore = normalizedScore / 100;
+          }
+          normalizedScore = Math.max(0, Math.min(1, normalizedScore));
+        } else {
+          normalizedScore = 0;
+        }
+        
+        // Логируем для отладки (только первые 3 записи)
+        if (index < 3) {
+          console.log(`📋 Table recommendation [${index}] for ${rec.figi || rec.id}:`, {
+            ticker: rec.ticker,
+            recommendation: rec.recommendation || rec.action || 'HOLD',
+            confidence: normalizedConfidence,
+            score: normalizedScore,
+            rawConfidence: rec.confidence,
+            rawScore: rec.score,
+            analysisDate: rec.analysisDate || rec.createdAt
+          });
+        }
+        
+        return {
+          figi: rec.figi || rec.id,
+          ticker: rec.ticker || '',
+          name: rec.name || '',
+          recommendation: rec.recommendation || rec.action || 'HOLD',
+          confidence: normalizedConfidence,
+          score: normalizedScore,
+          analysis: rec.analysis || {},
+          explanation: rec.explanation || rec.aiExplanation || {},
+          priceAtAnalysis: rec.priceAtAnalysis || rec.price || 0,
+          targetPrice: rec.targetPrice || rec.takeProfit,
+          stopLoss: rec.stopLoss,
+          takeProfit: rec.takeProfit || rec.targetPrice,
+          analysisDate: rec.analysisDate || rec.createdAt || new Date().toISOString(),
+          validUntil: rec.validUntil || rec.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          isActive: rec.isActive !== undefined ? rec.isActive : true,
+          sector: rec.sector,
+          tags: rec.tags || []
+        };
+      });
       
-      setRecommendations(recommendations);
+      setRecommendations(normalizedRecommendations);
       
     } catch (error) {
       console.error('Error loading recommendations:', error);
@@ -136,7 +173,7 @@ const RecommendationsViewer: React.FC = () => {
     }
   };
 
-  const getRecommendationBadge = (recommendation: string) => {
+  const getRecommendationBadge = (recommendation: string, explanation?: any) => {
     const config = {
       BUY: { severity: 'success' },
       SELL: { severity: 'danger' },
@@ -144,7 +181,48 @@ const RecommendationsViewer: React.FC = () => {
     };
     
     const rec = config[recommendation as keyof typeof config] || { severity: 'secondary' };
-    return <Badge value={translateRecommendation(recommendation)} severity={rec.severity as any} />;
+    
+    // Извлекаем summary из explanation (может быть объектом или строкой)
+    let summaryText = '';
+    if (explanation) {
+      if (typeof explanation === 'string') {
+        summaryText = explanation;
+      } else if (typeof explanation === 'object' && explanation !== null) {
+        // Проверяем различные возможные пути к summary
+        summaryText = explanation.summary || 
+                     explanation.details?.summary || 
+                     explanation.text ||
+                     explanation.description ||
+                     '';
+      }
+    }
+    
+    // Очищаем текст от HTML тегов, если они есть
+    if (summaryText) {
+      summaryText = summaryText.replace(/<[^>]*>/g, '').trim();
+    }
+    
+    // Для отладки - можно раскомментировать
+    // if (summaryText) {
+    //   console.log('Summary found:', summaryText.substring(0, 50));
+    // }
+    
+    return (
+      <div 
+        title={summaryText || undefined}
+        style={{ 
+          cursor: summaryText ? 'help' : 'default', 
+          display: 'inline-block',
+          width: '100%',
+          height: '100%'
+        }}
+      >
+        <Badge 
+          value={translateRecommendation(recommendation)} 
+          severity={rec.severity as any}
+        />
+      </div>
+    );
   };
 
   const getConfidenceBadge = (confidence: number) => {
@@ -427,7 +505,13 @@ const RecommendationsViewer: React.FC = () => {
               field="recommendation"
               header="Рекомендация"
               sortable
-              body={(rowData) => getRecommendationBadge(rowData.recommendation)}
+              body={(rowData) => {
+                // Временная отладка - проверим структуру explanation
+                if (rowData.explanation && Object.keys(rowData.explanation).length > 0) {
+                  console.log('Explanation for', rowData.ticker, ':', rowData.explanation);
+                }
+                return getRecommendationBadge(rowData.recommendation, rowData.explanation);
+              }}
             />
             
             <Column

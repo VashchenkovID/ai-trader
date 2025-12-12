@@ -5,6 +5,7 @@ import { Chart } from 'primereact/chart';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Tag } from 'primereact/tag';
+import { Badge } from 'primereact/badge';
 import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
 import { ProgressSpinner } from 'primereact/progressspinner';
@@ -58,6 +59,22 @@ interface NewsItem {
   };
 }
 
+interface SignalItem {
+  signalId: string;
+  strategyId: string;
+  strategyName: string;
+  createDt: string;
+  endDt: string;
+  direction: 'SIGNAL_DIRECTION_BUY' | 'SIGNAL_DIRECTION_SELL' | 'SIGNAL_DIRECTION_UNSPECIFIED';
+  initialPrice: number | null;
+  targetPrice: number | null;
+  stoploss: number | null;
+  probability: number;
+  name: string;
+  info?: string;
+  isActive: boolean;
+}
+
 type TimePeriod = 'day' | 'week' | 'month' | 'year';
 
 const StockDetail: React.FC = () => {
@@ -72,12 +89,11 @@ const StockDetail: React.FC = () => {
   const [predictionHistory, setPredictionHistory] = useState<PredictionHistory[]>([]);
   const [currentPrediction, setCurrentPrediction] = useState<any>(null);
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [signals, setSignals] = useState<SignalItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pricePeriod, setPricePeriod] = useState<TimePeriod>('week');
   const [volumePeriod, setVolumePeriod] = useState<TimePeriod>('week');
   const [loadingNews, setLoadingNews] = useState(false);
-  const [signals, setSignals] = useState<any>(null);
-  const [loadingSignals, setLoadingSignals] = useState(false);
 
   const periodOptions = [
     { label: 'День', value: 'day' },
@@ -111,21 +127,50 @@ const StockDetail: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Загружаем данные параллельно
-      const [detailData, priceCandlesData, volumeCandlesData, historyData, predictionData, newsData] = await Promise.all([
+      // Загружаем данные из БД (как в таблице рекомендаций)
+      console.log(`📊 Loading stock data for ${figi} from database...`);
+      
+      // Загружаем остальные данные параллельно
+      const [detailData, priceCandlesData, volumeCandlesData, historyData, newsData, signalsData, recommendationData] = await Promise.all([
         apiService.getStockDetail(figi),
         apiService.getStockCandles(figi, 365, 'DAY'), // За год по умолчанию для цены
         apiService.getStockCandles(figi, 365, 'DAY'), // За год по умолчанию для объема
         apiService.getStockPredictionHistory(figi),
-        apiService.getEnsemblePrediction(figi),
-        apiService.getNews(figi, 20, 30).catch(() => []) // Новости за 30 дней
+        apiService.getNews(figi, 20, 30).catch(() => []), // Новости за 30 дней
+        apiService.getStockSignals(figi).catch(() => ({ success: true, data: [] })), // Сигналы из БД
+        apiService.getLatestStockRecommendation(figi, 24).catch(() => ({ success: true, data: null })) // Рекомендация из БД (макс 24 часа)
       ]);
       
       setStockDetail(detailData);
       setPriceCandles(priceCandlesData || []);
       setVolumeCandles(volumeCandlesData || []);
       setPredictionHistory(historyData || []);
-      setCurrentPrediction(predictionData);
+      
+      // Используем данные из БД (как в таблице)
+      if (recommendationData?.success && recommendationData?.data) {
+        const dbPrediction = recommendationData.data;
+        console.log(`✅ Loaded recommendation from DB for ${figi}:`, {
+          recommendation: dbPrediction.recommendation,
+          confidence: dbPrediction.confidence,
+          score: dbPrediction.score,
+          analysisDate: dbPrediction.analysisDate,
+          isFromDatabase: dbPrediction.isFromDatabase
+        });
+        
+        // Нормализуем confidence и score: если больше 1, значит это процент (0-100), делим на 100
+        if (typeof dbPrediction.confidence === 'number' && !isNaN(dbPrediction.confidence) && dbPrediction.confidence > 1) {
+          dbPrediction.confidence = dbPrediction.confidence / 100;
+        }
+        if (typeof dbPrediction.score === 'number' && !isNaN(dbPrediction.score) && dbPrediction.score > 1) {
+          dbPrediction.score = dbPrediction.score / 100;
+        }
+        
+        setCurrentPrediction(dbPrediction);
+      } else {
+        console.log(`⚠️ No recommendation found in DB for ${figi} (or too old)`);
+        setCurrentPrediction(null);
+      }
+      
       // Преобразуем новости в нужный формат
       const formattedNews = Array.isArray(newsData) 
         ? newsData.map((item: any) => ({
@@ -137,6 +182,13 @@ const StockDetail: React.FC = () => {
           }))
         : [];
       setNews(formattedNews);
+      
+      // Устанавливаем сигналы из БД
+      if (signalsData.success && Array.isArray(signalsData.data)) {
+        setSignals(signalsData.data);
+      } else {
+        setSignals([]);
+      }
       
     } catch (err: any) {
       console.error('Error loading stock data:', err);
@@ -272,51 +324,6 @@ const StockDetail: React.FC = () => {
     }
   };
 
-  const handleGetSignals = async () => {
-    if (!figi) {
-      toast.current?.show({
-        severity: 'warn',
-        summary: 'Предупреждение',
-        detail: 'FIGI инструмента не указан',
-        life: 3000
-      });
-      return;
-    }
-
-    try {
-      setLoadingSignals(true);
-      const result = await apiService.getStockSignals(figi);
-      
-      if (result.success) {
-        setSignals(result.data);
-        toast.current?.show({
-          severity: 'success',
-          summary: 'Успешно',
-          detail: 'Сигналы успешно получены',
-          life: 3000
-        });
-      } else {
-        toast.current?.show({
-          severity: 'warn',
-          summary: 'Предупреждение',
-          detail: result.message || 'Метод GetSignals недоступен',
-          life: 5000
-        });
-        setSignals(null);
-      }
-    } catch (err: any) {
-      console.error('Error getting signals:', err);
-      toast.current?.show({
-        severity: 'error',
-        summary: 'Ошибка',
-        detail: err.response?.data?.message || err.message || 'Не удалось получить сигналы',
-        life: 5000
-      });
-      setSignals(null);
-    } finally {
-      setLoadingSignals(false);
-    }
-  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('ru-RU', {
@@ -612,18 +619,7 @@ const StockDetail: React.FC = () => {
           
           <div className="col-12 md:col-3">
             <div className="mb-3">
-              <div className="flex align-items-center justify-content-between mb-2">
-                <div className="text-600 text-sm">Текущее предсказание</div>
-                <Button
-                  icon="pi pi-bolt"
-                  label="Получить сигналы"
-                  size="small"
-                  onClick={handleGetSignals}
-                  loading={loadingSignals}
-                  disabled={!figi || loadingSignals}
-                  className="p-button-text p-button-sm"
-                />
-              </div>
+              <div className="text-600 text-sm mb-2">Текущее предсказание (из БД)</div>
               {currentPrediction ? (
                 <div>
                   <Tag 
@@ -641,27 +637,28 @@ const StockDetail: React.FC = () => {
                       Оценка: {scoreDesc.text} ({scoreDesc.percentage})
                     </div>
                   )}
+                  {currentPrediction.analysisDate && (
+                    <div className="text-xs text-500 mt-1">
+                      Дата анализа: {formatDate(currentPrediction.analysisDate)}
+                    </div>
+                  )}
+                  {currentPrediction.isFromDatabase && (
+                    <div className="text-xs text-green-500 mt-1">
+                      ✓ Данные из БД
+                    </div>
+                  )}
                   {formatFullPrediction(currentPrediction)}
                 </div>
               ) : (
-                <div className="text-500">Нет данных</div>
+                <div className="text-500">
+                  Нет данных в БД
+                  <div className="text-xs mt-1">(Рекомендация будет создана при следующем обновлении)</div>
+                </div>
               )}
             </div>
           </div>
         </div>
       </Card>
-
-      {/* Блок с сигналами */}
-      {signals && (
-        <Card className="mb-4">
-          <h3 className="mb-3">⚡ Торговые сигналы от Tinkoff API</h3>
-          <div className="p-3 surface-100 border-round">
-            <pre className="text-sm" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {JSON.stringify(signals, null, 2)}
-            </pre>
-          </div>
-        </Card>
-      )}
 
       {/* Основной контент */}
       <div className="grid">
@@ -752,8 +749,70 @@ const StockDetail: React.FC = () => {
           </Card>
         </div>
 
-        {/* Правая колонка - Новости */}
+        {/* Правая колонка - Сигналы и Новости */}
         <div className="col-12 lg:col-4">
+          {/* Сигналы */}
+          <Card className="mb-4">
+            <div className="flex align-items-center justify-content-between mb-3">
+              <h3 className="m-0">⚡ Торговые сигналы</h3>
+            </div>
+            {signals.length > 0 ? (
+              <div className="flex flex-column gap-3" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                {signals.map((signal) => {
+                  const directionText = signal.direction === 'SIGNAL_DIRECTION_BUY' 
+                    ? 'ПОКУПКА' 
+                    : signal.direction === 'SIGNAL_DIRECTION_SELL' 
+                    ? 'ПРОДАЖА' 
+                    : 'НЕОПРЕДЕЛЕНО';
+                  const directionSeverity = signal.direction === 'SIGNAL_DIRECTION_BUY' 
+                    ? 'success' 
+                    : signal.direction === 'SIGNAL_DIRECTION_SELL' 
+                    ? 'danger' 
+                    : 'info';
+                  
+                  return (
+                    <div key={signal.signalId} className="border-bottom-1 surface-border pb-3">
+                      <div className="flex align-items-center justify-content-between mb-2">
+                        <Tag value={directionText} severity={directionSeverity} />
+                        {signal.isActive && (
+                          <Badge value="Активен" severity="success" />
+                        )}
+                      </div>
+                      <div className="text-sm text-500 mb-2">
+                        {signal.strategyName}
+                        {signal.probability && ` • Вероятность: ${signal.probability}%`}
+                      </div>
+                      {signal.name && (
+                        <div className="font-medium mb-2">{signal.name}</div>
+                      )}
+                      <div className="text-sm text-600 mb-2">
+                        <div>Создан: {formatDate(signal.createDt)}</div>
+                        <div>Действует до: {formatDate(signal.endDt)}</div>
+                        {signal.initialPrice && (
+                          <div>Начальная цена: {formatCurrency(signal.initialPrice)}</div>
+                        )}
+                        {signal.targetPrice && (
+                          <div>Целевая цена: {formatCurrency(signal.targetPrice)}</div>
+                        )}
+                        {signal.stoploss && (
+                          <div>Стоп-лосс: {formatCurrency(signal.stoploss)}</div>
+                        )}
+                      </div>
+                      {signal.info && (
+                        <div className="text-sm text-500">{signal.info}</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center text-500 py-4">
+                Нет сигналов
+              </div>
+            )}
+          </Card>
+
+          {/* Новости */}
           <Card className="mb-4">
             <div className="flex align-items-center justify-content-between mb-3">
               <h3 className="m-0">📰 Новости</h3>

@@ -926,9 +926,12 @@ class OptimizedTrainingService {
             // Сохраняем модель в файлы для конкретного инструмента
             const fs = await import('fs/promises');
             const path = await import('path');
+            const { fileURLToPath } = await import('url');
             
-            // Создаем директорию models если не существует
-            const modelsDir = './models';
+            // Используем правильный путь относительно server директории
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const modelsDir = path.join(__dirname, '../../models');
             await fs.mkdir(modelsDir, { recursive: true });
             
             // Сохраняем архитектуру модели

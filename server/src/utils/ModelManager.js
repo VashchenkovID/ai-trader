@@ -1,6 +1,7 @@
 import * as tf from '@tensorflow/tfjs';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Универсальный менеджер для сохранения и загрузки моделей TensorFlow.js
@@ -8,7 +9,10 @@ import path from 'path';
  */
 class ModelManager {
     constructor() {
-        this.modelsDir = './models';
+        // Используем правильный путь относительно server директории
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = path.dirname(__filename);
+        this.modelsDir = path.join(__dirname, '../../models');
         this.ensureModelsDir();
     }
 
