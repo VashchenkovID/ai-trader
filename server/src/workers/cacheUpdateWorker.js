@@ -1,9 +1,64 @@
 import { parentPort, workerData } from 'worker_threads';
 import CacheService from '../services/CacheService.js';
 import SignalCacheService from '../services/SignalCacheService.js';
+import sequelize from '../config/database.js';
+
+/**
+ * Проверка и восстановление соединения с БД
+ * ВАЖНО: Worker threads используют тот же экземпляр sequelize, но с изолированным пулом соединений
+ * ВАРИАНТ 2 и 3: Улучшенное управление соединениями без лишних authenticate()
+ */
+async function ensureDatabaseConnection() {
+    try {
+        // ВАРИАНТ 2: Не используем authenticate() - проверяем только состояние пула
+        if (sequelize.connectionManager && sequelize.connectionManager.pool) {
+            const pool = sequelize.connectionManager.pool;
+            if (pool._draining) {
+                console.warn('⚠️ Connection pool is draining, waiting for cleanup...');
+                return false;
+            }
+            // Пул активен, соединение должно быть доступно
+            return true;
+        }
+        
+        // Если пула нет, пытаемся восстановить
+        console.warn('⚠️ Connection pool not available in worker, attempting to restore...');
+        await sequelize.authenticate();
+        return true;
+    } catch (error) {
+        // ВАРИАНТ 6: Retry с exponential backoff
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        while (retryCount < maxRetries) {
+            const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Максимум 10 секунд
+            retryCount++;
+            
+            console.warn(`⚠️ Database connection issue in worker, retry ${retryCount}/${maxRetries} after ${backoffDelay}ms...`);
+            
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            
+            try {
+                await sequelize.authenticate();
+                console.log('✅ Database connection restored in worker');
+                return true;
+            } catch (reconnectError) {
+                if (retryCount >= maxRetries) {
+                    console.error('❌ Failed to reconnect to database in worker after retries:', reconnectError.message);
+                    return false;
+                }
+            }
+        }
+        
+        return false;
+    }
+}
 
 async function performCacheUpdate() {
     try {
+        // Проверяем соединение с БД перед началом работы
+        await ensureDatabaseConnection();
+        
         const { 
             updateInstruments, 
             updateCandles, 
@@ -11,7 +66,9 @@ async function performCacheUpdate() {
             instrumentsLimit, 
             candlesDays, 
             incrementalUpdate,
-            signalsLimit
+            signalsLimit,
+            signalsFrom,
+            signalsTo
         } = workerData;
         const startTime = Date.now();
         let totalUpdated = 0;
@@ -49,6 +106,19 @@ async function performCacheUpdate() {
                     const instrument = instruments[i];
                     
                     try {
+                        // Периодически проверяем соединение с БД (каждые 50 инструментов)
+                        // И добавляем небольшую задержку для снижения нагрузки на БД
+                        if (i > 0 && i % 50 === 0) {
+                            const connectionOk = await ensureDatabaseConnection();
+                            if (!connectionOk) {
+                                console.warn(`⚠️ Database connection issue at instrument ${i}, waiting before retry...`);
+                                // Небольшая пауза перед продолжением
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                            }
+                            // Небольшая задержка для снижения нагрузки на БД при большом количестве инструментов
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                        }
+                        
                         let candlesCached = 0;
                         
                         // Используем инкрементальное обновление, если включено
@@ -68,6 +138,42 @@ async function performCacheUpdate() {
                             console.log(`📊 Updated candles for ${i + 1}/${instruments.length} instruments (total candles: ${totalCandlesCached})`);
                         }
                     } catch (error) {
+                        // Если ошибка связана с БД, пытаемся переподключиться
+                        if (error.message && (
+                            error.message.includes('Connection') || 
+                            error.message.includes('connection') ||
+                            error.message.includes('pool') ||
+                            error.message.includes('closed')
+                        )) {
+                            // ВАРИАНТ 3 и 6: Улучшенная обработка ошибок с exponential backoff
+                            console.warn(`⚠️ Database connection issue for ${instrument.figi}, attempting to reconnect...`);
+                            
+                            let retryCount = 0;
+                            const maxRetries = 3;
+                            let reconnected = false;
+                            
+                            while (retryCount < maxRetries && !reconnected) {
+                                const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Максимум 5 секунд
+                                retryCount++;
+                                await new Promise(resolve => setTimeout(resolve, backoffDelay));
+                                
+                                try {
+                                    await ensureDatabaseConnection();
+                                    reconnected = true;
+                                    console.log(`✅ Reconnected after ${retryCount} attempt(s)`);
+                                } catch (reconnectError) {
+                                    if (retryCount >= maxRetries) {
+                                        console.error(`❌ Failed to reconnect after ${maxRetries} attempts, skipping ${instrument.figi}`);
+                                    }
+                                }
+                            }
+                            
+                            if (reconnected) {
+                                continue; // Skip current instrument, try next
+                            } else {
+                                continue; // Skip anyway
+                            }
+                        }
                         console.error(`❌ Error updating candles for ${instrument.figi}:`, error.message);
                         // Продолжаем с другими инструментами
                     }
@@ -94,11 +200,34 @@ async function performCacheUpdate() {
                     const instrument = instruments[i];
                     
                     try {
-                        // Получаем активные сигналы для инструмента
-                        const result = await SignalCacheService.fetchAndCacheSignals(instrument.figi, {
-                            active: true,
-                            limit: 100
-                        });
+                        // Периодически проверяем соединение с БД (каждые 50 инструментов)
+                        // И добавляем небольшую задержку для снижения нагрузки на БД
+                        if (i > 0 && i % 50 === 0) {
+                            const connectionOk = await ensureDatabaseConnection();
+                            if (!connectionOk) {
+                                console.warn(`⚠️ Database connection issue at signal ${i}, waiting before retry...`);
+                                // Небольшая пауза перед продолжением
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                            }
+                            // Небольшая задержка для снижения нагрузки на БД при большом количестве инструментов
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                        }
+                        
+                        // Формируем опции для запроса сигналов
+                        const signalsOptions = {
+                            limit: 1000, // Максимальный лимит для получения всех доступных сигналов
+                            pageNumber: 0
+                        };
+                        
+                        // Если указаны даты для инкрементального обновления, добавляем их
+                        if (signalsFrom) {
+                            signalsOptions.from = new Date(signalsFrom);
+                        }
+                        if (signalsTo) {
+                            signalsOptions.to = new Date(signalsTo);
+                        }
+                        
+                        const result = await SignalCacheService.fetchAndCacheSignals(instrument.figi, signalsOptions);
                         
                         if (result.success) {
                             totalSignalsCached += result.savedCount || 0;
@@ -121,6 +250,42 @@ async function performCacheUpdate() {
                         // Небольшая задержка чтобы не перегружать API
                         await new Promise(resolve => setTimeout(resolve, 200));
                     } catch (error) {
+                        // Если ошибка связана с БД, пытаемся переподключиться
+                        if (error.message && (
+                            error.message.includes('Connection') || 
+                            error.message.includes('connection') ||
+                            error.message.includes('pool') ||
+                            error.message.includes('closed')
+                        )) {
+                            // ВАРИАНТ 3 и 6: Улучшенная обработка ошибок с exponential backoff
+                            console.warn(`⚠️ Database connection issue for ${instrument.figi}, attempting to reconnect...`);
+                            
+                            let retryCount = 0;
+                            const maxRetries = 3;
+                            let reconnected = false;
+                            
+                            while (retryCount < maxRetries && !reconnected) {
+                                const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Максимум 5 секунд
+                                retryCount++;
+                                await new Promise(resolve => setTimeout(resolve, backoffDelay));
+                                
+                                try {
+                                    await ensureDatabaseConnection();
+                                    reconnected = true;
+                                    console.log(`✅ Reconnected after ${retryCount} attempt(s)`);
+                                } catch (reconnectError) {
+                                    if (retryCount >= maxRetries) {
+                                        console.error(`❌ Failed to reconnect after ${maxRetries} attempts, skipping ${instrument.figi}`);
+                                    }
+                                }
+                            }
+                            
+                            if (reconnected) {
+                                continue; // Skip current instrument, try next
+                            } else {
+                                continue; // Skip anyway
+                            }
+                        }
                         console.error(`❌ Error updating signals for ${instrument.figi}:`, error.message);
                         // Продолжаем с другими инструментами
                     }

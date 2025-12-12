@@ -1169,6 +1169,17 @@ class NeuralNetworkService {
         this.isAnalyzing = true;
 
         try {
+            // ВАРИАНТ 2: Используем DatabaseConnectionManager без лишних authenticate()
+            const DatabaseConnectionManager = (await import('../utils/DatabaseConnectionManager.js')).default;
+            const requesterId = `analyze-portfolio-${Date.now()}`;
+            
+            console.log(`📊 Requesting database connection before creating worker (${requesterId})...`);
+            const connection = await DatabaseConnectionManager.acquireConnection(requesterId, 60000);
+            console.log(`✅ Database connection acquired (${connection.connectionId}), creating worker...`);
+            
+            // Освобождаем подключение сразу после проверки, worker получит свое
+            connection.release();
+            
             const { Worker } = await import('worker_threads');
             const { fileURLToPath } = await import('url');
             const { dirname, join } = await import('path');
@@ -1382,7 +1393,28 @@ class NeuralNetworkService {
 
                 // Сохраняем ВСЕ рекомендации (BUY, SELL, HOLD) без фильтрации по score
                 validPredictions++;
-                const currentPrice = candidatePrice;
+                
+                // Для HOLD рекомендаций особенно важно иметь валидную цену
+                // Если candidatePrice отсутствует или равна 0, пытаемся получить через API
+                let currentPrice = candidatePrice;
+                if ((!currentPrice || currentPrice === 0 || isNaN(currentPrice)) && prediction.recommendation === 'HOLD') {
+                    console.log(`🔄 [HOLD] Price missing for ${instrument.ticker}, fetching from API...`);
+                    try {
+                        currentPrice = await this.getCurrentPrice(instrument.figi);
+                        if (currentPrice && currentPrice > 0) {
+                            console.log(`✅ [HOLD] Got price from API for ${instrument.ticker}: ${currentPrice}`);
+                            // Обновляем кеш инструмента
+                            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+                            await CachedInstrument.update(
+                                { lastPrice: currentPrice, lastPriceTime: new Date() },
+                                { where: { figi: instrument.figi } }
+                            );
+                        }
+                    } catch (priceError) {
+                        console.warn(`⚠️ [HOLD] Could not fetch price for ${instrument.ticker}:`, priceError.message);
+                    }
+                }
+                
                 const recommendation = prediction.recommendation || 'HOLD';
                 
                 // Определяем стратегию для рекомендации и рассчитываем размер позиции с учетом стратегии
@@ -1601,9 +1633,14 @@ class NeuralNetworkService {
                     }
                 }
 
+                // Получаем текущую цену ДО формирования объекта recommendation
+                const currentPrice = await this.getCurrentPrice(item.figi);
+                
                 const recommendation = {
                     item,
+                    instrument: item, // Добавляем instrument для совместимости
                     prediction,
+                    currentPrice: currentPrice, // Сохраняем цену в объекте recommendation
                     reason,
                     strategy: strategyInfo ? {
                         id: strategyInfo.id,
@@ -1630,7 +1667,6 @@ class NeuralNetworkService {
                         holdCount: 0
                     };
                 }
-                const currentPrice = await this.getCurrentPrice(item.figi);
                 recommendationsByStrategy[strategyKey].recommendations.push(recommendation);
                 recommendationsByStrategy[strategyKey].totalValue += currentPrice * item.quantity;
                 if (prediction.recommendation === 'SELL' || prediction.score < 0.3) {
@@ -2116,6 +2152,7 @@ class NeuralNetworkService {
 
                 const recommendation = {
                     item,
+                    instrument: item, // Добавляем instrument для совместимости
                     currentPrice,
                     prediction,
                     reason,
@@ -2204,17 +2241,37 @@ class NeuralNetworkService {
         // Сначала пробуем взять цену из кеша инструментов
         try {
             const instrument = await CacheService.getInstrument(figi);
-            if (instrument && typeof instrument.lastPrice === 'number') {
+            if (instrument && typeof instrument.lastPrice === 'number' && instrument.lastPrice > 0) {
                 return instrument.lastPrice;
             }
         } catch (e) {}
 
         // Фолбек к последней свече
-        const candles = await CacheService.getCandles(figi, 'DAY', 1);
-        if (!candles || candles.length === 0) {
-            return 0;
+        try {
+            const candles = await CacheService.getCandles(figi, 'DAY', 1);
+            if (candles && candles.length > 0 && candles[candles.length - 1].close > 0) {
+                return candles[candles.length - 1].close;
+            }
+        } catch (e) {}
+
+        // Если цена не найдена в кеше и свечах, пытаемся получить через API
+        try {
+            const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
+            const lastPrices = await TinkoffApiService.getLastPrices([figi]);
+            if (lastPrices && lastPrices[figi] && typeof lastPrices[figi] === 'number' && lastPrices[figi] > 0) {
+                // Обновляем кеш инструмента
+                const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+                await CachedInstrument.update(
+                    { lastPrice: lastPrices[figi], lastPriceTime: new Date() },
+                    { where: { figi } }
+                );
+                return lastPrices[figi];
+            }
+        } catch (apiError) {
+            // Игнорируем ошибки API
         }
-        return candles[candles.length - 1].close;
+
+        return 0;
     }
 
     getStatus() {
@@ -2732,6 +2789,24 @@ class NeuralNetworkService {
     }
 
     // Сохранение рекомендаций в базу данных
+    // Вспомогательная функция для извлечения данных из Sequelize модели или обычного объекта
+    getInstrumentData(instrument) {
+        if (!instrument) return null;
+        
+        // Если это Sequelize модель, преобразуем в обычный объект
+        if (instrument.toJSON && typeof instrument.toJSON === 'function') {
+            return instrument.toJSON();
+        }
+        
+        // Если есть dataValues, используем их
+        if (instrument.dataValues) {
+            return instrument.dataValues;
+        }
+        
+        // Иначе возвращаем как есть (обычный объект)
+        return instrument;
+    }
+
     async saveRecommendationsToDatabase(buyRecommendations, sellRecommendations) {
         try {
             const Recommendation = (await import('../models/Recommendation.js')).default;
@@ -2739,10 +2814,22 @@ class NeuralNetworkService {
             // Сохраняем BUY и HOLD рекомендации (все из buyRecommendations)
             for (const rec of buyRecommendations) {
                 // Проверяем наличие instrument
-                if (!rec.instrument || !rec.instrument.figi) {
-                    console.warn('⚠️ Skipping recommendation: missing instrument or figi', rec);
+                if (!rec.instrument) {
+                    console.warn('⚠️ Skipping recommendation: missing instrument', rec);
                     continue;
                 }
+                
+                // Получаем данные инструмента из Sequelize модели или обычного объекта
+                const instrumentData = this.getInstrumentData(rec.instrument);
+                if (!instrumentData || !instrumentData.figi) {
+                    console.warn('⚠️ Skipping recommendation: missing figi', {
+                        instrument: rec.instrument,
+                        instrumentData: instrumentData
+                    });
+                    continue;
+                }
+                
+                const figi = instrumentData.figi;
                 
                 // Правильно извлекаем confidence и score из prediction
                 // ВАЖНО: score и confidence должны быть разными значениями!
@@ -2802,6 +2889,7 @@ class NeuralNetworkService {
                 let analysis = {};
                 if (rec.prediction?.horizons) {
                     // Сохраняем структурированные данные о горизонтах в analysis
+                    // Включаем рекомендации по стратегиям, если они есть
                     analysis = {
                         horizons: {
                             shortTerm: {
@@ -2812,7 +2900,9 @@ class NeuralNetworkService {
                                 confidence: rec.prediction.horizons.shortTerm?.confidence || 0,
                                 recommendation: rec.prediction.horizons.shortTerm?.recommendation || 'HOLD',
                                 weight: rec.prediction.horizons.shortTerm?.weight || 0,
-                                horizonDays: rec.prediction.horizons.shortTerm?.horizonDays || 1
+                                horizonDays: rec.prediction.horizons.shortTerm?.horizonDays || 1,
+                                // Добавляем рекомендации по стратегиям, если они есть
+                                strategies: rec.prediction.horizons.shortTerm?.strategies || null
                             },
                             mediumTerm: {
                                 name: rec.prediction.horizons.mediumTerm?.name || 'Среднесрочный прогноз',
@@ -2822,7 +2912,9 @@ class NeuralNetworkService {
                                 confidence: rec.prediction.horizons.mediumTerm?.confidence || 0,
                                 recommendation: rec.prediction.horizons.mediumTerm?.recommendation || 'HOLD',
                                 weight: rec.prediction.horizons.mediumTerm?.weight || 0,
-                                horizonDays: rec.prediction.horizons.mediumTerm?.horizonDays || 21
+                                horizonDays: rec.prediction.horizons.mediumTerm?.horizonDays || 21,
+                                // Добавляем рекомендации по стратегиям, если они есть
+                                strategies: rec.prediction.horizons.mediumTerm?.strategies || null
                             },
                             longTerm: {
                                 name: rec.prediction.horizons.longTerm?.name || 'Долгосрочный прогноз',
@@ -2832,7 +2924,9 @@ class NeuralNetworkService {
                                 confidence: rec.prediction.horizons.longTerm?.confidence || 0,
                                 recommendation: rec.prediction.horizons.longTerm?.recommendation || 'HOLD',
                                 weight: rec.prediction.horizons.longTerm?.weight || 0,
-                                horizonDays: rec.prediction.horizons.longTerm?.horizonDays || 84
+                                horizonDays: rec.prediction.horizons.longTerm?.horizonDays || 84,
+                                // Добавляем рекомендации по стратегиям, если они есть
+                                strategies: rec.prediction.horizons.longTerm?.strategies || null
                             }
                         },
                         agreement: rec.prediction.agreement || null
@@ -2846,7 +2940,7 @@ class NeuralNetworkService {
 
                 const recommendation = rec.prediction?.recommendation || 'BUY';
                 
-                console.log(`💾 Saving ${recommendation} recommendation for ${rec.instrument.ticker}: score=${score.toFixed(3)}, confidence=${confidence.toFixed(3)}`);
+                console.log(`💾 Saving ${recommendation} recommendation for ${instrumentData.ticker || figi}: score=${score.toFixed(3)}, confidence=${confidence.toFixed(3)}`);
 
                 // Определяем стратегию для рекомендации
                 // Сначала проверяем, есть ли стратегия в самой рекомендации (для позиций портфеля)
@@ -2873,53 +2967,116 @@ class NeuralNetworkService {
                     }
                 }
 
+                // Получаем текущую цену с fallback на instrumentData.lastPrice
+                // Используем утилиту для надежного извлечения из Sequelize модели
+                const { getField } = await import('../utils/sequelizeUtils.js');
+                let currentPrice = rec.currentPrice;
+                
+                // Проверяем и нормализуем цену из rec.currentPrice
+                if (!currentPrice || typeof currentPrice !== 'number' || isNaN(currentPrice) || currentPrice <= 0) {
+                    // Пытаемся получить из instrumentData используя утилиту
+                    const lastPrice = getField(rec.instrument, 'lastPrice');
+                    const averagePrice = getField(rec.instrument, 'averagePrice');
+                    
+                    if (lastPrice && typeof lastPrice === 'number' && !isNaN(lastPrice) && lastPrice > 0) {
+                        currentPrice = lastPrice;
+                    } else if (averagePrice && typeof averagePrice === 'number' && !isNaN(averagePrice) && averagePrice > 0) {
+                        currentPrice = averagePrice;
+                    } else {
+                        // Пробуем получить из instrumentData напрямую
+                        const instrumentDataLastPrice = instrumentData.lastPrice;
+                        const instrumentDataAveragePrice = instrumentData.averagePrice;
+                        
+                        if (instrumentDataLastPrice && typeof instrumentDataLastPrice === 'number' && !isNaN(instrumentDataLastPrice) && instrumentDataLastPrice > 0) {
+                            currentPrice = instrumentDataLastPrice;
+                        } else if (instrumentDataAveragePrice && typeof instrumentDataAveragePrice === 'number' && !isNaN(instrumentDataAveragePrice) && instrumentDataAveragePrice > 0) {
+                            currentPrice = instrumentDataAveragePrice;
+                        } else {
+                            currentPrice = null;
+                        }
+                    }
+                }
+                
+                // Если цена все еще отсутствует, пытаемся получить через API
+                // ВАЖНО: Для HOLD рекомендаций особенно важно получить цену, так как она может отсутствовать в кеше
+                if (!currentPrice || currentPrice === 0 || isNaN(currentPrice)) {
+                    try {
+                        const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
+                        const lastPrices = await TinkoffApiService.getLastPrices([figi]);
+                        if (lastPrices && lastPrices[figi] && typeof lastPrices[figi] === 'number' && !isNaN(lastPrices[figi]) && lastPrices[figi] > 0) {
+                            currentPrice = lastPrices[figi];
+                            // Обновляем кеш инструмента
+                            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+                            await CachedInstrument.update(
+                                { lastPrice: currentPrice, lastPriceTime: new Date() },
+                                { where: { figi } }
+                            );
+                        } else if (recommendation === 'HOLD') {
+                            console.warn(`⚠️ Cannot save HOLD recommendation without price for ${figi} (${instrumentData.ticker || 'UNKNOWN'})`);
+                        }
+                    } catch (priceError) {
+                        if (recommendation === 'HOLD') {
+                            console.warn(`⚠️ Price fetch failed for HOLD recommendation ${figi} (${instrumentData.ticker || 'UNKNOWN'}):`, priceError.message);
+                        }
+                    }
+                }
+                
+                // Для HOLD рекомендаций без цены - логируем предупреждение, но все равно сохраняем
+                // Пользователь должен видеть рекомендацию, даже если цена временно недоступна
+                if (recommendation === 'HOLD' && (!currentPrice || currentPrice === 0 || isNaN(currentPrice))) {
+                    console.warn(`⚠️ Saving HOLD recommendation for ${figi} (${instrumentData.ticker || 'UNKNOWN'}) WITHOUT price - price will be 0`);
+                    // Устанавливаем цену в 0, чтобы рекомендация была сохранена
+                    // На фронтенде кнопка "Купить" будет отключена для таких рекомендаций
+                    currentPrice = 0;
+                }
+                
                 // Рассчитываем targetPrice, stopLoss и takeProfit
                 // Используем динамический стоп-лосс на основе ATR, если доступен
                 let targetPrice, stopLoss, takeProfit;
                 
-                if (rec.currentPrice) {
+                if (currentPrice && currentPrice > 0) {
                     // Пытаемся использовать динамический стоп-лосс на основе ATR
                     try {
                         const RiskManagementService = (await import('./RiskManagementService.js')).default;
                         if (RiskManagementService && RiskManagementService.isInitialized && strategy) {
                             stopLoss = await RiskManagementService.calculateDynamicStopLoss(
-                                rec.instrument.figi,
-                                rec.currentPrice,
+                                figi,
+                                currentPrice,
                                 strategy,
                                 recommendation === 'SELL' ? 'SELL' : 'BUY'
                             );
                         } else {
                             // Fallback к фиксированным процентам
                             if (recommendation === 'BUY') {
-                                stopLoss = rec.currentPrice * (1 - (strategy?.stopLossPercent || 10) / 100);
+                                stopLoss = currentPrice * (1 - (strategy?.stopLossPercent || 10) / 100);
                             } else if (recommendation === 'SELL') {
-                                stopLoss = rec.currentPrice * (1 + (strategy?.stopLossPercent || 10) / 100);
+                                stopLoss = currentPrice * (1 + (strategy?.stopLossPercent || 10) / 100);
                             } else {
-                                stopLoss = rec.currentPrice * (1 - (strategy?.stopLossPercent || 5) / 100);
+                                stopLoss = currentPrice * (1 - (strategy?.stopLossPercent || 5) / 100);
                             }
                         }
                     } catch (error) {
                         // Fallback к фиксированным процентам при ошибке
                         if (recommendation === 'BUY') {
-                            stopLoss = rec.currentPrice * 0.9; // -10% как стоп-лосс
+                            stopLoss = currentPrice * 0.9; // -10% как стоп-лосс
                         } else if (recommendation === 'SELL') {
-                            stopLoss = rec.currentPrice * 1.1; // +10% как стоп-лосс
+                            stopLoss = currentPrice * 1.1; // +10% как стоп-лосс
                         } else {
-                            stopLoss = rec.currentPrice * 0.95; // -5% как стоп-лосс
+                            stopLoss = currentPrice * 0.95; // -5% как стоп-лосс
                         }
                     }
                     
                     // Рассчитываем targetPrice и takeProfit
                     if (recommendation === 'BUY') {
-                        targetPrice = rec.currentPrice * 1.1; // +10% как цель
-                        takeProfit = rec.currentPrice * 1.2; // +20% как тейк-профит
+                        targetPrice = currentPrice * 1.1; // +10% как цель
+                        takeProfit = currentPrice * 1.2; // +20% как тейк-профит
                     } else if (recommendation === 'SELL') {
-                        targetPrice = rec.currentPrice * 0.9; // -10% как цель
-                        takeProfit = rec.currentPrice * 0.8; // -20% как тейк-профит
+                        targetPrice = currentPrice * 0.9; // -10% как цель
+                        takeProfit = currentPrice * 0.8; // -20% как тейк-профит
                     } else {
                         // HOLD - нейтральные значения
-                        targetPrice = rec.currentPrice * 1.05; // +5% как цель
-                        takeProfit = rec.currentPrice * 1.1; // +10% как тейк-профит
+                        targetPrice = currentPrice * 1.05; // +5% как цель
+                        takeProfit = currentPrice * 1.1; // +10% как тейк-профит
                     }
                 } else {
                     targetPrice = null;
@@ -2928,9 +3085,9 @@ class NeuralNetworkService {
                 }
 
                 const recommendationData = {
-                    figi: rec.instrument.figi,
-                    ticker: rec.instrument.ticker || 'UNKNOWN',
-                    name: rec.instrument.name || 'Unknown',
+                    figi: figi,
+                    ticker: instrumentData.ticker || 'UNKNOWN',
+                    name: instrumentData.name || 'Unknown',
                     recommendation: recommendation,
                     confidence: confidence,
                     score: score,
@@ -2938,103 +3095,123 @@ class NeuralNetworkService {
                     analysis: analysis, // Сохраняем структурированные данные о горизонтах
                     analysisDate: new Date(), // Обновляем дату анализа
                     modelVersion: '1.0',
-                    priceAtAnalysis: rec.currentPrice,
+                    priceAtAnalysis: currentPrice || 0,
                     targetPrice: targetPrice,
                     stopLoss: stopLoss,
                     takeProfit: takeProfit,
-                    sector: rec.instrument.sector || 'Unknown',
-                    marketCap: rec.instrument.marketCap || 'Unknown',
+                    sector: instrumentData.sector || 'Unknown',
+                    marketCap: instrumentData.marketCap || 'Unknown',
                     isActive: true,
                     strategyId: strategyId // Добавляем ID стратегии
                 };
 
-                // Ищем существующую рекомендацию
-                const existing = await Recommendation.findOne({
-                    where: {
-                        figi: rec.instrument.figi,
-                        isActive: true
-                    }
+                // Используем upsert для обновления существующей записи или создания новой
+                const [savedRecommendation, created] = await Recommendation.upsert(recommendationData, {
+                    returning: true
                 });
-
-                if (existing) {
-                    // Обновляем существующую
-                    await existing.update(recommendationData);
-                    console.log(`🔄 Updated ${recommendation} recommendation for ${rec.instrument.ticker}`);
+                
+                if (created) {
+                    console.log(`✅ Created ${recommendation} recommendation for ${instrumentData.ticker || figi}`);
                 } else {
-                    // Создаем новую
-                    const createdRecommendation = await Recommendation.create(recommendationData);
-                    
-                    // Отправляем торговый сигнал через WebSocket для BUY/SELL рекомендаций
-                    if (createdRecommendation && (createdRecommendation.recommendation === 'BUY' || createdRecommendation.recommendation === 'SELL')) {
-                        try {
-                            const WebSocketService = getService('WebSocketService');
-                            if (WebSocketService && typeof WebSocketService.broadcastTradingSignal === 'function') {
-                                WebSocketService.broadcastTradingSignal({
-                                    figi: createdRecommendation.figi,
-                                    ticker: createdRecommendation.ticker,
-                                    name: createdRecommendation.name,
-                                    signalType: createdRecommendation.recommendation,
-                                    confidence: createdRecommendation.confidence,
-                                    entryPrice: createdRecommendation.priceAtAnalysis || currentPrice,
-                                    stopLoss: createdRecommendation.stopLoss,
-                                    takeProfit: createdRecommendation.takeProfit || createdRecommendation.targetPrice
+                    console.log(`🔄 Updated ${recommendation} recommendation for ${instrumentData.ticker || figi}`);
+                }
+                
+                // Отправляем торговый сигнал через WebSocket для BUY/SELL рекомендаций (только для новых)
+                if (created && savedRecommendation && (savedRecommendation.recommendation === 'BUY' || savedRecommendation.recommendation === 'SELL')) {
+                    try {
+                        const WebSocketService = getService('WebSocketService');
+                        if (WebSocketService && typeof WebSocketService.broadcastTradingSignal === 'function') {
+                            WebSocketService.broadcastTradingSignal({
+                                figi: savedRecommendation.figi,
+                                ticker: savedRecommendation.ticker,
+                                name: savedRecommendation.name,
+                                signalType: savedRecommendation.recommendation,
+                                confidence: savedRecommendation.confidence,
+                                entryPrice: savedRecommendation.priceAtAnalysis || currentPrice || 0,
+                                stopLoss: savedRecommendation.stopLoss,
+                                takeProfit: savedRecommendation.takeProfit || savedRecommendation.targetPrice
+                            });
+                        }
+                    } catch (wsError) {
+                        console.warn('⚠️ Could not broadcast trading signal:', wsError.message);
+                    }
+
+                    // Автоматическое создание заявки для высокоуверенных сигналов (только для новых)
+                    try {
+                        const SettingsService = (await import('./SettingsService.js')).default;
+                        const TradingRequestService = (await import('./TradingRequestService.js')).default;
+                        const settings = await SettingsService.getSettings();
+                        const autoTradeEnabled = settings.auto_trade_enabled !== false; // По умолчанию включено
+                        const minConfidence = settings.auto_trade_min_confidence || 0.85;
+                        const minScore = settings.auto_trade_min_score || 0.8;
+                        const minAgreement = settings.auto_trade_min_agreement || 0.9;
+
+                        if (autoTradeEnabled && 
+                            savedRecommendation.confidence >= minConfidence && 
+                            savedRecommendation.score >= minScore) {
+                            
+                            // Получаем agreement из IntegratedAIService
+                            let agreement = null;
+                            try {
+                                const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+                                if (IntegratedAIService.isInitialized) {
+                                    const integratedRec = await IntegratedAIService.getIntegratedRecommendation(savedRecommendation.figi);
+                                    agreement = integratedRec.agreement || null;
+                                }
+                            } catch (error) {
+                                console.warn('⚠️ Could not get agreement for auto-trade:', error.message);
+                            }
+
+                            const meetsAgreement = agreement === null || agreement >= minAgreement;
+
+                            if (meetsAgreement) {
+                                // Автоматически создаем заявку
+                                console.log(`🤖 Auto-creating trading request for ${savedRecommendation.ticker} (confidence=${savedRecommendation.confidence.toFixed(2)}, score=${savedRecommendation.score.toFixed(2)})`);
+                                await TradingRequestService.createTradingRequest(savedRecommendation.figi, {
+                                    strategyId: strategyId || undefined
                                 });
                             }
-                        } catch (wsError) {
-                            console.warn('⚠️ Could not broadcast trading signal:', wsError.message);
                         }
-
-                        // Автоматическое создание заявки для высокоуверенных сигналов
-                        try {
-                            const SettingsService = (await import('./SettingsService.js')).default;
-                            const TradingRequestService = (await import('./TradingRequestService.js')).default;
-                            const settings = await SettingsService.getSettings();
-                            const autoTradeEnabled = settings.auto_trade_enabled !== false; // По умолчанию включено
-                            const minConfidence = settings.auto_trade_min_confidence || 0.85;
-                            const minScore = settings.auto_trade_min_score || 0.8;
-                            const minAgreement = settings.auto_trade_min_agreement || 0.9;
-
-                            if (autoTradeEnabled && 
-                                createdRecommendation.confidence >= minConfidence && 
-                                createdRecommendation.score >= minScore) {
-                                
-                                // Получаем agreement из IntegratedAIService
-                                let agreement = null;
-                                try {
-                                    const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
-                                    if (IntegratedAIService.isInitialized) {
-                                        const integratedRec = await IntegratedAIService.getIntegratedRecommendation(createdRecommendation.figi);
-                                        agreement = integratedRec.agreement || null;
-                                    }
-                                } catch (error) {
-                                    console.warn('⚠️ Could not get agreement for auto-trade:', error.message);
-                                }
-
-                                const meetsAgreement = agreement === null || agreement >= minAgreement;
-
-                                if (meetsAgreement) {
-                                    // Автоматически создаем заявку
-                                    console.log(`🤖 Auto-creating trading request for ${createdRecommendation.ticker} (confidence=${createdRecommendation.confidence.toFixed(2)}, score=${createdRecommendation.score.toFixed(2)})`);
-                                    await TradingRequestService.createTradingRequest(createdRecommendation.figi, {
-                                        strategyId: strategyId || undefined
-                                    });
-                                }
-                            }
-                        } catch (autoTradeError) {
-                            console.warn('⚠️ Could not auto-create trading request:', autoTradeError.message);
-                            // Не прерываем выполнение, если не удалось создать заявку
-                        }
+                    } catch (autoTradeError) {
+                        console.warn('⚠️ Could not auto-create trading request:', autoTradeError.message);
+                        // Не прерываем выполнение, если не удалось создать заявку
                     }
-                    console.log(`✅ Created ${recommendation} recommendation for ${rec.instrument.ticker}`);
                 }
             }
 
             // Сохраняем SELL рекомендации (в том числе HOLD для позиций)
             for (const rec of sellRecommendations) {
-                const instrument = rec.instrument || rec.item;
-                if (!instrument || !instrument.figi) {
-                    console.warn('⚠️ Skipping SELL recommendation: missing instrument/item or figi', rec);
+                let instrument = rec.instrument || rec.item;
+                if (!instrument) {
+                    console.warn('⚠️ Skipping SELL recommendation: missing instrument/item');
                     continue;
+                }
+                
+                // Получаем данные инструмента из Sequelize модели или обычного объекта
+                let instrumentData = this.getInstrumentData(instrument);
+                if (!instrumentData || !instrumentData.figi) {
+                    console.warn('⚠️ Skipping SELL recommendation: missing figi', {
+                        instrument: instrument,
+                        instrumentData: instrumentData
+                    });
+                    continue;
+                }
+                
+                const figi = instrumentData.figi;
+                
+                // ВАЖНО: Для SELL рекомендаций из портфеля instrument может быть обычным объектом (item)
+                // Нужно загрузить инструмент из кеша, чтобы получить доступ к lastPrice
+                if (!instrument.toJSON || !instrument.dataValues) {
+                    try {
+                        const CacheService = ServiceManager.getService('CacheService');
+                        const cachedInstrument = await CacheService.getInstrument(figi);
+                        if (cachedInstrument) {
+                            instrument = cachedInstrument; // Используем Sequelize модель из кеша
+                            instrumentData = this.getInstrumentData(instrument); // Обновляем instrumentData
+                        }
+                    } catch (cacheError) {
+                        // Игнорируем ошибки загрузки из кеша
+                    }
                 }
 
                 // Правильно извлекаем score и confidence из prediction
@@ -3053,7 +3230,50 @@ class NeuralNetworkService {
                     // Если confidence отсутствует, используем score с небольшим коэффициентом
                     confidence = Math.max(0, Math.min(1, score * 0.9)); // 90% от score
                 }
-                const currentPrice = rec.currentPrice ?? instrument.lastPrice ?? instrument.averagePrice ?? 0;
+                // Получаем текущую цену с fallback на instrumentData.lastPrice
+                // Используем утилиту для надежного извлечения из Sequelize модели
+                const { getField: getFieldSell } = await import('../utils/sequelizeUtils.js');
+                let currentPrice = rec.currentPrice;
+                
+                // Проверяем и нормализуем цену из rec.currentPrice
+                if (!currentPrice || typeof currentPrice !== 'number' || isNaN(currentPrice) || currentPrice <= 0) {
+                    // Пытаемся получить из instrument используя утилиту (надежнее чем instrumentData)
+                    const lastPrice = getFieldSell(instrument, 'lastPrice');
+                    const averagePrice = getFieldSell(instrument, 'averagePrice');
+                    
+                    if (lastPrice && typeof lastPrice === 'number' && !isNaN(lastPrice) && lastPrice > 0) {
+                        currentPrice = lastPrice;
+                    } else if (averagePrice && typeof averagePrice === 'number' && !isNaN(averagePrice) && averagePrice > 0) {
+                        currentPrice = averagePrice;
+                    } else {
+                        // Fallback на instrumentData (может быть уже преобразованным объектом)
+                        currentPrice = instrumentData.lastPrice || instrumentData.averagePrice || null;
+                    }
+                }
+                
+                // Если цена все еще отсутствует, пытаемся получить через API
+                if (!currentPrice || currentPrice === 0 || isNaN(currentPrice)) {
+                    try {
+                        const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
+                        const lastPrices = await TinkoffApiService.getLastPrices([figi]);
+                        if (lastPrices && lastPrices[figi] && typeof lastPrices[figi] === 'number' && !isNaN(lastPrices[figi]) && lastPrices[figi] > 0) {
+                            currentPrice = lastPrices[figi];
+                            // Обновляем кеш инструмента
+                            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+                            await CachedInstrument.update(
+                                { lastPrice: currentPrice, lastPriceTime: new Date() },
+                                { where: { figi } }
+                            );
+                        }
+                    } catch (priceError) {
+                        // Игнорируем ошибки получения цены через API
+                    }
+                }
+                
+                // Если цена все еще отсутствует, используем 0 (но это нежелательно)
+                if (!currentPrice || currentPrice === 0 || isNaN(currentPrice)) {
+                    currentPrice = 0;
+                }
                 
                 // Определяем recommendation на основе score, если не указан явно
                 let recommendation = rec.prediction?.recommendation;
@@ -3103,6 +3323,7 @@ class NeuralNetworkService {
                 let analysis = {};
                 if (rec.prediction?.horizons) {
                     // Сохраняем структурированные данные о горизонтах в analysis
+                    // Включаем рекомендации по стратегиям, если они есть
                     analysis = {
                         horizons: {
                             shortTerm: {
@@ -3113,7 +3334,9 @@ class NeuralNetworkService {
                                 confidence: rec.prediction.horizons.shortTerm?.confidence || 0,
                                 recommendation: rec.prediction.horizons.shortTerm?.recommendation || 'HOLD',
                                 weight: rec.prediction.horizons.shortTerm?.weight || 0,
-                                horizonDays: rec.prediction.horizons.shortTerm?.horizonDays || 1
+                                horizonDays: rec.prediction.horizons.shortTerm?.horizonDays || 1,
+                                // Добавляем рекомендации по стратегиям, если они есть
+                                strategies: rec.prediction.horizons.shortTerm?.strategies || null
                             },
                             mediumTerm: {
                                 name: rec.prediction.horizons.mediumTerm?.name || 'Среднесрочный прогноз',
@@ -3123,7 +3346,9 @@ class NeuralNetworkService {
                                 confidence: rec.prediction.horizons.mediumTerm?.confidence || 0,
                                 recommendation: rec.prediction.horizons.mediumTerm?.recommendation || 'HOLD',
                                 weight: rec.prediction.horizons.mediumTerm?.weight || 0,
-                                horizonDays: rec.prediction.horizons.mediumTerm?.horizonDays || 21
+                                horizonDays: rec.prediction.horizons.mediumTerm?.horizonDays || 21,
+                                // Добавляем рекомендации по стратегиям, если они есть
+                                strategies: rec.prediction.horizons.mediumTerm?.strategies || null
                             },
                             longTerm: {
                                 name: rec.prediction.horizons.longTerm?.name || 'Долгосрочный прогноз',
@@ -3133,7 +3358,9 @@ class NeuralNetworkService {
                                 confidence: rec.prediction.horizons.longTerm?.confidence || 0,
                                 recommendation: rec.prediction.horizons.longTerm?.recommendation || 'HOLD',
                                 weight: rec.prediction.horizons.longTerm?.weight || 0,
-                                horizonDays: rec.prediction.horizons.longTerm?.horizonDays || 84
+                                horizonDays: rec.prediction.horizons.longTerm?.horizonDays || 84,
+                                // Добавляем рекомендации по стратегиям, если они есть
+                                strategies: rec.prediction.horizons.longTerm?.strategies || null
                             }
                         },
                         agreement: rec.prediction.agreement || null
@@ -3162,13 +3389,13 @@ class NeuralNetworkService {
 
                 // Рассчитываем стоп-лосс: используем динамический ATR-based стоп-лосс, если доступен
                 let stopLoss = null;
-                if (currentPrice) {
+                if (currentPrice && currentPrice > 0) {
                     try {
                         const RiskManagementService = (await import('./RiskManagementService.js')).default;
                         if (RiskManagementService && RiskManagementService.isInitialized && strategy) {
                             // Используем динамический стоп-лосс на основе ATR
                             stopLoss = await RiskManagementService.calculateDynamicStopLoss(
-                                instrument.figi,
+                                figi,
                                 currentPrice,
                                 strategy,
                                 'SELL'
@@ -3184,9 +3411,9 @@ class NeuralNetworkService {
                 }
 
                 const recommendationData = {
-                    figi: instrument.figi,
-                    ticker: instrument.ticker || 'UNKNOWN',
-                    name: instrument.name || 'Unknown',
+                    figi: figi,
+                    ticker: instrumentData.ticker || 'UNKNOWN',
+                    name: instrumentData.name || 'Unknown',
                     recommendation: recommendation,
                     confidence: confidence,
                     score: score,
@@ -3194,53 +3421,46 @@ class NeuralNetworkService {
                     analysis: analysis, // Сохраняем структурированные данные о горизонтах
                     analysisDate: new Date(), // Обновляем дату анализа
                     modelVersion: '1.0',
-                    priceAtAnalysis: currentPrice,
-                    targetPrice: currentPrice ? currentPrice * 0.9 : null, // -10% как цель
+                    priceAtAnalysis: currentPrice || 0,
+                    targetPrice: currentPrice && currentPrice > 0 ? currentPrice * 0.9 : null, // -10% как цель
                     stopLoss: stopLoss,
-                    takeProfit: currentPrice ? currentPrice * 0.8 : null, // -20% как тейк-профит
-                    sector: instrument.sector || 'Unknown',
-                    marketCap: instrument.marketCap || 'Unknown',
+                    takeProfit: currentPrice && currentPrice > 0 ? currentPrice * 0.8 : null, // -20% как тейк-профит
+                    sector: instrumentData.sector || 'Unknown',
+                    marketCap: instrumentData.marketCap || 'Unknown',
                     isActive: true,
                     strategyId: strategyId // Добавляем ID стратегии для позиций портфеля
                 };
 
-                // Ищем существующую рекомендацию
-                const existing = await Recommendation.findOne({
-                    where: {
-                        figi: instrument.figi,
-                        isActive: true
-                    }
+                // Используем upsert для обновления существующей записи или создания новой
+                const [savedRecommendation, created] = await Recommendation.upsert(recommendationData, {
+                    returning: true
                 });
-
-                if (existing) {
-                    // Обновляем существующую
-                    await existing.update(recommendationData);
-                    console.log(`🔄 Updated ${recommendation} recommendation for ${instrument.ticker}`);
+                
+                if (created) {
+                    console.log(`✅ Created ${recommendation} recommendation for ${instrumentData.ticker || figi}`);
                 } else {
-                    // Создаем новую
-                    const createdRecommendation = await Recommendation.create(recommendationData);
-                    
-                    // Отправляем торговый сигнал через WebSocket для BUY/SELL рекомендаций
-                    if (createdRecommendation && (createdRecommendation.recommendation === 'BUY' || createdRecommendation.recommendation === 'SELL')) {
-                        try {
-                            const WebSocketService = getService('WebSocketService');
-                            if (WebSocketService && typeof WebSocketService.broadcastTradingSignal === 'function') {
-                                WebSocketService.broadcastTradingSignal({
-                                    figi: createdRecommendation.figi,
-                                    ticker: createdRecommendation.ticker,
-                                    name: createdRecommendation.name,
-                                    signalType: createdRecommendation.recommendation,
-                                    confidence: createdRecommendation.confidence,
-                                    entryPrice: createdRecommendation.priceAtAnalysis || currentPrice,
-                                    stopLoss: createdRecommendation.stopLoss,
-                                    takeProfit: createdRecommendation.takeProfit || createdRecommendation.targetPrice
-                                });
-                            }
-                        } catch (wsError) {
-                            console.warn('⚠️ Could not broadcast trading signal:', wsError.message);
+                    console.log(`🔄 Updated ${recommendation} recommendation for ${instrumentData.ticker || figi}`);
+                }
+                
+                // Отправляем торговый сигнал через WebSocket для BUY/SELL рекомендаций (только для новых)
+                if (created && savedRecommendation && (savedRecommendation.recommendation === 'BUY' || savedRecommendation.recommendation === 'SELL')) {
+                    try {
+                        const WebSocketService = getService('WebSocketService');
+                        if (WebSocketService && typeof WebSocketService.broadcastTradingSignal === 'function') {
+                            WebSocketService.broadcastTradingSignal({
+                                figi: savedRecommendation.figi,
+                                ticker: savedRecommendation.ticker,
+                                name: savedRecommendation.name,
+                                signalType: savedRecommendation.recommendation,
+                                confidence: savedRecommendation.confidence,
+                                entryPrice: savedRecommendation.priceAtAnalysis || currentPrice || 0,
+                                stopLoss: savedRecommendation.stopLoss,
+                                takeProfit: savedRecommendation.takeProfit || savedRecommendation.targetPrice
+                            });
                         }
+                    } catch (wsError) {
+                        console.warn('⚠️ Could not broadcast trading signal:', wsError.message);
                     }
-                    console.log(`✅ Created ${recommendation} recommendation for ${instrument.ticker}`);
                 }
             }
 

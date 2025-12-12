@@ -113,6 +113,16 @@ const TrainingDebug: React.FC = () => {
   // Виды обучения
   const trainingTypes = [
     {
+      key: 'analyze-single',
+      label: 'Анализ и сохранение рекомендации',
+      icon: 'pi pi-chart-line',
+      description: 'Анализ одного инструмента с сохранением результата в рекомендации (для отладки)',
+      handler: () => handleTraining('analyze-single', () => 
+        apiService.analyzeSingleInstrument(selectedInstrument!.figi)
+      ),
+      severity: 'info' as const
+    },
+    {
       key: 'neural',
       label: 'Основная нейросеть',
       icon: 'pi pi-brain',

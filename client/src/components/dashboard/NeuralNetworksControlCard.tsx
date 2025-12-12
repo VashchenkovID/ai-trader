@@ -16,7 +16,7 @@ interface NeuralNetworksControlCardProps {
     reinforcementLearning: 'pending' | 'in_progress' | 'completed' | 'failed';
   };
   trainingStage: string | null;
-  trainingProgress: string | null;
+  trainingProgress: string | any | null;
   onTrainAllNetworks: () => void;
 }
 
@@ -65,7 +65,13 @@ export const NeuralNetworksControlCard: React.FC<NeuralNetworksControlCardProps>
 
         {trainingProgress && (
           <div className="text-center">
-            <small className="text-600">{trainingProgress}</small>
+            <small className="text-600">
+              {typeof trainingProgress === 'string' 
+                ? trainingProgress 
+                : typeof trainingProgress === 'object' && trainingProgress !== null
+                ? `${trainingProgress.currentEpoch || 0}/${trainingProgress.totalEpochs || 0} эпох`
+                : String(trainingProgress)}
+            </small>
           </div>
         )}
 

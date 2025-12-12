@@ -394,7 +394,15 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
             trainLoading={trainLoading}
             trainingStages={trainingStages}
             trainingStage={trainingStage || null}
-            trainingProgress={trainingProgress || null}
+            trainingProgress={
+              trainingProgress 
+                ? (typeof trainingProgress === 'string' 
+                    ? trainingProgress 
+                    : typeof trainingProgress === 'object' && trainingProgress !== null
+                    ? `${trainingProgress.currentEpoch || 0}/${trainingProgress.totalEpochs || 0} эпох`
+                    : String(trainingProgress))
+                : trainingProgressText || null
+            }
             onTrainAllNetworks={handleTrainAllNetworks}
           />
         </div>

@@ -13,6 +13,9 @@ class SchedulerService {
     constructor() {
         this.cacheTask = null;
         this.priceUpdateTask = null; // Задача обновления цен
+        this.portfolioPricesUpdateTask = null; // Задача обновления цен портфеля
+        this.activeSignalsPricesUpdateTask = null; // Задача обновления цен активных сигналов
+        this.tradingRequestsPricesUpdateTask = null; // Задача обновления цен активных заявок
         this.cleanupTask = null;
         this.newsCleanupTask = null;
         this.newsDailyUpdateTask = null;
@@ -41,6 +44,8 @@ class SchedulerService {
         this.webSocketService = null; // Кэшируем WebSocketService
         this.startTime = Date.now(); // Время старта сервиса для отслеживания первого запуска
         this.skipFirstRun = new Set(); // Задачи, которые должны пропустить первый запуск
+        this.isFullCacheUpdateRunning = false; // Флаг выполнения полного обновления кеша
+        this.currentFullCacheUpdateWorker = null; // Текущий worker полного обновления кеша
     }
 
     /**
@@ -56,14 +61,15 @@ class SchedulerService {
      */
     getWebSocketService() {
         if (!this.webSocketService) {
-            console.warn('⚠️ WebSocketService not set, getting from global ServiceManager');
-            // Получаем уже инициализированный экземпляр из глобального ServiceManager
-            this.webSocketService = getService('WebSocketService');
-            if (!this.webSocketService) {
-                console.warn('⚠️ WebSocketService not available, skipping broadcast');
+            try {
+                // Получаем уже инициализированный экземпляр из глобального ServiceManager
+                // Используем тот же подход, что и для других сервисов
+                this.webSocketService = getService('WebSocketService');
+            } catch (error) {
+                // Сервис не найден - это нормально, если он еще не инициализирован
+                // Не устанавливаем в кеш, чтобы попробовать снова при следующем вызове
                 return null;
             }
-            console.log('🔌 WebSocketService retrieved from global ServiceManager');
         }
         return this.webSocketService;
     }
@@ -95,9 +101,10 @@ class SchedulerService {
         const schedulerSettings = await SettingsService.getSchedulerSettings();
         const nnSettings = await SettingsService.getNeuralNetworkSettings();
         const notificationSettings = await SettingsService.getNotificationSettings();
-        const cacheSchedule = schedulerSettings.cache_update_interval || '0 */4 * * *';
-        // Полное обучение ночью в 02:00 (последовательно: Базовая → Ансамбль → Мета-обучение → RL)
-        const trainingSchedule = schedulerSettings.nn_training_schedule || '0 2 * * *';
+        // Инкрементальное обновление кеша раз в сутки (в 2:00)
+        const cacheSchedule = schedulerSettings.cache_update_interval || '0 2 * * *';
+        // Полное обучение ночью в 03:00 (после обновления кеша в 02:00, последовательно: Базовая → Ансамбль → Мета-обучение → RL)
+        const trainingSchedule = schedulerSettings.nn_training_schedule || '0 3 * * *';
         // Быстрое обучение каждые 2 часа: 08:00, 10:00, 12:00, 14:00, 16:00, 18:00
         const quickTrainingSchedule = schedulerSettings.nn_training_interval || '0 8,10,12,14,16,18 * * *';
         const newsCacheSchedule = notificationSettings.news_cache_update_interval || '0 */6 * * *';
@@ -160,6 +167,73 @@ class SchedulerService {
             timezone: "Europe/Moscow"
         });
 
+        // Задача 1.6: Обновление цен активных позиций в портфеле (каждые 2 минуты в торговые часы)
+        const portfolioPricesUpdateIntervalMinutes = schedulerSettings.portfolio_prices_update_interval_minutes || 2;
+        const portfolioPricesUpdateSchedule = `*/${portfolioPricesUpdateIntervalMinutes} * * * *`; // Каждые N минут
+        this.portfolioPricesUpdateTask = cron.schedule(portfolioPricesUpdateSchedule, async () => {
+            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 60 * 1000) {
+                console.log('⏭️ Skipping first portfolio prices update run (too soon after startup)');
+                return;
+            }
+            
+            try {
+                console.log('💰 Scheduled portfolio prices update started...');
+                await this.performPortfolioPricesUpdate();
+            } catch (error) {
+                console.error('Error in scheduled portfolio prices update:', error);
+                // Не отправляем критическое уведомление для обновления цен портфеля
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
+        // Задача 1.7: Обновление цен активных сигналов (каждые 5 минут в торговые часы)
+        const activeSignalsPricesUpdateIntervalMinutes = schedulerSettings.active_signals_prices_update_interval_minutes || 5;
+        const activeSignalsPricesUpdateSchedule = `*/${activeSignalsPricesUpdateIntervalMinutes} * * * *`; // Каждые N минут
+        this.activeSignalsPricesUpdateTask = cron.schedule(activeSignalsPricesUpdateSchedule, async () => {
+            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 60 * 1000) {
+                console.log('⏭️ Skipping first active signals prices update run (too soon after startup)');
+                return;
+            }
+            
+            try {
+                console.log('📊 Scheduled active signals prices update started...');
+                await this.performActiveSignalsPricesUpdate();
+            } catch (error) {
+                console.error('Error in scheduled active signals prices update:', error);
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
+        // Задача 1.8: Обновление цен активных торговых заявок (каждую минуту в торговые часы)
+        const tradingRequestsPricesUpdateIntervalSeconds = schedulerSettings.trading_requests_prices_update_interval_seconds || 60;
+        const tradingRequestsPricesUpdateSchedule = `*/${Math.floor(tradingRequestsPricesUpdateIntervalSeconds / 60)} * * * *`; // Каждые N минут (округляем до минут)
+        this.tradingRequestsPricesUpdateTask = cron.schedule(tradingRequestsPricesUpdateSchedule, async () => {
+            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 60 * 1000) {
+                console.log('⏭️ Skipping first trading requests prices update run (too soon after startup)');
+                return;
+            }
+            
+            try {
+                console.log('📋 Scheduled trading requests prices update started...');
+                await this.performTradingRequestsPricesUpdate();
+            } catch (error) {
+                console.error('Error in scheduled trading requests prices update:', error);
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
         // Задача 2: Очистка старых свечей каждые 24 часа
         this.cleanupTask = cron.schedule('0 2 * * *', async () => {
             try {
@@ -176,6 +250,22 @@ class SchedulerService {
         // Задача 3: Периодическое обучение нейросети
         this.trainingTask = cron.schedule(trainingSchedule, async () => {
             try {
+                // Проверяем свежесть данных перед обучением
+                const isStale = await this.isCacheStale();
+                if (isStale) {
+                    console.log('⚠️ Cache is stale, waiting for cache update before training...');
+                    // Ждем обновления кеша (максимум 10 минут)
+                    let waitTime = 0;
+                    const maxWait = 10 * 60 * 1000; // 10 минут
+                    while (await this.isCacheStale() && waitTime < maxWait) {
+                        await new Promise(resolve => setTimeout(resolve, 60000)); // Ждем 1 минуту
+                        waitTime += 60000;
+                    }
+                    if (await this.isCacheStale()) {
+                        console.log('⚠️ Cache update timeout, proceeding with training anyway...');
+                    }
+                }
+                
                 console.log('🧠 Scheduled neural network training started...');
                 await this.performScheduledTraining();
             } catch (error) {
@@ -192,6 +282,13 @@ class SchedulerService {
         if (quickTrainingEnabled) {
             this.quickTrainingTask = cron.schedule(quickTrainingSchedule, async () => {
                 try {
+                    // Проверяем свежесть данных перед быстрым обучением
+                    const isStale = await this.isCacheStale();
+                    if (isStale) {
+                        console.log('⚠️ Cache is stale, skipping quick training (will run after cache update)...');
+                        return;
+                    }
+                    
                     console.log('⚡ Scheduled quick neural network training started...');
                     const QuickTrainingService = (await import('./QuickTrainingService.js')).default;
                     await QuickTrainingService.performQuickTraining();
@@ -329,6 +426,13 @@ class SchedulerService {
             }
             
             try {
+                // Проверяем свежесть данных перед анализом портфеля
+                const isStale = await this.isCacheStale();
+                if (isStale) {
+                    console.log('⚠️ Cache is stale, skipping portfolio analysis (will run after cache update)...');
+                    return;
+                }
+                
                 console.log('📊 Scheduled portfolio analysis started...');
                 await this.performPortfolioAnalysis();
             } catch (error) {
@@ -349,7 +453,20 @@ class SchedulerService {
                 return;
             }
             
+            // Проверяем, не идет ли полное обновление кеша
+            if (this.isFullCacheUpdateRunning) {
+                console.log('⏭️ Skipping predictions update - full cache update is running');
+                return;
+            }
+            
             try {
+                // Проверяем свежесть данных перед обновлением предсказаний
+                const isStale = await this.isCacheStale();
+                if (isStale) {
+                    console.log('⚠️ Cache is stale, skipping predictions update (will run after cache update)...');
+                    return;
+                }
+                
                 console.log('🔄 Scheduled predictions update started...');
                 await this.updateRecommendationsPredictions();
             } catch (error) {
@@ -363,6 +480,12 @@ class SchedulerService {
 
         // Задача 12: Обновление сигналов аналитиков раз в день (в 6:00)
         this.signalsUpdateTask = cron.schedule('0 6 * * *', async () => {
+            // Проверяем, не идет ли полное обновление кеша
+            if (this.isFullCacheUpdateRunning) {
+                console.log('⏭️ Skipping signals update - full cache update is running');
+                return;
+            }
+            
             try {
                 console.log('⚡ Scheduled signals update started...');
                 await this.performSignalsUpdate();
@@ -381,6 +504,12 @@ class SchedulerService {
             const timeSinceStart = Date.now() - this.startTime;
             if (timeSinceStart < 60 * 1000) {
                 console.log('⏭️ Skipping first trailing stops check run (too soon after startup)');
+                return;
+            }
+            
+            // Проверяем, не идет ли полное обновление кеша
+            if (this.isFullCacheUpdateRunning) {
+                console.log('⏭️ Skipping trailing stops check - full cache update is running');
                 return;
             }
             
@@ -413,9 +542,16 @@ class SchedulerService {
         // Запускаем периодическую отправку данных через WebSocket
         this.startWebSocketBroadcasts();
         
-        // Первый анализ портфеля через 30 минут после старта
+        // Первый анализ портфеля через 30 минут после старта (с проверкой свежести данных)
         setTimeout(async () => {
             try {
+                // Проверяем свежесть данных перед первым анализом
+                const isStale = await this.isCacheStale();
+                if (isStale) {
+                    console.log('⚠️ Cache is stale, skipping initial portfolio analysis (will run after cache update)...');
+                    return;
+                }
+                
                 console.log('📊 Starting initial portfolio analysis (30 minutes after startup)...');
                 await this.performPortfolioAnalysis();
             } catch (error) {
@@ -602,65 +738,96 @@ class SchedulerService {
         // Отправляем системный статус каждые 15 секунд (cron: каждые 15 секунд)
         const systemStatusTask = cron.schedule('*/15 * * * * *', async () => {
             try {
-                const WebSocketService = this.getWebSocketService();
-                if (WebSocketService) {
-                    // Получаем сервисы из глобального ServiceManager
-                    const NeuralNetworkService = getService('NeuralNetworkService');
-                    const TradingEngine = getService('TradingEngine');
-                    const EnsembleService = getService('EnsembleService');
-                    const WebSocketService = getService('WebSocketService');
-                    
-                    // Получаем реальный статус системы с полными данными
-                    let neuralNetworkStatus = {};
-                    if (NeuralNetworkService) {
-                        try {
-                            // Используем getModelStatus() для получения полных данных
-                            neuralNetworkStatus = NeuralNetworkService.getModelStatus();
-                        } catch (error) {
-                            console.warn('Error getting neural network status in scheduler:', error);
-                            // Fallback к базовому статусу
-                            neuralNetworkStatus = {
-                                status: NeuralNetworkService.isTraining ? 'training' : (NeuralNetworkService.isActive ? 'active' : 'off'),
-                                isTraining: NeuralNetworkService.isTraining || false,
-                                isActive: NeuralNetworkService.isActive || false,
-                                isLoaded: !!NeuralNetworkService.model
-                            };
-                        }
-                    }
-                    
-                    // Получаем статус ансамбля
-                    let ensembleStatus = {};
-                    if (EnsembleService) {
-                        try {
-                            ensembleStatus = EnsembleService.getEnsembleStats();
-                        } catch (error) {
-                            console.warn('Error getting ensemble status in scheduler:', error);
-                            ensembleStatus = {
-                                isInitialized: EnsembleService.isInitialized || false,
-                                isTraining: EnsembleService.isTraining || false
-                            };
-                        }
-                    }
-                    
-                    const systemStatus = {
-                        neuralNetwork: neuralNetworkStatus,
-                        websocket: WebSocketService ? WebSocketService.getStatus() : { isConnected: false, clientsCount: 0, isInitialized: false },
-                        database: { 
-                            status: 'connected', 
-                            lastQuery: new Date().toISOString() 
-                        },
-                        trading: { 
-                            status: TradingEngine?.isActive ? 'active' : 'inactive',
-                            mode: TradingEngine?.mode || 'paper',
-                            isActive: TradingEngine?.isActive || false
-                        },
-                        ensemble: ensembleStatus
-                    };
-                    
-                    WebSocketService.broadcastSystemStatus(systemStatus);
+                // Получаем сервисы так же, как в других местах
+                let WebSocketService = null;
+                let NeuralNetworkService = null;
+                let TradingEngine = null;
+                let EnsembleService = null;
+                
+                try {
+                    WebSocketService = this.getWebSocketService();
+                } catch (error) {
+                    // Сервис не найден - это нормально, если он еще не инициализирован
+                    return;
                 }
+                
+                if (!WebSocketService) {
+                    return;
+                }
+                
+                // Получаем сервисы из глобального ServiceManager
+                try {
+                    NeuralNetworkService = getService('NeuralNetworkService');
+                } catch (error) {
+                    // Сервис не найден - используем пустой объект
+                }
+                
+                try {
+                    TradingEngine = getService('TradingEngine');
+                } catch (error) {
+                    // Сервис не найден - используем пустой объект
+                }
+                
+                try {
+                    EnsembleService = getService('EnsembleService');
+                } catch (error) {
+                    // Сервис не найден - используем пустой объект
+                }
+                
+                // Получаем реальный статус системы с полными данными
+                let neuralNetworkStatus = {};
+                if (NeuralNetworkService) {
+                    try {
+                        // Используем getModelStatus() для получения полных данных
+                        neuralNetworkStatus = NeuralNetworkService.getModelStatus();
+                    } catch (error) {
+                        console.warn('Error getting neural network status in scheduler:', error);
+                        // Fallback к базовому статусу
+                        neuralNetworkStatus = {
+                            status: NeuralNetworkService.isTraining ? 'training' : (NeuralNetworkService.isActive ? 'active' : 'off'),
+                            isTraining: NeuralNetworkService.isTraining || false,
+                            isActive: NeuralNetworkService.isActive || false,
+                            isLoaded: !!NeuralNetworkService.model
+                        };
+                    }
+                }
+                
+                // Получаем статус ансамбля
+                let ensembleStatus = {};
+                if (EnsembleService) {
+                    try {
+                        ensembleStatus = EnsembleService.getEnsembleStats();
+                    } catch (error) {
+                        console.warn('Error getting ensemble status in scheduler:', error);
+                        ensembleStatus = {
+                            isInitialized: EnsembleService.isInitialized || false,
+                            isTraining: EnsembleService.isTraining || false
+                        };
+                    }
+                }
+                
+                const systemStatus = {
+                    neuralNetwork: neuralNetworkStatus,
+                    websocket: WebSocketService ? WebSocketService.getStatus() : { isConnected: false, clientsCount: 0, isInitialized: false },
+                    database: { 
+                        status: 'connected', 
+                        lastQuery: new Date().toISOString() 
+                    },
+                    trading: { 
+                        status: TradingEngine?.isActive ? 'active' : 'inactive',
+                        mode: TradingEngine?.mode || 'paper',
+                        isActive: TradingEngine?.isActive || false
+                    },
+                    ensemble: ensembleStatus
+                };
+                
+                WebSocketService.broadcastSystemStatus(systemStatus);
             } catch (error) {
-                console.error('❌ Error broadcasting system status:', error);
+                // Не логируем ошибки получения сервисов, чтобы не засорять консоль
+                // Только логируем критические ошибки
+                if (error.message && !error.message.includes('not found')) {
+                    console.error('❌ Error broadcasting system status:', error);
+                }
             }
         }, { scheduled: false });
         this.intervals.add(systemStatusTask);
@@ -668,65 +835,77 @@ class SchedulerService {
         // Отправляем торговую статистику каждые 20 секунд (cron: каждые 20 секунд)
         const tradingStatsTask = cron.schedule('*/20 * * * * *', async () => {
             try {
-                const WebSocketService = this.getWebSocketService();
-                if (WebSocketService) {
-                    const TradingEngine = getService('TradingEngine');
-                    
-                    // Проверяем, не закрыта ли база данных
-                    if (!this.isInitialized) {
-                        console.log('⏰ Skipping trading stats - service not initialized');
-                        return;
-                    }
-                    
-                    // Проверяем, не закрыта ли база данных
-                    try {
-                        const sequelize = (await import('../config/database.js')).default;
-                        if (!sequelize || !sequelize.authenticate) {
-                            console.log('⏰ Skipping trading stats - database not available');
-                            return;
-                        }
-                    } catch (error) {
-                        console.log('⏰ Skipping trading stats - database error:', error.message);
-                        return;
-                    }
-                    
-                    // Получаем реальную торговую статистику и состояние портфеля
-                    const portfolio = await TradingEngine.getVirtualPortfolioValue();
-                    const stats = await TradingEngine.calculateTradingStats();
-
-                    // Получаем топ-3 активные BUY-рекомендации
-                    const Recommendation = (await import('../models/Recommendation.js')).default;
-                    // Используем прямой запрос без include, чтобы избежать ошибок ассоциаций
-                    const topBuys = await Recommendation.findAll({
-                        where: {
-                            isActive: true,
-                            recommendation: 'BUY'
-                        },
-                        order: [['confidence', 'DESC'], ['score', 'DESC']],
-                        limit: 3
-                    });
-
-                    const tradingStats = {
-                        portfolioValue: portfolio?.totalValue || 0,
-                        cash: portfolio?.cash || 0,
-                        totalPnL: stats?.totalReturn || 0,
-                        winRate: (stats?.winRate || 0) * 100,
-                        totalTrades: stats?.totalTrades || 0,
-                        successfulTrades: Math.round((stats?.totalTrades || 0) * (stats?.winRate || 0)),
-                        recommendations: (topBuys || []).map(rec => ({
-                            figi: rec.figi || '',
-                            ticker: rec.ticker || '',
-                            name: rec.name || '',
-                            recommendation: rec.recommendation || 'HOLD',
-                            confidence: rec.confidence || 0,
-                            score: rec.score || 0
-                        }))
-                    };
-                    
-                    WebSocketService.broadcastTradingStats(tradingStats);
+                // Получаем сервисы так же, как в других местах
+                let WebSocketService = null;
+                let TradingEngine = null;
+                
+                try {
+                    WebSocketService = this.getWebSocketService();
+                } catch (error) {
+                    // Сервис не найден - это нормально, если он еще не инициализирован
+                    return;
                 }
+                
+                if (!WebSocketService) {
+                    return;
+                }
+                
+                try {
+                    TradingEngine = getService('TradingEngine');
+                } catch (error) {
+                    // Сервис не найден - пропускаем обновление статистики
+                    return;
+                }
+                
+                // Проверяем, не закрыта ли база данных
+                if (!this.isInitialized) {
+                    return;
+                }
+                
+                // Проверяем, не закрыта ли база данных
+                try {
+                    const sequelize = (await import('../config/database.js')).default;
+                    if (!sequelize || !sequelize.authenticate) {
+                        return;
+                    }
+                } catch (error) {
+                    return;
+                }
+                
+                // Получаем реальную торговую статистику и состояние портфеля
+                const portfolio = await TradingEngine.getVirtualPortfolioValue();
+                const stats = await TradingEngine.calculateTradingStats();
+
+                // Получаем топ-3 активные BUY-рекомендации - по одной для каждой стратегии
+                const Recommendation = (await import('../models/Recommendation.js')).default;
+                const topBuys = await Recommendation.getTopRecommendationsByStrategies();
+
+                const tradingStats = {
+                    portfolioValue: portfolio?.totalValue || 0,
+                    cash: portfolio?.cash || 0,
+                    totalPnL: stats?.totalReturn || 0,
+                    winRate: (stats?.winRate || 0) * 100,
+                    totalTrades: stats?.totalTrades || 0,
+                    successfulTrades: Math.round((stats?.totalTrades || 0) * (stats?.winRate || 0)),
+                    recommendations: (topBuys || []).map(rec => ({
+                        figi: rec.figi || '',
+                        ticker: rec.ticker || '',
+                        name: rec.name || '',
+                        recommendation: rec.recommendation || 'BUY',
+                        confidence: rec.strategyData?.strategyConfidence || rec.strategyData?.confidence || rec.confidence || 0,
+                        score: rec.strategyData?.score || rec.score || 0,
+                        strategyType: rec.strategyType || null,
+                        horizon: rec.horizon || null
+                    }))
+                };
+                
+                WebSocketService.broadcastTradingStats(tradingStats);
             } catch (error) {
-                console.error('❌ Error broadcasting trading stats:', error);
+                // Не логируем ошибки получения сервисов, чтобы не засорять консоль
+                // Только логируем критические ошибки
+                if (error.message && !error.message.includes('not found')) {
+                    console.error('❌ Error broadcasting trading stats:', error);
+                }
             }
         }, { scheduled: false });
         this.intervals.add(tradingStatsTask);
@@ -734,10 +913,24 @@ class SchedulerService {
         // Отправляем статус обучения каждые 5 секунд (cron: каждые 5 секунд)
         const trainingStatusTask = cron.schedule('*/5 * * * * *', async () => {
             try {
-                const WebSocketService = this.getWebSocketService();
+                // Получаем сервисы так же, как в других местах
+                let WebSocketService = null;
+                let TrainingStatusService = null;
+                
+                try {
+                    WebSocketService = getService('WebSocketService');
+                } catch (error) {
+                    // Сервис не найден - это нормально, если он еще не инициализирован
+                    return;
+                }
+                
+                try {
+                    TrainingStatusService = getService('TrainingStatusService');
+                } catch (error) {
+                    // Сервис не найден - используем дефолтный статус
+                }
+                
                 if (WebSocketService) {
-                    const TrainingStatusService = getService('TrainingStatusService');
-                    
                     const trainingStatus = TrainingStatusService?.getStatus() || {
                         neuralNetwork: { isTraining: false, stage: 'idle', progress: 0 },
                         ensemble: { isTraining: false, stage: 'idle', progress: 0 },
@@ -753,7 +946,11 @@ class SchedulerService {
                     });
                 }
             } catch (error) {
-                console.error('❌ Error broadcasting training status:', error);
+                // Не логируем ошибки получения сервисов, чтобы не засорять консоль
+                // Только логируем критические ошибки
+                if (error.message && !error.message.includes('not found')) {
+                    console.error('❌ Error broadcasting training status:', error);
+                }
             }
         }, { scheduled: false });
         this.intervals.add(trainingStatusTask);
@@ -1033,6 +1230,16 @@ class SchedulerService {
         const startTime = Date.now();
 
         try {
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверка на параллельное выполнение полного обновления
+            if (this.isFullCacheUpdateRunning) {
+                console.log('⏰ Skipping cache update - full cache update is running');
+                return {
+                    success: true,
+                    message: 'Cache update skipped - full cache update is running',
+                    skipped: true
+                };
+            }
+
             // Проверяем, нужно ли обновлять кеш
             if (!(await this.shouldUpdateCache())) {
                 console.log('⏰ Skipping cache update - too soon since last update');
@@ -1066,19 +1273,18 @@ class SchedulerService {
             const __dirname = dirname(__filename);
             const workerPath = join(__dirname, '../workers/cacheUpdateWorker.js');
             
-            // Получаем настройки для объёма кеширования
-            const nnSettings = await SettingsService.getNeuralNetworkSettings();
-            const cacheDays = nnSettings.cache_candles_days || 365; // Год данных по умолчанию
-            
+            // Для инкрементального обновления используем только новые данные за день
             const worker = new Worker(workerPath, {
                 workerData: {
-                    updateInstruments: true,
+                    updateInstruments: false, // Инструменты обновляем только при полном обновлении
                     updateCandles: true,
-                    updateSignals: true, // Включаем обновление сигналов
-                    instrumentsLimit: 100,
-                    candlesDays: cacheDays, // Увеличенный объём свечей
+                    updateSignals: true,
+                    instrumentsLimit: null,
+                    candlesDays: 1, // Только за день (инкрементальное обновление само определит период)
                     incrementalUpdate: true, // Используем инкрементальное обновление
-                    signalsLimit: 100 // Лимит инструментов для обновления сигналов
+                    signalsLimit: null,
+                    signalsFrom: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // Сигналы за последние 24 часа
+                    signalsTo: new Date().toISOString()
                 }
             });
             
@@ -1179,9 +1385,418 @@ class SchedulerService {
     }
 
     /**
+     * Полное обновление кеша (ТОЛЬКО РУЧНОЙ ЗАПУСК)
+     * 
+     * ВАЖНО: Это очень ресурсоемкая операция, которая:
+     * - Приостанавливает ВСЕ процессы системы (обучение, анализ, обновление цен и т.д.)
+     * - Может занять несколько часов в зависимости от количества инструментов
+     * - Создает большую нагрузку на БД (обрабатывает все инструменты за 1 год свечей)
+     * - Должна выполняться ТОЛЬКО вручную пользователем через API endpoint
+     * 
+     * НЕ ДОБАВЛЯТЬ автоматические вызовы этого метода!
+     * 
+     * Инструменты - обновление списка
+     * Свечи - за 1 год на каждый инструмент (365 дней)
+     * Сигналы - 1000 сигналов на каждый инструмент
+     * 
+     * @param {boolean} force - Принудительное обновление, игнорирует проверку shouldUpdateCache()
+     */
+    async performFullCacheUpdate(force = false) {
+        const startTime = Date.now();
+
+        try {
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ 1: Защита от параллельных запусков
+            if (this.isFullCacheUpdateRunning) {
+                const error = new Error('Full cache update is already running');
+                console.warn('⚠️', error.message);
+                throw error;
+            }
+
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ 3: Проверка необходимости обновления (если не принудительное)
+            if (!force) {
+                const shouldUpdate = await this.shouldUpdateCache();
+                if (!shouldUpdate) {
+                    const timeSinceUpdate = this.lastCacheUpdate 
+                        ? Math.round((Date.now() - this.lastCacheUpdate) / (60 * 1000))
+                        : 0;
+                    console.log(`⏰ Skipping full cache update - cache is fresh (updated ${timeSinceUpdate} minutes ago)`);
+                    return {
+                        success: true,
+                        skipped: true,
+                        message: `Cache is fresh (updated ${timeSinceUpdate} minutes ago)`,
+                        timestamp: new Date().toISOString()
+                    };
+                }
+            }
+
+            // Устанавливаем флаг выполнения
+            this.isFullCacheUpdateRunning = true;
+            this.currentFullCacheUpdateWorker = null;
+
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Приостанавливаем все процессы во время полного обновления
+            await this.pauseAllProcesses();
+
+            console.log('🔄 Starting FULL cache update in worker...');
+            
+            // Отправляем уведомление о начале обновления через WebSocket
+            const WebSocketService = await this.getWebSocketService();
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'cache_update_started',
+                    data: {
+                        message: 'Полное обновление кеша запущено',
+                        fullUpdate: true,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+            
+            // Создаем worker для полного обновления кеша
+            const { Worker } = await import('worker_threads');
+            const { fileURLToPath } = await import('url');
+            const { dirname, join } = await import('path');
+            
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = dirname(__filename);
+            const workerPath = join(__dirname, '../workers/cacheUpdateWorker.js');
+            
+            // Для полного обновления используем все данные
+            const worker = new Worker(workerPath, {
+                workerData: {
+                    updateInstruments: true, // Обновляем список инструментов
+                    updateCandles: true,
+                    updateSignals: true,
+                    instrumentsLimit: null, // Все инструменты
+                    candlesDays: 365, // 1 год свечей (изменено с 730 для снижения нагрузки на БД)
+                    incrementalUpdate: false, // Полное обновление
+                    signalsLimit: 1000, // Максимум 1000 сигналов на инструмент
+                    signalsFrom: null, // Все сигналы
+                    signalsTo: null
+                }
+            });
+            
+            // Сохраняем ссылку на worker для возможности отмены
+            this.currentFullCacheUpdateWorker = worker;
+            
+            // Добавляем worker в список для отслеживания
+            this.workers.add(worker);
+            
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ 2: Таймаут для worker (2 часа)
+            const TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 часа
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => {
+                    reject(new Error(`Full cache update timeout after ${TIMEOUT_MS / 1000 / 60} minutes`));
+                }, TIMEOUT_MS);
+            });
+
+            // Обрабатываем результат с таймаутом
+            const result = await Promise.race([
+                new Promise((resolve, reject) => {
+                    worker.on('message', (msg) => {
+                        if (msg.type === 'done') {
+                            resolve(msg.data);
+                        } else if (msg.type === 'error') {
+                            reject(new Error(msg.data.error));
+                        } else if (msg.type === 'progress') {
+                            // Отправляем прогресс через WebSocket
+                            if (WebSocketService) {
+                                WebSocketService.broadcast({
+                                    type: 'cache_update_progress',
+                                    data: {
+                                        ...msg.data,
+                                        fullUpdate: true
+                                    },
+                                    timestamp: new Date().toISOString()
+                                });
+                            }
+                        }
+                    });
+                    
+                    worker.on('error', reject);
+                    worker.on('exit', (code) => {
+                        if (code !== 0) {
+                            reject(new Error(`Worker stopped with exit code ${code}`));
+                        }
+                    });
+                }),
+                timeoutPromise
+            ]);
+            
+            // Удаляем worker из списка после завершения
+            this.workers.delete(worker);
+            worker.terminate();
+            this.currentFullCacheUpdateWorker = null;
+
+            const duration = Math.round((Date.now() - startTime) / 1000);
+            console.log(`✅ Full cache update completed in ${duration}s. ${result.message}`);
+
+            // Обновляем время последнего обновления кеша
+            this.lastCacheUpdate = Date.now();
+            console.log(`📅 Cache update timestamp updated: ${new Date(this.lastCacheUpdate).toISOString()}`);
+            
+            // Сохраняем время обновления в настройки
+            await this.saveLastCacheUpdateTime();
+
+            // Отправляем уведомление о завершении через WebSocket
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'cache_update_completed',
+                    data: {
+                        message: `Полное обновление кеша завершено за ${duration}с`,
+                        duration,
+                        totalUpdated: result.totalUpdated,
+                        totalCandlesCached: result.totalCandlesCached || 0,
+                        totalSignalsCached: result.totalSignalsCached || 0,
+                        fullUpdate: true,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+
+            // Отправляем уведомление в Telegram о завершении
+            await OptimizedTelegramService.sendAlert(
+                'Полное обновление Базы Данных',
+                `Полное обновление кеша завершено:\n• Время: ${duration}с\n• Обновлено: ${result.totalUpdated} элементов\n• Свечей: ${result.totalCandlesCached || 0}\n• Сигналов: ${result.totalSignalsCached || 0}\n• Статус: ✅ Готов к работе`,
+                'info'
+            );
+
+            return result;
+
+        } catch (error) {
+            console.error('❌ Full cache update failed:', error);
+            
+            // Обработка таймаута - завершаем worker
+            if (error.message && error.message.includes('timeout')) {
+                console.warn('⏰ Full cache update timeout, terminating worker...');
+                if (this.currentFullCacheUpdateWorker) {
+                    try {
+                        this.currentFullCacheUpdateWorker.terminate();
+                        this.workers.delete(this.currentFullCacheUpdateWorker);
+                    } catch (terminateError) {
+                        console.error('❌ Error terminating worker:', terminateError);
+                    }
+                    this.currentFullCacheUpdateWorker = null;
+                }
+            }
+            
+            // Отправляем уведомление об ошибке через WebSocket
+            const WebSocketService = await this.getWebSocketService();
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'cache_update_failed',
+                    data: {
+                        message: `Ошибка полного обновления кеша: ${error.message}`,
+                        error: error.message,
+                        fullUpdate: true,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+            
+            // Отправляем уведомление об ошибке в Telegram
+            await OptimizedTelegramService.sendAlert(
+                'CACHE_FULL_UPDATE_FAILED',
+                `Ошибка полного обновления кеша:\n• Ошибка: ${error.message}\n• Время: ${new Date().toLocaleString('ru-RU')}`,
+                'warning'
+            );
+            
+            throw error;
+        } finally {
+            // Сбрасываем флаг выполнения в любом случае
+            this.isFullCacheUpdateRunning = false;
+            this.currentFullCacheUpdateWorker = null;
+            
+            // Возобновляем все процессы после завершения полного обновления
+            await this.resumeAllProcesses();
+        }
+    }
+
+    /**
+     * Приостанавливает все процессы во время полного обновления кеша
+     */
+    async pauseAllProcesses() {
+        console.log('⏸️ Pausing all processes for full cache update...');
+        
+        // Останавливаем все cron задачи
+        if (this.cacheTask) {
+            this.cacheTask.stop();
+            console.log('⏸️ Paused: cache update task');
+        }
+        if (this.priceUpdateTask) {
+            this.priceUpdateTask.stop();
+            console.log('⏸️ Paused: price update task');
+        }
+        if (this.portfolioPricesUpdateTask) {
+            this.portfolioPricesUpdateTask.stop();
+            console.log('⏸️ Paused: portfolio prices update task');
+        }
+        if (this.activeSignalsPricesUpdateTask) {
+            this.activeSignalsPricesUpdateTask.stop();
+            console.log('⏸️ Paused: active signals prices update task');
+        }
+        if (this.tradingRequestsPricesUpdateTask) {
+            this.tradingRequestsPricesUpdateTask.stop();
+            console.log('⏸️ Paused: trading requests prices update task');
+        }
+        if (this.trainingTask) {
+            this.trainingTask.stop();
+            console.log('⏸️ Paused: training task');
+        }
+        if (this.quickTrainingTask) {
+            this.quickTrainingTask.stop();
+            console.log('⏸️ Paused: quick training task');
+        }
+        if (this.portfolioAnalysisTask) {
+            this.portfolioAnalysisTask.stop();
+            console.log('⏸️ Paused: portfolio analysis task');
+        }
+        if (this.predictionsUpdateTask) {
+            this.predictionsUpdateTask.stop();
+            console.log('⏸️ Paused: predictions update task');
+        }
+        if (this.signalsUpdateTask) {
+            this.signalsUpdateTask.stop();
+            console.log('⏸️ Paused: signals update task');
+        }
+        if (this.trailingStopsCheckTask) {
+            this.trailingStopsCheckTask.stop();
+            console.log('⏸️ Paused: trailing stops check task');
+        }
+        if (this.realPortfolioSyncTask) {
+            this.realPortfolioSyncTask.stop();
+            console.log('⏸️ Paused: real portfolio sync task');
+        }
+        if (this.virtualPortfolioUpdateTask) {
+            this.virtualPortfolioUpdateTask.stop();
+            console.log('⏸️ Paused: virtual portfolio update task');
+        }
+        if (this.degradationCheckTask) {
+            this.degradationCheckTask.stop();
+            console.log('⏸️ Paused: degradation check task');
+        }
+        
+        console.log('✅ All processes paused');
+    }
+
+    /**
+     * Возобновляет все процессы после завершения полного обновления кеша
+     * ВАЖНО: Возобновляем постепенно с задержками, чтобы не перегрузить БД одновременными подключениями
+     */
+    async resumeAllProcesses() {
+        console.log('▶️ Resuming all processes after full cache update (gradually to avoid DB overload)...');
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Возобновляем процессы постепенно с задержками
+        // Это предотвращает одновременное подключение всех worker'ов к БД
+        
+        // Группа 1: Критичные процессы (сразу)
+        if (this.trailingStopsCheckTask) {
+            this.trailingStopsCheckTask.start();
+            console.log('▶️ Resumed: trailing stops check task');
+        }
+        
+        // Небольшая задержка перед следующей группой
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
+        
+        // Группа 2: Обновление цен (постепенно)
+        if (this.priceUpdateTask) {
+            this.priceUpdateTask.start();
+            console.log('▶️ Resumed: price update task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
+        
+        if (this.portfolioPricesUpdateTask) {
+            this.portfolioPricesUpdateTask.start();
+            console.log('▶️ Resumed: portfolio prices update task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
+        
+        if (this.activeSignalsPricesUpdateTask) {
+            this.activeSignalsPricesUpdateTask.start();
+            console.log('▶️ Resumed: active signals prices update task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
+        
+        if (this.tradingRequestsPricesUpdateTask) {
+            this.tradingRequestsPricesUpdateTask.start();
+            console.log('▶️ Resumed: trading requests prices update task');
+        }
+        
+        // Задержка перед тяжелыми процессами
+        await new Promise(resolve => setTimeout(resolve, 3000)); // 3 секунды
+        
+        // Группа 3: Анализ и предсказания
+        if (this.portfolioAnalysisTask) {
+            this.portfolioAnalysisTask.start();
+            console.log('▶️ Resumed: portfolio analysis task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
+        
+        if (this.predictionsUpdateTask) {
+            this.predictionsUpdateTask.start();
+            console.log('▶️ Resumed: predictions update task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
+        
+        // Группа 4: Обновление кеша и обучение (самые тяжелые)
+        if (this.cacheTask) {
+            this.cacheTask.start();
+            console.log('▶️ Resumed: cache update task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
+        
+        if (this.trainingTask) {
+            this.trainingTask.start();
+            console.log('▶️ Resumed: training task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
+        
+        if (this.quickTrainingTask) {
+            this.quickTrainingTask.start();
+            console.log('▶️ Resumed: quick training task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
+        
+        // Группа 5: Остальные процессы
+        if (this.signalsUpdateTask) {
+            this.signalsUpdateTask.start();
+            console.log('▶️ Resumed: signals update task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
+        
+        if (this.realPortfolioSyncTask) {
+            this.realPortfolioSyncTask.start();
+            console.log('▶️ Resumed: real portfolio sync task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
+        
+        if (this.virtualPortfolioUpdateTask) {
+            this.virtualPortfolioUpdateTask.start();
+            console.log('▶️ Resumed: virtual portfolio update task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
+        
+        if (this.degradationCheckTask) {
+            this.degradationCheckTask.start();
+            console.log('▶️ Resumed: degradation check task');
+        }
+        
+        console.log('✅ All processes resumed gradually (total delay: ~20 seconds)');
+    }
+
+    /**
      * Обновление цен акций через worker thread
      */
     async performPriceUpdate() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('💰 Price update skipped: full cache update is running');
+            return {
+                success: true,
+                skipped: true,
+                message: 'Price update skipped - full cache update is running'
+            };
+        }
+        
         const startTime = Date.now();
 
         try {
@@ -1290,6 +1905,661 @@ class SchedulerService {
         }
     }
 
+    /**
+     * Обновление цен активных позиций в портфеле
+     * Выполняется каждые 1-2 минуты в торговые часы
+     */
+    async performPortfolioPricesUpdate() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('💰 Portfolio prices update skipped: full cache update is running');
+            return;
+        }
+        
+        const startTime = Date.now();
+
+        try {
+            // Проверяем, доступна ли торговля
+            const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
+            const isTradingAvailable = await TinkoffApiService.isTradingAvailable();
+            
+            if (!isTradingAvailable) {
+                console.log('⏭️ Skipping portfolio prices update - trading not available');
+                return {
+                    success: true,
+                    message: 'Trading not available, update skipped',
+                    skipped: true
+                };
+            }
+
+            console.log('💰 Starting portfolio prices update in worker...');
+            
+            // Отправляем уведомление о начале обновления через WebSocket
+            const WebSocketService = await this.getWebSocketService();
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'portfolio_prices_update_started',
+                    data: {
+                        message: 'Обновление цен портфеля запущено',
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+            
+            // Создаем worker для обновления цен портфеля
+            const { Worker } = await import('worker_threads');
+            const { fileURLToPath } = await import('url');
+            const { dirname, join } = await import('path');
+            
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = dirname(__filename);
+            const workerPath = join(__dirname, '../workers/portfolioPricesUpdateWorker.js');
+            
+            const worker = new Worker(workerPath, {
+                workerData: {}
+            });
+            
+            // Добавляем worker в список для отслеживания
+            this.workers.add(worker);
+            
+            // Обрабатываем результат
+            const result = await new Promise((resolve, reject) => {
+                worker.on('message', (msg) => {
+                    if (msg.type === 'done') {
+                        resolve(msg.data);
+                    } else if (msg.type === 'error') {
+                        reject(new Error(msg.data.error));
+                    } else if (msg.type === 'progress') {
+                        // Отправляем прогресс через WebSocket
+                        if (WebSocketService) {
+                            WebSocketService.broadcast({
+                                type: 'portfolio_prices_update_progress',
+                                data: msg.data,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+                });
+                
+                worker.on('error', reject);
+                worker.on('exit', (code) => {
+                    this.workers.delete(worker);
+                    if (code !== 0) {
+                        reject(new Error(`Worker stopped with exit code ${code}`));
+                    }
+                });
+            });
+            
+            // Удаляем worker из списка после завершения
+            this.workers.delete(worker);
+            worker.terminate();
+
+            const duration = Math.round((Date.now() - startTime) / 1000);
+            console.log(`✅ Portfolio prices update completed in ${duration}s. Updated: ${result.totalUpdated}, Failed: ${result.totalFailed || 0}`);
+
+            // Пересчитываем стоимость портфеля после обновления цен
+            try {
+                await this.recalculatePortfolioValue();
+            } catch (recalcError) {
+                console.warn('⚠️ Error recalculating portfolio value:', recalcError.message);
+            }
+
+            // Отправляем уведомление о завершении через WebSocket
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'portfolio_prices_update_completed',
+                    data: {
+                        message: `Цены портфеля обновлены успешно за ${duration}с`,
+                        duration,
+                        totalUpdated: result.totalUpdated,
+                        totalFailed: result.totalFailed || 0,
+                        positionsCount: result.positionsCount || 0,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+
+            return result;
+        } catch (error) {
+            console.error('❌ Portfolio prices update failed:', error);
+            
+            // Отправляем уведомление об ошибке через WebSocket
+            const WebSocketService = await this.getWebSocketService();
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'portfolio_prices_update_failed',
+                    data: {
+                        error: error.message,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+            
+            throw error;
+        }
+    }
+
+    /**
+     * Пересчет стоимости портфеля на основе обновленных цен
+     */
+    async recalculatePortfolioValue() {
+        try {
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const portfolio = await TradingEngine.getPortfolioValue();
+            
+            if (!portfolio || !portfolio.positions) {
+                return;
+            }
+
+            let positionsValue = 0;
+            const positions = portfolio.positions || {};
+            
+            // Получаем цены для всех позиций
+            const CacheService = (await import('./CacheService.js')).default;
+            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+            
+            for (const [figi, quantity] of Object.entries(positions)) {
+                if (quantity && typeof quantity === 'number' && quantity > 0) {
+                    try {
+                        const instrument = await CachedInstrument.findOne({
+                            where: { figi }
+                        });
+                        
+                        if (instrument && instrument.lastPrice && instrument.lastPrice > 0) {
+                            positionsValue += instrument.lastPrice * quantity;
+                        }
+                    } catch (error) {
+                        console.warn(`⚠️ Error getting price for ${figi}:`, error.message);
+                    }
+                }
+            }
+
+            const cash = portfolio.cash || 0;
+            const totalValue = cash + positionsValue;
+            
+            // Обновляем портфель в БД с проверкой состояния соединения
+            const VirtualPortfolio = (await import('../models/VirtualPortfolio.js')).default;
+            
+            // Проверяем, что connection manager не закрыт
+            const sequelize = (await import('../config/database.js')).default;
+            if (sequelize.connectionManager && sequelize.connectionManager.pool) {
+                const pool = sequelize.connectionManager.pool;
+                if (pool._draining) {
+                    console.warn('⚠️ Connection pool is draining, skipping portfolio update');
+                    return {
+                        cash,
+                        positionsValue,
+                        totalValue
+                    };
+                }
+            }
+            
+            const savedPortfolio = await VirtualPortfolio.getCurrent();
+            
+            if (savedPortfolio) {
+                await savedPortfolio.update({
+                    totalValue: totalValue,
+                    lastUpdated: new Date()
+                });
+            }
+
+            // Отправляем обновление через WebSocket
+            const WebSocketService = await this.getWebSocketService();
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'portfolio_value_updated',
+                    data: {
+                        cash,
+                        positionsValue,
+                        totalValue,
+                        initialCapital: portfolio.initialCapital || 1000000,
+                        pnl: totalValue - (portfolio.initialCapital || 1000000),
+                        pnlPercent: portfolio.initialCapital ? ((totalValue - portfolio.initialCapital) / portfolio.initialCapital) * 100 : 0,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+
+            console.log(`💰 Portfolio value recalculated: ${totalValue.toLocaleString('ru-RU')} ₽ (positions: ${positionsValue.toLocaleString('ru-RU')} ₽, cash: ${cash.toLocaleString('ru-RU')} ₽)`);
+            
+            return {
+                cash,
+                positionsValue,
+                totalValue
+            };
+        } catch (error) {
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обрабатываем ошибку закрытого connection manager
+            if (error.message && error.message.includes('connection manager was closed')) {
+                console.warn('⚠️ Connection manager was closed during portfolio recalculation, attempting to restore...');
+                
+                // Пытаемся восстановить соединение через DatabaseConnectionManager
+                try {
+                    const DatabaseConnectionManager = (await import('../utils/DatabaseConnectionManager.js')).default;
+                    await DatabaseConnectionManager.reconnect();
+                    console.log('✅ Connection restored, retrying portfolio recalculation...');
+                    
+                    // Повторяем попытку через небольшую задержку
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    return await this.recalculatePortfolioValue();
+                } catch (reconnectError) {
+                    console.error('❌ Failed to restore connection:', reconnectError.message);
+                    // Не бросаем ошибку дальше, чтобы не прерывать другие процессы
+                    return null;
+                }
+            }
+            
+            console.error('❌ Error recalculating portfolio value:', error);
+            // Не бросаем ошибку дальше, чтобы не прерывать другие процессы
+            return null;
+        }
+    }
+
+    /**
+     * Обновление цен активных сигналов
+     * Выполняется каждые 5-10 минут в торговые часы
+     */
+    async performActiveSignalsPricesUpdate() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('💰 Active signals prices update skipped: full cache update is running');
+            return;
+        }
+        
+        const startTime = Date.now();
+
+        try {
+            // Проверяем, доступна ли торговля
+            const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
+            const isTradingAvailable = await TinkoffApiService.isTradingAvailable();
+            
+            if (!isTradingAvailable) {
+                console.log('⏭️ Skipping active signals prices update - trading not available');
+                return {
+                    success: true,
+                    message: 'Trading not available, update skipped',
+                    skipped: true
+                };
+            }
+
+            console.log('📊 Starting active signals prices update in worker...');
+            
+            // Отправляем уведомление о начале обновления через WebSocket
+            const WebSocketService = await this.getWebSocketService();
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'active_signals_prices_update_started',
+                    data: {
+                        message: 'Обновление цен активных сигналов запущено',
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+            
+            // Создаем worker для обновления цен активных сигналов
+            const { Worker } = await import('worker_threads');
+            const { fileURLToPath } = await import('url');
+            const { dirname, join } = await import('path');
+            
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = dirname(__filename);
+            const workerPath = join(__dirname, '../workers/activeSignalsPricesUpdateWorker.js');
+            
+            const worker = new Worker(workerPath, {
+                workerData: {}
+            });
+            
+            // Добавляем worker в список для отслеживания
+            this.workers.add(worker);
+            
+            // Обрабатываем результат
+            const result = await new Promise((resolve, reject) => {
+                worker.on('message', (msg) => {
+                    if (msg.type === 'done') {
+                        resolve(msg.data);
+                    } else if (msg.type === 'error') {
+                        reject(new Error(msg.data.error));
+                    } else if (msg.type === 'progress') {
+                        // Отправляем прогресс через WebSocket
+                        if (WebSocketService) {
+                            WebSocketService.broadcast({
+                                type: 'active_signals_prices_update_progress',
+                                data: msg.data,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+                });
+                
+                worker.on('error', reject);
+                worker.on('exit', (code) => {
+                    this.workers.delete(worker);
+                    if (code !== 0) {
+                        reject(new Error(`Worker stopped with exit code ${code}`));
+                    }
+                });
+            });
+            
+            // Удаляем worker из списка после завершения
+            this.workers.delete(worker);
+            worker.terminate();
+
+            const duration = Math.round((Date.now() - startTime) / 1000);
+            console.log(`✅ Active signals prices update completed in ${duration}s. Updated: ${result.totalUpdated}, Failed: ${result.totalFailed || 0}, Triggered: ${result.triggeredSignals?.length || 0}`);
+
+            // Обрабатываем сработавшие сигналы
+            if (result.triggeredSignals && result.triggeredSignals.length > 0) {
+                await this.handleTriggeredSignals(result.triggeredSignals);
+            }
+
+            // Отправляем уведомление о завершении через WebSocket
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'active_signals_prices_update_completed',
+                    data: {
+                        message: `Цены активных сигналов обновлены успешно за ${duration}с`,
+                        duration,
+                        totalUpdated: result.totalUpdated,
+                        totalFailed: result.totalFailed || 0,
+                        triggeredSignals: result.triggeredSignals?.length || 0,
+                        signalsCount: result.signalsCount || 0,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+
+            return result;
+        } catch (error) {
+            console.error('❌ Active signals prices update failed:', error);
+            
+            // Отправляем уведомление об ошибке через WebSocket
+            const WebSocketService = await this.getWebSocketService();
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'active_signals_prices_update_failed',
+                    data: {
+                        error: error.message,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+            
+            throw error;
+        }
+    }
+
+    /**
+     * Обработка сработавших сигналов (достижение targetPrice или stoploss)
+     */
+    async handleTriggeredSignals(triggeredSignals) {
+        try {
+            const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+            const CachedSignal = (await import('../models/CachedSignal.js')).default;
+            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+            const WebSocketService = await this.getWebSocketService();
+
+            for (const triggered of triggeredSignals) {
+                try {
+                    // Получаем информацию об инструменте
+                    const instrument = await CachedInstrument.findOne({
+                        where: { figi: triggered.figi }
+                    });
+
+                    const ticker = instrument?.ticker || triggered.figi;
+                    const name = instrument?.name || 'Неизвестный инструмент';
+
+                    // Формируем сообщение
+                    const directionText = triggered.direction === 'SIGNAL_DIRECTION_BUY' ? 'ПОКУПКА' : 'ПРОДАЖА';
+                    const triggerText = triggered.triggerType === 'target_reached' ? '✅ Целевая цена достигнута' : '⚠️ Стоп-лосс сработал';
+                    
+                    const message = `📊 Сигнал сработал: ${triggered.name || 'Сигнал'}\n` +
+                        `📈 Инструмент: ${ticker} (${name})\n` +
+                        `📊 Направление: ${directionText}\n` +
+                        `🎯 ${triggerText}\n` +
+                        `💰 Текущая цена: ${triggered.currentPrice.toFixed(2)} ₽\n` +
+                        `🎯 Целевая цена: ${triggered.targetPrice ? triggered.targetPrice.toFixed(2) : 'N/A'} ₽\n` +
+                        `🛑 Стоп-лосс: ${triggered.stoploss ? triggered.stoploss.toFixed(2) : 'N/A'} ₽\n` +
+                        `📋 Стратегия: ${triggered.strategyName || 'Неизвестна'}`;
+
+                    // Отправляем уведомление в Telegram
+                    await OptimizedTelegramService.sendAlert(
+                        'Сигнал сработал',
+                        message,
+                        triggered.triggerType === 'target_reached' ? 'success' : 'warning'
+                    );
+
+                    // Отправляем уведомление через WebSocket
+                    if (WebSocketService) {
+                        WebSocketService.broadcast({
+                            type: 'signal_triggered',
+                            data: {
+                                signalId: triggered.signalId,
+                                figi: triggered.figi,
+                                ticker,
+                                name,
+                                direction: triggered.direction,
+                                triggerType: triggered.triggerType,
+                                currentPrice: triggered.currentPrice,
+                                targetPrice: triggered.targetPrice,
+                                stoploss: triggered.stoploss,
+                                strategyName: triggered.strategyName,
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+                    }
+
+                    console.log(`✅ Signal triggered: ${triggered.signalId} (${triggered.figi}) - ${triggerText}`);
+                } catch (signalError) {
+                    console.error(`❌ Error handling triggered signal ${triggered.signalId}:`, signalError.message);
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error handling triggered signals:', error);
+        }
+    }
+
+    /**
+     * Обновление цен активных торговых заявок
+     * Выполняется каждые 30 секунд - 1 минуту в торговые часы
+     */
+    async performTradingRequestsPricesUpdate() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('💰 Trading requests prices update skipped: full cache update is running');
+            return;
+        }
+        
+        const startTime = Date.now();
+
+        try {
+            // Проверяем, доступна ли торговля
+            const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
+            const isTradingAvailable = await TinkoffApiService.isTradingAvailable();
+            
+            if (!isTradingAvailable) {
+                console.log('⏭️ Skipping trading requests prices update - trading not available');
+                return {
+                    success: true,
+                    message: 'Trading not available, update skipped',
+                    skipped: true
+                };
+            }
+
+            console.log('📋 Starting trading requests prices update in worker...');
+            
+            // Отправляем уведомление о начале обновления через WebSocket
+            const WebSocketService = await this.getWebSocketService();
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'trading_requests_prices_update_started',
+                    data: {
+                        message: 'Обновление цен активных заявок запущено',
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+            
+            // Создаем worker для обновления цен активных заявок
+            const { Worker } = await import('worker_threads');
+            const { fileURLToPath } = await import('url');
+            const { dirname, join } = await import('path');
+            
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = dirname(__filename);
+            const workerPath = join(__dirname, '../workers/tradingRequestsPricesUpdateWorker.js');
+            
+            const worker = new Worker(workerPath, {
+                workerData: {}
+            });
+            
+            // Добавляем worker в список для отслеживания
+            this.workers.add(worker);
+            
+            // Обрабатываем результат
+            const result = await new Promise((resolve, reject) => {
+                worker.on('message', (msg) => {
+                    if (msg.type === 'done') {
+                        resolve(msg.data);
+                    } else if (msg.type === 'error') {
+                        reject(new Error(msg.data.error));
+                    } else if (msg.type === 'progress') {
+                        // Отправляем прогресс через WebSocket
+                        if (WebSocketService) {
+                            WebSocketService.broadcast({
+                                type: 'trading_requests_prices_update_progress',
+                                data: msg.data,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+                });
+                
+                worker.on('error', reject);
+                worker.on('exit', (code) => {
+                    this.workers.delete(worker);
+                    if (code !== 0) {
+                        reject(new Error(`Worker stopped with exit code ${code}`));
+                    }
+                });
+            });
+            
+            // Удаляем worker из списка после завершения
+            this.workers.delete(worker);
+            worker.terminate();
+
+            const duration = Math.round((Date.now() - startTime) / 1000);
+            console.log(`✅ Trading requests prices update completed in ${duration}s. Updated: ${result.totalUpdated}, Failed: ${result.totalFailed || 0}, Ready to execute: ${result.readyToExecute?.length || 0}`);
+
+            // Обрабатываем заявки, готовые к исполнению
+            if (result.readyToExecute && result.readyToExecute.length > 0) {
+                await this.handleReadyToExecuteRequests(result.readyToExecute);
+            }
+
+            // Отправляем уведомление о завершении через WebSocket
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'trading_requests_prices_update_completed',
+                    data: {
+                        message: `Цены активных заявок обновлены успешно за ${duration}с`,
+                        duration,
+                        totalUpdated: result.totalUpdated,
+                        totalFailed: result.totalFailed || 0,
+                        readyToExecute: result.readyToExecute?.length || 0,
+                        requestsCount: result.requestsCount || 0,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+
+            return result;
+        } catch (error) {
+            console.error('❌ Trading requests prices update failed:', error);
+            
+            // Отправляем уведомление об ошибке через WebSocket
+            const WebSocketService = await this.getWebSocketService();
+            if (WebSocketService) {
+                WebSocketService.broadcast({
+                    type: 'trading_requests_prices_update_failed',
+                    data: {
+                        error: error.message,
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            }
+            
+            throw error;
+        }
+    }
+
+    /**
+     * Обработка заявок, готовых к исполнению
+     */
+    async handleReadyToExecuteRequests(readyToExecute) {
+        try {
+            const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+            const TradingRequest = (await import('../models/TradingRequest.js')).default;
+            const WebSocketService = await this.getWebSocketService();
+
+            for (const requestData of readyToExecute) {
+                try {
+                    // Получаем заявку из БД
+                    const request = await TradingRequest.findByPk(requestData.requestId);
+                    if (!request) {
+                        continue;
+                    }
+
+                    // Формируем сообщение
+                    const actionText = requestData.action === 'BUY' ? 'ПОКУПКА' : 'ПРОДАЖА';
+                    const statusText = requestData.isPriceReached ? '✅ Цена достигнута - готово к исполнению' : '⚠️ Цена приближается - готово к исполнению';
+                    
+                    const message = `📋 Заявка готова к исполнению\n` +
+                        `📈 Инструмент: ${requestData.ticker} (${requestData.name})\n` +
+                        `📊 Действие: ${actionText}\n` +
+                        `💰 Цена заявки: ${requestData.priceAtRequest.toFixed(2)} ₽\n` +
+                        `💵 Текущая цена: ${requestData.currentPrice.toFixed(2)} ₽\n` +
+                        `📉 Разница: ${requestData.priceDiffPercent.toFixed(2)}%\n` +
+                        `📦 Количество: ${requestData.quantity}\n` +
+                        `🎯 Уверенность: ${(requestData.confidence * 100).toFixed(0)}%\n` +
+                        `📋 Статус: ${statusText}`;
+
+                    // Отправляем уведомление в Telegram
+                    await OptimizedTelegramService.sendAlert(
+                        'Заявка готова к исполнению',
+                        message,
+                        requestData.isPriceReached ? 'success' : 'info'
+                    );
+
+                    // Отправляем уведомление через WebSocket
+                    if (WebSocketService) {
+                        WebSocketService.broadcast({
+                            type: 'trading_request_ready_to_execute',
+                            data: {
+                                requestId: requestData.requestId,
+                                figi: requestData.figi,
+                                ticker: requestData.ticker,
+                                name: requestData.name,
+                                action: requestData.action,
+                                priceAtRequest: requestData.priceAtRequest,
+                                currentPrice: requestData.currentPrice,
+                                priceDiffPercent: requestData.priceDiffPercent,
+                                isPriceReached: requestData.isPriceReached,
+                                isPriceApproaching: requestData.isPriceApproaching,
+                                quantity: requestData.quantity,
+                                status: requestData.status,
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+                    }
+
+                    console.log(`✅ Request ready to execute: ${requestData.requestId} (${requestData.figi}) - ${statusText}`);
+                } catch (requestError) {
+                    console.error(`❌ Error handling ready to execute request ${requestData.requestId}:`, requestError.message);
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error handling ready to execute requests:', error);
+        }
+    }
+
     async performCleanup() {
         try {
             const { CachedCandle } = await import('../models/CachedCandle.js');
@@ -1314,6 +2584,12 @@ class SchedulerService {
     }
 
     async performScheduledTraining() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('🧠 Scheduled training skipped: full cache update is running');
+            return;
+        }
+        
         // Проверяем, не идет ли уже обучение
         if (this.isTraining) {
             console.log('🧠 Scheduled training skipped: training already in progress');
@@ -1441,6 +2717,12 @@ class SchedulerService {
     }
 
     async performQuickTraining() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('⚡ Quick training skipped: full cache update is running');
+            return;
+        }
+        
         // Проверяем, не идет ли уже обучение или анализ
         if (this.isTraining || this.isAnalyzing) {
             console.log('⚡ Quick training skipped: another process is running');
@@ -1774,6 +3056,12 @@ class SchedulerService {
      * Обновление предсказаний в таблице Recommendations каждые 20 минут
      */
     async updateRecommendationsPredictions() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('🔄 Predictions update skipped: full cache update is running');
+            return;
+        }
+        
         try {
             const Recommendation = (await import('../models/Recommendation.js')).default;
             
@@ -1908,6 +3196,12 @@ class SchedulerService {
     }
 
     async performPortfolioAnalysis() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('⚠️ Portfolio analysis skipped: full cache update is running');
+            return;
+        }
+        
         // Проверяем, не идет ли уже анализ
         if (this.isAnalyzing) {
             console.log('⚠️ Portfolio analysis already in progress, skipping duplicate start');
@@ -1923,13 +3217,31 @@ class SchedulerService {
         this.isAnalyzing = true;
         
         try {
+            // ВАРИАНТ 2: Используем DatabaseConnectionManager без лишних authenticate()
+            const DatabaseConnectionManager = (await import('../utils/DatabaseConnectionManager.js')).default;
+            const requesterId = `portfolio-analysis-${Date.now()}`;
+            
+            console.log(`📊 Requesting database connection before portfolio analysis (${requesterId})...`);
+            const connection = await DatabaseConnectionManager.acquireConnection(requesterId, 60000);
+            console.log(`✅ Database connection acquired (${connection.connectionId}), starting analysis...`);
+            
+            // Освобождаем подключение сразу после проверки, анализ получит свое через worker
+            connection.release();
 
+            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Анализируем портфели последовательно с задержками
+            // Это предотвращает одновременное подключение нескольких worker'ов к БД
+            
             // Анализируем виртуальный портфель
             try {
                 await NeuralNetworkService.analyzePortfolioAndSave('virtual');
+                console.log('✅ Virtual portfolio analysis completed');
             } catch (error) {
-                console.error('Error analyzing virtual portfolio:', error);
+                console.error('❌ Error analyzing virtual portfolio:', error);
             }
+
+            // Задержка перед анализом реального портфеля (если есть)
+            // Это дает время БД освободить соединения от первого worker'а
+            await new Promise(resolve => setTimeout(resolve, 3000)); // 3 секунды
 
             // Анализируем реальный портфель (если есть)
             try {
@@ -1940,11 +3252,26 @@ class SchedulerService {
                         ? realPortfolio.positions 
                         : Object.keys(realPortfolio.positions);
                     if (positions.length > 0) {
+                        // ВАРИАНТ 2 и 6: Используем DatabaseConnectionManager с retry вместо прямых authenticate()
+                        const DatabaseConnectionManager = (await import('../utils/DatabaseConnectionManager.js')).default;
+                        const requesterId2 = `real-portfolio-analysis-${Date.now()}`;
+                        
+                        try {
+                            const connection2 = await DatabaseConnectionManager.acquireConnection(requesterId2, 60000);
+                            console.log(`✅ Database connection acquired for real portfolio analysis (${connection2.connectionId})`);
+                            connection2.release();
+                        } catch (dbError) {
+                            console.error('❌ Database connection failed before real portfolio analysis:', dbError.message);
+                            // DatabaseConnectionManager уже обработал retry с exponential backoff
+                            throw dbError;
+                        }
+                        
                         await NeuralNetworkService.analyzePortfolioAndSave('real');
+                        console.log('✅ Real portfolio analysis completed');
                     }
                 }
             } catch (error) {
-                console.error('Error analyzing real portfolio:', error);
+                console.error('❌ Error analyzing real portfolio:', error);
             }
 
             console.log('✅ Portfolio analysis completed for all portfolio types');
@@ -2115,6 +3442,12 @@ class SchedulerService {
      * Ежедневная проверка и загрузка свежих новостей
      */
     async performDailyNewsUpdate() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('📰 Daily news update skipped: full cache update is running');
+            return;
+        }
+        
         try {
             console.log('📰 Starting daily news update...');
             
@@ -2170,6 +3503,12 @@ class SchedulerService {
      * Проверка и обработка трейлинг-стопов
      */
     async checkTrailingStops() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('🛑 Trailing stops check skipped: full cache update is running');
+            return;
+        }
+        
         try {
             const RiskManagementService = (await import('./RiskManagementService.js')).default;
             const TradingEngine = (await import('./TradingEngine.js')).default;
@@ -2251,6 +3590,12 @@ class SchedulerService {
      * Обновление сигналов аналитиков для всех активных инструментов
      */
     async performSignalsUpdate() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('⚡ Signals update skipped: full cache update is running');
+            return;
+        }
+        
         try {
             console.log('⚡ Starting signals update...');
             
@@ -2515,6 +3860,12 @@ class SchedulerService {
      * Синхронизация реального портфеля из Tinkoff API
      */
     async performRealPortfolioSync() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('💼 Real portfolio sync skipped: full cache update is running');
+            return;
+        }
+        
         try {
             console.log('💼 Starting real portfolio sync from Tinkoff API...');
             
@@ -2587,6 +3938,12 @@ class SchedulerService {
      * Обновление виртуального портфеля - пересчет totalValue на основе текущих цен
      */
     async performVirtualPortfolioUpdate() {
+        // Проверяем, не идет ли полное обновление кеша
+        if (this.isFullCacheUpdateRunning) {
+            console.log('💼 Virtual portfolio update skipped: full cache update is running');
+            return;
+        }
+        
         try {
             console.log('💼 Starting virtual portfolio update (recalculating totalValue)...');
             
@@ -2630,6 +3987,50 @@ class SchedulerService {
         } catch (error) {
             console.error('❌ Error updating virtual portfolio:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Получить статус планировщика
+     */
+    async getStatus() {
+        try {
+            const tasks = {
+                cacheTask: this.cacheTask ? 'active' : 'inactive',
+                priceUpdateTask: this.priceUpdateTask ? 'active' : 'inactive',
+                portfolioPricesUpdateTask: this.portfolioPricesUpdateTask ? 'active' : 'inactive',
+                activeSignalsPricesUpdateTask: this.activeSignalsPricesUpdateTask ? 'active' : 'inactive',
+                tradingRequestsPricesUpdateTask: this.tradingRequestsPricesUpdateTask ? 'active' : 'inactive',
+                cleanupTask: this.cleanupTask ? 'active' : 'inactive',
+                trainingTask: this.trainingTask ? 'active' : 'inactive',
+                quickTrainingTask: this.quickTrainingTask ? 'active' : 'inactive',
+                tradingHoursTask: this.tradingHoursTask ? 'active' : 'inactive',
+                tradingHoursCacheTask: this.tradingHoursCacheTask ? 'active' : 'inactive',
+                degradationCheckTask: this.degradationCheckTask ? 'active' : 'inactive',
+                portfolioAnalysisTask: this.portfolioAnalysisTask ? 'active' : 'inactive',
+                predictionsUpdateTask: this.predictionsUpdateTask ? 'active' : 'inactive',
+                signalsUpdateTask: this.signalsUpdateTask ? 'active' : 'inactive',
+                trailingStopsCheckTask: this.trailingStopsCheckTask ? 'active' : 'inactive',
+                newsCleanupTask: this.newsCleanupTask ? 'active' : 'inactive',
+                newsDailyUpdateTask: this.newsDailyUpdateTask ? 'active' : 'inactive',
+                telegramCacheTask: this.telegramCacheTask ? 'active' : 'inactive'
+            };
+
+            return {
+                isInitialized: this.isInitialized || false,
+                tasks,
+                activeWorkers: this.workers.size,
+                activeIntervals: this.intervals.size,
+                lastCacheUpdate: this.lastCacheUpdate ? new Date(this.lastCacheUpdate).toISOString() : null,
+                timestamp: new Date().toISOString()
+            };
+        } catch (error) {
+            console.error('Error getting scheduler status:', error);
+            return {
+                isInitialized: false,
+                error: error.message,
+                timestamp: new Date().toISOString()
+            };
         }
     }
 }

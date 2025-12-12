@@ -14,6 +14,20 @@ interface Horizon {
   confidence: number;
   name: string;
   description: string;
+  strategies?: {
+    aggressive?: {
+      recommendation: 'BUY' | 'SELL' | 'HOLD';
+      explanation?: string;
+    };
+    moderate?: {
+      recommendation: 'BUY' | 'SELL' | 'HOLD';
+      explanation?: string;
+    };
+    conservative?: {
+      recommendation: 'BUY' | 'SELL' | 'HOLD';
+      explanation?: string;
+    };
+  };
 }
 
 interface Recommendation {
@@ -88,7 +102,28 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated }) => {
   const [strategyWarning, setStrategyWarning] = useState<string | null>(null);
   const toast = useRef<Toast>(null);
 
-  // Проверяем, есть ли хотя бы один прогноз BUY или HOLD в горизонтах или общая рекомендация
+  // Получаем горизонты из разных возможных мест
+  const getHorizons = () => {
+    // Путь 1: прямое поле horizons (приоритет, т.к. оно передается из StockDetail)
+    if (rowData.horizons) {
+      return rowData.horizons;
+    }
+    // Путь 2: explanation.details.ensemble.horizons
+    if (rowData.explanation?.details?.ensemble?.horizons) {
+      return rowData.explanation.details.ensemble.horizons;
+    }
+    // Путь 3: explanation.details.horizons
+    if (rowData.explanation?.details?.horizons) {
+      return rowData.explanation.details.horizons;
+    }
+    // Путь 4: explanation.horizons
+    if (rowData.explanation?.horizons) {
+      return rowData.explanation.horizons;
+    }
+    return null;
+  };
+
+  // Проверяем, есть ли хотя бы один прогноз BUY или HOLD в горизонтах, стратегиях или общая рекомендация
   const hasBuyOrHoldHorizon = (): boolean => {
     // Сначала проверяем общую рекомендацию - если она BUY или HOLD, кнопка доступна
     if (rowData.recommendation === 'BUY' || rowData.recommendation === 'HOLD') {
@@ -96,25 +131,7 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated }) => {
     }
 
     // Затем проверяем горизонты, если они есть
-    // Проверяем разные возможные пути к горизонтам
-    let horizons = null;
-    
-    // Путь 1: explanation.details.ensemble.horizons
-    if (rowData.explanation?.details?.ensemble?.horizons) {
-      horizons = rowData.explanation.details.ensemble.horizons;
-    }
-    // Путь 2: explanation.details.horizons
-    else if (rowData.explanation?.details?.horizons) {
-      horizons = rowData.explanation.details.horizons;
-    }
-    // Путь 3: explanation.horizons
-    else if (rowData.explanation?.horizons) {
-      horizons = rowData.explanation.horizons;
-    }
-    // Путь 4: прямое поле horizons (если оно было извлечено при загрузке)
-    else if (rowData.horizons) {
-      horizons = rowData.horizons;
-    }
+    const horizons = getHorizons();
     
     if (!horizons || typeof horizons !== 'object') {
       // Если горизонтов нет, уже проверили общую рекомендацию выше
@@ -122,6 +139,8 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated }) => {
     }
 
     const { shortTerm, mediumTerm, longTerm } = horizons;
+    
+    // Проверяем рекомендации горизонтов
     const horizonRecommendations = [
       shortTerm?.recommendation,
       mediumTerm?.recommendation,
@@ -129,7 +148,145 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated }) => {
     ].filter(Boolean) as string[];
 
     // Если есть хотя бы один BUY или HOLD в горизонтах, кнопка доступна
-    return horizonRecommendations.some(rec => rec === 'BUY' || rec === 'HOLD');
+    if (horizonRecommendations.some(rec => rec === 'BUY' || rec === 'HOLD')) {
+      return true;
+    }
+
+    // Проверяем стратегии в горизонтах - если хотя бы одна стратегия дает BUY или HOLD, кнопка доступна
+    const horizonList = [shortTerm, mediumTerm, longTerm].filter(Boolean);
+    for (const horizon of horizonList) {
+      if (horizon?.strategies && typeof horizon.strategies === 'object') {
+        const strategies = horizon.strategies;
+        // Проверяем все три стратегии на BUY
+        if (strategies.aggressive?.recommendation === 'BUY' || 
+            strategies.moderate?.recommendation === 'BUY' || 
+            strategies.conservative?.recommendation === 'BUY') {
+          return true;
+        }
+        // Также проверяем HOLD в стратегиях (если общая рекомендация не SELL)
+        if (rowData.recommendation !== 'SELL') {
+          if (strategies.aggressive?.recommendation === 'HOLD' || 
+              strategies.moderate?.recommendation === 'HOLD' || 
+              strategies.conservative?.recommendation === 'HOLD') {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  };
+
+  // Получаем детальное объяснение, почему кнопка заблокирована
+  const getDisabledReason = (): string => {
+    // Проверяем цену
+    if (!rowData.priceAtAnalysis || rowData.priceAtAnalysis <= 0) {
+      return 'Покупка недоступна: цена не определена или равна нулю';
+    }
+
+    const horizons = getHorizons();
+    
+    // Если общая рекомендация HOLD или BUY, но кнопка заблокирована - проверяем стратегии
+    if (rowData.recommendation === 'HOLD' || rowData.recommendation === 'BUY') {
+      if (!horizons || typeof horizons !== 'object') {
+        return 'Покупка недоступна: нет данных по горизонтам для проверки стратегий';
+      }
+
+      const { shortTerm, mediumTerm, longTerm } = horizons;
+      const horizonList = [shortTerm, mediumTerm, longTerm].filter(Boolean);
+      
+      // Проверяем, есть ли хотя бы одна стратегия с BUY
+      let hasBuyInStrategies = false;
+      const strategiesWithBuy: string[] = [];
+      
+      for (const horizon of horizonList) {
+        if (horizon?.strategies) {
+          const strategies = horizon.strategies;
+          const horizonName = horizon.name || 'Неизвестный горизонт';
+          
+          if (strategies.aggressive?.recommendation === 'BUY') {
+            hasBuyInStrategies = true;
+            strategiesWithBuy.push(`${horizonName} (Агрессивная)`);
+          }
+          if (strategies.moderate?.recommendation === 'BUY') {
+            hasBuyInStrategies = true;
+            strategiesWithBuy.push(`${horizonName} (Умеренная)`);
+          }
+          if (strategies.conservative?.recommendation === 'BUY') {
+            hasBuyInStrategies = true;
+            strategiesWithBuy.push(`${horizonName} (Консервативная)`);
+          }
+        }
+      }
+
+      if (hasBuyInStrategies) {
+        return `Покупка доступна: есть BUY в стратегиях (${strategiesWithBuy.join(', ')})`;
+      }
+
+      return 'Покупка недоступна: общая рекомендация HOLD и нет BUY в стратегиях горизонтов';
+    }
+
+    // Проверяем общую рекомендацию SELL
+    if (rowData.recommendation === 'SELL') {
+      const horizons = getHorizons();
+      
+      if (!horizons || typeof horizons !== 'object') {
+        return 'Покупка недоступна: общая рекомендация SELL и нет данных по горизонтам';
+      }
+
+      const { shortTerm, mediumTerm, longTerm } = horizons;
+      const horizonRecs = [
+        { name: 'Краткосрочный', rec: shortTerm?.recommendation, strategies: shortTerm?.strategies },
+        { name: 'Среднесрочный', rec: mediumTerm?.recommendation, strategies: mediumTerm?.strategies },
+        { name: 'Долгосрочный', rec: longTerm?.recommendation, strategies: longTerm?.strategies }
+      ].filter(h => h.rec);
+
+      if (horizonRecs.length === 0) {
+        return 'Покупка недоступна: общая рекомендация SELL и нет данных по горизонтам';
+      }
+
+      // Проверяем стратегии в горизонтах - возможно, хотя бы одна стратегия дает BUY
+      const strategiesWithBuy: string[] = [];
+      horizonRecs.forEach(horizon => {
+        if (horizon.strategies) {
+          if (horizon.strategies.aggressive?.recommendation === 'BUY') {
+            strategiesWithBuy.push(`${horizon.name} (Агрессивная)`);
+          }
+          if (horizon.strategies.moderate?.recommendation === 'BUY') {
+            strategiesWithBuy.push(`${horizon.name} (Умеренная)`);
+          }
+          if (horizon.strategies.conservative?.recommendation === 'BUY') {
+            strategiesWithBuy.push(`${horizon.name} (Консервативная)`);
+          }
+        }
+      });
+
+      // Если есть BUY в стратегиях, но общая рекомендация SELL
+      if (strategiesWithBuy.length > 0) {
+        return `Покупка недоступна: общая рекомендация SELL. Однако есть BUY в стратегиях: ${strategiesWithBuy.join(', ')}. Проверьте детальную страницу для подробностей.`;
+      }
+
+      // Проверяем, все ли горизонты дают SELL
+      const allSell = horizonRecs.every(h => h.rec === 'SELL');
+      if (allSell) {
+        const horizonNames = horizonRecs.map(h => h.name).join(', ');
+        return `Покупка недоступна: общая рекомендация SELL, все горизонты (${horizonNames}) также рекомендуют SELL`;
+      }
+
+      // Если не все SELL, но нет BUY/HOLD
+      const hasBuyHold = horizonRecs.some(h => h.rec === 'BUY' || h.rec === 'HOLD');
+      if (!hasBuyHold) {
+        return 'Покупка недоступна: общая рекомендация SELL, нет BUY или HOLD рекомендаций в горизонтах';
+      }
+    }
+
+    // Если общая рекомендация HOLD или BUY, но кнопка все равно заблокирована
+    // (это не должно происходить, но на всякий случай)
+    if (!hasBuyOrHoldHorizon()) {
+      return 'Покупка недоступна: нет доступных прогнозов BUY или HOLD';
+    }
+
+    return 'Покупка недоступна';
   };
 
   // Находим лучший прогноз (с максимальным confidence и score)
@@ -170,11 +327,13 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated }) => {
     rowData.recommendation === 'BUY' ? 'success' :
     rowData.recommendation === 'SELL' ? 'warning' : 'info';
   
-  const tooltipText = rowData.recommendation === 'HOLD'
-    ? 'Создать заявку на покупку (AI рекомендует удержание)'
-    : 'Создать заявку на покупку';
-
   const isButtonDisabled = !rowData.priceAtAnalysis || rowData.priceAtAnalysis <= 0 || !hasBuyOrHoldHorizon();
+  
+  const tooltipText = isButtonDisabled 
+    ? getDisabledReason()
+    : (rowData.recommendation === 'HOLD'
+        ? 'Создать заявку на покупку (AI рекомендует удержание)'
+        : 'Создать заявку на покупку');
 
   const handleBuyClick = async () => {
     try {
@@ -344,16 +503,21 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated }) => {
             style={{ fontSize: '0.75rem', padding: '0.5rem' }}
           />
         )}
-        <Button
-          icon="pi pi-shopping-cart"
-          label={buttonLabel}
-          size="small"
-          severity={buttonSeverity}
-          onClick={handleBuyClick}
-          disabled={isButtonDisabled}
-          tooltip={isButtonDisabled ? 'Нет доступных прогнозов для покупки (требуется BUY или HOLD)' : tooltipText}
-          tooltipOptions={{ position: 'top' }}
-        />
+        <div 
+          title={tooltipText} 
+          style={{ display: 'inline-block', cursor: isButtonDisabled ? 'not-allowed' : 'pointer' }}
+        >
+          <Button
+            icon="pi pi-shopping-cart"
+            label={buttonLabel}
+            size="small"
+            severity={buttonSeverity}
+            onClick={handleBuyClick}
+            disabled={isButtonDisabled}
+            tooltip={!isButtonDisabled ? tooltipText : undefined}
+            tooltipOptions={{ position: 'top' }}
+          />
+        </div>
       </div>
 
       <Dialog

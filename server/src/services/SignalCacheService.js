@@ -37,7 +37,13 @@ class SignalCacheService {
      */
     async convertInstrumentUidToFigi(instrumentUid) {
         try {
-            // Пробуем найти в кэше инструментов по instrumentUid (может быть сохранен в apiData)
+            // Проверяем, может быть это уже FIGI (начинается с BBG или TCS)
+            if (instrumentUid && (instrumentUid.startsWith('BBG') || instrumentUid.startsWith('TCS'))) {
+                return instrumentUid;
+            }
+            
+            // Пробуем найти в кэше инструментов по instrumentUid
+            // Может быть сохранен как figi или в apiData.uid
             const instrument = await CachedInstrument.findOne({
                 where: {
                     [Op.or]: [
@@ -51,60 +57,27 @@ class SignalCacheService {
                 }
             });
 
-            if (instrument) {
+            if (instrument && instrument.figi) {
                 return instrument.figi;
             }
 
-            // Если не нашли в кэше, пробуем получить через API
-            // Определяем тип идентификатора: UUID или FIGI
-            const isUuid = this.isUUID(instrumentUid);
-            
+            // Если не нашли в кэше, пробуем найти через API используя FindInstrument
+            // Это более универсальный метод, чем GetInstrumentBy
             try {
-                let apiInstrument = null;
-                
-                if (isUuid) {
-                    // Если это UUID, используем метод для UID
-                    apiInstrument = await TinkoffApiService.getInstrumentByUid(instrumentUid);
-                    
-                    if (apiInstrument && apiInstrument.figi) {
-                        return apiInstrument.figi;
-                    }
-                    
-                    // Если не нашли через UID, пробуем найти в кэше по другим полям
-                    // Может быть instrumentUid сохранен в apiData как uid
-                    const instrumentByUid = await CachedInstrument.findOne({
-                        where: sequelize.where(
-                            sequelize.fn('jsonb_extract_path_text', sequelize.col('apiData'), 'uid'),
-                            instrumentUid
-                        )
-                    });
-                    
-                    if (instrumentByUid && instrumentByUid.figi) {
-                        return instrumentByUid.figi;
-                    }
-                } else {
-                    // Если это не UUID, пробуем как FIGI
-                    apiInstrument = await TinkoffApiService.getInstrumentByFigi(instrumentUid);
-                    
-                    if (apiInstrument && apiInstrument.figi) {
-                        return apiInstrument.figi;
-                    }
+                const apiInstrument = await TinkoffApiService.findInstrument(instrumentUid);
+                if (apiInstrument && apiInstrument.figi) {
+                    return apiInstrument.figi;
                 }
             } catch (apiError) {
-                // 404 - это нормально, инструмент просто не найден (не логируем)
-                if (apiError.message && apiError.message.includes('404')) {
-                    return null;
+                // 404 или "Instrument not found" - это нормально, инструмент просто не найден
+                if (!apiError.message || (!apiError.message.includes('404') && !apiError.message.includes('Instrument not found'))) {
+                    console.warn(`⚠️ Ошибка поиска инструмента ${instrumentUid} через API:`, apiError.message);
                 }
-                // Другие ошибки логируем как предупреждение (только если не 404)
-                console.warn(`⚠️ Ошибка получения инструмента ${instrumentUid} через API:`, apiError.message);
             }
 
             return null;
         } catch (error) {
-            // Только критические ошибки логируем как ошибку
-            if (!error.message || !error.message.includes('404')) {
-                console.error(`❌ Критическая ошибка конвертации instrumentUid ${instrumentUid} в FIGI:`, error.message);
-            }
+            console.error(`❌ Ошибка конвертации instrumentUid ${instrumentUid} в FIGI:`, error.message);
             return null;
         }
     }
@@ -112,9 +85,10 @@ class SignalCacheService {
     /**
      * Сохранение сигналов в БД
      * @param {Array} signals - Массив сигналов от API
+     * @param {string} requestedFigi - FIGI, по которому запрашивались сигналы (fallback)
      * @returns {Promise<number>} - Количество сохраненных сигналов
      */
-    async saveSignals(signals) {
+    async saveSignals(signals, requestedFigi = null) {
         if (!Array.isArray(signals) || signals.length === 0) {
             return 0;
         }
@@ -125,15 +99,41 @@ class SignalCacheService {
 
         for (const signal of signals) {
             try {
-                // Конвертируем instrumentUid в FIGI если нужно
+                // Определяем FIGI для сигнала
                 let figi = null;
                 
-                // Сначала проверяем, есть ли figi в самом сигнале
+                // Приоритет 1: Если в сигнале уже есть figi - используем его
                 if (signal.figi) {
                     figi = signal.figi;
-                } else if (signal.instrumentUid) {
-                    // Пробуем конвертировать instrumentUid в FIGI
-                    figi = await this.convertInstrumentUidToFigi(signal.instrumentUid);
+                }
+                // Приоритет 2: Если instrumentUid выглядит как FIGI (начинается с BBG или TCS) - используем его
+                else if (signal.instrumentUid && (signal.instrumentUid.startsWith('BBG') || signal.instrumentUid.startsWith('TCS'))) {
+                    figi = signal.instrumentUid;
+                }
+                // Приоритет 3: Пробуем найти в кэше БД (быстро и без API запросов)
+                else if (signal.instrumentUid) {
+                    // Сначала проверяем кэш БД - может быть instrumentUid уже сохранен как FIGI или в apiData
+                    const cachedInstrument = await CachedInstrument.findOne({
+                        where: {
+                            [Op.or]: [
+                                { figi: signal.instrumentUid },
+                                sequelize.where(
+                                    sequelize.fn('jsonb_extract_path_text', sequelize.col('apiData'), 'uid'),
+                                    signal.instrumentUid
+                                )
+                            ]
+                        }
+                    });
+                    
+                    if (cachedInstrument && cachedInstrument.figi) {
+                        figi = cachedInstrument.figi;
+                    }
+                }
+                
+                // Приоритет 4: Используем requestedFigi как fallback (исходный FIGI из запроса)
+                // Это самый надежный вариант, так как мы запрашивали сигналы именно для этого FIGI
+                if (!figi && requestedFigi) {
+                    figi = requestedFigi;
                 }
 
                 const signalData = {
@@ -269,7 +269,8 @@ class SignalCacheService {
             }
 
             const signals = result.data.signals;
-            const savedCount = await this.saveSignals(signals);
+            // Передаем figi как fallback на случай, если в сигналах нет figi или instrumentUid не конвертируется
+            const savedCount = await this.saveSignals(signals, figi);
 
             return {
                 success: true,

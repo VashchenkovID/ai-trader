@@ -272,14 +272,27 @@ export const apiService = {
   },
 
   /**
-   * Обновить кеш данных
+   * Обновить кеш данных (инкрементальное обновление)
    */
   async refreshCache(): Promise<any> {
     try {
-      const response = await api.post('/api/market/refresh');
+      const response = await api.post('/api/system/cache/update');
       return response.data;
     } catch (error) {
       console.error('Error refreshing cache:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Полное обновление кеша данных
+   */
+  async fullRefreshCache(): Promise<any> {
+    try {
+      const response = await api.post('/api/system/cache/full-update');
+      return response.data;
+    } catch (error) {
+      console.error('Error full refreshing cache:', error);
       throw error;
     }
   },
@@ -943,6 +956,19 @@ export const apiService = {
       return response.data.data;
     } catch (error) {
       console.error('Error training all AI:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Анализ одного инструмента с сохранением в рекомендации (для отладки)
+   */
+  async analyzeSingleInstrument(figi: string): Promise<any> {
+    try {
+      const response = await api.post('/api/ai/analyze-single-instrument', { figi });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error analyzing single instrument:', error);
       throw error;
     }
   },
@@ -2775,6 +2801,19 @@ export const apiService = {
       return response.data;
     } catch (error: any) {
       console.error('Error getting stock signals:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Запрос и кеширование торговых сигналов для инструмента
+   */
+  async fetchAndCacheSignals(figi: string): Promise<any> {
+    try {
+      const response = await api.post(`/api/market/stock/${figi}/signals/fetch`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching and caching signals:', error);
       throw error;
     }
   }

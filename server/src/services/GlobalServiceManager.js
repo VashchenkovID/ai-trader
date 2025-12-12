@@ -8,7 +8,8 @@ let globalServiceManager = null;
  */
 export function getGlobalServiceManager() {
     if (!globalServiceManager) {
-        globalServiceManager = new ServiceManager();
+        // ServiceManager экспортируется как singleton, используем его напрямую
+        globalServiceManager = ServiceManager;
     }
     return globalServiceManager;
 }

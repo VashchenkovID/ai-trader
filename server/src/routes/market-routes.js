@@ -265,15 +265,37 @@ router.get('/stock/:figi/signals', async (req, res) => {
         
         const SignalCacheService = (await import('../services/SignalCacheService.js')).default;
         
+        const requestedLimit = limit ? parseInt(limit) : 20;
         const options = {
-            limit: limit ? parseInt(limit) : 20 // По умолчанию 20 сигналов
+            limit: requestedLimit
         };
         if (from) options.from = new Date(from);
         if (to) options.to = new Date(to);
         if (direction) options.direction = direction;
         if (activeOnly === 'true') options.activeOnly = true;
         
-        const signals = await SignalCacheService.getSignalsByFigi(figi, options);
+        // Сначала проверяем, есть ли сигналы в БД
+        let signals = await SignalCacheService.getSignalsByFigi(figi, options);
+        
+        // Если сигналов нет в БД или их мало (и нет фильтров по датам/направлению), запрашиваем с максимальным лимитом
+        if (signals.length === 0 || (signals.length < requestedLimit && !from && !to && !direction)) {
+            console.log(`📡 Сигналов в БД для ${figi}: ${signals.length}, запрашиваем из API с максимальным лимитом...`);
+            
+            // Запрашиваем с максимальным лимитом (1000 - обычно максимальный лимит для API)
+            const fetchOptions = {
+                limit: 1000, // Максимальный лимит для получения всех доступных сигналов
+                pageNumber: 0
+            };
+            
+            const fetchResult = await SignalCacheService.fetchAndCacheSignals(figi, fetchOptions);
+            
+            if (fetchResult.success && fetchResult.savedCount > 0) {
+                console.log(`✅ Загружено и сохранено ${fetchResult.savedCount} сигналов для ${figi}`);
+                
+                // Теперь получаем сигналы из БД с нужными фильтрами
+                signals = await SignalCacheService.getSignalsByFigi(figi, options);
+            }
+        }
         
         // Преобразуем сигналы в формат для фронтенда
         const formattedSignals = signals.map(signal => {
@@ -314,6 +336,44 @@ router.get('/stock/:figi/signals', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Ошибка получения сигналов из БД',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Запрос и кеширование торговых сигналов для инструмента из API
+ * POST /api/market/stock/:figi/signals/fetch
+ */
+router.post('/stock/:figi/signals/fetch', async (req, res) => {
+    try {
+        const { figi } = req.params;
+        
+        const SignalCacheService = (await import('../services/SignalCacheService.js')).default;
+        
+        const result = await SignalCacheService.fetchAndCacheSignals(figi);
+        
+        if (result.success) {
+            res.json({
+                success: true,
+                message: `Загружено и сохранено ${result.savedCount} сигналов`,
+                data: {
+                    savedCount: result.savedCount,
+                    totalSignals: result.totalSignals || 0
+                }
+            });
+        } else {
+            res.status(500).json({
+                success: false,
+                message: 'Ошибка загрузки сигналов',
+                error: result.error || 'Неизвестная ошибка'
+            });
+        }
+    } catch (error) {
+        console.error('Ошибка запроса сигналов:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка запроса сигналов',
             error: error.message
         });
     }

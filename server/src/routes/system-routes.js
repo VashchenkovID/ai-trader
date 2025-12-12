@@ -120,46 +120,67 @@ router.get('/cache/status', async (req, res) => {
 });
 
 /**
- * Обновление кеша
+ * Инкрементальное обновление кеша (раз в сутки)
  */
 router.post('/cache/update', async (req, res) => {
     try {
         // Отправляем ответ сразу
         res.json({
             success: true,
-            message: 'Обновление кеша запущено'
+            message: 'Инкрементальное обновление кеша запущено'
         });
 
-        // Запускаем обновление кеша в фоне
+        // Запускаем инкрементальное обновление кеша в фоне
         try {
-            const result = await CacheService.updateCache();
-            console.log('Обновление кеша завершено:', result);
-            
-            // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
-            if (WebSocketService) {
-                WebSocketService.broadcast('cache_update_completed', {
-                    success: true,
-                    result: result
-                });
-            }
+            const result = await SchedulerService.performCacheUpdate();
+            console.log('Инкрементальное обновление кеша завершено:', result);
         } catch (updateError) {
-            console.error('Ошибка обновления кеша:', updateError);
-            
-            // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
-            if (WebSocketService) {
-                WebSocketService.broadcast('cache_update_error', {
-                    success: false,
-                    error: updateError.message
-                });
-            }
+            console.error('Ошибка инкрементального обновления кеша:', updateError);
         }
     } catch (error) {
-        console.error('Ошибка запуска обновления кеша:', error);
+        console.error('Ошибка запуска инкрементального обновления кеша:', error);
         res.status(500).json({
             success: false,
-            message: 'Ошибка запуска обновления кеша',
+            message: 'Ошибка запуска инкрементального обновления кеша',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Полное обновление кеша (ТОЛЬКО РУЧНОЙ ЗАПУСК)
+ * ВАЖНО: Это очень ресурсоемкая операция, которая:
+ * - Приостанавливает ВСЕ процессы системы
+ * - Может занять несколько часов
+ * - Создает большую нагрузку на БД
+ * - Должна выполняться только вручную пользователем
+ * 
+ * Инструменты - обновление списка
+ * Свечи - за 1 год на каждый инструмент
+ * Сигналы - 1000 сигналов на каждый инструмент
+ */
+router.post('/cache/full-update', async (req, res) => {
+    try {
+        // Отправляем ответ сразу
+        res.json({
+            success: true,
+            message: 'Полное обновление кеша запущено'
+        });
+
+        // Запускаем полное обновление кеша в фоне
+        // ВАЖНО: Не вызывать автоматически! Только по запросу пользователя.
+        try {
+            const result = await SchedulerService.performFullCacheUpdate(true); // force = true для ручного запуска
+            console.log('✅ Полное обновление кеша завершено:', result);
+        } catch (updateError) {
+            console.error('❌ Ошибка полного обновления кеша:', updateError);
+            // Ошибка уже обработана в performFullCacheUpdate, здесь просто логируем
+        }
+    } catch (error) {
+        console.error('Ошибка запуска полного обновления кеша:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка запуска полного обновления кеша',
             error: error.message
         });
     }

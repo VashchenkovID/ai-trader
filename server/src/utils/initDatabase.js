@@ -246,11 +246,12 @@ async function initializeRecommendedSettings() {
             },
             {
                 key: 'nn_training_schedule',
-                value: '0 3 * * 1',
-                description: 'Расписание полного обучения нейросети (cron)',
+                value: '0 3 * * *',
+                description: 'Расписание полного обучения нейросети (cron, запускается после обновления кеша в 02:00)',
                 category: 'scheduler',
                 dataType: 'string',
                 options: [
+                    { value: '0 3 * * *', label: 'Ежедневно в 3:00 (после обновления кеша)' },
                     { value: '0 2 * * 1', label: 'Понедельник в 2:00' },
                     { value: '0 3 * * 1', label: 'Понедельник в 3:00' },
                     { value: '0 4 * * 1', label: 'Понедельник в 4:00' },
@@ -310,6 +311,42 @@ async function initializeRecommendedSettings() {
                 dataType: 'number',
                 minValue: 5,
                 maxValue: 1440
+            },
+            {
+                key: 'price_update_interval_minutes',
+                value: 20,
+                description: 'Интервал обновления цен всех инструментов (минуты)',
+                category: 'scheduler',
+                dataType: 'number',
+                minValue: 1,
+                maxValue: 60
+            },
+            {
+                key: 'portfolio_prices_update_interval_minutes',
+                value: 2,
+                description: 'Интервал обновления цен активных позиций портфеля (минуты)',
+                category: 'scheduler',
+                dataType: 'number',
+                minValue: 1,
+                maxValue: 10
+            },
+            {
+                key: 'active_signals_prices_update_interval_minutes',
+                value: 5,
+                description: 'Интервал обновления цен активных сигналов (минуты)',
+                category: 'scheduler',
+                dataType: 'number',
+                minValue: 1,
+                maxValue: 30
+            },
+            {
+                key: 'trading_requests_prices_update_interval_seconds',
+                value: 60,
+                description: 'Интервал обновления цен активных торговых заявок (секунды)',
+                category: 'scheduler',
+                dataType: 'number',
+                minValue: 30,
+                maxValue: 300
             },
 
             // ========================================

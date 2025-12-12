@@ -301,6 +301,42 @@ Settings.initializeDefaults = async function() {
             ]
         },
         {
+            key: 'price_update_interval_minutes',
+            value: 20,
+            description: 'Интервал обновления цен всех инструментов (минуты)',
+            category: 'scheduler',
+            dataType: 'number',
+            minValue: 5,
+            maxValue: 60
+        },
+        {
+            key: 'portfolio_prices_update_interval_minutes',
+            value: 2,
+            description: 'Интервал обновления цен активных позиций портфеля (минуты)',
+            category: 'scheduler',
+            dataType: 'number',
+            minValue: 1,
+            maxValue: 10
+        },
+        {
+            key: 'active_signals_prices_update_interval_minutes',
+            value: 5,
+            description: 'Интервал обновления цен активных сигналов (минуты)',
+            category: 'scheduler',
+            dataType: 'number',
+            minValue: 1,
+            maxValue: 30
+        },
+        {
+            key: 'trading_requests_prices_update_interval_seconds',
+            value: 60,
+            description: 'Интервал обновления цен активных торговых заявок (секунды)',
+            category: 'scheduler',
+            dataType: 'number',
+            minValue: 30,
+            maxValue: 300
+        },
+        {
             key: 'system_report_schedule',
             value: '0 */6 * * *',
             description: 'Расписание системных отчетов в Telegram (cron)',

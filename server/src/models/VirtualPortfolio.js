@@ -75,6 +75,15 @@ const VirtualPortfolio = sequelize.define('VirtualPortfolio', {
 // Статические методы
 VirtualPortfolio.getCurrent = async function() {
     try {
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверяем состояние connection manager перед использованием
+        if (sequelize.connectionManager && sequelize.connectionManager.pool) {
+            const pool = sequelize.connectionManager.pool;
+            if (pool._draining) {
+                console.warn('⚠️ Connection pool is draining, cannot get portfolio');
+                return null;
+            }
+        }
+        
         // У нас всегда один виртуальный портфель, ищем по ID=1 или просто первую запись
         let portfolio = await this.findByPk(1);
         
@@ -107,6 +116,24 @@ VirtualPortfolio.getCurrent = async function() {
         
         return portfolio;
     } catch (error) {
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обрабатываем ошибку закрытого connection manager
+        if (error.message && error.message.includes('connection manager was closed')) {
+            console.warn('⚠️ Connection manager was closed, attempting to restore...');
+            
+            // Пытаемся восстановить соединение
+            try {
+                const DatabaseConnectionManager = (await import('../utils/DatabaseConnectionManager.js')).default;
+                await DatabaseConnectionManager.reconnect();
+                
+                // Повторяем попытку после небольшой задержки
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return await this.getCurrent();
+            } catch (reconnectError) {
+                console.error('❌ Failed to restore connection:', reconnectError.message);
+                return null;
+            }
+        }
+        
         console.error('❌ Ошибка получения виртуального портфеля:', error);
         return null;
     }

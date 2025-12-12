@@ -198,6 +198,125 @@ Recommendation.getTopRecommendations = async function(limit = 10, recommendation
     });
 };
 
+/**
+ * Получить топ-3 рекомендации BUY - по одной для каждой стратегии (агрессивная, умеренная, консервативная)
+ * Ищет рекомендации, где в горизонтах есть BUY для соответствующей стратегии
+ */
+Recommendation.getTopRecommendationsByStrategies = async function() {
+    try {
+        // Получаем все активные рекомендации с анализом (не только BUY, т.к. BUY может быть в стратегиях)
+        const allRecommendations = await this.findAll({
+            where: {
+                isActive: true
+                // Не фильтруем по recommendation, т.к. BUY может быть в стратегиях горизонтов
+            },
+            order: [['confidence', 'DESC'], ['score', 'DESC']],
+            limit: 100 // Берем больше, чтобы найти лучшие по стратегиям
+        });
+
+        const result = {
+            aggressive: null,
+            moderate: null,
+            conservative: null
+        };
+
+        // Проходим по всем рекомендациям и ищем лучшие для каждой стратегии
+        // Проверяем ВСЕ рекомендации независимо от общей рекомендации (BUY/SELL/HOLD)
+        for (const rec of allRecommendations) {
+            // Получаем analysis - может быть объектом или JSONB строкой
+            let analysis = rec.analysis;
+            if (typeof analysis === 'string') {
+                try {
+                    analysis = JSON.parse(analysis);
+                } catch (e) {
+                    console.warn(`⚠️ Failed to parse analysis for ${rec.figi}:`, e.message);
+                    analysis = {};
+                }
+            }
+            analysis = analysis || {};
+            
+            const horizons = analysis.horizons || {};
+
+            // Проверяем все горизонты (shortTerm, mediumTerm, longTerm)
+            const horizonKeys = ['shortTerm', 'mediumTerm', 'longTerm'];
+            
+            // Проверяем все горизонты (shortTerm, mediumTerm, longTerm)
+            for (const horizonKey of horizonKeys) {
+                const horizon = horizons[horizonKey];
+                if (!horizon || !horizon.strategies) {
+                    continue;
+                }
+
+                const strategies = horizon.strategies;
+
+                // Проверяем агрессивную стратегию - ищем BUY независимо от общей рекомендации
+                if (strategies.aggressive && strategies.aggressive.recommendation === 'BUY') {
+                    const strategyConfidence = strategies.aggressive.strategyConfidence || strategies.aggressive.confidence || 0;
+                    const currentConfidence = result.aggressive?.strategyData?.strategyConfidence || 
+                                             result.aggressive?.strategyData?.confidence || 0;
+                    
+                    // Если еще нет рекомендации или текущая лучше (по уверенности стратегии)
+                    if (!result.aggressive || strategyConfidence > currentConfidence) {
+                        result.aggressive = {
+                            ...rec.toJSON(),
+                            strategyType: 'aggressive',
+                            strategyData: strategies.aggressive,
+                            horizon: horizonKey
+                        };
+                    }
+                }
+
+                // Проверяем умеренную стратегию - ищем BUY независимо от общей рекомендации
+                if (strategies.moderate && strategies.moderate.recommendation === 'BUY') {
+                    const strategyConfidence = strategies.moderate.strategyConfidence || strategies.moderate.confidence || 0;
+                    const currentConfidence = result.moderate?.strategyData?.strategyConfidence || 
+                                             result.moderate?.strategyData?.confidence || 0;
+                    
+                    if (!result.moderate || strategyConfidence > currentConfidence) {
+                        result.moderate = {
+                            ...rec.toJSON(),
+                            strategyType: 'moderate',
+                            strategyData: strategies.moderate,
+                            horizon: horizonKey
+                        };
+                    }
+                }
+
+                // Проверяем консервативную стратегию - ищем BUY независимо от общей рекомендации
+                if (strategies.conservative && strategies.conservative.recommendation === 'BUY') {
+                    const strategyConfidence = strategies.conservative.strategyConfidence || strategies.conservative.confidence || 0;
+                    const currentConfidence = result.conservative?.strategyData?.strategyConfidence || 
+                                             result.conservative?.strategyData?.confidence || 0;
+                    
+                    if (!result.conservative || strategyConfidence > currentConfidence) {
+                        result.conservative = {
+                            ...rec.toJSON(),
+                            strategyType: 'conservative',
+                            strategyData: strategies.conservative,
+                            horizon: horizonKey
+                        };
+                    }
+                }
+            }
+
+            // Продолжаем поиск по всем рекомендациям, чтобы найти лучшие для каждой стратегии
+        }
+
+        // Возвращаем массив из найденных рекомендаций (может быть меньше 3, если не все найдены)
+        const recommendations = [];
+        if (result.aggressive) recommendations.push(result.aggressive);
+        if (result.moderate) recommendations.push(result.moderate);
+        if (result.conservative) recommendations.push(result.conservative);
+
+
+        return recommendations;
+    } catch (error) {
+        console.error('❌ Error getting top recommendations by strategies:', error);
+        // В случае ошибки возвращаем пустой массив или fallback на старый метод
+        return this.getTopRecommendations(3, 'BUY');
+    }
+};
+
 Recommendation.getRecentRecommendations = async function(limit = 20) {
     return this.findAll({
         where: { isActive: true },

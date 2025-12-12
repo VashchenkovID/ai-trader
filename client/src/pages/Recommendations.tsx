@@ -172,6 +172,43 @@ const Recommendations: React.FC = () => {
             }
           }
           
+        // Парсим analysis и explanation, если они строки JSON
+        let analysisObj = rec.analysis;
+        if (typeof analysisObj === 'string') {
+          try {
+            analysisObj = JSON.parse(analysisObj);
+          } catch (e) {
+            analysisObj = null;
+          }
+        }
+        
+        let explanationObj = rec.explanation;
+        if (typeof explanationObj === 'string') {
+          try {
+            explanationObj = JSON.parse(explanationObj);
+          } catch (e) {
+            explanationObj = null;
+          }
+        }
+        
+        // Извлекаем горизонты из разных мест (в порядке приоритета)
+        let horizons = null;
+        // Приоритет 1: прямое поле horizons
+        if (rec.horizons) {
+          horizons = rec.horizons;
+        }
+        // Приоритет 2: analysis.horizons (как в БД)
+        else if (analysisObj && typeof analysisObj === 'object' && analysisObj.horizons) {
+          horizons = analysisObj.horizons;
+        }
+        // Приоритет 3: explanation.details.ensemble.horizons
+        else if (explanationObj && typeof explanationObj === 'object') {
+          horizons = explanationObj.details?.ensemble?.horizons || 
+                     explanationObj.details?.horizons || 
+                     explanationObj.horizons || 
+                     null;
+        }
+        
         return {
           figi: rec.figi || rec.id,
           ticker: rec.ticker || '',
@@ -186,32 +223,12 @@ const Recommendations: React.FC = () => {
           sector: rec.sector,
           analysisDate: rec.analysisDate || rec.createdAt || new Date().toISOString(),
           isActive: rec.isActive !== undefined ? rec.isActive : true,
-          explanation: rec.explanation || null,
-          analysis: rec.analysis || null,
+          explanation: explanationObj || rec.explanation || null,
+          analysis: analysisObj || rec.analysis || null,
           strategy: strategy,
           suggestedStrategy: suggestedStrategy,
           strategyId: rec.strategyId || strategy?.id || suggestedStrategy?.id || null,
-          // Извлекаем горизонты из разных мест, учитывая что explanation может быть строкой JSON
-          horizons: (() => {
-            // Сначала проверяем прямое поле horizons
-            if (rec.horizons) return rec.horizons;
-            
-            // Затем проверяем explanation (может быть объектом или строкой JSON)
-            let explanationObj = rec.explanation;
-            if (typeof explanationObj === 'string') {
-              try {
-                explanationObj = JSON.parse(explanationObj);
-              } catch (e) {
-                return null;
-              }
-            }
-            
-            if (explanationObj && typeof explanationObj === 'object') {
-              return explanationObj.details?.horizons || explanationObj.horizons || null;
-            }
-            
-            return null;
-          })()
+          horizons: horizons
         };
       });
       
@@ -367,8 +384,8 @@ const Recommendations: React.FC = () => {
             style={{ minWidth: '150px' }}
           />
           <Column
-            field="action"
-            header="Действие"
+            field="buy"
+            header="Купить"
             body={(rowData: Recommendation) => <BuyButton rowData={rowData} onRequestCreated={loadRecommendations} />}
             style={{ minWidth: '120px' }}
             frozen

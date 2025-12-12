@@ -12,11 +12,14 @@ import { ProgressSpinner } from 'primereact/progressspinner';
 import { Message } from 'primereact/message';
 import { SelectButton } from 'primereact/selectbutton';
 import { Divider } from 'primereact/divider';
+import { Dialog } from 'primereact/dialog';
 import { apiService } from '../services/apiService';
 import { translateSector } from '../utils/sectorTranslator';
 import { translateRecommendation } from '../utils/recommendationTranslator';
 import { getConfidenceDescription, getScoreDescription } from '../utils/confidenceTranslator';
-import { formatFullPrediction } from '../utils/predictionFormatter';
+import BuyButton from '../components/recommendations/BuyButton';
+import AnalyzeButton from '../components/recommendations/AnalyzeButton';
+import TrainButton from '../components/recommendations/TrainButton';
 
 interface StockDetail {
   figi: string;
@@ -94,6 +97,17 @@ const StockDetail: React.FC = () => {
   const [pricePeriod, setPricePeriod] = useState<TimePeriod>('week');
   const [volumePeriod, setVolumePeriod] = useState<TimePeriod>('week');
   const [loadingNews, setLoadingNews] = useState(false);
+  const [loadingSignals, setLoadingSignals] = useState(false);
+  const [showSignalsModal, setShowSignalsModal] = useState(false);
+  const [showNewsModal, setShowNewsModal] = useState(false);
+  const [modalSignals, setModalSignals] = useState<SignalItem[]>([]);
+  const [modalNews, setModalNews] = useState<NewsItem[]>([]);
+  const [loadingMoreSignals, setLoadingMoreSignals] = useState(false);
+  const [loadingMoreNews, setLoadingMoreNews] = useState(false);
+  const [hasMoreSignals, setHasMoreSignals] = useState(true);
+  const [hasMoreNews, setHasMoreNews] = useState(true);
+  const signalsModalRef = useRef<HTMLDivElement>(null);
+  const newsModalRef = useRef<HTMLDivElement>(null);
 
   const periodOptions = [
     { label: 'День', value: 'day' },
@@ -131,13 +145,12 @@ const StockDetail: React.FC = () => {
       console.log(`📊 Loading stock data for ${figi} from database...`);
       
       // Загружаем остальные данные параллельно
-      const [detailData, priceCandlesData, volumeCandlesData, historyData, newsData, signalsData, recommendationData] = await Promise.all([
+      const [detailData, priceCandlesData, volumeCandlesData, historyData, newsData, recommendationData] = await Promise.all([
         apiService.getStockDetail(figi),
         apiService.getStockCandles(figi, 365, 'DAY'), // За год по умолчанию для цены
         apiService.getStockCandles(figi, 365, 'DAY'), // За год по умолчанию для объема
         apiService.getStockPredictionHistory(figi),
         apiService.getNews(figi, 20, 30).catch(() => []), // Новости за 30 дней
-        apiService.getStockSignals(figi).catch(() => ({ success: true, data: [] })), // Сигналы из БД
         apiService.getLatestStockRecommendation(figi, 24).catch(() => ({ success: true, data: null })) // Рекомендация из БД (макс 24 часа)
       ]);
       
@@ -157,6 +170,45 @@ const StockDetail: React.FC = () => {
           isFromDatabase: dbPrediction.isFromDatabase
         });
         
+        // Парсим analysis и explanation, если они строки JSON
+        let analysisObj = dbPrediction.analysis;
+        if (typeof analysisObj === 'string') {
+          try {
+            analysisObj = JSON.parse(analysisObj);
+          } catch (e) {
+            console.warn('Failed to parse analysis JSON:', e);
+            analysisObj = null;
+          }
+        }
+        
+        let explanationObj = dbPrediction.explanation;
+        if (typeof explanationObj === 'string') {
+          try {
+            explanationObj = JSON.parse(explanationObj);
+          } catch (e) {
+            console.warn('Failed to parse explanation JSON:', e);
+            explanationObj = null;
+          }
+        }
+        
+        // Извлекаем горизонты из разных мест (в порядке приоритета, как в таблице)
+        let horizons = null;
+        // Приоритет 1: прямое поле horizons
+        if (dbPrediction.horizons) {
+          horizons = dbPrediction.horizons;
+        }
+        // Приоритет 2: analysis.horizons (как в БД)
+        else if (analysisObj && typeof analysisObj === 'object' && analysisObj.horizons) {
+          horizons = analysisObj.horizons;
+        }
+        // Приоритет 3: explanation.details.ensemble.horizons
+        else if (explanationObj && typeof explanationObj === 'object') {
+          horizons = explanationObj.details?.ensemble?.horizons || 
+                     explanationObj.details?.horizons || 
+                     explanationObj.horizons || 
+                     null;
+        }
+        
         // Нормализуем confidence и score: если больше 1, значит это процент (0-100), делим на 100
         if (typeof dbPrediction.confidence === 'number' && !isNaN(dbPrediction.confidence) && dbPrediction.confidence > 1) {
           dbPrediction.confidence = dbPrediction.confidence / 100;
@@ -165,7 +217,14 @@ const StockDetail: React.FC = () => {
           dbPrediction.score = dbPrediction.score / 100;
         }
         
-        setCurrentPrediction(dbPrediction);
+        // Формируем объект предсказания с унифицированной структурой (как в таблице)
+        setCurrentPrediction({
+          ...dbPrediction,
+          analysis: analysisObj || dbPrediction.analysis || null,
+          explanation: explanationObj || dbPrediction.explanation || null,
+          horizons: horizons,
+          priceAtAnalysis: dbPrediction.priceAtAnalysis || dbPrediction.price || stockDetail?.currentPrice || 0
+        });
       } else {
         console.log(`⚠️ No recommendation found in DB for ${figi} (or too old)`);
         setCurrentPrediction(null);
@@ -183,12 +242,7 @@ const StockDetail: React.FC = () => {
         : [];
       setNews(formattedNews);
       
-      // Устанавливаем сигналы из БД
-      if (signalsData.success && Array.isArray(signalsData.data)) {
-        setSignals(signalsData.data);
-      } else {
-        setSignals([]);
-      }
+      // Сигналы не загружаются автоматически, только по клику на кнопку "Запросить сигналы"
       
     } catch (err: any) {
       console.error('Error loading stock data:', err);
@@ -270,6 +324,46 @@ const StockDetail: React.FC = () => {
     }
   };
 
+  const handleFetchFreshSignals = async () => {
+    if (!figi) {
+      toast.current?.show({
+        severity: 'warn',
+        summary: 'Предупреждение',
+        detail: 'FIGI не указан',
+        life: 3000
+      });
+      return;
+    }
+
+    try {
+      setLoadingSignals(true);
+      const result = await apiService.fetchAndCacheSignals(figi);
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Успешно',
+        detail: result.message || `Загружено ${result.data?.savedCount || 0} сигналов`,
+        life: 3000
+      });
+
+      // Обновляем список сигналов после загрузки
+      const signalsData = await apiService.getStockSignals(figi, 20, false);
+      if (signalsData.success && Array.isArray(signalsData.data)) {
+        setSignals(signalsData.data);
+      }
+    } catch (error: any) {
+      console.error('Error fetching signals:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Ошибка',
+        detail: error.response?.data?.message || error.message || 'Не удалось загрузить сигналы',
+        life: 5000
+      });
+    } finally {
+      setLoadingSignals(false);
+    }
+  };
+
   const handleFetchFreshNews = async () => {
     if (!stockDetail || !stockDetail.ticker) {
       toast.current?.show({
@@ -321,6 +415,149 @@ const StockDetail: React.FC = () => {
       });
     } finally {
       setLoadingNews(false);
+    }
+  };
+
+  // Открытие модального окна для сигналов
+  const handleOpenSignalsModal = async () => {
+    if (!figi) return;
+    
+    setShowSignalsModal(true);
+    setModalSignals([]);
+    setHasMoreSignals(true);
+    
+    try {
+      const signalsData = await apiService.getStockSignals(figi, 20, false);
+      if (signalsData.success && Array.isArray(signalsData.data)) {
+        setModalSignals(signalsData.data);
+        setHasMoreSignals(signalsData.data.length >= 20);
+      }
+    } catch (err) {
+      console.error('Error loading signals:', err);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Ошибка',
+        detail: 'Не удалось загрузить сигналы',
+        life: 3000
+      });
+    }
+  };
+
+  // Открытие модального окна для новостей
+  const handleOpenNewsModal = async () => {
+    if (!figi) return;
+    
+    setShowNewsModal(true);
+    setModalNews([]);
+    setHasMoreNews(true);
+    
+    try {
+      const newsData = await apiService.getNews(figi, 20, 30);
+      const formattedNews = Array.isArray(newsData) 
+        ? newsData.map((item: any) => ({
+            title: item.title || '',
+            description: item.description || '',
+            url: item.url || '',
+            publishedAt: item.publishedAt || new Date().toISOString(),
+            source: item.source ? (typeof item.source === 'string' ? { name: item.source } : item.source) : { name: 'Неизвестный источник' }
+          }))
+        : [];
+      setModalNews(formattedNews);
+      setHasMoreNews(formattedNews.length >= 20);
+    } catch (err) {
+      console.error('Error loading news:', err);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Ошибка',
+        detail: 'Не удалось загрузить новости',
+        life: 3000
+      });
+    }
+  };
+
+  // Загрузка дополнительных сигналов
+  const loadMoreSignals = async () => {
+    if (!figi || loadingMoreSignals || !hasMoreSignals) return;
+    
+    setLoadingMoreSignals(true);
+    try {
+      const currentCount = modalSignals.length;
+      const signalsData = await apiService.getStockSignals(figi, currentCount + 20, false);
+      if (signalsData.success && Array.isArray(signalsData.data)) {
+        // Добавляем только новые сигналы (которые еще не загружены)
+        const existingIds = new Set(modalSignals.map(s => s.signalId));
+        const newSignals = signalsData.data.filter((s: SignalItem) => !existingIds.has(s.signalId));
+        
+        if (newSignals.length > 0) {
+          setModalSignals([...modalSignals, ...newSignals]);
+        }
+        
+        // Если получили меньше чем запросили, значит больше нет данных
+        setHasMoreSignals(signalsData.data.length >= currentCount + 20);
+      } else {
+        setHasMoreSignals(false);
+      }
+    } catch (err) {
+      console.error('Error loading more signals:', err);
+      setHasMoreSignals(false);
+    } finally {
+      setLoadingMoreSignals(false);
+    }
+  };
+
+  // Загрузка дополнительных новостей
+  const loadMoreNews = async () => {
+    if (!figi || loadingMoreNews || !hasMoreNews) return;
+    
+    setLoadingMoreNews(true);
+    try {
+      const currentCount = modalNews.length;
+      const newsData = await apiService.getNews(figi, currentCount + 20, 30);
+      const formattedNews = Array.isArray(newsData) 
+        ? newsData.map((item: any) => ({
+            title: item.title || '',
+            description: item.description || '',
+            url: item.url || '',
+            publishedAt: item.publishedAt || new Date().toISOString(),
+            source: item.source ? (typeof item.source === 'string' ? { name: item.source } : item.source) : { name: 'Неизвестный источник' }
+          }))
+        : [];
+      
+      // Добавляем только новые новости (проверяем по title и publishedAt)
+      const existingKeys = new Set(modalNews.map(n => `${n.title}_${n.publishedAt}`));
+      const newNews = formattedNews.filter((n: NewsItem) => !existingKeys.has(`${n.title}_${n.publishedAt}`));
+      
+      if (newNews.length > 0) {
+        setModalNews([...modalNews, ...newNews]);
+      }
+      
+      // Если получили меньше чем запросили, значит больше нет данных
+      setHasMoreNews(formattedNews.length >= currentCount + 20);
+    } catch (err) {
+      console.error('Error loading more news:', err);
+      setHasMoreNews(false);
+    } finally {
+      setLoadingMoreNews(false);
+    }
+  };
+
+  // Обработка прокрутки для сигналов
+  const handleSignalsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+    
+    if (scrollBottom < 100 && hasMoreSignals && !loadingMoreSignals) {
+      loadMoreSignals();
+    }
+  };
+
+  // Обработка прокрутки для новостей
+  const handleNewsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+    
+    if (scrollBottom < 100 && hasMoreNews && !loadingMoreNews) {
+      loadMoreNews();
     }
   };
 
@@ -569,7 +806,7 @@ const StockDetail: React.FC = () => {
       {/* Детальная информация наверху */}
       <Card className="mb-4">
         <div className="grid">
-          <div className="col-12 md:col-3">
+          <div className="col-12 md:col-2">
             <div className="mb-3">
               <div className="text-600 mb-1 text-sm">FIGI</div>
               <div className="font-medium">{stockDetail.figi}</div>
@@ -584,7 +821,7 @@ const StockDetail: React.FC = () => {
             </div>
           </div>
           
-          <div className="col-12 md:col-3">
+          <div className="col-12 md:col-2">
             <div className="mb-3">
               <div className="text-600 mb-1 text-sm">Сектор</div>
               <div className="font-medium">
@@ -603,7 +840,7 @@ const StockDetail: React.FC = () => {
             )}
           </div>
           
-          <div className="col-12 md:col-3">
+          <div className="col-12 md:col-2">
             <div className="mb-3">
               <div className="text-600 mb-1 text-sm">Текущая цена</div>
               <div className="text-2xl font-bold text-primary">
@@ -622,11 +859,12 @@ const StockDetail: React.FC = () => {
               <div className="text-600 text-sm mb-2">Текущее предсказание (из БД)</div>
               {currentPrediction ? (
                 <div>
-                  <Tag 
-                    value={translateRecommendation(currentPrediction.recommendation || 'HOLD')} 
-                    severity={currentPrediction.recommendation === 'BUY' ? 'success' : currentPrediction.recommendation === 'SELL' ? 'danger' : 'info'} 
-                    className="mb-2"
-                  />
+                  <div className="mb-2">
+                    <Tag 
+                      value={translateRecommendation(currentPrediction.recommendation || 'HOLD')} 
+                      severity={currentPrediction.recommendation === 'BUY' ? 'success' : currentPrediction.recommendation === 'SELL' ? 'danger' : 'info'} 
+                    />
+                  </div>
                   {confidenceDesc && (
                     <div className={`text-sm ${confidenceDesc.colorClass} mb-1`}>
                       Уверенность: {confidenceDesc.text} ({confidenceDesc.percentage})
@@ -647,17 +885,358 @@ const StockDetail: React.FC = () => {
                       ✓ Данные из БД
                     </div>
                   )}
-                  {formatFullPrediction(currentPrediction)}
+                  {/* Убираем formatFullPrediction отсюда - горизонты будут показаны ниже крупнее */}
                 </div>
               ) : (
                 <div className="text-500">
-                  Нет данных в БД
-                  <div className="text-xs mt-1">(Рекомендация будет создана при следующем обновлении)</div>
+                  <div className="mb-2">Нет данных в БД</div>
+                  <div className="text-xs mt-2">(Рекомендация будет создана при следующем обновлении или нажмите "Анализ" для немедленного анализа)</div>
                 </div>
               )}
             </div>
           </div>
+          
+          <div className="col-12 md:col-3">
+            <div className="mb-3">
+              <div className="text-600 text-sm mb-2">Действия</div>
+              <div className="flex flex-column gap-2">
+                {currentPrediction ? (
+                  <>
+                    <BuyButton 
+                      rowData={{
+                        figi: currentPrediction.figi || figi || '',
+                        ticker: currentPrediction.ticker || stockDetail?.ticker || '',
+                        name: currentPrediction.name || stockDetail?.name || '',
+                        recommendation: currentPrediction.recommendation || 'HOLD',
+                        confidence: currentPrediction.confidence || 0,
+                        score: currentPrediction.score || 0,
+                        priceAtAnalysis: currentPrediction.priceAtAnalysis || currentPrediction.price || stockDetail?.currentPrice || 0,
+                        targetPrice: currentPrediction.targetPrice,
+                        stopLoss: currentPrediction.stopLoss,
+                        takeProfit: currentPrediction.takeProfit,
+                        explanation: currentPrediction.explanation,
+                        horizons: currentPrediction.horizons
+                      }}
+                    />
+                    <AnalyzeButton 
+                      rowData={{
+                        figi: currentPrediction.figi || figi || '',
+                        ticker: currentPrediction.ticker || stockDetail?.ticker || '',
+                        name: currentPrediction.name || stockDetail?.name || ''
+                      }}
+                      onAnalysisComplete={loadStockData}
+                    />
+                    <TrainButton 
+                      rowData={{
+                        figi: currentPrediction.figi || figi || '',
+                        ticker: currentPrediction.ticker || stockDetail?.ticker || '',
+                        name: currentPrediction.name || stockDetail?.name || ''
+                      }}
+                      onTrainingComplete={loadStockData}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <AnalyzeButton 
+                      rowData={{
+                        figi: figi || '',
+                        ticker: stockDetail?.ticker || '',
+                        name: stockDetail?.name || ''
+                      }}
+                      onAnalysisComplete={loadStockData}
+                    />
+                    <TrainButton 
+                      rowData={{
+                        figi: figi || '',
+                        ticker: stockDetail?.ticker || '',
+                        name: stockDetail?.name || ''
+                      }}
+                      onTrainingComplete={loadStockData}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
+        
+        {/* Прогнозы по горизонтам - крупнее, под основными данными */}
+        {currentPrediction && (() => {
+          // Извлекаем горизонты из разных возможных мест
+          let horizons = null;
+          if (currentPrediction.horizons) {
+            horizons = currentPrediction.horizons;
+          } else if (currentPrediction.analysis?.horizons) {
+            horizons = currentPrediction.analysis.horizons;
+          } else if (currentPrediction.explanation?.details?.ensemble?.horizons) {
+            horizons = currentPrediction.explanation.details.ensemble.horizons;
+          } else if (currentPrediction.explanation?.details?.horizons) {
+            horizons = currentPrediction.explanation.details.horizons;
+          }
+          
+          if (!horizons) return null;
+          
+          const { shortTerm, mediumTerm, longTerm } = horizons;
+          const agreement = currentPrediction.agreement || currentPrediction.analysis?.agreement;
+          
+          const getRecColor = (rec: string) => {
+            if (rec === 'BUY') return 'text-green-600';
+            if (rec === 'SELL') return 'text-red-600';
+            return 'text-blue-600';
+          };
+          
+          const getRecSeverity = (rec: string) => {
+            if (rec === 'BUY') return 'success';
+            if (rec === 'SELL') return 'danger';
+            return 'info';
+          };
+          
+          return (
+            <div className="col-12 mt-3 pt-3 border-top-1 surface-border">
+              <div className="text-lg font-semibold mb-3">📊 Прогнозы по горизонтам</div>
+              <div className="grid">
+                {shortTerm && (
+                  <div className="col-12 md:col-4">
+                    <Card className="h-full">
+                      <div className="text-600 text-sm mb-2">{shortTerm.name || 'Краткосрочный прогноз'}</div>
+                      <div className="text-xs text-500 mb-2">{shortTerm.description || 'Прогноз на 1-3 дня'}</div>
+                      <Tag 
+                        value={translateRecommendation(shortTerm.recommendation || 'HOLD')} 
+                        severity={getRecSeverity(shortTerm.recommendation || 'HOLD')}
+                        className="mb-2"
+                      />
+                      <div className="text-sm mb-1">
+                        <span className="text-600">Сигнал: </span>
+                        <span className={getRecColor(shortTerm.recommendation || 'HOLD')}>
+                          {((shortTerm.score || 0) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="text-sm mb-3">
+                        <span className="text-600">Уверенность: </span>
+                        <span className="font-semibold">
+                          {((shortTerm.confidence || 0) * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      
+                      {/* Стратегии для горизонта */}
+                      {shortTerm.strategies && (
+                        <div className="mt-3 pt-3 border-top-1 surface-border">
+                          <div className="text-xs text-600 font-semibold mb-2">Рекомендации по стратегиям:</div>
+                          <div className="flex flex-column gap-2">
+                            {shortTerm.strategies.aggressive && (
+                              <div className="p-2 bg-red-50 border-round">
+                                <div className="flex align-items-center gap-2 mb-1">
+                                  <Tag 
+                                    value="Агрессивная" 
+                                    severity="danger"
+                                    className="text-xs"
+                                  />
+                          
+                                </div>
+                                <div className="text-xs text-600">
+                                  {shortTerm.strategies.aggressive.explanation || 'Нет описания'}
+                                </div>
+                              </div>
+                            )}
+                            {shortTerm.strategies.moderate && (
+                              <div className="p-2 bg-yellow-50 border-round">
+                                <div className="flex align-items-center gap-2 mb-1">
+                                  <Tag 
+                                    value="Умеренная" 
+                                    severity="warning"
+                                    className="text-xs"
+                                  />
+                            
+                                </div>
+                                <div className="text-xs text-600">
+                                  {shortTerm.strategies.moderate.explanation || 'Нет описания'}
+                                </div>
+                              </div>
+                            )}
+                            {shortTerm.strategies.conservative && (
+                              <div className="p-2 bg-green-50 border-round">
+                                <div className="flex align-items-center gap-2 mb-1">
+                                  <Tag 
+                                    value="Консервативная" 
+                                    severity="success"
+                                    className="text-xs"
+                                  />
+                                </div>
+                                <div className="text-xs text-600">
+                                  {shortTerm.strategies.conservative.explanation || 'Нет описания'}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+                )}
+                {mediumTerm && (
+                  <div className="col-12 md:col-4">
+                    <Card className="h-full">
+                      <div className="text-600 text-sm mb-2">{mediumTerm.name || 'Среднесрочный прогноз'}</div>
+                      <div className="text-xs text-500 mb-2">{mediumTerm.description || 'Прогноз на 1-4 недели'}</div>
+                      <Tag 
+                        value={translateRecommendation(mediumTerm.recommendation || 'HOLD')} 
+                        severity={getRecSeverity(mediumTerm.recommendation || 'HOLD')}
+                        className="mb-2"
+                      />
+                      <div className="text-sm mb-1">
+                        <span className="text-600">Сигнал: </span>
+                        <span className={getRecColor(mediumTerm.recommendation || 'HOLD')}>
+                          {((mediumTerm.score || 0) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="text-sm mb-3">
+                        <span className="text-600">Уверенность: </span>
+                        <span className="font-semibold">
+                          {((mediumTerm.confidence || 0) * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      
+                      {/* Стратегии для горизонта */}
+                      {mediumTerm.strategies && (
+                        <div className="mt-3 pt-3 border-top-1 surface-border">
+                          <div className="text-xs text-600 font-semibold mb-2">Рекомендации по стратегиям:</div>
+                          <div className="flex flex-column gap-2">
+                            {mediumTerm.strategies.aggressive && (
+                              <div className="p-2 bg-red-50 border-round">
+                                <div className="flex align-items-center gap-2 mb-1">
+                                  <Tag 
+                                    value="Агрессивная" 
+                                    severity="danger"
+                                    className="text-xs"
+                                  />
+                                </div>
+                                <div className="text-xs text-600">
+                                  {mediumTerm.strategies.aggressive.explanation || 'Нет описания'}
+                                </div>
+                              </div>
+                            )}
+                            {mediumTerm.strategies.moderate && (
+                              <div className="p-2 bg-yellow-50 border-round">
+                                <div className="flex align-items-center gap-2 mb-1">
+                                  <Tag 
+                                    value="Умеренная" 
+                                    severity="warning"
+                                    className="text-xs"
+                                  />
+                                </div>
+                                <div className="text-xs text-600">
+                                  {mediumTerm.strategies.moderate.explanation || 'Нет описания'}
+                                </div>
+                              </div>
+                            )}
+                            {mediumTerm.strategies.conservative && (
+                              <div className="p-2 bg-green-50 border-round">
+                                <div className="flex align-items-center gap-2 mb-1">
+                                  <Tag 
+                                    value="Консервативная" 
+                                    severity="success"
+                                    className="text-xs"
+                                  />
+                                </div>
+                                <div className="text-xs text-600">
+                                  {mediumTerm.strategies.conservative.explanation || 'Нет описания'}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+                )}
+                {longTerm && (
+                  <div className="col-12 md:col-4">
+                    <Card className="h-full">
+                      <div className="text-600 text-sm mb-2">{longTerm.name || 'Долгосрочный прогноз'}</div>
+                      <div className="text-xs text-500 mb-2">{longTerm.description || 'Прогноз на 2-3 месяца'}</div>
+                      <Tag 
+                        value={translateRecommendation(longTerm.recommendation || 'HOLD')} 
+                        severity={getRecSeverity(longTerm.recommendation || 'HOLD')}
+                        className="mb-2"
+                      />
+                      <div className="text-sm mb-1">
+                        <span className="text-600">Сигнал: </span>
+                        <span className={getRecColor(longTerm.recommendation || 'HOLD')}>
+                          {((longTerm.score || 0) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="text-sm mb-3">
+                        <span className="text-600">Уверенность: </span>
+                        <span className="font-semibold">
+                          {((longTerm.confidence || 0) * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      
+                      {/* Стратегии для горизонта */}
+                      {longTerm.strategies && (
+                        <div className="mt-3 pt-3 border-top-1 surface-border">
+                          <div className="text-xs text-600 font-semibold mb-2">Рекомендации по стратегиям:</div>
+                          <div className="flex flex-column gap-2">
+                            {longTerm.strategies.aggressive && (
+                              <div className="p-2 bg-red-50 border-round">
+                                <div className="flex align-items-center gap-2 mb-1">
+                                  <Tag 
+                                    value="Агрессивная" 
+                                    severity="danger"
+                                    className="text-xs"
+                                  />
+                                </div>
+                                <div className="text-xs text-600">
+                                  {longTerm.strategies.aggressive.explanation || 'Нет описания'}
+                                </div>
+                              </div>
+                            )}
+                            {longTerm.strategies.moderate && (
+                              <div className="p-2 bg-yellow-50 border-round">
+                                <div className="flex align-items-center gap-2 mb-1">
+                                  <Tag 
+                                    value="Умеренная" 
+                                    severity="warning"
+                                    className="text-xs"
+                                  />
+                                </div>
+                                <div className="text-xs text-600">
+                                  {longTerm.strategies.moderate.explanation || 'Нет описания'}
+                                </div>
+                              </div>
+                            )}
+                            {longTerm.strategies.conservative && (
+                              <div className="p-2 bg-green-50 border-round">
+                                <div className="flex align-items-center gap-2 mb-1">
+                                  <Tag 
+                                    value="Консервативная" 
+                                    severity="success"
+                                    className="text-xs"
+                                  />
+                                </div>
+                                <div className="text-xs text-600">
+                                  {longTerm.strategies.conservative.explanation || 'Нет описания'}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+                )}
+              </div>
+              {agreement !== undefined && agreement !== null && (
+                <div className="mt-3 text-center">
+                  <div className="text-600 text-sm mb-1">Согласованность горизонтов</div>
+                  <div className="text-xl font-bold text-primary">
+                    {(agreement * 100).toFixed(0)}%
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Card>
 
       {/* Основной контент */}
@@ -755,10 +1334,20 @@ const StockDetail: React.FC = () => {
           <Card className="mb-4">
             <div className="flex align-items-center justify-content-between mb-3">
               <h3 className="m-0">⚡ Торговые сигналы</h3>
+              <Button
+                icon="pi pi-refresh"
+                label="Запросить сигналы"
+                size="small"
+                onClick={handleFetchFreshSignals}
+                loading={loadingSignals}
+                disabled={!figi || loadingSignals}
+                className="p-button-text p-button-sm"
+              />
             </div>
             {signals.length > 0 ? (
-              <div className="flex flex-column gap-3" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                {signals.map((signal) => {
+              <>
+                <div className="flex flex-column gap-3">
+                  {signals.slice(0, 5).map((signal) => {
                   const directionText = signal.direction === 'SIGNAL_DIRECTION_BUY' 
                     ? 'ПОКУПКА' 
                     : signal.direction === 'SIGNAL_DIRECTION_SELL' 
@@ -803,8 +1392,20 @@ const StockDetail: React.FC = () => {
                       )}
                     </div>
                   );
-                })}
-              </div>
+                  })}
+                </div>
+                {signals.length > 5 && (
+                  <div className="mt-3 text-center">
+                    <Button
+                      label="Еще"
+                      icon="pi pi-arrow-down"
+                      onClick={() => handleOpenSignalsModal()}
+                      className="p-button-text"
+                      size="small"
+                    />
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center text-500 py-4">
                 Нет сигналов
@@ -827,8 +1428,9 @@ const StockDetail: React.FC = () => {
               />
             </div>
             {news.length > 0 ? (
-              <div className="flex flex-column gap-3" style={{ maxHeight: '800px', overflowY: 'auto' }}>
-                {news.map((item, index) => (
+              <>
+                <div className="flex flex-column gap-3" style={{ maxHeight: '800px', overflowY: 'auto' }}>
+                  {news.slice(0, 5).map((item, index) => (
                   <div key={index} className="border-bottom-1 surface-border pb-3">
                     <div className="text-sm text-500 mb-2">
                       {formatDate(item.publishedAt)}
@@ -849,8 +1451,20 @@ const StockDetail: React.FC = () => {
                       </a>
                     )}
                   </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                {news.length > 5 && (
+                  <div className="mt-3 text-center">
+                    <Button
+                      label="Еще"
+                      icon="pi pi-arrow-down"
+                      onClick={() => handleOpenNewsModal()}
+                      className="p-button-text"
+                      size="small"
+                    />
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center text-500 py-4">
                 Нет новостей
@@ -859,6 +1473,130 @@ const StockDetail: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* Модальное окно для сигналов */}
+      <Dialog
+        header="⚡ Торговые сигналы"
+        visible={showSignalsModal}
+        onHide={() => setShowSignalsModal(false)}
+        style={{ width: '90vw', maxWidth: '800px' }}
+        modal
+        maximizable
+      >
+        <div
+          ref={signalsModalRef}
+          className="flex flex-column gap-3"
+          style={{ maxHeight: '70vh', overflowY: 'auto' }}
+          onScroll={handleSignalsScroll}
+        >
+          {modalSignals.map((signal) => {
+            const directionText = signal.direction === 'SIGNAL_DIRECTION_BUY' 
+              ? 'ПОКУПКА' 
+              : signal.direction === 'SIGNAL_DIRECTION_SELL' 
+              ? 'ПРОДАЖА' 
+              : 'НЕОПРЕДЕЛЕНО';
+            const directionSeverity = signal.direction === 'SIGNAL_DIRECTION_BUY' 
+              ? 'success' 
+              : signal.direction === 'SIGNAL_DIRECTION_SELL' 
+              ? 'danger' 
+              : 'info';
+            
+            return (
+              <div key={signal.signalId} className="border-bottom-1 surface-border pb-3">
+                <div className="flex align-items-center justify-content-between mb-2">
+                  <Tag value={directionText} severity={directionSeverity} />
+                  {signal.isActive && (
+                    <Badge value="Активен" severity="success" />
+                  )}
+                </div>
+                <div className="text-sm text-500 mb-2">
+                  {signal.strategyName}
+                  {signal.probability && ` • Вероятность: ${signal.probability}%`}
+                </div>
+                {signal.name && (
+                  <div className="font-medium mb-2">{signal.name}</div>
+                )}
+                <div className="text-sm text-600 mb-2">
+                  <div>Создан: {formatDate(signal.createDt)}</div>
+                  <div>Действует до: {formatDate(signal.endDt)}</div>
+                  {signal.initialPrice && (
+                    <div>Начальная цена: {formatCurrency(signal.initialPrice)}</div>
+                  )}
+                  {signal.targetPrice && (
+                    <div>Целевая цена: {formatCurrency(signal.targetPrice)}</div>
+                  )}
+                  {signal.stoploss && (
+                    <div>Стоп-лосс: {formatCurrency(signal.stoploss)}</div>
+                  )}
+                </div>
+                {signal.info && (
+                  <div className="text-sm text-500">{signal.info}</div>
+                )}
+              </div>
+            );
+          })}
+          {loadingMoreSignals && (
+            <div className="text-center py-3">
+              <ProgressSpinner />
+            </div>
+          )}
+          {!hasMoreSignals && modalSignals.length > 0 && (
+            <div className="text-center text-500 py-3">
+              Все сигналы загружены
+            </div>
+          )}
+        </div>
+      </Dialog>
+
+      {/* Модальное окно для новостей */}
+      <Dialog
+        header="📰 Новости"
+        visible={showNewsModal}
+        onHide={() => setShowNewsModal(false)}
+        style={{ width: '90vw', maxWidth: '800px' }}
+        modal
+        maximizable
+      >
+        <div
+          ref={newsModalRef}
+          className="flex flex-column gap-3"
+          style={{ maxHeight: '70vh', overflowY: 'auto' }}
+          onScroll={handleNewsScroll}
+        >
+          {modalNews.map((item, index) => (
+            <div key={index} className="border-bottom-1 surface-border pb-3">
+              <div className="text-sm text-500 mb-2">
+                {formatDate(item.publishedAt)}
+                {item.source?.name && ` • ${item.source.name}`}
+              </div>
+              <div className="font-medium mb-2">{item.title}</div>
+              {item.description && (
+                <div className="text-sm text-600 mb-2">{item.description}</div>
+              )}
+              {item.url && (
+                <a 
+                  href={item.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary"
+                >
+                  Читать далее →
+                </a>
+              )}
+            </div>
+          ))}
+          {loadingMoreNews && (
+            <div className="text-center py-3">
+              <ProgressSpinner />
+            </div>
+          )}
+          {!hasMoreNews && modalNews.length > 0 && (
+            <div className="text-center text-500 py-3">
+              Все новости загружены
+            </div>
+          )}
+        </div>
+      </Dialog>
     </div>
   );
 };

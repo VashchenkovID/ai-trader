@@ -1,7 +1,16 @@
 import { parentPort, workerData } from 'worker_threads';
 
 async function performPortfolioAnalysis() {
+    let connection = null;
     try {
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем DatabaseConnectionManager для получения подключения с ожиданием в очереди
+        const DatabaseConnectionManager = (await import('../utils/DatabaseConnectionManager.js')).default;
+        const workerId = `portfolio-analysis-${Date.now()}`;
+        
+        console.log(`📊 [Worker] Requesting database connection (${workerId})...`);
+        connection = await DatabaseConnectionManager.acquireConnection(workerId, 60000);
+        console.log(`✅ [Worker] Database connection acquired (${connection.connectionId})`);
+        
         const { 
             portfolioType, 
             portfolioItems, 
@@ -227,6 +236,12 @@ async function performPortfolioAnalysis() {
                 stack: error.stack
             }
         });
+    } finally {
+        // Освобождаем подключение к БД
+        if (connection && connection.release) {
+            connection.release();
+            console.log(`🔓 [Worker] Database connection released (${connection.connectionId})`);
+        }
     }
 }
 

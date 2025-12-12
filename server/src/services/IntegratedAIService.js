@@ -103,8 +103,6 @@ class IntegratedAIService {
             if (!this.isInitialized) {
                 throw new Error('Integrated AI Service not initialized');
             }
-
-            console.log(`🔍 Getting integrated recommendation for ${figi}...`);
             
             const recommendations = [];
             const weights = {};
@@ -421,10 +419,21 @@ class IntegratedAIService {
         let agreement = null;
         let summary = null;
 
+        // Собираем рекомендации от всех источников для расчета согласованности
+        const sourceRecommendations = [];
+
         for (const rec of recommendations) {
             const weight = normalizedWeights[rec.source] || 0;
             weightedScore += rec.score * weight;
             totalConfidence += rec.confidence * weight;
+            
+            // Сохраняем рекомендацию источника для расчета согласованности
+            sourceRecommendations.push({
+                source: rec.source,
+                recommendation: rec.recommendation,
+                weight: weight,
+                confidence: rec.confidence
+            });
             
             // Если это ансамбль, извлекаем информацию о горизонтах
             if (rec.source === 'ensemble' && rec.horizons) {
@@ -453,6 +462,37 @@ class IntegratedAIService {
             recommendation = 'SELL';
         }
 
+        // Рассчитываем согласованность между источниками
+        let sourceAgreement = 1.0;
+        if (sourceRecommendations.length > 1) {
+            // Подсчитываем количество рекомендаций каждого типа с учетом весов
+            const buyWeight = sourceRecommendations
+                .filter(r => r.recommendation === 'BUY')
+                .reduce((sum, r) => sum + r.weight, 0);
+            const sellWeight = sourceRecommendations
+                .filter(r => r.recommendation === 'SELL')
+                .reduce((sum, r) => sum + r.weight, 0);
+            const holdWeight = sourceRecommendations
+                .filter(r => r.recommendation === 'HOLD')
+                .reduce((sum, r) => sum + r.weight, 0);
+            
+            // Максимальный вес (доминирующая рекомендация)
+            const maxWeight = Math.max(buyWeight, sellWeight, holdWeight);
+            const totalWeight = buyWeight + sellWeight + holdWeight;
+            
+            // Согласованность = доля веса доминирующей рекомендации
+            sourceAgreement = totalWeight > 0 ? maxWeight / totalWeight : 1.0;
+        }
+
+        // Корректируем итоговую confidence с учетом согласованности источников
+        // Если источники расходятся, снижаем confidence
+        const adjustedConfidence = totalConfidence * sourceAgreement;
+
+        // Генерируем рекомендации по стратегиям для каждого горизонта
+        if (horizons) {
+            horizons = this.addStrategyRecommendationsToHorizons(horizons);
+        }
+
         // Генерируем понятное резюме, если есть горизонты
         let finalSummary = summary;
         if (!finalSummary && horizons) {
@@ -461,16 +501,204 @@ class IntegratedAIService {
 
         return {
             score: weightedScore,
-            confidence: totalConfidence,
+            confidence: adjustedConfidence, // Используем скорректированную confidence
             recommendation,
             sources: recommendations.length,
             details: sourceDetails,
             weights: normalizedWeights,
-            // Добавляем информацию о горизонтах, если доступна
+            // Добавляем информацию о горизонтах, если доступна (теперь с рекомендациями по стратегиям)
             horizons: horizons,
-            agreement: agreement,
+            agreement: agreement, // Согласованность горизонтов внутри ensemble
+            sourceAgreement: sourceAgreement, // Согласованность между источниками
             summary: finalSummary
         };
+    }
+
+    /**
+     * Добавляет рекомендации по стратегиям для каждого горизонта
+     * Агрессивная стратегия может давать BUY при более низком confidence, консервативная — только при высоком
+     */
+    addStrategyRecommendationsToHorizons(horizons) {
+        if (!horizons) return horizons;
+
+        // Пороги для каждой стратегии
+        const strategyThresholds = {
+            aggressive: {
+                buyScore: 0.55,
+                buyConfidence: 0.5,
+                sellScore: 0.45,
+                sellConfidence: 0.5
+            },
+            moderate: {
+                buyScore: 0.65,
+                buyConfidence: 0.6,
+                sellScore: 0.35,
+                sellConfidence: 0.6
+            },
+            conservative: {
+                buyScore: 0.75,
+                buyConfidence: 0.8,
+                sellScore: 0.25,
+                sellConfidence: 0.8
+            }
+        };
+
+        // Обрабатываем каждый горизонт
+        const horizonKeys = ['shortTerm', 'mediumTerm', 'longTerm'];
+        
+        for (const horizonKey of horizonKeys) {
+            if (!horizons[horizonKey]) continue;
+            
+            const horizon = horizons[horizonKey];
+            const baseScore = horizon.score || 0;
+            const baseConfidence = horizon.confidence || 0;
+            const baseRecommendation = horizon.recommendation || 'HOLD';
+            
+            // Генерируем рекомендации для каждой стратегии
+            const strategies = {};
+            
+            for (const [strategyType, thresholds] of Object.entries(strategyThresholds)) {
+                let strategyRecommendation = 'HOLD';
+                
+                // Определяем рекомендацию на основе порогов стратегии
+                // Сначала проверяем BUY (более строгие условия)
+                if (baseScore >= thresholds.buyScore && baseConfidence >= thresholds.buyConfidence) {
+                    strategyRecommendation = 'BUY';
+                } 
+                // Затем проверяем SELL (более строгие условия)
+                else if (baseScore <= thresholds.sellScore && baseConfidence >= thresholds.sellConfidence) {
+                    strategyRecommendation = 'SELL';
+                } 
+                // Если базовая рекомендация SELL, но стратегия не прошла порог для SELL
+                else if (baseRecommendation === 'SELL') {
+                    // Для агрессивной стратегии можем дать SELL даже при более низком confidence
+                    if (strategyType === 'aggressive' && baseScore < 0.5 && baseConfidence >= 0.4) {
+                        strategyRecommendation = 'SELL';
+                    } else {
+                        strategyRecommendation = 'HOLD';
+                    }
+                }
+                // Иначе HOLD
+                else {
+                    strategyRecommendation = 'HOLD';
+                }
+                
+                strategies[strategyType] = {
+                    recommendation: strategyRecommendation,
+                    score: baseScore,
+                    confidence: baseConfidence,
+                    // Уверенность стратегии зависит от того, насколько уверенно мы можем дать эту рекомендацию
+                    strategyConfidence: this.calculateStrategyConfidence(
+                        baseScore, 
+                        baseConfidence, 
+                        strategyType, 
+                        strategyRecommendation,
+                        thresholds
+                    ),
+                    thresholds: thresholds,
+                    // Объяснение почему эта стратегия дает такую рекомендацию
+                    explanation: this.generateStrategyExplanation(
+                        strategyType,
+                        strategyRecommendation,
+                        baseScore,
+                        baseConfidence,
+                        thresholds
+                    )
+                };
+            }
+            
+            // Добавляем рекомендации по стратегиям в горизонт
+            horizon.strategies = strategies;
+            
+            // Обновляем базовую рекомендацию горизонта на основе стратегических рекомендаций
+            // Если хотя бы одна стратегия дает SELL, а базовая HOLD, меняем на SELL
+            // Если хотя бы одна стратегия дает BUY, а базовая HOLD, меняем на BUY
+            const strategyRecommendations = Object.values(strategies).map(s => s.recommendation);
+            const hasSellStrategy = strategyRecommendations.includes('SELL');
+            const hasBuyStrategy = strategyRecommendations.includes('BUY');
+            
+            if (baseRecommendation === 'HOLD') {
+                if (hasSellStrategy && !hasBuyStrategy) {
+                    // Если есть SELL стратегии и нет BUY, меняем на SELL
+                    horizon.recommendation = 'SELL';
+                } else if (hasBuyStrategy && !hasSellStrategy) {
+                    // Если есть BUY стратегии и нет SELL, меняем на BUY
+                    horizon.recommendation = 'BUY';
+                }
+                // Если есть и BUY и SELL, оставляем HOLD (противоречие)
+            }
+        }
+        
+        return horizons;
+    }
+
+    /**
+     * Рассчитывает уверенность стратегии на основе базовых показателей и порогов
+     */
+    calculateStrategyConfidence(baseScore, baseConfidence, strategyType, recommendation, thresholds) {
+        if (recommendation === 'HOLD') {
+            return Math.min(baseConfidence, 0.5);
+        }
+        
+        // Для BUY/SELL уверенность зависит от того, насколько показатели превышают пороги
+        if (recommendation === 'BUY') {
+            const scoreExcess = Math.max(0, (baseScore - thresholds.buyScore) / (1 - thresholds.buyScore));
+            const confidenceExcess = Math.max(0, (baseConfidence - thresholds.buyConfidence) / (1 - thresholds.buyConfidence));
+            return Math.min(1, baseConfidence + (scoreExcess + confidenceExcess) / 2 * 0.2);
+        } else if (recommendation === 'SELL') {
+            const scoreExcess = Math.max(0, (thresholds.sellScore - baseScore) / thresholds.sellScore);
+            const confidenceExcess = Math.max(0, (baseConfidence - thresholds.sellConfidence) / (1 - thresholds.sellConfidence));
+            return Math.min(1, baseConfidence + (scoreExcess + confidenceExcess) / 2 * 0.2);
+        }
+        
+        return baseConfidence;
+    }
+
+    /**
+     * Генерирует объяснение рекомендации стратегии
+     */
+    generateStrategyExplanation(strategyType, recommendation, score, confidence, thresholds) {
+        const strategyNames = {
+            aggressive: 'Агрессивная',
+            moderate: 'Умеренная',
+            conservative: 'Консервативная'
+        };
+        
+        const strategyName = strategyNames[strategyType] || strategyType;
+        const scorePercent = (score * 100).toFixed(1);
+        const confidencePercent = (confidence * 100).toFixed(0);
+        
+        if (recommendation === 'BUY') {
+            return `${strategyName} стратегия рекомендует покупку: сигнал ${scorePercent}% (порог: ${(thresholds.buyScore * 100).toFixed(0)}%), уверенность ${confidencePercent}% (порог: ${(thresholds.buyConfidence * 100).toFixed(0)}%)`;
+        } else if (recommendation === 'SELL') {
+            return `${strategyName} стратегия рекомендует продажу: сигнал ${scorePercent}% (порог: ${(thresholds.sellScore * 100).toFixed(0)}%), уверенность ${confidencePercent}% (порог: ${(thresholds.sellConfidence * 100).toFixed(0)}%)`;
+        } else {
+            // HOLD - объясняем почему не BUY и не SELL
+            // Проверяем условия для SELL (если они выполнены, но recommendation = HOLD из-за других факторов)
+            const meetsSellConditions = score <= thresholds.sellScore && confidence >= thresholds.sellConfidence;
+            // Проверяем условия для BUY (если они выполнены, но recommendation = HOLD из-за других факторов)
+            const meetsBuyConditions = score >= thresholds.buyScore && confidence >= thresholds.buyConfidence;
+            
+            if (meetsSellConditions) {
+                // Условия для SELL выполнены, но recommendation = HOLD (возможно из-за других факторов)
+                // В этом случае все равно говорим о продаже, так как условия выполнены
+                return `${strategyName} стратегия рекомендует продажу: сигнал ${scorePercent}% (порог: ${(thresholds.sellScore * 100).toFixed(0)}%), уверенность ${confidencePercent}% (порог: ${(thresholds.sellConfidence * 100).toFixed(0)}%)`;
+            } else if (meetsBuyConditions) {
+                // Условия для BUY выполнены, но recommendation = HOLD (возможно из-за других факторов)
+                // В этом случае все равно говорим о покупке, так как условия выполнены
+                return `${strategyName} стратегия рекомендует покупку: сигнал ${scorePercent}% (порог: ${(thresholds.buyScore * 100).toFixed(0)}%), уверенность ${confidencePercent}% (порог: ${(thresholds.buyConfidence * 100).toFixed(0)}%)`;
+            } else {
+                // Условия для BUY не выполнены
+                if (score < thresholds.buyScore || confidence < thresholds.buyConfidence) {
+                    return `${strategyName} стратегия не рекомендует покупку: сигнал ${scorePercent}% или уверенность ${confidencePercent}% ниже порога (${(thresholds.buyScore * 100).toFixed(0)}%/${(thresholds.buyConfidence * 100).toFixed(0)}%)`;
+                }
+                // Если условия для SELL не выполнены (score > sellScore или confidence < sellConfidence)
+                if (score > thresholds.sellScore || confidence < thresholds.sellConfidence) {
+                    return `${strategyName} стратегия не рекомендует продажу: сигнал ${scorePercent}% или уверенность ${confidencePercent}% выше порога (${(thresholds.sellScore * 100).toFixed(0)}%/${(thresholds.sellConfidence * 100).toFixed(0)}%)`;
+                }
+                return `${strategyName} стратегия рекомендует удержание: показатели не достигают порогов для активных действий`;
+            }
+        }
     }
 
     /**

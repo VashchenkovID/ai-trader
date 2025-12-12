@@ -69,6 +69,10 @@ const sectorTranslations: Record<string, string> = {
   // Альтернативные названия (дополнительные варианты)
   'Tech': 'Технологии',
   'Finance': 'Финансы',
+  'financial': 'Финансы',
+  'Financial': 'Финансы',
+  'IT': 'ИТ',
+  'it': 'ИТ',
   'Health': 'Здравоохранение',
   'Oil & Gas': 'Нефть и газ',
   'oil_gas': 'Нефть и газ',

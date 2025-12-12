@@ -41,7 +41,7 @@ export interface TradingStats {
   totalTrades: number;
   successfulTrades: number;
 
-  // Топ-рекомендации
+  // Топ-рекомендации (по одной для каждой стратегии)
   recommendations?: {
     figi: string;
     ticker: string;
@@ -49,6 +49,8 @@ export interface TradingStats {
     recommendation: 'BUY' | 'SELL' | 'HOLD';
     confidence: number;
     score: number;
+    strategyType?: 'aggressive' | 'moderate' | 'conservative' | null;
+    horizon?: 'shortTerm' | 'mediumTerm' | 'longTerm' | null;
   }[];
 }
 

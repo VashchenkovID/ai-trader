@@ -49,12 +49,13 @@ class TinkoffApiService {
                 
                 // Обработка ошибки 404 (Not Found) - метод не существует или инструмент не найден
                 if (response.status === 404) {
-                    // Для методов получения новостей это нормально - метод может не существовать
-                    if (path.includes('News') || path.includes('GetNews')) {
+                    // Для GetInstrumentBy 404 - это нормально (инструмент не найден), не логируем
+                    if (path.includes('GetInstrumentBy')) {
+                        // Просто выбрасываем ошибку без логирования - она будет обработана в вызывающем коде
                         throw new Error(`HTTP error! status: 404, details: ${errorText}`);
                     }
-                    // Для GetInstrumentBy 404 - это нормально (инструмент не найден), не логируем детали
-                    if (path.includes('GetInstrumentBy')) {
+                    // Для методов получения новостей это нормально - метод может не существовать
+                    if (path.includes('News') || path.includes('GetNews')) {
                         throw new Error(`HTTP error! status: 404, details: ${errorText}`);
                     }
                     // Для других методов логируем ошибку
@@ -124,6 +125,12 @@ class TinkoffApiService {
                 console.warn('⚠️ Shares endpoint returned ECONNRESET - this is a known issue with Tinkoff API');
                 console.warn('💡 Consider using cached data or alternative endpoints');
                 throw new Error('Shares endpoint temporarily unavailable due to ECONNRESET');
+            }
+            
+            // Не логируем 404 для GetInstrumentBy - это нормально (инструмент не найден)
+            if (error.message && error.message.includes('404') && path.includes('GetInstrumentBy')) {
+                // Просто пробрасываем ошибку без логирования
+                throw error;
             }
             
             console.error('Tinkoff API request failed:', error);
@@ -290,25 +297,30 @@ class TinkoffApiService {
         }
     }
 
-    // Получение информации по конкретному инструменту по UID
-    async getInstrumentByUid(uid) {
+    // Поиск инструмента через FindInstrument (более универсальный метод)
+    async findInstrument(query) {
         try {
-            const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetInstrumentBy', {
-                id: uid,
-                idType: 'INSTRUMENT_ID_TYPE_UID'
+            const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.InstrumentsService/FindInstrument', {
+                query: query
             });
 
-            return response;
+            // FindInstrument возвращает массив инструментов, берем первый результат
+            if (response.instruments && response.instruments.length > 0) {
+                return response.instruments[0];
+            }
+            
+            return null;
         } catch (error) {
             // 404 - это нормально, инструмент просто не найден (не логируем как ошибку)
             if (error.message && error.message.includes('404')) {
                 return null;
             }
             // Другие ошибки логируем
-            console.error(`Error getting instrument by UID ${uid}:`, error);
+            console.warn(`⚠️ Ошибка поиска инструмента по запросу "${query}":`, error.message);
             return null;
         }
     }
+
 
     // Получение портфеля пользователя
     async getPortfolio(accountId = null) {

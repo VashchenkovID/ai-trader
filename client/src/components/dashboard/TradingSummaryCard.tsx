@@ -62,29 +62,42 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
                 <div className="text-500 text-sm text-center">Нет активных рекомендаций</div>
               ) : (
                 <div className="flex flex-column gap-2">
-                  {tradingStats.recommendations.slice(0, 3).map((rec) => (
-                    <div
-                      key={rec.figi}
-                      className="flex align-items-center justify-content-between text-sm border-round surface-0 px-2 py-1"
-                    >
-                      <div 
-                        className="cursor-pointer hover:text-primary transition-colors flex-1"
-                        onClick={() => navigate(`/stock/${rec.figi}`)}
-                        title="Нажмите для просмотра детальной информации"
+                  {tradingStats.recommendations.slice(0, 3).map((rec) => {
+                    const strategyNames: { [key: string]: string } = {
+                      aggressive: 'Агрессивная',
+                      moderate: 'Умеренная',
+                      conservative: 'Консервативная'
+                    };
+                    const strategyName = rec.strategyType ? strategyNames[rec.strategyType] || rec.strategyType : '';
+                    
+                    return (
+                      <div
+                        key={rec.figi}
+                        className="flex align-items-center justify-content-between text-sm border-round surface-0 px-2 py-1"
                       >
-                        <div className="font-medium">
-                          {rec.ticker} <span className="text-500">• {rec.name}</span>
+                        <div 
+                          className="cursor-pointer hover:text-primary transition-colors flex-1"
+                          onClick={() => navigate(`/stock/${rec.figi}`)}
+                          title="Нажмите для просмотра детальной информации"
+                        >
+                          <div className="font-medium">
+                            {rec.ticker} <span className="text-500">• {rec.name}</span>
+                          </div>
+                          <div className="text-xs text-500">
+                            {strategyName && <span className="text-primary font-semibold">{strategyName}</span>}
+                            {strategyName && ' • '}
+                            FIGI: {rec.figi}
+                          </div>
                         </div>
-                        <div className="text-xs text-500">FIGI: {rec.figi}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-green-500 font-semibold text-xs">{translateRecommendation('BUY')}</div>
-                        <div className="text-500 text-xs">
-                          conf: {(rec.confidence * 100).toFixed(0)}% / score: {rec.score.toFixed(2)}
+                        <div className="text-right">
+                          <div className="text-green-500 font-semibold text-xs">{translateRecommendation('BUY')}</div>
+                          <div className="text-500 text-xs">
+                            conf: {(rec.confidence * 100).toFixed(0)}% / score: {rec.score.toFixed(2)}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

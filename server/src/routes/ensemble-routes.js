@@ -2,6 +2,12 @@ import express from 'express';
 import EnsembleService from '../services/EnsembleService.js';
 import ServiceManager from '../services/ServiceManager.js';
 import OptimizedTelegramService from '../services/OptimizedTelegramService.js';
+import { Worker } from 'worker_threads';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -42,27 +48,60 @@ router.post('/train', async (req, res) => {
             data: { figi }
         });
 
-        // Запускаем обучение в фоне
-        try {
-            const result = await EnsembleService.trainEnsemble(figi, options);
-            console.log('Обучение ансамбля завершено:', result?.success ? 'Успешно' : 'Ошибка');
-            
-            // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
-            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
-                WebSocketService.broadcast({
-                    type: 'ensemble_training_completed',
-                    data: { success: true, result }
-                });
+        // Запускаем обучение в воркере
+        const workerPath = path.join(__dirname, '../workers/ensembleWorker.js');
+        const worker = new Worker(workerPath, {
+            workerData: {
+                figi,
+                options
             }
-        } catch (trainingError) {
-            console.error('Ошибка обучения ансамбля:', trainingError);
+        });
+
+        // Обрабатываем сообщения от воркера
+        worker.on('message', async (msg) => {
+            if (msg.type === 'done') {
+                const { result } = msg.data;
+                console.log('Обучение ансамбля завершено:', result?.success ? 'Успешно' : 'Ошибка');
+                
+                // Уведомляем через WebSocket
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'ensemble_training_completed',
+                        data: { success: true, result }
+                    });
+                }
+            } else if (msg.type === 'error') {
+                const { error } = msg.data;
+                console.error('Ошибка обучения ансамбля:', error);
+                
+                // Отправляем ошибку в Telegram
+                if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
+                    await OptimizedTelegramService.sendAlert(
+                        'Ошибка обучения ансамбля',
+                        `Ошибка: ${error}`
+                    );
+                }
+                
+                // Уведомляем через WebSocket
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'ensemble_training_error',
+                        data: { success: false, error }
+                    });
+                }
+            }
+        });
+
+        worker.on('error', async (error) => {
+            console.error('Ошибка воркера обучения ансамбля:', error);
             
             // Отправляем ошибку в Telegram
             if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
                 await OptimizedTelegramService.sendAlert(
-                    'Ошибка обучения ансамбля',
-                    `Ошибка: ${trainingError.message}\nСтек: ${trainingError.stack}`
+                    'Ошибка воркера обучения ансамбля',
+                    `Ошибка: ${error.message}\nСтек: ${error.stack}`
                 );
             }
             
@@ -71,10 +110,16 @@ router.post('/train', async (req, res) => {
             if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                 WebSocketService.broadcast({
                     type: 'ensemble_training_error',
-                    data: { success: false, error: trainingError.message }
+                    data: { success: false, error: error.message }
                 });
             }
-        }
+        });
+
+        worker.on('exit', (code) => {
+            if (code !== 0) {
+                console.error(`Воркер обучения ансамбля завершился с кодом ${code}`);
+            }
+        });
     } catch (error) {
         console.error('Ошибка запуска обучения ансамбля:', error);
         res.status(500).json({

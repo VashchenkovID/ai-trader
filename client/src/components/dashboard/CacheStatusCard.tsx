@@ -83,14 +83,36 @@ export const CacheStatusCard: React.FC<CacheStatusCardProps> = ({ cacheStatus })
             </div>
           </div>
           <div className="col-12">
-            <div className="text-center p-3 border-round surface-100">
+            <div className="flex gap-2">
               <Button
                 icon="pi pi-refresh"
                 label="Обновить кеш"
                 size="small"
                 severity="info"
-                className="w-full"
+                className="flex-1"
                 onClick={handleRefreshCache}
+                tooltip="Инкрементальное обновление (свечи за день, сигналы за день)"
+                tooltipOptions={{ position: 'top' }}
+              />
+              <Button
+                icon="pi pi-download"
+                label="Полное обновление"
+                size="small"
+                severity="warning"
+                className="flex-1"
+                onClick={async () => {
+                  if (confirm('Запустить полное обновление кеша? Это может занять много времени.\n\n• Инструменты - обновление списка\n• Свечи - за 2 года на каждый инструмент\n• Сигналы - 1000 сигналов на каждый инструмент')) {
+                    try {
+                      await apiService.fullRefreshCache();
+                      alert('Полное обновление кеша запущено!');
+                    } catch (e) {
+                      console.error('Full cache refresh failed:', e);
+                      alert('Ошибка запуска полного обновления кеша');
+                    }
+                  }
+                }}
+                tooltip="Полное обновление (инструменты, свечи за 2 года, сигналы 1000)"
+                tooltipOptions={{ position: 'top' }}
               />
             </div>
           </div>

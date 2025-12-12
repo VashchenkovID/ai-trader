@@ -47,19 +47,7 @@ class WebSocketService {
         let connectionCount = 0;
 
         this.wss.on('connection', (ws) => {
-            // Добавляем отладочную информацию
-            try {
-                const stack = new Error().stack;
-                if (stack) {
-                    console.log('🔍 WebSocket connection attempt from:', stack.split('\n')[2]?.trim() || 'unknown');
-                    console.log('🔍 Full stack trace:', stack.split('\n').slice(0, 10).join('\n'));
-                } else {
-                    console.log('🔍 WebSocket connection attempt from: unknown (no stack trace)');
-                }
-            } catch (error) {
-                console.log('🔍 WebSocket connection attempt from: unknown (error getting stack trace)');
-            }
-            
+        
             // Проверяем, не является ли это внутренним подключением
             const remoteAddress = ws._socket?.remoteAddress;
             const localAddress = ws._socket?.localAddress;
@@ -435,7 +423,8 @@ class WebSocketService {
                     const portfolio = await TradingEngine.getVirtualPortfolioValue();
                     const stats = await TradingEngine.calculateTradingStats();
                     const Recommendation = (await import('../models/Recommendation.js')).default;
-                    const topBuys = await Recommendation.getTopRecommendations(3, 'BUY');
+                    // Получаем топ-3 рекомендации - по одной для каждой стратегии
+                    const topBuys = await Recommendation.getTopRecommendationsByStrategies();
 
                     const tradingStats = {
                         portfolioValue: portfolio.totalValue,
@@ -448,9 +437,11 @@ class WebSocketService {
                             figi: rec.figi,
                             ticker: rec.ticker,
                             name: rec.name,
-                            recommendation: rec.recommendation,
-                            confidence: rec.confidence,
-                            score: rec.score
+                            recommendation: rec.recommendation || 'BUY',
+                            confidence: rec.strategyData?.strategyConfidence || rec.strategyData?.confidence || rec.confidence || 0,
+                            score: rec.strategyData?.score || rec.score || 0,
+                            strategyType: rec.strategyType || null,
+                            horizon: rec.horizon || null
                         }))
                     };
                     

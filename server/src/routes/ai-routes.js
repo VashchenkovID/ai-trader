@@ -319,6 +319,9 @@ async function saveSingleRecommendationToDatabase(figi, prediction) {
             return;
         }
         
+        // Преобразуем Sequelize модель в обычный объект для надежного доступа к полям
+        const instrumentData = instrument.toJSON ? instrument.toJSON() : instrument;
+        
         const score = typeof prediction?.score === 'number' && !isNaN(prediction.score) 
             ? Math.max(0, Math.min(1, prediction.score))
             : 0;
@@ -334,9 +337,6 @@ async function saveSingleRecommendationToDatabase(figi, prediction) {
         } else {
             confidence = Math.max(0, Math.min(1, score * 0.9));
         }
-        
-        // Логируем для отладки
-        console.log(`💾 Saving recommendation for ${figi}: confidence=${confidence}, score=${score}, prediction.confidence=${prediction?.confidence}`);
         
         let explanation = {};
         if (prediction?.summary) {
@@ -363,6 +363,18 @@ async function saveSingleRecommendationToDatabase(figi, prediction) {
             };
         }
         
+        // Сохраняем горизонты в правильной структуре для фронтенда
+        if (prediction?.horizons) {
+            // Если горизонты есть, добавляем их в explanation.details.ensemble
+            if (!explanation.details) {
+                explanation.details = {};
+            }
+            if (!explanation.details.ensemble) {
+                explanation.details.ensemble = {};
+            }
+            explanation.details.ensemble.horizons = prediction.horizons;
+        }
+        
         let analysis = {};
         if (prediction?.horizons) {
             analysis = {
@@ -372,7 +384,55 @@ async function saveSingleRecommendationToDatabase(figi, prediction) {
         }
         
         const recommendation = prediction?.recommendation || 'HOLD';
-        const currentPrice = instrument.lastPrice || null;
+        
+        // Получаем цену: сначала из кеша, если нет - пытаемся получить через API
+        let currentPrice = null;
+        
+        // Используем утилиту для надежного извлечения из Sequelize модели
+        const { getField } = await import('../utils/sequelizeUtils.js');
+        
+        // Пробуем получить цену из разных источников (на случай если Sequelize возвращает по-разному)
+        const lastPriceFromUtil = getField(instrument, 'lastPrice');
+        const averagePriceFromUtil = getField(instrument, 'averagePrice');
+        const lastPrice = lastPriceFromUtil || instrumentData.lastPrice || instrument.get?.('lastPrice') || instrument.dataValues?.lastPrice || instrument.lastPrice;
+        
+        // Пробуем получить цену из кеша, конвертируя в число если нужно
+        if (lastPrice !== null && lastPrice !== undefined) {
+            // Конвертируем в число, если это строка
+            const cachedPrice = typeof lastPrice === 'string' 
+                ? parseFloat(lastPrice) 
+                : Number(lastPrice);
+            
+            // Проверяем, что это валидное число и больше 0
+            if (!isNaN(cachedPrice) && isFinite(cachedPrice) && cachedPrice > 0) {
+                currentPrice = cachedPrice;
+            }
+        }
+        
+        // Если цена не найдена в кеше или невалидна, пытаемся получить через API
+        if (!currentPrice) {
+            try {
+                const TinkoffApiService = (await import('../services/TinkoffApiService.js')).default;
+                const lastPricesResp = await TinkoffApiService.getLastPrices([figi]);
+                if (lastPricesResp?.lastPrices && lastPricesResp.lastPrices.length > 0) {
+                    const priceData = lastPricesResp.lastPrices[0];
+                    if (priceData.price) {
+                        const units = parseFloat(priceData.price.units || 0);
+                        const nano = parseFloat(priceData.price.nano || 0);
+                        currentPrice = units + nano / 1e9;
+                        // Обновляем цену в кеше для будущих запросов
+                        if (currentPrice > 0 && instrument.update) {
+                            await instrument.update({ 
+                                lastPrice: currentPrice, 
+                                lastPriceTime: priceData.time ? new Date(priceData.time) : new Date() 
+                            });
+                        }
+                    }
+                }
+            } catch (priceError) {
+                // Игнорируем ошибки получения цены через API
+            }
+        }
         
         let strategyId = null;
         let strategy = null;
@@ -449,19 +509,143 @@ async function saveSingleRecommendationToDatabase(figi, prediction) {
         
         // Используем upsert для обновления существующей записи или создания новой
         // Поскольку figi является первичным ключом, мы обновляем существующую запись
-        const [savedRecommendation, created] = await Recommendation.upsert(recommendationData, {
+        await Recommendation.upsert(recommendationData, {
             returning: true
         });
-        
-        if (created) {
-            console.log(`✅ Created ${recommendation} recommendation for ${instrument.ticker} in DB`);
-        } else {
-            console.log(`✅ Updated ${recommendation} recommendation for ${instrument.ticker} in DB`);
-        }
     } catch (error) {
         console.error('❌ Error saving recommendation to database:', error);
         throw error;
     }
 }
+
+/**
+ * Анализ одного инструмента с сохранением в рекомендации (для отладки)
+ */
+router.post('/analyze-single-instrument', async (req, res) => {
+    try {
+        const { figi } = req.body;
+        
+        if (!figi) {
+            return res.status(400).json({
+                success: false,
+                message: 'FIGI is required'
+            });
+        }
+
+        console.log(`🔍 [DEBUG] Starting analysis for single instrument: ${figi}`);
+
+        // Получаем сервисы
+        const NeuralNetworkService = (await import('../services/NeuralNetworkService.js')).default;
+        const CacheService = ServiceManager.getService('CacheService');
+        
+        // Инициализируем NeuralNetworkService, если нужно
+        if (!NeuralNetworkService.isInitialized) {
+            await NeuralNetworkService.initialize();
+        }
+
+        // Получаем инструмент из кеша
+        let instrument;
+        try {
+            instrument = await CacheService.getInstrument(figi);
+        } catch (cacheError) {
+            console.error(`❌ [DEBUG] Error getting instrument from cache:`, cacheError);
+            return res.status(500).json({
+                success: false,
+                message: `Error getting instrument from cache: ${cacheError.message}`
+            });
+        }
+
+        if (!instrument) {
+            return res.status(404).json({
+                success: false,
+                message: `Instrument with FIGI ${figi} not found in cache`
+            });
+        }
+
+        console.log(`📊 [DEBUG] Instrument found: ${instrument.ticker} - ${instrument.name}`);
+
+        // Используем IntegratedAIService для получения рекомендации
+        const integratedRec = await IntegratedAIService.getIntegratedRecommendation(figi);
+        
+        console.log(`✅ [DEBUG] Got integrated recommendation:`, {
+            recommendation: integratedRec.recommendation,
+            score: integratedRec.score,
+            confidence: integratedRec.confidence
+        });
+
+        // Формируем структуру для сохранения (как в analyzeAllInstruments)
+        const prediction = {
+            score: integratedRec.score || 0,
+            confidence: integratedRec.confidence || integratedRec.score || 0,
+            recommendation: integratedRec.recommendation || 'HOLD',
+            explanation: integratedRec.summary || {},
+            summary: typeof integratedRec.summary === 'string' ? integratedRec.summary : (integratedRec.summary?.summary || ''),
+            details: integratedRec.details || {},
+            horizons: integratedRec.horizons || null,
+            agreement: integratedRec.agreement || null
+        };
+
+        // Получаем текущую цену
+        let currentPrice = null;
+        try {
+            if (instrument.lastPrice && typeof instrument.lastPrice === 'number' && instrument.lastPrice > 0) {
+                currentPrice = instrument.lastPrice;
+            } else {
+                const TinkoffApiService = (await import('../services/TinkoffApiService.js')).default;
+                const lastPrices = await TinkoffApiService.getLastPrices([figi]);
+                if (lastPrices && lastPrices[figi] && typeof lastPrices[figi] === 'number' && lastPrices[figi] > 0) {
+                    currentPrice = lastPrices[figi];
+                    // Обновляем кеш
+                    const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+                    await CachedInstrument.update(
+                        { lastPrice: currentPrice, lastPriceTime: new Date() },
+                        { where: { figi } }
+                    );
+                }
+            }
+        } catch (priceError) {
+            console.warn(`⚠️ [DEBUG] Could not get price for ${figi}:`, priceError.message);
+        }
+
+        // Формируем запись для сохранения
+        const buyRecommendation = {
+            instrument: instrument,
+            prediction: prediction,
+            currentPrice: currentPrice
+        };
+
+        // Сохраняем рекомендацию в БД через NeuralNetworkService
+        await NeuralNetworkService.saveRecommendationsToDatabase([buyRecommendation], []);
+
+        console.log(`💾 [DEBUG] Recommendation saved to database for ${figi}`);
+
+        // Получаем сохраненную рекомендацию из БД
+        const Recommendation = (await import('../models/Recommendation.js')).default;
+        const savedRecommendation = await Recommendation.findByPk(figi);
+
+        res.json({
+            success: true,
+            message: `Analysis completed and saved for ${instrument.ticker}`,
+            data: {
+                figi: figi,
+                ticker: instrument.ticker,
+                name: instrument.name,
+                recommendation: prediction.recommendation,
+                score: prediction.score,
+                confidence: prediction.confidence,
+                priceAtAnalysis: currentPrice || 0,
+                savedRecommendation: savedRecommendation ? savedRecommendation.toJSON() : null
+            }
+        });
+    } catch (error) {
+        console.error('❌ [DEBUG] Error analyzing single instrument:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error analyzing single instrument',
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
 
 export default router;

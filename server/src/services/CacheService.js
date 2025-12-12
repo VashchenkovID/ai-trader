@@ -327,10 +327,6 @@ class CacheService {
             console.warn(`⚠️ Reached max iterations (${maxIterations}) for ${figi}, stopping`);
         }
 
-        if (all.length > 0) {
-            console.log(`✅ Collected ${all.length} candles for ${figi} (out of ${maxIterations} iterations)`);
-        }
-
         return all;
     }
 

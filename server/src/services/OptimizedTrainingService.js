@@ -1236,7 +1236,6 @@ class OptimizedTrainingService {
                 metrics: ['accuracy']
             });
 
-                    console.log(`✅ Loaded per-FIGI model for ${figi}`);
             return model;
                 }
             } catch (figiError) {

@@ -1108,8 +1108,8 @@ class EnsembleService {
                 }
             }
 
-            // Нормализуем score в диапазон [0, 1]
-            score = Math.max(0, Math.min(1, score));
+            // Нормализуем score в диапазон [0.01, 0.99] для избежания экстремальных значений
+            score = Math.max(0.01, Math.min(0.99, score));
 
             // Определяем рекомендацию
             const recommendation = score > 0.6 ? 'BUY' : score < 0.4 ? 'SELL' : 'HOLD';
@@ -1372,15 +1372,38 @@ class EnsembleService {
             const mediumTermModel = hasEnoughDataForCNN ? 'CNN' : 'Technical Indicators';
             const longTermModel = hasEnoughDataForTransformer ? 'Transformer' : 'Technical Indicators';
 
+            // Рассчитываем confidence для каждого горизонта на основе реальных метрик
+            // Если accuracy не установлен или равен 0, используем базовую confidence с учетом согласованности
+            const calculateHorizonConfidence = (modelType, hasEnoughData, prediction, overallConfidence) => {
+                if (!hasEnoughData) {
+                    return 0.3; // Низкая уверенность для упрощенных моделей
+                }
+                
+                const performance = this.performance[modelType];
+                // Проверяем, что accuracy установлен и больше 0 (не начальное значение)
+                if (performance && performance.accuracy && performance.accuracy > 0) {
+                    // Используем реальную accuracy модели
+                    return Math.max(0.3, Math.min(0.95, performance.accuracy));
+                }
+                
+                // Если accuracy не установлен, рассчитываем confidence на основе:
+                // 1. Общей confidence ансамбля
+                // 2. Согласованности с другими моделями
+                // 3. Уверенности в предсказании (чем ближе к 0.5, тем ниже confidence)
+                const predictionConfidence = 1 - Math.abs(prediction - 0.5) * 2; // Максимум при prediction = 0.5, минимум при 0 или 1
+                const baseConfidence = overallConfidence * 0.7 + predictionConfidence * 0.3;
+                
+                // Ограничиваем в разумных пределах
+                return Math.max(0.35, Math.min(0.75, baseConfidence));
+            };
+
             const horizons = {
                 shortTerm: {
                     name: 'Краткосрочный прогноз',
                     description: 'Прогноз на 1-3 дня',
                     model: shortTermModel,
-                    score: lstmPred,
-                    confidence: hasEnoughDataForLSTM 
-                        ? (this.performance.lstm?.accuracy || 0.5)
-                        : 0.3, // Низкая уверенность для упрощенных моделей
+                    score: Math.max(0.01, Math.min(0.99, lstmPred)), // Ограничиваем score для избежания экстремальных значений
+                    confidence: calculateHorizonConfidence('lstm', hasEnoughDataForLSTM, lstmPred, confidence),
                     recommendation: lstmPred > 0.7 ? 'BUY' : lstmPred < 0.3 ? 'SELL' : 'HOLD',
                     weight: this.weights.lstm,
                     horizonDays: 1,
@@ -1392,10 +1415,8 @@ class EnsembleService {
                     name: 'Среднесрочный прогноз',
                     description: 'Прогноз на 1-4 недели',
                     model: mediumTermModel,
-                    score: cnnPred,
-                    confidence: hasEnoughDataForCNN 
-                        ? (this.performance.cnn?.accuracy || 0.5)
-                        : 0.3, // Низкая уверенность для упрощенных моделей
+                    score: Math.max(0.01, Math.min(0.99, cnnPred)), // Ограничиваем score для избежания экстремальных значений
+                    confidence: calculateHorizonConfidence('cnn', hasEnoughDataForCNN, cnnPred, confidence),
                     recommendation: cnnPred > 0.7 ? 'BUY' : cnnPred < 0.3 ? 'SELL' : 'HOLD',
                     weight: this.weights.cnn,
                     horizonDays: 21,
@@ -1407,10 +1428,8 @@ class EnsembleService {
                     name: 'Долгосрочный прогноз',
                     description: 'Прогноз на 2-3 месяца',
                     model: longTermModel,
-                    score: transformerPred,
-                    confidence: hasEnoughDataForTransformer 
-                        ? (this.performance.transformer?.accuracy || 0.5)
-                        : 0.3, // Низкая уверенность для упрощенных моделей
+                    score: Math.max(0.01, Math.min(0.99, transformerPred)), // Ограничиваем score для избежания экстремальных значений (включая 100%)
+                    confidence: calculateHorizonConfidence('transformer', hasEnoughDataForTransformer, transformerPred, confidence),
                     recommendation: transformerPred > 0.7 ? 'BUY' : transformerPred < 0.3 ? 'SELL' : 'HOLD',
                     weight: this.weights.transformer,
                     horizonDays: 84,
@@ -1481,13 +1500,46 @@ class EnsembleService {
         }
         
         try {
+            // Проверяем, обучена ли модель (проверяем веса)
+            // Если модель только что создана и не обучена, веса будут случайными
+            const weights = model.getWeights();
+            const hasTrainedWeights = weights && weights.length > 0 && 
+                weights.some(w => {
+                    const data = w.dataSync();
+                    return data.some(v => Math.abs(v) > 0.001); // Проверяем, что есть ненулевые веса
+                });
+            
+            if (!hasTrainedWeights) {
+                console.warn(`⚠️ Model ${modelType} appears to be untrained (all weights near zero), using fallback`);
+                return 0.5; // Возвращаем нейтральное значение для необученной модели
+            }
+            
             // Формируем тензор: [1, time_steps, features_per_step]
             const inputTensor = tf.tensor3d([features], [1, ...inputShape]);
             const prediction = model.predict(inputTensor);
-            const score = (await prediction.data())[0];
+            let score = (await prediction.data())[0];
             
             inputTensor.dispose();
             prediction.dispose();
+            
+            // Проверяем на валидность значения
+            if (!isFinite(score) || isNaN(score)) {
+                console.warn(`⚠️ Model ${modelType} returned invalid score: ${score}, using fallback`);
+                return 0.5;
+            }
+            
+            // Ограничиваем score в диапазоне [0.01, 0.99] для избежания экстремальных значений
+            // Это предотвращает показ 100% сигнала, который может быть артефактом модели
+            score = Math.max(0.01, Math.min(0.99, score));
+            
+            // Дополнительная проверка: если score очень близок к границам (0.99 или 0.01),
+            // это может быть признаком переобучения или артефакта модели
+            // Смягчаем такие значения
+            if (score >= 0.95) {
+                score = 0.95; // Максимум 95% вместо 99%
+            } else if (score <= 0.05) {
+                score = 0.05; // Минимум 5% вместо 1%
+            }
             
             return score;
         } catch (error) {

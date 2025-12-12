@@ -94,7 +94,6 @@ class OptimizedDataService {
                         // Проверяем размер фичей для консистентности
                         if (expectedFeatureSize === null) {
                             expectedFeatureSize = featureVector.length;
-                            console.log(`📏 Expected feature size: ${expectedFeatureSize}`);
                         } else if (featureVector.length !== expectedFeatureSize) {
                             console.warn(`⚠️ Feature size mismatch: expected ${expectedFeatureSize}, got ${featureVector.length}, skipping sample ${i}`);
                             skippedSamples++;
@@ -128,7 +127,6 @@ class OptimizedDataService {
                 console.warn(`⚠️ Skipped ${skippedSamples} samples due to inconsistent feature sizes`);
             }
 
-            console.log(`✅ Prepared ${features.length} training samples with ${expectedFeatureSize} features each`);
             return { features, labels };
         } catch (error) {
             console.error('❌ Error preparing training data:', error);

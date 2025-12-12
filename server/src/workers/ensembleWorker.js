@@ -1,12 +1,21 @@
 import { parentPort, workerData } from 'worker_threads';
+import EnsembleService from '../services/EnsembleService.js';
+import ServiceManager from '../services/ServiceManager.js';
+import { setGlobalServiceManager } from '../services/GlobalServiceManager.js';
 
 async function run() {
-    const { figi, options, services } = workerData;
+    const { figi, options } = workerData;
     try {
-        // Используем переданные сервисы вместо импорта
-        const { EnsembleService, CacheService, OptimizedTelegramService } = services;
+        // Устанавливаем глобальный ServiceManager для использования в сервисах
+        setGlobalServiceManager(ServiceManager);
         
-        // Проверяем, инициализирован ли сервис
+        // Инициализируем ServiceManager, если еще не инициализирован
+        if (!ServiceManager.isInitialized) {
+            console.log('🔧 ServiceManager not initialized in worker, initializing...');
+            await ServiceManager.initialize();
+        }
+        
+        // Проверяем, инициализирован ли EnsembleService
         if (!EnsembleService.isInitialized) {
             console.log('🔧 EnsembleService not initialized in worker, initializing...');
             await EnsembleService.initialize();
