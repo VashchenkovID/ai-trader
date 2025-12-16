@@ -454,13 +454,27 @@ class IntegratedAIService {
             };
         }
 
-        // Определяем финальную рекомендацию
+        // Определяем финальную рекомендацию с учетом И score И confidence
+        // Используем пороги из moderate стратегии как базовые (более консервативные)
+        const baseThresholds = {
+            buyScore: 0.65,
+            buyConfidence: 0.6,
+            sellScore: 0.35,
+            sellConfidence: 0.6
+        };
+        
         let recommendation = 'HOLD';
-        if (weightedScore > 0.7) {
+        
+        // BUY: нужен высокий score И высокая confidence
+        if (weightedScore >= baseThresholds.buyScore && totalConfidence >= baseThresholds.buyConfidence) {
             recommendation = 'BUY';
-        } else if (weightedScore < 0.3) {
+        } 
+        // SELL: нужен низкий score И высокая confidence (чтобы быть уверенным в продаже)
+        else if (weightedScore <= baseThresholds.sellScore && totalConfidence >= baseThresholds.sellConfidence) {
             recommendation = 'SELL';
         }
+        // Если confidence низкая, даже при экстремальных score, лучше HOLD
+        // Это предотвращает рекомендации на основе ненадежных данных
 
         // Рассчитываем согласованность между источниками
         let sourceAgreement = 1.0;

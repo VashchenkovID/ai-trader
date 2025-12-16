@@ -5,6 +5,7 @@ import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
 import { Dropdown } from 'primereact/dropdown';
+import { InputText } from 'primereact/inputtext';
 import { Message } from 'primereact/message';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
@@ -74,6 +75,7 @@ const Recommendations: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStrategy, setFilterStrategy] = useState<number | null>(null);
+  const [globalFilter, setGlobalFilter] = useState<string>('');
   const [strategies, setStrategies] = useState<any[]>([]);
   const toast = useRef<Toast>(null);
 
@@ -275,36 +277,47 @@ const Recommendations: React.FC = () => {
       <Toast ref={toast} />
       
       <Card title="📊 Рекомендации AI для торговли" className="mb-4">
-        <div className="flex justify-content-between align-items-center mb-3">
-          <div className="flex align-items-center gap-3">
-            <span className="text-600">Фильтр:</span>
-            <Dropdown
-              value={filterType}
-              options={filterOptions}
-              onChange={(e) => setFilterType(e.value)}
-              placeholder="Тип рекомендации"
-              style={{ minWidth: '200px' }}
-            />
-            <Dropdown
-              value={filterStrategy}
-              options={[
-                { label: 'Все стратегии', value: null },
-                ...strategies.map((s: any) => ({ label: s.name, value: s.id }))
-              ]}
-              onChange={(e) => setFilterStrategy(e.value)}
-              placeholder="Стратегия"
-              style={{ minWidth: '200px' }}
-            />
-            <Button
-              icon="pi pi-refresh"
-              label="Обновить"
-              size="small"
-              onClick={() => loadRecommendations()}
-              loading={loading}
-            />
-          </div>
-          <div className="text-sm text-600">
-            Всего рекомендаций: <strong>{recommendations.length}</strong>
+        <div className="flex flex-column gap-3 mb-3">
+          <div className="flex justify-content-between align-items-center flex-wrap gap-2">
+            <div className="flex align-items-center gap-3 flex-wrap">
+              <span className="p-input-icon-left" style={{ minWidth: '300px' }}>
+                <i className="pi pi-search" />
+                <InputText
+                  value={globalFilter}
+                  onChange={(e) => setGlobalFilter(e.target.value)}
+                  placeholder="Поиск по названию компании, тикеру или сектору..."
+                  className="w-full"
+                />
+              </span>
+              <span className="text-600">Фильтр:</span>
+              <Dropdown
+                value={filterType}
+                options={filterOptions}
+                onChange={(e) => setFilterType(e.value)}
+                placeholder="Тип рекомендации"
+                style={{ minWidth: '200px' }}
+              />
+              <Dropdown
+                value={filterStrategy}
+                options={[
+                  { label: 'Все стратегии', value: null },
+                  ...strategies.map((s: any) => ({ label: s.name, value: s.id }))
+                ]}
+                onChange={(e) => setFilterStrategy(e.value)}
+                placeholder="Стратегия"
+                style={{ minWidth: '200px' }}
+              />
+              <Button
+                icon="pi pi-refresh"
+                label="Обновить"
+                size="small"
+                onClick={() => loadRecommendations()}
+                loading={loading}
+              />
+            </div>
+            <div className="text-sm text-600">
+              Всего рекомендаций: <strong>{recommendations.length}</strong>
+            </div>
           </div>
         </div>
 
@@ -324,7 +337,21 @@ const Recommendations: React.FC = () => {
           rows={10}
           sortMode="multiple"
           className="p-datatable-sm"
+          globalFilter={globalFilter}
           globalFilterFields={['ticker', 'name', 'recommendation', 'sector']}
+          header={
+            <div className="flex justify-content-between align-items-center">
+              <span className="p-input-icon-left w-full">
+                <i className="pi pi-search" />
+                <InputText
+                  value={globalFilter}
+                  onChange={(e) => setGlobalFilter(e.target.value)}
+                  placeholder="Поиск по названию компании, тикеру или сектору..."
+                  className="w-full"
+                />
+              </span>
+            </div>
+          }
         >
           <Column
             field="name"

@@ -16,6 +16,8 @@ import MigrationStatus from '../models/MigrationStatus.js';
 import TradingStrategy from '../models/TradingStrategy.js';
 import PortfolioAllocation from '../models/PortfolioAllocation.js';
 import PositionStrategy from '../models/PositionStrategy.js';
+import PositionExit from '../models/PositionExit.js';
+import TriggeredSignal from '../models/TriggeredSignal.js';
 import TrainingState from '../models/TrainingState.js';
 
 async function clearDatabase() {
@@ -38,29 +40,39 @@ async function clearDatabase() {
     await Recommendation.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Рекомендации очищены');
 
-    // 3. Торговые заявки (зависят от TradingStrategy)
+    // 3. Сработавшие сигналы (зависят от TradingRequest)
+    console.log('⚡ Очистка сработавших сигналов...');
+    await TriggeredSignal.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    console.log('   ✅ Сработавшие сигналы очищены');
+
+    // 4. Частичные закрытия позиций (зависят от TradingRequest)
+    console.log('📊 Очистка частичных закрытий позиций...');
+    await PositionExit.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    console.log('   ✅ Частичные закрытия позиций очищены');
+
+    // 5. Торговые заявки (зависят от TradingStrategy)
     console.log('🎯 Очистка торговых заявок...');
     await TradingRequest.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Торговые заявки очищены');
 
-    // 4. Стратегии торговли (основная таблица)
+    // 5. Стратегии торговли (основная таблица)
     console.log('📈 Очистка торговых стратегий...');
     await TradingStrategy.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Торговые стратегии очищены');
 
-    // 5. Портфели
+    // 6. Портфели
     console.log('💼 Очистка портфелей...');
     await RealPortfolio.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     await VirtualPortfolio.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     await PortfolioItem.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Портфели очищены');
 
-    // 6. Состояние обучения
+    // 7. Состояние обучения
     console.log('🧠 Очистка состояния обучения...');
     await TrainingState.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Состояние обучения очищено');
 
-    // 7. Кешированные данные
+    // 8. Кешированные данные
     console.log('📊 Очистка кешированных данных...');
     await CachedSignal.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     await CachedCandle.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
@@ -70,17 +82,17 @@ async function clearDatabase() {
     await CachedInstrument.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Кешированные данные очищены');
 
-    // 8. Компании
+    // 9. Компании
     console.log('🏢 Очистка компаний...');
     await Company.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Компании очищены');
 
-    // 9. Миграции
+    // 10. Миграции
     console.log('🔄 Очистка данных миграций...');
     await MigrationStatus.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Данные миграций очищены');
 
-    // 10. Настройки (опционально - можно закомментировать, если нужно сохранить настройки)
+    // 11. Настройки (опционально - можно закомментировать, если нужно сохранить настройки)
     console.log('⚙️  Очистка настроек...');
     await Settings.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Настройки очищены');

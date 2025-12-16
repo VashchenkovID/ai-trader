@@ -18,6 +18,8 @@ import TrainingState from '../models/TrainingState.js';
 import TradingStrategy from '../models/TradingStrategy.js';
 import PortfolioAllocation from '../models/PortfolioAllocation.js';
 import PositionStrategy from '../models/PositionStrategy.js';
+import PositionExit from '../models/PositionExit.js';
+import TriggeredSignal from '../models/TriggeredSignal.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
@@ -87,6 +89,14 @@ export async function initDatabase() {
         console.log('⚡ Создание таблицы кэшированных сигналов...');
         await CachedSignal.sync({ force: false });
         console.log('✅ Таблица кэшированных сигналов создана/обновлена');
+        
+        // Создаем таблицу частичных закрытий позиций
+        console.log('📊 Создание таблицы частичных закрытий позиций...');
+        await PositionExit.sync({ force: false });
+        console.log('✅ Таблица частичных закрытий позиций создана/обновлена');
+        
+        await TriggeredSignal.sync({ force: false });
+        console.log('✅ Таблица сработавших сигналов создана/обновлена');
         
         // Создаем таблицу состояния обучения
         console.log('📊 Создание таблицы состояния обучения...');

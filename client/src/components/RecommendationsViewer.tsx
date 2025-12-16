@@ -12,6 +12,7 @@ import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { Skeleton } from 'primereact/skeleton';
 import { Message } from 'primereact/message';
 import { Dropdown } from 'primereact/dropdown';
+import { InputText } from 'primereact/inputtext';
 import { apiService } from '../services/apiService';
 import { translateRecommendation } from '../utils/recommendationTranslator';
 
@@ -51,6 +52,8 @@ const RecommendationsViewer: React.FC = () => {
   const [currentRecommendation, setCurrentRecommendation] = useState<Recommendation | null>(null);
   const [createOptions, setCreateOptions] = useState<CreateRequestOptions>({});
   const [filterType, setFilterType] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [globalFilter, setGlobalFilter] = useState<string>('');
   const [userReason, setUserReason] = useState<string>('');
   const toast = React.useRef<Toast>(null);
 
@@ -391,10 +394,21 @@ const RecommendationsViewer: React.FC = () => {
     return new Date(dateString).toLocaleString('ru-RU');
   };
 
+  // Фильтрация рекомендаций по поисковому запросу
+  const filteredRecommendations = recommendations.filter((rec) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase().trim();
+    return (
+      rec.name?.toLowerCase().includes(query) ||
+      rec.ticker?.toLowerCase().includes(query) ||
+      rec.sector?.toLowerCase().includes(query)
+    );
+  });
+
   const toolbarTemplate = () => {
     return (
-      <div className="flex justify-content-between align-items-center">
-        <div className="flex gap-2 align-items-center">
+      <div className="flex justify-content-between align-items-center flex-wrap gap-2">
+        <div className="flex gap-2 align-items-center flex-wrap">
           <Button
             label="Обновить"
             icon="pi pi-refresh"
@@ -402,6 +416,16 @@ const RecommendationsViewer: React.FC = () => {
             loading={loading}
             size="small"
           />
+          
+          <span className="p-input-icon-left">
+            <i className="pi pi-search" />
+            <InputText
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Поиск по названию компании..."
+              className="w-20rem"
+            />
+          </span>
           
           <Dropdown
             value={filterType}
@@ -422,14 +446,14 @@ const RecommendationsViewer: React.FC = () => {
           )}
         </div>
         
-        <div className="flex gap-2">
-          <Badge value={`Всего: ${recommendations.length}`} severity="info" />
+        <div className="flex gap-2 flex-wrap">
+          <Badge value={`Всего: ${filteredRecommendations.length}${searchQuery ? ` / ${recommendations.length}` : ''}`} severity="info" />
           <Badge 
-            value={`${translateRecommendation('BUY')}: ${recommendations.filter(r => r.recommendation === 'BUY').length}`} 
+            value={`${translateRecommendation('BUY')}: ${filteredRecommendations.filter(r => r.recommendation === 'BUY').length}`} 
             severity="success" 
           />
           <Badge 
-            value={`${translateRecommendation('SELL')}: ${recommendations.filter(r => r.recommendation === 'SELL').length}`} 
+            value={`${translateRecommendation('SELL')}: ${filteredRecommendations.filter(r => r.recommendation === 'SELL').length}`} 
             severity="danger"
           />
         </div>
@@ -468,11 +492,14 @@ const RecommendationsViewer: React.FC = () => {
           {toolbarTemplate()}
         </div>
         
-        {recommendations.length === 0 ? (
-          <Message severity="info" text="Нет доступных рекомендаций" />
+        {filteredRecommendations.length === 0 ? (
+          <Message 
+            severity="info" 
+            text={searchQuery ? `Не найдено рекомендаций по запросу "${searchQuery}"` : "Нет доступных рекомендаций"} 
+          />
         ) : (
           <DataTable
-            value={recommendations}
+            value={filteredRecommendations}
             selection={selectedRecommendations}
             onSelectionChange={(e) => setSelectedRecommendations(e.value as Recommendation[])}
             selectionMode="multiple"
@@ -482,7 +509,21 @@ const RecommendationsViewer: React.FC = () => {
             sortMode="multiple"
             removableSort
             className="p-datatable-sm"
+            globalFilter={globalFilter}
             globalFilterFields={['ticker', 'name', 'sector']}
+            header={
+              <div className="flex justify-content-between align-items-center">
+                <span className="p-input-icon-left w-full">
+                  <i className="pi pi-search" />
+                  <InputText
+                    value={globalFilter}
+                    onChange={(e) => setGlobalFilter(e.target.value)}
+                    placeholder="Поиск по таблице..."
+                    className="w-full"
+                  />
+                </span>
+              </div>
+            }
           >
             <Column selectionMode="multiple" headerStyle={{ width: '3rem' }} />
             

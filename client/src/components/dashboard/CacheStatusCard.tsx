@@ -1,16 +1,59 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card } from 'primereact/card';
 import { Skeleton } from 'primereact/skeleton';
 import { Badge } from 'primereact/badge';
 import { Button } from 'primereact/button';
+import { Message } from 'primereact/message';
 import { apiService } from '../../services/apiService';
 import { CacheStatus } from '../WebSocketDataProvider';
+import { useWebSocketData } from '../WebSocketDataProvider';
 
 interface CacheStatusCardProps {
   cacheStatus: CacheStatus | null;
 }
 
 export const CacheStatusCard: React.FC<CacheStatusCardProps> = ({ cacheStatus }) => {
+  // Пытаемся получить данные о cacheUpdate из WebSocket, но делаем это опционально
+  // чтобы не падать, если провайдер недоступен
+  let cacheUpdateData: any = null;
+  try {
+    const wsData = useWebSocketData();
+    // Проверяем наличие cacheUpdate в данных (может быть не экспортировано в типе)
+    cacheUpdateData = (wsData as any)?.cacheUpdate || null;
+  } catch (error) {
+    // Если провайдер недоступен, просто игнорируем - компонент будет работать без WebSocket обновлений
+    console.debug('WebSocket data provider not available for cache updates:', error);
+  }
+
+  const [cacheUpdateStatus, setCacheUpdateStatus] = useState<{
+    status: 'started' | 'completed' | 'failed' | null;
+    message?: string;
+    timestamp?: string;
+    duration?: number;
+    totalUpdated?: number;
+    error?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (cacheUpdateData) {
+      setCacheUpdateStatus({
+        status: cacheUpdateData.status,
+        message: cacheUpdateData.message,
+        timestamp: cacheUpdateData.timestamp,
+        duration: cacheUpdateData.duration,
+        totalUpdated: cacheUpdateData.totalUpdated,
+        error: cacheUpdateData.error
+      });
+      
+      // Автоматически скрываем сообщение через 10 секунд после завершения
+      if (cacheUpdateData.status === 'completed' || cacheUpdateData.status === 'failed') {
+        setTimeout(() => {
+          setCacheUpdateStatus(null);
+        }, 10000);
+      }
+    }
+  }, [cacheUpdateData]);
+
   const handleRefreshCache = async () => {
     try {
       await apiService.refreshCache();
@@ -23,6 +66,25 @@ export const CacheStatusCard: React.FC<CacheStatusCardProps> = ({ cacheStatus })
 
   return (
     <Card title="💾 Статус кеша" className="h-full">
+      {cacheUpdateStatus && (
+        <div className="mb-3">
+          {cacheUpdateStatus.status === 'started' && (
+            <Message severity="info" text={`🔄 Обновление кеша началось: ${cacheUpdateStatus.message || ''}`} />
+          )}
+          {cacheUpdateStatus.status === 'completed' && (
+            <Message 
+              severity="success" 
+              text={`✅ Обновление кеша завершено: ${cacheUpdateStatus.message || ''}${cacheUpdateStatus.duration ? ` (${Math.round(cacheUpdateStatus.duration / 1000)}с)` : ''}${cacheUpdateStatus.totalUpdated ? ` | Обновлено: ${cacheUpdateStatus.totalUpdated}` : ''}`} 
+            />
+          )}
+          {cacheUpdateStatus.status === 'failed' && (
+            <Message 
+              severity="error" 
+              text={`❌ Ошибка обновления кеша: ${cacheUpdateStatus.error || cacheUpdateStatus.message || 'Неизвестная ошибка'}`} 
+            />
+          )}
+        </div>
+      )}
       {!cacheStatus ? (
         <div className="grid">
           {[1, 2, 3].map((item) => (

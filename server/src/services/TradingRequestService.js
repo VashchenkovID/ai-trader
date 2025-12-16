@@ -1060,15 +1060,92 @@ class TradingRequestService {
                 const cutoffDate = new Date();
                 cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
                 whereClause.updatedAt = {
-                    [TradingRequest.sequelize.Op.lt]: cutoffDate
+                    [Op.lt]: cutoffDate
                 };
             }
 
+            // Получаем ID заявок, которые будут удалены
+            const requestsToDelete = await TradingRequest.findAll({
+                where: whereClause,
+                attributes: ['id']
+            });
+
+            const requestIds = requestsToDelete.map(r => r.id);
+
+            if (requestIds.length === 0) {
+                console.log('🧹 Нет завершенных заявок для удаления');
+                return {
+                    success: true,
+                    deletedCount: 0,
+                    filters: { olderThanDays, tradingMode }
+                };
+            }
+
+            console.log(`🧹 Найдено ${requestIds.length} завершенных заявок для удаления. Удаляем зависимые записи...`);
+
+            // Удаляем зависимые записи в правильном порядке
+            let deletedDependencies = {
+                positionStrategies: 0,
+                positionExits: 0,
+                triggeredSignals: 0
+            };
+
+            try {
+                // 1. Удаляем PositionStrategy (зависит от trading_requests через positionId)
+                const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
+                deletedDependencies.positionStrategies = await PositionStrategy.destroy({
+                    where: {
+                        positionId: {
+                            [Op.in]: requestIds
+                        }
+                    }
+                });
+                console.log(`   ✅ Удалено ${deletedDependencies.positionStrategies} записей из position_strategies`);
+            } catch (psError) {
+                console.warn(`⚠️ Ошибка удаления position_strategies:`, psError.message);
+            }
+
+            try {
+                // 2. Удаляем PositionExit (зависит от trading_requests через tradingRequestId)
+                const PositionExit = (await import('../models/PositionExit.js')).default;
+                deletedDependencies.positionExits = await PositionExit.destroy({
+                    where: {
+                        tradingRequestId: {
+                            [Op.in]: requestIds
+                        }
+                    }
+                });
+                console.log(`   ✅ Удалено ${deletedDependencies.positionExits} записей из position_exits`);
+            } catch (peError) {
+                console.warn(`⚠️ Ошибка удаления position_exits:`, peError.message);
+            }
+
+            try {
+                // 3. Обнуляем tradingRequestId в TriggeredSignal (не удаляем, только разрываем связь)
+                const TriggeredSignal = (await import('../models/TriggeredSignal.js')).default;
+                const updatedSignals = await TriggeredSignal.update(
+                    { tradingRequestId: null },
+                    {
+                        where: {
+                            tradingRequestId: {
+                                [Op.in]: requestIds
+                            }
+                        }
+                    }
+                );
+                deletedDependencies.triggeredSignals = updatedSignals[0] || 0;
+                console.log(`   ✅ Обновлено ${deletedDependencies.triggeredSignals} записей в triggered_signals (разорвана связь)`);
+            } catch (tsError) {
+                console.warn(`⚠️ Ошибка обновления triggered_signals:`, tsError.message);
+            }
+
+            // Теперь удаляем сами заявки
             const deletedCount = await TradingRequest.destroy({
                 where: whereClause
             });
 
             console.log(`🧹 Удалено ${deletedCount} завершенных торговых заявок (APPROVED/REJECTED)`);
+            console.log(`   Зависимости: ${deletedDependencies.positionStrategies} position_strategies, ${deletedDependencies.positionExits} position_exits, ${deletedDependencies.triggeredSignals} triggered_signals обновлено`);
 
             // Уведомляем через WebSocket (если доступен)
             try {
@@ -1078,6 +1155,7 @@ class TradingRequestService {
                         type: 'TRADING_REQUESTS_CLEANED',
                         data: {
                             deletedCount,
+                            dependencies: deletedDependencies,
                             filters: { olderThanDays, tradingMode }
                         }
                     });
@@ -1089,6 +1167,7 @@ class TradingRequestService {
             return {
                 success: true,
                 deletedCount,
+                dependencies: deletedDependencies,
                 filters: { olderThanDays, tradingMode }
             };
 

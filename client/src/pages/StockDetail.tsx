@@ -145,12 +145,13 @@ const StockDetail: React.FC = () => {
       console.log(`📊 Loading stock data for ${figi} from database...`);
       
       // Загружаем остальные данные параллельно
-      const [detailData, priceCandlesData, volumeCandlesData, historyData, newsData, recommendationData] = await Promise.all([
+      const [detailData, priceCandlesData, volumeCandlesData, historyData, newsData, signalsData, recommendationData] = await Promise.all([
         apiService.getStockDetail(figi),
         apiService.getStockCandles(figi, 365, 'DAY'), // За год по умолчанию для цены
         apiService.getStockCandles(figi, 365, 'DAY'), // За год по умолчанию для объема
         apiService.getStockPredictionHistory(figi),
-        apiService.getNews(figi, 20, 30).catch(() => []), // Новости за 30 дней
+        apiService.getNews(figi, 20, 30).catch(() => []), // Новости за 30 дней из БД
+        apiService.getStockSignals(figi, 20, false).catch(() => ({ success: true, data: [] })), // Сигналы из БД
         apiService.getLatestStockRecommendation(figi, 24).catch(() => ({ success: true, data: null })) // Рекомендация из БД (макс 24 часа)
       ]);
       
@@ -242,7 +243,12 @@ const StockDetail: React.FC = () => {
         : [];
       setNews(formattedNews);
       
-      // Сигналы не загружаются автоматически, только по клику на кнопку "Запросить сигналы"
+      // Загружаем сигналы из БД
+      if (signalsData.success && Array.isArray(signalsData.data)) {
+        setSignals(signalsData.data);
+      } else {
+        setSignals([]);
+      }
       
     } catch (err: any) {
       console.error('Error loading stock data:', err);
@@ -365,11 +371,23 @@ const StockDetail: React.FC = () => {
   };
 
   const handleFetchFreshNews = async () => {
-    if (!stockDetail || !stockDetail.ticker) {
+    if (!figi) {
       toast.current?.show({
         severity: 'warn',
         summary: 'Предупреждение',
-        detail: 'Не удалось определить тикер инструмента',
+        detail: 'FIGI не указан',
+        life: 3000
+      });
+      return;
+    }
+
+    // Используем ticker из stockDetail, если он есть, иначе пытаемся получить из detailData
+    const ticker = stockDetail?.ticker;
+    if (!ticker) {
+      toast.current?.show({
+        severity: 'warn',
+        summary: 'Предупреждение',
+        detail: 'Не удалось определить тикер инструмента. Попробуйте обновить страницу.',
         life: 3000
       });
       return;
@@ -377,19 +395,31 @@ const StockDetail: React.FC = () => {
 
     try {
       setLoadingNews(true);
-      const result = await apiService.testNewsApiNews(stockDetail.ticker);
+      console.log(`📰 Запрос свежих новостей для тикера: ${ticker}`);
+      
+      const result = await apiService.testNewsApiNews(ticker);
+      
+      console.log(`✅ Результат загрузки новостей:`, result);
+      
+      const newsCount = result?.data?.newsCount || result?.newsCount || 0;
       
       toast.current?.show({
         severity: 'success',
         summary: 'Успешно',
-        detail: `Загружено ${result.data?.newsCount || 0} новостей`,
+        detail: `Загружено ${newsCount} новостей`,
         life: 3000
       });
 
       // Перезагружаем новости из БД после успешного запроса
+      // Увеличиваем задержку до 3 секунд для надежного сохранения в БД
       setTimeout(async () => {
         try {
-          const newsData = await apiService.getNews(figi || '', 20, 30).catch(() => []);
+          console.log(`🔄 Перезагрузка новостей из БД для FIGI: ${figi}`);
+          const newsData = await apiService.getNews(figi || '', 20, 30).catch((err) => {
+            console.error('Ошибка при перезагрузке новостей:', err);
+            return [];
+          });
+          
           const formattedNews = Array.isArray(newsData) 
             ? newsData.map((item: any) => ({
                 title: item.title || '',
@@ -399,18 +429,22 @@ const StockDetail: React.FC = () => {
                 source: item.source ? (typeof item.source === 'string' ? { name: item.source } : item.source) : { name: 'Неизвестный источник' }
               }))
             : [];
+          
+          console.log(`📰 Загружено ${formattedNews.length} новостей из БД`);
           setNews(formattedNews);
         } catch (err) {
           console.error('Error reloading news:', err);
         }
-      }, 2000); // Небольшая задержка для сохранения в БД
+      }, 3000); // Увеличена задержка для сохранения в БД
       
     } catch (err: any) {
-      console.error('Error fetching fresh news:', err);
+      console.error('❌ Error fetching fresh news:', err);
+      const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || 'Не удалось загрузить свежие новости';
+      
       toast.current?.show({
         severity: 'error',
         summary: 'Ошибка',
-        detail: err.response?.data?.message || err.message || 'Не удалось загрузить свежие новости',
+        detail: errorMessage,
         life: 5000
       });
     } finally {
@@ -1419,12 +1453,14 @@ const StockDetail: React.FC = () => {
               <h3 className="m-0">📰 Новости</h3>
               <Button
                 icon="pi pi-refresh"
-                label="Запросить свежие"
+                label="Загрузить свежие"
                 size="small"
                 onClick={handleFetchFreshNews}
                 loading={loadingNews}
-                disabled={!stockDetail || loadingNews}
+                disabled={!figi || !stockDetail?.ticker || loadingNews}
                 className="p-button-text p-button-sm"
+                tooltip="Загрузить свежие новости из NewsAPI и сохранить в БД"
+                tooltipOptions={{ position: 'top' }}
               />
             </div>
             {news.length > 0 ? (

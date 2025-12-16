@@ -188,7 +188,7 @@ async function performActiveSignalsPricesUpdate() {
                                     triggerType = 'target_reached';
                                 } else if (stoploss && priceValue <= stoploss) {
                                     triggered = true;
-                                    triggerType = 'stoploss_hit';
+                                    triggerType = 'stoploss_triggered';
                                 }
                             } else if (signal.direction === 'SIGNAL_DIRECTION_SELL') {
                                 // Для SELL сигналов: достигли targetPrice (вниз) или stoploss (вверх)
@@ -197,7 +197,7 @@ async function performActiveSignalsPricesUpdate() {
                                     triggerType = 'target_reached';
                                 } else if (stoploss && priceValue >= stoploss) {
                                     triggered = true;
-                                    triggerType = 'stoploss_hit';
+                                    triggerType = 'stoploss_triggered';
                                 }
                             }
 

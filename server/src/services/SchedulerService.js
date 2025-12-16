@@ -14,6 +14,7 @@ class SchedulerService {
         this.cacheTask = null;
         this.priceUpdateTask = null; // Задача обновления цен
         this.portfolioPricesUpdateTask = null; // Задача обновления цен портфеля
+        this.partialExitCheckTask = null; // Задача проверки частичного закрытия позиций
         this.activeSignalsPricesUpdateTask = null; // Задача обновления цен активных сигналов
         this.tradingRequestsPricesUpdateTask = null; // Задача обновления цен активных заявок
         this.cleanupTask = null;
@@ -46,6 +47,7 @@ class SchedulerService {
         this.skipFirstRun = new Set(); // Задачи, которые должны пропустить первый запуск
         this.isFullCacheUpdateRunning = false; // Флаг выполнения полного обновления кеша
         this.currentFullCacheUpdateWorker = null; // Текущий worker полного обновления кеша
+        this.pendingTriggeredSignals = []; // Накопленные сработавшие сигналы для отправки после анализа
     }
 
     /**
@@ -184,6 +186,37 @@ class SchedulerService {
             } catch (error) {
                 console.error('Error in scheduled portfolio prices update:', error);
                 // Не отправляем критическое уведомление для обновления цен портфеля
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
+        // Задача 1.6.5: Проверка частичного закрытия позиций (каждые 2 минуты вместе с обновлением цен)
+        this.partialExitCheckTask = cron.schedule(portfolioPricesUpdateSchedule, async () => {
+            // Пропускаем первый запуск при старте
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 60 * 1000) {
+                return;
+            }
+            
+            // Пропускаем, если идет полное обновление кеша
+            if (this.isFullCacheUpdateRunning) {
+                return;
+            }
+            
+            try {
+                console.log('📊 Checking positions for partial exit...');
+                const PartialExitService = (await import('./PartialExitService.js')).default;
+                if (!PartialExitService.isInitialized) {
+                    await PartialExitService.initialize();
+                }
+                const result = await PartialExitService.checkAndExecutePartialExits();
+                if (result.executed > 0) {
+                    console.log(`✅ Partial exit check completed: checked=${result.checked}, executed=${result.executed}, skipped=${result.skipped}`);
+                }
+            } catch (error) {
+                console.error('❌ Error in partial exit check:', error);
             }
         }, {
             scheduled: true,
@@ -1630,6 +1663,10 @@ class SchedulerService {
             this.portfolioPricesUpdateTask.stop();
             console.log('⏸️ Paused: portfolio prices update task');
         }
+        if (this.partialExitCheckTask) {
+            this.partialExitCheckTask.stop();
+            console.log('⏸️ Paused: partial exit check task');
+        }
         if (this.activeSignalsPricesUpdateTask) {
             this.activeSignalsPricesUpdateTask.stop();
             console.log('⏸️ Paused: active signals prices update task');
@@ -1707,6 +1744,12 @@ class SchedulerService {
         if (this.portfolioPricesUpdateTask) {
             this.portfolioPricesUpdateTask.start();
             console.log('▶️ Resumed: portfolio prices update task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
+        
+        if (this.partialExitCheckTask) {
+            this.partialExitCheckTask.start();
+            console.log('▶️ Resumed: partial exit check task');
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
         
@@ -2295,6 +2338,7 @@ class SchedulerService {
             const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
             const CachedSignal = (await import('../models/CachedSignal.js')).default;
             const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+            const TriggeredSignal = (await import('../models/TriggeredSignal.js')).default;
             const WebSocketService = await this.getWebSocketService();
 
             for (const triggered of triggeredSignals) {
@@ -2307,47 +2351,77 @@ class SchedulerService {
                     const ticker = instrument?.ticker || triggered.figi;
                     const name = instrument?.name || 'Неизвестный инструмент';
 
-                    // Формируем сообщение
-                    const directionText = triggered.direction === 'SIGNAL_DIRECTION_BUY' ? 'ПОКУПКА' : 'ПРОДАЖА';
-                    const triggerText = triggered.triggerType === 'target_reached' ? '✅ Целевая цена достигнута' : '⚠️ Стоп-лосс сработал';
-                    
-                    const message = `📊 Сигнал сработал: ${triggered.name || 'Сигнал'}\n` +
-                        `📈 Инструмент: ${ticker} (${name})\n` +
-                        `📊 Направление: ${directionText}\n` +
-                        `🎯 ${triggerText}\n` +
-                        `💰 Текущая цена: ${triggered.currentPrice.toFixed(2)} ₽\n` +
-                        `🎯 Целевая цена: ${triggered.targetPrice ? triggered.targetPrice.toFixed(2) : 'N/A'} ₽\n` +
-                        `🛑 Стоп-лосс: ${triggered.stoploss ? triggered.stoploss.toFixed(2) : 'N/A'} ₽\n` +
-                        `📋 Стратегия: ${triggered.strategyName || 'Неизвестна'}`;
+                    // Получаем исходный сигнал для дополнительной информации
+                    const originalSignal = await CachedSignal.findOne({
+                        where: { signalId: triggered.signalId }
+                    });
 
-                    // Отправляем уведомление в Telegram
-                    await OptimizedTelegramService.sendAlert(
-                        'Сигнал сработал',
-                        message,
-                        triggered.triggerType === 'target_reached' ? 'success' : 'warning'
-                    );
-
-                    // Отправляем уведомление через WebSocket
-                    if (WebSocketService) {
-                        WebSocketService.broadcast({
-                            type: 'signal_triggered',
-                            data: {
+                    // Сохраняем или обновляем сработавший сигнал в БД
+                    // Обновляем счетчик срабатываний, если сигнал уже существует
+                    try {
+                        const [existingSignal, created] = await TriggeredSignal.findOrCreate({
+                            where: {
                                 signalId: triggered.signalId,
+                                triggerType: triggered.triggerType
+                            },
+                            defaults: {
+                                signalId: triggered.signalId,
+                                strategyId: triggered.strategyId || originalSignal?.strategyId || '',
+                                strategyName: triggered.strategyName || originalSignal?.strategyName || 'Неизвестна',
                                 figi: triggered.figi,
-                                ticker,
-                                name,
+                                ticker: ticker,
+                                name: name,
                                 direction: triggered.direction,
                                 triggerType: triggered.triggerType,
+                                initialPrice: triggered.initialPrice || originalSignal?.initialPrice || null,
                                 currentPrice: triggered.currentPrice,
-                                targetPrice: triggered.targetPrice,
-                                stoploss: triggered.stoploss,
-                                strategyName: triggered.strategyName,
-                                timestamp: new Date().toISOString()
+                                targetPrice: triggered.targetPrice || originalSignal?.targetPrice || null,
+                                stoploss: triggered.stoploss || originalSignal?.stoploss || null,
+                                signalName: triggered.name || originalSignal?.name || null,
+                                probability: triggered.probability || originalSignal?.probability || null,
+                                status: 'triggered',
+                                triggerCount: 1,
+                                lastTriggeredAt: new Date(),
+                                triggeredAt: new Date(),
+                                signalCreateDt: originalSignal?.createDt || null,
+                                signalEndDt: originalSignal?.endDt || null
                             }
                         });
-                    }
 
-                    console.log(`✅ Signal triggered: ${triggered.signalId} (${triggered.figi}) - ${triggerText}`);
+                        if (!created && existingSignal) {
+                            // Обновляем существующий сигнал: увеличиваем счетчик и обновляем цены
+                            await existingSignal.update({
+                                triggerCount: (existingSignal.triggerCount || 1) + 1,
+                                lastTriggeredAt: new Date(),
+                                currentPrice: triggered.currentPrice, // Обновляем текущую цену
+                                updatedAt: new Date()
+                            });
+                            console.log(`🔄 Triggered signal updated: ${triggered.signalId} (${triggered.triggerType}) - count: ${existingSignal.triggerCount + 1}`);
+                        } else {
+                            console.log(`💾 Triggered signal saved to DB: ${triggered.signalId} (${triggered.triggerType})`);
+                        }
+
+                        // Добавляем сигнал в очередь для отправки после анализа
+                        // Используем актуальные данные из БД
+                        const signalToNotify = await TriggeredSignal.findOne({
+                            where: {
+                                signalId: triggered.signalId,
+                                triggerType: triggered.triggerType
+                            }
+                        });
+
+                        if (signalToNotify) {
+                            this.pendingTriggeredSignals.push({
+                                ...triggered,
+                                ticker,
+                                name,
+                                triggerCount: signalToNotify.triggerCount,
+                                lastTriggeredAt: signalToNotify.lastTriggeredAt
+                            });
+                        }
+                    } catch (dbError) {
+                        console.error(`❌ Error saving triggered signal to DB:`, dbError.message);
+                    }
                 } catch (signalError) {
                     console.error(`❌ Error handling triggered signal ${triggered.signalId}:`, signalError.message);
                 }
@@ -2507,6 +2581,12 @@ class SchedulerService {
                         continue;
                     }
 
+                    // Пропускаем уже исполненные, отклоненные или отмененные заявки
+                    if (['EXECUTED', 'REJECTED', 'CANCELLED'].includes(request.status)) {
+                        console.log(`⏭️ Skipping request ${requestData.requestId} - status is ${request.status}`);
+                        continue;
+                    }
+
                     // Формируем сообщение
                     const actionText = requestData.action === 'BUY' ? 'ПОКУПКА' : 'ПРОДАЖА';
                     const statusText = requestData.isPriceReached ? '✅ Цена достигнута - готово к исполнению' : '⚠️ Цена приближается - готово к исполнению';
@@ -2563,12 +2643,13 @@ class SchedulerService {
     async performCleanup() {
         try {
             const { CachedCandle } = await import('../models/CachedCandle.js');
+            const TriggeredSignal = (await import('../models/TriggeredSignal.js')).default;
 
             // Удаляем свечи старше 30 дней
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-            const deletedCount = await CachedCandle.destroy({
+            const deletedCandlesCount = await CachedCandle.destroy({
                 where: {
                     time: {
                         [Op.lt]: thirtyDaysAgo
@@ -2576,7 +2657,19 @@ class SchedulerService {
                 }
             });
 
-            console.log(`🧹 Cleanup completed. Deleted ${deletedCount} old candles`);
+            // Удаляем сработавшие сигналы старше 1 суток (24 часа)
+            const oneDayAgo = new Date();
+            oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+
+            const deletedSignalsCount = await TriggeredSignal.destroy({
+                where: {
+                    triggeredAt: {
+                        [Op.lt]: oneDayAgo
+                    }
+                }
+            });
+
+            console.log(`🧹 Cleanup completed. Deleted ${deletedCandlesCount} old candles, ${deletedSignalsCount} old triggered signals`);
         } catch (error) {
             console.error('Cleanup error:', error);
             throw error;
@@ -3275,11 +3368,109 @@ class SchedulerService {
             }
 
             console.log('✅ Portfolio analysis completed for all portfolio types');
+
+            // Отправляем накопленные сработавшие сигналы после завершения анализа
+            if (this.pendingTriggeredSignals.length > 0) {
+                await this.sendPendingTriggeredSignals();
+            }
         } catch (error) {
             console.error('❌ Error performing portfolio analysis:', error);
             throw error;
         } finally {
             this.isAnalyzing = false;
+        }
+    }
+
+    /**
+     * Отправка накопленных сработавших сигналов раз после анализа
+     * Это позволяет избежать неактуальности и дублирования уведомлений
+     */
+    async sendPendingTriggeredSignals() {
+        if (this.pendingTriggeredSignals.length === 0) {
+            return;
+        }
+
+        try {
+            const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+            const WebSocketService = await this.getWebSocketService();
+            const translateStrategy = (await import('../utils/strategyTranslator.js')).default;
+
+            // Группируем сигналы по инструменту для более компактного представления
+            const signalsByInstrument = {};
+            for (const triggered of this.pendingTriggeredSignals) {
+                const key = `${triggered.figi}_${triggered.triggerType}`;
+                if (!signalsByInstrument[key]) {
+                    signalsByInstrument[key] = [];
+                }
+                signalsByInstrument[key].push(triggered);
+            }
+
+            // Отправляем уведомления для каждого уникального сигнала
+            for (const [key, signals] of Object.entries(signalsByInstrument)) {
+                const triggered = signals[0]; // Берем первый сигнал для базовой информации
+                const latestSignal = signals[signals.length - 1]; // Берем последний для актуальной цены
+                const totalCount = signals.reduce((sum, s) => sum + (s.triggerCount || 1), 0);
+
+                try {
+                    const directionText = triggered.direction === 'SIGNAL_DIRECTION_BUY' ? 'ПОКУПКА' : 'ПРОДАЖА';
+                    const triggerText = triggered.triggerType === 'target_reached' ? '✅ Целевая цена достигнута' : '⚠️ Стоп-лосс сработал';
+                    const strategyNameRu = translateStrategy(triggered.strategyName || 'Неизвестна');
+                    
+                    // Формируем сообщение с учетом количества срабатываний
+                    let message = `📊 Сигнал сработал: ${triggered.name || 'Сигнал'}\n` +
+                        `📈 Инструмент: ${triggered.ticker} (${triggered.name})\n` +
+                        `📊 Направление: ${directionText}\n` +
+                        `🎯 ${triggerText}\n` +
+                        `💰 Текущая цена: ${latestSignal.currentPrice.toFixed(2)} ₽\n` +
+                        `🎯 Целевая цена: ${latestSignal.targetPrice ? latestSignal.targetPrice.toFixed(2) : 'N/A'} ₽\n` +
+                        `🛑 Стоп-лосс: ${latestSignal.stoploss ? latestSignal.stoploss.toFixed(2) : 'N/A'} ₽\n` +
+                        `📋 Стратегия: ${strategyNameRu}`;
+
+                    // Добавляем информацию о количестве срабатываний, если больше 1
+                    if (totalCount > 1) {
+                        message += `\n🔄 Количество срабатываний: ${totalCount}`;
+                    }
+
+                    // Отправляем уведомление в Telegram
+                    await OptimizedTelegramService.sendAlert(
+                        'Сигнал сработал',
+                        message,
+                        triggered.triggerType === 'target_reached' ? 'success' : 'warning'
+                    );
+
+                    // Отправляем уведомление через WebSocket
+                    if (WebSocketService) {
+                        WebSocketService.broadcast({
+                            type: 'signal_triggered',
+                            data: {
+                                signalId: triggered.signalId,
+                                figi: triggered.figi,
+                                ticker: triggered.ticker,
+                                name: triggered.name,
+                                direction: triggered.direction,
+                                triggerType: triggered.triggerType,
+                                currentPrice: latestSignal.currentPrice,
+                                targetPrice: latestSignal.targetPrice,
+                                stoploss: latestSignal.stoploss,
+                                strategyName: triggered.strategyName,
+                                strategyNameRu: strategyNameRu,
+                                triggerCount: totalCount,
+                                timestamp: new Date().toISOString()
+                            }
+                        });
+                    }
+
+                    console.log(`✅ Signal triggered notification sent: ${triggered.signalId} (${triggered.figi}) - ${triggerText} (count: ${totalCount})`);
+                } catch (signalError) {
+                    console.error(`❌ Error sending notification for signal ${triggered.signalId}:`, signalError.message);
+                }
+            }
+
+            // Очищаем очередь после отправки
+            this.pendingTriggeredSignals = [];
+            console.log(`📤 Sent ${Object.keys(signalsByInstrument).length} triggered signal notifications after analysis`);
+        } catch (error) {
+            console.error('❌ Error sending pending triggered signals:', error);
         }
     }
 

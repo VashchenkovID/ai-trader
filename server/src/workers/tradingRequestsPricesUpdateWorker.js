@@ -57,6 +57,24 @@ async function performTradingRequestsPricesUpdate() {
 
         console.log(`📋 [Trading Requests Worker] Updating prices for ${figis.length} instruments with ${activeRequests.length} active requests...`);
 
+        // Оптимизация: загружаем актуальные статусы всех заявок одним запросом вместо N+1
+        // Создаем Map для быстрого доступа к статусам по ID заявки
+        const requestIds = activeRequests.map(r => r.id);
+        const freshStatuses = await TradingRequest.findAll({
+            where: {
+                id: {
+                    [Op.in]: requestIds
+                }
+            },
+            attributes: ['id', 'status']
+        });
+        
+        // Создаем Map для O(1) доступа к статусам
+        const statusMap = new Map();
+        for (const fresh of freshStatuses) {
+            statusMap.set(fresh.id, fresh.status);
+        }
+
         // Разбиваем на батчи по 50 инструментов (лимит API)
         const batchSize = 50;
         const batches = [];
@@ -113,6 +131,16 @@ async function performTradingRequestsPricesUpdate() {
                         // Проверяем условия исполнения для всех заявок этого инструмента
                         const requestsForFigi = activeRequests.filter(r => r.figi === priceData.figi);
                         for (const request of requestsForFigi) {
+                            // Получаем актуальный статус из Map (O(1) вместо запроса к БД)
+                            const currentStatus = statusMap.get(request.id);
+                            
+                            // Пропускаем уже исполненные, отклоненные или отмененные заявки
+                            // Используем актуальный статус из Map, если доступен, иначе используем статус из загруженных данных
+                            const effectiveStatus = currentStatus || request.status;
+                            if (['EXECUTED', 'REJECTED', 'CANCELLED'].includes(effectiveStatus)) {
+                                continue;
+                            }
+
                             const priceDiff = Math.abs(priceValue - request.priceAtRequest);
                             const priceDiffPercent = (priceDiff / request.priceAtRequest) * 100;
                             
@@ -136,7 +164,7 @@ async function performTradingRequestsPricesUpdate() {
                                     isPriceReached,
                                     isPriceApproaching,
                                     quantity: request.quantity,
-                                    status: request.status,
+                                    status: effectiveStatus, // Используем актуальный статус из Map
                                     confidence: request.confidence
                                 });
                             }
