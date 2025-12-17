@@ -490,13 +490,9 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
 
       {/* Новые WebSocket виджеты */}
       <div className="grid mt-3">
-        {/* Торговые сигналы (WebSocket) */}
-        <div className="col-12 lg:col-6">
-          <TradingSignalsWidget maxSignals={10} />
-        </div>
 
         {/* Записанные торговые сигналы из БД */}
-        <div className="col-12 lg:col-6">
+        <div className="col-12">
           <CachedSignalsCard maxSignals={20} />
         </div>
 

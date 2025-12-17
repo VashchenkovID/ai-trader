@@ -10,6 +10,9 @@ import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 import { getService } from './GlobalServiceManager.js';
 
+// Импорт утилит планировщика
+import * as SchedulerUtils from '../utils/scheduler/index.js';
+
 class SchedulerService {
     constructor() {
         this.cacheTask = null;
@@ -99,6 +102,12 @@ class SchedulerService {
     async start() {
         console.log('Starting scheduled tasks...');
         
+        // Загружаем время последнего обновления кеша, если оно еще не загружено
+        // Это гарантирует восстановление состояния после перезапуска сервиса
+        if (this.lastCacheUpdate === null || this.lastCacheUpdate === undefined) {
+            await this.loadLastCacheUpdateTime();
+        }
+        
         // Сохраняем время старта для предотвращения немедленного запуска задач
         // ВАЖНО: устанавливаем время старта ДО создания cron задач
         this.startTime = Date.now();
@@ -124,15 +133,9 @@ class SchedulerService {
         this.cacheUpdateInterval = cacheUpdateIntervalHours * 60 * 60 * 1000; // конвертируем в миллисекунды
 
         // Задача 1: Обновление кеша акций
-        this.cacheTask = cron.schedule(cacheSchedule, async () => {
-            // Пропускаем первый запуск при старте (минимум 10 минут с момента старта)
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 10 * 60 * 1000) {
-                console.log('⏭️ Skipping first cache update run (too soon after startup)');
-                return;
-            }
-            
-            try {
+        this.cacheTask = SchedulerUtils.createScheduledTask(
+            cacheSchedule,
+            async () => {
                 console.log('⏰ Scheduled cache update started...');
                 
                 // Проверяем, нужно ли обновлять кеш
@@ -141,75 +144,55 @@ class SchedulerService {
                 }
                 
                 await this.performCacheUpdate();
-            } catch (error) {
-                console.error('Error in scheduled cache update:', error);
-                await OptimizedTelegramService.sendAlert('CACHE_UPDATE_ERROR', error.message, 'critical');
+            },
+            {
+                taskName: 'cache-update',
+                sendAlerts: false, // performCacheUpdate уже отправляет свои уведомления об ошибках
+                alertType: 'critical',
+                startTime: this.startTime,
+                minDelay: 10 * 60 * 1000, // 10 минут
+                checkCacheStale: false // Проверка уже внутри performCacheUpdate
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 1.5: Обновление цен акций (каждые 20 минут)
         const priceUpdateIntervalMinutes = schedulerSettings.price_update_interval_minutes || 20;
         const priceUpdateSchedule = `*/${priceUpdateIntervalMinutes} * * * *`; // Каждые N минут
-        this.priceUpdateTask = cron.schedule(priceUpdateSchedule, async () => {
-            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 60 * 1000) {
-                console.log('⏭️ Skipping first price update run (too soon after startup)');
-                return;
-            }
-            
-            try {
+        this.priceUpdateTask = SchedulerUtils.createScheduledTask(
+            priceUpdateSchedule,
+            async () => {
                 console.log('💰 Scheduled price update started...');
                 await this.performPriceUpdate();
-            } catch (error) {
-                console.error('Error in scheduled price update:', error);
-                // Не отправляем критическое уведомление для обновления цен
+            },
+            {
+                taskName: 'price-update',
+                sendAlerts: false, // Не отправляем критическое уведомление для обновления цен
+                startTime: this.startTime,
+                minDelay: 60 * 1000 // 1 минута
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 1.6: Обновление цен активных позиций в портфеле (каждые 2 минуты в торговые часы)
         const portfolioPricesUpdateIntervalMinutes = schedulerSettings.portfolio_prices_update_interval_minutes || 2;
         const portfolioPricesUpdateSchedule = `*/${portfolioPricesUpdateIntervalMinutes} * * * *`; // Каждые N минут
-        this.portfolioPricesUpdateTask = cron.schedule(portfolioPricesUpdateSchedule, async () => {
-            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 60 * 1000) {
-                console.log('⏭️ Skipping first portfolio prices update run (too soon after startup)');
-                return;
-            }
-            
-            try {
+        this.portfolioPricesUpdateTask = SchedulerUtils.createScheduledTask(
+            portfolioPricesUpdateSchedule,
+            async () => {
                 console.log('💰 Scheduled portfolio prices update started...');
                 await this.performPortfolioPricesUpdate();
-            } catch (error) {
-                console.error('Error in scheduled portfolio prices update:', error);
-                // Не отправляем критическое уведомление для обновления цен портфеля
+            },
+            {
+                taskName: 'portfolio-prices-update',
+                sendAlerts: false,
+                startTime: this.startTime,
+                minDelay: 60 * 1000 // 1 минута
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 1.6.5: Проверка частичного закрытия позиций (каждые 2 минуты вместе с обновлением цен)
-        this.partialExitCheckTask = cron.schedule(portfolioPricesUpdateSchedule, async () => {
-            // Пропускаем первый запуск при старте
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 60 * 1000) {
-                return;
-            }
-            
-            // Пропускаем, если идет полное обновление кеша
-            if (this.isFullCacheUpdateRunning) {
-                return;
-            }
-            
-            try {
+        this.partialExitCheckTask = SchedulerUtils.createScheduledTask(
+            portfolioPricesUpdateSchedule,
+            async () => {
                 console.log('📊 Checking positions for partial exit...');
                 const PartialExitService = (await import('./PartialExitService.js')).default;
                 if (!PartialExitService.isInitialized) {
@@ -219,160 +202,138 @@ class SchedulerService {
                 if (result.executed > 0) {
                     console.log(`✅ Partial exit check completed: checked=${result.checked}, executed=${result.executed}, skipped=${result.skipped}`);
                 }
-            } catch (error) {
-                console.error('❌ Error in partial exit check:', error);
+            },
+            {
+                taskName: 'partial-exit-check',
+                sendAlerts: false,
+                startTime: this.startTime,
+                minDelay: 60 * 1000, // 1 минута
+                checkFlagFn: () => this.isFullCacheUpdateRunning,
+                flagName: 'full cache update'
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 1.7: Обновление цен активных сигналов (каждые 5 минут в торговые часы)
         const activeSignalsPricesUpdateIntervalMinutes = schedulerSettings.active_signals_prices_update_interval_minutes || 5;
         const activeSignalsPricesUpdateSchedule = `*/${activeSignalsPricesUpdateIntervalMinutes} * * * *`; // Каждые N минут
-        this.activeSignalsPricesUpdateTask = cron.schedule(activeSignalsPricesUpdateSchedule, async () => {
-            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 60 * 1000) {
-                console.log('⏭️ Skipping first active signals prices update run (too soon after startup)');
-                return;
-            }
-            
-            try {
+        this.activeSignalsPricesUpdateTask = SchedulerUtils.createScheduledTask(
+            activeSignalsPricesUpdateSchedule,
+            async () => {
                 console.log('📊 Scheduled active signals prices update started...');
                 await this.performActiveSignalsPricesUpdate();
-            } catch (error) {
-                console.error('Error in scheduled active signals prices update:', error);
+            },
+            {
+                taskName: 'active-signals-prices-update',
+                sendAlerts: false,
+                startTime: this.startTime,
+                minDelay: 60 * 1000 // 1 минута
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 1.8: Обновление цен активных торговых заявок (каждую минуту в торговые часы)
         const tradingRequestsPricesUpdateIntervalSeconds = schedulerSettings.trading_requests_prices_update_interval_seconds || 60;
         const tradingRequestsPricesUpdateSchedule = `*/${Math.floor(tradingRequestsPricesUpdateIntervalSeconds / 60)} * * * *`; // Каждые N минут (округляем до минут)
-        this.tradingRequestsPricesUpdateTask = cron.schedule(tradingRequestsPricesUpdateSchedule, async () => {
-            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 60 * 1000) {
-                console.log('⏭️ Skipping first trading requests prices update run (too soon after startup)');
-                return;
-            }
-            
-            try {
+        this.tradingRequestsPricesUpdateTask = SchedulerUtils.createScheduledTask(
+            tradingRequestsPricesUpdateSchedule,
+            async () => {
                 console.log('📋 Scheduled trading requests prices update started...');
                 await this.performTradingRequestsPricesUpdate();
-            } catch (error) {
-                console.error('Error in scheduled trading requests prices update:', error);
+            },
+            {
+                taskName: 'trading-requests-prices-update',
+                sendAlerts: false,
+                startTime: this.startTime,
+                minDelay: 60 * 1000 // 1 минута
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 2: Очистка старых свечей каждые 24 часа
-        this.cleanupTask = cron.schedule('0 2 * * *', async () => {
-            try {
+        this.cleanupTask = SchedulerUtils.createScheduledTask(
+            '0 2 * * *',
+            async () => {
                 console.log('🧹 Scheduled cleanup started...');
                 await this.performCleanup();
-            } catch (error) {
-                console.error('Error in scheduled cleanup:', error);
+            },
+            {
+                taskName: 'cleanup',
+                sendAlerts: false,
+                startTime: this.startTime,
+                minDelay: 60 * 1000 // 1 минута
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 3: Периодическое обучение нейросети
-        this.trainingTask = cron.schedule(trainingSchedule, async () => {
-            try {
-                // Проверяем свежесть данных перед обучением
-                const isStale = await this.isCacheStale();
-                if (isStale) {
-                    console.log('⚠️ Cache is stale, waiting for cache update before training...');
-                    // Ждем обновления кеша (максимум 10 минут)
-                    let waitTime = 0;
-                    const maxWait = 10 * 60 * 1000; // 10 минут
-                    while (await this.isCacheStale() && waitTime < maxWait) {
-                        await new Promise(resolve => setTimeout(resolve, 60000)); // Ждем 1 минуту
-                        waitTime += 60000;
-                    }
-                    if (await this.isCacheStale()) {
-                        console.log('⚠️ Cache update timeout, proceeding with training anyway...');
-                    }
-                }
-                
+        this.trainingTask = SchedulerUtils.createScheduledTask(
+            trainingSchedule,
+            async () => {
                 console.log('🧠 Scheduled neural network training started...');
                 await this.performScheduledTraining();
-            } catch (error) {
-                console.error('Error in scheduled training:', error);
-                await OptimizedTelegramService.sendAlert('CACHE_UPDATE_ERROR', error.message, 'critical');
+            },
+            {
+                taskName: 'training',
+                sendAlerts: true,
+                alertType: 'critical',
+                startTime: this.startTime,
+                minDelay: 60 * 1000,
+                checkCacheStale: true,
+                isCacheStaleFn: () => this.isCacheStale(),
+                skipIfStale: false // Ждем обновления кеша
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 4: Быстрое обучение нейросети (если включено)
         // Расписание: каждые 2 часа (08:00, 10:00, 12:00, 14:00, 16:00, 18:00)
         if (quickTrainingEnabled) {
-            this.quickTrainingTask = cron.schedule(quickTrainingSchedule, async () => {
-                try {
-                    // Проверяем свежесть данных перед быстрым обучением
-                    const isStale = await this.isCacheStale();
-                    if (isStale) {
-                        console.log('⚠️ Cache is stale, skipping quick training (will run after cache update)...');
-                        return;
-                    }
-                    
+            this.quickTrainingTask = SchedulerUtils.createScheduledTask(
+                quickTrainingSchedule,
+                async () => {
                     console.log('⚡ Scheduled quick neural network training started...');
                     const QuickTrainingService = (await import('./QuickTrainingService.js')).default;
                     await QuickTrainingService.performQuickTraining();
-                } catch (error) {
-                    console.error('Error in scheduled quick training:', error);
-                    // Не отправляем в Telegram для быстрого обучения, чтобы не спамить
+                },
+                {
+                    taskName: 'quick-training',
+                    sendAlerts: false, // Не отправляем в Telegram для быстрого обучения, чтобы не спамить
+                    startTime: this.startTime,
+                    minDelay: 60 * 1000,
+                    checkCacheStale: true,
+                    isCacheStaleFn: () => this.isCacheStale(),
+                    skipIfStale: true // Пропускаем если кеш устарел
                 }
-            }, {
-                scheduled: true,
-                timezone: "Europe/Moscow"
-            });
+            );
         }
 
         // Задача 5: Обновление кеша торговых часов
         const tradingHoursSchedule = schedulerSettings.trading_hours_update_interval || '*/15 * * * *';
-        this.tradingHoursCacheTask = cron.schedule(tradingHoursSchedule, async () => {
-            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 60 * 1000) {
-                console.log('⏭️ Skipping first trading hours cache update run (too soon after startup)');
-                return;
-            }
-            
-            try {
+        this.tradingHoursCacheTask = SchedulerUtils.createScheduledTask(
+            tradingHoursSchedule,
+            async () => {
                 console.log('🕐 Scheduled trading hours cache update started...');
                 await TradingHoursCacheService.updateTradingHoursCache();
-            } catch (error) {
-                console.error('Error in scheduled trading hours cache update:', error);
+            },
+            {
+                taskName: 'trading-hours-cache-update',
+                sendAlerts: false,
+                startTime: this.startTime,
+                minDelay: 60 * 1000 // 1 минута
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 6: Еженедельная очистка новостей старше года (каждое воскресенье в 3:00)
-        this.newsCleanupTask = cron.schedule(newsWeeklyCleanupSchedule, async () => {
-            try {
+        this.newsCleanupTask = SchedulerUtils.createScheduledTask(
+            newsWeeklyCleanupSchedule,
+            async () => {
                 console.log('📰 Scheduled weekly news cleanup (older than 1 year) started...');
                 await this.performNewsCacheCleanup();
-            } catch (error) {
-                console.error('Error in scheduled weekly news cleanup:', error);
-                await OptimizedTelegramService.sendAlert('NEWS_WEEKLY_CLEANUP_ERROR', error.message, 'warning');
+            },
+            {
+                taskName: 'news-weekly-cleanup',
+                sendAlerts: true,
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 60 * 1000
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача: Периодическое обновление кеша новостей (каждые 6 часов по умолчанию)
         // ОТКЛЮЧЕНО: Новости теперь обновляются в performCacheUpdate и performDailyNewsUpdate
@@ -398,328 +359,192 @@ class SchedulerService {
         // });
 
         // Задача: Ежедневная проверка и загрузка свежих новостей
-        this.newsDailyUpdateTask = cron.schedule(newsDailyUpdateSchedule, async () => {
-            try {
+        this.newsDailyUpdateTask = SchedulerUtils.createScheduledTask(
+            newsDailyUpdateSchedule,
+            async () => {
                 console.log('📰 Scheduled daily news update started...');
                 await this.performDailyNewsUpdate();
-            } catch (error) {
-                console.error('Error in scheduled daily news update:', error);
-                await OptimizedTelegramService.sendAlert('NEWS_DAILY_UPDATE_ERROR', error.message, 'warning');
+            },
+            {
+                taskName: 'news-daily-update',
+                sendAlerts: true,
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 60 * 1000
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 7: Обновление кеша настроений Telegram (настраиваемое расписание)
-        this.telegramCacheTask = cron.schedule(telegramCacheSchedule, async () => {
-            try {
+        this.telegramCacheTask = SchedulerUtils.createScheduledTask(
+            telegramCacheSchedule,
+            async () => {
                 console.log('📱 Scheduled Telegram sentiment cache update started...');
                 await this.performTelegramCacheUpdate();
-            } catch (error) {
-                console.error('Error in scheduled Telegram cache update:', error);
-                await OptimizedTelegramService.sendAlert('TELEGRAM_CACHE_UPDATE_ERROR', error.message, 'warning');
+            },
+            {
+                taskName: 'telegram-cache-update',
+                sendAlerts: true,
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 60 * 1000
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 8: Проверка торговых часов и уведомлений (каждые 5 минут)
-        this.tradingHoursTask = cron.schedule('*/5 * * * *', async () => {
-            try {
+        this.tradingHoursTask = SchedulerUtils.createScheduledTask(
+            '*/5 * * * *',
+            async () => {
                 await TradingHoursService.checkAndSendNotifications();
-            } catch (error) {
-                console.error('Error checking trading hours notifications:', error);
+            },
+            {
+                taskName: 'trading-hours-check',
+                sendAlerts: false,
+                startTime: this.startTime,
+                minDelay: 60 * 1000
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 9: Проверка деградации моделей и автоматическое восстановление (каждые 6 часов)
         const degradationCheckSchedule = schedulerSettings.degradation_check_interval || '0 */6 * * *';
-        this.degradationCheckTask = cron.schedule(degradationCheckSchedule, async () => {
-            try {
+        this.degradationCheckTask = SchedulerUtils.createScheduledTask(
+            degradationCheckSchedule,
+            async () => {
                 console.log('🔍 Scheduled degradation check started...');
                 await this.checkDegradationAndRestoreAll();
-            } catch (error) {
-                console.error('Error in scheduled degradation check:', error);
-                await OptimizedTelegramService.sendAlert('DEGRADATION_CHECK_ERROR', error.message, 'warning');
+            },
+            {
+                taskName: 'degradation-check',
+                sendAlerts: true,
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 60 * 1000
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 10: Автоматический анализ портфеля (каждый час)
         // Пропускаем первый запуск, так как он будет выполнен через 30 минут после старта
-        this.portfolioAnalysisTask = cron.schedule('0 * * * *', async () => {
-            // Проверяем, прошло ли достаточно времени с момента старта (минимум 35 минут)
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 35 * 60 * 1000) {
-                console.log('⏭️ Skipping first portfolio analysis run (will run after 30 minutes from startup)');
-                return;
-            }
-            
-            try {
-                // Проверяем свежесть данных перед анализом портфеля
-                const isStale = await this.isCacheStale();
-                if (isStale) {
-                    console.log('⚠️ Cache is stale, skipping portfolio analysis (will run after cache update)...');
-                    return;
-                }
-                
+        this.portfolioAnalysisTask = SchedulerUtils.createScheduledTask(
+            '0 * * * *',
+            async () => {
                 console.log('📊 Scheduled portfolio analysis started...');
                 await this.performPortfolioAnalysis();
-            } catch (error) {
-                console.error('Error in scheduled portfolio analysis:', error);
-                await OptimizedTelegramService.sendAlert('PORTFOLIO_ANALYSIS_ERROR', error.message, 'warning');
+            },
+            {
+                taskName: 'portfolio-analysis',
+                sendAlerts: true,
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 35 * 60 * 1000, // 35 минут (первый запуск через 30 минут после старта)
+                checkCacheStale: true,
+                isCacheStaleFn: () => this.isCacheStale(),
+                skipIfStale: true
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 11: Обновление предсказаний в рекомендациях каждые 20 минут
-        this.predictionsUpdateTask = cron.schedule('*/20 * * * *', async () => {
-            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 60 * 1000) {
-                console.log('⏭️ Skipping first predictions update run (too soon after startup)');
-                return;
-            }
-            
-            // Проверяем, не идет ли полное обновление кеша
-            if (this.isFullCacheUpdateRunning) {
-                console.log('⏭️ Skipping predictions update - full cache update is running');
-                return;
-            }
-            
-            try {
-                // Проверяем свежесть данных перед обновлением предсказаний
-                const isStale = await this.isCacheStale();
-                if (isStale) {
-                    console.log('⚠️ Cache is stale, skipping predictions update (will run after cache update)...');
-                    return;
-                }
-                
+        this.predictionsUpdateTask = SchedulerUtils.createScheduledTask(
+            '*/20 * * * *',
+            async () => {
                 console.log('🔄 Scheduled predictions update started...');
                 await this.updateRecommendationsPredictions();
-            } catch (error) {
-                console.error('Error in scheduled predictions update:', error);
-                // Не отправляем в Telegram, чтобы не спамить при частых обновлениях
+            },
+            {
+                taskName: 'predictions-update',
+                sendAlerts: false, // Не отправляем в Telegram, чтобы не спамить при частых обновлениях
+                startTime: this.startTime,
+                minDelay: 60 * 1000,
+                checkFlagFn: () => this.isFullCacheUpdateRunning,
+                flagName: 'full cache update',
+                checkCacheStale: true,
+                isCacheStaleFn: () => this.isCacheStale(),
+                skipIfStale: true
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 12: Обновление сигналов аналитиков раз в день (в 6:00)
-        this.signalsUpdateTask = cron.schedule('0 6 * * *', async () => {
-            // Проверяем, не идет ли полное обновление кеша
-            if (this.isFullCacheUpdateRunning) {
-                console.log('⏭️ Skipping signals update - full cache update is running');
-                return;
-            }
-            
-            try {
+        this.signalsUpdateTask = SchedulerUtils.createScheduledTask(
+            '0 6 * * *',
+            async () => {
                 console.log('⚡ Scheduled signals update started...');
                 await this.performSignalsUpdate();
-            } catch (error) {
-                console.error('Error in scheduled signals update:', error);
-                await OptimizedTelegramService.sendAlert('SIGNALS_UPDATE_ERROR', error.message, 'warning');
+            },
+            {
+                taskName: 'signals-update',
+                sendAlerts: true,
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 60 * 1000,
+                checkFlagFn: () => this.isFullCacheUpdateRunning,
+                flagName: 'full cache update'
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 13: Проверка трейлинг-стопов (каждые 5 минут)
-        this.trailingStopsCheckTask = cron.schedule('*/5 * * * *', async () => {
-            // Пропускаем первый запуск при старте (минимум 1 минута с момента старта)
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 60 * 1000) {
-                console.log('⏭️ Skipping first trailing stops check run (too soon after startup)');
-                return;
-            }
-            
-            // Проверяем, не идет ли полное обновление кеша
-            if (this.isFullCacheUpdateRunning) {
-                console.log('⏭️ Skipping trailing stops check - full cache update is running');
-                return;
-            }
-            
-            try {
+        this.trailingStopsCheckTask = SchedulerUtils.createScheduledTask(
+            '*/5 * * * *',
+            async () => {
                 await this.checkTrailingStops();
-            } catch (error) {
-                console.error('Error in trailing stops check:', error);
+            },
+            {
+                taskName: 'trailing-stops-check',
+                sendAlerts: false,
+                startTime: this.startTime,
+                minDelay: 60 * 1000,
+                checkFlagFn: () => this.isFullCacheUpdateRunning,
+                flagName: 'full cache update'
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 14: Автоматическая перебалансировка стратегий (каждое воскресенье в 3:00)
-        this.strategyRebalanceTask = cron.schedule('0 3 * * 0', async () => {
-            try {
+        this.strategyRebalanceTask = SchedulerUtils.createScheduledTask(
+            '0 3 * * 0',
+            async () => {
                 console.log('🔄 Scheduled strategy rebalancing started...');
                 const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
                 await StrategyAllocationService.rebalanceStrategies();
                 await OptimizedTelegramService.sendAlert('STRATEGY_REBALANCE_COMPLETE', 'Стратегии перебалансированы', 'info');
-            } catch (error) {
-                console.error('Error in scheduled strategy rebalancing:', error);
-                await OptimizedTelegramService.sendAlert('STRATEGY_REBALANCE_ERROR', error.message, 'warning');
+            },
+            {
+                taskName: 'strategy-rebalance',
+                sendAlerts: true,
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 60 * 1000
             }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 14.5: Предварительный расчет корреляций для популярных инструментов (каждое воскресенье в 2:00)
         const correlationPrecalcSchedule = schedulerSettings.correlation_precalc_schedule || '0 2 * * 0'; // Каждое воскресенье в 2:00
-        this.correlationPrecalcTask = cron.schedule(correlationPrecalcSchedule, async () => {
-            // Пропускаем первый запуск при старте
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 60 * 60 * 1000) {
-                console.log('⏭️ Skipping first correlation precalculation run (too soon after startup)');
-                return;
+        this.correlationPrecalcTask = SchedulerUtils.createScheduledTask(
+            correlationPrecalcSchedule,
+            async () => {
+                await this.performCorrelationPrecalculation();
+            },
+            {
+                taskName: 'correlation-precalc',
+                sendAlerts: false, // performCorrelationPrecalculation уже отправляет свои уведомления об ошибках
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 60 * 60 * 1000 // 1 час
             }
-            
-            try {
-                console.log('🔗 Scheduled correlation precalculation started...');
-                const CorrelationService = (await import('./CorrelationService.js')).default;
-                const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
-                
-                // Инициализируем сервис, если нужно
-                if (!CorrelationService.isInitialized) {
-                    await CorrelationService.initialize();
-                }
-                
-                // Получаем топ-50 инструментов по активности торгов
-                // Используем количество свечей и средний объем торгов как показатели активности
-                const CachedCandle = (await import('../models/CachedCandle.js')).default;
-                
-                // Получаем инструменты с достаточным количеством свечей (минимум 20 для расчета корреляции)
-                // Сортируем по количеству свечей и среднему объему торгов
-                const instrumentsWithCandles = await CachedCandle.findAll({
-                    attributes: [
-                        'figi',
-                        [sequelize.fn('COUNT', sequelize.col('figi')), 'candleCount'],
-                        [sequelize.fn('AVG', sequelize.col('volume')), 'avgVolume'],
-                        [sequelize.fn('MAX', sequelize.col('time')), 'lastCandleTime']
-                    ],
-                    group: ['figi'],
-                    having: sequelize.where(
-                        sequelize.fn('COUNT', sequelize.col('figi')),
-                        { [Op.gte]: 20 } // Минимум 20 свечей для расчета корреляции
-                    ),
-                    order: [
-                        // Сортируем по среднему объему торгов (показатель ликвидности)
-                        [sequelize.fn('AVG', sequelize.col('volume')), 'DESC'],
-                        // Затем по количеству свечей (показатель активности)
-                        [sequelize.fn('COUNT', sequelize.col('figi')), 'DESC'],
-                        // Затем по последней свече (актуальность данных)
-                        [sequelize.fn('MAX', sequelize.col('time')), 'DESC']
-                    ],
-                    limit: 50,
-                    raw: true
-                });
-                
-                // Если не удалось получить через группировку, используем альтернативный метод
-                let popularInstruments;
-                if (instrumentsWithCandles.length < 2) {
-                    // Fallback: используем активные инструменты с недавними обновлениями
-                    popularInstruments = await CachedInstrument.findAll({
-                        where: {
-                            isActive: true,
-                            lastUpdated: {
-                                [Op.gte]: sequelize.literal("NOW() - INTERVAL '7 days'") // Обновлялись за последние 7 дней
-                            }
-                        },
-                        order: [
-                            ['lastUpdated', 'DESC'] // По времени последнего обновления
-                        ],
-                        limit: 50,
-                        attributes: ['figi']
-                    });
-                } else {
-                    // Преобразуем результат группировки в формат с figi
-                    popularInstruments = instrumentsWithCandles.map(item => ({
-                        figi: item.figi,
-                        candleCount: parseInt(item.candleCount) || 0,
-                        avgVolume: parseFloat(item.avgVolume) || 0
-                    }));
-                }
-                
-                const figis = popularInstruments.map(inst => inst.figi).filter(Boolean);
-                
-                if (figis.length >= 2) {
-                    const result = await CorrelationService.precalculateCorrelations(figis, 30);
-                    await OptimizedTelegramService.sendAlert(
-                        'CORRELATION_PRECALC_COMPLETE',
-                        `Предварительный расчет корреляций завершен: рассчитано ${result.calculated}, из кеша ${result.cached}, ошибок ${result.errors}`,
-                        'info'
-                    );
-                } else {
-                    console.warn('⚠️ Недостаточно инструментов для предварительного расчета корреляций');
-                }
-            } catch (error) {
-                console.error('Error in scheduled correlation precalculation:', error);
-                await OptimizedTelegramService.sendAlert('CORRELATION_PRECALC_ERROR', error.message, 'warning');
-            }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
 
         // Задача 15: Динамическое перераспределение бюджета по результативности (каждое воскресенье в 4:00)
         // Выполняется после обычной перебалансировки для оптимизации распределения на основе метрик
         const dynamicRebalanceSchedule = schedulerSettings.dynamic_budget_rebalance_schedule || '0 4 * * 0'; // Каждое воскресенье в 4:00
-        this.dynamicBudgetRebalanceTask = cron.schedule(dynamicRebalanceSchedule, async () => {
-            // Пропускаем первый запуск при старте (минимум 1 час с момента старта)
-            const timeSinceStart = Date.now() - this.startTime;
-            if (timeSinceStart < 60 * 60 * 1000) {
-                console.log('⏭️ Skipping first dynamic budget rebalance run (too soon after startup)');
-                return;
+        this.dynamicBudgetRebalanceTask = SchedulerUtils.createScheduledTask(
+            dynamicRebalanceSchedule,
+            async () => {
+                await this.performDynamicBudgetRebalance();
+            },
+            {
+                taskName: 'dynamic-budget-rebalance',
+                sendAlerts: false, // performDynamicBudgetRebalance уже отправляет свои уведомления об ошибках
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 60 * 60 * 1000 // 1 час
             }
-            
-            try {
-                console.log('💰 Scheduled dynamic budget rebalancing based on performance started...');
-                const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
-                
-                // Выполняем перераспределение на основе метрик за последние 30 дней
-                const result = await StrategyAllocationService.rebalanceBudgetByPerformance(30, 0);
-                
-                if (result.success && result.changes && result.changes.length > 0) {
-                    // Формируем сообщение с деталями изменений
-                    let message = '💰 ДИНАМИЧЕСКОЕ ПЕРЕРАСПРЕДЕЛЕНИЕ БЮДЖЕТА\n\n';
-                    message += `📊 Перераспределено стратегий: ${result.changes.length}\n`;
-                    message += `📈 Средний Sharpe Ratio: ${result.averageSharpeRatio.toFixed(3)}\n\n`;
-                    message += '📋 Изменения:\n';
-                    
-                    result.changes.forEach((change, index) => {
-                        message += `${index + 1}. ${change.strategyName}\n`;
-                        message += `   Бюджет: ${change.oldAllocation} → ${change.newAllocation}\n`;
-                        message += `   Сумма: ${change.oldAmount} → ${change.newAmount} RUB\n`;
-                        message += `   Sharpe: ${change.sharpeRatio}, Win Rate: ${change.winRate}\n`;
-                        message += `   Max Drawdown: ${change.maxDrawdown}\n\n`;
-                    });
-                    
-                    await OptimizedTelegramService.sendAlert('DYNAMIC_BUDGET_REBALANCE_COMPLETE', message, 'info');
-                } else if (result.success && result.reason) {
-                    console.log(`✅ Dynamic budget rebalancing completed: ${result.reason}`);
-                } else {
-                    console.warn(`⚠️ Dynamic budget rebalancing completed with issues: ${result.reason || 'Unknown'}`);
-                }
-            } catch (error) {
-                console.error('Error in scheduled dynamic budget rebalancing:', error);
-                await OptimizedTelegramService.sendAlert('DYNAMIC_BUDGET_REBALANCE_ERROR', error.message, 'warning');
-            }
-        }, {
-            scheduled: true,
-            timezone: "Europe/Moscow"
-        });
+        );
         
         // Запускаем периодическую отправку данных через WebSocket
         this.startWebSocketBroadcasts();
@@ -746,101 +571,41 @@ class SchedulerService {
 
     /**
      * Проверяет, устарел ли кеш (нет свежих данных)
+     * Использует утилиту из cacheManagementUtils
      */
     async isCacheStale() {
-        try {
-            // Проверяем, есть ли свежие данные в кеше
-            const instruments = await CacheService.getAllInstruments(1); // Берем только 1 инструмент для проверки
-            console.log(`🔍 Cache staleness check: found ${instruments?.length || 0} instruments`);
-            
-            if (!instruments || instruments.length === 0) {
-                console.log('📅 Cache is empty, update needed');
-                return true;
-            }
-            
-            // Проверяем время последнего обновления инструмента
-            const lastUpdate = instruments[0].lastUpdated;
-            console.log(`🔍 Last update time: ${lastUpdate ? new Date(lastUpdate).toISOString() : 'null'}`);
-            
-            if (!lastUpdate) {
-                console.log('📅 No update time in cache, update needed');
-                return true;
-            }
-            
-            const timeSinceUpdate = Date.now() - new Date(lastUpdate).getTime();
-            const isStale = timeSinceUpdate > this.cacheUpdateInterval;
-            
-            if (isStale) {
-                const hoursSinceUpdate = Math.round(timeSinceUpdate / (60 * 60 * 1000));
-                console.log(`📅 Cache is stale: ${hoursSinceUpdate}h since last update, update needed`);
-            } else {
-                const remainingTime = Math.round((this.cacheUpdateInterval - timeSinceUpdate) / (60 * 1000));
-                console.log(`⏰ Cache is fresh: ${remainingTime}min until next update`);
-            }
-            
-            return isStale;
-        } catch (error) {
-            console.error('❌ Error checking cache staleness:', error);
-            // В случае ошибки считаем кеш устаревшим
-            return true;
-        }
+        return await SchedulerUtils.isCacheStale(this.cacheUpdateInterval);
     }
 
     /**
      * Проверяет, нужно ли обновлять кеш
+     * Использует утилиту из cacheManagementUtils
      */
     async shouldUpdateCache() {
-        
-        if (!this.lastCacheUpdate) {
-            // Проверяем, есть ли свежие данные в кеше
-            const isStale = await this.isCacheStale();
-            return isStale;
-        }
-
-        const timeSinceLastUpdate = Date.now() - this.lastCacheUpdate;
-        const shouldUpdate = timeSinceLastUpdate >= this.cacheUpdateInterval;
-
-        return shouldUpdate;
+        return await SchedulerUtils.shouldUpdateCache(
+            this.lastCacheUpdate,
+            this.cacheUpdateInterval,
+            () => this.isCacheStale()
+        );
     }
 
     /**
      * Загружает время последнего обновления кеша из настроек
+     * Использует утилиту из cacheManagementUtils
      */
     async loadLastCacheUpdateTime() {
-        try {
-            const lastUpdateSetting = await SettingsService.getSetting('last_cache_update_time');
-            if (lastUpdateSetting) {
-                this.lastCacheUpdate = new Date(lastUpdateSetting).getTime();
-            } else {
-                // При первом запуске проверяем свежесть кеша
-                const isStale = await this.isCacheStale();
-                if (isStale) {
-                    this.lastCacheUpdate = null; // Устанавливаем null, чтобы shouldUpdateCache() вернул true
-                } else {
-                    this.lastCacheUpdate = Date.now();
-                    await this.saveLastCacheUpdateTime();
-                }
-            }
-        } catch (error) {
-            console.error('❌ Error loading last cache update time:', error);
-            // В случае ошибки проверяем свежесть кеша
-            const isStale = await this.isCacheStale();
-            this.lastCacheUpdate = isStale ? null : Date.now();
-        }
+        this.lastCacheUpdate = await SchedulerUtils.loadLastCacheUpdateTime(
+            () => this.isCacheStale()
+        );
     }
 
     /**
      * Сохраняет время последнего обновления кеша в настройки
+     * Использует утилиту из cacheManagementUtils
      */
     async saveLastCacheUpdateTime() {
-        try {
-            if (!this.lastCacheUpdate) {
-                return;
-            }
-            await SettingsService.setSetting('last_cache_update_time', new Date(this.lastCacheUpdate).toISOString());
-            console.log(`💾 Saved last cache update time: ${new Date(this.lastCacheUpdate).toISOString()}`);
-        } catch (error) {
-            console.error('❌ Error saving last cache update time:', error);
+        if (this.lastCacheUpdate) {
+            await SchedulerUtils.saveLastCacheUpdateTime(this.lastCacheUpdate);
         }
     }
 
@@ -1409,162 +1174,21 @@ class SchedulerService {
         }
     }
 
+    /**
+     * Инкрементальное обновление кеша
+     * Использует утилиту из cacheUpdateUtils
+     */
     async performCacheUpdate() {
-        const startTime = Date.now();
-
-        try {
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Проверка на параллельное выполнение полного обновления
-            if (this.isFullCacheUpdateRunning) {
-                console.log('⏰ Skipping cache update - full cache update is running');
-                return {
-                    success: true,
-                    message: 'Cache update skipped - full cache update is running',
-                    skipped: true
-                };
-            }
-
-            // Проверяем, нужно ли обновлять кеш
-            if (!(await this.shouldUpdateCache())) {
-                console.log('⏰ Skipping cache update - too soon since last update');
-                return {
-                    success: true,
-                    message: 'Cache update skipped - too soon since last update',
-                    skipped: true
-                };
-            }
-
-            console.log('🔄 Starting cache update in worker...');
-            
-            // Отправляем уведомление о начале обновления через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'cache_update_started',
-                    data: {
-                        message: 'Обновление кеша запущено',
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            // Создаем worker для обновления кеша
-            const { Worker } = await import('worker_threads');
-            const { fileURLToPath } = await import('url');
-            const { dirname, join } = await import('path');
-            
-            const __filename = fileURLToPath(import.meta.url);
-            const __dirname = dirname(__filename);
-            const workerPath = join(__dirname, '../workers/cacheUpdateWorker.js');
-            
-            // Для инкрементального обновления используем только новые данные за день
-            const worker = new Worker(workerPath, {
-                workerData: {
-                    updateInstruments: false, // Инструменты обновляем только при полном обновлении
-                    updateCandles: true,
-                    updateSignals: true,
-                    instrumentsLimit: null,
-                    candlesDays: 1, // Только за день (инкрементальное обновление само определит период)
-                    incrementalUpdate: true, // Используем инкрементальное обновление
-                    signalsLimit: null,
-                    signalsFrom: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // Сигналы за последние 24 часа
-                    signalsTo: new Date().toISOString()
-                }
-            });
-            
-            // Добавляем worker в список для отслеживания
-            this.workers.add(worker);
-            
-            // Обрабатываем результат
-            const result = await new Promise((resolve, reject) => {
-                worker.on('message', (msg) => {
-                    if (msg.type === 'done') {
-                        resolve(msg.data);
-                    } else if (msg.type === 'error') {
-                        reject(new Error(msg.data.error));
-                    }
-                });
-                
-                worker.on('error', reject);
-                worker.on('exit', (code) => {
-                    if (code !== 0) {
-                        reject(new Error(`Worker stopped with exit code ${code}`));
-                    }
-                });
-            });
-            
-            // Удаляем worker из списка после завершения
-            this.workers.delete(worker);
-            worker.terminate();
-
-            const duration = Math.round((Date.now() - startTime) / 1000);
-            console.log(`✅ Cache update completed in ${duration}s. ${result.message}`);
-
-            // Обновляем новости для ограниченного количества инструментов (чтобы не превысить лимит в 100 запросов в день)
-            // Обновляем только для инструментов без свежих новостей (старше 24 часов)
-            // Ограничиваем до 10 запросов за раз, так как performCacheUpdate вызывается каждые 4 часа (6 раз в день)
-            // Итого: 10 * 6 = 60 запросов в день + 30 из performDailyNewsUpdate = 90 запросов (в пределах лимита)
-            try {
-                console.log('📰 Starting news cache update (limited to avoid API limits)...');
-                await this.performLimitedNewsUpdate(10); // Максимум 10 запросов за раз
-            } catch (newsError) {
-                console.warn('⚠️ News cache update failed (non-critical):', newsError.message);
-                // Не прерываем процесс, если обновление новостей не удалось
-            }
-
-            // Обновляем время последнего обновления кеша
-            this.lastCacheUpdate = Date.now();
-            console.log(`📅 Cache update timestamp updated: ${new Date(this.lastCacheUpdate).toISOString()}`);
-            
-            // Сохраняем время обновления в настройки
-            await this.saveLastCacheUpdateTime();
-
-            // Отправляем уведомление о завершении через WebSocket
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'cache_update_completed',
-                    data: {
-                        message: `Кеш обновлен успешно за ${duration}с`,
-                        duration,
-                        totalUpdated: result.totalUpdated,
-                        totalCandlesCached: result.totalCandlesCached || 0,
-                        totalSignalsCached: result.totalSignalsCached || 0,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-
-            // Отправляем уведомление в Telegram о завершении
-            await OptimizedTelegramService.sendAlert(
-                'Обновление Базы Данных',
-                `Кеш обновлен успешно:\n• Время: ${duration}с\n• Обновлено: ${result.totalUpdated} элементов\n• Статус: ✅ Готов к работе`,
-                'info'
-            );
-
-        } catch (error) {
-            console.error('❌ Cache update failed:', error);
-            
-            // Отправляем уведомление об ошибке через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'cache_update_failed',
-                    data: {
-                        message: `Ошибка обновления кеша: ${error.message}`,
-                        error: error.message,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            // Отправляем уведомление об ошибке в Telegram
-            await OptimizedTelegramService.sendAlert(
-                'CACHE_UPDATE_FAILED',
-                `Ошибка обновления кеша:\n• Ошибка: ${error.message}\n• Время: ${new Date().toLocaleString('ru-RU')}`,
-                'warning'
-            );
-            
-            throw error;
-        }
+        const context = {
+            getWebSocketService: () => this.getWebSocketService(),
+            workersSet: this.workers,
+            checkFullCacheUpdate: () => this.isFullCacheUpdateRunning,
+            shouldUpdateCacheFn: () => this.shouldUpdateCache(),
+            updateLastCacheUpdate: (timestamp) => { this.lastCacheUpdate = timestamp; },
+            performLimitedNewsUpdate: (limit) => this.performLimitedNewsUpdate(limit)
+        };
+        
+        return await SchedulerUtils.performCacheUpdate(context);
     }
 
     /**
@@ -1578,220 +1202,26 @@ class SchedulerService {
      * 
      * НЕ ДОБАВЛЯТЬ автоматические вызовы этого метода!
      * 
-     * Инструменты - обновление списка
-     * Свечи - за 1 год на каждый инструмент (365 дней)
-     * Сигналы - 1000 сигналов на каждый инструмент
+     * Использует утилиту из cacheUpdateUtils
      * 
      * @param {boolean} force - Принудительное обновление, игнорирует проверку shouldUpdateCache()
      */
     async performFullCacheUpdate(force = false) {
-        const startTime = Date.now();
-
-        try {
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ 1: Защита от параллельных запусков
-            if (this.isFullCacheUpdateRunning) {
-                const error = new Error('Full cache update is already running');
-                console.warn('⚠️', error.message);
-                throw error;
-            }
-
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ 3: Проверка необходимости обновления (если не принудительное)
-            if (!force) {
-                const shouldUpdate = await this.shouldUpdateCache();
-                if (!shouldUpdate) {
-                    const timeSinceUpdate = this.lastCacheUpdate 
-                        ? Math.round((Date.now() - this.lastCacheUpdate) / (60 * 1000))
-                        : 0;
-                    console.log(`⏰ Skipping full cache update - cache is fresh (updated ${timeSinceUpdate} minutes ago)`);
-                    return {
-                        success: true,
-                        skipped: true,
-                        message: `Cache is fresh (updated ${timeSinceUpdate} minutes ago)`,
-                        timestamp: new Date().toISOString()
-                    };
-                }
-            }
-
-            // Устанавливаем флаг выполнения
-            this.isFullCacheUpdateRunning = true;
-            this.currentFullCacheUpdateWorker = null;
-
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Приостанавливаем все процессы во время полного обновления
-            await this.pauseAllProcesses();
-
-            console.log('🔄 Starting FULL cache update in worker...');
-            
-            // Отправляем уведомление о начале обновления через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'cache_update_started',
-                    data: {
-                        message: 'Полное обновление кеша запущено',
-                        fullUpdate: true,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            // Создаем worker для полного обновления кеша
-            const { Worker } = await import('worker_threads');
-            const { fileURLToPath } = await import('url');
-            const { dirname, join } = await import('path');
-            
-            const __filename = fileURLToPath(import.meta.url);
-            const __dirname = dirname(__filename);
-            const workerPath = join(__dirname, '../workers/cacheUpdateWorker.js');
-            
-            // Для полного обновления используем все данные
-            const worker = new Worker(workerPath, {
-                workerData: {
-                    updateInstruments: true, // Обновляем список инструментов
-                    updateCandles: true,
-                    updateSignals: true,
-                    instrumentsLimit: null, // Все инструменты
-                    candlesDays: 365, // 1 год свечей (изменено с 730 для снижения нагрузки на БД)
-                    incrementalUpdate: false, // Полное обновление
-                    signalsLimit: 1000, // Максимум 1000 сигналов на инструмент
-                    signalsFrom: null, // Все сигналы
-                    signalsTo: null
-                }
-            });
-            
-            // Сохраняем ссылку на worker для возможности отмены
-            this.currentFullCacheUpdateWorker = worker;
-            
-            // Добавляем worker в список для отслеживания
-            this.workers.add(worker);
-            
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ 2: Таймаут для worker (2 часа)
-            const TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 часа
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => {
-                    reject(new Error(`Full cache update timeout after ${TIMEOUT_MS / 1000 / 60} minutes`));
-                }, TIMEOUT_MS);
-            });
-
-            // Обрабатываем результат с таймаутом
-            const result = await Promise.race([
-                new Promise((resolve, reject) => {
-                    worker.on('message', (msg) => {
-                        if (msg.type === 'done') {
-                            resolve(msg.data);
-                        } else if (msg.type === 'error') {
-                            reject(new Error(msg.data.error));
-                        } else if (msg.type === 'progress') {
-                            // Отправляем прогресс через WebSocket
-                            if (WebSocketService) {
-                                WebSocketService.broadcast({
-                                    type: 'cache_update_progress',
-                                    data: {
-                                        ...msg.data,
-                                        fullUpdate: true
-                                    },
-                                    timestamp: new Date().toISOString()
-                                });
-                            }
-                        }
-                    });
-                    
-                    worker.on('error', reject);
-                    worker.on('exit', (code) => {
-                        if (code !== 0) {
-                            reject(new Error(`Worker stopped with exit code ${code}`));
-                        }
-                    });
-                }),
-                timeoutPromise
-            ]);
-            
-            // Удаляем worker из списка после завершения
-            this.workers.delete(worker);
-            worker.terminate();
-            this.currentFullCacheUpdateWorker = null;
-
-            const duration = Math.round((Date.now() - startTime) / 1000);
-            console.log(`✅ Full cache update completed in ${duration}s. ${result.message}`);
-
-            // Обновляем время последнего обновления кеша
-            this.lastCacheUpdate = Date.now();
-            console.log(`📅 Cache update timestamp updated: ${new Date(this.lastCacheUpdate).toISOString()}`);
-            
-            // Сохраняем время обновления в настройки
-            await this.saveLastCacheUpdateTime();
-
-            // Отправляем уведомление о завершении через WebSocket
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'cache_update_completed',
-                    data: {
-                        message: `Полное обновление кеша завершено за ${duration}с`,
-                        duration,
-                        totalUpdated: result.totalUpdated,
-                        totalCandlesCached: result.totalCandlesCached || 0,
-                        totalSignalsCached: result.totalSignalsCached || 0,
-                        fullUpdate: true,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-
-            // Отправляем уведомление в Telegram о завершении
-            await OptimizedTelegramService.sendAlert(
-                'Полное обновление Базы Данных',
-                `Полное обновление кеша завершено:\n• Время: ${duration}с\n• Обновлено: ${result.totalUpdated} элементов\n• Свечей: ${result.totalCandlesCached || 0}\n• Сигналов: ${result.totalSignalsCached || 0}\n• Статус: ✅ Готов к работе`,
-                'info'
-            );
-
-            return result;
-
-        } catch (error) {
-            console.error('❌ Full cache update failed:', error);
-            
-            // Обработка таймаута - завершаем worker
-            if (error.message && error.message.includes('timeout')) {
-                console.warn('⏰ Full cache update timeout, terminating worker...');
-                if (this.currentFullCacheUpdateWorker) {
-                    try {
-                        this.currentFullCacheUpdateWorker.terminate();
-                        this.workers.delete(this.currentFullCacheUpdateWorker);
-                    } catch (terminateError) {
-                        console.error('❌ Error terminating worker:', terminateError);
-                    }
-                    this.currentFullCacheUpdateWorker = null;
-                }
-            }
-            
-            // Отправляем уведомление об ошибке через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'cache_update_failed',
-                    data: {
-                        message: `Ошибка полного обновления кеша: ${error.message}`,
-                        error: error.message,
-                        fullUpdate: true,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            // Отправляем уведомление об ошибке в Telegram
-            await OptimizedTelegramService.sendAlert(
-                'CACHE_FULL_UPDATE_FAILED',
-                `Ошибка полного обновления кеша:\n• Ошибка: ${error.message}\n• Время: ${new Date().toLocaleString('ru-RU')}`,
-                'warning'
-            );
-            
-            throw error;
-        } finally {
-            // Сбрасываем флаг выполнения в любом случае
-            this.isFullCacheUpdateRunning = false;
-            this.currentFullCacheUpdateWorker = null;
-            
-            // Возобновляем все процессы после завершения полного обновления
-            await this.resumeAllProcesses();
-        }
+        const context = {
+            getWebSocketService: () => this.getWebSocketService(),
+            workersSet: this.workers,
+            checkFullCacheUpdate: () => this.isFullCacheUpdateRunning,
+            setFullCacheUpdateRunning: (value) => { this.isFullCacheUpdateRunning = value; },
+            setCurrentFullCacheUpdateWorker: (worker) => { this.currentFullCacheUpdateWorker = worker; },
+            shouldUpdateCacheFn: () => this.shouldUpdateCache(),
+            pauseAllProcesses: () => this.pauseAllProcesses(),
+            resumeAllProcesses: () => this.resumeAllProcesses(),
+            updateLastCacheUpdate: (timestamp) => { this.lastCacheUpdate = timestamp; }
+            // Не передаем currentFullCacheUpdateWorker в контекст, так как это снимок значения
+            // Вместо этого используем локальную переменную worker в performFullCacheUpdate
+        };
+        
+        return await SchedulerUtils.performFullCacheUpdate(context, force);
     }
 
     /**
@@ -1979,505 +1409,70 @@ class SchedulerService {
     /**
      * Обновление цен акций через worker thread
      */
+    /**
+     * Обновление цен инструментов
+     * Использует утилиту из priceUpdateUtils
+     */
     async performPriceUpdate() {
-        // Проверяем, не идет ли полное обновление кеша
-        if (this.isFullCacheUpdateRunning) {
-            console.log('💰 Price update skipped: full cache update is running');
-            return {
-                success: true,
-                skipped: true,
-                message: 'Price update skipped - full cache update is running'
-            };
-        }
+        const context = {
+            getWebSocketService: () => this.getWebSocketService(),
+            workersSet: this.workers,
+            checkFullCacheUpdate: () => this.isFullCacheUpdateRunning
+        };
         
-        const startTime = Date.now();
-
-        try {
-            console.log('💰 Starting price update in worker...');
-            
-            // Отправляем уведомление о начале обновления через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'price_update_started',
-                    data: {
-                        message: 'Обновление цен запущено',
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            // Создаем worker для обновления цен
-            const { Worker } = await import('worker_threads');
-            const { fileURLToPath } = await import('url');
-            const { dirname, join } = await import('path');
-            
-            const __filename = fileURLToPath(import.meta.url);
-            const __dirname = dirname(__filename);
-            const workerPath = join(__dirname, '../workers/priceUpdateWorker.js');
-            
-            const worker = new Worker(workerPath, {
-                workerData: {
-                    instrumentsLimit: 1000 // Обновляем цены для всех инструментов
-                }
-            });
-            
-            // Добавляем worker в список для отслеживания
-            this.workers.add(worker);
-            
-            // Обрабатываем результат
-            const result = await new Promise((resolve, reject) => {
-                worker.on('message', (msg) => {
-                    if (msg.type === 'done') {
-                        resolve(msg.data);
-                    } else if (msg.type === 'error') {
-                        reject(new Error(msg.data.error));
-                    } else if (msg.type === 'progress') {
-                        // Отправляем прогресс через WebSocket
-                        if (WebSocketService) {
-                            WebSocketService.broadcast({
-                                type: 'price_update_progress',
-                                data: msg.data,
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                    }
-                });
-                
-                worker.on('error', reject);
-                worker.on('exit', (code) => {
-                    this.workers.delete(worker);
-                    if (code !== 0) {
-                        reject(new Error(`Worker stopped with exit code ${code}`));
-                    }
-                });
-            });
-            
-            // Удаляем worker из списка после завершения
-            this.workers.delete(worker);
-            worker.terminate();
-
-            const duration = Math.round((Date.now() - startTime) / 1000);
-            console.log(`✅ Price update completed in ${duration}s. Updated: ${result.totalUpdated}, Failed: ${result.totalFailed || 0}`);
+        const result = await SchedulerUtils.performPriceUpdate(context);
 
             // Обновляем время последнего обновления цен
+        if (result && !result.skipped) {
             this.lastPriceUpdate = Date.now();
             console.log(`📅 Price update timestamp updated: ${new Date(this.lastPriceUpdate).toISOString()}`);
-
-            // Отправляем уведомление о завершении через WebSocket
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'price_update_completed',
-                    data: {
-                        message: `Цены обновлены успешно за ${duration}с`,
-                        duration,
-                        totalUpdated: result.totalUpdated,
-                        totalFailed: result.totalFailed || 0,
-                        timestamp: new Date().toISOString()
-                    }
-                });
             }
 
             return result;
-        } catch (error) {
-            console.error('❌ Price update failed:', error);
-            
-            // Отправляем уведомление об ошибке через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'price_update_error',
-                    data: {
-                        error: error.message,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            throw error;
-        }
     }
 
     /**
      * Обновление цен активных позиций в портфеле
      * Выполняется каждые 1-2 минуты в торговые часы
+     * Использует утилиту из priceUpdateUtils
      */
     async performPortfolioPricesUpdate() {
-        // Проверяем, не идет ли полное обновление кеша
-        if (this.isFullCacheUpdateRunning) {
-            console.log('💰 Portfolio prices update skipped: full cache update is running');
-            return;
-        }
+        const context = {
+            getWebSocketService: () => this.getWebSocketService(),
+            workersSet: this.workers,
+            checkFullCacheUpdate: () => this.isFullCacheUpdateRunning,
+            recalculatePortfolioValue: () => this.recalculatePortfolioValue()
+        };
         
-        const startTime = Date.now();
-
-        try {
-            // Проверяем, доступна ли торговля
-            const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
-            const isTradingAvailable = await TinkoffApiService.isTradingAvailable();
-            
-            if (!isTradingAvailable) {
-                console.log('⏭️ Skipping portfolio prices update - trading not available');
-                return {
-                    success: true,
-                    message: 'Trading not available, update skipped',
-                    skipped: true
-                };
-            }
-
-            console.log('💰 Starting portfolio prices update in worker...');
-            
-            // Отправляем уведомление о начале обновления через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'portfolio_prices_update_started',
-                    data: {
-                        message: 'Обновление цен портфеля запущено',
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            // Создаем worker для обновления цен портфеля
-            const { Worker } = await import('worker_threads');
-            const { fileURLToPath } = await import('url');
-            const { dirname, join } = await import('path');
-            
-            const __filename = fileURLToPath(import.meta.url);
-            const __dirname = dirname(__filename);
-            const workerPath = join(__dirname, '../workers/portfolioPricesUpdateWorker.js');
-            
-            const worker = new Worker(workerPath, {
-                workerData: {}
-            });
-            
-            // Добавляем worker в список для отслеживания
-            this.workers.add(worker);
-            
-            // Обрабатываем результат
-            const result = await new Promise((resolve, reject) => {
-                worker.on('message', (msg) => {
-                    if (msg.type === 'done') {
-                        resolve(msg.data);
-                    } else if (msg.type === 'error') {
-                        reject(new Error(msg.data.error));
-                    } else if (msg.type === 'progress') {
-                        // Отправляем прогресс через WebSocket
-                        if (WebSocketService) {
-                            WebSocketService.broadcast({
-                                type: 'portfolio_prices_update_progress',
-                                data: msg.data,
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                    }
-                });
-                
-                worker.on('error', reject);
-                worker.on('exit', (code) => {
-                    this.workers.delete(worker);
-                    if (code !== 0) {
-                        reject(new Error(`Worker stopped with exit code ${code}`));
-                    }
-                });
-            });
-            
-            // Удаляем worker из списка после завершения
-            this.workers.delete(worker);
-            worker.terminate();
-
-            const duration = Math.round((Date.now() - startTime) / 1000);
-            console.log(`✅ Portfolio prices update completed in ${duration}s. Updated: ${result.totalUpdated}, Failed: ${result.totalFailed || 0}`);
-
-            // Пересчитываем стоимость портфеля после обновления цен
-            try {
-                await this.recalculatePortfolioValue();
-            } catch (recalcError) {
-                console.warn('⚠️ Error recalculating portfolio value:', recalcError.message);
-            }
-
-            // Отправляем уведомление о завершении через WebSocket
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'portfolio_prices_update_completed',
-                    data: {
-                        message: `Цены портфеля обновлены успешно за ${duration}с`,
-                        duration,
-                        totalUpdated: result.totalUpdated,
-                        totalFailed: result.totalFailed || 0,
-                        positionsCount: result.positionsCount || 0,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-
-            return result;
-        } catch (error) {
-            console.error('❌ Portfolio prices update failed:', error);
-            
-            // Отправляем уведомление об ошибке через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'portfolio_prices_update_failed',
-                    data: {
-                        error: error.message,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            throw error;
-        }
+        return await SchedulerUtils.performPortfolioPricesUpdate(context);
     }
 
     /**
      * Пересчет стоимости портфеля на основе обновленных цен
+     * Использует утилиту из priceUpdateUtils
      */
     async recalculatePortfolioValue() {
-        try {
-            const TradingEngine = (await import('./TradingEngine.js')).default;
-            const portfolio = await TradingEngine.getPortfolioValue();
-            
-            if (!portfolio || !portfolio.positions) {
-                return;
-            }
-
-            let positionsValue = 0;
-            const positions = portfolio.positions || {};
-            
-            // Получаем цены для всех позиций
-            const CacheService = (await import('./CacheService.js')).default;
-            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
-            
-            for (const [figi, quantity] of Object.entries(positions)) {
-                if (quantity && typeof quantity === 'number' && quantity > 0) {
-                    try {
-                        const instrument = await CachedInstrument.findOne({
-                            where: { figi }
-                        });
-                        
-                        if (instrument && instrument.lastPrice && instrument.lastPrice > 0) {
-                            positionsValue += instrument.lastPrice * quantity;
-                        }
-                    } catch (error) {
-                        console.warn(`⚠️ Error getting price for ${figi}:`, error.message);
-                    }
-                }
-            }
-
-            const cash = portfolio.cash || 0;
-            const totalValue = cash + positionsValue;
-            
-            // Обновляем портфель в БД с проверкой состояния соединения
-            const VirtualPortfolio = (await import('../models/VirtualPortfolio.js')).default;
-            
-            // Проверяем, что connection manager не закрыт
-            const sequelize = (await import('../config/database.js')).default;
-            if (sequelize.connectionManager && sequelize.connectionManager.pool) {
-                const pool = sequelize.connectionManager.pool;
-                if (pool._draining) {
-                    console.warn('⚠️ Connection pool is draining, skipping portfolio update');
-                    return {
-                        cash,
-                        positionsValue,
-                        totalValue
-                    };
-                }
-            }
-            
-            const savedPortfolio = await VirtualPortfolio.getCurrent();
-            
-            if (savedPortfolio) {
-                await savedPortfolio.update({
-                    totalValue: totalValue,
-                    lastUpdated: new Date()
-                });
-            }
-
-            // Отправляем обновление через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'portfolio_value_updated',
-                    data: {
-                        cash,
-                        positionsValue,
-                        totalValue,
-                        initialCapital: portfolio.initialCapital || 1000000,
-                        pnl: totalValue - (portfolio.initialCapital || 1000000),
-                        pnlPercent: portfolio.initialCapital ? ((totalValue - portfolio.initialCapital) / portfolio.initialCapital) * 100 : 0,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-
-            console.log(`💰 Portfolio value recalculated: ${totalValue.toLocaleString('ru-RU')} ₽ (positions: ${positionsValue.toLocaleString('ru-RU')} ₽, cash: ${cash.toLocaleString('ru-RU')} ₽)`);
-            
-            return {
-                cash,
-                positionsValue,
-                totalValue
-            };
-        } catch (error) {
-            // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обрабатываем ошибку закрытого connection manager
-            if (error.message && error.message.includes('connection manager was closed')) {
-                console.warn('⚠️ Connection manager was closed during portfolio recalculation, attempting to restore...');
-                
-                // Пытаемся восстановить соединение через DatabaseConnectionManager
-                try {
-                    const DatabaseConnectionManager = (await import('../utils/DatabaseConnectionManager.js')).default;
-                    await DatabaseConnectionManager.reconnect();
-                    console.log('✅ Connection restored, retrying portfolio recalculation...');
-                    
-                    // Повторяем попытку через небольшую задержку
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    return await this.recalculatePortfolioValue();
-                } catch (reconnectError) {
-                    console.error('❌ Failed to restore connection:', reconnectError.message);
-                    // Не бросаем ошибку дальше, чтобы не прерывать другие процессы
-                    return null;
-                }
-            }
-            
-            console.error('❌ Error recalculating portfolio value:', error);
-            // Не бросаем ошибку дальше, чтобы не прерывать другие процессы
-            return null;
-        }
+        const context = {
+            getWebSocketService: () => this.getWebSocketService()
+        };
+        
+        return await SchedulerUtils.recalculatePortfolioValue(context);
     }
 
     /**
      * Обновление цен активных сигналов
      * Выполняется каждые 5-10 минут в торговые часы
+     * Использует утилиту из priceUpdateUtils
      */
     async performActiveSignalsPricesUpdate() {
-        // Проверяем, не идет ли полное обновление кеша
-        if (this.isFullCacheUpdateRunning) {
-            console.log('💰 Active signals prices update skipped: full cache update is running');
-            return;
-        }
+        const context = {
+            getWebSocketService: () => this.getWebSocketService(),
+            workersSet: this.workers,
+            checkFullCacheUpdate: () => this.isFullCacheUpdateRunning,
+            handleTriggeredSignals: (signals) => this.handleTriggeredSignals(signals)
+        };
         
-        const startTime = Date.now();
-
-        try {
-            // Проверяем, доступна ли торговля
-            const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
-            const isTradingAvailable = await TinkoffApiService.isTradingAvailable();
-            
-            if (!isTradingAvailable) {
-                console.log('⏭️ Skipping active signals prices update - trading not available');
-                return {
-                    success: true,
-                    message: 'Trading not available, update skipped',
-                    skipped: true
-                };
-            }
-
-            console.log('📊 Starting active signals prices update in worker...');
-            
-            // Отправляем уведомление о начале обновления через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'active_signals_prices_update_started',
-                    data: {
-                        message: 'Обновление цен активных сигналов запущено',
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            // Создаем worker для обновления цен активных сигналов
-            const { Worker } = await import('worker_threads');
-            const { fileURLToPath } = await import('url');
-            const { dirname, join } = await import('path');
-            
-            const __filename = fileURLToPath(import.meta.url);
-            const __dirname = dirname(__filename);
-            const workerPath = join(__dirname, '../workers/activeSignalsPricesUpdateWorker.js');
-            
-            const worker = new Worker(workerPath, {
-                workerData: {}
-            });
-            
-            // Добавляем worker в список для отслеживания
-            this.workers.add(worker);
-            
-            // Обрабатываем результат
-            const result = await new Promise((resolve, reject) => {
-                worker.on('message', (msg) => {
-                    if (msg.type === 'done') {
-                        resolve(msg.data);
-                    } else if (msg.type === 'error') {
-                        reject(new Error(msg.data.error));
-                    } else if (msg.type === 'progress') {
-                        // Отправляем прогресс через WebSocket
-                        if (WebSocketService) {
-                            WebSocketService.broadcast({
-                                type: 'active_signals_prices_update_progress',
-                                data: msg.data,
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                    }
-                });
-                
-                worker.on('error', reject);
-                worker.on('exit', (code) => {
-                    this.workers.delete(worker);
-                    if (code !== 0) {
-                        reject(new Error(`Worker stopped with exit code ${code}`));
-                    }
-                });
-            });
-            
-            // Удаляем worker из списка после завершения
-            this.workers.delete(worker);
-            worker.terminate();
-
-            const duration = Math.round((Date.now() - startTime) / 1000);
-            console.log(`✅ Active signals prices update completed in ${duration}s. Updated: ${result.totalUpdated}, Failed: ${result.totalFailed || 0}, Triggered: ${result.triggeredSignals?.length || 0}`);
-
-            // Обрабатываем сработавшие сигналы
-            if (result.triggeredSignals && result.triggeredSignals.length > 0) {
-                await this.handleTriggeredSignals(result.triggeredSignals);
-            }
-
-            // Отправляем уведомление о завершении через WebSocket
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'active_signals_prices_update_completed',
-                    data: {
-                        message: `Цены активных сигналов обновлены успешно за ${duration}с`,
-                        duration,
-                        totalUpdated: result.totalUpdated,
-                        totalFailed: result.totalFailed || 0,
-                        triggeredSignals: result.triggeredSignals?.length || 0,
-                        signalsCount: result.signalsCount || 0,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-
-            return result;
-        } catch (error) {
-            console.error('❌ Active signals prices update failed:', error);
-            
-            // Отправляем уведомление об ошибке через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'active_signals_prices_update_failed',
-                    data: {
-                        error: error.message,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            throw error;
-        }
+        return await SchedulerUtils.performActiveSignalsPricesUpdate(context);
     }
 
     /**
@@ -2603,7 +1598,9 @@ class SchedulerService {
                                 signalName: signalToNotify.signalName,
                                 probability: signalToNotify.probability,
                                 triggerCount: signalToNotify.triggerCount,
-                                lastTriggeredAt: signalToNotify.lastTriggeredAt
+                                lastTriggeredAt: signalToNotify.lastTriggeredAt,
+                                signalCreateDt: originalSignal?.createDt || signalToNotify.signalCreateDt || null,
+                                signalEndDt: originalSignal?.endDt || signalToNotify.signalEndDt || null
                             });
                         }
                     } catch (dbError) {
@@ -2622,133 +1619,25 @@ class SchedulerService {
      * Обновление цен активных торговых заявок
      * Выполняется каждые 30 секунд - 1 минуту в торговые часы
      */
+    /**
+     * Обновление цен активных торговых заявок
+     * Использует утилиту из priceUpdateUtils
+     */
     async performTradingRequestsPricesUpdate() {
-        // Проверяем, не идет ли полное обновление кеша
-        if (this.isFullCacheUpdateRunning) {
-            console.log('💰 Trading requests prices update skipped: full cache update is running');
-            return;
-        }
+        const context = {
+            getWebSocketService: () => this.getWebSocketService(),
+            workersSet: this.workers,
+            checkFullCacheUpdate: () => this.isFullCacheUpdateRunning
+        };
         
-        const startTime = Date.now();
-
-        try {
-            // Проверяем, доступна ли торговля
-            const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
-            const isTradingAvailable = await TinkoffApiService.isTradingAvailable();
-            
-            if (!isTradingAvailable) {
-                console.log('⏭️ Skipping trading requests prices update - trading not available');
-                return {
-                    success: true,
-                    message: 'Trading not available, update skipped',
-                    skipped: true
-                };
-            }
-
-            console.log('📋 Starting trading requests prices update in worker...');
-            
-            // Отправляем уведомление о начале обновления через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'trading_requests_prices_update_started',
-                    data: {
-                        message: 'Обновление цен активных заявок запущено',
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            // Создаем worker для обновления цен активных заявок
-            const { Worker } = await import('worker_threads');
-            const { fileURLToPath } = await import('url');
-            const { dirname, join } = await import('path');
-            
-            const __filename = fileURLToPath(import.meta.url);
-            const __dirname = dirname(__filename);
-            const workerPath = join(__dirname, '../workers/tradingRequestsPricesUpdateWorker.js');
-            
-            const worker = new Worker(workerPath, {
-                workerData: {}
-            });
-            
-            // Добавляем worker в список для отслеживания
-            this.workers.add(worker);
-            
-            // Обрабатываем результат
-            const result = await new Promise((resolve, reject) => {
-                worker.on('message', (msg) => {
-                    if (msg.type === 'done') {
-                        resolve(msg.data);
-                    } else if (msg.type === 'error') {
-                        reject(new Error(msg.data.error));
-                    } else if (msg.type === 'progress') {
-                        // Отправляем прогресс через WebSocket
-                        if (WebSocketService) {
-                            WebSocketService.broadcast({
-                                type: 'trading_requests_prices_update_progress',
-                                data: msg.data,
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                    }
-                });
-                
-                worker.on('error', reject);
-                worker.on('exit', (code) => {
-                    this.workers.delete(worker);
-                    if (code !== 0) {
-                        reject(new Error(`Worker stopped with exit code ${code}`));
-                    }
-                });
-            });
-            
-            // Удаляем worker из списка после завершения
-            this.workers.delete(worker);
-            worker.terminate();
-
-            const duration = Math.round((Date.now() - startTime) / 1000);
-            console.log(`✅ Trading requests prices update completed in ${duration}s. Updated: ${result.totalUpdated}, Failed: ${result.totalFailed || 0}, Ready to execute: ${result.readyToExecute?.length || 0}`);
+        const result = await SchedulerUtils.performTradingRequestsPricesUpdate(context);
 
             // Обрабатываем заявки, готовые к исполнению
-            if (result.readyToExecute && result.readyToExecute.length > 0) {
+        if (result && result.readyToExecute && result.readyToExecute.length > 0) {
                 await this.handleReadyToExecuteRequests(result.readyToExecute);
             }
 
-            // Отправляем уведомление о завершении через WebSocket
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'trading_requests_prices_update_completed',
-                    data: {
-                        message: `Цены активных заявок обновлены успешно за ${duration}с`,
-                        duration,
-                        totalUpdated: result.totalUpdated,
-                        totalFailed: result.totalFailed || 0,
-                        readyToExecute: result.readyToExecute?.length || 0,
-                        requestsCount: result.requestsCount || 0,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-
             return result;
-        } catch (error) {
-            console.error('❌ Trading requests prices update failed:', error);
-            
-            // Отправляем уведомление об ошибке через WebSocket
-            const WebSocketService = await this.getWebSocketService();
-            if (WebSocketService) {
-                WebSocketService.broadcast({
-                    type: 'trading_requests_prices_update_failed',
-                    data: {
-                        error: error.message,
-                        timestamp: new Date().toISOString()
-                    }
-                });
-            }
-            
-            throw error;
-        }
     }
 
     /**
@@ -3582,9 +2471,39 @@ class SchedulerService {
             const WebSocketService = await this.getWebSocketService();
             const translateStrategy = (await import('../utils/strategyTranslator.js')).default;
 
+            // Фильтруем сигналы: отправляем только сигналы не старше 24 часов
+            const now = Date.now();
+            const maxAge = 1 * 24 * 60 * 60 * 1000; // 1 день (24 часа)
+            const maxTimeSinceEnd = 1 * 24 * 60 * 60 * 1000; // 1 день после окончания
+
+            const filteredSignals = this.pendingTriggeredSignals.filter(triggered => {
+                // Проверяем дату создания сигнала
+                if (triggered.signalCreateDt) {
+                    const signalAge = now - new Date(triggered.signalCreateDt).getTime();
+                    if (signalAge > maxAge) {
+                        const hoursAgo = Math.floor(signalAge / (60 * 60 * 1000));
+                        console.log(`⏭️ Skipped old triggered signal ${triggered.signalId}: created ${hoursAgo} hours ago`);
+                        return false;
+                    }
+                }
+
+                // Проверяем дату окончания сигнала
+                if (triggered.signalEndDt) {
+                    const endDt = new Date(triggered.signalEndDt);
+                    const timeSinceEnd = now - endDt.getTime();
+                    if (timeSinceEnd > maxTimeSinceEnd) {
+                        const daysAgo = Math.floor(timeSinceEnd / (24 * 60 * 60 * 1000));
+                        console.log(`⏭️ Skipped expired triggered signal ${triggered.signalId}: ended ${daysAgo} days ago`);
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+
             // Группируем сигналы по инструменту для более компактного представления
             const signalsByInstrument = {};
-            for (const triggered of this.pendingTriggeredSignals) {
+            for (const triggered of filteredSignals) {
                 const key = `${triggered.figi}_${triggered.triggerType}`;
                 if (!signalsByInstrument[key]) {
                     signalsByInstrument[key] = [];
@@ -3592,7 +2511,11 @@ class SchedulerService {
                 signalsByInstrument[key].push(triggered);
             }
 
-            // Отправляем уведомления для каждого уникального сигнала
+            // Собираем все сигналы в одно сообщение для группировки
+            const signalMessages = [];
+            const signalWebSocketData = [];
+
+            // Формируем сообщения для каждого уникального сигнала
             for (const [key, signals] of Object.entries(signalsByInstrument)) {
                 const triggered = signals[0]; // Берем первый сигнал для базовой информации
                 const latestSignal = signals[signals.length - 1]; // Берем последний для актуальной цены
@@ -3952,18 +2875,11 @@ class SchedulerService {
                     // Важное предупреждение
                     message += `⚠️ <i>Помните: сигналы не являются гарантией прибыли. Всегда используйте стоп-лосс и не вкладывайте все средства в один сигнал.</i>`;
 
-                    // Отправляем уведомление в Telegram
-                    await OptimizedTelegramService.sendAlert(
-                        'Сигнал сработал',
-                        message,
-                        triggered.triggerType === 'target_reached' ? 'success' : 'warning'
-                    );
+                    // Сохраняем сообщение для группировки
+                    signalMessages.push(message);
 
-                    // Отправляем уведомление через WebSocket
-                    if (WebSocketService) {
-                        WebSocketService.broadcast({
-                            type: 'signal_triggered',
-                            data: {
+                    // Сохраняем данные для WebSocket
+                    signalWebSocketData.push({
                                 signalId: triggered.signalId,
                                 figi: triggered.figi,
                                 ticker: triggered.ticker,
@@ -3977,19 +2893,48 @@ class SchedulerService {
                                 strategyNameRu: strategyNameRu,
                                 triggerCount: totalCount,
                                 timestamp: new Date().toISOString()
-                            }
                         });
-                    }
 
-                    console.log(`✅ Signal triggered notification sent: ${triggered.signalId} (${triggered.figi}) - ${triggerText} (count: ${totalCount})`);
+                    console.log(`✅ Signal message prepared: ${triggered.signalId} (${triggered.figi}) - ${triggerText} (count: ${totalCount})`);
                 } catch (signalError) {
-                    console.error(`❌ Error sending notification for signal ${triggered.signalId}:`, signalError.message);
+                    console.error(`❌ Error preparing notification for signal ${triggered.signalId}:`, signalError.message);
+                }
+            }
+
+            // Группируем все сигналы в одно сообщение
+            if (signalMessages.length > 0) {
+                const totalSignals = signalMessages.length;
+                const header = `🔔 <b>СРАБОТАЛИ СИГНАЛЫ</b>\n\n📊 Всего сигналов: <b>${totalSignals}</b>\n\n`;
+                const separator = `\n${'─'.repeat(40)}\n\n`;
+                const groupedMessage = header + signalMessages.join(separator);
+                
+                // Определяем общий тип severity (если есть стоп-лоссы, то warning, иначе success)
+                const hasStoploss = signalWebSocketData.some(s => s.triggerType === 'stoploss_triggered');
+                const severity = hasStoploss ? 'warning' : 'success';
+
+                // Отправляем одно группированное сообщение
+                await OptimizedTelegramService.sendAlert(
+                    `Сигналы сработали (${totalSignals})`,
+                    groupedMessage,
+                    severity
+                );
+
+                console.log(`📤 Sent grouped notification with ${totalSignals} signals`);
+            }
+
+            // Отправляем уведомления через WebSocket (каждое отдельно для реального времени)
+            if (WebSocketService && signalWebSocketData.length > 0) {
+                for (const data of signalWebSocketData) {
+                    WebSocketService.broadcast({
+                        type: 'signal_triggered',
+                        data: data
+                    });
                 }
             }
 
             // Очищаем очередь после отправки
             this.pendingTriggeredSignals = [];
-            console.log(`📤 Sent ${Object.keys(signalsByInstrument).length} triggered signal notifications after analysis`);
+            console.log(`✅ Sent ${signalMessages.length} triggered signal notifications (grouped) after analysis`);
         } catch (error) {
             console.error('❌ Error sending pending triggered signals:', error);
         }
@@ -4301,6 +3246,134 @@ class SchedulerService {
     /**
      * Обновление сигналов аналитиков для всех активных инструментов
      */
+    /**
+     * Предварительный расчет корреляций для популярных инструментов
+     */
+    async performCorrelationPrecalculation() {
+        try {
+            console.log('🔗 Scheduled correlation precalculation started...');
+            const CorrelationService = (await import('./CorrelationService.js')).default;
+            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+            
+            // Инициализируем сервис, если нужно
+            if (!CorrelationService.isInitialized) {
+                await CorrelationService.initialize();
+            }
+            
+            // Получаем топ-50 инструментов по активности торгов
+            // Используем количество свечей и средний объем торгов как показатели активности
+            const CachedCandle = (await import('../models/CachedCandle.js')).default;
+            
+            // Получаем инструменты с достаточным количеством свечей (минимум 20 для расчета корреляции)
+            // Сортируем по количеству свечей и среднему объему торгов
+            const instrumentsWithCandles = await CachedCandle.findAll({
+                attributes: [
+                    'figi',
+                    [sequelize.fn('COUNT', sequelize.col('figi')), 'candleCount'],
+                    [sequelize.fn('AVG', sequelize.col('volume')), 'avgVolume'],
+                    [sequelize.fn('MAX', sequelize.col('time')), 'lastCandleTime']
+                ],
+                group: ['figi'],
+                having: sequelize.where(
+                    sequelize.fn('COUNT', sequelize.col('figi')),
+                    { [Op.gte]: 20 } // Минимум 20 свечей для расчета корреляции
+                ),
+                order: [
+                    // Сортируем по среднему объему торгов (показатель ликвидности)
+                    [sequelize.fn('AVG', sequelize.col('volume')), 'DESC'],
+                    // Затем по количеству свечей (показатель активности)
+                    [sequelize.fn('COUNT', sequelize.col('figi')), 'DESC'],
+                    // Затем по последней свече (актуальность данных)
+                    [sequelize.fn('MAX', sequelize.col('time')), 'DESC']
+                ],
+                limit: 50,
+                raw: true
+            });
+            
+            // Если не удалось получить через группировку, используем альтернативный метод
+            let popularInstruments;
+            if (instrumentsWithCandles.length < 2) {
+                // Fallback: используем активные инструменты с недавними обновлениями
+                popularInstruments = await CachedInstrument.findAll({
+                    where: {
+                        isActive: true,
+                        lastUpdated: {
+                            [Op.gte]: sequelize.literal("NOW() - INTERVAL '7 days'") // Обновлялись за последние 7 дней
+                        }
+                    },
+                    order: [
+                        ['lastUpdated', 'DESC'] // По времени последнего обновления
+                    ],
+                    limit: 50,
+                    attributes: ['figi']
+                });
+            } else {
+                // Преобразуем результат группировки в формат с figi
+                popularInstruments = instrumentsWithCandles.map(item => ({
+                    figi: item.figi,
+                    candleCount: parseInt(item.candleCount) || 0,
+                    avgVolume: parseFloat(item.avgVolume) || 0
+                }));
+            }
+            
+            const figis = popularInstruments.map(inst => inst.figi).filter(Boolean);
+            
+            if (figis.length >= 2) {
+                const result = await CorrelationService.precalculateCorrelations(figis, 30);
+                await OptimizedTelegramService.sendAlert(
+                    'CORRELATION_PRECALC_COMPLETE',
+                    `Предварительный расчет корреляций завершен: рассчитано ${result.calculated}, из кеша ${result.cached}, ошибок ${result.errors}`,
+                    'info'
+                );
+            } else {
+                console.warn('⚠️ Недостаточно инструментов для предварительного расчета корреляций');
+            }
+        } catch (error) {
+            console.error('Error in scheduled correlation precalculation:', error);
+            await OptimizedTelegramService.sendAlert('CORRELATION_PRECALC_ERROR', error.message, 'warning');
+            throw error;
+        }
+    }
+
+    /**
+     * Динамическое перераспределение бюджета по результативности
+     */
+    async performDynamicBudgetRebalance() {
+        try {
+            console.log('💰 Scheduled dynamic budget rebalancing based on performance started...');
+            const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+            
+            // Выполняем перераспределение на основе метрик за последние 30 дней
+            const result = await StrategyAllocationService.rebalanceBudgetByPerformance(30, 0);
+            
+            if (result.success && result.changes && result.changes.length > 0) {
+                // Формируем сообщение с деталями изменений
+                let message = '💰 ДИНАМИЧЕСКОЕ ПЕРЕРАСПРЕДЕЛЕНИЕ БЮДЖЕТА\n\n';
+                message += `📊 Перераспределено стратегий: ${result.changes.length}\n`;
+                message += `📈 Средний Sharpe Ratio: ${result.averageSharpeRatio.toFixed(3)}\n\n`;
+                message += '📋 Изменения:\n';
+                
+                result.changes.forEach((change, index) => {
+                    message += `${index + 1}. ${change.strategyName}\n`;
+                    message += `   Бюджет: ${change.oldAllocation} → ${change.newAllocation}\n`;
+                    message += `   Сумма: ${change.oldAmount} → ${change.newAmount} RUB\n`;
+                    message += `   Sharpe: ${change.sharpeRatio}, Win Rate: ${change.winRate}\n`;
+                    message += `   Max Drawdown: ${change.maxDrawdown}\n\n`;
+                });
+                
+                await OptimizedTelegramService.sendAlert('DYNAMIC_BUDGET_REBALANCE_COMPLETE', message, 'info');
+            } else if (result.success && result.reason) {
+                console.log(`✅ Dynamic budget rebalancing completed: ${result.reason}`);
+            } else {
+                console.warn(`⚠️ Dynamic budget rebalancing completed with issues: ${result.reason || 'Unknown'}`);
+            }
+        } catch (error) {
+            console.error('Error in scheduled dynamic budget rebalancing:', error);
+            await OptimizedTelegramService.sendAlert('DYNAMIC_BUDGET_REBALANCE_ERROR', error.message, 'warning');
+            throw error;
+        }
+    }
+
     async performSignalsUpdate() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {

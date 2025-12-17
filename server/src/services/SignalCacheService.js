@@ -97,6 +97,9 @@ class SignalCacheService {
         let savedCount = 0;
         let updatedCount = 0;
         let skippedCount = 0;
+        
+        // Группируем сигналы по инструменту для групповой отправки
+        const signalsByFigi = new Map(); // figi -> { newSignals: [], updatedSignals: [] }
 
         for (const signal of signals) {
             try {
@@ -165,17 +168,23 @@ class SignalCacheService {
                     await cachedSignal.update(signalData);
                     updatedCount++;
                     
-                    // Если сигнал еще не был отправлен в Telegram, отправляем его
+                    // Группируем для отправки (только актуальные)
                     if (!cachedSignal.telegramSent && figi) {
-                        await this.sendSignalToTelegram(cachedSignal, figi);
+                        if (!signalsByFigi.has(figi)) {
+                            signalsByFigi.set(figi, { newSignals: [], updatedSignals: [] });
+                        }
+                        signalsByFigi.get(figi).updatedSignals.push(cachedSignal);
                     }
                 } else {
                     savedCount++;
                     if (!figi) {
                         skippedCount++; // Считаем как пропущенный, если нет FIGI
                     } else {
-                        // Отправляем новый сигнал в Telegram
-                        await this.sendSignalToTelegram(cachedSignal, figi);
+                        // Группируем для отправки
+                        if (!signalsByFigi.has(figi)) {
+                            signalsByFigi.set(figi, { newSignals: [], updatedSignals: [] });
+                        }
+                        signalsByFigi.get(figi).newSignals.push(cachedSignal);
                     }
                 }
             } catch (error) {
@@ -204,9 +213,12 @@ class SignalCacheService {
                             });
                             updatedCount++;
                             
-                            // Если сигнал еще не был отправлен в Telegram, отправляем его
+                            // Группируем для отправки (только актуальные)
                             if (!existingSignal.telegramSent && figi) {
-                                await this.sendSignalToTelegram(existingSignal, figi);
+                                if (!signalsByFigi.has(figi)) {
+                                    signalsByFigi.set(figi, { newSignals: [], updatedSignals: [] });
+                                }
+                                signalsByFigi.get(figi).updatedSignals.push(existingSignal);
                             }
                         }
                     } catch (updateError) {
@@ -219,7 +231,136 @@ class SignalCacheService {
             }
         }
 
+        // Отправляем группированные уведомления по инструментам
+        await this.sendGroupedSignalsToTelegram(signalsByFigi);
+
         return savedCount + updatedCount;
+    }
+
+    /**
+     * Отправка группированных сигналов в Telegram
+     * Отправляет сводку по каждому инструменту вместо отдельных сообщений
+     * @param {Map} signalsByFigi - Map с ключом figi и значением { newSignals: [], updatedSignals: [] }
+     */
+    async sendGroupedSignalsToTelegram(signalsByFigi) {
+        if (!signalsByFigi || signalsByFigi.size === 0) {
+            return;
+        }
+
+        // Проверяем, инициализирован ли Telegram сервис
+        if (!OptimizedTelegramService.isInitialized) {
+            return;
+        }
+
+        const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+
+        for (const [figi, signalGroups] of signalsByFigi.entries()) {
+            try {
+                const newSignals = signalGroups.newSignals || [];
+                const updatedSignals = signalGroups.updatedSignals || [];
+                
+                // Фильтруем только актуальные сигналы (не старше 1 дня)
+                const now = Date.now();
+                const maxAge = 1 * 24 * 60 * 60 * 1000; // 1 день (24 часа)
+                const maxTimeSinceEnd = 1 * 24 * 60 * 60 * 1000; // 1 день после окончания
+
+                const filterActualSignals = (signals) => {
+                    return signals.filter(signal => {
+                        const signalAge = now - new Date(signal.createDt).getTime();
+                        if (signalAge > maxAge) {
+                            // Помечаем как отправленный, но не отправляем
+                            signal.update({
+                                telegramSent: true,
+                                telegramSentAt: new Date()
+                            }).catch(() => {});
+                            return false;
+                        }
+
+                        const endDt = new Date(signal.endDt);
+                        const timeSinceEnd = now - endDt.getTime();
+                        if (timeSinceEnd > maxTimeSinceEnd) {
+                            // Помечаем как отправленный, но не отправляем
+                            signal.update({
+                                telegramSent: true,
+                                telegramSentAt: new Date()
+                            }).catch(() => {});
+                            return false;
+                        }
+
+                        return true;
+                    });
+                };
+
+                const actualNewSignals = filterActualSignals(newSignals);
+                const actualUpdatedSignals = filterActualSignals(updatedSignals);
+                const totalActualSignals = actualNewSignals.length + actualUpdatedSignals.length;
+
+                if (totalActualSignals === 0) {
+                    continue; // Нет актуальных сигналов для этого инструмента
+                }
+
+                // Получаем информацию об инструменте
+                const instrument = await CachedInstrument.findOne({
+                    where: { figi: figi },
+                    attributes: ['ticker', 'name']
+                });
+
+                const ticker = instrument?.ticker || figi;
+                const instrumentName = instrument?.name || 'Неизвестный инструмент';
+
+                // Формируем сводное сообщение
+                let message = `📊 <b>НОВЫЕ СИГНАЛЫ ДЛЯ ИНСТРУМЕНТА</b>\n\n`;
+                message += `📈 <b>Инструмент:</b> ${ticker} (${instrumentName})\n`;
+                message += `🔔 <b>Всего новых сигналов:</b> ${totalActualSignals}\n`;
+                
+                if (actualNewSignals.length > 0) {
+                    message += `✅ Новых: ${actualNewSignals.length}\n`;
+                }
+                if (actualUpdatedSignals.length > 0) {
+                    message += `🔄 Обновленных: ${actualUpdatedSignals.length}\n`;
+                }
+                
+                message += `\n`;
+
+                // Добавляем краткую информацию о первых 3 сигналах (самых актуальных)
+                const topSignals = [...actualNewSignals, ...actualUpdatedSignals]
+                    .sort((a, b) => new Date(b.createDt) - new Date(a.createDt))
+                    .slice(0, 3);
+
+                if (topSignals.length > 0) {
+                    message += `📋 <b>Последние сигналы:</b>\n`;
+                    for (const signal of topSignals) {
+                        const direction = signal.direction === 'SIGNAL_DIRECTION_BUY' ? '🟢 ПОКУПКА' : 
+                                       signal.direction === 'SIGNAL_DIRECTION_SELL' ? '🔴 ПРОДАЖА' : '⚪';
+                        const signalName = signal.name || 'Сигнал';
+                        const probability = signal.probability ? `${signal.probability}%` : 'N/A';
+                        message += `• ${direction} ${signalName} (вероятность: ${probability})\n`;
+                    }
+                    
+                    if (totalActualSignals > 3) {
+                        message += `\n... и еще ${totalActualSignals - 3} сигналов\n`;
+                    }
+                }
+
+                message += `\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`;
+
+                // Отправляем группированное сообщение
+                await OptimizedTelegramService.sendAlert('TRADING_SIGNAL', message, 'info');
+
+                // Помечаем все сигналы как отправленные
+                const allSignals = [...actualNewSignals, ...actualUpdatedSignals];
+                for (const signal of allSignals) {
+                    await signal.update({
+                        telegramSent: true,
+                        telegramSentAt: new Date()
+                    });
+                }
+
+                console.log(`✅ Отправлена сводка по ${totalActualSignals} сигналам для ${ticker} (${figi})`);
+            } catch (error) {
+                console.error(`❌ Ошибка отправки группированных сигналов для ${figi}:`, error.message);
+            }
+        }
     }
 
     /**
@@ -481,6 +622,37 @@ class SignalCacheService {
 
             // Проверяем, инициализирован ли Telegram сервис
             if (!OptimizedTelegramService.isInitialized) {
+                return;
+            }
+
+            // Фильтрация: отправляем только актуальные сигналы
+            // 1. Сигнал должен быть создан не более 1 дня назад (новые сигналы)
+            const signalAge = Date.now() - new Date(signal.createDt).getTime();
+            const maxAge = 1 * 24 * 60 * 60 * 1000; // 1 день (24 часа)
+            if (signalAge > maxAge) {
+                // Старый сигнал - помечаем как отправленный, но не отправляем
+                await signal.update({
+                    telegramSent: true,
+                    telegramSentAt: new Date()
+                });
+                const hoursAgo = Math.floor(signalAge / (60 * 60 * 1000));
+                console.log(`⏭️ Skipped old signal ${signal.signalId}: created ${hoursAgo} hours ago`);
+                return;
+            }
+
+            // 2. Сигнал должен быть еще активен (endDt в будущем или недавно истек)
+            const endDt = new Date(signal.endDt);
+            const now = new Date();
+            const timeSinceEnd = now.getTime() - endDt.getTime();
+            const maxTimeSinceEnd = 1 * 24 * 60 * 60 * 1000; // Максимум 1 день после окончания
+            
+            if (timeSinceEnd > maxTimeSinceEnd) {
+                // Сигнал истек давно - помечаем как отправленный, но не отправляем
+                await signal.update({
+                    telegramSent: true,
+                    telegramSentAt: new Date()
+                });
+                console.log(`⏭️ Skipped expired signal ${signal.signalId}: ended ${Math.floor(timeSinceEnd / (24 * 60 * 60 * 1000))} days ago`);
                 return;
             }
 

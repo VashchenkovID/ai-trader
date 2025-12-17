@@ -25,6 +25,12 @@ class OptimizedTelegramService {
         
         // Счетчик тренировок
         this.trainingCount = 0;
+        
+        // Ограничение частоты отправки для TRADING_SIGNAL
+        this.tradingSignalQueue = [];
+        this.tradingSignalLastSent = null;
+        this.tradingSignalMinInterval = 60000; // Минимум 1 минута между отправками
+        this.tradingSignalBatchTimeout = null;
     }
 
     async initialize() {
@@ -499,6 +505,11 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
         if (!this.isInitialized) return;
 
         try {
+            // Для TRADING_SIGNAL используем очередь с ограничением частоты
+            if (alertType === 'TRADING_SIGNAL') {
+                return await this.queueTradingSignal(message, severity);
+            }
+
             const emoji = {
                 'critical': '🚨',
                 'warning': '⚠️',
@@ -510,6 +521,60 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
             console.log(`✅ Alert sent: ${alertType}`);
         } catch (error) {
             console.error('❌ Error sending alert:', error);
+        }
+    }
+
+    // Очередь для торговых сигналов с ограничением частоты
+    async queueTradingSignal(message, severity = 'info') {
+        // Добавляем сигнал в очередь
+        this.tradingSignalQueue.push({ message, severity, timestamp: Date.now() });
+
+        // Если это первый сигнал или прошло достаточно времени с последней отправки
+        const now = Date.now();
+        const timeSinceLastSent = this.tradingSignalLastSent ? now - this.tradingSignalLastSent : Infinity;
+
+        if (timeSinceLastSent >= this.tradingSignalMinInterval) {
+            // Отправляем немедленно
+            await this.flushTradingSignalQueue();
+        } else {
+            // Планируем отправку через оставшееся время + небольшая задержка для группировки
+            const delay = this.tradingSignalMinInterval - timeSinceLastSent + 5000; // +5 секунд для группировки
+            
+            if (this.tradingSignalBatchTimeout) {
+                clearTimeout(this.tradingSignalBatchTimeout);
+            }
+            
+            this.tradingSignalBatchTimeout = setTimeout(() => {
+                this.flushTradingSignalQueue();
+            }, delay);
+        }
+    }
+
+    async flushTradingSignalQueue() {
+        if (this.tradingSignalQueue.length === 0) return;
+
+        try {
+            const signals = [...this.tradingSignalQueue];
+            this.tradingSignalQueue = [];
+            
+            if (signals.length === 0) return;
+
+            // Группируем сигналы в одно сообщение
+            const totalSignals = signals.length;
+            const header = `📊 <b>НОВЫЕ ТОРГОВЫЕ СИГНАЛЫ</b>\n\n🔔 Всего сигналов: <b>${totalSignals}</b>\n\n`;
+            const separator = `\n${'─'.repeat(40)}\n\n`;
+            
+            // Берем только сообщения (без severity, так как они уже отформатированы)
+            const messages = signals.map(s => s.message);
+            const groupedMessage = header + messages.join(separator);
+
+            const alertMessage = `<b>Оповещение: TRADING_SIGNAL</b>\n\n${groupedMessage}\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`;
+            await this.safeSendMessage(this.chatId, alertMessage, { parse_mode: 'HTML' });
+            
+            this.tradingSignalLastSent = Date.now();
+            console.log(`✅ Sent ${totalSignals} trading signals (grouped)`);
+        } catch (error) {
+            console.error('❌ Error flushing trading signal queue:', error);
         }
     }
 

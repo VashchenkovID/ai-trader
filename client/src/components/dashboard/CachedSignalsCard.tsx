@@ -152,7 +152,7 @@ const CachedSignalsCard: React.FC<CachedSignalsCardProps> = ({
     <Card 
       title={
         <div className="flex align-items-center justify-content-between flex-wrap gap-2">
-          <span>📊 Записанные торговые сигналы</span>
+          <span>📊 Торговые сигналы</span>
           <div className="flex align-items-center gap-2">
             <Badge value={signals.length} severity="info" />
             <Button
