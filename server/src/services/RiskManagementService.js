@@ -174,6 +174,27 @@ class RiskManagementService {
      */
     async calculateDynamicStopLoss(figi, currentPrice, strategy = null, direction = 'BUY') {
         try {
+            // Валидация входных данных
+            if (!figi || typeof figi !== 'string') {
+                throw new Error(`Invalid FIGI: ${figi}`);
+            }
+            
+            if (!currentPrice || !isFinite(currentPrice) || currentPrice <= 0) {
+                throw new Error(`Invalid currentPrice: ${currentPrice}. Must be a positive number.`);
+            }
+            
+            if (direction !== 'BUY' && direction !== 'SELL') {
+                throw new Error(`Invalid direction: ${direction}. Must be 'BUY' or 'SELL'.`);
+            }
+            
+            // Валидация стратегии и atrMultiplier
+            if (strategy && strategy.atrMultiplier !== null && strategy.atrMultiplier !== undefined) {
+                if (!isFinite(strategy.atrMultiplier) || strategy.atrMultiplier <= 0 || strategy.atrMultiplier > 10) {
+                    console.warn(`⚠️ Invalid atrMultiplier ${strategy.atrMultiplier} for ${figi}, using fallback`);
+                    strategy = { ...strategy, atrMultiplier: null };
+                }
+            }
+            
             // Если стратегия не передана или atrMultiplier не задан, используем фиксированный процент
             if (!strategy || strategy.atrMultiplier === null || strategy.atrMultiplier === undefined) {
                 const stopLossPercent = strategy?.stopLossPercent || 5.0;
@@ -185,10 +206,23 @@ class RiskManagementService {
             }
 
             // Получаем свечи для расчета ATR (нужно минимум 15 свечей для периода 14)
-            const candles = await CacheService.getCandles(figi, 'DAY', 30);
+            let candles;
+            try {
+                candles = await CacheService.getCandles(figi, 'DAY', 30);
+            } catch (cacheError) {
+                console.warn(`⚠️ Ошибка получения свечей для ${figi}:`, cacheError.message);
+                // Используем фиксированный процент при ошибке получения данных
+                const stopLossPercent = strategy?.stopLossPercent || 5.0;
+                if (direction === 'BUY') {
+                    return currentPrice * (1 - stopLossPercent / 100);
+                } else {
+                    return currentPrice * (1 + stopLossPercent / 100);
+                }
+            }
             
             if (!candles || candles.length < 15) {
                 // Если данных недостаточно, используем фиксированный процент
+                console.warn(`⚠️ Недостаточно свечей для расчета ATR для ${figi}: ${candles?.length || 0} (требуется минимум 15)`);
                 const stopLossPercent = strategy?.stopLossPercent || 5.0;
                 if (direction === 'BUY') {
                     return currentPrice * (1 - stopLossPercent / 100);
@@ -200,8 +234,9 @@ class RiskManagementService {
             // Рассчитываем ATR
             const atr = OptimizedDataService.calculateATR(candles, 14);
             
-            if (atr === 0 || !isFinite(atr)) {
-                // Если ATR не удалось рассчитать, используем фиксированный процент
+            // Валидация ATR: должен быть положительным числом
+            if (!atr || !isFinite(atr) || atr <= 0) {
+                console.warn(`⚠️ Некорректный ATR для ${figi}: ${atr}, используем фиксированный процент`);
                 const stopLossPercent = strategy?.stopLossPercent || 5.0;
                 if (direction === 'BUY') {
                     return currentPrice * (1 - stopLossPercent / 100);
@@ -780,11 +815,22 @@ class RiskManagementService {
      * Обновление трейлинг-стопа на основе текущей цены
      * @param {number} trailingStopId - ID трейлинг-стопа
      * @param {number} currentPrice - Текущая цена инструмента
+     * @param {Object} transaction - Опциональная транзакция Sequelize
      * @returns {Promise<Object>} - Обновленный трейлинг-стоп или null, если сработал
      */
-    async updateTrailingStop(trailingStopId, currentPrice) {
+    async updateTrailingStop(trailingStopId, currentPrice, transaction = null) {
         try {
-            const trailingStop = await TrailingStop.findByPk(trailingStopId);
+            // Валидация входных данных
+            if (!trailingStopId || !isFinite(trailingStopId)) {
+                throw new Error(`Invalid trailingStopId: ${trailingStopId}`);
+            }
+            
+            if (!currentPrice || !isFinite(currentPrice) || currentPrice <= 0) {
+                throw new Error(`Invalid currentPrice: ${currentPrice}. Must be a positive number.`);
+            }
+
+            const options = transaction ? { transaction } : {};
+            const trailingStop = await TrailingStop.findByPk(trailingStopId, options);
             if (!trailingStop) {
                 throw new Error(`Трейлинг-стоп с ID ${trailingStopId} не найден`);
             }
@@ -832,7 +878,7 @@ class RiskManagementService {
                 }
 
                 trailingStop.currentStopPrice = stopPrice;
-                await trailingStop.save();
+                await trailingStop.save(options);
 
                 console.log(`✅ Трейлинг-стоп активирован для ${trailingStop.ticker} при цене ${currentPrice.toFixed(2)}`);
             }
@@ -844,7 +890,7 @@ class RiskManagementService {
 
                 if (direction === 'BUY') {
                     // Обновляем максимальную цену и стоп-лосс только вверх
-                    if (currentPrice > trailingStop.highestPrice) {
+                    if (currentPrice > (trailingStop.highestPrice || trailingStop.entryPrice)) {
                         trailingStop.highestPrice = currentPrice;
                         shouldUpdate = true;
 
@@ -867,14 +913,14 @@ class RiskManagementService {
                         trailingStop.status = 'triggered';
                         trailingStop.triggeredAt = new Date();
                         trailingStop.triggerPrice = currentPrice;
-                        await trailingStop.save();
+                        await trailingStop.save(options);
 
                         console.log(`🛑 Трейлинг-стоп сработал для ${trailingStop.ticker}: цена ${currentPrice.toFixed(2)} <= стоп ${trailingStop.currentStopPrice.toFixed(2)}`);
                         return trailingStop;
                     }
                 } else {
                     // Для SELL позиций логика обратная
-                    if (currentPrice < trailingStop.lowestPrice) {
+                    if (currentPrice < (trailingStop.lowestPrice || trailingStop.entryPrice)) {
                         trailingStop.lowestPrice = currentPrice;
                         shouldUpdate = true;
 
@@ -897,7 +943,7 @@ class RiskManagementService {
                         trailingStop.status = 'triggered';
                         trailingStop.triggeredAt = new Date();
                         trailingStop.triggerPrice = currentPrice;
-                        await trailingStop.save();
+                        await trailingStop.save(options);
 
                         console.log(`🛑 Трейлинг-стоп сработал для ${trailingStop.ticker}: цена ${currentPrice.toFixed(2)} >= стоп ${trailingStop.currentStopPrice.toFixed(2)}`);
                         return trailingStop;
@@ -905,7 +951,7 @@ class RiskManagementService {
                 }
 
                 if (shouldUpdate) {
-                    await trailingStop.save();
+                    await trailingStop.save(options);
                 }
             }
 
@@ -918,43 +964,269 @@ class RiskManagementService {
 
     /**
      * Проверка всех активных трейлинг-стопов
+     * Оптимизировано: получает цены батчами для уменьшения количества запросов к БД
      * @param {string} portfolioType - Тип портфеля ('virtual' или 'real')
+     * @param {boolean} autoClosePositions - Автоматически закрывать позиции при срабатывании (по умолчанию true)
      * @returns {Promise<Array>} - Массив сработавших трейлинг-стопов
      */
-    async checkAllTrailingStops(portfolioType = 'virtual') {
+    async checkAllTrailingStops(portfolioType = 'virtual', autoClosePositions = true) {
+        let transaction = null;
+        
         try {
-            const activeStops = await TrailingStop.findAll({
-                where: {
-                    status: ['pending', 'active'],
-                    portfolioType
-                }
-            });
-
-            const triggeredStops = [];
-
-            for (const stop of activeStops) {
+            // Используем транзакцию для предотвращения race condition
+            const sequelize = TrailingStop.sequelize;
+            
+            // Проверяем, что sequelize инициализирован
+            if (!sequelize) {
+                console.warn('⚠️ Sequelize not initialized, checking trailing stops without transaction');
+                // Продолжаем без транзакции как fallback
+            } else {
                 try {
-                    // Получаем текущую цену
-                    const instrument = await CacheService.getInstrument(stop.figi, true);
-                    if (!instrument || !instrument.lastPrice) {
-                        console.warn(`⚠️ Не удалось получить цену для ${stop.ticker}`);
+                    transaction = await sequelize.transaction();
+                } catch (txError) {
+                    console.warn('⚠️ Failed to create transaction, checking trailing stops without transaction:', txError.message);
+                    // Продолжаем без транзакции как fallback
+                    transaction = null;
+                }
+            }
+            
+            try {
+                // Получаем все активные трейлинг-стопы с блокировкой строк (если транзакция доступна)
+                const findOptions = {
+                    where: {
+                        status: ['pending', 'active'],
+                        portfolioType
+                    }
+                };
+                
+                // Добавляем блокировку и транзакцию только если они доступны
+                if (transaction) {
+                    findOptions.lock = transaction.LOCK.UPDATE;
+                    findOptions.transaction = transaction;
+                }
+                
+                const activeStops = await TrailingStop.findAll(findOptions);
+
+                if (activeStops.length === 0) {
+                    if (transaction) {
+                        await transaction.commit();
+                    }
+                    return [];
+                }
+
+                // Получаем уникальные FIGI для батч-запроса цен
+                const uniqueFigis = [...new Set(activeStops.map(s => s.figi))];
+                const pricesMap = {};
+                
+                // Получаем цены батчами
+                for (const figi of uniqueFigis) {
+                    try {
+                        const instrument = await CacheService.getInstrument(figi, true);
+                        if (instrument && instrument.lastPrice && isFinite(instrument.lastPrice) && instrument.lastPrice > 0) {
+                            pricesMap[figi] = instrument.lastPrice;
+                        }
+                    } catch (error) {
+                        console.warn(`⚠️ Не удалось получить цену для ${figi}:`, error.message);
+                    }
+                }
+
+                const triggeredStops = [];
+
+                // Обновляем трейлинг-стопы с использованием полученных цен
+                for (const stop of activeStops) {
+                    try {
+                        const currentPrice = pricesMap[stop.figi];
+                        if (!currentPrice) {
+                            console.warn(`⚠️ Не удалось получить цену для ${stop.ticker} (${stop.figi})`);
+                            continue;
+                        }
+
+                        // Обновляем трейлинг-стоп в транзакции (если доступна)
+                        const updatedStop = await this.updateTrailingStop(stop.id, currentPrice, transaction);
+
+                        if (updatedStop && updatedStop.status === 'triggered') {
+                            triggeredStops.push(updatedStop);
+                        }
+                    } catch (error) {
+                        console.error(`❌ Ошибка проверки трейлинг-стопа ${stop.id}:`, error.message);
+                    }
+                }
+
+                // Коммитим транзакцию только если она была создана
+                if (transaction) {
+                    await transaction.commit();
+                }
+
+                // Автоматически закрываем позиции для сработавших трейлинг-стопов
+                if (autoClosePositions && triggeredStops.length > 0) {
+                    await this.closePositionsForTriggeredStops(triggeredStops, portfolioType);
+                }
+
+                return triggeredStops;
+            } catch (error) {
+                // Откатываем транзакцию только если она была создана
+                if (transaction) {
+                    try {
+                        await transaction.rollback();
+                    } catch (rollbackError) {
+                        console.error('❌ Ошибка отката транзакции:', rollbackError.message);
+                    }
+                }
+                throw error;
+            }
+        } catch (error) {
+            console.error('❌ Ошибка проверки трейлинг-стопов:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Автоматическое закрытие позиций для сработавших трейлинг-стопов
+     * @param {Array} triggeredStops - Массив сработавших трейлинг-стопов
+     * @param {string} portfolioType - Тип портфеля
+     * @returns {Promise<void>}
+     */
+    async closePositionsForTriggeredStops(triggeredStops, portfolioType) {
+        try {
+            const TradingRequest = (await import('../models/TradingRequest.js')).default;
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const PartialExitService = (await import('./PartialExitService.js')).default;
+            const TradingModeManager = (await import('./TradingModeManager.js')).default;
+
+            for (const stop of triggeredStops) {
+                try {
+                    if (!stop.tradingRequestId) {
+                        console.warn(`⚠️ Трейлинг-стоп ${stop.id} не связан с торговой заявкой`);
                         continue;
                     }
 
-                    const currentPrice = instrument.lastPrice;
-                    const updatedStop = await this.updateTrailingStop(stop.id, currentPrice);
+                    // Получаем торговую заявку
+                    const tradingRequest = await TradingRequest.findByPk(stop.tradingRequestId);
+                    if (!tradingRequest || tradingRequest.status !== 'EXECUTED') {
+                        console.warn(`⚠️ Торговая заявка ${stop.tradingRequestId} не найдена или не исполнена`);
+                        continue;
+                    }
 
-                    if (updatedStop.status === 'triggered') {
-                        triggeredStops.push(updatedStop);
+                    // Проверяем, не закрыта ли позиция частично
+                    const PositionExit = (await import('../models/PositionExit.js')).default;
+                    const existingExits = await PositionExit.getExitsByRequest(tradingRequest.id);
+                    const totalExited = existingExits
+                        .filter(e => e.status === 'EXECUTED')
+                        .reduce((sum, e) => sum + e.exitQuantity, 0);
+                    
+                    const remainingQuantity = tradingRequest.quantity - totalExited;
+                    
+                    if (remainingQuantity <= 0) {
+                        console.log(`ℹ️ Позиция ${tradingRequest.ticker} уже полностью закрыта`);
+                        continue;
+                    }
+
+                    // Определяем режим торговли
+                    const currentMode = TradingModeManager.getCurrentMode().mode;
+                    const tradingMode = portfolioType === 'real' ? 'real' : currentMode;
+
+                    // Создаем запись о закрытии через трейлинг-стоп
+                    const positionExit = await PositionExit.create({
+                        tradingRequestId: tradingRequest.id,
+                        figi: tradingRequest.figi,
+                        ticker: tradingRequest.ticker,
+                        name: tradingRequest.name,
+                        entryPrice: stop.entryPrice,
+                        initialQuantity: tradingRequest.quantity,
+                        remainingQuantity: 0, // Полностью закрываем
+                        exitStage: 'TRAILING_STOP',
+                        profitPercent: stop.direction === 'BUY' 
+                            ? ((stop.triggerPrice - stop.entryPrice) / stop.entryPrice) * 100
+                            : ((stop.entryPrice - stop.triggerPrice) / stop.entryPrice) * 100, // Для SELL позиций прибыль = разница в обратную сторону
+                        exitPrice: stop.triggerPrice,
+                        exitQuantity: remainingQuantity,
+                        exitAmount: stop.triggerPrice * remainingQuantity,
+                        commission: 0,
+                        realizedProfit: 0,
+                        status: 'PENDING',
+                        tradingMode
+                    });
+
+                    // Определяем действие для закрытия позиции
+                    // Для BUY позиций закрытие - это SELL, для SELL позиций закрытие - это BUY
+                    const closeAction = stop.direction === 'BUY' ? 'SELL' : 'BUY';
+                    
+                    // Рассчитываем прибыль в зависимости от направления позиции
+                    // Для BUY: прибыль = (цена_выхода - цена_входа) * количество
+                    // Для SELL: прибыль = (цена_входа - цена_выхода) * количество
+                    const calculateProfit = (exitPrice, entryPrice, quantity) => {
+                        if (stop.direction === 'BUY') {
+                            return (exitPrice - entryPrice) * quantity;
+                        } else {
+                            return (entryPrice - exitPrice) * quantity;
+                        }
+                    };
+
+                    // Выполняем закрытие
+                    if (tradingMode === 'paper' || tradingMode === 'micro') {
+                        const signal = {
+                            symbol: tradingRequest.figi,
+                            action: closeAction,
+                            quantity: remainingQuantity,
+                            price: stop.triggerPrice,
+                            confidence: 1.0,
+                            isTrailingStopExit: true,
+                            originalRequestId: tradingRequest.id
+                        };
+
+                        const result = await TradingEngine.executeOrder(signal);
+                        
+                        // Безопасный доступ к результату выполнения
+                        if (!result || !result.trade) {
+                            throw new Error(`Failed to execute order for trailing stop ${stop.id}: no trade result`);
+                        }
+                        
+                        const realizedProfit = calculateProfit(result.trade.price, stop.entryPrice, remainingQuantity) - (result.trade.commission || 0);
+                        
+                        await positionExit.execute({
+                            exitPrice: result.trade.price,
+                            commission: result.trade.commission || 0,
+                            realizedProfit,
+                            notes: `Автоматическое закрытие по трейлинг-стопу`
+                        });
+
+                        console.log(`✅ Позиция ${tradingRequest.ticker} закрыта по трейлинг-стопу: ${remainingQuantity} акций (${closeAction})`);
+                    } else {
+                        // В режиме real создаем торговую заявку
+                        const exitRequest = await TradingRequest.create({
+                            recommendationId: tradingRequest.recommendationId || tradingRequest.figi,
+                            figi: tradingRequest.figi,
+                            ticker: tradingRequest.ticker,
+                            name: tradingRequest.name,
+                            action: closeAction,
+                            quantity: remainingQuantity,
+                            priceAtRequest: stop.triggerPrice,
+                            estimatedAmount: stop.triggerPrice * remainingQuantity,
+                            confidence: 1.0,
+                            score: 1.0,
+                            reasoning: `Автоматическое закрытие по трейлинг-стопу`,
+                            tradingMode: 'real',
+                            status: 'PENDING',
+                            userComment: `Трейлинг-стоп сработал при цене ${stop.triggerPrice.toFixed(2)}`
+                        });
+
+                        const estimatedProfit = calculateProfit(stop.triggerPrice, stop.entryPrice, remainingQuantity);
+                        
+                        await positionExit.execute({
+                            exitPrice: stop.triggerPrice,
+                            commission: 0,
+                            realizedProfit: estimatedProfit,
+                            notes: `Создана заявка на закрытие по трейлинг-стопу: ${exitRequest.id}`
+                        });
+
+                        console.log(`📋 Создана заявка на закрытие позиции ${tradingRequest.ticker} по трейлинг-стопу: ${exitRequest.id}`);
                     }
                 } catch (error) {
-                    console.error(`❌ Ошибка проверки трейлинг-стопа ${stop.id}:`, error.message);
+                    console.error(`❌ Ошибка закрытия позиции для трейлинг-стопа ${stop.id}:`, error);
                 }
             }
-
-            return triggeredStops;
         } catch (error) {
-            console.error('❌ Ошибка проверки трейлинг-стопов:', error);
+            console.error('❌ Ошибка автоматического закрытия позиций:', error);
             throw error;
         }
     }

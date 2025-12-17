@@ -607,6 +607,9 @@ class StrategyAllocationService {
             );
             const metrics = await Promise.all(metricsPromises);
 
+            // Минимальное количество сделок для участия в перераспределении
+            const minTrades = 10; // Минимум 10 сделок за период
+            
             // Фильтруем стратегии с достаточными данными и минимальным Sharpe Ratio
             const validMetrics = metrics
                 .map((metric, index) => ({
@@ -614,7 +617,25 @@ class StrategyAllocationService {
                     strategy: strategies[index],
                     originalBudgetAllocation: strategies[index].budgetAllocation
                 }))
-                .filter(m => !m.insufficientData && m.sharpeRatio >= minSharpeRatio);
+                .filter(m => {
+                    // Проверяем достаточность данных
+                    if (m.insufficientData) {
+                        return false;
+                    }
+                    
+                    // Проверяем минимальное количество сделок
+                    if (m.totalTrades < minTrades) {
+                        console.log(`⚠️ Strategy ${m.strategy?.name || 'Unknown'} has only ${m.totalTrades} trades (minimum ${minTrades} required)`);
+                        return false;
+                    }
+                    
+                    // Проверяем минимальный Sharpe Ratio
+                    if (m.sharpeRatio < minSharpeRatio) {
+                        return false;
+                    }
+                    
+                    return true;
+                });
 
             if (validMetrics.length === 0) {
                 console.warn('⚠️ No strategies with sufficient data for rebalancing');
@@ -637,19 +658,67 @@ class StrategyAllocationService {
                 };
             }
 
-            // Рассчитываем новые проценты распределения на основе Sharpe Ratio
-            // Используем взвешенное распределение: новый_процент = базовый_процент × (Sharpe_стратегии / средний_Sharpe)
+            // Рассчитываем новые проценты распределения на основе метрик производительности
+            // Комбинируем Sharpe Ratio, Win Rate и Max Drawdown
+            // Формула: новый_процент = базовый_процент × (Sharpe_стратегии / средний_Sharpe) × (WinRate_стратегии / средний_WinRate) × (1 - MaxDrawdown_стратегии / средний_MaxDrawdown)
+            
+            // Рассчитываем средние значения для нормализации
+            const avgWinRate = validMetrics.reduce((sum, m) => sum + m.winRate, 0) / validMetrics.length;
+            const avgMaxDrawdown = validMetrics.reduce((sum, m) => sum + m.maxDrawdown, 0) / validMetrics.length;
+            
+            // Защита от деления на ноль
+            const safeAvgWinRate = avgWinRate > 0 ? avgWinRate : 0.5;
+            const safeAvgMaxDrawdown = avgMaxDrawdown > 0 ? avgMaxDrawdown : 0.1;
+            
             const rebalancedMetrics = validMetrics.map(metric => {
-                const performanceMultiplier = metric.sharpeRatio / avgSharpeRatio;
+                // Множитель на основе Sharpe Ratio
+                const sharpeMultiplier = avgSharpeRatio > 0 ? metric.sharpeRatio / avgSharpeRatio : 1.0;
+                
+                // Множитель на основе Win Rate (чем выше Win Rate, тем больше бюджет)
+                const winRateMultiplier = safeAvgWinRate > 0 ? metric.winRate / safeAvgWinRate : 1.0;
+                
+                // Множитель на основе Max Drawdown (чем меньше просадка, тем больше бюджет)
+                // Инвертируем: (1 - drawdown / avgDrawdown) дает больше для меньших просадок
+                const drawdownMultiplier = safeAvgMaxDrawdown > 0 
+                    ? Math.max(0.5, Math.min(1.5, 1.0 - (metric.maxDrawdown / safeAvgMaxDrawdown) * 0.5))
+                    : 1.0;
+                
+                // Комбинируем множители с весами: Sharpe 50%, Win Rate 30%, Drawdown 20%
+                const combinedMultiplier = (
+                    sharpeMultiplier * 0.5 +
+                    winRateMultiplier * 0.3 +
+                    drawdownMultiplier * 0.2
+                );
+                
                 // Ограничиваем изменение: не более чем в 2 раза в любую сторону
-                const cappedMultiplier = Math.max(0.5, Math.min(2.0, performanceMultiplier));
-                const newBudgetAllocation = metric.originalBudgetAllocation * cappedMultiplier;
+                const cappedMultiplier = Math.max(0.5, Math.min(2.0, combinedMultiplier));
+                
+                // Проверка на переполнение перед умножением
+                const maxSafeAllocation = 100; // Максимальный процент бюджета
+                const newBudgetAllocation = Math.min(
+                    maxSafeAllocation,
+                    metric.originalBudgetAllocation * cappedMultiplier
+                );
+                
+                // Проверка на валидность результата
+                if (!isFinite(newBudgetAllocation) || newBudgetAllocation < 0) {
+                    console.warn(`⚠️ Invalid budget allocation calculated for strategy ${metric.strategy.name}: ${newBudgetAllocation}`);
+                    return {
+                        ...metric,
+                        performanceMultiplier: combinedMultiplier,
+                        cappedMultiplier: 1.0,
+                        newBudgetAllocation: metric.originalBudgetAllocation
+                    };
+                }
                 
                 return {
                     ...metric,
-                    performanceMultiplier,
+                    performanceMultiplier: combinedMultiplier,
                     cappedMultiplier,
-                    newBudgetAllocation
+                    newBudgetAllocation,
+                    sharpeMultiplier,
+                    winRateMultiplier,
+                    drawdownMultiplier
                 };
             });
 
@@ -712,6 +781,7 @@ class StrategyAllocationService {
                             sharpeRatio: metric.sharpeRatio.toFixed(3),
                             winRate: (metric.winRate * 100).toFixed(2) + '%',
                             maxDrawdown: (metric.maxDrawdown * 100).toFixed(2) + '%',
+                            totalTrades: metric.totalTrades || metric.totalPositions || 0,
                             performanceMultiplier: metric.cappedMultiplier.toFixed(3)
                         });
                     }

@@ -108,6 +108,32 @@ class PartialExitService {
      */
     async checkPositionForExit(position, currentPrice) {
         try {
+            // Валидация входных данных
+            if (!position || !position.id || !position.figi) {
+                return { shouldExit: false, reason: 'Invalid position data' };
+            }
+            
+            if (!currentPrice || !isFinite(currentPrice) || currentPrice <= 0) {
+                return { shouldExit: false, reason: 'Invalid current price' };
+            }
+            
+            // Проверяем, не сработал ли трейлинг-стоп
+            const TrailingStop = (await import('../models/TrailingStop.js')).default;
+            const activeTrailingStop = await TrailingStop.findOne({
+                where: {
+                    tradingRequestId: position.id,
+                    status: ['pending', 'active', 'triggered']
+                }
+            });
+            
+            if (activeTrailingStop && activeTrailingStop.status === 'triggered') {
+                return { 
+                    shouldExit: false, 
+                    reason: 'Trailing stop already triggered',
+                    trailingStopTriggered: true
+                };
+            }
+            
             // Получаем историю закрытий для этой позиции
             const existingExits = await PositionExit.getExitsByRequest(position.id);
             const executedExits = existingExits.filter(e => e.status === 'EXECUTED');
@@ -117,7 +143,7 @@ class PartialExitService {
             
             // Рассчитываем текущий процент прибыли
             const entryPrice = position.actualPrice || position.priceAtRequest;
-            if (!entryPrice || entryPrice <= 0) {
+            if (!entryPrice || entryPrice <= 0 || !isFinite(entryPrice)) {
                 return { shouldExit: false, reason: 'Invalid entry price' };
             }
 
@@ -184,6 +210,54 @@ class PartialExitService {
      */
     async executePartialExit(position, exitInfo) {
         try {
+            // Валидация входных данных
+            if (!position || !position.id || !position.figi) {
+                throw new Error('Invalid position data');
+            }
+            
+            if (!exitInfo || !exitInfo.shouldExit) {
+                throw new Error('Exit conditions not met');
+            }
+            
+            // Валидация количества для закрытия
+            if (!exitInfo.exitQuantity || exitInfo.exitQuantity <= 0 || !isFinite(exitInfo.exitQuantity)) {
+                throw new Error(`Invalid exitQuantity: ${exitInfo.exitQuantity}`);
+            }
+            
+            if (!exitInfo.exitPrice || exitInfo.exitPrice <= 0 || !isFinite(exitInfo.exitPrice)) {
+                throw new Error(`Invalid exitPrice: ${exitInfo.exitPrice}`);
+            }
+            
+            // Проверяем, что не закрываем больше, чем есть
+            const existingExits = await PositionExit.getExitsByRequest(position.id);
+            const executedExits = existingExits.filter(e => e.status === 'EXECUTED');
+            const totalExited = executedExits.reduce((sum, e) => sum + e.exitQuantity, 0);
+            const remainingQuantity = position.quantity - totalExited;
+            
+            if (exitInfo.exitQuantity > remainingQuantity) {
+                throw new Error(`Cannot exit ${exitInfo.exitQuantity} shares, only ${remainingQuantity} remaining`);
+            }
+            
+            // Проверяем, не сработал ли трейлинг-стоп
+            const RiskManagementService = (await import('./RiskManagementService.js')).default;
+            const TrailingStop = (await import('../models/TrailingStop.js')).default;
+            
+            const activeTrailingStop = await TrailingStop.findOne({
+                where: {
+                    tradingRequestId: position.id,
+                    status: ['pending', 'active', 'triggered'] // Включаем 'triggered' для проверки
+                }
+            });
+            
+            if (activeTrailingStop && activeTrailingStop.status === 'triggered') {
+                console.log(`⚠️ Трейлинг-стоп уже сработал для ${position.ticker}, пропускаем частичное закрытие`);
+                return {
+                    success: false,
+                    reason: 'Trailing stop already triggered',
+                    trailingStopId: activeTrailingStop.id
+                };
+            }
+            
             const currentMode = TradingModeManager.getCurrentMode().mode;
             
             // Создаем запись о закрытии
@@ -194,7 +268,7 @@ class PartialExitService {
                 name: position.name,
                 entryPrice: exitInfo.entryPrice,
                 initialQuantity: position.quantity,
-                remainingQuantity: exitInfo.remainingQuantity - exitInfo.exitQuantity,
+                remainingQuantity: remainingQuantity - exitInfo.exitQuantity,
                 exitStage: exitInfo.stage,
                 profitPercent: exitInfo.profitPercent,
                 exitPrice: exitInfo.exitPrice,

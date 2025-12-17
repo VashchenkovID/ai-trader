@@ -49,6 +49,7 @@ class SchedulerService {
         this.isFullCacheUpdateRunning = false; // Флаг выполнения полного обновления кеша
         this.currentFullCacheUpdateWorker = null; // Текущий worker полного обновления кеша
         this.pendingTriggeredSignals = []; // Накопленные сработавшие сигналы для отправки после анализа
+        this.maxPendingSignals = 1000; // Максимальное количество накопленных сигналов (защита от утечки памяти)
     }
 
     /**
@@ -2478,6 +2479,14 @@ class SchedulerService {
                         });
 
                         if (signalToNotify) {
+                            // Защита от утечки памяти: ограничиваем размер массива
+                            if (this.pendingTriggeredSignals.length >= this.maxPendingSignals) {
+                                // Удаляем самые старые записи (FIFO)
+                                const removeCount = Math.floor(this.maxPendingSignals * 0.1); // Удаляем 10%
+                                this.pendingTriggeredSignals.splice(0, removeCount);
+                                console.warn(`⚠️ Pending signals buffer full, removed ${removeCount} oldest entries`);
+                            }
+                            
                             // Используем данные из БД, а не из объекта triggered
                             this.pendingTriggeredSignals.push({
                                 signalId: signalToNotify.signalId,

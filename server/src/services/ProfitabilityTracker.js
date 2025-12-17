@@ -797,6 +797,7 @@ class ProfitabilityTracker {
                 avgReturn: avgReturn || 0,
                 volatility: volatility || 0,
                 totalPositions,
+                totalTrades: totalPositions, // Алиас для совместимости
                 profitablePositions,
                 losingPositions,
                 insufficientData: false
