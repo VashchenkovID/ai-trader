@@ -36,3 +36,4 @@ export { default as TrailingStop } from './TrailingStop.js';
 export { default as PositionExit } from './PositionExit.js';
 export { default as TriggeredSignal } from './TriggeredSignal.js';
 export { default as CorrelationCache } from './CorrelationCache.js';
+export { default as BacktestResult } from './BacktestResult.js';

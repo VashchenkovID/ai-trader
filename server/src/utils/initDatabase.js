@@ -21,6 +21,7 @@ import PositionStrategy from '../models/PositionStrategy.js';
 import PositionExit from '../models/PositionExit.js';
 import TriggeredSignal from '../models/TriggeredSignal.js';
 import InstrumentStats from '../models/InstrumentStats.js';
+import BacktestResult from '../models/BacktestResult.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
@@ -39,8 +40,21 @@ export async function initDatabase() {
 
         // Синхронизация всех моделей
         console.log('🔄 Синхронизация моделей...');
-        await sequelize.sync({ force: false });
-        console.log('✅ Все модели синхронизированы');
+        try {
+            await sequelize.sync({ force: false });
+            console.log('✅ Все модели синхронизированы');
+        } catch (syncError) {
+            // Игнорируем ошибки создания ENUM типов, если они уже существуют
+            // Это нормально при повторной инициализации БД
+            if (syncError.name === 'SequelizeUniqueConstraintError' && 
+                syncError.original && syncError.original.code === '23505' &&
+                syncError.original.detail && syncError.original.detail.includes('enum_')) {
+                console.log('✅ Все модели синхронизированы (некоторые ENUM типы уже существуют)');
+            } else {
+                // Пробрасываем другие ошибки
+                throw syncError;
+            }
+        }
         
         // Добавляем столбец instrumentType, если его нет
         try {
@@ -93,8 +107,20 @@ export async function initDatabase() {
         
         // Создаем таблицу частичных закрытий позиций
         console.log('📊 Создание таблицы частичных закрытий позиций...');
-        await PositionExit.sync({ force: false });
-        console.log('✅ Таблица частичных закрытий позиций создана/обновлена');
+        try {
+            await PositionExit.sync({ force: false });
+            console.log('✅ Таблица частичных закрытий позиций создана/обновлена');
+        } catch (syncError) {
+            // Игнорируем ошибки создания ENUM типов, если они уже существуют
+            if (syncError.name === 'SequelizeUniqueConstraintError' && 
+                syncError.original && syncError.original.code === '23505' &&
+                (syncError.message && syncError.message.includes('enum_position_exits') ||
+                 syncError.original.detail && syncError.original.detail.includes('enum_position_exits'))) {
+                console.log('✅ Таблица частичных закрытий позиций уже существует');
+            } else {
+                throw syncError;
+            }
+        }
         
         await TriggeredSignal.sync({ force: false });
         console.log('✅ Таблица сработавших сигналов создана/обновлена');
@@ -110,6 +136,23 @@ export async function initDatabase() {
         await PortfolioAllocation.sync({ force: false });
         await PositionStrategy.sync({ force: false });
         console.log('✅ Таблицы торговых стратегий созданы/обновлены');
+        
+        // Создаем таблицу результатов бэктестинга
+        console.log('📊 Создание таблицы результатов бэктестинга...');
+        try {
+            await BacktestResult.sync({ force: false });
+            console.log('✅ Таблица результатов бэктестинга создана/обновлена');
+        } catch (syncError) {
+            // Игнорируем ошибки создания ENUM типов, если они уже существуют
+            if (syncError.name === 'SequelizeUniqueConstraintError' && 
+                syncError.original && syncError.original.code === '23505' &&
+                (syncError.message && syncError.message.includes('enum_backtest_results') ||
+                 syncError.original.detail && syncError.original.detail.includes('enum_backtest_results'))) {
+                console.log('✅ Таблица результатов бэктестинга уже существует');
+            } else {
+                throw syncError;
+            }
+        }
         
         // Инициализируем стратегии по умолчанию
         await TradingStrategy.initializeDefaultStrategies();
@@ -136,6 +179,10 @@ export async function initDatabase() {
                 foreignKey: 'strategyId',
                 as: 'positions'
             });
+            TradingStrategy.hasMany(BacktestResult, {
+                foreignKey: 'strategyId',
+                as: 'backtestResults'
+            });
             
             // Ассоциации для PositionStrategy
             PositionStrategy.belongsTo(TradingRequest, {
@@ -149,6 +196,12 @@ export async function initDatabase() {
             
             // Ассоциации для TradingRequest
             TradingRequest.belongsTo(TradingStrategy, {
+                foreignKey: 'strategyId',
+                as: 'strategy'
+            });
+            
+            // Ассоциации для BacktestResult
+            BacktestResult.belongsTo(TradingStrategy, {
                 foreignKey: 'strategyId',
                 as: 'strategy'
             });

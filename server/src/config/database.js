@@ -1,12 +1,49 @@
 import { Sequelize } from 'sequelize';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+// Загружаем переменные окружения
+// Пробуем загрузить из разных мест
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Сначала пробуем загрузить из server/.env, затем из корня проекта
+const envPaths = [
+    path.join(__dirname, '..', '.env'),
+    path.join(__dirname, '..', '..', '.env'),
+    path.join(process.cwd(), '.env'),
+    path.join(process.cwd(), 'server', '.env')
+];
+
+let envLoaded = false;
+for (const envPath of envPaths) {
+    const result = dotenv.config({ path: envPath });
+    if (!result.error) {
+        envLoaded = true;
+        break;
+    }
+}
+
+// Если не загрузили из файла, пробуем системные переменные окружения
+if (!envLoaded) {
+    dotenv.config();
+}
+
+// Убеждаемся, что пароль - строка и не пустой
+const dbPassword = process.env.DB_PASSWORD;
+const passwordString = dbPassword && typeof dbPassword === 'string' && dbPassword.trim() !== '' 
+    ? dbPassword.trim() 
+    : '';
+
+if (!passwordString && process.env.DB_PASSWORD !== undefined) {
+    console.warn('⚠️ DB_PASSWORD установлен, но является пустой строкой или не строкой');
+}
 
 const sequelize = new Sequelize(
     process.env.DB_NAME,
     process.env.DB_USER,
-    String(process.env.DB_PASSWORD || ''),
+    passwordString,
     {
         host: process.env.DB_HOST,
         port: process.env.DB_PORT,

@@ -19,6 +19,7 @@ import PositionStrategy from '../models/PositionStrategy.js';
 import PositionExit from '../models/PositionExit.js';
 import TriggeredSignal from '../models/TriggeredSignal.js';
 import TrainingState from '../models/TrainingState.js';
+import BacktestResult from '../models/BacktestResult.js';
 import { Op } from 'sequelize';
 
 /**
@@ -125,6 +126,7 @@ async function clearDatabase() {
     
     // 1. Зависимые таблицы стратегий (самые зависимые)
     console.log('🔗 Очистка зависимых таблиц стратегий...');
+    await BacktestResult.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     await PositionStrategy.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     await PortfolioAllocation.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Зависимые таблицы стратегий очищены');

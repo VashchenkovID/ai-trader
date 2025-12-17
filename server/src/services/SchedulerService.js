@@ -39,6 +39,7 @@ class SchedulerService {
         this.virtualPortfolioUpdateTask = null;
         this.dynamicBudgetRebalanceTask = null;
         this.correlationPrecalcTask = null;
+        this.weeklyBacktestTask = null;
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -540,6 +541,23 @@ class SchedulerService {
             {
                 taskName: 'dynamic-budget-rebalance',
                 sendAlerts: false, // performDynamicBudgetRebalance уже отправляет свои уведомления об ошибках
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 60 * 60 * 1000 // 1 час
+            }
+        );
+
+        // Задача 16: Еженедельный бэктестинг стратегий (каждое воскресенье в 5:00)
+        // Выполняется после перебалансировки бюджета для оценки производительности стратегий
+        const weeklyBacktestSchedule = schedulerSettings.weekly_backtest_schedule || '0 5 * * 0'; // Каждое воскресенье в 5:00
+        this.weeklyBacktestTask = SchedulerUtils.createScheduledTask(
+            weeklyBacktestSchedule,
+            async () => {
+                await this.performWeeklyBacktesting();
+            },
+            {
+                taskName: 'weekly-backtest',
+                sendAlerts: true,
                 alertType: 'warning',
                 startTime: this.startTime,
                 minDelay: 60 * 60 * 1000 // 1 час
@@ -1141,6 +1159,12 @@ class SchedulerService {
                 this.tradingHoursCacheTask = null;
                 console.log('✅ Trading hours cache task stopped and destroyed');
             }
+            if (this.weeklyBacktestTask) {
+                this.weeklyBacktestTask.stop();
+                this.weeklyBacktestTask.destroy();
+                this.weeklyBacktestTask = null;
+                console.log('✅ Weekly backtest task stopped and destroyed');
+            }
             
             // Останавливаем все cron задачи из intervals
             this.intervals.forEach(task => {
@@ -1291,6 +1315,10 @@ class SchedulerService {
             this.degradationCheckTask.stop();
             console.log('⏸️ Paused: degradation check task');
         }
+        if (this.weeklyBacktestTask) {
+            this.weeklyBacktestTask.stop();
+            console.log('⏸️ Paused: weekly backtest task');
+        }
         
         console.log('✅ All processes paused');
     }
@@ -1401,6 +1429,12 @@ class SchedulerService {
         if (this.degradationCheckTask) {
             this.degradationCheckTask.start();
             console.log('▶️ Resumed: degradation check task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
+        
+        if (this.weeklyBacktestTask) {
+            this.weeklyBacktestTask.start();
+            console.log('▶️ Resumed: weekly backtest task');
         }
         
         console.log('✅ All processes resumed gradually (total delay: ~20 seconds)');
@@ -3720,6 +3754,197 @@ class SchedulerService {
     }
 
     /**
+     * Еженедельный бэктестинг всех активных стратегий
+     * Выполняет walk-forward анализ для выявления деградации производительности
+     */
+    async performWeeklyBacktesting() {
+        try {
+            console.log('📊 Starting weekly backtesting for all active strategies...');
+            
+            const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+            const BacktestingService = (await import('./BacktestingService.js')).default;
+            const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+            
+            // Получаем все активные стратегии
+            const strategies = await TradingStrategy.findAll({
+                where: { isActive: true }
+            });
+
+            if (strategies.length === 0) {
+                console.log('⚠️ No active strategies found for backtesting');
+                return;
+            }
+
+            console.log(`📊 Found ${strategies.length} active strategies to backtest`);
+
+            const results = [];
+            const degradedStrategies = [];
+            const warnings = [];
+
+            // Выполняем walk-forward анализ для каждой стратегии
+            for (const strategy of strategies) {
+                try {
+                    console.log(`\n📊 Backtesting strategy "${strategy.name}" (ID: ${strategy.id})...`);
+                    
+                    // Выполняем walk-forward анализ за последние 6 месяцев
+                    const endDate = new Date();
+                    const startDate = new Date();
+                    startDate.setMonth(startDate.getMonth() - 6);
+
+                    const walkForwardResult = await BacktestingService.walkForwardAnalysis(
+                        strategy.id,
+                        {
+                            startDate: startDate,
+                            endDate: endDate,
+                            windowSizeMonths: 2, // 2 месяца на окно
+                            stepSizeMonths: 1,  // Шаг 1 месяц
+                            saveToDb: true
+                        }
+                    );
+
+                    results.push({
+                        strategyId: strategy.id,
+                        strategyName: strategy.name,
+                        averageReturn: walkForwardResult.stabilityAnalysis.averageReturn,
+                        consistency: walkForwardResult.stabilityAnalysis.consistency,
+                        isDegrading: walkForwardResult.degradationAnalysis.isDegrading,
+                        severity: walkForwardResult.degradationAnalysis.severity,
+                        alerts: walkForwardResult.alerts
+                    });
+
+                    // Проверяем на деградацию
+                    if (walkForwardResult.degradationAnalysis.isDegrading) {
+                        degradedStrategies.push({
+                            strategyId: strategy.id,
+                            strategyName: strategy.name,
+                            severity: walkForwardResult.degradationAnalysis.severity,
+                            reasons: walkForwardResult.degradationAnalysis.reasons,
+                            metrics: {
+                                averageReturn: walkForwardResult.stabilityAnalysis.averageReturn,
+                                averageWinRate: walkForwardResult.stabilityAnalysis.averageWinRate,
+                                averageSharpeRatio: walkForwardResult.stabilityAnalysis.averageSharpeRatio
+                            }
+                        });
+
+                        // Если критическая деградация - отключаем стратегию
+                        if (walkForwardResult.degradationAnalysis.severity === 'critical') {
+                            console.log(`🔴 CRITICAL: Disabling strategy "${strategy.name}" due to degradation`);
+                            await strategy.update({ isActive: false });
+                            
+                            // Уведомление в Telegram
+                            const message = `🔴 <b>КРИТИЧЕСКАЯ ДЕГРАДАЦИЯ СТРАТЕГИИ</b>\n\n` +
+                                `Стратегия "<b>${strategy.name}</b>" была автоматически отключена из-за критической деградации производительности.\n\n` +
+                                `Причины:\n${walkForwardResult.degradationAnalysis.reasons.map(r => `• ${r}`).join('\n')}\n\n` +
+                                `Метрики:\n` +
+                                `• Средняя доходность: ${walkForwardResult.stabilityAnalysis.averageReturn.toFixed(2)}%\n` +
+                                `• Средний Win Rate: ${walkForwardResult.stabilityAnalysis.averageWinRate.toFixed(2)}%\n` +
+                                `• Средний Sharpe Ratio: ${walkForwardResult.stabilityAnalysis.averageSharpeRatio.toFixed(2)}\n\n` +
+                                `Стратегия будет отключена до ручного пересмотра.`;
+
+                            await OptimizedTelegramService.sendAlert(
+                                'STRATEGY_DEGRADATION',
+                                message,
+                                'error'
+                            );
+                        } else {
+                            // Предупреждение о деградации
+                            warnings.push({
+                                strategyId: strategy.id,
+                                strategyName: strategy.name,
+                                reasons: walkForwardResult.degradationAnalysis.reasons
+                            });
+                        }
+                    }
+
+                    console.log(`✅ Strategy "${strategy.name}" backtested: Return=${walkForwardResult.stabilityAnalysis.averageReturn.toFixed(2)}%, Degrading=${walkForwardResult.degradationAnalysis.isDegrading ? 'YES' : 'NO'}`);
+                } catch (error) {
+                    console.error(`❌ Error backtesting strategy ${strategy.id}:`, error);
+                    await OptimizedTelegramService.sendAlert(
+                        'BACKTEST_ERROR',
+                        `Ошибка при бэктестинге стратегии "${strategy.name}": ${error.message}`,
+                        'warning'
+                    );
+                }
+            }
+
+            // Формируем сводный отчет
+            const summary = {
+                totalStrategies: strategies.length,
+                testedStrategies: results.length,
+                degradedStrategies: degradedStrategies.length,
+                criticalDegradations: degradedStrategies.filter(s => s.severity === 'critical').length,
+                warnings: warnings.length
+            };
+
+            console.log(`\n📊 Weekly backtesting completed:`);
+            console.log(`   Total strategies: ${summary.totalStrategies}`);
+            console.log(`   Tested: ${summary.testedStrategies}`);
+            console.log(`   Degraded: ${summary.degradedStrategies} (${summary.criticalDegradations} critical)`);
+            console.log(`   Warnings: ${summary.warnings}`);
+
+            // Отправляем сводный отчет в Telegram
+            if (summary.degradedStrategies > 0 || summary.warnings > 0) {
+                let reportMessage = `📊 <b>ЕЖЕНЕДЕЛЬНЫЙ БЭКТЕСТИНГ СТРАТЕГИЙ</b>\n\n`;
+                reportMessage += `Протестировано стратегий: <b>${summary.testedStrategies}</b>\n`;
+                reportMessage += `Деградирующих: <b>${summary.degradedStrategies}</b> (${summary.criticalDegradations} критических)\n`;
+                reportMessage += `Предупреждений: <b>${summary.warnings}</b>\n\n`;
+
+                if (summary.criticalDegradations > 0) {
+                    reportMessage += `🔴 <b>Критически деградирующие стратегии:</b>\n`;
+                    for (const degraded of degradedStrategies.filter(s => s.severity === 'critical')) {
+                        reportMessage += `• ${degraded.strategyName} (отключена)\n`;
+                    }
+                    reportMessage += `\n`;
+                }
+
+                if (warnings.length > 0) {
+                    reportMessage += `🟠 <b>Стратегии с предупреждениями:</b>\n`;
+                    for (const warning of warnings) {
+                        reportMessage += `• ${warning.strategyName}\n`;
+                    }
+                }
+
+                await OptimizedTelegramService.sendAlert(
+                    'WEEKLY_BACKTEST_REPORT',
+                    reportMessage,
+                    summary.criticalDegradations > 0 ? 'error' : 'warning'
+                );
+            } else {
+                // Все стратегии в порядке
+                const successMessage = `✅ <b>ЕЖЕНЕДЕЛЬНЫЙ БЭКТЕСТИНГ СТРАТЕГИЙ</b>\n\n` +
+                    `Все <b>${summary.testedStrategies}</b> стратегий протестированы.\n` +
+                    `Деградация не обнаружена. Все стратегии работают стабильно.`;
+
+                await OptimizedTelegramService.sendAlert(
+                    'WEEKLY_BACKTEST_REPORT',
+                    successMessage,
+                    'success'
+                );
+            }
+
+            // Обновляем распределение бюджета на основе результатов бэктестинга
+            if (summary.degradedStrategies > 0) {
+                try {
+                    console.log('🔄 Updating budget allocation based on backtest results...');
+                    await StrategyAllocationService.rebalanceBudgetByPerformance(30, 0);
+                    console.log('✅ Budget allocation updated');
+                } catch (error) {
+                    console.error('❌ Error updating budget allocation:', error);
+                }
+            }
+
+        } catch (error) {
+            console.error('❌ Error in performWeeklyBacktesting:', error);
+            await OptimizedTelegramService.sendAlert(
+                'WEEKLY_BACKTEST_ERROR',
+                `Ошибка при выполнении еженедельного бэктестинга: ${error.message}`,
+                'error'
+            );
+            throw error;
+        }
+    }
+
+    /**
      * Обновление виртуального портфеля - пересчет totalValue на основе текущих цен
      */
     async performVirtualPortfolioUpdate() {
@@ -3801,7 +4026,8 @@ class SchedulerService {
                 telegramCacheTask: this.telegramCacheTask ? 'active' : 'inactive',
                 strategyRebalanceTask: this.strategyRebalanceTask ? 'active' : 'inactive',
                 dynamicBudgetRebalanceTask: this.dynamicBudgetRebalanceTask ? 'active' : 'inactive',
-                correlationPrecalcTask: this.correlationPrecalcTask ? 'active' : 'inactive'
+                correlationPrecalcTask: this.correlationPrecalcTask ? 'active' : 'inactive',
+                weeklyBacktestTask: this.weeklyBacktestTask ? 'active' : 'inactive'
             };
 
             return {
@@ -3823,4 +4049,8 @@ class SchedulerService {
     }
 }
 
+// Экспортируем класс для тестирования
+export { SchedulerService };
+
+// Экспортируем экземпляр по умолчанию для использования в приложении
 export default new SchedulerService();
