@@ -12,8 +12,6 @@
     "migrate:instrument-type": "node migrations/create-portfolio-analysis-table.js",
     "migrate:instrument-stats": "node migrations/create-instrument-stats-table.js",
     "migrate:correlation-cache": "node migrations/create-correlation-cache-table.js",
-    "test:correlation": "node src/test-correlation-system.js",
-    "test:correlation:quick": "node src/test-correlation-quick.js",
     "start:optimized": "node src/app-optimized.js",
     "start:backup": "node src/app-backup.js",
     "cleanup": "node cleanup-unused-files.js"
