@@ -2,6 +2,7 @@ import TradingStrategy from '../models/TradingStrategy.js';
 import PortfolioAllocation from '../models/PortfolioAllocation.js';
 import PositionStrategy from '../models/PositionStrategy.js';
 import SettingsService from './SettingsService.js';
+import ProfitabilityTracker from './ProfitabilityTracker.js';
 import { Op } from 'sequelize';
 
 /**
@@ -565,6 +566,198 @@ class StrategyAllocationService {
         } catch (error) {
             console.error(`❌ Error getting stats for strategy ${strategyId}:`, error);
             return null;
+        }
+    }
+
+    /**
+     * Динамическое перераспределение бюджета на основе результативности стратегий
+     * Использует Sharpe Ratio, Win Rate и Max Drawdown за последние 30 дней
+     * Формула: новый_бюджет = базовый_бюджет × (Sharpe_стратегии / средний_Sharpe)
+     * 
+     * @param {number} days - Количество дней для анализа (по умолчанию 30)
+     * @param {number} minSharpeRatio - Минимальный Sharpe Ratio для участия в перераспределении (по умолчанию 0)
+     * @returns {Object} Результат перераспределения с деталями изменений
+     */
+    async rebalanceBudgetByPerformance(days = 30, minSharpeRatio = 0) {
+        try {
+            console.log(`🔄 Starting dynamic budget rebalancing based on performance (last ${days} days)...`);
+
+            // Получаем все активные стратегии
+            const strategies = await TradingStrategy.findAll({
+                where: { isActive: true },
+                order: [['priority', 'ASC']]
+            });
+
+            if (strategies.length === 0) {
+                console.warn('⚠️ No active strategies found for rebalancing');
+                return {
+                    success: false,
+                    reason: 'No active strategies',
+                    changes: []
+                };
+            }
+
+            // Получаем общий бюджет портфеля
+            const portfolioSettings = await SettingsService.getPortfolioSettings();
+            const totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
+
+            // Рассчитываем метрики для каждой стратегии
+            const metricsPromises = strategies.map(strategy => 
+                ProfitabilityTracker.calculateStrategyMetrics(strategy.id, days)
+            );
+            const metrics = await Promise.all(metricsPromises);
+
+            // Фильтруем стратегии с достаточными данными и минимальным Sharpe Ratio
+            const validMetrics = metrics
+                .map((metric, index) => ({
+                    ...metric,
+                    strategy: strategies[index],
+                    originalBudgetAllocation: strategies[index].budgetAllocation
+                }))
+                .filter(m => !m.insufficientData && m.sharpeRatio >= minSharpeRatio);
+
+            if (validMetrics.length === 0) {
+                console.warn('⚠️ No strategies with sufficient data for rebalancing');
+                return {
+                    success: false,
+                    reason: 'Insufficient data',
+                    changes: []
+                };
+            }
+
+            // Рассчитываем средний Sharpe Ratio
+            const avgSharpeRatio = validMetrics.reduce((sum, m) => sum + m.sharpeRatio, 0) / validMetrics.length;
+
+            if (avgSharpeRatio === 0) {
+                console.warn('⚠️ Average Sharpe Ratio is zero, cannot rebalance');
+                return {
+                    success: false,
+                    reason: 'Zero average Sharpe Ratio',
+                    changes: []
+                };
+            }
+
+            // Рассчитываем новые проценты распределения на основе Sharpe Ratio
+            // Используем взвешенное распределение: новый_процент = базовый_процент × (Sharpe_стратегии / средний_Sharpe)
+            const rebalancedMetrics = validMetrics.map(metric => {
+                const performanceMultiplier = metric.sharpeRatio / avgSharpeRatio;
+                // Ограничиваем изменение: не более чем в 2 раза в любую сторону
+                const cappedMultiplier = Math.max(0.5, Math.min(2.0, performanceMultiplier));
+                const newBudgetAllocation = metric.originalBudgetAllocation * cappedMultiplier;
+                
+                return {
+                    ...metric,
+                    performanceMultiplier,
+                    cappedMultiplier,
+                    newBudgetAllocation
+                };
+            });
+
+            // Нормализуем проценты, чтобы сумма была равна 100%
+            const totalNewAllocation = rebalancedMetrics.reduce((sum, m) => sum + m.newBudgetAllocation, 0);
+            
+            // Защита от деления на ноль
+            if (totalNewAllocation === 0 || !isFinite(totalNewAllocation)) {
+                console.warn('⚠️ Total new allocation is zero or invalid, cannot normalize');
+                return {
+                    success: false,
+                    reason: 'Total allocation is zero or invalid',
+                    changes: []
+                };
+            }
+            
+            const normalizationFactor = 100 / totalNewAllocation;
+
+            const normalizedMetrics = rebalancedMetrics.map(metric => {
+                const normalizedAllocation = metric.newBudgetAllocation * normalizationFactor;
+                // Проверяем на валидность результата
+                if (!isFinite(normalizedAllocation) || normalizedAllocation < 0) {
+                    console.warn(`⚠️ Invalid normalized allocation for strategy ${metric.strategy.name}: ${normalizedAllocation}`);
+                    return {
+                        ...metric,
+                        normalizedBudgetAllocation: metric.originalBudgetAllocation // Возвращаем исходное значение
+                    };
+                }
+                return {
+                    ...metric,
+                    normalizedBudgetAllocation: normalizedAllocation
+                };
+            });
+
+            // Применяем изменения только если разница значительна (> 2% от базового бюджета)
+            const changes = [];
+            const threshold = 2.0; // Минимальное изменение в процентах для применения
+
+            for (const metric of normalizedMetrics) {
+                const change = Math.abs(metric.normalizedBudgetAllocation - metric.originalBudgetAllocation);
+                
+                if (change >= threshold) {
+                    const newAllocatedAmount = (totalBudget * metric.normalizedBudgetAllocation) / 100;
+                    const allocation = await PortfolioAllocation.getOrCreateAllocation(metric.strategyId);
+                    const currentAllocated = parseFloat(allocation.allocatedAmount);
+                    
+                    // Не уменьшаем выделенный бюджет ниже использованного
+                    const finalAllocatedAmount = Math.max(newAllocatedAmount, parseFloat(allocation.usedAmount || 0));
+                    
+                    if (Math.abs(finalAllocatedAmount - currentAllocated) > totalBudget * 0.01) {
+                        await PortfolioAllocation.updateAllocation(metric.strategyId, finalAllocatedAmount);
+                        
+                        changes.push({
+                            strategyId: metric.strategyId,
+                            strategyName: metric.strategy.name,
+                            oldAllocation: metric.originalBudgetAllocation.toFixed(2) + '%',
+                            newAllocation: metric.normalizedBudgetAllocation.toFixed(2) + '%',
+                            oldAmount: currentAllocated.toFixed(2),
+                            newAmount: finalAllocatedAmount.toFixed(2),
+                            sharpeRatio: metric.sharpeRatio.toFixed(3),
+                            winRate: (metric.winRate * 100).toFixed(2) + '%',
+                            maxDrawdown: (metric.maxDrawdown * 100).toFixed(2) + '%',
+                            performanceMultiplier: metric.cappedMultiplier.toFixed(3)
+                        });
+                    }
+                }
+            }
+
+            if (changes.length === 0) {
+                console.log('✅ No significant changes needed for budget rebalancing');
+                return {
+                    success: true,
+                    reason: 'No significant changes',
+                    changes: [],
+                    metrics: normalizedMetrics.map(m => ({
+                        strategyName: m.strategy.name,
+                        sharpeRatio: m.sharpeRatio,
+                        winRate: m.winRate,
+                        maxDrawdown: m.maxDrawdown,
+                        oldAllocation: m.originalBudgetAllocation,
+                        newAllocation: m.normalizedBudgetAllocation
+                    }))
+                };
+            }
+
+            console.log(`✅ Budget rebalancing completed: ${changes.length} strategies updated`);
+            changes.forEach(change => {
+                console.log(`   📊 ${change.strategyName}: ${change.oldAllocation} → ${change.newAllocation} (Sharpe: ${change.sharpeRatio}, Win Rate: ${change.winRate})`);
+            });
+
+            return {
+                success: true,
+                changes,
+                metrics: normalizedMetrics.map(m => ({
+                    strategyName: m.strategy.name,
+                    sharpeRatio: m.sharpeRatio,
+                    winRate: m.winRate,
+                    maxDrawdown: m.maxDrawdown,
+                    oldAllocation: m.originalBudgetAllocation,
+                    newAllocation: m.normalizedBudgetAllocation
+                })),
+                averageSharpeRatio: avgSharpeRatio,
+                totalBudget
+            };
+
+        } catch (error) {
+            console.error('❌ Error rebalancing budget by performance:', error);
+            throw error;
         }
     }
 }

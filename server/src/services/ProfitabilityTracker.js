@@ -662,6 +662,178 @@ class ProfitabilityTracker {
             };
         }
     }
+
+    /**
+     * Расчет метрик производительности для стратегии за последние N дней
+     * @param {number} strategyId - ID стратегии
+     * @param {number} days - Количество дней для анализа (по умолчанию 30)
+     * @returns {Object} Объект с метриками: sharpeRatio, winRate, maxDrawdown, totalReturn, avgReturn, volatility
+     */
+    async calculateStrategyMetrics(strategyId, days = 30) {
+        try {
+            const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
+            const TradingRequest = (await import('../models/TradingRequest.js')).default;
+            const { Op } = await import('sequelize');
+
+            // Вычисляем дату начала периода
+            const endDate = new Date();
+            const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
+
+            // Получаем все закрытые позиции стратегии за период
+            const closedPositions = await PositionStrategy.findAll({
+                where: {
+                    strategyId,
+                    exitDate: {
+                        [Op.not]: null,
+                        [Op.gte]: startDate,
+                        [Op.lte]: endDate
+                    }
+                },
+                order: [['exitDate', 'ASC']]
+            });
+
+            if (closedPositions.length === 0) {
+                // Если нет закрытых позиций, возвращаем нулевые метрики
+                return {
+                    strategyId,
+                    days,
+                    sharpeRatio: 0,
+                    winRate: 0,
+                    maxDrawdown: 0,
+                    totalReturn: 0,
+                    avgReturn: 0,
+                    volatility: 0,
+                    totalPositions: 0,
+                    profitablePositions: 0,
+                    losingPositions: 0,
+                    insufficientData: true
+                };
+            }
+
+            // Извлекаем результаты позиций (в процентах)
+            const returns = closedPositions
+                .map(pos => parseFloat(pos.resultPercent || 0))
+                .filter(ret => !isNaN(ret));
+
+            if (returns.length === 0) {
+                return {
+                    strategyId,
+                    days,
+                    sharpeRatio: 0,
+                    winRate: 0,
+                    maxDrawdown: 0,
+                    totalReturn: 0,
+                    avgReturn: 0,
+                    volatility: 0,
+                    totalPositions: 0,
+                    profitablePositions: 0,
+                    losingPositions: 0,
+                    insufficientData: true
+                };
+            }
+
+            // Рассчитываем базовые метрики
+            const totalPositions = returns.length;
+            const profitablePositions = returns.filter(r => r > 0).length;
+            const losingPositions = returns.filter(r => r < 0).length;
+            const winRate = totalPositions > 0 ? profitablePositions / totalPositions : 0;
+
+            // Средняя доходность
+            const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+
+            // Общая доходность (сумма всех возвратов)
+            const totalReturn = returns.reduce((sum, r) => sum + r, 0);
+
+            // Волатильность (стандартное отклонение)
+            const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+            const volatility = Math.sqrt(variance);
+
+            // Sharpe Ratio (упрощенный: средняя доходность / волатильность)
+            // Безрисковая ставка принимается равной 0 для упрощения
+            const sharpeRatio = volatility > 0 ? avgReturn / volatility : 0;
+
+            // Максимальная просадка (Max Drawdown)
+            // Рассчитываем кумулятивную доходность и находим максимальную просадку от пика
+            let cumulativeReturn = 0;
+            let peak = 0;
+            let maxDrawdown = 0;
+
+            for (const ret of returns) {
+                cumulativeReturn += ret;
+                if (cumulativeReturn > peak) {
+                    peak = cumulativeReturn;
+                }
+                const drawdown = peak - cumulativeReturn;
+                if (drawdown > maxDrawdown) {
+                    maxDrawdown = drawdown;
+                }
+            }
+
+            return {
+                strategyId,
+                days,
+                sharpeRatio: sharpeRatio || 0,
+                winRate: winRate || 0,
+                maxDrawdown: maxDrawdown || 0,
+                totalReturn: totalReturn || 0,
+                avgReturn: avgReturn || 0,
+                volatility: volatility || 0,
+                totalPositions,
+                profitablePositions,
+                losingPositions,
+                insufficientData: false
+            };
+
+        } catch (error) {
+            console.error(`❌ Ошибка расчета метрик для стратегии ${strategyId}:`, error);
+            return {
+                strategyId,
+                days,
+                sharpeRatio: 0,
+                winRate: 0,
+                maxDrawdown: 0,
+                totalReturn: 0,
+                avgReturn: 0,
+                volatility: 0,
+                totalPositions: 0,
+                profitablePositions: 0,
+                losingPositions: 0,
+                insufficientData: true,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Расчет метрик для всех активных стратегий
+     * @param {number} days - Количество дней для анализа (по умолчанию 30)
+     * @returns {Array} Массив объектов с метриками для каждой стратегии
+     */
+    async calculateAllStrategiesMetrics(days = 30) {
+        try {
+            const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+
+            const strategies = await TradingStrategy.findAll({
+                where: { isActive: true }
+            });
+
+            const metricsPromises = strategies.map(strategy => 
+                this.calculateStrategyMetrics(strategy.id, days)
+            );
+
+            const metrics = await Promise.all(metricsPromises);
+
+            return metrics.map((metric, index) => ({
+                ...metric,
+                strategyName: strategies[index].name,
+                strategyType: strategies[index].type
+            }));
+
+        } catch (error) {
+            console.error('❌ Ошибка расчета метрик для всех стратегий:', error);
+            return [];
+        }
+    }
 }
 
 export default new ProfitabilityTracker();

@@ -33,6 +33,7 @@ class SchedulerService {
         this.trailingStopsCheckTask = null;
         this.realPortfolioSyncTask = null;
         this.virtualPortfolioUpdateTask = null;
+        this.dynamicBudgetRebalanceTask = null;
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -566,6 +567,54 @@ class SchedulerService {
             } catch (error) {
                 console.error('Error in scheduled strategy rebalancing:', error);
                 await OptimizedTelegramService.sendAlert('STRATEGY_REBALANCE_ERROR', error.message, 'warning');
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
+        // Задача 15: Динамическое перераспределение бюджета по результативности (каждое воскресенье в 4:00)
+        // Выполняется после обычной перебалансировки для оптимизации распределения на основе метрик
+        const dynamicRebalanceSchedule = schedulerSettings.dynamic_budget_rebalance_schedule || '0 4 * * 0'; // Каждое воскресенье в 4:00
+        this.dynamicBudgetRebalanceTask = cron.schedule(dynamicRebalanceSchedule, async () => {
+            // Пропускаем первый запуск при старте (минимум 1 час с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 60 * 60 * 1000) {
+                console.log('⏭️ Skipping first dynamic budget rebalance run (too soon after startup)');
+                return;
+            }
+            
+            try {
+                console.log('💰 Scheduled dynamic budget rebalancing based on performance started...');
+                const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+                
+                // Выполняем перераспределение на основе метрик за последние 30 дней
+                const result = await StrategyAllocationService.rebalanceBudgetByPerformance(30, 0);
+                
+                if (result.success && result.changes && result.changes.length > 0) {
+                    // Формируем сообщение с деталями изменений
+                    let message = '💰 ДИНАМИЧЕСКОЕ ПЕРЕРАСПРЕДЕЛЕНИЕ БЮДЖЕТА\n\n';
+                    message += `📊 Перераспределено стратегий: ${result.changes.length}\n`;
+                    message += `📈 Средний Sharpe Ratio: ${result.averageSharpeRatio.toFixed(3)}\n\n`;
+                    message += '📋 Изменения:\n';
+                    
+                    result.changes.forEach((change, index) => {
+                        message += `${index + 1}. ${change.strategyName}\n`;
+                        message += `   Бюджет: ${change.oldAllocation} → ${change.newAllocation}\n`;
+                        message += `   Сумма: ${change.oldAmount} → ${change.newAmount} RUB\n`;
+                        message += `   Sharpe: ${change.sharpeRatio}, Win Rate: ${change.winRate}\n`;
+                        message += `   Max Drawdown: ${change.maxDrawdown}\n\n`;
+                    });
+                    
+                    await OptimizedTelegramService.sendAlert('DYNAMIC_BUDGET_REBALANCE_COMPLETE', message, 'info');
+                } else if (result.success && result.reason) {
+                    console.log(`✅ Dynamic budget rebalancing completed: ${result.reason}`);
+                } else {
+                    console.warn(`⚠️ Dynamic budget rebalancing completed with issues: ${result.reason || 'Unknown'}`);
+                }
+            } catch (error) {
+                console.error('Error in scheduled dynamic budget rebalancing:', error);
+                await OptimizedTelegramService.sendAlert('DYNAMIC_BUDGET_REBALANCE_ERROR', error.message, 'warning');
             }
         }, {
             scheduled: true,
@@ -4568,7 +4617,9 @@ class SchedulerService {
                 trailingStopsCheckTask: this.trailingStopsCheckTask ? 'active' : 'inactive',
                 newsCleanupTask: this.newsCleanupTask ? 'active' : 'inactive',
                 newsDailyUpdateTask: this.newsDailyUpdateTask ? 'active' : 'inactive',
-                telegramCacheTask: this.telegramCacheTask ? 'active' : 'inactive'
+                telegramCacheTask: this.telegramCacheTask ? 'active' : 'inactive',
+                strategyRebalanceTask: this.strategyRebalanceTask ? 'active' : 'inactive',
+                dynamicBudgetRebalanceTask: this.dynamicBudgetRebalanceTask ? 'active' : 'inactive'
             };
 
             return {
