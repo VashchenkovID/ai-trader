@@ -150,8 +150,25 @@ class RiskManagementService {
 
             // 9. Проверка корреляции с существующими позициями
             const correlationRisk = await this.checkCorrelationRisk(signal, portfolio);
-            if (correlationRisk.high) {
-                validation.warnings.push(`Высокая корреляция с существующими позициями: ${correlationRisk.correlatedPositions.join(', ')}`);
+            
+            if (correlationRisk.recommendation === 'BLOCK') {
+                validation.isValid = false;
+                validation.errors.push(
+                    `Высокая корреляция портфеля (${(correlationRisk.portfolioCorrelation * 100).toFixed(1)}%). ` +
+                    `Максимально допустимая корреляция: ${(correlationRisk.portfolioThreshold * 100).toFixed(0)}%. ` +
+                    `Высококоррелированные позиции: ${correlationRisk.correlatedPositions.slice(0, 3).join(', ')}${correlationRisk.correlatedPositions.length > 3 ? '...' : ''}`
+                );
+            } else if (correlationRisk.recommendation === 'WARNING') {
+                const highCorrPositions = correlationRisk.correlationDetails
+                    .filter(d => d.risk === 'HIGH')
+                    .map(d => d.figi)
+                    .slice(0, 3);
+                
+                validation.warnings.push(
+                    `Высокая корреляция с ${correlationRisk.correlatedPositions.length} позициями ` +
+                    `(портфель: ${(correlationRisk.portfolioCorrelation * 100).toFixed(1)}%). ` +
+                    (highCorrPositions.length > 0 ? `Наибольшая корреляция: ${highCorrPositions.join(', ')}` : '')
+                );
             }
 
             return validation;
@@ -457,16 +474,106 @@ class RiskManagementService {
 
     /**
      * Проверка корреляционного риска
+     * Использует CorrelationService для расчета реальных корреляций на основе исторических данных
      */
     async checkCorrelationRisk(signal, portfolio) {
-        // Упрощенная проверка корреляции
-        // В реальной системе здесь был бы анализ корреляций между инструментами
+        try {
+            const CorrelationService = (await import('./CorrelationService.js')).default;
+            
+            // Инициализируем сервис, если еще не инициализирован
+            if (!CorrelationService.isInitialized) {
+                await CorrelationService.initialize();
+            }
+            
+            const correlationThreshold = await Settings.getSetting('correlation_threshold', 0.7);
+            const portfolioCorrelationThreshold = await Settings.getSetting('portfolio_correlation_threshold', 0.7);
+            
+            const correlatedPositions = [];
+            const correlationDetails = [];
+            
+            // Получаем все открытые позиции
+            const openPositions = Object.keys(portfolio.positions || {}).filter(figi => portfolio.positions[figi] > 0);
+            
+            // Рассчитываем корреляцию с каждой существующей позицией
+            for (const positionFigi of openPositions) {
+                if (positionFigi === signal.figi || positionFigi === signal.symbol) {
+                    continue;
+                }
+                
+                try {
+                    const correlation = await CorrelationService.calculateCorrelation(
+                        signal.figi || signal.symbol,
+                        positionFigi,
+                        30 // период 30 дней
+                    );
+                    
+                    if (Math.abs(correlation) >= correlationThreshold) {
+                        correlatedPositions.push(positionFigi);
+                        correlationDetails.push({
+                            figi: positionFigi,
+                            correlation: correlation,
+                            absCorrelation: Math.abs(correlation),
+                            risk: Math.abs(correlation) >= 0.8 ? 'HIGH' : 'MEDIUM'
+                        });
+                    }
+                } catch (error) {
+                    console.warn(`⚠️ Ошибка расчета корреляции для ${signal.figi}-${positionFigi}:`, error.message);
+                    // Fallback на проверку секторов при ошибке
+                    if (this.isSameSector(signal.symbol || signal.figi, positionFigi)) {
+                        correlatedPositions.push(positionFigi);
+                        correlationDetails.push({
+                            figi: positionFigi,
+                            correlation: 0.75, // Предполагаемая корреляция по сектору
+                            absCorrelation: 0.75,
+                            risk: 'MEDIUM',
+                            fallback: true
+                        });
+                    }
+                }
+            }
+            
+            // Рассчитываем суммарную корреляцию портфеля
+            let portfolioCorrelation = 0;
+            try {
+                portfolioCorrelation = await CorrelationService.calculatePortfolioCorrelation(portfolio, 30);
+            } catch (error) {
+                console.warn('⚠️ Ошибка расчета корреляции портфеля:', error.message);
+            }
+            
+            // Определяем рекомендацию
+            let recommendation = 'OK';
+            if (portfolioCorrelation >= portfolioCorrelationThreshold) {
+                recommendation = 'BLOCK';
+            } else if (correlatedPositions.length > 2 || portfolioCorrelation >= portfolioCorrelationThreshold * 0.9) {
+                recommendation = 'WARNING';
+            }
+            
+            return {
+                high: correlatedPositions.length > 2 || portfolioCorrelation >= portfolioCorrelationThreshold,
+                correlatedPositions,
+                correlationDetails,
+                portfolioCorrelation,
+                recommendation,
+                threshold: correlationThreshold,
+                portfolioThreshold: portfolioCorrelationThreshold
+            };
+        } catch (error) {
+            console.error('❌ Ошибка проверки корреляционного риска:', error);
+            // Fallback на упрощенную проверку при ошибке
+            return this.checkCorrelationRiskFallback(signal, portfolio);
+        }
+    }
+    
+    /**
+     * Упрощенная проверка корреляции (fallback)
+     */
+    checkCorrelationRiskFallback(signal, portfolio) {
         const correlatedPositions = [];
         
-        for (const symbol of Object.keys(portfolio.positions)) {
-            if (symbol !== signal.symbol) {
+        for (const symbol of Object.keys(portfolio.positions || {})) {
+            if (symbol !== signal.symbol && symbol !== signal.figi) {
                 // Простая проверка на схожие секторы
-                if (this.isSameSector(signal.symbol, symbol)) {
+                if (this.isSameSector(signal.symbol || signal.figi, symbol)) {
                     correlatedPositions.push(symbol);
                 }
             }
@@ -474,7 +581,13 @@ class RiskManagementService {
         
         return {
             high: correlatedPositions.length > 2,
-            correlatedPositions
+            correlatedPositions,
+            correlationDetails: [],
+            portfolioCorrelation: 0,
+            recommendation: correlatedPositions.length > 2 ? 'WARNING' : 'OK',
+            threshold: 0.7,
+            portfolioThreshold: 0.7,
+            fallback: true
         };
     }
 

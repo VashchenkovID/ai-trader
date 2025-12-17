@@ -183,7 +183,7 @@ class CapitalAllocationStrategy {
             analysis.sectors = this.analyzeSectors(analysis.positions);
 
             // Анализируем риски
-            analysis.risks = this.analyzeRisks(analysis.positions);
+            analysis.risks = await this.analyzeRisks(analysis.positions);
 
             // Генерируем рекомендации
             analysis.recommendations = this.generateRecommendations(analysis);
@@ -257,7 +257,7 @@ class CapitalAllocationStrategy {
     /**
      * Анализ рисков
      */
-    analyzeRisks(positions) {
+    async analyzeRisks(positions) {
         const risks = {
             concentration: 0,
             correlation: 0,
@@ -270,8 +270,8 @@ class CapitalAllocationStrategy {
         const positionSizes = positions.map(p => p.positionSize);
         risks.concentration = this.calculateConcentrationRisk(positionSizes);
 
-        // Анализ корреляции
-        risks.correlation = this.calculateCorrelationRisk(positions);
+        // Анализ корреляции (асинхронный метод)
+        risks.correlation = await this.calculateCorrelationRisk(positions);
 
         // Анализ волатильности
         risks.volatility = this.calculateVolatilityRisk(positions);
@@ -670,19 +670,65 @@ class CapitalAllocationStrategy {
         return maxSize / avgSize;
     }
 
-    calculateCorrelationRisk(positions) {
+    /**
+     * Расчет корреляционного риска портфеля
+     * Использует CorrelationService для расчета реальных корреляций
+     */
+    async calculateCorrelationRisk(positions) {
         if (positions.length < 2) return 0;
         
         try {
-            // Рассчитываем корреляцию между позициями
-            const returns = positions.map(pos => {
-                // Используем PnL как proxy для доходности
-                return pos.pnlPercent || 0;
-            });
+            const CorrelationService = (await import('./CorrelationService.js')).default;
+            
+            // Инициализируем сервис, если еще не инициализирован
+            if (!CorrelationService.isInitialized) {
+                await CorrelationService.initialize();
+            }
+            
+            // Получаем FIGI всех позиций
+            const figis = positions
+                .map(p => p.figi || p.symbol)
+                .filter(Boolean);
+            
+            if (figis.length < 2) return 0;
+            
+            // Рассчитываем матрицу корреляций
+            const correlationMatrix = await CorrelationService.getCorrelationMatrix(figis, 30);
+            
+            // Рассчитываем среднюю корреляцию портфеля
+            let totalCorrelation = 0;
+            let pairCount = 0;
+            
+            for (let i = 0; i < figis.length; i++) {
+                for (let j = i + 1; j < figis.length; j++) {
+                    const correlation = correlationMatrix[figis[i]]?.[figis[j]] || 0;
+                    totalCorrelation += Math.abs(correlation);
+                    pairCount++;
+                }
+            }
+            
+            return pairCount > 0 ? totalCorrelation / pairCount : 0;
+            
+        } catch (error) {
+            console.error('❌ Ошибка расчета корреляционного риска:', error);
+            // Fallback на упрощенный расчет при ошибке
+            return this.calculateCorrelationRiskFallback(positions);
+        }
+    }
+    
+    /**
+     * Упрощенный расчет корреляционного риска (fallback)
+     */
+    calculateCorrelationRiskFallback(positions) {
+        if (positions.length < 2) return 0;
+        
+        try {
+            // Рассчитываем корреляцию между позициями на основе PnL
+            const returns = positions.map(pos => pos.pnlPercent || 0);
             
             if (returns.length < 2) return 0;
             
-            // Простой расчет корреляции
+            // Простой расчет дисперсии как proxy для корреляции
             const avgReturn = returns.reduce((sum, ret) => sum + ret, 0) / returns.length;
             const variance = returns.reduce((sum, ret) => sum + Math.pow(ret - avgReturn, 2), 0) / returns.length;
             
@@ -690,7 +736,7 @@ class CapitalAllocationStrategy {
             return Math.min(1, Math.max(0, variance / 100));
             
         } catch (error) {
-            console.error('❌ Ошибка расчета корреляции:', error);
+            console.error('❌ Ошибка упрощенного расчета корреляции:', error);
             return 0;
         }
     }
@@ -897,6 +943,71 @@ class CapitalAllocationStrategy {
         } catch (error) {
             console.error(`❌ Ошибка расчета ожидаемой доходности для ${figi}:`, error);
             return 0.05; // Значение по умолчанию
+        }
+    }
+
+    /**
+     * Приоритизация инструментов по низкой корреляции с портфелем
+     * @param {Array} instruments - Массив инструментов для приоритизации
+     * @param {Object} portfolio - Объект портфеля
+     * @param {number} maxCorrelation - Максимальная допустимая корреляция (по умолчанию 0.7)
+     * @returns {Promise<Array>} Отсортированный массив инструментов с оценками корреляции
+     */
+    async prioritizeInstrumentsByCorrelation(instruments, portfolio, maxCorrelation = 0.7) {
+        try {
+            const CorrelationService = (await import('./CorrelationService.js')).default;
+            
+            // Инициализируем сервис, если еще не инициализирован
+            if (!CorrelationService.isInitialized) {
+                await CorrelationService.initialize();
+            }
+            
+            const prioritized = [];
+            
+            for (const instrument of instruments) {
+                const figi = instrument.figi || instrument.symbol;
+                if (!figi) continue;
+                
+                try {
+                    // Получаем оценку корреляции для инструмента
+                    const correlationScore = await CorrelationService.getCorrelationScore(
+                        figi,
+                        portfolio,
+                        30
+                    );
+                    
+                    prioritized.push({
+                        ...instrument,
+                        correlationScore: correlationScore.correlationScore,
+                        avgCorrelation: correlationScore.avgCorrelation,
+                        maxCorrelation: correlationScore.maxCorrelation,
+                        correlatedPositions: correlationScore.correlatedPositions
+                    });
+                } catch (error) {
+                    console.warn(`⚠️ Ошибка расчета корреляции для ${figi}:`, error.message);
+                    // При ошибке даем средний приоритет
+                    prioritized.push({
+                        ...instrument,
+                        correlationScore: 0.5,
+                        avgCorrelation: 0,
+                        maxCorrelation: 0,
+                        correlatedPositions: []
+                    });
+                }
+            }
+            
+            // Сортируем по приоритету (высокий приоритет = низкая корреляция)
+            return prioritized.sort((a, b) => b.correlationScore - a.correlationScore);
+            
+        } catch (error) {
+            console.error('❌ Ошибка приоритизации по корреляции:', error);
+            // Возвращаем исходный массив при ошибке
+            return instruments.map(instr => ({
+                ...instr,
+                correlationScore: 0.5,
+                avgCorrelation: 0,
+                maxCorrelation: 0
+            }));
         }
     }
 

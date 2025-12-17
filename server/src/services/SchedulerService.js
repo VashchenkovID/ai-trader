@@ -7,6 +7,7 @@ import SettingsService from './SettingsService.js';
 import TradingHoursService from './TradingHoursService.js';
 import TradingHoursCacheService from './TradingHoursCacheService.js';
 import { Op } from 'sequelize';
+import sequelize from '../config/database.js';
 import { getService } from './GlobalServiceManager.js';
 
 class SchedulerService {
@@ -34,6 +35,7 @@ class SchedulerService {
         this.realPortfolioSyncTask = null;
         this.virtualPortfolioUpdateTask = null;
         this.dynamicBudgetRebalanceTask = null;
+        this.correlationPrecalcTask = null;
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -568,6 +570,103 @@ class SchedulerService {
             } catch (error) {
                 console.error('Error in scheduled strategy rebalancing:', error);
                 await OptimizedTelegramService.sendAlert('STRATEGY_REBALANCE_ERROR', error.message, 'warning');
+            }
+        }, {
+            scheduled: true,
+            timezone: "Europe/Moscow"
+        });
+
+        // Задача 14.5: Предварительный расчет корреляций для популярных инструментов (каждое воскресенье в 2:00)
+        const correlationPrecalcSchedule = schedulerSettings.correlation_precalc_schedule || '0 2 * * 0'; // Каждое воскресенье в 2:00
+        this.correlationPrecalcTask = cron.schedule(correlationPrecalcSchedule, async () => {
+            // Пропускаем первый запуск при старте
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 60 * 60 * 1000) {
+                console.log('⏭️ Skipping first correlation precalculation run (too soon after startup)');
+                return;
+            }
+            
+            try {
+                console.log('🔗 Scheduled correlation precalculation started...');
+                const CorrelationService = (await import('./CorrelationService.js')).default;
+                const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+                
+                // Инициализируем сервис, если нужно
+                if (!CorrelationService.isInitialized) {
+                    await CorrelationService.initialize();
+                }
+                
+                // Получаем топ-50 инструментов по активности торгов
+                // Используем количество свечей и средний объем торгов как показатели активности
+                const CachedCandle = (await import('../models/CachedCandle.js')).default;
+                
+                // Получаем инструменты с достаточным количеством свечей (минимум 20 для расчета корреляции)
+                // Сортируем по количеству свечей и среднему объему торгов
+                const instrumentsWithCandles = await CachedCandle.findAll({
+                    attributes: [
+                        'figi',
+                        [sequelize.fn('COUNT', sequelize.col('figi')), 'candleCount'],
+                        [sequelize.fn('AVG', sequelize.col('volume')), 'avgVolume'],
+                        [sequelize.fn('MAX', sequelize.col('time')), 'lastCandleTime']
+                    ],
+                    group: ['figi'],
+                    having: sequelize.where(
+                        sequelize.fn('COUNT', sequelize.col('figi')),
+                        { [Op.gte]: 20 } // Минимум 20 свечей для расчета корреляции
+                    ),
+                    order: [
+                        // Сортируем по среднему объему торгов (показатель ликвидности)
+                        [sequelize.fn('AVG', sequelize.col('volume')), 'DESC'],
+                        // Затем по количеству свечей (показатель активности)
+                        [sequelize.fn('COUNT', sequelize.col('figi')), 'DESC'],
+                        // Затем по последней свече (актуальность данных)
+                        [sequelize.fn('MAX', sequelize.col('time')), 'DESC']
+                    ],
+                    limit: 50,
+                    raw: true
+                });
+                
+                // Если не удалось получить через группировку, используем альтернативный метод
+                let popularInstruments;
+                if (instrumentsWithCandles.length < 2) {
+                    // Fallback: используем активные инструменты с недавними обновлениями
+                    popularInstruments = await CachedInstrument.findAll({
+                        where: {
+                            isActive: true,
+                            lastUpdated: {
+                                [Op.gte]: sequelize.literal("NOW() - INTERVAL '7 days'") // Обновлялись за последние 7 дней
+                            }
+                        },
+                        order: [
+                            ['lastUpdated', 'DESC'] // По времени последнего обновления
+                        ],
+                        limit: 50,
+                        attributes: ['figi']
+                    });
+                } else {
+                    // Преобразуем результат группировки в формат с figi
+                    popularInstruments = instrumentsWithCandles.map(item => ({
+                        figi: item.figi,
+                        candleCount: parseInt(item.candleCount) || 0,
+                        avgVolume: parseFloat(item.avgVolume) || 0
+                    }));
+                }
+                
+                const figis = popularInstruments.map(inst => inst.figi).filter(Boolean);
+                
+                if (figis.length >= 2) {
+                    const result = await CorrelationService.precalculateCorrelations(figis, 30);
+                    await OptimizedTelegramService.sendAlert(
+                        'CORRELATION_PRECALC_COMPLETE',
+                        `Предварительный расчет корреляций завершен: рассчитано ${result.calculated}, из кеша ${result.cached}, ошибок ${result.errors}`,
+                        'info'
+                    );
+                } else {
+                    console.warn('⚠️ Недостаточно инструментов для предварительного расчета корреляций');
+                }
+            } catch (error) {
+                console.error('Error in scheduled correlation precalculation:', error);
+                await OptimizedTelegramService.sendAlert('CORRELATION_PRECALC_ERROR', error.message, 'warning');
             }
         }, {
             scheduled: true,
@@ -4628,7 +4727,8 @@ class SchedulerService {
                 newsDailyUpdateTask: this.newsDailyUpdateTask ? 'active' : 'inactive',
                 telegramCacheTask: this.telegramCacheTask ? 'active' : 'inactive',
                 strategyRebalanceTask: this.strategyRebalanceTask ? 'active' : 'inactive',
-                dynamicBudgetRebalanceTask: this.dynamicBudgetRebalanceTask ? 'active' : 'inactive'
+                dynamicBudgetRebalanceTask: this.dynamicBudgetRebalanceTask ? 'active' : 'inactive',
+                correlationPrecalcTask: this.correlationPrecalcTask ? 'active' : 'inactive'
             };
 
             return {
