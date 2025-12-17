@@ -684,6 +684,7 @@ class TradingEngine {
             trades: this.virtualPortfolio.trades,
             positionsValue,
             totalValue,
+            initialCapital: this.virtualPortfolio.initialCapital || 1000000,
             mode: 'paper'
         };
     }

@@ -81,6 +81,17 @@ CachedSignal.init({
         allowNull: true,
         comment: 'Дополнительная информация о сигнале'
     },
+    telegramSent: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        comment: 'Отправлен ли сигнал в Telegram'
+    },
+    telegramSentAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Дата и время отправки сигнала в Telegram'
+    },
     createdAt: {
         type: DataTypes.DATE,
         allowNull: false,

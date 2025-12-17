@@ -716,6 +716,12 @@ class MetaLearningService {
      */
     async loadMetaModel() {
         try {
+            // Проверяем, загружена ли уже модель
+            if (this.metaModel) {
+                console.log('ℹ️ Meta-model already loaded, skipping reload');
+                return;
+            }
+
             console.log('📥 Loading meta-model with ModelManager...');
             
             // Пытаемся загрузить модель через ModelManager

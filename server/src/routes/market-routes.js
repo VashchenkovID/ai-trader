@@ -380,6 +380,70 @@ router.post('/stock/:figi/signals/fetch', async (req, res) => {
 });
 
 /**
+ * Получение всех сигналов из БД
+ * GET /api/market/signals?limit=50&from=2024-01-01&to=2024-12-31&direction=BUY&activeOnly=true
+ */
+router.get('/signals', async (req, res) => {
+    try {
+        const { limit, from, to, direction, activeOnly } = req.query;
+        
+        const SignalCacheService = (await import('../services/SignalCacheService.js')).default;
+        
+        const options = {};
+        if (limit) options.limit = parseInt(limit);
+        if (from) options.from = new Date(from);
+        if (to) options.to = new Date(to);
+        if (direction) options.direction = direction;
+        if (activeOnly === 'true') options.activeOnly = true;
+        
+        const signals = await SignalCacheService.getAllSignals(options);
+        
+        // Преобразуем сигналы в формат для фронтенда
+        const formatPrice = (priceObj) => {
+            if (!priceObj) return null;
+            if (typeof priceObj === 'number') return priceObj;
+            const units = parseFloat(priceObj.units || 0);
+            const nano = parseFloat(priceObj.nano || 0) / 1000000000;
+            return units + nano;
+        };
+        
+        const formattedSignals = signals.map(signal => {
+            return {
+                signalId: signal.signalId,
+                strategyId: signal.strategyId,
+                strategyName: signal.strategyName,
+                instrumentUid: signal.instrumentUid,
+                figi: signal.figi,
+                ticker: signal.ticker || null,
+                name: signal.instrumentName || signal.name || null, // Название инструмента (приоритет) или сигнала
+                signalName: signal.name || null, // Название сигнала
+                createDt: signal.createDt,
+                endDt: signal.endDt,
+                direction: signal.direction,
+                initialPrice: formatPrice(signal.initialPrice),
+                targetPrice: formatPrice(signal.targetPrice),
+                stoploss: formatPrice(signal.stoploss),
+                probability: signal.probability,
+                info: signal.info
+            };
+        });
+        
+        res.json({
+            success: true,
+            data: formattedSignals,
+            count: formattedSignals.length
+        });
+    } catch (error) {
+        console.error('Ошибка получения всех сигналов из БД:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения сигналов из БД',
+            error: error.message
+        });
+    }
+});
+
+/**
  * Получение сигналов из БД по FIGI
  * GET /api/market/signals/:figi?from=2024-01-01&to=2024-12-31&direction=BUY&activeOnly=true
  */

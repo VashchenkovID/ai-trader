@@ -37,6 +37,12 @@ class IntegratedAIService {
      */
     async initialize() {
         try {
+            // Проверяем, не инициализирован ли уже сервис
+            if (this.isInitialized) {
+                console.log('ℹ️ Integrated AI Service already initialized, skipping');
+                return;
+            }
+
             console.log('🧠 Initializing Integrated AI Service...');
             
             // Проверяем, инициализированы ли уже сервисы через ServiceManager
@@ -77,11 +83,12 @@ class IntegratedAIService {
                 console.log('✅ Reinforcement learning service already initialized');
             }
             
-            // Загружаем все модели после инициализации
-            await this.loadAllModels();
+            // Загружаем модели только если они еще не загружены
+            // (модели уже загружены при инициализации отдельных сервисов)
+            await this.loadAllModelsIfNeeded();
             
-            // Сохраняем все модели после загрузки (для обновления метаданных)
-            await this.saveAllModels();
+            // НЕ сохраняем модели при инициализации - это делается только после обучения
+            // await this.saveAllModels();
             
             this.isInitialized = true;
             this.lastUpdate = new Date().toISOString();
@@ -1105,7 +1112,65 @@ class IntegratedAIService {
     }
 
     /**
-     * Загрузка всех моделей
+     * Загрузка всех моделей (если еще не загружены)
+     */
+    async loadAllModelsIfNeeded() {
+        try {
+            const results = {};
+            let needsLoading = false;
+
+            // Проверяем, нужно ли загружать модели
+            if (this.activeNetworks.ensemble && (!EnsembleService.models.lstm && !EnsembleService.models.cnn && !EnsembleService.models.transformer)) {
+                needsLoading = true;
+            }
+            if (this.activeNetworks.metaLearning && !MetaLearningService.metaModel) {
+                needsLoading = true;
+            }
+            if (this.activeNetworks.reinforcementLearning && !ReinforcementLearningService.agent) {
+                needsLoading = true;
+            }
+            if (this.activeNetworks.traditional && !NeuralNetworkService.model) {
+                needsLoading = true;
+            }
+
+            if (!needsLoading) {
+                console.log('ℹ️ All models already loaded, skipping reload');
+                return { skipped: true };
+            }
+
+            console.log('📥 Loading missing models...');
+
+            if (this.activeNetworks.ensemble && (!EnsembleService.models.lstm && !EnsembleService.models.cnn && !EnsembleService.models.transformer)) {
+                await EnsembleService.loadModels();
+                results.ensemble = 'loaded';
+            }
+
+            if (this.activeNetworks.metaLearning && !MetaLearningService.metaModel) {
+                await MetaLearningService.loadMetaModel();
+                results.metaLearning = 'loaded';
+            }
+
+            if (this.activeNetworks.reinforcementLearning && !ReinforcementLearningService.agent) {
+                await ReinforcementLearningService.loadModel();
+                results.reinforcementLearning = 'loaded';
+            }
+
+            if (this.activeNetworks.traditional && !NeuralNetworkService.model) {
+                await NeuralNetworkService.loadModel();
+                results.traditional = 'loaded';
+            }
+
+            console.log('✅ Missing models loaded');
+            return results;
+
+        } catch (error) {
+            console.error('❌ Failed to load models:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Загрузка всех моделей (принудительная, используется для перезагрузки)
      */
     async loadAllModels() {
         try {

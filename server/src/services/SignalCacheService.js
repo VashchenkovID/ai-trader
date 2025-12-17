@@ -3,6 +3,7 @@ import TinkoffApiService from './TinkoffApiService.js';
 import CachedInstrument from '../models/CachedInstrument.js';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
+import OptimizedTelegramService from './OptimizedTelegramService.js';
 
 class SignalCacheService {
     constructor() {
@@ -163,10 +164,18 @@ class SignalCacheService {
                     // Обновляем существующий сигнал
                     await cachedSignal.update(signalData);
                     updatedCount++;
+                    
+                    // Если сигнал еще не был отправлен в Telegram, отправляем его
+                    if (!cachedSignal.telegramSent && figi) {
+                        await this.sendSignalToTelegram(cachedSignal, figi);
+                    }
                 } else {
                     savedCount++;
                     if (!figi) {
                         skippedCount++; // Считаем как пропущенный, если нет FIGI
+                    } else {
+                        // Отправляем новый сигнал в Telegram
+                        await this.sendSignalToTelegram(cachedSignal, figi);
                     }
                 }
             } catch (error) {
@@ -194,6 +203,11 @@ class SignalCacheService {
                                 info: signal.info || null
                             });
                             updatedCount++;
+                            
+                            // Если сигнал еще не был отправлен в Telegram, отправляем его
+                            if (!existingSignal.telegramSent && figi) {
+                                await this.sendSignalToTelegram(existingSignal, figi);
+                            }
                         }
                     } catch (updateError) {
                         // Игнорируем ошибки обновления при race condition
@@ -338,6 +352,92 @@ class SignalCacheService {
     }
 
     /**
+     * Получение всех сигналов из БД (или последних N)
+     * @param {object} options - Опции фильтрации
+     * @param {number} options.limit - Лимит записей (по умолчанию 100)
+     * @param {Date} options.from - Дата начала периода
+     * @param {Date} options.to - Дата окончания периода
+     * @param {string} options.direction - Направление сигнала
+     * @param {boolean} options.activeOnly - Только активные сигналы (endDt >= now)
+     * @returns {Promise<Array>} - Массив сигналов
+     */
+    async getAllSignals(options = {}) {
+        try {
+            const where = {};
+
+            // Фильтр по датам
+            if (options.from) {
+                where.createDt = {
+                    [Op.gte]: options.from instanceof Date ? options.from : new Date(options.from)
+                };
+            }
+            if (options.to) {
+                where.endDt = {
+                    [Op.lte]: options.to instanceof Date ? options.to : new Date(options.to)
+                };
+            }
+
+            // Фильтр по направлению
+            if (options.direction) {
+                where.direction = options.direction;
+            }
+
+            // Только активные сигналы
+            if (options.activeOnly) {
+                where.endDt = {
+                    ...where.endDt,
+                    [Op.gte]: new Date()
+                };
+            }
+
+            const signals = await CachedSignal.findAll({
+                where: where,
+                order: [['createDt', 'DESC']],
+                limit: options.limit || 100
+            });
+
+            // Получаем уникальные FIGI для загрузки информации об инструментах
+            const figis = [...new Set(signals.map(s => s.figi).filter(f => f))];
+            
+            // Загружаем информацию об инструментах
+            const instruments = await CachedInstrument.findAll({
+                where: {
+                    figi: {
+                        [Op.in]: figis
+                    }
+                },
+                attributes: ['figi', 'ticker', 'name']
+            });
+
+            // Создаем мапу для быстрого доступа
+            const instrumentMap = new Map();
+            instruments.forEach(instr => {
+                instrumentMap.set(instr.figi, {
+                    ticker: instr.ticker,
+                    name: instr.name
+                });
+            });
+
+            // Добавляем ticker и name к сигналам
+            const signalsWithInstrument = signals.map(signal => {
+                const signalData = signal.toJSON();
+                const instrumentInfo = instrumentMap.get(signalData.figi);
+                if (instrumentInfo) {
+                    signalData.ticker = instrumentInfo.ticker;
+                    signalData.instrumentName = instrumentInfo.name; // Название инструмента
+                }
+                // signalData.name остается как название сигнала из модели
+                return signalData;
+            });
+
+            return signalsWithInstrument;
+        } catch (error) {
+            console.error('❌ Ошибка получения всех сигналов из БД:', error);
+            return [];
+        }
+    }
+
+    /**
      * Получение сигналов на конкретную дату
      * @param {string} figi - FIGI инструмента
      * @param {Date} date - Дата для получения сигналов
@@ -365,6 +465,125 @@ class SignalCacheService {
             console.error(`❌ Ошибка получения сигналов на дату ${date} для ${figi}:`, error);
             return [];
         }
+    }
+
+    /**
+     * Отправка нового сигнала в Telegram
+     * @param {CachedSignal} signal - Объект сигнала
+     * @param {string} figi - FIGI инструмента
+     */
+    async sendSignalToTelegram(signal, figi) {
+        try {
+            // Проверяем, не отправлен ли уже сигнал
+            if (signal.telegramSent) {
+                return;
+            }
+
+            // Проверяем, инициализирован ли Telegram сервис
+            if (!OptimizedTelegramService.isInitialized) {
+                return;
+            }
+
+            // Получаем информацию об инструменте
+            let ticker = null;
+            let instrumentName = null;
+            
+            if (figi) {
+                const instrument = await CachedInstrument.findOne({
+                    where: { figi: figi },
+                    attributes: ['ticker', 'name']
+                });
+                
+                if (instrument) {
+                    ticker = instrument.ticker;
+                    instrumentName = instrument.name;
+                }
+            }
+
+            // Форматируем сообщение
+            const message = this.formatSignalMessage(signal, ticker, instrumentName, figi);
+
+            // Отправляем сообщение
+            await OptimizedTelegramService.sendAlert('TRADING_SIGNAL', message, 'info');
+
+            // Отмечаем сигнал как отправленный
+            await signal.update({
+                telegramSent: true,
+                telegramSentAt: new Date()
+            });
+
+            console.log(`✅ Новый сигнал отправлен в Telegram: ${signal.signalId}`);
+        } catch (error) {
+            console.error(`❌ Ошибка отправки сигнала в Telegram:`, error);
+            // Не бросаем ошибку, чтобы не прерывать сохранение сигналов
+        }
+    }
+
+    /**
+     * Форматирование сообщения о сигнале для Telegram
+     * @param {CachedSignal} signal - Объект сигнала
+     * @param {string} ticker - Тикер инструмента
+     * @param {string} instrumentName - Название инструмента
+     * @param {string} figi - FIGI инструмента
+     * @returns {string} - Форматированное сообщение
+     */
+    formatSignalMessage(signal, ticker, instrumentName, figi) {
+        // Преобразуем цену из формата {units, nano} в число
+        const formatPrice = (priceObj) => {
+            if (!priceObj) return 'N/A';
+            if (typeof priceObj === 'number') return priceObj.toFixed(2);
+            const units = parseFloat(priceObj.units || 0);
+            const nano = parseFloat(priceObj.nano || 0) / 1000000000;
+            return (units + nano).toFixed(2);
+        };
+
+        // Определяем направление сигнала
+        const direction = signal.direction === 'SIGNAL_DIRECTION_BUY' ? '📈 ПОКУПКА' : 
+                         signal.direction === 'SIGNAL_DIRECTION_SELL' ? '📉 ПРОДАЖА' : 
+                         '❓ НЕИЗВЕСТНО';
+
+        const directionEmoji = signal.direction === 'SIGNAL_DIRECTION_BUY' ? '🟢' : 
+                              signal.direction === 'SIGNAL_DIRECTION_SELL' ? '🔴' : 
+                              '⚪';
+
+        const initialPrice = formatPrice(signal.initialPrice);
+        const targetPrice = formatPrice(signal.targetPrice);
+        const stoploss = signal.stoploss ? formatPrice(signal.stoploss) : 'N/A';
+
+        // Вычисляем потенциальную прибыль/убыток
+        let potentialProfit = 'N/A';
+        if (signal.direction === 'SIGNAL_DIRECTION_BUY' && initialPrice && targetPrice) {
+            const profit = ((parseFloat(targetPrice) - parseFloat(initialPrice)) / parseFloat(initialPrice) * 100).toFixed(2);
+            potentialProfit = `+${profit}%`;
+        } else if (signal.direction === 'SIGNAL_DIRECTION_SELL' && initialPrice && targetPrice) {
+            const profit = ((parseFloat(initialPrice) - parseFloat(targetPrice)) / parseFloat(initialPrice) * 100).toFixed(2);
+            potentialProfit = `+${profit}%`;
+        }
+
+        const instrumentDisplay = ticker ? `${ticker}${instrumentName ? ` (${instrumentName})` : ''}` : (figi || 'Неизвестный инструмент');
+
+        let message = `${directionEmoji} <b>НОВЫЙ ТОРГОВЫЙ СИГНАЛ</b>\n\n`;
+        message += `📊 <b>Инструмент:</b> ${instrumentDisplay}\n`;
+        message += `📈 <b>Направление:</b> ${direction}\n`;
+        message += `🎯 <b>Стратегия:</b> ${signal.strategyName}\n`;
+        message += `📝 <b>Название сигнала:</b> ${signal.name}\n\n`;
+        
+        message += `💰 <b>Цены:</b>\n`;
+        message += `• Входная: <b>${initialPrice} ₽</b>\n`;
+        message += `• Целевая: <b>${targetPrice} ₽</b>\n`;
+        if (stoploss !== 'N/A') {
+            message += `• Стоп-лосс: <b>${stoploss} ₽</b>\n`;
+        }
+        message += `• Потенциальная прибыль: <b>${potentialProfit}</b>\n\n`;
+
+        message += `📊 <b>Вероятность успеха:</b> <b>${signal.probability}%</b>\n`;
+        message += `📅 <b>Действителен до:</b> ${new Date(signal.endDt).toLocaleString('ru-RU')}\n`;
+
+        if (signal.info) {
+            message += `\nℹ️ <b>Дополнительная информация:</b>\n${signal.info}`;
+        }
+
+        return message;
     }
 
     /**

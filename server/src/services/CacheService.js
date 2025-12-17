@@ -12,6 +12,17 @@ class CacheService {
     }
 
     /**
+     * Проверка, является ли FIGI тестовым
+     * Тестовые FIGI начинаются с TEST_FIGI_ или TEST_
+     */
+    isTestFigi(figi) {
+        if (!figi || typeof figi !== 'string') {
+            return false;
+        }
+        return figi.startsWith('TEST_FIGI_') || figi.startsWith('TEST_');
+    }
+
+    /**
      * Инициализация сервиса
      */
     async initialize() {
@@ -203,6 +214,12 @@ class CacheService {
     // Кеширование свечей для инструмента (append/upsert без уничтожения старых записей)
     async cacheCandles(figi, interval = 'DAY', days = 365) {
         try {
+            // Пропускаем запросы к API для тестовых FIGI
+            if (this.isTestFigi(figi)) {
+                console.log(`⚠️ Skipping API request for test FIGI: ${figi}`);
+                return [];
+            }
+
             // Минимальное окно запроса: 30 дней, чтобы избегать пустых ответов
             const minDays = 30;
             const effectiveDays = Math.max(days || 0, minDays);
@@ -262,6 +279,12 @@ class CacheService {
 
     // Батч-выгрузка свечей из API по диапазону
     async fetchCandlesRangeBatched(figi, interval, from, to) {
+        // Пропускаем запросы к API для тестовых FIGI
+        if (this.isTestFigi(figi)) {
+            console.log(`⚠️ Skipping API request for test FIGI: ${figi}`);
+            return [];
+        }
+
         const chunkDays = 365; // грузим по 1 году
         let cursor = new Date(from);
         const all = [];
@@ -316,6 +339,19 @@ class CacheService {
                     // Не сдвигаем курсор, пытаемся повторить тот же запрос
                     continue;
                 } else {
+                    // Проверяем, является ли это ошибкой "Instrument not found" (404)
+                    const isNotFoundError = error.message && (
+                        error.message.includes('Instrument not found') ||
+                        error.message.includes('404') ||
+                        (error.error && typeof error.error === 'string' && error.error.includes('"code":5'))
+                    );
+                    
+                    if (isNotFoundError) {
+                        // Для тестовых FIGI или несуществующих инструментов просто возвращаем пустой массив
+                        console.log(`ℹ️ Instrument not found in API: ${figi} (skipping)`);
+                        return [];
+                    }
+                    
                     // Для других ошибок просто логируем и продолжаем
                     console.error(`❌ Error fetching candles for ${figi}:`, error.message);
                     cursor.setDate(cursor.getDate() + chunkDays);
@@ -409,6 +445,24 @@ class CacheService {
     // Получение свечей из кеша (с догрузкой при дефиците)
     async getCandles(figi, interval = 'DAY', days = 365) {
         try {
+            // Для тестовых FIGI возвращаем пустой массив без запросов к API
+            if (this.isTestFigi(figi)) {
+                // Проверяем, есть ли данные в кеше
+                const from = new Date();
+                from.setDate(from.getDate() - days);
+                const candles = await CachedCandle.findAll({
+                    where: {
+                        figi: figi,
+                        interval: interval,
+                        time: {
+                            [Op.gte]: from
+                        }
+                    },
+                    order: [['time', 'ASC']]
+                });
+                return candles;
+            }
+
             const from = new Date();
             from.setDate(from.getDate() - days);
 
@@ -423,11 +477,11 @@ class CacheService {
                 order: [['time', 'ASC']]
             });
 
-            // Если данных нет или их мало/обрезаны, догружаем историю
+            // Если данных нет или их мало/обрезаны, догружаем историю (только для реальных FIGI)
             const minRequired = Math.max(100, Math.floor(days * 0.8)); // Минимум 80% от запрошенных дней
             const earliest = candles[0]?.time ? new Date(candles[0].time) : null;
             const rangeInsufficient = candles.length < minRequired || (earliest && earliest > from);
-            if (candles.length === 0 || rangeInsufficient) {
+            if ((candles.length === 0 || rangeInsufficient) && !this.isTestFigi(figi)) {
                 // Увеличиваем период для догрузки, но не более 730 дней (2 года)
                 const extendDays = Math.min(days * 2, 730);
                 await this.cacheCandles(figi, interval, extendDays);

@@ -2789,6 +2789,24 @@ export const apiService = {
   },
 
   /**
+   * Получить все торговые сигналы из БД
+   */
+  async getAllSignals(limit: number = 50, activeOnly: boolean = false, direction?: string): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      if (limit) params.append('limit', limit.toString());
+      if (activeOnly) params.append('activeOnly', 'true');
+      if (direction) params.append('direction', direction);
+      
+      const response = await api.get(`/api/market/signals?${params.toString()}`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error getting all signals:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Получить торговые сигналы для инструмента из БД
    */
   async getStockSignals(figi: string, limit: number = 20, activeOnly: boolean = false): Promise<any> {

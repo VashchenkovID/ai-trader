@@ -50,6 +50,21 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
               >
                 Прибыль по сделкам: {tradingStats.totalPnL >= 0 ? '+' : ''}
                 {formatCurrency(tradingStats.totalPnL || 0)}
+                {(() => {
+                  // Рассчитываем процент прибыли
+                  const initialCapital = tradingStats.initialCapital || 1000000;
+                  const totalPnL = tradingStats.totalPnL || 0;
+                  const totalPnLPercent = initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
+                  
+                  if (totalPnLPercent !== 0) {
+                    return (
+                      <span className="ml-2">
+                        ({totalPnLPercent >= 0 ? '+' : ''}{totalPnLPercent.toFixed(2)}%)
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             </div>
           </div>

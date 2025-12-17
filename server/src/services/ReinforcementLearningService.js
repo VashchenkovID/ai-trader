@@ -848,6 +848,12 @@ class ReinforcementLearningService {
      */
     async loadModel() {
         try {
+            // Проверяем, загружена ли уже модель
+            if (this.agent) {
+                console.log('ℹ️ RL model already loaded, skipping reload');
+                return;
+            }
+
             console.log('📥 Loading RL model with ModelManager...');
             
             // Пытаемся загрузить модель через ModelManager

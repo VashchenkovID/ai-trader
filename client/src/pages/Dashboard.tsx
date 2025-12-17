@@ -13,6 +13,7 @@ import NeuralNetworksControlCard from '../components/dashboard/NeuralNetworksCon
 import TradingSignalsWidget from '../components/websocket/TradingSignalsWidget';
 import AlertsWidget from '../components/websocket/AlertsWidget';
 import ModelMetricsWidget from '../components/websocket/ModelMetricsWidget';
+import CachedSignalsCard from '../components/dashboard/CachedSignalsCard';
 import TrainingProgressWidget from '../components/websocket/TrainingProgressWidget';
 
 interface DashboardProps {
@@ -489,9 +490,14 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
 
       {/* Новые WebSocket виджеты */}
       <div className="grid mt-3">
-        {/* Торговые сигналы */}
+        {/* Торговые сигналы (WebSocket) */}
         <div className="col-12 lg:col-6">
           <TradingSignalsWidget maxSignals={10} />
+        </div>
+
+        {/* Записанные торговые сигналы из БД */}
+        <div className="col-12 lg:col-6">
+          <CachedSignalsCard maxSignals={20} />
         </div>
 
         {/* Системные алерты */}

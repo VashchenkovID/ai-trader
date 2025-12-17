@@ -917,6 +917,7 @@ class SchedulerService {
                     portfolioValue: portfolio?.totalValue || 0,
                     cash: portfolio?.cash || 0,
                     totalPnL: stats?.totalReturn || 0,
+                    initialCapital: portfolio?.initialCapital || 1000000, // Добавляем начальный капитал для расчета процента прибыли
                     winRate: (stats?.winRate || 0) * 100,
                     totalTrades: stats?.totalTrades || 0,
                     successfulTrades: Math.round((stats?.totalTrades || 0) * (stats?.winRate || 0)),
@@ -2356,6 +2357,23 @@ class SchedulerService {
                         where: { signalId: triggered.signalId }
                     });
 
+                    // Функция для преобразования цены из формата {units, nano} в число
+                    const formatPrice = (priceObj) => {
+                        if (!priceObj) return null;
+                        if (typeof priceObj === 'number') return priceObj;
+                        if (typeof priceObj === 'object' && priceObj.units !== undefined) {
+                            const units = parseFloat(priceObj.units || 0);
+                            const nano = parseFloat(priceObj.nano || 0) / 1000000000;
+                            return units + nano;
+                        }
+                        return parseFloat(priceObj) || null;
+                    };
+
+                    // Преобразуем цены из исходного сигнала в числа
+                    const initialPrice = formatPrice(triggered.initialPrice || originalSignal?.initialPrice);
+                    const targetPrice = formatPrice(triggered.targetPrice || originalSignal?.targetPrice);
+                    const stoploss = formatPrice(triggered.stoploss || originalSignal?.stoploss);
+
                     // Сохраняем или обновляем сработавший сигнал в БД
                     // Обновляем счетчик срабатываний, если сигнал уже существует
                     try {
@@ -2373,10 +2391,10 @@ class SchedulerService {
                                 name: name,
                                 direction: triggered.direction,
                                 triggerType: triggered.triggerType,
-                                initialPrice: triggered.initialPrice || originalSignal?.initialPrice || null,
+                                initialPrice: initialPrice,
                                 currentPrice: triggered.currentPrice,
-                                targetPrice: triggered.targetPrice || originalSignal?.targetPrice || null,
-                                stoploss: triggered.stoploss || originalSignal?.stoploss || null,
+                                targetPrice: targetPrice,
+                                stoploss: stoploss,
                                 signalName: triggered.name || originalSignal?.name || null,
                                 probability: triggered.probability || originalSignal?.probability || null,
                                 status: 'triggered',
@@ -2411,10 +2429,22 @@ class SchedulerService {
                         });
 
                         if (signalToNotify) {
+                            // Используем данные из БД, а не из объекта triggered
                             this.pendingTriggeredSignals.push({
-                                ...triggered,
-                                ticker,
-                                name,
+                                signalId: signalToNotify.signalId,
+                                strategyId: signalToNotify.strategyId,
+                                strategyName: signalToNotify.strategyName,
+                                figi: signalToNotify.figi,
+                                ticker: ticker,
+                                name: name,
+                                direction: signalToNotify.direction,
+                                triggerType: signalToNotify.triggerType,
+                                initialPrice: signalToNotify.initialPrice,
+                                currentPrice: signalToNotify.currentPrice,
+                                targetPrice: signalToNotify.targetPrice,
+                                stoploss: signalToNotify.stoploss,
+                                signalName: signalToNotify.signalName,
+                                probability: signalToNotify.probability,
                                 triggerCount: signalToNotify.triggerCount,
                                 lastTriggeredAt: signalToNotify.lastTriggeredAt
                             });
@@ -3416,20 +3446,354 @@ class SchedulerService {
                     const triggerText = triggered.triggerType === 'target_reached' ? '✅ Целевая цена достигнута' : '⚠️ Стоп-лосс сработал';
                     const strategyNameRu = translateStrategy(triggered.strategyName || 'Неизвестна');
                     
-                    // Формируем сообщение с учетом количества срабатываний
-                    let message = `📊 Сигнал сработал: ${triggered.name || 'Сигнал'}\n` +
-                        `📈 Инструмент: ${triggered.ticker} (${triggered.name})\n` +
-                        `📊 Направление: ${directionText}\n` +
-                        `🎯 ${triggerText}\n` +
-                        `💰 Текущая цена: ${latestSignal.currentPrice.toFixed(2)} ₽\n` +
-                        `🎯 Целевая цена: ${latestSignal.targetPrice ? latestSignal.targetPrice.toFixed(2) : 'N/A'} ₽\n` +
-                        `🛑 Стоп-лосс: ${latestSignal.stoploss ? latestSignal.stoploss.toFixed(2) : 'N/A'} ₽\n` +
-                        `📋 Стратегия: ${strategyNameRu}`;
-
-                    // Добавляем информацию о количестве срабатываний, если больше 1
-                    if (totalCount > 1) {
-                        message += `\n🔄 Количество срабатываний: ${totalCount}`;
+                    // Получаем информацию о стратегии нашей системы (если есть связь через TradingRequest)
+                    let ourStrategyName = null;
+                    let ourStrategy = null;
+                    try {
+                        // Проверяем доступность соединения с БД перед запросом
+                        const sequelize = (await import('../config/database.js')).default;
+                        let dbAvailable = false;
+                        
+                        try {
+                            // Проверяем, не закрыт ли пул соединений
+                            if (sequelize.connectionManager && sequelize.connectionManager.pool) {
+                                const pool = sequelize.connectionManager.pool;
+                                if (!pool._draining && !pool._closed) {
+                                    dbAvailable = true;
+                                }
+                            } else {
+                                // Если пула нет, считаем что соединение может быть доступно
+                                dbAvailable = true;
+                            }
+                        } catch (dbCheckError) {
+                            // Соединение недоступно
+                            dbAvailable = false;
+                        }
+                        
+                        if (dbAvailable) {
+                            const TriggeredSignal = (await import('../models/TriggeredSignal.js')).default;
+                            const TradingRequest = (await import('../models/TradingRequest.js')).default;
+                            const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
+                            
+                            // Находим TriggeredSignal в БД
+                            const triggeredSignalFromDb = await TriggeredSignal.findOne({
+                                where: {
+                                    signalId: triggered.signalId,
+                                    triggerType: triggered.triggerType
+                                }
+                            });
+                            
+                            // Если есть связь с TradingRequest, получаем стратегию
+                            if (triggeredSignalFromDb?.tradingRequestId) {
+                                const tradingRequest = await TradingRequest.findByPk(triggeredSignalFromDb.tradingRequestId);
+                                
+                                if (tradingRequest?.strategyId) {
+                                    const strategy = await TradingStrategy.findByPk(tradingRequest.strategyId);
+                                    if (strategy) {
+                                        ourStrategyName = strategy.name;
+                                        ourStrategy = strategy;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (strategyError) {
+                        // Игнорируем ошибки при получении стратегии (включая ошибки закрытого соединения)
+                        if (!strategyError.message || !strategyError.message.includes('connection manager was closed')) {
+                            console.warn('⚠️ Could not get our strategy for signal:', strategyError.message);
+                        }
                     }
+                    
+                    // Рассчитываем рекомендуемое количество для покупки
+                    let recommendedQuantity = null;
+                    let recommendedAmount = null;
+                    let potentialProfit = null;
+                    let maxLoss = null;
+                    let portfolioPercent = null;
+                    try {
+                        // Проверяем доступность соединения с БД перед запросом
+                        const sequelize = (await import('../config/database.js')).default;
+                        let dbAvailable = false;
+                        
+                        try {
+                            // Проверяем, не закрыт ли пул соединений
+                            if (sequelize.connectionManager && sequelize.connectionManager.pool) {
+                                const pool = sequelize.connectionManager.pool;
+                                if (!pool._draining && !pool._closed) {
+                                    // Пытаемся выполнить простой запрос для проверки соединения
+                                    await sequelize.authenticate();
+                                    dbAvailable = true;
+                                }
+                            } else {
+                                // Если пула нет, пытаемся подключиться
+                                await sequelize.authenticate();
+                                dbAvailable = true;
+                            }
+                        } catch (dbCheckError) {
+                            // Соединение недоступно, используем значения по умолчанию
+                            console.warn('⚠️ Database connection unavailable for recommended quantity calculation, using defaults');
+                            dbAvailable = false;
+                        }
+                        
+                        let totalBudget = 1000000; // Значение по умолчанию
+                        
+                        if (dbAvailable) {
+                            try {
+                                const SettingsService = (await import('./SettingsService.js')).default;
+                                const portfolioSettings = await SettingsService.getPortfolioSettings();
+                                totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
+                            } catch (settingsError) {
+                                // Если не удалось получить настройки, используем значение по умолчанию
+                                console.warn('⚠️ Could not get portfolio settings, using default budget:', settingsError.message);
+                            }
+                        }
+                        
+                        const currentPrice = latestSignal.currentPrice;
+                        
+                        // Валидация текущей цены перед расчетами
+                        if (!currentPrice || currentPrice <= 0 || isNaN(currentPrice)) {
+                            console.warn(`⚠️ Invalid currentPrice for signal ${triggered.signalId}: ${currentPrice}, skipping quantity calculation`);
+                            throw new Error(`Invalid currentPrice: ${currentPrice}`);
+                        }
+                        
+                        const stoploss = latestSignal.stoploss || (currentPrice * 0.95); // Если нет стоп-лосса, используем -5%
+                        const targetPrice = latestSignal.targetPrice || (currentPrice * 1.1); // Если нет цели, используем +10%
+                        
+                        // Определяем доступный бюджет
+                        let availableBudget = totalBudget;
+                        if (ourStrategy && ourStrategy.budgetAllocation) {
+                            // Если есть стратегия с выделенным бюджетом
+                            availableBudget = totalBudget * (ourStrategy.budgetAllocation / 100);
+                        } else {
+                            // Консервативный подход: максимум 5% от портфеля на одну позицию
+                            availableBudget = totalBudget * 0.05;
+                        }
+                        
+                        // Расчет на основе риска (консервативный подход)
+                        // Максимальный риск на позицию: 2% от портфеля
+                        const maxRiskPercent = 2.0;
+                        const maxRiskAmount = totalBudget * (maxRiskPercent / 100);
+                        
+                        // Риск на одну акцию (разница между текущей ценой и стоп-лоссом)
+                        const riskPerShare = Math.abs(currentPrice - stoploss);
+                        
+                        if (riskPerShare > 0 && currentPrice > 0) {
+                            // Количество акций на основе риска
+                            const quantityByRisk = Math.floor(maxRiskAmount / riskPerShare);
+                            
+                            // Количество акций на основе бюджета (с проверкой на деление на ноль)
+                            const quantityByBudget = Math.floor(availableBudget / currentPrice);
+                            
+                            // Берем минимум из двух (более консервативный подход)
+                            recommendedQuantity = Math.min(quantityByRisk, quantityByBudget);
+                            
+                            // Рассчитываем сумму инвестиций
+                            recommendedAmount = recommendedQuantity * currentPrice;
+                            
+                            // Процент от портфеля
+                            portfolioPercent = ((recommendedAmount / totalBudget) * 100).toFixed(2);
+                            
+                            // Потенциальная прибыль при достижении цели
+                            if (targetPrice > currentPrice) {
+                                const profitPerShare = targetPrice - currentPrice;
+                                potentialProfit = recommendedQuantity * profitPerShare;
+                            }
+                            
+                            // Максимальный убыток при срабатывании стоп-лосса
+                            if (stoploss < currentPrice) {
+                                const lossPerShare = currentPrice - stoploss;
+                                maxLoss = recommendedQuantity * lossPerShare;
+                            }
+                        }
+                    } catch (calcError) {
+                        // Игнорируем ошибки расчета
+                        console.warn('⚠️ Could not calculate recommended quantity:', calcError.message);
+                    }
+                    
+                    // Формируем понятное сообщение для пользователя
+                    const instrumentName = triggered.name || 'Неизвестный инструмент';
+                    const signalName = triggered.signalName || 'Сигнал';
+                    
+                    // Заголовок с понятным объяснением
+                    let message = `🔔 <b>СИГНАЛ СРАБОТАЛ</b>\n\n`;
+                    message += `📊 <b>Что произошло:</b>\n`;
+                    message += `Сигнал "${signalName}" для инструмента ${triggered.ticker} (${instrumentName}) достиг своей цели.\n\n`;
+                    
+                    // Основная информация
+                    message += `📈 <b>Инструмент:</b> ${triggered.ticker} (${instrumentName})\n`;
+                    message += `📊 <b>Направление:</b> ${directionText}\n`;
+                    message += `🎯 <b>Результат:</b> ${triggerText}\n\n`;
+                    
+                    // Цены с понятными объяснениями
+                    message += `💰 <b>Цены:</b>\n`;
+                    if (latestSignal.initialPrice) {
+                        const isBuy = triggered.direction === 'SIGNAL_DIRECTION_BUY';
+                        const priceChange = latestSignal.currentPrice - latestSignal.initialPrice;
+                        const priceChangePercent = ((priceChange / latestSignal.initialPrice) * 100).toFixed(2);
+                        const changeSign = priceChange >= 0 ? '+' : '';
+                        const changeEmoji = priceChange >= 0 ? '📈' : '📉';
+                        
+                        message += `• Входная цена (цена ${isBuy ? 'покупки' : 'продажи'}): <b>${latestSignal.initialPrice.toFixed(2)} ₽</b>\n`;
+                        message += `• Текущая цена (сейчас): <b>${latestSignal.currentPrice.toFixed(2)} ₽</b> ${changeEmoji} (${changeSign}${priceChangePercent}%)\n`;
+                    } else {
+                        message += `• Текущая цена (сейчас): <b>${latestSignal.currentPrice.toFixed(2)} ₽</b>\n`;
+                    }
+                    if (latestSignal.targetPrice) {
+                        const targetReached = triggered.triggerType === 'target_reached';
+                        const isBuy = triggered.direction === 'SIGNAL_DIRECTION_BUY';
+                        const isSell = triggered.direction === 'SIGNAL_DIRECTION_SELL';
+                        
+                        // Для BUY: целевая цена должна быть выше входной (ожидается рост)
+                        // Для SELL: целевая цена должна быть ниже входной (ожидается падение)
+                        if (targetReached) {
+                            // Время достижения цели
+                            const targetReachedTime = triggered.lastTriggeredAt || triggered.triggeredAt;
+                            const timeStr = targetReachedTime ? new Date(targetReachedTime).toLocaleString('ru-RU', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            }) : 'ранее';
+                            
+                            if (isBuy) {
+                                // Для BUY: если текущая цена >= целевой, значит цена выросла до цели
+                                if (latestSignal.currentPrice >= latestSignal.targetPrice) {
+                                    message += `• Целевая цена (достигнута ${timeStr}): <b>${latestSignal.targetPrice.toFixed(2)} ₽</b> ✅\n`;
+                                    if (latestSignal.currentPrice > latestSignal.targetPrice) {
+                                        const excessProfit = ((latestSignal.currentPrice - latestSignal.targetPrice) / latestSignal.targetPrice * 100).toFixed(2);
+                                        message += `  <i>Цель была достигнута ${timeStr}. Сейчас цена ${latestSignal.currentPrice.toFixed(2)} ₽ (выше цели на ${excessProfit}%)</i>\n`;
+                                    } else {
+                                        message += `  <i>Цена выросла с ${latestSignal.initialPrice ? latestSignal.initialPrice.toFixed(2) : 'входной'} ₽ до ${latestSignal.currentPrice.toFixed(2)} ₽</i>\n`;
+                                    }
+                                } else {
+                                    // Странная ситуация: для BUY текущая цена ниже целевой при срабатывании
+                                    message += `• Целевая цена: <b>${latestSignal.targetPrice.toFixed(2)} ₽</b> ⚠️\n`;
+                                    message += `  <i>Внимание: текущая цена ниже целевой для сигнала на покупку</i>\n`;
+                                }
+                            } else if (isSell) {
+                                // Для SELL: если текущая цена <= целевой, значит цена упала до цели
+                                if (latestSignal.currentPrice <= latestSignal.targetPrice) {
+                                    message += `• Целевая цена (достигнута ${timeStr}): <b>${latestSignal.targetPrice.toFixed(2)} ₽</b> ✅\n`;
+                                    if (latestSignal.currentPrice < latestSignal.targetPrice) {
+                                        const excessProfit = ((latestSignal.targetPrice - latestSignal.currentPrice) / latestSignal.targetPrice * 100).toFixed(2);
+                                        message += `  <i>Цель была достигнута ${timeStr}. Сейчас цена ${latestSignal.currentPrice.toFixed(2)} ₽ (ниже цели на ${excessProfit}%)</i>\n`;
+                                    } else {
+                                        message += `  <i>Цена упала с ${latestSignal.initialPrice ? latestSignal.initialPrice.toFixed(2) : 'входной'} ₽ до ${latestSignal.currentPrice.toFixed(2)} ₽</i>\n`;
+                                    }
+                                } else {
+                                    message += `• Целевая цена: <b>${latestSignal.targetPrice.toFixed(2)} ₽</b> ⚠️\n`;
+                                    message += `  <i>Внимание: текущая цена выше целевой для сигнала на продажу</i>\n`;
+                                }
+                            } else {
+                                message += `• Целевая цена (достигнута ${timeStr}): <b>${latestSignal.targetPrice.toFixed(2)} ₽</b> ✅\n`;
+                            }
+                        } else {
+                            message += `• Целевая цена (ожидается): <b>${latestSignal.targetPrice.toFixed(2)} ₽</b>\n`;
+                            if (isBuy && latestSignal.initialPrice) {
+                                const profitToTarget = ((latestSignal.targetPrice - latestSignal.initialPrice) / latestSignal.initialPrice * 100).toFixed(2);
+                                message += `  <i>Ожидается рост на ${profitToTarget}% от входной цены</i>\n`;
+                            } else if (isSell && latestSignal.initialPrice) {
+                                const profitToTarget = ((latestSignal.initialPrice - latestSignal.targetPrice) / latestSignal.initialPrice * 100).toFixed(2);
+                                message += `  <i>Ожидается падение на ${profitToTarget}% от входной цены</i>\n`;
+                            }
+                        }
+                    }
+                    if (latestSignal.stoploss) {
+                        message += `• Стоп-лосс (защита от убытков): <b>${latestSignal.stoploss.toFixed(2)} ₽</b>\n`;
+                    }
+                    message += `\n`;
+                    
+                    // Прибыль/убыток с понятным объяснением
+                    if (latestSignal.initialPrice && latestSignal.currentPrice) {
+                        const profitPercent = ((latestSignal.currentPrice - latestSignal.initialPrice) / latestSignal.initialPrice * 100);
+                        const profitSign = profitPercent >= 0 ? '+' : '';
+                        const profitAbs = Math.abs(profitPercent).toFixed(2);
+                        const profitRub = Math.abs(latestSignal.currentPrice - latestSignal.initialPrice).toFixed(2);
+                        
+                        if (profitPercent >= 0) {
+                            message += `📈 <b>Прибыль:</b> <b>${profitSign}${profitAbs}%</b> (${profitSign}${profitRub} ₽ на каждую акцию)\n`;
+                            message += `Это означает, что если вы купили по входной цене, сейчас вы в прибыли!\n\n`;
+                        } else {
+                            message += `📉 <b>Убыток:</b> <b>${profitSign}${profitAbs}%</b> (${profitSign}${profitRub} ₽ на каждую акцию)\n`;
+                            message += `Это означает, что цена ушла вниз от входной цены.\n\n`;
+                        }
+                    }
+                    
+                    // Стратегии
+                    message += `📋 <b>Стратегия сигнала:</b> ${strategyNameRu}\n`;
+                    if (ourStrategyName) {
+                        message += `🎯 <b>Наша стратегия:</b> ${ourStrategyName}\n`;
+                    }
+                    message += `\n`;
+                    
+                    // Вероятность успеха (если есть)
+                    if (latestSignal.probability) {
+                        const prob = latestSignal.probability;
+                        let probText = '';
+                        if (prob >= 70) {
+                            probText = 'высокая (надежный сигнал)';
+                        } else if (prob >= 40) {
+                            probText = 'средняя (умеренно надежный)';
+                        } else {
+                            probText = 'низкая (рискованный сигнал)';
+                        }
+                        message += `📊 <b>Вероятность успеха:</b> ${prob}% (${probText})\n\n`;
+                    }
+                    
+                    // Количество срабатываний
+                    if (totalCount > 1) {
+                        message += `🔄 <b>Количество срабатываний:</b> ${totalCount}\n`;
+                        message += `Этот сигнал срабатывал ${totalCount} раз(а), что означает, что цена несколько раз достигала целевого уровня.\n\n`;
+                    }
+                    
+                    // Рекомендуемое количество для покупки (только для сигналов на покупку)
+                    if (triggered.direction === 'SIGNAL_DIRECTION_BUY' && recommendedQuantity && recommendedQuantity > 0) {
+                        message += `💼 <b>Рекомендация по размеру позиции:</b>\n`;
+                        message += `• Рекомендуемое количество акций: <b>${recommendedQuantity} шт.</b>\n`;
+                        message += `• Сумма инвестиций: <b>${recommendedAmount.toFixed(2)} ₽</b>\n`;
+                        message += `• Процент от портфеля: <b>${portfolioPercent}%</b>\n`;
+                        
+                        if (potentialProfit && potentialProfit > 0) {
+                            const potentialProfitPercent = ((potentialProfit / recommendedAmount) * 100).toFixed(2);
+                            message += `• Потенциальная прибыль (при достижении цели): <b>+${potentialProfitPercent}%</b> (<b>+${potentialProfit.toFixed(2)} ₽</b>)\n`;
+                        }
+                        
+                        if (maxLoss && maxLoss > 0) {
+                            const maxLossPercent = ((maxLoss / recommendedAmount) * 100).toFixed(2);
+                            message += `• Максимальный убыток (при срабатывании стоп-лосса): <b>-${maxLossPercent}%</b> (<b>-${maxLoss.toFixed(2)} ₽</b>)\n`;
+                        }
+                        
+                        message += `\n`;
+                        message += `<i>💡 Это рекомендация на основе риск-менеджмента. Реальное количество может отличаться в зависимости от вашей стратегии и доступных средств.</i>\n\n`;
+                    }
+                    
+                    // Что делать дальше
+                    message += `💡 <b>Что делать дальше:</b>\n`;
+                    if (triggered.triggerType === 'target_reached') {
+                        const isBuy = triggered.direction === 'SIGNAL_DIRECTION_BUY';
+                        const isSell = triggered.direction === 'SIGNAL_DIRECTION_SELL';
+                        
+                        if (isBuy) {
+                            message += `✅ <b>Целевая цена достигнута!</b>\n`;
+                            message += `Сигнал на ПОКУПКУ означает: "купи сейчас, ожидается рост до целевой цены".\n`;
+                            message += `Цель достигнута, поэтому рекомендуется <b>зафиксировать прибыль</b> (продать часть или всю позицию).\n`;
+                            message += `Это позволит закрепить полученную прибыль и снизить риски.\n`;
+                        } else if (isSell) {
+                            message += `✅ <b>Целевая цена достигнута!</b>\n`;
+                            message += `Сигнал на ПРОДАЖУ означает: "продай сейчас, ожидается падение до целевой цены".\n`;
+                            message += `Цель достигнута, позиция должна быть закрыта.\n`;
+                        } else {
+                            message += `✅ Целевая цена достигнута! Рекомендуется рассмотреть возможность фиксации прибыли.\n`;
+                        }
+                    } else {
+                        message += `⚠️ <b>Сработал стоп-лосс!</b>\n`;
+                        message += `Это защитный механизм, который ограничивает убытки.\n`;
+                        message += `Рекомендуется <b>немедленно закрыть позицию</b>, чтобы ограничить дальнейшие убытки.\n`;
+                    }
+                    message += `\n`;
+                    
+                    // Важное предупреждение
+                    message += `⚠️ <i>Помните: сигналы не являются гарантией прибыли. Всегда используйте стоп-лосс и не вкладывайте все средства в один сигнал.</i>`;
 
                     // Отправляем уведомление в Telegram
                     await OptimizedTelegramService.sendAlert(

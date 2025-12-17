@@ -2220,10 +2220,23 @@ class EnsembleService {
      */
     async loadModels() {
         try {
+            // Проверяем, загружены ли уже модели
+            const allLoaded = this.models.lstm && this.models.cnn && this.models.transformer;
+            if (allLoaded) {
+                console.log('ℹ️ Ensemble models already loaded, skipping reload');
+                return;
+            }
+
             console.log('📥 Loading ensemble models with new ModelManager...');
             
             // Загружаем каждую модель ансамбля через ModelManager
             for (const modelType of ['lstm', 'cnn', 'transformer']) {
+                // Пропускаем, если модель уже загружена
+                if (this.models[modelType]) {
+                    console.log(`ℹ️ ${modelType} model already loaded, skipping`);
+                    continue;
+                }
+
                 try {
                     const modelName = `ensemble/${modelType}`;
                     const model = await ModelManager.loadModel(modelName);

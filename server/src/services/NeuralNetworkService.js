@@ -383,6 +383,12 @@ class NeuralNetworkService {
     // Загрузка модели из файлов (без tfjs-node): архитектура + веса
     async loadModel(figi = null) {
         try {
+            // Проверяем, загружена ли уже модель (если не указан конкретный FIGI)
+            if (!figi && this.model) {
+                console.log('ℹ️ Neural network model already loaded, skipping reload');
+                return true;
+            }
+
             // Попытка 0: Загрузить модель через OptimizedTrainingService (если есть в памяти)
             if (figi) {
                 try {

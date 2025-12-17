@@ -35,6 +35,7 @@ export interface TradingStats {
   portfolioValue: number; // Текущая стоимость портфеля
   cash: number;           // Свободные средства
   totalPnL: number;       // Суммарная прибыль/убыток по сделкам (валюта)
+  initialCapital?: number; // Начальный капитал (для расчета процента прибыли)
 
   // Статистика сделок
   winRate: number;        // WinRate в %, 0-100
