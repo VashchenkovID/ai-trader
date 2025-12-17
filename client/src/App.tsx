@@ -22,6 +22,7 @@ import Portfolio from './pages/Portfolio';
 import TrainingDebug from './pages/TrainingDebug';
 import StockDetail from './pages/StockDetail';
 import Strategies from './pages/Strategies';
+import InstrumentStats from './pages/InstrumentStats';
 
 function App() {
   // Инициализируем глобальный обработчик ошибок
@@ -45,6 +46,7 @@ function App() {
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/strategies" element={<Strategies />} />
                 <Route path="/training-debug" element={<TrainingDebug />} />
+                <Route path="/instrument-stats" element={<InstrumentStats />} />
                 <Route path="/stock/:figi" element={<StockDetail />} />
               </Routes>
             </main>

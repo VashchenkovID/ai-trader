@@ -4,6 +4,7 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Badge } from 'primereact/badge';
+import { Tag } from 'primereact/tag';
 import { Dialog } from 'primereact/dialog';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Toast } from 'primereact/toast';
@@ -39,6 +40,12 @@ interface TradingRequest {
   rejectionReason?: string;
   actualPrice?: number;
   commission?: number;
+  // Статистика инструмента (загружается отдельно)
+  instrumentStats?: {
+    winRate: number;
+    kellyFraction: number | null;
+    totalTrades: number;
+  };
 }
 
 const TradingRequestManager: React.FC = () => {
@@ -98,7 +105,38 @@ const TradingRequestManager: React.FC = () => {
       
       // Обрабатываем ответ - может быть массив или объект с data
       const requests = Array.isArray(requestsData) ? requestsData : (requestsData?.data || []);
-      setRequests(requests);
+      
+      // Загружаем статистику по инструментам для каждой заявки
+      // Оптимизация: получаем уникальные FIGI и загружаем статистику для них
+      const uniqueFigis = [...new Set(requests.map((req: TradingRequest) => req.figi))];
+      const statsMap = new Map<string, any>();
+      
+      // Загружаем статистику для всех уникальных инструментов параллельно
+      await Promise.allSettled(
+        uniqueFigis.map(async (figi) => {
+          try {
+            const statResult = await apiService.getInstrumentStat(figi);
+            if (statResult.success && statResult.data) {
+              statsMap.set(figi, {
+                winRate: statResult.data.winRate,
+                kellyFraction: statResult.data.kellyFraction,
+                totalTrades: statResult.data.totalTrades
+              });
+            }
+          } catch (error) {
+            // Игнорируем ошибки загрузки статистики
+            console.warn(`Не удалось загрузить статистику для ${figi}:`, error);
+          }
+        })
+      );
+      
+      // Добавляем статистику к каждой заявке
+      const requestsWithStats = requests.map((req: TradingRequest) => ({
+        ...req,
+        instrumentStats: statsMap.get(req.figi)
+      }));
+      
+      setRequests(requestsWithStats);
       
       // Загружаем статистику (опционально, если метод существует)
       try {
@@ -182,6 +220,71 @@ const TradingRequestManager: React.FC = () => {
         severity={config.severity as any} 
       />
     );
+  };
+
+  const getWinRateDisplay = (rowData: TradingRequest) => {
+    const winRate = rowData.instrumentStats?.winRate;
+    const totalTrades = rowData.instrumentStats?.totalTrades;
+    
+    if (winRate === undefined || winRate === null) {
+      return <span className="text-500">—</span>;
+    }
+    
+    const winRatePercent = (winRate * 100).toFixed(1);
+    
+    // Определяем цвет в зависимости от Win Rate
+    let severity: 'success' | 'warning' | 'danger' | 'info' = 'info';
+    if (winRate >= 0.6) {
+      severity = 'success';
+    } else if (winRate >= 0.5) {
+      severity = 'warning';
+    } else {
+      severity = 'danger';
+    }
+    
+    return (
+      <div className="flex align-items-center gap-2">
+        <Tag value={`${winRatePercent}%`} severity={severity} />
+        {totalTrades !== undefined && totalTrades > 0 && (
+          <span className="text-xs text-500">({totalTrades})</span>
+        )}
+      </div>
+    );
+  };
+
+  const getKellyDisplay = (rowData: TradingRequest) => {
+    const kellyFraction = rowData.instrumentStats?.kellyFraction;
+    
+    if (kellyFraction === undefined || kellyFraction === null) {
+      return <span className="text-500">—</span>;
+    }
+    
+    const kellyPercent = (kellyFraction * 100).toFixed(2);
+    
+    // Определяем цвет в зависимости от Kelly Fraction
+    let severity: 'success' | 'warning' | 'danger' | 'info' = 'info';
+    if (kellyFraction >= 0.15) {
+      severity = 'success';
+    } else if (kellyFraction >= 0.05) {
+      severity = 'warning';
+    } else if (kellyFraction > 0) {
+      severity = 'info';
+    } else {
+      severity = 'danger';
+    }
+    
+    return (
+      <Tag value={`${kellyPercent}%`} severity={severity} />
+    );
+  };
+
+  // Функции сортировки для вложенных полей (PrimeReact не поддерживает dot notation)
+  const winRateSortFunction = (rowData: TradingRequest) => {
+    return rowData.instrumentStats?.winRate ?? -1; // -1 для сортировки null значений в конец
+  };
+
+  const kellySortFunction = (rowData: TradingRequest) => {
+    return rowData.instrumentStats?.kellyFraction ?? -1; // -1 для сортировки null значений в конец
   };
 
   const handleApprove = (request: TradingRequest) => {
@@ -629,6 +732,34 @@ const TradingRequestManager: React.FC = () => {
                 />
                 
                 <Column
+                  header="Win Rate"
+                  sortable
+                  sortFunction={(e) => {
+                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
+                      const aValue = winRateSortFunction(a);
+                      const bValue = winRateSortFunction(b);
+                      return e.order * (aValue - bValue);
+                    });
+                  }}
+                  body={getWinRateDisplay}
+                  style={{ minWidth: '100px' }}
+                />
+                
+                <Column
+                  header="Келли"
+                  sortable
+                  sortFunction={(e) => {
+                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
+                      const aValue = kellySortFunction(a);
+                      const bValue = kellySortFunction(b);
+                      return e.order * (aValue - bValue);
+                    });
+                  }}
+                  body={getKellyDisplay}
+                  style={{ minWidth: '90px' }}
+                />
+                
+                <Column
                   field="createdAt"
                   header="Создана"
                   sortable
@@ -668,6 +799,32 @@ const TradingRequestManager: React.FC = () => {
                 <Column field="quantity" header="Количество" sortable />
                 <Column field="estimatedAmount" header="Сумма" sortable body={(rowData) => formatCurrency(rowData.estimatedAmount)} />
                 <Column field="confidence" header="Уверенность" sortable body={(rowData) => `${(rowData.confidence * 100).toFixed(1)}%`} />
+                <Column 
+                  header="Win Rate" 
+                  sortable 
+                  sortFunction={(e) => {
+                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
+                      const aValue = winRateSortFunction(a);
+                      const bValue = winRateSortFunction(b);
+                      return e.order * (aValue - bValue);
+                    });
+                  }}
+                  body={getWinRateDisplay} 
+                  style={{ minWidth: '100px' }} 
+                />
+                <Column 
+                  header="Келли" 
+                  sortable 
+                  sortFunction={(e) => {
+                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
+                      const aValue = kellySortFunction(a);
+                      const bValue = kellySortFunction(b);
+                      return e.order * (aValue - bValue);
+                    });
+                  }}
+                  body={getKellyDisplay} 
+                  style={{ minWidth: '90px' }} 
+                />
                 <Column field="priority" header="Приоритет" sortable body={(rowData) => getPriorityBadge(rowData.priority)} />
                 <Column header="Действия" body={actionBodyTemplate} />
               </DataTable>
@@ -693,6 +850,32 @@ const TradingRequestManager: React.FC = () => {
                 )} />
                 <Column field="quantity" header="Количество" sortable />
                 <Column field="estimatedAmount" header="Сумма" sortable body={(rowData) => formatCurrency(rowData.estimatedAmount)} />
+                <Column 
+                  header="Win Rate" 
+                  sortable 
+                  sortFunction={(e) => {
+                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
+                      const aValue = winRateSortFunction(a);
+                      const bValue = winRateSortFunction(b);
+                      return e.order * (aValue - bValue);
+                    });
+                  }}
+                  body={getWinRateDisplay} 
+                  style={{ minWidth: '100px' }} 
+                />
+                <Column 
+                  header="Келли" 
+                  sortable 
+                  sortFunction={(e) => {
+                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
+                      const aValue = kellySortFunction(a);
+                      const bValue = kellySortFunction(b);
+                      return e.order * (aValue - bValue);
+                    });
+                  }}
+                  body={getKellyDisplay} 
+                  style={{ minWidth: '90px' }} 
+                />
                 <Column field="approvedAt" header="Одобрена" sortable body={(rowData) => formatDateTime(rowData.approvedAt)} />
                 <Column header="Действия" body={actionBodyTemplate} />
               </DataTable>

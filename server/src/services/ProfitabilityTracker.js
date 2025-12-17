@@ -193,6 +193,24 @@ class ProfitabilityTracker {
         
         // Обновляем месячную статистику
         this.updateMonthlyStats(monthKey, tradeData);
+        
+        // Обновляем статистику инструмента при закрытии позиции (SELL)
+        // Примечание: Основное обновление происходит в TradingEngine.executePaperOrder,
+        // здесь обновляем только если trade содержит resultPercent напрямую
+        if (trade.action === 'SELL' && trade.resultPercent !== undefined && trade.resultPercent !== null) {
+            try {
+                const RiskManagementService = (await import('./RiskManagementService.js')).default;
+                if (RiskManagementService.isInitialized) {
+                    const figi = trade.figi || trade.symbol;
+                    const ticker = trade.ticker || trade.symbol;
+                    
+                    await RiskManagementService.updateInstrumentStats(figi, ticker, trade.resultPercent);
+                }
+            } catch (error) {
+                // Не прерываем запись статистики при ошибке обновления статистики инструмента
+                console.warn(`⚠️ Не удалось обновить статистику инструмента для ${trade.symbol}:`, error.message);
+            }
+        }
     }
 
     /**

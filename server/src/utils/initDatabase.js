@@ -20,6 +20,7 @@ import PortfolioAllocation from '../models/PortfolioAllocation.js';
 import PositionStrategy from '../models/PositionStrategy.js';
 import PositionExit from '../models/PositionExit.js';
 import TriggeredSignal from '../models/TriggeredSignal.js';
+import InstrumentStats from '../models/InstrumentStats.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');

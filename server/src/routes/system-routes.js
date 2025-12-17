@@ -6,6 +6,8 @@ import EnsembleService from '../services/EnsembleService.js';
 import CacheService from '../services/CacheService.js';
 import SettingsService from '../services/SettingsService.js';
 import SchedulerService from '../services/SchedulerService.js';
+import Settings from '../models/Settings.js';
+import RiskManagementService from '../services/RiskManagementService.js';
 
 const router = express.Router();
 
@@ -242,6 +244,93 @@ router.put('/settings', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Ошибка обновления настроек',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Получить настройки формулы Келли
+ */
+router.get('/settings/kelly', async (req, res) => {
+    try {
+        const settings = {
+            enabled: await Settings.getSetting('kelly_enabled', false),
+            conservativeFactor: await Settings.getSetting('kelly_conservative_factor', 0.25),
+            minTrades: await Settings.getSetting('kelly_min_trades', 10),
+            volatilityPeriod: await Settings.getSetting('kelly_volatility_period', 30)
+        };
+        
+        res.json({
+            success: true,
+            data: settings
+        });
+    } catch (error) {
+        console.error('Ошибка получения настроек Келли:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения настроек Келли',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Обновить настройки формулы Келли
+ */
+router.put('/settings/kelly', async (req, res) => {
+    try {
+        const { enabled, conservativeFactor, minTrades, volatilityPeriod } = req.body;
+        
+        const updates = {};
+        if (enabled !== undefined) {
+            await Settings.setSetting('kelly_enabled', enabled);
+            updates.enabled = enabled;
+        }
+        if (conservativeFactor !== undefined) {
+            if (conservativeFactor < 0 || conservativeFactor > 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'conservativeFactor должен быть между 0 и 1'
+                });
+            }
+            await Settings.setSetting('kelly_conservative_factor', conservativeFactor);
+            updates.conservativeFactor = conservativeFactor;
+        }
+        if (minTrades !== undefined) {
+            if (minTrades < 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'minTrades должен быть больше 0'
+                });
+            }
+            await Settings.setSetting('kelly_min_trades', minTrades);
+            updates.minTrades = minTrades;
+        }
+        if (volatilityPeriod !== undefined) {
+            if (volatilityPeriod < 7 || volatilityPeriod > 365) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'volatilityPeriod должен быть между 7 и 365 днями'
+                });
+            }
+            await Settings.setSetting('kelly_volatility_period', volatilityPeriod);
+            updates.volatilityPeriod = volatilityPeriod;
+        }
+        
+        // Перезагружаем настройки в сервисе
+        await RiskManagementService.loadKellySettings();
+        
+        res.json({
+            success: true,
+            message: 'Настройки Келли обновлены',
+            data: updates
+        });
+    } catch (error) {
+        console.error('Ошибка обновления настроек Келли:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка обновления настроек Келли',
             error: error.message
         });
     }

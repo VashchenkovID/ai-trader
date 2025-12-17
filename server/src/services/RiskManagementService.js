@@ -2,6 +2,8 @@ import OptimizedTelegramService from './OptimizedTelegramService.js';
 import OptimizedDataService from './OptimizedDataService.js';
 import CacheService from './CacheService.js';
 import TrailingStop from '../models/TrailingStop.js';
+import InstrumentStats from '../models/InstrumentStats.js';
+import Settings from '../models/Settings.js';
 
 /**
  * Сервис управления рисками для торговли
@@ -43,6 +45,14 @@ class RiskManagementService {
         this.tradeHistory = [];
         this.dailyHistory = [];
         
+        // Настройки формулы Келли (инициализируются значениями по умолчанию)
+        this.kellySettings = {
+            enabled: false,               // Включен ли индивидуальный расчет Келли
+            conservativeFactor: 0.25,     // Коэффициент консервативности (1/4 от Келли)
+            minTrades: 10,                // Минимальное количество сделок для использования статистики
+            volatilityPeriod: 30          // Период расчета волатильности в днях
+        };
+        
         // Алерты и предупреждения
         this.alerts = [];
         this.emergencyStop = false;
@@ -57,6 +67,9 @@ class RiskManagementService {
             
             // Загружаем сохраненную статистику если есть
             await this.loadStats();
+            
+            // Загружаем настройки формулы Келли
+            await this.loadKellySettings();
             
             this.isInitialized = true;
             console.log('✅ RiskManagementService инициализирован');
@@ -115,7 +128,7 @@ class RiskManagementService {
             }
 
             // 6. Расчет размера позиции
-            const positionSize = this.calculatePositionSize(signal, portfolio, currentPrices);
+            const positionSize = await this.calculatePositionSize(signal, portfolio, currentPrices);
             if (positionSize > this.limits.maxPositionSize * portfolio.totalValue) {
                 validation.warnings.push(`Размер позиции ${positionSize.toFixed(2)}₽ превышает рекомендуемый лимит`);
                 validation.adjustedSignal = {
@@ -236,25 +249,81 @@ class RiskManagementService {
 
     /**
      * Расчет оптимального размера позиции по формуле Келли
+     * Поддерживает как общий, так и индивидуальный расчет по инструменту
      */
-    calculatePositionSize(signal, portfolio, currentPrices) {
+    async calculatePositionSize(signal, portfolio, currentPrices) {
         const price = currentPrices[signal.symbol] || signal.price;
         const quantity = signal.quantity || 1;
+        const figi = signal.figi || signal.symbol;
         
-        // Базовая формула Келли: f = (bp - q) / b
-        // где b = odds, p = вероятность выигрыша, q = вероятность проигрыша
-        const winRate = this.stats.winRate || 0.5;
-        const averageWin = this.stats.averageWin || 0.01;
-        const averageLoss = Math.abs(this.stats.averageLoss) || 0.01;
+        let winRate, averageWin, averageLoss, kellyFraction;
         
-        // Коэффициент Келли
-        const kellyFraction = (winRate * averageWin - (1 - winRate) * averageLoss) / averageWin;
+        // Если включен индивидуальный расчет Келли и есть FIGI
+        if (this.kellySettings.enabled && figi) {
+            try {
+                const instrumentStats = await InstrumentStats.findOne({ where: { figi } });
+                
+                // Используем индивидуальную статистику, если есть достаточно данных
+                if (instrumentStats && instrumentStats.totalTrades >= this.kellySettings.minTrades) {
+                    winRate = instrumentStats.winRate || 0.5;
+                    averageWin = instrumentStats.averageWin || 0.01;
+                    averageLoss = Math.abs(instrumentStats.averageLoss) || 0.01;
+                    
+                    // Используем предрассчитанный Келли или рассчитываем заново
+                    if (instrumentStats.kellyFraction !== null && instrumentStats.kellyFraction !== undefined) {
+                        kellyFraction = instrumentStats.kellyFraction;
+                    } else {
+                        // Рассчитываем Келли
+                        if (averageWin > 0) {
+                            kellyFraction = (winRate * averageWin - (1 - winRate) * averageLoss) / averageWin;
+                            kellyFraction = Math.min(Math.max(kellyFraction, 0), 0.25);
+                        } else {
+                            kellyFraction = 0;
+                        }
+                    }
+                } else {
+                    // Недостаточно данных, используем общую статистику
+                    winRate = this.stats.winRate || 0.5;
+                    averageWin = this.stats.averageWin || 0.01;
+                    averageLoss = Math.abs(this.stats.averageLoss) || 0.01;
+                    
+                    if (averageWin > 0) {
+                        kellyFraction = (winRate * averageWin - (1 - winRate) * averageLoss) / averageWin;
+                        kellyFraction = Math.min(Math.max(kellyFraction, 0), 0.25);
+                    } else {
+                        kellyFraction = 0;
+                    }
+                }
+            } catch (error) {
+                console.warn(`⚠️ Ошибка получения статистики для ${figi}, используем общую статистику:`, error.message);
+                // Fallback на общую статистику
+                winRate = this.stats.winRate || 0.5;
+                averageWin = this.stats.averageWin || 0.01;
+                averageLoss = Math.abs(this.stats.averageLoss) || 0.01;
+                
+                if (averageWin > 0) {
+                    kellyFraction = (winRate * averageWin - (1 - winRate) * averageLoss) / averageWin;
+                    kellyFraction = Math.min(Math.max(kellyFraction, 0), 0.25);
+                } else {
+                    kellyFraction = 0;
+                }
+            }
+        } else {
+            // Используем общую статистику
+            winRate = this.stats.winRate || 0.5;
+            averageWin = this.stats.averageWin || 0.01;
+            averageLoss = Math.abs(this.stats.averageLoss) || 0.01;
+            
+            if (averageWin > 0) {
+                kellyFraction = (winRate * averageWin - (1 - winRate) * averageLoss) / averageWin;
+                kellyFraction = Math.min(Math.max(kellyFraction, 0), 0.25);
+            } else {
+                kellyFraction = 0;
+            }
+        }
         
-        // Ограничиваем Келли максимум 25% от капитала
-        const maxKellyFraction = Math.min(kellyFraction, 0.25);
-        
-        // Применяем консервативный подход - используем 1/4 от Келли
-        const conservativeFraction = maxKellyFraction * 0.25;
+        // Применяем консервативный подход
+        const conservativeFraction = kellyFraction * this.kellySettings.conservativeFactor;
         
         // Рассчитываем размер позиции
         const positionValue = portfolio.totalValue * conservativeFraction;
@@ -264,6 +333,68 @@ class RiskManagementService {
         const maxQuantity = Math.floor(this.limits.maxPositionSize * portfolio.totalValue / price);
         
         return Math.min(positionQuantity, maxQuantity, quantity);
+    }
+    
+    /**
+     * Обновление статистики инструмента при закрытии позиции
+     * Статистика собирается независимо от того, включен ли расчет Келли
+     */
+    async updateInstrumentStats(figi, ticker, resultPercent) {
+        try {
+            if (!figi) {
+                return;
+            }
+            
+            const isProfitable = resultPercent > 0;
+            await InstrumentStats.updateFromPosition(figi, resultPercent, isProfitable);
+            
+            // Обновляем волатильность только если включен расчет Келли
+            // (волатильность используется только для формулы Келли)
+            if (this.kellySettings.enabled) {
+                await this.updateInstrumentVolatility(figi);
+            }
+            
+        } catch (error) {
+            console.error(`❌ Ошибка обновления статистики для ${figi}:`, error);
+        }
+    }
+    
+    /**
+     * Обновление волатильности инструмента
+     */
+    async updateInstrumentVolatility(figi) {
+        try {
+            const candles = await CacheService.getCandles(figi, 'DAY', this.kellySettings.volatilityPeriod);
+            
+            if (!candles || candles.length < 10) {
+                return;
+            }
+            
+            // Рассчитываем доходности
+            const returns = [];
+            for (let i = 1; i < candles.length; i++) {
+                const prevClose = candles[i - 1].close;
+                const currentClose = candles[i].close;
+                if (prevClose > 0) {
+                    const returnPercent = (currentClose - prevClose) / prevClose;
+                    returns.push(returnPercent);
+                }
+            }
+            
+            if (returns.length === 0) {
+                return;
+            }
+            
+            // Рассчитываем стандартное отклонение (волатильность)
+            const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+            const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+            const volatility = Math.sqrt(variance);
+            
+            await InstrumentStats.updateVolatility(figi, volatility, this.kellySettings.volatilityPeriod);
+            
+        } catch (error) {
+            console.error(`❌ Ошибка обновления волатильности для ${figi}:`, error);
+        }
     }
 
     /**
@@ -539,6 +670,30 @@ class RiskManagementService {
             console.log('📂 Статистика риск-менеджмента загружена');
         } catch (error) {
             console.error('❌ Ошибка загрузки статистики:', error);
+        }
+    }
+    
+    /**
+     * Загрузка настроек формулы Келли
+     */
+    async loadKellySettings() {
+        try {
+            this.kellySettings = {
+                enabled: await Settings.getSetting('kelly_enabled', false),
+                conservativeFactor: await Settings.getSetting('kelly_conservative_factor', 0.25),
+                minTrades: await Settings.getSetting('kelly_min_trades', 10),
+                volatilityPeriod: await Settings.getSetting('kelly_volatility_period', 30)
+            };
+            console.log(`📊 Настройки Келли загружены: ${this.kellySettings.enabled ? 'включен' : 'выключен'}`);
+        } catch (error) {
+            console.warn('⚠️ Ошибка загрузки настроек Келли, используем значения по умолчанию:', error.message);
+            // Убеждаемся, что настройки установлены значениями по умолчанию при ошибке
+            this.kellySettings = {
+                enabled: false,
+                conservativeFactor: 0.25,
+                minTrades: 10,
+                volatilityPeriod: 30
+            };
         }
     }
 

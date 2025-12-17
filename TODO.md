@@ -74,7 +74,7 @@
   - `server/src/services/ProfitabilityTracker.js`
   - `server/src/services/SchedulerService.js` (новая cron-задача)
 
-#### 6. Улучшенная формула Келли с учетом инструмента
+#### 6. Улучшенная формула Келли с учетом инструмента (реализация 75% проверить фронт)
 - **Текущее состояние:** Используется общий winRate для всех инструментов
 - **Рекомендация:** Индивидуальный расчет Келли для каждого инструмента:
   - Win Rate по конкретному инструменту
@@ -87,6 +87,16 @@
   - `server/src/services/RiskManagementService.js`
   - Новая модель: `server/src/models/InstrumentStats.js`
   - `server/src/services/StrategyAllocationService.js`
+- **Фронтенд компоненты (см. `TODO_FRONTEND_KELLY.md`):**
+  - Новая страница: `client/src/pages/InstrumentStats.tsx` - статистика по инструментам
+  - Расширение `TradingRequests.tsx` - отображение Win Rate и Келли в заявках
+  - Расширение `Settings.tsx` - настройки формулы Келли
+  - Расширение `Portfolio.tsx` - карточки статистики инструментов
+  - Расширение `Recommendations.tsx` - информация о Келли в рекомендациях
+  - Компонент `KellyCalculator.tsx` - интерактивный калькулятор Келли
+  - Расширение `Dashboard.tsx` - виджеты метрик Келли
+  - Расширение `MetricsMonitoring.tsx` - графики метрик Келли
+  - API endpoints: `/api/instrument-stats/*`, `/api/settings/kelly`
 
 #### 7. Контроль корреляций между позициями
 - **Текущее состояние:** Базовая проверка корреляции (только предупреждение)

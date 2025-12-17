@@ -24,6 +24,7 @@ import portfolioMigratorRoutes from './portfolio-migrator-routes.js';
 import preflightCheckRoutes from './preflight-check-routes.js';
 import notificationsRoutes from './notifications-routes.js';
 import errorsRoutes from './errors-routes.js';
+import instrumentStatsRoutes from './instrument-stats-routes.js';
 import ServiceManager from '../services/ServiceManager.js';
 import Recommendation from '../models/Recommendation.js';
 import { Op } from 'sequelize';
@@ -56,6 +57,7 @@ router.use('/portfolio-migrator', portfolioMigratorRoutes);
 router.use('/preflight-check', preflightCheckRoutes);
 router.use('/notifications', notificationsRoutes);
 router.use('/errors', errorsRoutes);
+router.use('/instrument-stats', instrumentStatsRoutes);
 
 /**
  * Статистика Meta-Learning

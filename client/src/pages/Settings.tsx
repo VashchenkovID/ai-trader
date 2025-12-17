@@ -19,6 +19,7 @@ import { Calendar } from 'primereact/calendar';
 import { ToggleButton } from 'primereact/togglebutton';
 import { ProgressBar } from 'primereact/progressbar';
 import { Chip } from 'primereact/chip';
+import { InputSwitch } from 'primereact/inputswitch';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { apiService } from '../services/apiService';
@@ -91,6 +92,8 @@ const Settings: React.FC = () => {
   const [showAdvancedMode, setShowAdvancedMode] = useState(false);
   const [showSystemDialog, setShowSystemDialog] = useState(false);
   const [showBackupDialog, setShowBackupDialog] = useState(false);
+  const [kellySettings, setKellySettings] = useState<any>(null);
+  const [loadingKellySettings, setLoadingKellySettings] = useState(false);
   const toast = useRef<Toast>(null);
   const { isConnected } = useWebSocketData();
 
@@ -128,6 +131,7 @@ const Settings: React.FC = () => {
     loadSettings();
     loadSystemInfo();
     loadPerformanceMetrics();
+    loadKellySettings();
     
     // Обновляем системную информацию каждые 30 секунд
     const interval = setInterval(() => {
@@ -137,6 +141,43 @@ const Settings: React.FC = () => {
     
     return () => clearInterval(interval);
   }, []);
+  
+  const loadKellySettings = async () => {
+    try {
+      setLoadingKellySettings(true);
+      const result = await apiService.getKellySettings();
+      if (result.success) {
+        setKellySettings(result.data);
+      }
+    } catch (error) {
+      console.error('Error loading Kelly settings:', error);
+    } finally {
+      setLoadingKellySettings(false);
+    }
+  };
+  
+  const saveKellySettings = async (updates: any) => {
+    try {
+      setLoadingKellySettings(true);
+      const result = await apiService.updateKellySettings(updates);
+      if (result.success) {
+        setKellySettings({ ...kellySettings, ...updates });
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Успешно',
+          detail: 'Настройки Келли обновлены'
+        });
+      }
+    } catch (error: any) {
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Ошибка',
+        detail: error.message || 'Не удалось сохранить настройки Келли'
+      });
+    } finally {
+      setLoadingKellySettings(false);
+    }
+  };
 
   // Обновление данных из WebSocket
   useEffect(() => {
@@ -656,6 +697,182 @@ const Settings: React.FC = () => {
     // Специальная обработка для обзорной вкладки
     if (moduleName === 'Обзор') {
       return renderOverviewTab();
+    }
+
+    // Специальная обработка для вкладки "Торговля" - добавляем настройки Келли
+    if (moduleName === 'Торговля') {
+      const moduleSettings = getModuleSettings(moduleName);
+      return (
+        <div className="flex flex-column gap-4">
+          {/* Настройки формулы Келли */}
+          <Card title="📊 Формула Келли" className="mb-4">
+            {loadingKellySettings ? (
+              <div className="text-center p-4">
+                <ProgressBar mode="indeterminate" style={{ height: '6px' }} />
+              </div>
+            ) : kellySettings ? (
+              <div className="grid">
+                <div className="col-12">
+                  <div className="flex align-items-center justify-content-between mb-3">
+                    <div>
+                      <label className="font-semibold">Индивидуальный расчет Келли по инструментам</label>
+                      <p className="text-sm text-500 mt-1">
+                        Использовать статистику по каждому инструменту вместо общей статистики
+                      </p>
+                    </div>
+                    <InputSwitch
+                      checked={kellySettings.enabled}
+                      onChange={(e) => saveKellySettings({ enabled: e.value })}
+                    />
+                  </div>
+                </div>
+                
+                {kellySettings.enabled && (
+                  <>
+                    <div className="col-12 md:col-6">
+                      <label className="block text-sm font-medium mb-2">
+                        Коэффициент консервативности
+                      </label>
+                      <InputNumber
+                        value={kellySettings.conservativeFactor}
+                        onValueChange={(e) => {
+                          const value = e.value || 0.25;
+                          if (value >= 0 && value <= 1) {
+                            saveKellySettings({ conservativeFactor: value });
+                          }
+                        }}
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        suffix=" (доля от Келли)"
+                        className="w-full"
+                      />
+                      <small className="text-500">
+                        Рекомендуется: 0.25 (1/4 от полного Келли)
+                      </small>
+                    </div>
+                    
+                    <div className="col-12 md:col-6">
+                      <label className="block text-sm font-medium mb-2">
+                        Минимальное количество сделок
+                      </label>
+                      <InputNumber
+                        value={kellySettings.minTrades}
+                        onValueChange={(e) => {
+                          const value = e.value || 10;
+                          if (value >= 1) {
+                            saveKellySettings({ minTrades: value });
+                          }
+                        }}
+                        min={1}
+                        max={1000}
+                        className="w-full"
+                      />
+                      <small className="text-500">
+                        Минимум сделок для использования статистики по инструменту
+                      </small>
+                    </div>
+                    
+                    <div className="col-12 md:col-6">
+                      <label className="block text-sm font-medium mb-2">
+                        Период расчета волатильности (дни)
+                      </label>
+                      <InputNumber
+                        value={kellySettings.volatilityPeriod}
+                        onValueChange={(e) => {
+                          const value = e.value || 30;
+                          if (value >= 7 && value <= 365) {
+                            saveKellySettings({ volatilityPeriod: value });
+                          }
+                        }}
+                        min={7}
+                        max={365}
+                        className="w-full"
+                      />
+                      <small className="text-500">
+                        Период для расчета волатильности инструмента
+                      </small>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="text-center text-500 p-4">
+                Не удалось загрузить настройки Келли
+              </div>
+            )}
+          </Card>
+          
+          {/* Остальные настройки торговли */}
+          {moduleSettings.length > 0 && (
+            <>
+              <Divider />
+              <h4 className="text-xl font-semibold mb-3">Другие настройки торговли</h4>
+              {Object.entries(
+                moduleSettings.reduce((acc, setting) => {
+                  const category = setting.category || 'Общие';
+                  if (!acc[category]) {
+                    acc[category] = [];
+                  }
+                  acc[category].push(setting);
+                  return acc;
+                }, {} as Record<string, Setting[]>)
+              ).map(([category, categorySettings]) => (
+                <div key={category}>
+                  <Divider align="left">
+                    <Tag value={category} severity="info" />
+                  </Divider>
+                  <div className="grid">
+                    {categorySettings.map((setting) => {
+                      const hasChanged = originalSettings.find(orig => orig.key === setting.key)?.value !== setting.value;
+                      return (
+                        <div key={setting.key} className="col-12 md:col-6 lg:col-4">
+                          <Card className={`h-full ${hasChanged ? 'border-orange-300' : ''}`}>
+                            <div className="flex flex-column gap-3">
+                              <div className="flex justify-content-between align-items-start">
+                                <div className="flex-1">
+                                  <label className="font-semibold text-sm text-gray-700">
+                                    {setting.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                  </label>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {setting.description}
+                                  </p>
+                                </div>
+                                <div className="flex align-items-center gap-1">
+                                  {hasChanged && (
+                                    <Badge value="Изменено" severity="warning" size="normal" />
+                                  )}
+                                  {!setting.isEditable && (
+                                    <i className="pi pi-lock text-gray-400" title="Только для чтения"></i>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="flex align-items-center gap-2">
+                                {renderSettingInput(setting)}
+                              </div>
+
+                              <div className="flex justify-content-between align-items-center">
+                                <div className="text-xs text-gray-400">
+                                  Обновлено: {new Date(setting.lastUpdated).toLocaleString('ru-RU')}
+                                </div>
+                                <Tag 
+                                  value={setting.dataType} 
+                                  severity="info" 
+                                />
+                              </div>
+                            </div>
+                          </Card>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      );
     }
 
     // Специальная обработка для вкладки "Уведомления" - добавляем управление новостями

@@ -320,21 +320,66 @@ class TradingEngine {
             }
         }
 
+        // Рассчитываем resultPercent для статистики инструмента (только для SELL)
+        // Используем PnL для расчета, так как он уже учитывает обе комиссии (покупки и продажи)
+        let resultPercent = null;
+        if (action === 'SELL' && pnl !== undefined && pnl !== null) {
+            // Находим среднюю цену покупки для расчета процента прибыли/убытка
+            const buyTrades = this.virtualPortfolio.trades.filter(t => 
+                (t.symbol === symbol || t.figi === symbol) && t.action === 'BUY'
+            );
+            if (buyTrades.length > 0) {
+                // Суммируем стоимость покупок с учетом комиссий
+                const totalCost = buyTrades.reduce((sum, t) => 
+                    sum + (t.price * t.quantity) + (t.commission || 0), 0
+                );
+                const totalQuantity = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
+                const averageBuyPrice = totalQuantity > 0 ? totalCost / totalQuantity : executionPrice;
+                
+                if (averageBuyPrice > 0 && quantity > 0) {
+                    // resultPercent рассчитываем из PnL, который уже учитывает обе комиссии
+                    // resultPercent = PnL / (средняя цена покупки * количество)
+                    // Это дает точный процент прибыли/убытка с учетом всех комиссий
+                    const totalCostBasis = averageBuyPrice * quantity;
+                    resultPercent = pnl / totalCostBasis;
+                }
+            }
+        }
+        
         // Запись сделки
         const trade = {
             id: `paper_${Date.now()}`,
             symbol,
+            figi: signal.figi || symbol,
+            ticker: signal.ticker || symbol,
             action,
             quantity,
             price: executionPrice,
             commission,
             pnl,
+            resultPercent, // Добавляем resultPercent в trade для использования в ProfitabilityTracker
             timestamp: new Date().toISOString(),
             confidence,
             mode: 'paper'
         };
         
         this.virtualPortfolio.trades.push(trade);
+        
+        // Обновляем статистику инструмента при закрытии позиции (SELL)
+        if (action === 'SELL' && resultPercent !== null && resultPercent !== undefined) {
+            try {
+                const RiskManagementService = (await import('./RiskManagementService.js')).default;
+                if (RiskManagementService.isInitialized) {
+                    const figi = signal.figi || symbol;
+                    const ticker = signal.ticker || symbol;
+                    
+                    await RiskManagementService.updateInstrumentStats(figi, ticker, resultPercent);
+                }
+            } catch (error) {
+                // Не прерываем выполнение сделки при ошибке обновления статистики
+                console.warn(`⚠️ Не удалось обновить статистику инструмента для ${symbol}:`, error.message);
+            }
+        }
         
         // Сохраняем виртуальный портфель в БД
         await this.saveVirtualPortfolio();

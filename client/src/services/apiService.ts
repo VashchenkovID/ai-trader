@@ -96,6 +96,46 @@ export interface TradingMode {
   timestamp: string;
 }
 
+export interface InstrumentStat {
+  id?: number;
+  figi: string;
+  ticker: string;
+  winRate: number;
+  averageWin: number;
+  averageLoss: number;
+  totalTrades: number;
+  profitableTrades: number;
+  losingTrades: number;
+  volatility: number | null;
+  volatilityPeriod: number | null;
+  kellyFraction: number | null;
+  conservativeKelly: number | null;
+  lastUpdated: string;
+  lastTradeDate: string | null;
+  metadata?: any;
+}
+
+export interface KellySettings {
+  enabled: boolean;
+  conservativeFactor: number;
+  minTrades: number;
+  volatilityPeriod: number;
+}
+
+export interface KellyCalculation {
+  figi: string;
+  ticker: string;
+  winRate: number;
+  averageWin: number;
+  averageLoss: number;
+  totalTrades: number;
+  kellyFraction: number;
+  conservativeKelly: number;
+  recommendedPositionSize: number;
+  volatility: number | null;
+  insufficientData: boolean;
+}
+
 export interface RiskManagementStatus {
   isActive: boolean;
   maxPositionSize: number;
@@ -2832,6 +2872,103 @@ export const apiService = {
       return response.data;
     } catch (error: any) {
       console.error('Error fetching and caching signals:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить статистику по всем инструментам
+   */
+  async getInstrumentStats(params?: { minTrades?: number; sortBy?: string; order?: string; limit?: number }): Promise<{ success: boolean; data: InstrumentStat[]; count: number }> {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params?.minTrades) queryParams.append('minTrades', params.minTrades.toString());
+      if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+      if (params?.order) queryParams.append('order', params.order);
+      if (params?.limit) queryParams.append('limit', params.limit.toString());
+      
+      const response = await api.get(`/api/instrument-stats?${queryParams.toString()}`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error getting instrument stats:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить статистику по конкретному инструменту
+   */
+  async getInstrumentStat(figi: string): Promise<{ success: boolean; data: InstrumentStat }> {
+    try {
+      const response = await api.get(`/api/instrument-stats/${figi}`);
+      return response.data;
+    } catch (error: any) {
+      console.error(`Error getting instrument stat for ${figi}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Рассчитать Келли для инструмента
+   */
+  async calculateKelly(figi: string, portfolioValue: number): Promise<{ success: boolean; data: KellyCalculation }> {
+    try {
+      const response = await api.post('/api/instrument-stats/calculate-kelly', { figi, portfolioValue });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error calculating Kelly:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Обновить статистику по инструменту
+   */
+  async refreshInstrumentStat(figi: string): Promise<{ success: boolean; message: string; data: InstrumentStat }> {
+    try {
+      const response = await api.post(`/api/instrument-stats/${figi}/refresh`);
+      return response.data;
+    } catch (error: any) {
+      console.error(`Error refreshing instrument stat for ${figi}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить топ инструментов по метрике
+   */
+  async getTopInstruments(metric: 'winRate' | 'kellyFraction' | 'totalTrades' | 'averageWin', limit: number = 10): Promise<{ success: boolean; data: InstrumentStat[]; metric: string; count: number }> {
+    try {
+      const response = await api.get(`/api/instrument-stats/top/${metric}?limit=${limit}`);
+      return response.data;
+    } catch (error: any) {
+      console.error(`Error getting top instruments by ${metric}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить настройки формулы Келли
+   */
+  async getKellySettings(): Promise<{ success: boolean; data: KellySettings }> {
+    try {
+      const response = await api.get('/api/system/settings/kelly');
+      return response.data;
+    } catch (error: any) {
+      console.error('Error getting Kelly settings:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Обновить настройки формулы Келли
+   */
+  async updateKellySettings(settings: Partial<KellySettings>): Promise<{ success: boolean; message: string; data: Partial<KellySettings> }> {
+    try {
+      const response = await api.put('/api/system/settings/kelly', settings);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating Kelly settings:', error);
       throw error;
     }
   }
