@@ -51,6 +51,7 @@ class ServiceManager {
             
             // 4. Инициализируем все остальные сервисы
             await this.initializeService('CapitalAllocationStrategy', () => import('./CapitalAllocationStrategy.js'));
+            await this.initializeService('PortfolioOptimizer', () => import('./PortfolioOptimizer.js'));
             await this.initializeService('DividendService', () => import('./DividendService.js'));
             await this.initializeService('ModelSaveService', () => import('./ModelSaveService.js'));
             await this.initializeService('NewsAnalysisService', () => import('./NewsAnalysisService.js'));

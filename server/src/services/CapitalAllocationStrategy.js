@@ -7,6 +7,8 @@ import ProfitabilityTracker from './ProfitabilityTracker.js';
 import CacheService from './CacheService.js';
 import TinkoffApiService from './TinkoffApiService.js';
 import CachedInstrument from '../models/CachedInstrument.js';
+import PortfolioOptimizer from './PortfolioOptimizer.js';
+import CorrelationService from './CorrelationService.js';
 
 /**
  * Сервис для стратегии распределения капитала
@@ -56,6 +58,16 @@ class CapitalAllocationStrategy {
                 maxSingleStock: 0.10, // Будет адаптироваться
                 diversification: 0.8, // Будет адаптироваться
                 riskTolerance: 0.5 // Будет адаптироваться
+            },
+            optimized: {
+                name: 'Оптимизированная (Mean-Variance/Black-Litterman/Risk Parity)',
+                maxPositionSize: 0.10, // 10% на позицию (будет оптимизировано)
+                maxSectorExposure: 0.30, // 30% на сектор
+                maxSingleStock: 0.15, // 15% на одну акцию
+                diversification: 0.9,
+                riskTolerance: 0.5,
+                optimizationMethod: 'mean_variance', // mean_variance, black_litterman, risk_parity
+                useOptimizer: true
             }
         };
     }
@@ -393,6 +405,17 @@ class CapitalAllocationStrategy {
             return targetAllocation;
         }
 
+        // Если используется стратегия optimized, используем PortfolioOptimizer
+        if (strategyConfig.useOptimizer) {
+            try {
+                return await this.calculateOptimizedAllocation(analysis, strategyConfig);
+            } catch (error) {
+                console.warn('⚠️ Ошибка оптимизации портфеля, используем fallback метод:', error.message);
+                // Fallback на стандартный метод
+            }
+        }
+
+        // Стандартный метод распределения (fallback или для других стратегий)
         // Получаем список доступных инструментов
         const availableInstruments = await this.getAvailableInstruments();
         
@@ -430,6 +453,151 @@ class CapitalAllocationStrategy {
                 positionCount++;
             }
         }
+
+        return targetAllocation;
+    }
+
+    /**
+     * Расчет целевого распределения с использованием PortfolioOptimizer
+     */
+    async calculateOptimizedAllocation(analysis, strategyConfig) {
+        const totalValue = analysis.totalValue;
+        
+        // Инициализируем PortfolioOptimizer если еще не инициализирован
+        if (!PortfolioOptimizer.isInitialized) {
+            await PortfolioOptimizer.initialize();
+        }
+
+        // Получаем список доступных инструментов
+        const availableInstruments = await this.getAvailableInstruments();
+        
+        if (!availableInstruments || availableInstruments.length === 0) {
+            throw new Error('Нет доступных инструментов для оптимизации');
+        }
+
+        // Преобразуем инструменты в формат для PortfolioOptimizer
+        const instruments = [];
+        for (const inst of availableInstruments) {
+            // Получаем FIGI из CachedInstrument если нужно
+            let figi = inst.figi;
+            if (!figi && inst.symbol) {
+                const cachedInst = await CachedInstrument.findOne({
+                    where: { ticker: inst.symbol },
+                    attributes: ['figi', 'ticker', 'name', 'instrumentType', 'currency']
+                });
+                if (cachedInst) {
+                    figi = cachedInst.figi;
+                }
+            }
+
+            if (figi) {
+                instruments.push({
+                    figi: figi,
+                    ticker: inst.symbol || inst.ticker,
+                    name: inst.name,
+                    sector: inst.sector,
+                    price: inst.price || 0
+                });
+            }
+        }
+
+        if (instruments.length < 2) {
+            throw new Error('Недостаточно инструментов для оптимизации (нужно минимум 2)');
+        }
+
+        // Получаем матрицу корреляций
+        const figis = instruments.map(i => i.figi);
+        const correlationMatrix = await CorrelationService.getCorrelationMatrix(figis);
+
+        if (!correlationMatrix || Object.keys(correlationMatrix).length === 0) {
+            throw new Error('Не удалось получить матрицу корреляций');
+        }
+
+        // Определяем метод оптимизации
+        const optimizationMethod = strategyConfig.optimizationMethod || 'mean_variance';
+        
+        // Настройки ограничений
+        const constraints = {
+            maxPositionSize: strategyConfig.maxPositionSize || 0.10,
+            minPositionSize: 0.01, // Минимум 1%
+            maxSectorExposure: strategyConfig.maxSectorExposure || 0.30,
+            maxPositions: this.allocationSettings.maxPositions || instruments.length,
+            instruments: instruments
+        };
+
+        // Выполняем оптимизацию в зависимости от метода
+        let optimizationResult;
+        try {
+            switch (optimizationMethod) {
+                case 'black_litterman':
+                    optimizationResult = await PortfolioOptimizer.blackLittermanOptimization({
+                        instruments: instruments,
+                        correlationMatrix: correlationMatrix,
+                        totalCapital: totalValue,
+                        constraints: constraints,
+                        riskAversion: strategyConfig.riskTolerance ? (1 / strategyConfig.riskTolerance) * 2 : 3.0
+                    });
+                    break;
+                
+                case 'risk_parity':
+                    optimizationResult = await PortfolioOptimizer.riskParityOptimization({
+                        instruments: instruments,
+                        correlationMatrix: correlationMatrix,
+                        totalCapital: totalValue,
+                        constraints: constraints
+                    });
+                    break;
+                
+                case 'mean_variance':
+                default:
+                    optimizationResult = await PortfolioOptimizer.meanVarianceOptimization({
+                        instruments: instruments,
+                        correlationMatrix: correlationMatrix,
+                        totalCapital: totalValue,
+                        constraints: constraints,
+                        riskAversion: strategyConfig.riskTolerance ? (1 / strategyConfig.riskTolerance) * 2 : 3.0
+                    });
+                    break;
+            }
+        } catch (error) {
+            console.error('❌ Ошибка выполнения оптимизации:', error);
+            throw error;
+        }
+
+        if (!optimizationResult || !optimizationResult.weights) {
+            throw new Error('Оптимизация не вернула результаты');
+        }
+
+        // Преобразуем результаты оптимизации в формат targetAllocation
+        const targetAllocation = [];
+        const weights = optimizationResult.weights;
+
+        for (const instrument of instruments) {
+            const weight = weights[instrument.figi] || 0;
+            
+            if (weight > 0.001) { // Минимальный вес 0.1%
+                const positionValue = totalValue * weight;
+                const price = instrument.price || (await CacheService.getInstrument(instrument.figi))?.lastPrice || 0;
+                
+                if (price > 0) {
+                    targetAllocation.push({
+                        symbol: instrument.ticker,
+                        figi: instrument.figi,
+                        quantity: Math.floor(positionValue / price),
+                        value: positionValue,
+                        weight: weight,
+                        sector: instrument.sector,
+                        expectedReturn: optimizationResult.expectedReturn || 0,
+                        risk: optimizationResult.portfolioVolatility || 0,
+                        optimizationMethod: optimizationMethod,
+                        sharpeRatio: optimizationResult.sharpeRatio || 0
+                    });
+                }
+            }
+        }
+
+        // Сортируем по весу (от большего к меньшему)
+        targetAllocation.sort((a, b) => b.weight - a.weight);
 
         return targetAllocation;
     }

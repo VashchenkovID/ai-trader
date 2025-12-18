@@ -130,7 +130,7 @@
 
 ### 🟢 Низкий приоритет (долгосрочный эффект)
 
-#### 9. Оптимизация портфеля (Mean-Variance Optimization)
+#### 9. Оптимизация портфеля (Mean-Variance Optimization) (Реализовано)
 - **Рекомендация:** Использовать современные методы оптимизации:
   - Mean-Variance Optimization (Markowitz)
   - Black-Litterman Model (с учетом мнений аналитиков)
