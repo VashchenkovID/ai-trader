@@ -22,6 +22,7 @@ import PositionExit from '../models/PositionExit.js';
 import TriggeredSignal from '../models/TriggeredSignal.js';
 import InstrumentStats from '../models/InstrumentStats.js';
 import BacktestResult from '../models/BacktestResult.js';
+import MacroIndicator from '../models/MacroIndicator.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
@@ -154,6 +155,80 @@ export async function initDatabase() {
             }
         }
         
+        // Создаем таблицу макроиндикаторов
+        console.log('📊 Создание таблицы макроиндикаторов...');
+        try {
+            // Сначала добавляем новые значения в ENUM, если их еще нет
+            const newEnumValues = ['industrial_production', 'retail_sales', 'investments', 'exports', 'imports'];
+            for (const enumValue of newEnumValues) {
+                try {
+                    await sequelize.query(`
+                        DO $$ 
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM pg_enum 
+                                WHERE enumlabel = '${enumValue}' 
+                                AND enumtypid = (
+                                    SELECT oid FROM pg_type 
+                                    WHERE typname = 'enum_macro_indicators_indicatorType'
+                                )
+                            ) THEN
+                                ALTER TYPE enum_macro_indicators_indicatorType ADD VALUE '${enumValue}';
+                            END IF;
+                        END $$;
+                    `);
+                    console.log(`✅ Добавлено значение ${enumValue} в ENUM`);
+                } catch (enumError) {
+                    // Игнорируем ошибки, если ENUM еще не создан или значение уже существует
+                    if (!enumError.message.includes('does not exist') && 
+                        !enumError.message.includes('already exists') &&
+                        !enumError.message.includes('не существует')) {
+                        console.warn(`⚠️ Не удалось добавить значение ${enumValue} в ENUM:`, enumError.message);
+                    }
+                }
+            }
+            
+            // Миграция: изменяем тип столбца value с FLOAT на DECIMAL(10, 2) для точности до сотых
+            try {
+                await sequelize.query(`
+                    DO $$ 
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM information_schema.columns 
+                            WHERE table_name = 'macro_indicators' 
+                            AND column_name = 'value'
+                            AND data_type = 'double precision'
+                        ) THEN
+                            ALTER TABLE macro_indicators 
+                            ALTER COLUMN value TYPE DECIMAL(10, 2) USING ROUND(value::numeric, 2);
+                        END IF;
+                    END $$;
+                `);
+                console.log('✅ Тип столбца value изменен на DECIMAL(10, 2) для точности до сотых');
+            } catch (migrationError) {
+                // Игнорируем ошибки, если столбец еще не создан или уже имеет нужный тип
+                if (!migrationError.message.includes('does not exist') && 
+                    !migrationError.message.includes('не существует') &&
+                    !migrationError.message.includes('column') &&
+                    !migrationError.message.includes('already')) {
+                    console.warn('⚠️ Не удалось изменить тип столбца value:', migrationError.message);
+                }
+            }
+            
+            await MacroIndicator.sync({ force: false });
+            console.log('✅ Таблица макроиндикаторов создана/обновлена');
+        } catch (syncError) {
+            // Игнорируем ошибки создания ENUM типов, если они уже существуют
+            if (syncError.name === 'SequelizeUniqueConstraintError' && 
+                syncError.original && syncError.original.code === '23505' &&
+                (syncError.message && syncError.message.includes('enum_macro_indicators') ||
+                 syncError.original.detail && syncError.original.detail.includes('enum_macro_indicators'))) {
+                console.log('✅ Таблица макроиндикаторов уже существует');
+            } else {
+                throw syncError;
+            }
+        }
+        
         // Инициализируем стратегии по умолчанию
         await TradingStrategy.initializeDefaultStrategies();
         
@@ -214,6 +289,8 @@ export async function initDatabase() {
         // Инициализация настроек
         console.log('\n🔧 Инициализация настроек...');
         await initializeRecommendedSettings();
+        // Также инициализируем настройки по умолчанию из Settings (включая макро-данные)
+        await Settings.initializeDefaults();
         console.log('✅ Настройки инициализированы');
 
         // Показываем статистику
@@ -653,6 +730,67 @@ async function initializeRecommendedSettings() {
                 dataType: 'number',
                 minValue: 1,
                 maxValue: 10
+            },
+
+            // ========================================
+            // МАКРОЭКОНОМИЧЕСКИЕ ДАННЫЕ
+            // ========================================
+            {
+                key: 'macro_data_update_interval',
+                value: '0 10 * * *',
+                description: 'Интервал обновления макроэкономических данных (cron)',
+                category: 'macro_data',
+                dataType: 'string',
+                options: [
+                    { value: '0 8 * * *', label: 'Каждый день в 8:00' },
+                    { value: '0 10 * * *', label: 'Каждый день в 10:00' },
+                    { value: '0 12 * * *', label: 'Каждый день в 12:00' },
+                    { value: '0 */6 * * *', label: 'Каждые 6 часов' },
+                    { value: '0 */12 * * *', label: 'Каждые 12 часов' }
+                ]
+            },
+            {
+                key: 'macro_data_cache_ttl_hours',
+                value: 1,
+                description: 'TTL кеша макроэкономических данных (часы)',
+                category: 'macro_data',
+                dataType: 'number',
+                minValue: 1,
+                maxValue: 24
+            },
+            {
+                key: 'macro_data_sources',
+                value: JSON.stringify({
+                    cbr: true,
+                    rosstat: true,
+                    moex: true,
+                    investing: false,
+                    tradingEconomics: false
+                }),
+                description: 'Настройки источников макроэкономических данных (JSON)',
+                category: 'macro_data',
+                dataType: 'json'
+            },
+            {
+                key: 'macro_data_cbr_enabled',
+                value: true,
+                description: 'Включить получение данных от ЦБ РФ',
+                category: 'macro_data',
+                dataType: 'boolean'
+            },
+            {
+                key: 'macro_data_rosstat_enabled',
+                value: true,
+                description: 'Включить получение данных от Росстата',
+                category: 'macro_data',
+                dataType: 'boolean'
+            },
+            {
+                key: 'macro_data_moex_enabled',
+                value: true,
+                description: 'Включить получение данных от Мосбиржи',
+                category: 'macro_data',
+                dataType: 'boolean'
             },
 
             // ========================================

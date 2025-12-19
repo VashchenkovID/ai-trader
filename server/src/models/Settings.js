@@ -636,6 +636,65 @@ Settings.initializeDefaults = async function() {
             dataType: 'number',
             minValue: 1,
             maxValue: 10
+        },
+        
+        // Настройки макроэкономических данных
+        {
+            key: 'macro_data_update_interval',
+            value: '0 10 * * *',
+            description: 'Интервал обновления макроэкономических данных (cron)',
+            category: 'macro_data',
+            dataType: 'string',
+            options: [
+                { value: '0 8 * * *', label: 'Каждый день в 8:00' },
+                { value: '0 10 * * *', label: 'Каждый день в 10:00' },
+                { value: '0 12 * * *', label: 'Каждый день в 12:00' },
+                { value: '0 */6 * * *', label: 'Каждые 6 часов' },
+                { value: '0 */12 * * *', label: 'Каждые 12 часов' }
+            ]
+        },
+        {
+            key: 'macro_data_cache_ttl_hours',
+            value: 1,
+            description: 'TTL кеша макроэкономических данных (часы)',
+            category: 'macro_data',
+            dataType: 'number',
+            minValue: 1,
+            maxValue: 24
+        },
+        {
+            key: 'macro_data_sources',
+            value: JSON.stringify({
+                cbr: true,
+                rosstat: true,
+                moex: true,
+                investing: false,
+                tradingEconomics: false
+            }),
+            description: 'Настройки источников макроэкономических данных (JSON)',
+            category: 'macro_data',
+            dataType: 'json'
+        },
+        {
+            key: 'macro_data_cbr_enabled',
+            value: true,
+            description: 'Включить получение данных от ЦБ РФ',
+            category: 'macro_data',
+            dataType: 'boolean'
+        },
+        {
+            key: 'macro_data_rosstat_enabled',
+            value: true,
+            description: 'Включить получение данных от Росстата',
+            category: 'macro_data',
+            dataType: 'boolean'
+        },
+        {
+            key: 'macro_data_moex_enabled',
+            value: true,
+            description: 'Включить получение данных от Мосбиржи',
+            category: 'macro_data',
+            dataType: 'boolean'
         }
     ];
     

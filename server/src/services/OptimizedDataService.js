@@ -1,6 +1,7 @@
 import CacheService from './CacheService.js';
 import TinkoffApiService from './TinkoffApiService.js';
 import DividendService from './DividendService.js';
+import MacroDataService from './MacroDataService.js';
 // import CompanySyncService from './CompanySyncService.js'; // Временно отключено
 // import PortfolioSyncService from './PortfolioSyncService.js'; // Временно отключено
 
@@ -25,6 +26,10 @@ class OptimizedDataService {
             
             // Инициализируем зависимости
             await CacheService.initialize();
+            // Инициализируем MacroDataService для работы с макро-фичами
+            if (!MacroDataService.isInitialized) {
+                await MacroDataService.initialize();
+            }
             // TinkoffApiService не требует инициализации - это экземпляр
             // await DividendService.initialize(); // Проверим, есть ли у DividendService метод initialize
             // await CompanySyncService.initialize(); // Временно отключено
@@ -201,6 +206,9 @@ class OptimizedDataService {
             // Сигналы аналитиков
             const signalsFeatures = await this.getSignalsFeatures(figi, window[window.length - 1].time);
             
+            // Макроэкономические фичи
+            const macroFeatures = await this.getMacroFeatures(window[window.length - 1].time);
+            
             // Объединяем все фичи
             features.push(...normalizedPrices);
             features.push(...normalizedVolumes);
@@ -210,10 +218,11 @@ class OptimizedDataService {
             features.push(...newsFeatures);
             features.push(...telegramFeatures);
             features.push(...signalsFeatures);
+            features.push(...macroFeatures);
             
             // Логирование и исправление размеров фичей
-            // Упрощенный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) = 30
-            const expectedSize = 30;
+            // Упрощенный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) + 8 (macro) = 38
+            const expectedSize = 38;
             if (features.length !== expectedSize) {
                 console.warn(`⚠️ Unexpected feature size: ${features.length}, expected ${expectedSize}`);
                 
@@ -235,8 +244,8 @@ class OptimizedDataService {
         } catch (error) {
             console.error('Error creating feature vector:', error);
             // Возвращаем нулевой вектор при ошибке с правильным размером
-            // Упрощенный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 = 30
-            return new Array(30).fill(0);
+            // Упрощенный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 + 8 = 38
+            return new Array(38).fill(0);
         }
     }
 
@@ -597,6 +606,11 @@ class OptimizedDataService {
      */
     async getMarketFeatures(figi, timestamp, preloadedCandles = null) {
         try {
+            // Если figi не указан, возвращаем дефолтные значения
+            if (!figi) {
+                return [0, 0, 0]; // Возвращаем 3 фичи: volatility, trend, rsi
+            }
+            
             // Используем предзагруженные свечи, если они переданы, иначе загружаем из кеша
             let candles = preloadedCandles;
             if (!candles || candles.length === 0) {
@@ -911,6 +925,55 @@ class OptimizedDataService {
         } catch (error) {
             console.error('❌ Ошибка получения Telegram фичей:', error);
             return [0, 0]; // Возвращаем 2 фичи при ошибке
+        }
+    }
+
+    /**
+     * Получение макроэкономических фичей
+     * ВАЖНО: Используем данные только до переданного timestamp для предотвращения утечки данных
+     * @param {Date|string} timestamp - Временная метка для получения макро-данных
+     * @param {string} country - Код страны (по умолчанию 'RUS')
+     * @returns {Promise<Array>} - Массив из 8 макро-фичей
+     */
+    async getMacroFeatures(timestamp, country = 'RUS') {
+        try {
+            // Убеждаемся, что MacroDataService инициализирован
+            if (!MacroDataService.isInitialized) {
+                await MacroDataService.initialize();
+            }
+            
+            // Преобразуем timestamp в Date, если это строка
+            const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+            
+            // Проверяем валидность даты
+            if (!date || isNaN(date.getTime())) {
+                console.warn('⚠️ Невалидная дата для макро-фичей:', timestamp);
+                return new Array(8).fill(0);
+            }
+            
+            // Получаем макро-фичи для указанной даты
+            const macroFeatures = await MacroDataService.getMacroFeatures(date, country);
+            
+            // Убеждаемся, что возвращаем ровно 8 фичей
+            if (macroFeatures.length !== 8) {
+                console.warn(`⚠️ Macro features count mismatch: expected 8, got ${macroFeatures.length}`);
+                // Дополняем или обрезаем до 8
+                const fixedFeatures = [...macroFeatures];
+                while (fixedFeatures.length < 8) {
+                    fixedFeatures.push(0);
+                }
+                if (fixedFeatures.length > 8) {
+                    fixedFeatures.splice(8);
+                }
+                return fixedFeatures;
+            }
+            
+            return macroFeatures;
+            
+        } catch (error) {
+            console.error('❌ Ошибка получения макро-фичей:', error);
+            // Возвращаем 8 нулевых фичей при ошибке
+            return new Array(8).fill(0);
         }
     }
 

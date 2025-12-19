@@ -40,6 +40,7 @@ class SchedulerService {
         this.dynamicBudgetRebalanceTask = null;
         this.correlationPrecalcTask = null;
         this.weeklyBacktestTask = null;
+        this.macroDataUpdateTask = null; // Задача обновления макроэкономических данных
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -561,6 +562,23 @@ class SchedulerService {
                 alertType: 'warning',
                 startTime: this.startTime,
                 minDelay: 60 * 60 * 1000 // 1 час
+            }
+        );
+        
+        // Задача 17: Обновление макроэкономических данных
+        // Расписание из настроек (по умолчанию: ежедневно в 10:00)
+        const macroDataUpdateSchedule = await SettingsService.getSetting('macro_data_update_interval', '0 10 * * *');
+        this.macroDataUpdateTask = SchedulerUtils.createScheduledTask(
+            macroDataUpdateSchedule,
+            async () => {
+                await this.performMacroDataUpdate();
+            },
+            {
+                taskName: 'macro-data-update',
+                sendAlerts: true,
+                alertType: 'info',
+                startTime: this.startTime,
+                minDelay: 30 * 60 * 1000 // 30 минут
             }
         );
         
@@ -1165,6 +1183,12 @@ class SchedulerService {
                 this.weeklyBacktestTask = null;
                 console.log('✅ Weekly backtest task stopped and destroyed');
             }
+            if (this.macroDataUpdateTask) {
+                this.macroDataUpdateTask.stop();
+                this.macroDataUpdateTask.destroy();
+                this.macroDataUpdateTask = null;
+                console.log('✅ Macro data update task stopped and destroyed');
+            }
             
             // Останавливаем все cron задачи из intervals
             this.intervals.forEach(task => {
@@ -1319,6 +1343,10 @@ class SchedulerService {
             this.weeklyBacktestTask.stop();
             console.log('⏸️ Paused: weekly backtest task');
         }
+        if (this.macroDataUpdateTask) {
+            this.macroDataUpdateTask.stop();
+            console.log('⏸️ Paused: macro data update task');
+        }
         
         console.log('✅ All processes paused');
     }
@@ -1435,6 +1463,12 @@ class SchedulerService {
         if (this.weeklyBacktestTask) {
             this.weeklyBacktestTask.start();
             console.log('▶️ Resumed: weekly backtest task');
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
+        
+        if (this.macroDataUpdateTask) {
+            this.macroDataUpdateTask.start();
+            console.log('▶️ Resumed: macro data update task');
         }
         
         console.log('✅ All processes resumed gradually (total delay: ~20 seconds)');
@@ -3945,6 +3979,129 @@ class SchedulerService {
     }
 
     /**
+     * Выполнение обновления макроэкономических данных
+     * Вызывается по расписанию из cron-задачи
+     */
+    async performMacroDataUpdate() {
+        try {
+            console.log('📊 Starting macro data update...');
+            
+            const MacroDataService = (await import('./MacroDataService.js')).default;
+            
+            // Убеждаемся, что сервис инициализирован
+            if (!MacroDataService.isInitialized) {
+                await MacroDataService.initialize();
+            }
+            
+            // Выполняем обновление всех данных
+            const updateStats = await MacroDataService.updateAllData();
+            
+            // Формируем отчет
+            const summary = {
+                cbr: {
+                    fetched: updateStats.cbr?.fetched || 0,
+                    saved: updateStats.cbr?.saved || 0,
+                    errors: updateStats.cbr?.errors || []
+                },
+                rosstat: {
+                    fetched: updateStats.rosstat?.fetched || 0,
+                    saved: updateStats.rosstat?.saved || 0,
+                    errors: updateStats.rosstat?.errors || []
+                },
+                moex: {
+                    fetched: updateStats.moex?.fetched || 0,
+                    saved: updateStats.moex?.saved || 0,
+                    errors: updateStats.moex?.errors || []
+                },
+                total: {
+                    fetched: updateStats.total?.fetched || 0,
+                    saved: updateStats.total?.saved || 0
+                }
+            };
+            
+            console.log(`\n📊 Macro data update completed:`);
+            console.log(`   ЦБ РФ: получено ${summary.cbr.fetched}, сохранено ${summary.cbr.saved}`);
+            console.log(`   Росстат: получено ${summary.rosstat.fetched}, сохранено ${summary.rosstat.saved}`);
+            console.log(`   Мосбиржа: получено ${summary.moex.fetched}, сохранено ${summary.moex.saved}`);
+            console.log(`   Всего: получено ${summary.total.fetched}, сохранено ${summary.total.saved}`);
+            
+            // Проверяем наличие ошибок
+            const totalErrors = summary.cbr.errors.length + summary.rosstat.errors.length + summary.moex.errors.length;
+            
+            if (totalErrors > 0) {
+                // Есть ошибки - отправляем предупреждение
+                let errorMessage = `⚠️ <b>ОБНОВЛЕНИЕ МАКРОЭКОНОМИЧЕСКИХ ДАННЫХ</b>\n\n`;
+                errorMessage += `Получено данных: <b>${summary.total.fetched}</b>\n`;
+                errorMessage += `Сохранено: <b>${summary.total.saved}</b>\n`;
+                errorMessage += `Ошибок: <b>${totalErrors}</b>\n\n`;
+                
+                if (summary.cbr.errors.length > 0) {
+                    errorMessage += `<b>ЦБ РФ:</b>\n`;
+                    summary.cbr.errors.slice(0, 3).forEach(err => {
+                        errorMessage += `• ${err}\n`;
+                    });
+                    if (summary.cbr.errors.length > 3) {
+                        errorMessage += `... и еще ${summary.cbr.errors.length - 3} ошибок\n`;
+                    }
+                    errorMessage += `\n`;
+                }
+                
+                if (summary.rosstat.errors.length > 0) {
+                    errorMessage += `<b>Росстат:</b>\n`;
+                    summary.rosstat.errors.slice(0, 3).forEach(err => {
+                        errorMessage += `• ${err}\n`;
+                    });
+                    if (summary.rosstat.errors.length > 3) {
+                        errorMessage += `... и еще ${summary.rosstat.errors.length - 3} ошибок\n`;
+                    }
+                    errorMessage += `\n`;
+                }
+                
+                if (summary.moex.errors.length > 0) {
+                    errorMessage += `<b>Мосбиржа:</b>\n`;
+                    summary.moex.errors.slice(0, 3).forEach(err => {
+                        errorMessage += `• ${err}\n`;
+                    });
+                    if (summary.moex.errors.length > 3) {
+                        errorMessage += `... и еще ${summary.moex.errors.length - 3} ошибок\n`;
+                    }
+                }
+                
+                await OptimizedTelegramService.sendAlert(
+                    'MACRO_DATA_UPDATE_WARNING',
+                    errorMessage,
+                    'warning'
+                );
+            } else if (summary.total.saved > 0) {
+                // Успешное обновление - отправляем информационное сообщение
+                const successMessage = `✅ <b>ОБНОВЛЕНИЕ МАКРОЭКОНОМИЧЕСКИХ ДАННЫХ</b>\n\n` +
+                    `Получено данных: <b>${summary.total.fetched}</b>\n` +
+                    `Сохранено: <b>${summary.total.saved}</b>\n\n` +
+                    `ЦБ РФ: ${summary.cbr.saved} записей\n` +
+                    `Росстат: ${summary.rosstat.saved} записей\n` +
+                    `Мосбиржа: ${summary.moex.saved} записей`;
+                
+                await OptimizedTelegramService.sendAlert(
+                    'MACRO_DATA_UPDATE_SUCCESS',
+                    successMessage,
+                    'info'
+                );
+            } else {
+                // Данные не получены (возможно, источники недоступны или нет новых данных)
+                console.log('ℹ️ No new macro data to save (sources may be unavailable or no updates)');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error in performMacroDataUpdate:', error);
+            await OptimizedTelegramService.sendAlert(
+                'MACRO_DATA_UPDATE_ERROR',
+                `❌ Ошибка при обновлении макроэкономических данных:\n${error.message}`,
+                'error'
+            );
+        }
+    }
+
+    /**
      * Обновление виртуального портфеля - пересчет totalValue на основе текущих цен
      */
     async performVirtualPortfolioUpdate() {
@@ -4027,7 +4184,8 @@ class SchedulerService {
                 strategyRebalanceTask: this.strategyRebalanceTask ? 'active' : 'inactive',
                 dynamicBudgetRebalanceTask: this.dynamicBudgetRebalanceTask ? 'active' : 'inactive',
                 correlationPrecalcTask: this.correlationPrecalcTask ? 'active' : 'inactive',
-                weeklyBacktestTask: this.weeklyBacktestTask ? 'active' : 'inactive'
+                weeklyBacktestTask: this.weeklyBacktestTask ? 'active' : 'inactive',
+                macroDataUpdateTask: this.macroDataUpdateTask ? 'active' : 'inactive'
             };
 
             return {

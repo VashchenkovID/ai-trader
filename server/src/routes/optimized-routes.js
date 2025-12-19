@@ -27,6 +27,7 @@ import notificationsRoutes from './notifications-routes.js';
 import errorsRoutes from './errors-routes.js';
 import instrumentStatsRoutes from './instrument-stats-routes.js';
 import backtestRoutes from './backtest-routes.js';
+import macroDataRoutes from './macro-data-routes.js';
 import ServiceManager from '../services/ServiceManager.js';
 import Recommendation from '../models/Recommendation.js';
 import { Op } from 'sequelize';
@@ -62,6 +63,7 @@ router.use('/notifications', notificationsRoutes);
 router.use('/errors', errorsRoutes);
 router.use('/instrument-stats', instrumentStatsRoutes);
 router.use('/backtest', backtestRoutes);
+router.use('/macro-data', macroDataRoutes);
 
 /**
  * Статистика Meta-Learning

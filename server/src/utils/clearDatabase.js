@@ -131,6 +131,11 @@ async function clearDatabase() {
     await PortfolioAllocation.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Зависимые таблицы стратегий очищены');
 
+    // 1.1. Макроиндикаторы (независимая таблица)
+    console.log('📊 Очистка макроиндикаторов...');
+    await MacroIndicator.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    console.log('   ✅ Макроиндикаторы очищены');
+
     // 2. Рекомендации (зависят от TradingStrategy)
     console.log('💡 Очистка рекомендаций...');
     await Recommendation.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
