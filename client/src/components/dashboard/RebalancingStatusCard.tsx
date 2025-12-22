@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Card } from 'primereact/card';
-import { Button } from 'primereact/button';
-import { Badge } from 'primereact/badge';
-import { Skeleton } from 'primereact/skeleton';
-import { ProgressSpinner } from 'primereact/progressspinner';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card } from '../ui/Card/Card';
+import { Button } from '../ui/Button/Button';
+import { Badge } from '../ui/Badge/Badge';
+import { Skeleton } from '../ui/Skeleton/Skeleton';
 import { Toast } from 'primereact/toast';
-import { useRef } from 'react';
+import './RebalancingStatusCard.css';
 
 interface RebalancingStatusCardProps {
   className?: string;
@@ -116,54 +115,66 @@ export const RebalancingStatusCard: React.FC<RebalancingStatusCardProps> = ({ cl
   return (
     <>
       <Card 
-        title={<span><i className="pi pi-balance-scale mr-2"></i>Статус ребалансировки</span>}
-        className={`h-full ${className}`}
+        variant="glass"
+        header={<span><i className="pi pi-balance-scale mr-2"></i>Статус ребалансировки</span>}
+        className={`h-full rebalancing-status-card ${className}`}
         footer={
           <Button
-            label={checking ? 'Проверка...' : 'Проверить сейчас'}
-            icon={checking ? undefined : 'pi pi-refresh'}
-            className="p-button-outlined w-full"
+            variant="secondary"
+            size="sm"
+            fullWidth
+            icon={checking ? <i className="pi pi-spin pi-spinner"></i> : <i className="pi pi-refresh"></i>}
             onClick={handleCheckRebalancing}
             disabled={checking || loading}
             loading={checking}
-          />
+          >
+            {checking ? 'Проверка...' : 'Проверить сейчас'}
+          </Button>
         }
       >
         {loading ? (
           <div className="flex flex-column gap-3">
-            <Skeleton width="100%" height="2rem" />
-            <Skeleton width="80%" height="1.5rem" />
-            <Skeleton width="60%" height="1rem" />
+            <Skeleton variant="rectangular" size="md" style={{ width: '100%', height: '2rem' }} />
+            <Skeleton variant="text" size="md" style={{ width: '80%' }} />
+            <Skeleton variant="text" size="sm" style={{ width: '60%' }} />
           </div>
         ) : (
           <div className="flex flex-column gap-3">
             {/* Статус сервиса */}
-            <div className="flex align-items-center justify-content-between p-2 border-round surface-100">
+            <div 
+              className="flex align-items-center justify-content-between p-2 border-round transition-default"
+              style={{ 
+                background: 'var(--color-surface-hover)', 
+                border: '1px solid var(--color-border-default)',
+                transition: 'all 0.2s ease'
+              }}
+            >
               <div className="flex align-items-center gap-2">
-                <i className={`pi ${status?.enabled ? 'pi-check-circle text-green-500' : 'pi-times-circle text-red-500'}`} />
-                <span className="text-sm font-medium">
+                <i 
+                  className={`pi ${status?.enabled ? 'pi-check-circle' : 'pi-times-circle'} ${status?.enabled ? 'number-success' : 'number-error'}`}
+                />
+                <span className="text-sm font-medium number-text-primary">
                   {status?.enabled ? 'Включена' : 'Выключена'}
                 </span>
               </div>
-              <Badge 
-                value={status?.enabled ? 'Активна' : 'Неактивна'} 
-                severity={status?.enabled ? 'success' : 'danger'} 
-              />
+              <Badge variant={status?.enabled ? 'success' : 'error'} size="sm">
+                {status?.enabled ? 'Активна' : 'Неактивна'}
+              </Badge>
             </div>
 
             {/* Последняя проверка */}
-            <div className="flex align-items-center justify-content-between p-2 border-round surface-100">
-              <div className="text-sm text-500">Последняя проверка</div>
-              <div className="text-sm font-medium">
+            <div className="status-item flex align-items-center justify-content-between">
+              <div className="text-sm number-text-tertiary">Последняя проверка</div>
+              <div className="text-sm font-medium number-text-primary">
                 {formatTimeAgo(status?.lastCheck || null)}
               </div>
             </div>
 
             {/* Последняя ребалансировка */}
             {status?.lastRebalance && (
-              <div className="flex align-items-center justify-content-between p-2 border-round surface-100">
-                <div className="text-sm text-500">Последняя ребалансировка</div>
-                <div className="text-sm font-medium">
+              <div className="status-item flex align-items-center justify-content-between">
+                <div className="text-sm number-text-tertiary">Последняя ребалансировка</div>
+                <div className="text-sm font-medium number-text-primary">
                   {formatTimeAgo(status.lastRebalance)}
                 </div>
               </div>
@@ -171,17 +182,21 @@ export const RebalancingStatusCard: React.FC<RebalancingStatusCardProps> = ({ cl
 
             {/* Результат проверки */}
             {checkResult && (
-              <div className={`p-3 border-round ${needsRebalancing ? 'surface-orange-50 border-2 border-orange-200' : 'surface-green-50 border-2 border-green-200'}`}>
+              <div 
+                className={`rebalancing-result ${needsRebalancing ? 'needs-rebalancing' : 'no-rebalancing'}`}
+              >
                 <div className="flex align-items-center justify-content-between mb-2">
                   <div className="flex align-items-center gap-2">
-                    <i className={`pi ${needsRebalancing ? 'pi-exclamation-triangle text-orange-500' : 'pi-check-circle text-green-500'}`} />
-                    <span className="font-medium">
+                    <i 
+                      className={`pi ${needsRebalancing ? 'pi-exclamation-triangle' : 'pi-check-circle'} ${needsRebalancing ? 'number-warning' : 'number-success'}`}
+                    />
+                    <span className="font-medium number-text-primary">
                       {needsRebalancing ? 'Требуется ребалансировка' : 'Ребалансировка не требуется'}
                     </span>
                   </div>
                 </div>
                 {needsRebalancing && deviationsCount > 0 && (
-                  <div className="text-sm text-500">
+                  <div className="text-sm number-text-secondary">
                     {deviationsCount} позиций требуют корректировки
                   </div>
                 )}
@@ -191,7 +206,7 @@ export const RebalancingStatusCard: React.FC<RebalancingStatusCardProps> = ({ cl
             {/* Индикатор загрузки при проверке */}
             {checking && (
               <div className="flex align-items-center justify-content-center p-3">
-                <ProgressSpinner style={{ width: '30px', height: '30px' }} />
+                <div className="animate-spin" style={{ width: '30px', height: '30px', border: '3px solid var(--color-border-default)', borderTopColor: 'var(--color-accent-primary)', borderRadius: '50%' }}></div>
               </div>
             )}
           </div>

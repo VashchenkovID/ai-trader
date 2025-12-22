@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from 'primereact/card';
-import { DataTable } from 'primereact/datatable';
-import { Column } from 'primereact/column';
-import { Tag } from 'primereact/tag';
-import { Badge } from 'primereact/badge';
-import { Button } from 'primereact/button';
-import { Skeleton } from 'primereact/skeleton';
+import { Card } from '../ui/Card/Card';
+import { Table, TableColumn } from '../ui/Table/Table';
+import { Badge } from '../ui/Badge/Badge';
+import { Button } from '../ui/Button/Button';
+import { Skeleton } from '../ui/Skeleton/Skeleton';
 import { Message } from 'primereact/message';
-import { Dropdown } from 'primereact/dropdown';
+import { Select } from '../ui/Select/Select';
 import { apiService } from '../../services/apiService';
 import { useNavigate } from 'react-router-dom';
+import './CachedSignalsCard.css';
 
 interface CachedSignal {
   signalId: string;
@@ -25,7 +24,6 @@ interface CachedSignal {
   targetPrice: number | null;
   stoploss: number | null;
   probability: number;
-  name?: string;
   info?: any;
 }
 
@@ -76,108 +74,146 @@ const CachedSignalsCard: React.FC<CachedSignalsCardProps> = ({
     }
   };
 
-  const directionTemplate = (rowData: CachedSignal) => {
-    const isBuy = rowData.direction === 'SIGNAL_DIRECTION_BUY';
-    const severity = isBuy ? 'success' : 'danger';
-    const label = isBuy ? 'ПОКУПКА' : 'ПРОДАЖА';
-    return <Tag value={label} severity={severity} />;
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
   };
 
-  const probabilityTemplate = (rowData: CachedSignal) => {
-    const percent = (rowData.probability || 0).toFixed(0);
-    const color = rowData.probability > 70 ? 'green' : rowData.probability > 50 ? 'orange' : 'red';
-    return (
-      <span className={`text-${color}-500 font-semibold`}>
-        {percent}%
-      </span>
-    );
-  };
-
-  const priceTemplate = (rowData: CachedSignal) => {
-    return (
-      <div className="flex flex-column gap-1">
-        {rowData.initialPrice && (
-          <div className="text-sm">
-            <span className="text-600">Вход: </span>
-            <span className="font-semibold">{rowData.initialPrice.toFixed(2)} ₽</span>
+  const columns: TableColumn<CachedSignal>[] = [
+    {
+      key: 'ticker',
+      header: 'Тикер',
+      render: (_, row) => {
+        const ticker = row.ticker || row.figi?.substring(0, 8) || 'N/A';
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => row.figi && navigate(`/stock/${row.figi}`)}
+            style={{ padding: 0, minHeight: 'auto', height: 'auto' }}
+          >
+            {ticker}
+          </Button>
+        );
+      },
+      width: '100px'
+    },
+    {
+      key: 'name',
+      header: 'Инструмент',
+      accessor: (row) => row.name || row.ticker || 'N/A',
+      width: '150px'
+    },
+    {
+      key: 'direction',
+      header: 'Сигнал',
+      render: (_, row) => {
+        const isBuy = row.direction === 'SIGNAL_DIRECTION_BUY';
+        const label = isBuy ? 'ПОКУПКА' : 'ПРОДАЖА';
+        return (
+          <Badge variant={isBuy ? 'success' : 'error'} size="sm">
+            {label}
+          </Badge>
+        );
+      },
+      width: '120px'
+    },
+    {
+      key: 'strategyName',
+      header: 'Стратегия',
+      accessor: (row) => row.strategyName || row.strategyId || 'N/A',
+      width: '150px'
+    },
+    {
+      key: 'probability',
+      header: 'Вероятность',
+      render: (_, row) => {
+        const percent = (row.probability || 0).toFixed(0);
+        const color = row.probability > 70 ? 'var(--color-accent-success)' : row.probability > 50 ? 'var(--color-accent-warning)' : 'var(--color-accent-error)';
+        return (
+          <span className="font-semibold" style={{ color }}>
+            {percent}%
+          </span>
+        );
+      },
+      align: 'right',
+      width: '100px'
+    },
+    {
+      key: 'prices',
+      header: 'Цены',
+      render: (_, row) => {
+        return (
+          <div className="flex flex-column gap-1">
+            {row.initialPrice && (
+              <div className="text-sm">
+                <span className="number-text-secondary">Вход: </span>
+                <span className="font-semibold number-text-primary">{formatCurrency(row.initialPrice)}</span>
+              </div>
+            )}
+            {row.targetPrice && (
+              <div className="text-sm number-success">
+                <span className="number-text-secondary">Цель: </span>
+                <span>{formatCurrency(row.targetPrice)}</span>
+              </div>
+            )}
+            {row.stoploss && (
+              <div className="text-sm number-error">
+                <span className="number-text-secondary">Стоп: </span>
+                <span>{formatCurrency(row.stoploss)}</span>
+              </div>
+            )}
           </div>
-        )}
-        {rowData.targetPrice && (
-          <div className="text-sm text-green-500">
-            <span className="text-600">Цель: </span>
-            <span>{rowData.targetPrice.toFixed(2)} ₽</span>
+        );
+      },
+      width: '150px'
+    },
+    {
+      key: 'createDt',
+      header: 'Дата создания',
+      render: (_, row) => {
+        const date = new Date(row.createDt);
+        return (
+          <div className="flex flex-column">
+            <span className="text-sm number-text-primary">{date.toLocaleDateString('ru-RU')}</span>
+            <span className="text-xs number-text-tertiary">{date.toLocaleTimeString('ru-RU')}</span>
           </div>
-        )}
-        {rowData.stoploss && (
-          <div className="text-sm text-red-500">
-            <span className="text-600">Стоп: </span>
-            <span>{rowData.stoploss.toFixed(2)} ₽</span>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const dateTemplate = (rowData: CachedSignal) => {
-    const date = new Date(rowData.createDt);
-    return (
-      <div className="flex flex-column">
-        <span className="text-sm">{date.toLocaleDateString('ru-RU')}</span>
-        <span className="text-xs text-500">{date.toLocaleTimeString('ru-RU')}</span>
-      </div>
-    );
-  };
-
-  const tickerTemplate = (rowData: CachedSignal) => {
-    const ticker = rowData.ticker || rowData.figi?.substring(0, 8) || 'N/A';
-    return (
-      <Button
-        label={ticker}
-        link
-        className="p-0 text-primary"
-        onClick={() => rowData.figi && navigate(`/stock/${rowData.figi}`)}
-      />
-    );
-  };
-
-  const strategyTemplate = (rowData: CachedSignal) => {
-    return (
-      <span className="text-sm text-600" title={rowData.strategyName}>
-        {rowData.strategyName || rowData.strategyId || 'N/A'}
-      </span>
-    );
-  };
+        );
+      },
+      width: '140px'
+    }
+  ];
 
   return (
     <Card 
-      title={
+      variant="default"
+      className={`cached-signals-card ${className}`}
+      header={
         <div className="flex align-items-center justify-content-between flex-wrap gap-2">
-          <span>📊 Торговые сигналы</span>
+          <span>Торговые сигналы</span>
           <div className="flex align-items-center gap-2">
-            <Badge value={signals.length} severity="info" />
+            <Badge variant="info" size="sm">{signals.length}</Badge>
             <Button
-              icon="pi pi-refresh"
-              className="p-button-text p-button-sm"
+              variant="ghost"
+              size="sm"
+              icon={loading ? <i className="pi pi-spin pi-spinner"></i> : <i className="pi pi-refresh"></i>}
               onClick={loadSignals}
               loading={loading}
-              tooltip="Обновить"
-              tooltipOptions={{ position: 'top' }}
+              title="Обновить"
             />
           </div>
         </div>
       }
-      className={className}
     >
-      <div className="mb-3">
-        <div className="flex align-items-center gap-2">
-          <span className="text-600 text-sm">Фильтр:</span>
-          <Dropdown
-            value={filterDirection}
-            options={directionOptions}
-            onChange={(e) => setFilterDirection(e.value)}
-            className="w-12rem"
-          />
-        </div>
+      <div className="signals-filter">
+        <span className="signals-filter-label">Фильтр:</span>
+        <Select
+          size="sm"
+          options={directionOptions}
+          value={filterDirection}
+          onChange={(e) => setFilterDirection(e.target.value)}
+          style={{ width: '140px' }}
+          fullWidth={false}
+        />
       </div>
 
       {error && (
@@ -188,60 +224,21 @@ const CachedSignalsCard: React.FC<CachedSignalsCardProps> = ({
         <div className="grid">
           {[1, 2, 3].map((item) => (
             <div key={item} className="col-12">
-              <Skeleton height="4rem" className="mb-2" />
+              <Skeleton variant="rectangular" size="md" style={{ width: '100%', height: '4rem', marginBottom: '0.5rem' }} />
             </div>
           ))}
         </div>
       )}
 
-      {!loading && signals.length === 0 && (
-        <div className="text-center p-4 text-500">
-          <i className="pi pi-info-circle text-2xl mb-2"></i>
-          <p>Нет записанных торговых сигналов</p>
-        </div>
-      )}
-
-      {!loading && signals.length > 0 && (
-        <DataTable
-          value={signals}
-          paginator={signals.length > 10}
-          rows={10}
-          size="small"
-          emptyMessage="Нет сигналов"
-          className="p-datatable-sm"
-        >
-          <Column field="ticker" header="Тикер" body={tickerTemplate} style={{ minWidth: '80px' }} />
-          <Column field="name" header="Инструмент" style={{ minWidth: '150px' }} />
-          <Column 
-            field="direction" 
-            header="Сигнал" 
-            body={directionTemplate}
-            style={{ minWidth: '100px' }}
-          />
-          <Column 
-            field="strategyName" 
-            header="Стратегия" 
-            body={strategyTemplate}
-            style={{ minWidth: '120px' }}
-          />
-          <Column 
-            field="probability" 
-            header="Вероятность" 
-            body={probabilityTemplate}
-            style={{ minWidth: '100px' }}
-          />
-          <Column 
-            header="Цены" 
-            body={priceTemplate}
-            style={{ minWidth: '150px' }}
-          />
-          <Column 
-            field="createDt" 
-            header="Дата создания" 
-            body={dateTemplate}
-            style={{ minWidth: '120px' }}
-          />
-        </DataTable>
+      {!loading && (
+        <Table
+          data={signals}
+          columns={columns}
+          size="lg"
+          hoverable
+          sortable
+          emptyMessage="Нет записанных торговых сигналов"
+        />
       )}
     </Card>
   );

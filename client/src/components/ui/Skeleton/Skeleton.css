@@ -1,0 +1,162 @@
+/* Базовые стили skeleton */
+.skeleton {
+  border-radius: var(--radius-base);
+  display: block;
+  position: relative;
+  overflow: hidden;
+  /* Убеждаемся, что skeleton виден */
+  visibility: visible !important;
+  opacity: 1 !important;
+  /* Минимальные размеры для видимости */
+  min-width: 1px;
+  min-height: 1px;
+  /* Улучшенный контраст для видимости на темном фоне */
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Варианты */
+.skeleton.skeleton-text {
+  height: 1em;
+  border-radius: var(--radius-sm);
+  width: 100%; /* По умолчанию на всю ширину */
+  display: block !important;
+  /* Убеждаемся, что текст виден */
+  min-width: 100px; /* Минимальная ширина для видимости */
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.skeleton.skeleton-circular {
+  border-radius: 50% !important; /* Круглая форма */
+  aspect-ratio: 1;
+  display: block !important;
+  flex-shrink: 0; /* Не сжимается */
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.skeleton.skeleton-rectangular {
+  border-radius: var(--radius-base);
+  display: block !important;
+  /* Минимальные размеры для видимости */
+  min-width: 50px;
+  min-height: 50px;
+  flex-shrink: 0; /* Не сжимается */
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Размеры */
+.skeleton-sm {
+  min-height: 16px;
+}
+
+.skeleton-md {
+  min-height: 24px;
+}
+
+.skeleton-lg {
+  min-height: 32px;
+}
+
+.skeleton.skeleton-circular.skeleton-sm {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  border-radius: 50% !important;
+}
+
+.skeleton.skeleton-circular.skeleton-md {
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  border-radius: 50% !important;
+}
+
+.skeleton.skeleton-circular.skeleton-lg {
+  width: 64px !important;
+  height: 64px !important;
+  min-width: 64px !important;
+  min-height: 64px !important;
+  border-radius: 50% !important;
+}
+
+/* Анимации */
+.skeleton.skeleton-pulse {
+  animation: skeleton-pulse 1.5s ease-in-out infinite !important;
+  /* Базовый фон для pulse */
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  opacity: 1 !important;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1 !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+  }
+  50% {
+    opacity: 0.6 !important;
+    background-color: rgba(255, 255, 255, 0.2) !important;
+  }
+}
+
+/* Без анимации - статичный skeleton */
+.skeleton:not(.skeleton-pulse):not(.skeleton-wave) {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  opacity: 1 !important;
+  animation: none !important;
+}
+
+.skeleton.skeleton-wave {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 0px,
+    rgba(255, 255, 255, 0.25) 40px,
+    rgba(255, 255, 255, 0.1) 80px
+  ) !important;
+  background-size: 200px 100% !important;
+  animation: skeleton-wave 1.5s infinite !important;
+  opacity: 1 !important; /* Убеждаемся, что wave виден */
+}
+
+@keyframes skeleton-wave {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+/* Wave эффект с градиентом */
+.skeleton.skeleton-wave::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    transparent
+  ) !important;
+  animation: skeleton-shimmer 1.5s infinite !important;
+  z-index: 1;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

@@ -1,0 +1,195 @@
+/* Базовые стили кнопки */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  font-family: var(--font-family-primary);
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: var(--radius-base);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+  user-select: none;
+  outline: none;
+  /* Базовые паддинги по умолчанию */
+  padding: 0 var(--spacing-4);
+  min-height: 40px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+/* Размеры */
+.btn-sm {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 var(--spacing-3);
+  font-size: 14px;
+}
+
+.btn-md {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 var(--spacing-4);
+  font-size: 16px;
+}
+
+.btn-lg {
+  height: 48px;
+  min-height: 48px;
+  padding: 0 var(--spacing-6);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* Варианты */
+.btn-primary {
+  background: var(--gradient-primary);
+  color: var(--color-text-primary);
+  border: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover:not(.btn-disabled) {
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+  box-shadow: var(--shadow-glow-primary);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(.btn-disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-primary);
+}
+
+.btn-secondary:hover:not(.btn-disabled) {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-hover);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:active:not(.btn-disabled) {
+  transform: translateY(0);
+  background: var(--color-surface-active);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+}
+
+.btn-ghost:hover:not(.btn-disabled) {
+  background: var(--color-surface-hover);
+}
+
+.btn-ghost:active:not(.btn-disabled) {
+  background: var(--color-surface-active);
+}
+
+.btn-danger {
+  background: var(--gradient-error);
+  color: var(--color-text-primary);
+  border: none;
+}
+
+.btn-danger:hover:not(.btn-disabled) {
+  background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-success {
+  background: var(--gradient-success);
+  color: var(--color-text-primary);
+  border: none;
+}
+
+.btn-success:hover:not(.btn-disabled) {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Состояния */
+.btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.btn-loading {
+  cursor: wait;
+  pointer-events: none;
+}
+
+.btn-full-width {
+  width: 100%;
+}
+
+/* Иконки */
+.btn-icon-left,
+.btn-icon-right {
+  display: flex;
+  align-items: center;
+  font-size: 1em;
+}
+
+.btn-icon-left {
+  margin-right: var(--spacing-1);
+}
+
+.btn-icon-right {
+  margin-left: var(--spacing-1);
+}
+
+/* Spinner для loading */
+.btn-spinner {
+  display: inline-flex;
+  align-items: center;
+  animation: spin 1s linear infinite;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Ripple эффект (опционально) */
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.3s, height 0.3s;
+}
+
+.btn:active::before {
+  width: 300px;
+  height: 300px;
+}

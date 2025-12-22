@@ -1,0 +1,114 @@
+/* Базовые стили badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  font-weight: 500;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Размеры */
+.badge-sm {
+  padding: 2px var(--spacing-2);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.badge-md {
+  padding: 4px var(--spacing-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.badge-lg {
+  padding: 6px var(--spacing-3);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Варианты */
+.badge-success {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #10B981;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.badge-error {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #EF4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.badge-warning {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #F59E0B;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.badge-info {
+  background-color: rgba(6, 182, 212, 0.2);
+  color: #06B6D4;
+  border-color: rgba(6, 182, 212, 0.4);
+}
+
+.badge-primary {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #3B82F6;
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.badge-neutral {
+  background-color: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-default);
+}
+
+/* Иконка */
+.badge-icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.9em;
+}
+
+.badge-sm .badge-icon {
+  font-size: 10px;
+}
+
+.badge-lg .badge-icon {
+  font-size: 16px;
+}
+
+/* Анимации для badge */
+.badge:hover {
+  transform: scale(1.05);
+}
+
+.badge-success:hover {
+  background-color: rgba(16, 185, 129, 0.3);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+}
+
+.badge-error:hover {
+  background-color: rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+
+.badge-warning:hover {
+  background-color: rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+}
+
+.badge-info:hover {
+  background-color: rgba(6, 182, 212, 0.3);
+  box-shadow: 0 0 8px rgba(6, 182, 212, 0.3);
+}
+
+.badge-primary:hover {
+  background-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+}

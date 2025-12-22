@@ -1,0 +1,18 @@
+/* CachedSignalsCard Styles */
+
+.cached-signals-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(239, 68, 68, 0.25) 100%);
+}
+
+.signals-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-3);
+}
+
+.signals-filter-label {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}

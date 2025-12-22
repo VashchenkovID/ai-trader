@@ -1225,7 +1225,19 @@ class OptimizedTrainingService {
                         const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
                         
                         if (modelInputSize !== null && modelInputSize !== inputSize) {
-                            console.warn(`⚠️ Input size mismatch for ${figi}: model expects ${modelInputSize}, but features have size ${inputSize}. Creating new model.`);
+                            console.log(`ℹ️ Input size mismatch for ${figi}: model expects ${modelInputSize}, but features have size ${inputSize}. This is expected when feature set changes. Creating new model.`);
+                            // Удаляем несовместимую модель для освобождения места
+                            try {
+                                if (await fs.access(figiModelPath).then(() => true).catch(() => false)) {
+                                    await fs.unlink(figiModelPath);
+                                }
+                                if (await fs.access(figiWeightsPath).then(() => true).catch(() => false)) {
+                                    await fs.unlink(figiWeightsPath);
+                                }
+                                console.log(`🗑️ Removed incompatible model files for ${figi}`);
+                            } catch (cleanupError) {
+                                // Игнорируем ошибки удаления
+                            }
                             return null;
                         }
                     }
@@ -1253,7 +1265,7 @@ class OptimizedTrainingService {
                         const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
                         
                         if (modelInputSize !== null && modelInputSize !== inputSize) {
-                            console.warn(`⚠️ Input size mismatch for ${figi} (ModelManager): model expects ${modelInputSize}, but features have size ${inputSize}. Creating new model.`);
+                            console.log(`ℹ️ Input size mismatch for ${figi} (ModelManager): model expects ${modelInputSize}, but features have size ${inputSize}. This is expected when feature set changes. Creating new model.`);
                             return null;
                         }
                     }
@@ -1296,7 +1308,20 @@ class OptimizedTrainingService {
                         const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
                         
                         if (modelInputSize !== null && modelInputSize !== inputSize) {
-                            console.warn(`⚠️ Input size mismatch for general model (used for ${figi}): model expects ${modelInputSize}, but features have size ${inputSize}. Creating new model.`);
+                            console.log(`ℹ️ Input size mismatch for general model (used for ${figi}): model expects ${modelInputSize}, but features have size ${inputSize}. This is expected when feature set changes. Creating new model.`);
+                            // Удаляем несовместимую общую модель
+                            try {
+                                if (await fs.access(generalModelPath).then(() => true).catch(() => false)) {
+                                    await fs.unlink(generalModelPath);
+                                }
+                                const generalWeightsPath = path.join(modelsDir, 'neural_model_weights.json');
+                                if (await fs.access(generalWeightsPath).then(() => true).catch(() => false)) {
+                                    await fs.unlink(generalWeightsPath);
+                                }
+                                console.log(`🗑️ Removed incompatible general model files`);
+                            } catch (cleanupError) {
+                                // Игнорируем ошибки удаления
+                            }
                             return null;
                         }
                     }

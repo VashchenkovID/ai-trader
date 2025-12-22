@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Card } from 'primereact/card';
-import { Button } from 'primereact/button';
-import { Skeleton } from 'primereact/skeleton';
-import { Tooltip } from 'primereact/tooltip';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card } from '../ui/Card/Card';
+import { Button } from '../ui/Button/Button';
+import { Skeleton } from '../ui/Skeleton/Skeleton';
 import { Toast } from 'primereact/toast';
+import './MacroDataPreview.css';
 
 interface MacroDataPreviewProps {
   className?: string;
@@ -148,16 +148,18 @@ export const MacroDataPreview: React.FC<MacroDataPreviewProps> = ({ className = 
     <>
       <Toast ref={toast} />
       <Card 
-        title={
+        variant="glass"
+        className="macro-data-preview"
+        header={
           <div className="flex align-items-center justify-content-between w-full">
-            <span><i className="pi pi-globe mr-2"></i>Макроэкономические данные</span>
+            <span>Макроэкономические данные</span>
             <Button
-              icon="pi pi-refresh"
-              className="p-button-text p-button-sm"
+              variant="ghost"
+              size="sm"
+              icon={updating ? <i className="pi pi-spin pi-spinner"></i> : <i className="pi pi-refresh"></i>}
               onClick={handleUpdate}
               loading={updating}
-              tooltip="Обновить макро-данные"
-              tooltipOptions={{ position: 'left' }}
+              title="Обновить макро-данные"
             />
           </div>
         }
@@ -168,43 +170,48 @@ export const MacroDataPreview: React.FC<MacroDataPreviewProps> = ({ className = 
           {[1, 2, 3, 4].map((item) => (
             <div key={item} className="col-12 md:col-6">
               <div className="p-2">
-                <Skeleton width="60%" height="1rem" className="mb-2" />
-                <Skeleton width="40%" height="1.5rem" />
+                <Skeleton variant="text" size="sm" style={{ width: '60%', marginBottom: '0.5rem' }} />
+                <Skeleton variant="rectangular" size="md" style={{ width: '40%' }} />
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <div className="grid">
-          {indicators.map((indicator) => {
+        <div className="macro-indicator-grid">
+          {indicators.map((indicator, index) => {
             const value = indicator.data?.value;
             const change = indicator.data?.change;
             const hasData = indicator.data && value !== null && value !== undefined;
             
             return (
-              <div key={indicator.key} className="col-12 md:col-6">
-                <div className="p-2 border-round surface-100 h-full">
-                  <div className="flex align-items-center justify-content-between">
-                    <div className="flex align-items-center gap-2 flex-1">
-                      <i className={`${indicator.icon} text-primary`} />
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">{indicator.label}</div>
-                        <Tooltip target={`.macro-${indicator.key}-tooltip`} />
-                        <small className={`text-xs text-500 macro-${indicator.key}-tooltip`} data-pr-tooltip={hasData ? indicator.tooltip : 'Данные отсутствуют. Возможно, требуется обновление макро-данных.'}>
-                          {hasData && indicator.data?.period ? new Date(indicator.data.period).toLocaleDateString('ru-RU') : 'Нет данных'}
-                        </small>
-                      </div>
+              <div 
+                key={indicator.key} 
+                className="macro-indicator-item animate-fade-in"
+                style={{ 
+                  animationDelay: `${index * 0.1}s`, 
+                  animationFillMode: 'both'
+                }}
+                title={hasData ? indicator.tooltip : 'Данные отсутствуют. Возможно, требуется обновление макро-данных.'}
+              >
+                <div className="flex align-items-center justify-content-between">
+                  <div className="flex align-items-center gap-2 flex-1">
+                    <i className={`${indicator.icon} number-primary`} />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium number-text-primary">{indicator.label}</div>
+                      <small className="text-xs number-text-tertiary">
+                        {hasData && indicator.data?.period ? new Date(indicator.data.period).toLocaleDateString('ru-RU') : 'Нет данных'}
+                      </small>
                     </div>
-                    <div className="text-right">
-                      <div className={`text-lg font-bold ${hasData ? '' : 'text-500'}`}>
-                        {hasData ? formatPercent(value) : '—'}
-                      </div>
-                      {hasData && change !== undefined && change !== null && (
-                        <div className={`text-xs ${getChangeColor(change)}`}>
-                          {getTrendIcon(change)} {formatChange(change)}
-                        </div>
-                      )}
+                  </div>
+                  <div className="text-right">
+                    <div className={`number-sm font-bold ${hasData ? 'number-text-primary' : 'number-text-tertiary'}`}>
+                      {hasData ? formatPercent(value) : '—'}
                     </div>
+                    {hasData && change !== undefined && change !== null && (
+                      <div className={`text-xs ${change >= 0 ? 'number-success' : 'number-error'}`}>
+                        {getTrendIcon(change)} {formatChange(change)}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

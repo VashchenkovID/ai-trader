@@ -1,5 +1,20 @@
-.notification-button {
+.notification-button-wrapper {
   position: relative;
+  display: inline-block;
+}
+
+.notification-badge-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-base);
 }
 
 .notification-panel {

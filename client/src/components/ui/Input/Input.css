@@ -1,0 +1,336 @@
+/* Базовые стили input wrapper */
+.input-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.input-full-width {
+  width: 100%;
+}
+
+/* Label */
+.input-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-3);
+  margin-top: 0;
+}
+
+/* Container для input и иконок */
+.input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border-radius: var(--radius-base);
+}
+
+/* Сам input */
+.input {
+  width: 100%;
+  font-family: var(--font-family-primary);
+  font-size: 16px;
+  color: var(--color-text-primary);
+  background: var(--color-surface-default) !important;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-base);
+  padding: 0 var(--spacing-4);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+  position: relative;
+  z-index: 2;
+}
+
+/* Убираем белый фон при автозаполнении */
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus,
+.input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px var(--color-surface-default) inset !important;
+  -webkit-text-fill-color: var(--color-text-primary) !important;
+  background-color: var(--color-surface-default) !important;
+  background: var(--color-surface-default) !important;
+}
+
+/* Убираем стандартный outline браузера и белый цвет */
+.input:focus {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+}
+
+.input::-webkit-search-decoration,
+.input::-webkit-search-cancel-button,
+.input::-webkit-search-results-button,
+.input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+}
+
+.input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--color-surface-hover);
+}
+
+/* Размеры */
+.input-sm .input {
+  min-height: 32px;
+  font-size: 14px;
+  padding: 0 var(--spacing-3);
+  line-height: 1.5;
+}
+
+.input-md .input {
+  min-height: 40px;
+  font-size: 16px;
+  padding: 0 var(--spacing-4);
+  line-height: 1.5;
+}
+
+.input-lg .input {
+  min-height: 48px;
+  font-size: 18px;
+  padding: 0 var(--spacing-5);
+  line-height: 1.5;
+}
+
+/* Варианты */
+.input-filled .input {
+  background: var(--color-surface-hover) !important;
+  border: 1px solid transparent;
+}
+
+.input-filled .input:focus {
+  background: var(--color-surface-default) !important;
+  border-color: var(--color-border-focus);
+}
+
+.input-filled .input:-webkit-autofill,
+.input-filled .input:-webkit-autofill:hover,
+.input-filled .input:-webkit-autofill:focus,
+.input-filled .input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px var(--color-surface-hover) inset !important;
+  -webkit-text-fill-color: var(--color-text-primary) !important;
+  background-color: var(--color-surface-hover) !important;
+  background: var(--color-surface-hover) !important;
+}
+
+/* Градиентная рамка при focus */
+.input-container::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: var(--radius-base);
+  padding: 2px;
+  background: var(--gradient-primary);
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: scale(0.8);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.input-focused .input-container::before {
+  opacity: 1;
+  transform: scale(1);
+  animation: focusRingPulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes focusRingPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+}
+
+/* Glow эффект при focus */
+.input-container::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: var(--radius-base);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(59, 130, 246, 0.15) 0%,
+    rgba(59, 130, 246, 0.05) 40%,
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.input-focused .input-container::after {
+  opacity: 1;
+  animation: focusGlow 2s ease-in-out infinite;
+}
+
+@keyframes focusGlow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+.input-focused .input {
+  border-color: var(--color-accent-primary);
+  background: var(--color-surface-default);
+  box-shadow: 
+    0 0 0 1px rgba(59, 130, 246, 0.3),
+    0 0 0 3px rgba(59, 130, 246, 0.1),
+    0 4px 12px rgba(59, 130, 246, 0.15),
+    0 0 24px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.input-focused.input-filled .input {
+  background: var(--color-surface-default);
+  box-shadow: 
+    0 0 0 1px rgba(59, 130, 246, 0.3),
+    0 0 0 3px rgba(59, 130, 246, 0.15),
+    0 4px 12px rgba(59, 130, 246, 0.2),
+    0 0 24px rgba(59, 130, 246, 0.15);
+}
+
+/* Error состояние */
+.input-error .input {
+  border-color: var(--color-accent-error);
+}
+
+.input-error .input-container::before {
+  background: var(--gradient-error);
+}
+
+.input-error .input-container::after {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(239, 68, 68, 0.15) 0%,
+    rgba(239, 68, 68, 0.05) 40%,
+    transparent 70%
+  );
+}
+
+.input-error.input-focused .input {
+  border-color: var(--color-accent-error);
+  box-shadow: 
+    0 0 0 1px rgba(239, 68, 68, 0.3),
+    0 0 0 3px rgba(239, 68, 68, 0.1),
+    0 4px 12px rgba(239, 68, 68, 0.15),
+    0 0 24px rgba(239, 68, 68, 0.1);
+}
+
+.input-error.input-focused .input-container::before {
+  opacity: 1;
+  transform: scale(1);
+  animation: focusRingPulseError 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.input-error.input-focused .input-container::after {
+  opacity: 1;
+  animation: focusGlowError 2s ease-in-out infinite;
+}
+
+@keyframes focusRingPulseError {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes focusGlowError {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+/* Иконки */
+.input-icon-left,
+.input-icon-right {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.input-icon-left {
+  left: var(--spacing-3);
+}
+
+.input-icon-right {
+  right: var(--spacing-3);
+}
+
+.input-sm .input-icon-left {
+  left: var(--spacing-2);
+}
+
+.input-sm .input-icon-right {
+  right: var(--spacing-2);
+}
+
+.input-lg .input-icon-left {
+  left: var(--spacing-4);
+}
+
+.input-lg .input-icon-right {
+  right: var(--spacing-4);
+}
+
+/* Helper text */
+.input-helper {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-2);
+  margin-bottom: 0;
+  min-height: 0;
+}
+
+.input-helper-error {
+  color: var(--color-accent-error);
+}
+
+/* Отступ между инпутами в контейнере */
+.input-wrapper + .input-wrapper {
+  margin-top: var(--spacing-4);
+}
+
+/* Hover эффект */
+.input:not(:disabled):hover {
+  border-color: var(--color-border-hover);
+}
+
+.input-filled .input:not(:disabled):hover {
+  background: var(--color-surface-active);
+}

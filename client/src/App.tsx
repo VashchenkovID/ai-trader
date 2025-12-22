@@ -6,6 +6,7 @@ import Navigation from './components/Navigation';
 
 // Contexts
 import { WebSocketDataProvider } from './components/WebSocketDataProvider';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 // Hooks
 import { useErrorHandler } from './hooks/useErrorHandler';
@@ -24,6 +25,7 @@ import TrainingDebug from './pages/TrainingDebug';
 import StockDetail from './pages/StockDetail';
 import Strategies from './pages/Strategies';
 import InstrumentStats from './pages/InstrumentStats';
+import DesignSystemTest from './pages/DesignSystemTest';
 
 function App() {
   // Инициализируем глобальный обработчик ошибок
@@ -31,30 +33,33 @@ function App() {
 
   return (
     <PrimeReactProvider>
-      <WebSocketDataProvider>
-        <BrowserRouter>
-          <div className="app flex h-screen">
-            <Navigation />
-            <main className="main-content flex-1 overflow-auto">
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/neural-networks" element={<NeuralNetworks />} />
-                <Route path="/trading-mode" element={<TradingModeManager />} />
-                <Route path="/metrics" element={<MetricsMonitoring />} />
-                <Route path="/advanced-metrics" element={<AdvancedMetrics />} />
-                <Route path="/trading-requests" element={<TradingRequests />} />
-                <Route path="/recommendations" element={<Recommendations />} />
-                <Route path="/portfolio" element={<Portfolio />} />
-                <Route path="/strategies" element={<Strategies />} />
-                <Route path="/training-debug" element={<TrainingDebug />} />
-                <Route path="/instrument-stats" element={<InstrumentStats />} />
-                <Route path="/stock/:figi" element={<StockDetail />} />
-              </Routes>
-            </main>
-          </div>
-        </BrowserRouter>
-      </WebSocketDataProvider>
+      <ThemeProvider defaultTheme="dark">
+        <WebSocketDataProvider>
+          <BrowserRouter>
+            <div className="app flex h-screen">
+              <Navigation />
+              <main className="main-content flex-1 overflow-auto">
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/neural-networks" element={<NeuralNetworks />} />
+                  <Route path="/trading-mode" element={<TradingModeManager />} />
+                  <Route path="/metrics" element={<MetricsMonitoring />} />
+                  <Route path="/advanced-metrics" element={<AdvancedMetrics />} />
+                  <Route path="/trading-requests" element={<TradingRequests />} />
+                  <Route path="/recommendations" element={<Recommendations />} />
+                  <Route path="/portfolio" element={<Portfolio />} />
+                  <Route path="/strategies" element={<Strategies />} />
+                  <Route path="/training-debug" element={<TrainingDebug />} />
+                  <Route path="/instrument-stats" element={<InstrumentStats />} />
+                  <Route path="/design-system-test" element={<DesignSystemTest />} />
+                  <Route path="/stock/:figi" element={<StockDetail />} />
+                </Routes>
+              </main>
+            </div>
+          </BrowserRouter>
+        </WebSocketDataProvider>
+      </ThemeProvider>
     </PrimeReactProvider>
   );
 }

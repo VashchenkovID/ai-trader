@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Button } from 'primereact/button';
+import { Button } from './ui/Button/Button';
 import { OverlayPanel } from 'primereact/overlaypanel';
-import { Badge } from 'primereact/badge';
+import { Badge } from './ui/Badge/Badge';
 import { ScrollPanel } from 'primereact/scrollpanel';
 import { useWebSocketData, Alert, TradingSignal, TrainingProgress } from './WebSocketDataProvider';
 import './NotificationPanel.css';
@@ -202,14 +202,19 @@ const NotificationPanel: React.FC = () => {
 
   return (
     <>
-      <Button
-        icon="pi pi-bell"
-        className="p-button-rounded p-button-text p-button-sm notification-button"
-        onClick={togglePanel}
-        badge={unreadCount > 0 ? unreadCount.toString() : undefined}
-        tooltip="Уведомления"
-        tooltipOptions={{ position: 'bottom' }}
-      />
+      <div className="notification-button-wrapper" title="Уведомления">
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<i className="pi pi-bell"></i>}
+          onClick={togglePanel}
+        />
+        {unreadCount > 0 && (
+          <Badge variant="error" size="sm" className="notification-badge-count">
+            {unreadCount}
+          </Badge>
+        )}
+      </div>
       <OverlayPanel
         ref={overlayPanelRef}
         className="notification-panel"
@@ -222,16 +227,20 @@ const NotificationPanel: React.FC = () => {
             <div className="flex gap-2">
               {unreadCount > 0 && (
                 <Button
-                  label="Прочитать все"
-                  className="p-button-text p-button-sm"
+                  variant="ghost"
+                  size="sm"
                   onClick={markAllAsRead}
-                />
+                >
+                  Прочитать все
+                </Button>
               )}
               <Button
-                label="Очистить"
-                className="p-button-text p-button-sm"
+                variant="ghost"
+                size="sm"
                 onClick={clearAll}
-              />
+              >
+                Очистить
+              </Button>
             </div>
           </div>
           {unreadCount > 0 && (
@@ -263,7 +272,9 @@ const NotificationPanel: React.FC = () => {
                       <div className="flex align-items-center justify-content-between mb-1">
                         <h4 className="m-0 text-sm font-semibold">{notification.title}</h4>
                         {!notification.read && (
-                          <Badge value="" severity="info" className="notification-dot" />
+                          <Badge variant="info" size="sm" className="notification-dot">
+                            <span style={{ width: '8px', height: '8px', display: 'block', borderRadius: '50%' }}></span>
+                          </Badge>
                         )}
                       </div>
                       <p className="m-0 text-sm text-600 mb-2">{notification.message}</p>

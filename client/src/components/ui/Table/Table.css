@@ -1,0 +1,191 @@
+/* Table Wrapper */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-surface-default);
+}
+
+/* Table Base */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface-default);
+  color: var(--color-text-primary);
+}
+
+/* Table Header */
+.table-header {
+  padding: var(--spacing-4) var(--spacing-4);
+  text-align: left;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-hover);
+  border-bottom: 2px solid var(--color-border-default);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  user-select: none;
+}
+
+.table-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-2);
+}
+
+.table-header-sortable {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.table-header-sortable:hover {
+  background: var(--color-surface-active);
+  color: var(--color-text-primary);
+}
+
+.table-header-sorted-asc,
+.table-header-sorted-desc {
+  color: var(--color-accent-primary);
+  background: var(--color-surface-active);
+}
+
+.table-sort-icon {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--color-accent-primary);
+  flex-shrink: 0;
+}
+
+.table-sort-icon-placeholder {
+  opacity: 0.3;
+  color: var(--color-text-tertiary);
+}
+
+/* Table Body */
+.table-cell {
+  padding: var(--spacing-4) var(--spacing-4);
+  border-bottom: 1px solid var(--color-border-default);
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+
+/* Table Row */
+.table-row-clickable {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.table-row-clickable:hover {
+  background: var(--color-surface-hover);
+  transform: translateX(2px);
+}
+
+/* Hoverable Rows */
+.table-hoverable tbody tr,
+.table-hoverable-row {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeIn 0.3s ease-out;
+}
+
+.table-hoverable tbody tr:nth-child(1),
+.table-hoverable-row:nth-child(1) {
+  animation-delay: 0.05s;
+}
+
+.table-hoverable tbody tr:nth-child(2),
+.table-hoverable-row:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.table-hoverable tbody tr:nth-child(3),
+.table-hoverable-row:nth-child(3) {
+  animation-delay: 0.15s;
+}
+
+.table-hoverable tbody tr:nth-child(4),
+.table-hoverable-row:nth-child(4) {
+  animation-delay: 0.2s;
+}
+
+.table-hoverable tbody tr:nth-child(5),
+.table-hoverable-row:nth-child(5) {
+  animation-delay: 0.25s;
+}
+
+.table-hoverable tbody tr:hover,
+.table-hoverable-row:hover {
+  background: var(--color-surface-hover);
+  transform: translateX(2px);
+}
+
+/* Striped Rows */
+.table-striped tbody tr:nth-child(even) {
+  background: var(--color-surface-hover);
+}
+
+/* Bordered Table */
+.table-bordered {
+  border: 1px solid var(--color-border-default);
+}
+
+.table-bordered .table-header,
+.table-bordered .table-cell {
+  border: 1px solid var(--color-border-default);
+}
+
+/* Table Sizes */
+.table-size-sm .table-header,
+.table-size-sm .table-cell {
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: 12px;
+}
+
+.table-size-md .table-header,
+.table-size-md .table-cell {
+  padding: var(--spacing-4) var(--spacing-4);
+  font-size: 14px;
+}
+
+.table-size-lg .table-header,
+.table-size-lg .table-cell {
+  font-size: 16px !important;
+}
+
+/* Empty State */
+.table-empty {
+  text-align: center;
+  padding: var(--spacing-8) !important;
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .table-wrapper {
+    border-radius: var(--radius-base);
+  }
+
+  .table-header,
+  .table-cell {
+    padding: var(--spacing-3) var(--spacing-2);
+    font-size: 12px;
+  }
+
+  /* Сохраняем стили размера lg на мобильных */
+  .table-size-lg .table-header,
+  .table-size-lg .table-cell {
+    padding: 0 !important;
+    font-size: 16px !important;
+  }
+
+  .table-header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-1);
+  }
+}

@@ -25,6 +25,7 @@ class NeuralNetworkService {
         this.modelFile = path.join(this.modelPath, 'neural-network-model.json');
         this.weightsFile = path.join(this.modelPath, 'neural-network-weights.json');
         this.isBatchTraining = false;
+        this.isStopping = false; // Флаг остановки сервиса
         // Метаданные обучения
         this.lastTrainingTime = null;
         this.lastTrainingDuration = null;
@@ -1241,8 +1242,12 @@ class NeuralNetworkService {
                 
                 worker.on('exit', (code) => {
                     this.analysisWorkers.delete(worker);
-                    if (code !== 0) {
+                    // Не считаем ошибкой завершение worker'а при остановке сервиса
+                    if (code !== 0 && !this.isStopping) {
                         reject(new Error(`Worker stopped with exit code ${code}`));
+                    } else if (code !== 0 && this.isStopping) {
+                        // При остановке просто логируем, но не считаем ошибкой
+                        console.log(`ℹ️ Worker stopped during service shutdown (exit code ${code})`);
                     }
                 });
             });
@@ -2505,7 +2510,15 @@ class NeuralNetworkService {
                 await this.performMarketAnalysis();
             } catch (error) {
                 console.error('Error in periodic analysis:', error);
-                WebSocketService.broadcastError(error);
+                // Безопасная отправка ошибки через WebSocket
+                try {
+                    const webSocketService = this.getWebSocketService();
+                    if (webSocketService && typeof webSocketService.broadcastError === 'function') {
+                        webSocketService.broadcastError(error);
+                    }
+                } catch (wsError) {
+                    console.warn('Failed to broadcast error via WebSocket:', wsError.message);
+                }
                 // Ошибки теперь обрабатываются в IntegratedAIService
             }
         }, 30 * 60 * 1000); // 30 минут
@@ -3782,6 +3795,9 @@ class NeuralNetworkService {
         try {
             console.log('🛑 Stopping Neural Network Service...');
             
+            // Устанавливаем флаг остановки перед очисткой ресурсов
+            this.isStopping = true;
+            
             // Очищаем интервал анализа
             if (this.analysisInterval) {
                 clearInterval(this.analysisInterval);
@@ -3792,13 +3808,18 @@ class NeuralNetworkService {
             this.isTraining = false;
             this.isBatchTraining = false;
             this.status = 'idle';
+            this.isAnalyzing = false;
             
             // Завершаем все worker процессы анализа
             if (this.analysisWorkers && this.analysisWorkers.size > 0) {
                 console.log(`🛑 Terminating ${this.analysisWorkers.size} analysis worker(s)...`);
                 this.analysisWorkers.forEach(worker => {
                     if (worker && worker.terminate) {
-                        worker.terminate();
+                        try {
+                            worker.terminate();
+                        } catch (error) {
+                            console.warn('⚠️ Error terminating worker:', error.message);
+                        }
                     }
                 });
                 this.analysisWorkers.clear();
@@ -3807,7 +3828,9 @@ class NeuralNetworkService {
             console.log('✅ Neural Network Service stopped');
         } catch (error) {
             console.error('❌ Error stopping Neural Network Service:', error);
-            throw error;
+            // Не пробрасываем ошибку дальше при остановке
+        } finally {
+            this.isStopping = false;
         }
     }
 }

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Button } from 'primereact/button';
 import { useRef } from 'react';
 import { Toast } from 'primereact/toast';
-import { Divider } from 'primereact/divider';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
+import { Button } from './ui/Button/Button';
 import WebSocketStatus from './WebSocketStatus';
 import NotificationPanel from './NotificationPanel';
+import './Navigation.css';
 
 interface NavigationProps {
   className?: string;
@@ -46,6 +46,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
     { path: '/trading-requests', label: 'Торговые заявки', icon: 'pi pi-list-check' },
     { path: '/trading-mode', label: 'Режимы торговли', icon: 'pi pi-cog' },
     { path: '/training-debug', label: 'Отладка обучения', icon: 'pi pi-cog' },
+    { path: '/design-system-test', label: '🎨 Тест дизайн-системы', icon: 'pi pi-palette' },
     { path: '/instrument-stats', label: 'Статистика инструментов', icon: 'pi pi-chart-bar' },
     { path: '/metrics', label: 'Метрики', icon: 'pi pi-chart-line' },
     { path: '/advanced-metrics', label: 'Продвинутые метрики', icon: 'pi pi-chart-bar' },
@@ -55,53 +56,54 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className={`w-16rem h-full bg-white border-right-1 border-200 ${className}`}>
+    <div className={`navigation-sidebar ${className}`}>
       <Toast ref={toast} />
       
       {/* Заголовок */}
-      <div className="p-3 border-bottom-1 border-200">
-        <div className="flex align-items-center gap-2 mb-2">
-          <i className="pi pi-chart-line text-2xl text-primary"></i>
-          <span className="text-lg font-bold text-primary">IvashkaTradeHelper</span>
-        </div>
-        
-        {/* WebSocket статус */}
-        <div className="mb-2">
-          <WebSocketStatus compact={true} />
-        </div>
-        
-        <div className="flex align-items-center justify-content-between">
-          <small className="text-500">
-            {systemStatus?.timestamp && new Date(systemStatus.timestamp).toLocaleTimeString()}
-          </small>
-          <div className="flex align-items-center gap-1">
-            <NotificationPanel />
-            <Button
-              icon="pi pi-refresh"
-              className="p-button-rounded p-button-text p-button-sm"
-              tooltip="Обновить статус"
-              onClick={loadSystemStatus}
-            />
+      <div className="navigation-header">
+        <div className="navigation-header-content">
+          <div className="navigation-logo">
+            <span className="navigation-logo-text">TradeForge Insights</span>
+          </div>
+          
+          {/* WebSocket статус */}
+          <div className="navigation-status-section">
+            <div className="mb-2">
+              <WebSocketStatus compact={true} />
+            </div>
+            
+            <div className="navigation-status-row">
+              <small className="navigation-timestamp">
+                {systemStatus?.timestamp && new Date(systemStatus.timestamp).toLocaleTimeString()}
+              </small>
+              <div className="navigation-actions">
+                <NotificationPanel />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<i className="pi pi-refresh"></i>}
+                  onClick={loadSystemStatus}
+                  title="Обновить статус"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Навигационные кнопки */}
-      <div className="p-2">
+      <div className="navigation-menu">
         {menuItems.map((item) => (
-          <Button
+          <button
             key={item.path}
-            icon={item.icon}
-            label={item.label}
-            className={`w-full justify-content-start mb-1 ${
-              isActive(item.path) ? 'p-button-outlined' : 'p-button-text'
-            }`}
+            className={`navigation-menu-item ${isActive(item.path) ? 'active' : ''}`}
             onClick={() => navigate(item.path)}
-          />
+          >
+            <i className={`${item.icon} navigation-menu-item-icon`}></i>
+            <span className="navigation-menu-item-label">{item.label}</span>
+          </button>
         ))}
       </div>
-
-      <Divider />
     </div>
   );
 };

@@ -1,27 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card } from 'primereact/card';
-import { Badge } from 'primereact/badge';
-import { Skeleton } from 'primereact/skeleton';
-import { Message } from 'primereact/message';
+import { Skeleton } from '../components/ui/Skeleton/Skeleton';
 import { Toast } from 'primereact/toast';
-import { ProgressBar } from 'primereact/progressbar';
-import { Panel } from 'primereact/panel';
-import { Divider } from 'primereact/divider';
+import { ProgressBar } from '../components/ui/ProgressBar/ProgressBar';
 import { apiService } from '../services/apiService';
-import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
+import { ConfirmDialog } from 'primereact/confirmdialog';
 import { useWebSocketData } from '../components/WebSocketDataProvider';
-import CacheStatusCard from '../components/dashboard/CacheStatusCard';
 import TradingSummaryCard from '../components/dashboard/TradingSummaryCard';
-import NeuralNetworksControlCard from '../components/dashboard/NeuralNetworksControlCard';
-import TradingSignalsWidget from '../components/websocket/TradingSignalsWidget';
-import AlertsWidget from '../components/websocket/AlertsWidget';
-import ModelMetricsWidget from '../components/websocket/ModelMetricsWidget';
 import CachedSignalsCard from '../components/dashboard/CachedSignalsCard';
-import TrainingProgressWidget from '../components/websocket/TrainingProgressWidget';
 import HeroMetricsCard from '../components/dashboard/HeroMetricsCard';
-import AdvancedMetricsPreview from '../components/dashboard/AdvancedMetricsPreview';
 import MacroDataPreview from '../components/dashboard/MacroDataPreview';
 import RebalancingStatusCard from '../components/dashboard/RebalancingStatusCard';
+import { Card } from '../components/ui/Card/Card';
+import { Badge as UIBadge } from '../components/ui/Badge/Badge';
+import './Dashboard.css';
 
 interface DashboardProps {
   className?: string;
@@ -33,38 +24,16 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
   // Используем новый WebSocket провайдер
   const { 
     systemStatus, 
-    cacheStatus, 
     systemResources,
     tradingStats, 
     trainingStatus,
-    trainingProgress,
-    tradingSignals,
-    alerts,
-    modelMetrics,
     isConnected 
   } = useWebSocketData();
   
   // Локальное состояние
-  const [error, setError] = useState<string | null>(null);
-  const [trainLoading, setTrainLoading] = useState(false);
-  const [trainingProgressText, setTrainingProgressText] = useState<string>('');
-  const [trainingStage, setTrainingStage] = useState<string>('');
   const [sharpeRatio, setSharpeRatio] = useState<number | null>(null);
-  const [trainingStages, setTrainingStages] = useState<{
-    neuralNetwork: 'pending' | 'in_progress' | 'completed' | 'failed';
-    ensemble: 'pending' | 'in_progress' | 'completed' | 'failed';
-    metaLearning: 'pending' | 'in_progress' | 'completed' | 'failed';
-    reinforcementLearning: 'pending' | 'in_progress' | 'completed' | 'failed';
-  }>({
-    neuralNetwork: 'pending',
-    ensemble: 'pending',
-    metaLearning: 'pending',
-    reinforcementLearning: 'pending'
-  });
   
   const toast = useRef<Toast>(null);
-  const lastSignalRef = useRef<string>('');
-  const lastAlertRef = useRef<string>('');
 
   // Загрузка Sharpe Ratio
   useEffect(() => {
@@ -89,27 +58,6 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
     loadSharpeRatio();
   }, []);
 
-  // Обработка статуса обучения из WebSocket
-  useEffect(() => {
-    if (trainingStatus) {      
-      // Обновляем локальное состояние на основе WebSocket данных
-      setTrainingStages({
-        neuralNetwork: trainingStatus.neuralNetwork.isTraining ? 'in_progress' : 
-                      trainingStatus.neuralNetwork.stage === 'completed' ? 'completed' :
-                      trainingStatus.neuralNetwork.stage === 'failed' ? 'failed' : 'pending',
-        ensemble: trainingStatus.ensemble.isTraining ? 'in_progress' : 
-                 trainingStatus.ensemble.stage === 'completed' ? 'completed' :
-                 trainingStatus.ensemble.stage === 'failed' ? 'failed' : 'pending',
-        metaLearning: trainingStatus.metaLearning.isTraining ? 'in_progress' : 
-                     trainingStatus.metaLearning.stage === 'completed' ? 'completed' :
-                     trainingStatus.metaLearning.stage === 'failed' ? 'failed' : 'pending',
-        reinforcementLearning: trainingStatus.reinforcementLearning.isTraining ? 'in_progress' : 
-                              trainingStatus.reinforcementLearning.stage === 'completed' ? 'completed' :
-                              trainingStatus.reinforcementLearning.stage === 'failed' ? 'failed' : 'pending'
-      });
-    }
-  }, [trainingStatus]);
-
   // Определяем, учится ли любая из нейросетей
   const isAnyNetworkTraining = !!(trainingStatus && (
     trainingStatus.neuralNetwork?.isTraining ||
@@ -117,13 +65,6 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
     trainingStatus.metaLearning?.isTraining ||
     trainingStatus.reinforcementLearning?.isTraining
   ));
-
-  // Отладочная информация для лоадера
-  useEffect(() => {
-    console.log('🔍 Dashboard - isAnyNetworkTraining:', isAnyNetworkTraining);
-    console.log('🔍 Dashboard - trainLoading:', trainLoading);
-    console.log('🔍 Dashboard - Button loading state:', trainLoading || isAnyNetworkTraining);
-  }, [isAnyNetworkTraining, trainLoading]);
 
   // Данные обновляются автоматически через WebSocket, интервалы не нужны
 
@@ -158,38 +99,35 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
   };
 
   const getStatusBadge = (status: any) => {
-    const badgeClassName = "text-xs";
-    const badgeStyle = { width: '100%', display: 'block', textAlign: 'center' as const };
-    
-    if (!status) return <Badge value="Неизвестно" severity="info" className={badgeClassName} style={badgeStyle} />;
+    if (!status) return <UIBadge variant="info" size="sm">Неизвестно</UIBadge>;
     
     // Если это строка
     if (typeof status === 'string') {
-      const statusMap: { [key: string]: 'success' | 'warning' | 'danger' | 'info' } = {
+      const statusMap: { [key: string]: 'success' | 'warning' | 'error' | 'info' } = {
         'active': 'success',
         'ready': 'success',
         'training': 'warning',
-        'off': 'danger',
-        'not_loaded': 'danger',
+        'off': 'error',
+        'not_loaded': 'error',
         'initialized': 'info',
         'unknown': 'info',
         'connected': 'success',
         'inactive': 'warning'
       };
       const translatedStatus = translateStatus(status);
-      return <Badge value={translatedStatus} severity={statusMap[status] || 'info'} className={badgeClassName} style={badgeStyle} />;
+      return <UIBadge variant={statusMap[status] || 'info'} size="sm">{translatedStatus}</UIBadge>;
     }
     
     // Обработка объектов с полем status
     if (status.hasOwnProperty('status')) {
       const statusValue = status.status;
-      const statusMap: { [key: string]: 'success' | 'warning' | 'danger' | 'info' } = {
+      const statusMap: { [key: string]: 'success' | 'warning' | 'error' | 'info' } = {
         'active': 'success',
         'connected': 'success',
         'training': 'warning',
         'inactive': 'warning',
-        'off': 'danger',
-        'not_loaded': 'danger',
+        'off': 'error',
+        'not_loaded': 'error',
         'unknown': 'info'
       };
       
@@ -199,7 +137,7 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
         badgeText = `${badgeText} (${translatedMode})`;
       }
       
-      return <Badge value={badgeText} severity={statusMap[statusValue] || 'info'} className={badgeClassName} style={badgeStyle} />;
+      return <UIBadge variant={statusMap[statusValue] || 'info'} size="sm">{badgeText}</UIBadge>;
     }
     
     // Обработка разных форматов объектов статуса
@@ -207,20 +145,20 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
     // NeuralNetworkService: {isLoaded, isTraining, status}
     if (status.hasOwnProperty('isLoaded')) {
       if (status.isTraining) {
-        return <Badge value="Обучение" severity="warning" className={badgeClassName} style={badgeStyle} />;
+        return <UIBadge variant="warning" size="sm">Обучение</UIBadge>;
       } else if (status.isLoaded) {
-        return <Badge value="Готов" severity="success" className={badgeClassName} style={badgeStyle} />;
+        return <UIBadge variant="success" size="sm">Готов</UIBadge>;
       } else {
-        return <Badge value="Не загружен" severity="danger" className={badgeClassName} style={badgeStyle} />;
+        return <UIBadge variant="error" size="sm">Не загружен</UIBadge>;
       }
     }
     
     // WebSocketService: {isConnected, clientsCount, isInitialized}
     if (status.hasOwnProperty('isConnected')) {
       if (status.isConnected && status.isInitialized) {
-        return <Badge value="Активен" severity="success" className={badgeClassName} style={badgeStyle} />;
+        return <UIBadge variant="success" size="sm">Активен</UIBadge>;
       } else {
-        return <Badge value="Отключен" severity="danger" className={badgeClassName} style={badgeStyle} />;
+        return <UIBadge variant="error" size="sm">Отключен</UIBadge>;
       }
     }
     
@@ -229,11 +167,11 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
       const mode = status.mode || (typeof status.currentMode === 'string' ? status.currentMode : status.currentMode?.mode) || 'unknown';
       const translatedMode = translateMode(mode);
       if (status.isActive) {
-        return <Badge value={`Активен (${translatedMode})`} severity="success" className={badgeClassName} style={badgeStyle} />;
+        return <UIBadge variant="success" size="sm">Активен ({translatedMode})</UIBadge>;
       } else if (status.isInitialized) {
-        return <Badge value={`Неактивен (${translatedMode})`} severity="warning" className={badgeClassName} style={badgeStyle} />;
+        return <UIBadge variant="warning" size="sm">Неактивен ({translatedMode})</UIBadge>;
       } else {
-        return <Badge value="Не инициализирован" severity="danger" className={badgeClassName} style={badgeStyle} />;
+        return <UIBadge variant="error" size="sm">Не инициализирован</UIBadge>;
       }
     }
     
@@ -241,222 +179,100 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
     if (status.hasOwnProperty('models') || status.hasOwnProperty('loadedModels')) {
       const modelCount = status.loadedModels || Object.keys(status.models || {}).length;
       if (modelCount > 0) {
-        return <Badge value={`Активен (${modelCount} моделей)`} severity="success" className={badgeClassName} style={badgeStyle} />;
+        return <UIBadge variant="success" size="sm">Активен ({modelCount} моделей)</UIBadge>;
       } else {
-        return <Badge value="Модели не загружены" severity="warning" className={badgeClassName} style={badgeStyle} />;
+        return <UIBadge variant="warning" size="sm">Модели не загружены</UIBadge>;
       }
     }
     
     // Fallback для других объектов
     if (status.isActive) {
-      return <Badge value="Активен" severity="success" className={badgeClassName} style={badgeStyle} />;
+      return <UIBadge variant="success" size="sm">Активен</UIBadge>;
     } else if (status.isTraining) {
-      return <Badge value="Обучение" severity="warning" className={badgeClassName} style={badgeStyle} />;
+      return <UIBadge variant="warning" size="sm">Обучение</UIBadge>;
     } else if (status.isInitialized) {
-      return <Badge value="Инициализирован" severity="info" className={badgeClassName} style={badgeStyle} />;
+      return <UIBadge variant="info" size="sm">Инициализирован</UIBadge>;
     } else {
-      return <Badge value="Отключен" severity="danger" className={badgeClassName} style={badgeStyle} />;
+      return <UIBadge variant="error" size="sm">Отключен</UIBadge>;
     }
   };
 
   // Графики убраны для упрощения дашборда
-
-  // Запуск обучения всех нейросетей одной кнопкой
-  const handleTrainAllNetworks = async () => {
-    confirmDialog({
-      message: 'Запустить обучение всех нейросетей для всех доступных инструментов? Это может занять продолжительное время.',
-      header: 'Подтверждение запуска обучения',
-      icon: 'pi pi-exclamation-triangle',
-      accept: async () => {
-        try {
-          setTrainLoading(true);
-          setTrainingProgressText('Инициализация...');
-          console.log('🚀 Starting training all networks...');
-          
-          // Загружаем доступные инструменты
-          setTrainingProgress('Загрузка инструментов...');
-          console.log('📋 Fetching available instruments...');
-          const instruments = await apiService.getNeuralNetworkInstruments();
-          console.log('📊 Available instruments:', instruments);
-          
-          const instrumentList = Array.isArray(instruments) ? instruments : [];
-          const figiList = instrumentList.map((i: any) => i.figi || i);
-          
-          console.log(`📈 Found ${figiList.length} instruments for training`);
-          
-          if (figiList.length === 0) {
-            console.warn('⚠️ No instruments available for training');
-            setError('Нет доступных инструментов для обучения. Возможно, нужно обновить кеш данных.');
-            return;
-          }
-
-          // 1) Основная NN: пакетное обучение
-          setTrainingProgressText(`Обучение нейросети для ${figiList.length} инструментов...`);
-          setTrainingStages(prev => ({ ...prev, neuralNetwork: 'in_progress' }));
-          setTrainingStage('Обучение нейросети...');
-          console.log('🧠 Starting batch neural network training...');
-          const nnResult = await apiService.trainBatchNeuralNetwork(figiList, {
-            epochs: 30,
-            batchSize: 16,
-            enableValidation: true
-          });
-          console.log('✅ Neural network training completed:', nnResult);
-          setTrainingStages(prev => ({ ...prev, neuralNetwork: 'completed' }));
-          setTrainingStage('Нейросеть обучена');
-
-          // 2) Ансамбль: пакетное обучение
-          setTrainingProgressText('Обучение ансамбля...');
-          setTrainingStages(prev => ({ ...prev, ensemble: 'in_progress' }));
-          setTrainingStage('Обучение ансамбля...');
-          console.log('🎭 Starting batch ensemble training...');
-            // Ensemble требует минимум ~100 свечей, фильтруем
-            const ensembleFigiList = instrumentList
-              .filter((i: any) => (i?.candleCount ?? 0) >= 100)
-              .map((i: any) => i.figi || i);
-          
-          console.log(`🎭 Ensemble training for ${ensembleFigiList.length} instruments with sufficient data`);
-          
-            if (ensembleFigiList.length > 0) {
-            const ensembleResult = await apiService.trainBatchEnsemble(ensembleFigiList, { 
-              epochs: 20, 
-              batchSize: 8 
-            });
-            console.log('✅ Ensemble training completed:', ensembleResult);
-            setTrainingStages(prev => ({ ...prev, ensemble: 'completed' }));
-            setTrainingStage('Ансамбль обучен');
-          } else {
-            console.log('⚠️ No instruments with sufficient data for ensemble training');
-            setTrainingStages(prev => ({ ...prev, ensemble: 'completed' }));
-            setTrainingStage('Ансамбль пропущен (недостаточно данных)');
-          }
-
-          // 3) Meta-Learning: пакетное обучение
-          setTrainingProgressText('Обучение Meta-Learning...');
-          setTrainingStages(prev => ({ ...prev, metaLearning: 'in_progress' }));
-          setTrainingStage('Обучение Meta-Learning...');
-          console.log('🧠 Starting batch meta-learning training...');
-          const metaLearningResult = await apiService.trainBatchMetaLearning(figiList, {
-            adaptationRate: 0.01,
-            knowledgeBaseSize: 1000
-          });
-          console.log('✅ Meta-Learning training completed:', metaLearningResult);
-          setTrainingStages(prev => ({ ...prev, metaLearning: 'completed' }));
-          setTrainingStage('Meta-Learning обучен');
-
-          // 4) Reinforcement Learning: пакетное обучение
-          setTrainingProgressText('Обучение Reinforcement Learning...');
-          setTrainingStages(prev => ({ ...prev, reinforcementLearning: 'in_progress' }));
-          setTrainingStage('Обучение Reinforcement Learning...');
-          console.log('🤖 Starting batch reinforcement learning training...');
-          const rlResult = await apiService.trainBatchReinforcementLearning(figiList, {
-            episodes: 50,
-            learningRate: 0.001
-          });
-          console.log('✅ Reinforcement Learning training completed:', rlResult);
-          setTrainingStages(prev => ({ ...prev, reinforcementLearning: 'completed' }));
-          setTrainingStage('Reinforcement Learning обучен');
-
-          // 3) Обновляем данные
-          setTrainingProgressText('Обновление данных...');
-          console.log('🔄 Refreshing dashboard data...');
-          // Данные обновляются автоматически через WebSocket
-          
-          setTrainingProgressText('Обучение завершено!');
-          console.log('🎉 All training completed successfully!');
-          
-          // Очищаем прогресс через 3 секунды
-          setTimeout(() => {
-            setTrainingProgressText('');
-          }, 3000);
-          
-        } catch (e: any) {
-          console.error('❌ Error during training all networks:', e);
-          // Показываем пользователю ошибку
-          setError(`Ошибка обучения: ${e.message || 'Неизвестная ошибка'}`);
-          setTrainingProgressText('');
-          // Сбрасываем все стадии в failed
-          setTrainingStages({
-            neuralNetwork: 'failed',
-            ensemble: 'failed',
-            metaLearning: 'failed',
-            reinforcementLearning: 'failed'
-          });
-          setTrainingStage('Ошибка обучения');
-        } finally {
-          setTrainLoading(false);
-        }
-      }
-    });
-  };
 
   return (
     <div className={`dashboard ${className}`}>
       <div className="grid">
         {/* Заголовок и статус подключения */}
         <div className="col-12">
-          <Card className="h-full">
-            <div className="flex flex-column md:flex-row md:align-items-center md:justify-content-between gap-3">
-            <div>
-              <div className="flex align-items-center gap-2 mb-2">
-                <h1 className="m-0 text-3xl font-bold text-primary">📊 Панель управления</h1>
-                {isConnected && (
-                  <Badge 
-                    value="LIVE" 
-                    severity="success" 
-                    className="animate-pulse"
-                  />
+          <Card variant="glass" className="h-full">
+            <div className="dashboard-header">
+              <div className="dashboard-title-section">
+                <div className="dashboard-title-wrapper">
+                  <h1 className="dashboard-title">📊 Панель управления</h1>
+                  {isConnected && (
+                    <UIBadge variant="success" size="md">
+                      LIVE
+                    </UIBadge>
+                  )}
+                </div>
+                <p className="dashboard-subtitle">
+                  Мониторинг торговой системы и нейросетей
+                  {isConnected && <span className="dashboard-subtitle-live"> • Данные в реальном времени</span>}
+                </p>
+                {systemStatus && (
+                  <small className="dashboard-updated">
+                    Обновлено: {new Date().toLocaleString('ru-RU')}
+                  </small>
                 )}
               </div>
-              <p className="text-600 mb-2">
-                Мониторинг торговой системы и нейросетей
-                {isConnected && <span className="text-green-500"> • Данные в реальном времени</span>}
-              </p>
-              {systemStatus && (
-                <small className="text-500">
-                  Обновлено: {new Date().toLocaleString('ru-RU')}
-                </small>
-              )}
-        </div>
 
-              <div className="flex align-items-center justify-content-center md:justify-content-end gap-2">
-              <div className="text-center">
-                  <div className="text-2xl mb-1">
-                  {isConnected ? '🟢' : '🔴'}
-                </div>
-                  <div className="text-600 text-sm">
-                  {isConnected ? 'Подключено к серверу' : 'Отключено от сервера'}
-                </div>
-                <small className="text-500">
-                  {isConnected ? 'Данные обновляются в реальном времени' : 'Попытка переподключения...'}
-                </small>
+              <div className="dashboard-connection-status">
+                <div className="dashboard-connection-indicator">
+                  <div className="dashboard-connection-icon">
+                    {isConnected ? '🟢' : '🔴'}
+                  </div>
+                  <div className="dashboard-connection-text">
+                    {isConnected ? 'Подключено к серверу' : 'Отключено от сервера'}
+                  </div>
+                  <small className="dashboard-connection-hint">
+                    {isConnected ? 'Данные обновляются в реальном времени' : 'Попытка переподключения...'}
+                  </small>
                 </div>
               </div>
             </div>
           </Card>
         </div>
 
-        {/* Сообщение об ошибке */}
-        {error && (
-          <div className="col-12">
-            <Message severity="error" text={error} />
-          </div>
-        )}
-
         {/* Верхняя панель "Ключевые метрики" (Hero Section) */}
-        <div className="col-12">
+        <div className="col-12 animate-fade-in">
+          <div className="dashboard-training-badge-wrapper">
+            <div></div>
+            {isAnyNetworkTraining && (
+              <UIBadge variant="warning" size="md" icon={<i className="pi pi-spin pi-spinner mr-1"></i>}>
+                Обучение нейросетей
+              </UIBadge>
+            )}
+          </div>
           <HeroMetricsCard tradingStats={tradingStats} sharpeRatio={sharpeRatio} />
         </div>
+      </div>
 
-        {/* Первая строка: 3 колонки - Состояние системы, Торговая активность, Управление нейросетями */}
-        <div className="col-12 lg:col-4">
-          <Card title={<span><i className="pi pi-cog mr-2"></i>Состояние системы</span>} className="h-full" key={systemStatus ? JSON.stringify(systemStatus) : 'loading'}>
+      {/* Первая строка: 3 колонки - Состояние системы, Торговая активность */}
+      <div className="dashboard-cards-grid">
+          <div className="animate-slide-up dashboard-animate-delay-3">
+            <Card 
+              variant="glass" 
+              header={<span>Состояние системы</span>} 
+              className="h-full"
+              key={systemStatus ? JSON.stringify(systemStatus) : 'loading'}
+            >
             {!systemStatus ? (
               <div className="grid">
                 {[1, 2, 3, 4].map((item) => (
                   <div key={item} className="col-6">
-                    <div className="text-center p-2 border-round surface-100">
-                      <Skeleton width="100%" height="1.5rem" className="mb-2" />
-                      <Skeleton width="60%" height="1rem" />
+                    <div className="dashboard-skeleton-item">
+                      <Skeleton variant="text" size="md" className="dashboard-skeleton-large" />
+                      <Skeleton variant="text" size="sm" className="dashboard-skeleton-medium" />
                     </div>
                   </div>
                 ))}
@@ -464,167 +280,113 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
             ) : systemStatus ? (
               <div className="flex flex-column gap-2">
                 {/* Статусы системы - компактная сетка 2x2 */}
-                <div className="grid">
-                  <div className="col-6">
-                    <div className="flex align-items-center gap-2 p-2 border-round surface-100">
-                      <i className="pi pi-brain text-primary"></i>
-                      <div className="flex-1">
-                        <div className="text-sm font-bold mb-1">Нейросеть</div>
-                        <div>{getStatusBadge(systemStatus.neuralNetwork)}</div>
-                      </div>
+                <div className="dashboard-system-status-grid">
+                  <div className="dashboard-status-item">
+                    <div className="dashboard-status-item-content">
+                      <div className="dashboard-status-item-label">Нейросеть</div>
+                      <div>{getStatusBadge(systemStatus.neuralNetwork)}</div>
                     </div>
                   </div>
-                  <div className="col-6">
-                    <div className="flex align-items-center gap-2 p-2 border-round surface-100">
-                      <i className="pi pi-wifi text-primary"></i>
-                      <div className="flex-1">
-                        <div className="text-sm font-bold mb-1">WebSocket</div>
-                        <div>{getStatusBadge(systemStatus.websocket)}</div>
-                      </div>
+                  <div className="dashboard-status-item">
+                    <div className="dashboard-status-item-content">
+                      <div className="dashboard-status-item-label">WebSocket</div>
+                      <div>{getStatusBadge(systemStatus.websocket)}</div>
                     </div>
                   </div>
-                  <div className="col-6">
-                    <div className="flex align-items-center gap-2 p-2 border-round surface-100">
-                      <i className="pi pi-cog text-primary"></i>
-                      <div className="flex-1">
-                        <div className="text-sm font-bold mb-1">Движок</div>
-                        <div>{getStatusBadge(systemStatus.trading)}</div>
-                      </div>
+                  <div className="dashboard-status-item">
+                    <div className="dashboard-status-item-content">
+                      <div className="dashboard-status-item-label">Движок</div>
+                      <div>{getStatusBadge(systemStatus.trading)}</div>
                     </div>
                   </div>
-                  <div className="col-6">
-                    <div className="flex align-items-center gap-2 p-2 border-round surface-100">
-                      <i className="pi pi-database text-primary"></i>
-                      <div className="flex-1">
-                        <div className="text-sm font-bold mb-1">База данных</div>
-                        <div>{getStatusBadge(systemStatus.database)}</div>
-                      </div>
+                  <div className="dashboard-status-item">
+                    <div className="dashboard-status-item-content">
+                      <div className="dashboard-status-item-label">База данных</div>
+                      <div>{getStatusBadge(systemStatus.database)}</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Ресурсы сервера - горизонтально */}
-                <Panel header="Ресурсы сервера" toggleable collapsed={true} className="text-sm">
-                  <div className="flex align-items-center gap-3">
-                    <div className="flex-1">
-                      <div className="flex justify-content-between mb-1">
-                        <span className="text-xs text-500">CPU</span>
-                        <span className="text-xs font-medium">
-                          {systemResources?.cpu?.usage != null
-                            ? `${systemResources.cpu.usage.toFixed(1)}%`
-                            : '—'}
-                        </span>
+                <details className="dashboard-server-resources" open>
+                  <summary className="dashboard-server-resources-summary">
+                    Ресурсы сервера
+                    <i className="pi pi-chevron-down ml-2 dashboard-server-resources-summary-icon"></i>
+                  </summary>
+                  <div className="dashboard-server-resources-content">
+                    <div className="dashboard-server-resources-row">
+                      <div className="dashboard-server-resources-item">
+                        <div className="dashboard-server-resources-label-row">
+                          <span className="dashboard-server-resources-label">CPU</span>
+                          <span className="dashboard-server-resources-value">
+                            {systemResources?.cpu?.usage != null
+                              ? `${systemResources.cpu.usage.toFixed(1)}%`
+                              : '—'}
+                          </span>
+                        </div>
+                        {systemResources?.cpu?.usage != null && (
+                          <ProgressBar 
+                            value={systemResources.cpu.usage} 
+                            variant={systemResources.cpu.usage < 70 ? 'success' : systemResources.cpu.usage < 90 ? 'warning' : 'error'}
+                            size="sm"
+                            showLabel={false}
+                          />
+                        )}
                       </div>
-                      {systemResources?.cpu?.usage != null && (
-                        <ProgressBar 
-                          value={systemResources.cpu.usage} 
-                          showValue={false}
-                          color={systemResources.cpu.usage < 70 ? '#22c55e' : systemResources.cpu.usage < 90 ? '#eab308' : '#ef4444'}
-                          style={{ height: '4px' }}
-                        />
-                      )}
-                    </div>
-                    <Divider layout="vertical" />
-                    <div className="flex-1">
-                      <div className="flex justify-content-between mb-1">
-                        <span className="text-xs text-500">Память</span>
-                        <span className="text-xs font-medium">
-                          {systemResources?.memory?.usage != null
-                            ? `${systemResources.memory.usage}%`
-                            : '—'}
-                        </span>
+                      <div className="dashboard-server-resources-divider"></div>
+                      <div className="dashboard-server-resources-item">
+                        <div className="dashboard-server-resources-label-row">
+                          <span className="dashboard-server-resources-label">Память</span>
+                          <span className="dashboard-server-resources-value">
+                            {systemResources?.memory?.usage != null
+                              ? `${systemResources.memory.usage}%`
+                              : '—'}
+                          </span>
+                        </div>
+                        {systemResources?.memory?.usage != null && (
+                          <ProgressBar 
+                            value={systemResources.memory.usage} 
+                            variant={systemResources.memory.usage < 70 ? 'success' : systemResources.memory.usage < 90 ? 'warning' : 'error'}
+                            size="sm"
+                            showLabel={false}
+                          />
+                        )}
                       </div>
-                      {systemResources?.memory?.usage != null && (
-                        <ProgressBar 
-                          value={systemResources.memory.usage} 
-                          showValue={false}
-                          color={systemResources.memory.usage < 70 ? '#22c55e' : systemResources.memory.usage < 90 ? '#eab308' : '#ef4444'}
-                          style={{ height: '4px' }}
-                        />
-                      )}
                     </div>
                   </div>
-                </Panel>
+                </details>
               </div>
             ) : (
-              <div className="text-center p-4">
-                <p className="text-600 text-sm">Нет данных о статусе системы</p>
+              <div className="dashboard-empty-state">
+                <p className="dashboard-empty-state-text">Нет данных о статусе системы</p>
               </div>
             )}
-          </Card>
+            </Card>
+          </div>
+
+          {/* Блок "Торговая активность" */}
+          <div className="animate-slide-up dashboard-animate-delay-4">
+            <TradingSummaryCard tradingStats={tradingStats} />
+          </div>
+
+          {/* Статус ребалансировки */}
+          <div className="animate-slide-up dashboard-animate-delay-5">
+            <RebalancingStatusCard />
+          </div>
         </div>
 
-        {/* Блок "Торговая активность" */}
-        <div className="col-12 lg:col-4">
-          <TradingSummaryCard tradingStats={tradingStats} />
-        </div>
-
-        {/* Управление нейросетями */}
-        <div className="col-12 lg:col-4">
-          <NeuralNetworksControlCard
-            trainingStatus={trainingStatus}
-            isAnyNetworkTraining={isAnyNetworkTraining}
-            trainLoading={trainLoading}
-            trainingStages={trainingStages}
-            trainingStage={trainingStage || null}
-            trainingProgress={
-              trainingProgress 
-                ? (typeof trainingProgress === 'string' 
-                    ? trainingProgress 
-                    : typeof trainingProgress === 'object' && trainingProgress !== null
-                    ? `${trainingProgress.currentEpoch || 0}/${trainingProgress.totalEpochs || 0} эпох`
-                    : String(trainingProgress))
-                : trainingProgressText || null
-            }
-            onTrainAllNetworks={handleTrainAllNetworks}
-          />
-        </div>
-
-        {/* Вторая строка: 3 колонки - Продвинутые метрики, Статус ребалансировки, Макроэкономические данные */}
-        <div className="col-12 lg:col-4">
-          <AdvancedMetricsPreview />
-        </div>
-
-        <div className="col-12 lg:col-4">
-          <RebalancingStatusCard />
-        </div>
-
-        <div className="col-12 lg:col-4">
+      {/* Макроэкономические данные - строка над таблицей сигналов */}
+      <div className="grid dashboard-section">
+        <div className="col-12 animate-fade-in dashboard-animate-delay-6">
           <MacroDataPreview />
-        </div>
-
-        {/* Третья строка: 2 колонки - Информация о кеше и другие виджеты */}
-        <div className="col-12 lg:col-6">
-          <CacheStatusCard cacheStatus={cacheStatus} />
         </div>
       </div>
 
-      {/* Новые WebSocket виджеты */}
-      <div className="grid mt-3">
-
-        {/* Записанные торговые сигналы из БД */}
-        <div className="col-12">
+      {/* Торговые сигналы - отдельный блок внизу */}
+      <div className="grid dashboard-section">
+        <div className="col-12 animate-fade-in dashboard-animate-delay-7 dashboard-signals-container">
           <CachedSignalsCard maxSignals={20} />
         </div>
-
-        {/* Системные алерты */}
-        <div className="col-12 lg:col-6">
-          <AlertsWidget maxAlerts={20} showClearButton={true} />
-        </div>
-
-        {/* Прогресс обучения */}
-        {trainingProgress && (
-          <div className="col-12 lg:col-6">
-            <TrainingProgressWidget />
-          </div>
-        )}
-
-        {/* Метрики моделей */}
-        {modelMetrics.length > 0 && (
-          <div className="col-12 lg:col-6">
-            <ModelMetricsWidget maxMetrics={10} />
-          </div>
-        )}
       </div>
 
       <Toast ref={toast} />

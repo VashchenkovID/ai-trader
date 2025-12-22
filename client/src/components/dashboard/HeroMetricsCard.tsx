@@ -1,8 +1,9 @@
-import React from 'react';
-import { Card } from 'primereact/card';
-import { Skeleton } from 'primereact/skeleton';
-import { ProgressBar } from 'primereact/progressbar';
+import React, { useEffect, useRef } from 'react';
+import { Card } from '../ui/Card/Card';
+import { Skeleton } from '../ui/Skeleton/Skeleton';
+import { ProgressBar } from '../ui/ProgressBar/ProgressBar';
 import { TradingStats } from '../WebSocketDataProvider';
+import './HeroMetricsCard.css';
 
 interface HeroMetricsCardProps {
   tradingStats: TradingStats | null;
@@ -24,6 +25,34 @@ const formatNumber = (value: number | null | undefined, decimals: number = 2) =>
   return value.toFixed(decimals);
 };
 
+// Компонент для анимированного числа
+const AnimatedNumber: React.FC<{ value: string | number; className?: string; style?: React.CSSProperties }> = ({ 
+  value, 
+  className = '', 
+  style = {} 
+}) => {
+  const prevValueRef = useRef<string | number>(value);
+  const [isAnimating, setIsAnimating] = React.useState(false);
+
+  useEffect(() => {
+    if (prevValueRef.current !== value) {
+      setIsAnimating(true);
+      const timer = setTimeout(() => setIsAnimating(false), 500);
+      prevValueRef.current = value;
+      return () => clearTimeout(timer);
+    }
+  }, [value]);
+
+  return (
+    <span 
+      className={`${className} ${isAnimating ? 'animate-number-update' : ''}`}
+      style={style}
+    >
+      {value}
+    </span>
+  );
+};
+
 export const HeroMetricsCard: React.FC<HeroMetricsCardProps> = ({ tradingStats, sharpeRatio }) => {
   // Рассчитываем процент прибыли
   const initialCapital = tradingStats?.initialCapital || 1000000;
@@ -32,7 +61,6 @@ export const HeroMetricsCard: React.FC<HeroMetricsCardProps> = ({ tradingStats, 
   
   // Win Rate
   const winRate = tradingStats?.winRate || 0;
-  const winRateColor = winRate >= 60 ? 'text-green-500' : winRate >= 40 ? 'text-yellow-500' : 'text-red-500';
   
   // Sharpe Ratio оценка
   const getSharpeRating = (value: number | null | undefined) => {
@@ -45,14 +73,14 @@ export const HeroMetricsCard: React.FC<HeroMetricsCardProps> = ({ tradingStats, 
   const sharpeRating = getSharpeRating(sharpeRatio);
 
   return (
-    <Card className="h-full">
+    <Card variant="default" className="h-full hero-metrics-card hero-metric-wrapper">
       {!tradingStats ? (
         <div className="grid">
           {[1, 2, 3, 4, 5].map((item) => (
             <div key={item} className="col-12 md:col-6 lg:col">
               <div className="text-center p-3">
-                <Skeleton width="60%" height="2rem" className="mb-2" />
-                <Skeleton width="80%" height="1rem" />
+                <Skeleton variant="rectangular" size="lg" className="hero-metric-skeleton-large" />
+                <Skeleton variant="text" size="sm" className="hero-metric-skeleton-small" />
               </div>
             </div>
           ))}
@@ -60,66 +88,102 @@ export const HeroMetricsCard: React.FC<HeroMetricsCardProps> = ({ tradingStats, 
       ) : (
         <div className="grid">
           {/* Баланс портфеля */}
-          <div className="col-12 md:col-6 lg:col">
-            <div className="text-center p-2 border-round surface-100 h-full flex flex-column align-items-center justify-content-center">
-              <div className="text-600 text-xs mb-1">Баланс</div>
-              <div className={`text-2xl font-bold mb-1 ${totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {formatCurrency(tradingStats.portfolioValue || 0)}
-              </div>
-              <div className={`text-xs font-semibold ${totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {totalPnL >= 0 ? '↑' : '↓'} {formatPercent(totalPnLPercent)}
+          <div className="col-12 md:col-6 lg:col animate-slide-up hero-metric-animate-delay-1">
+            <div 
+              className="hero-metric-item hero-metric-balance animated-gradient text-center p-3 h-full flex flex-column align-items-center justify-content-center"
+            >
+              <div className="hero-metric-content">
+                <div className="text-xs mb-2 number-text-secondary">Баланс</div>
+                <div className={`number-xlarge mb-1 ${totalPnL >= 0 ? 'number-positive' : 'number-negative'}`}>
+                  <AnimatedNumber 
+                    value={formatCurrency(tradingStats.portfolioValue || 0)}
+                  />
+                </div>
+                <div className={`text-sm font-semibold ${totalPnL >= 0 ? 'number-positive' : 'number-negative'}`}>
+                  {totalPnL >= 0 ? '↑' : '↓'} <AnimatedNumber value={formatPercent(totalPnLPercent)} />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Прибыль/Убыток */}
-          <div className="col-12 md:col-6 lg:col">
-            <div className="text-center p-2 border-round surface-100 h-full flex flex-column align-items-center justify-content-center">
-              <div className="text-600 text-xs mb-1">PnL</div>
-              <div className={`text-2xl font-bold mb-1 ${totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {formatCurrency(totalPnL)}
-              </div>
-              <div className="w-full">
-                <ProgressBar 
-                  value={Math.min(Math.abs(totalPnLPercent), 100)} 
-                  showValue={false}
-                  color={totalPnL >= 0 ? '#22c55e' : '#ef4444'}
-                  style={{ height: '4px' }}
-                />
+          <div className={`col-12 md:col-6 lg:col animate-slide-up hero-metric-animate-delay-2 ${totalPnL < 0 ? 'pnl-negative' : ''}`}>
+            <div 
+              className={`hero-metric-item hero-metric-pnl ${totalPnL < 0 ? 'negative' : ''} animated-gradient text-center p-3 h-full flex flex-column align-items-center justify-content-center`}
+            >
+              <div className="hero-metric-content">
+                <div className="text-xs mb-2 number-text-secondary">PnL</div>
+                <div className={`number-xlarge mb-2 ${totalPnL >= 0 ? 'number-positive' : 'number-negative'}`}>
+                  <AnimatedNumber value={formatCurrency(totalPnL)} />
+                </div>
+                <div className="hero-metric-progress-container">
+                  <ProgressBar 
+                    value={Math.min(Math.abs(totalPnLPercent), 100)} 
+                    variant={totalPnL >= 0 ? 'success' : 'error'}
+                    size="sm"
+                    showLabel={false}
+                  />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Win Rate */}
-          <div className="col-12 md:col-6 lg:col">
-            <div className="text-center p-2 border-round surface-100 h-full flex flex-column align-items-center justify-content-center">
-              <div className="text-600 text-xs mb-1">Win Rate</div>
-              <div className={`text-2xl font-bold mb-1 ${winRateColor}`}>
-                {formatNumber(winRate, 1)}%
-              </div>
-              <div className="text-xs text-500 mb-1">
-                {tradingStats.successfulTrades || 0}/{tradingStats.totalTrades || 0}
-              </div>
-              <div className="w-full">
-                <ProgressBar 
-                  value={winRate} 
-                  showValue={false}
-                  color={winRate >= 60 ? '#22c55e' : winRate >= 40 ? '#eab308' : '#ef4444'}
-                  style={{ height: '4px' }}
-                />
+          <div className="col-12 md:col-6 lg:col animate-slide-up hero-metric-animate-delay-3">
+            <div 
+              className="hero-metric-item hero-metric-winrate animated-gradient text-center p-3 h-full flex flex-column align-items-center justify-content-center"
+            >
+              <div className="hero-metric-content">
+                <div className="text-xs mb-2 number-text-secondary">Win Rate</div>
+                <div 
+                  className={`number-xlarge mb-1 ${
+                    winRate >= 60 ? 'number-success' : 
+                    winRate >= 40 ? 'number-warning' : 
+                    'number-error'
+                  }`}
+                >
+                  <AnimatedNumber value={`${formatNumber(winRate, 1)}%`} />
+                </div>
+                <div className="text-xs mb-2 number-text-tertiary">
+                  {tradingStats.successfulTrades || 0}/{tradingStats.totalTrades || 0}
+                </div>
+                <div className="hero-metric-progress-container">
+                  <ProgressBar 
+                    value={winRate} 
+                    variant={winRate >= 60 ? 'success' : winRate >= 40 ? 'warning' : 'error'}
+                    size="sm"
+                    showLabel={false}
+                  />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Sharpe Ratio */}
-          <div className="col-12 md:col-6 lg:col">
-            <div className="text-center p-2 border-round surface-100 h-full flex flex-column align-items-center justify-content-center">
-              <div className="text-600 text-xs mb-1">Sharpe</div>
-              <div className={`text-2xl font-bold mb-1 ${sharpeRating.color}`}>
-                {formatNumber(sharpeRatio)}
-              </div>
-              <div className={`text-xs font-semibold ${sharpeRating.color}`}>
-                {sharpeRating.text}
+          <div className="col-12 md:col-6 lg:col animate-slide-up hero-metric-animate-delay-4">
+            <div 
+              className="hero-metric-item hero-metric-sharpe animated-gradient text-center p-3 h-full flex flex-column align-items-center justify-content-center"
+            >
+              <div className="hero-metric-content">
+                <div className="text-xs mb-2 number-text-secondary">Sharpe</div>
+                <div 
+                  className={`number-xlarge mb-1 ${
+                    sharpeRatio && sharpeRatio > 1.5 ? 'number-success' : 
+                    sharpeRatio && sharpeRatio > 1.0 ? 'number-warning' : 
+                    'number-error'
+                  }`}
+                >
+                  <AnimatedNumber value={formatNumber(sharpeRatio)} />
+                </div>
+                <div 
+                  className={`text-sm font-semibold ${
+                    sharpeRatio && sharpeRatio > 1.5 ? 'number-success' : 
+                    sharpeRatio && sharpeRatio > 1.0 ? 'number-warning' : 
+                    'number-error'
+                  }`}
+                >
+                  {sharpeRating.text}
+                </div>
               </div>
             </div>
           </div>

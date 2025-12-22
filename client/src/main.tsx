@@ -1,6 +1,9 @@
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
+// Глобальные стили дизайн-системы (первыми!)
+import './styles/global.css';
+
 // Стили PrimeReact (порядок важен!)
 import 'primereact/resources/themes/lara-light-blue/theme.css';  // Тема
 import 'primereact/resources/primereact.min.css';                // Основные стили компонентов

@@ -10,22 +10,26 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f8fafc;
+  /* Темный фон из дизайн-системы */
+  background-color: var(--color-bg-primary, #0A0A0F);
 }
 
 /* Layout стили */
 .app {
   min-height: 100vh;
+  /* Темный фон из дизайн-системы */
+  background-color: var(--color-bg-primary, #0A0A0F);
 }
 
 .main-content {
   padding: 1rem;
-  background-color: #f8fafc;
+  /* Темный фон из дизайн-системы */
+  background-color: var(--color-bg-primary, #0A0A0F);
 }
 
 /* Dashboard стили */
 .dashboard {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -41,19 +45,6 @@ body {
   margin: 0 auto;
 }
 
-.trading-mode-manager .p-card {
-  transition: all 0.3s ease;
-}
-
-.trading-mode-manager .p-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.trading-mode-manager .p-card.border-primary {
-  border: 2px solid var(--primary-color);
-  box-shadow: 0 0 0 1px var(--primary-color);
-}
 
 /* Metrics Monitoring стили */
 .metrics-monitoring {
@@ -61,31 +52,6 @@ body {
   margin: 0 auto;
 }
 
-.metrics-monitoring .p-card {
-  transition: all 0.3s ease;
-}
-
-.metrics-monitoring .p-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.metrics-monitoring .p-progressbar {
-  height: 0.5rem;
-}
-
-.metrics-monitoring .p-badge {
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-}
-
-.metrics-monitoring .p-datatable .p-datatable-tbody > tr > td {
-  padding: 0.75rem;
-}
-
-.metrics-monitoring .p-chart {
-  position: relative;
-}
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
@@ -97,46 +63,6 @@ code {
   min-height: 100vh;
 }
 
-.p-container {
-  padding: 1rem;
-}
-
-/* Стили для карточек */
-.p-card {
-  margin-bottom: 1rem;
-}
-
-.p-card-header h1 {
-  color: #2563eb;
-  font-weight: 700;
-}
-
-.p-card-header h2 {
-  color: #1f2937;
-  font-weight: 600;
-}
-
-/* Стили для кнопок */
-.p-button-lg {
-  font-size: 1.1rem;
-  padding: 0.75rem 1.5rem;
-}
-
-/* Стили для таблиц */
-.p-datatable-sm .p-datatable-tbody > tr > td {
-  padding: 0.5rem;
-}
-
-/* Стили для графиков */
-.p-chart {
-  width: 100%;
-  height: 100%;
-}
-
-/* Стили для прогресс-баров */
-.p-progressbar {
-  border-radius: 4px;
-}
 
 /* Стили для алертов */
 .alert-item {
@@ -157,71 +83,23 @@ code {
 
 .confusion-matrix-table th,
 .confusion-matrix-table td {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border-default);
   padding: 0.5rem;
   text-align: center;
 }
 
 .confusion-matrix-table th {
-  background-color: #f9fafb;
+  background-color: var(--color-surface-default);
   font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 /* Стили для боковой навигации */
 .navigation-sidebar {
-  background: white;
-  border-right: 1px solid #e2e8f0;
   box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
-/* Стили для сайдбара */
-.p-sidebar {
-  background: #f8fafc;
-  border-right: 1px solid #e2e8f0;
-}
 
-.p-sidebar .p-menu {
-  border: none;
-  background: transparent;
-}
-
-/* Стили для табов */
-.p-tabview .p-tabview-nav li .p-tabview-nav-link {
-  padding: 0.75rem 1.5rem;
-  font-weight: 500;
-}
-
-/* Стили для модальных окон */
-.p-dialog .p-dialog-header {
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-/* Стили для уведомлений */
-.p-toast .p-toast-message {
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-/* Адаптивность */
-@media (max-width: 768px) {
-  .p-container {
-    padding: 0.5rem;
-  }
-  
-  .p-button-lg {
-    font-size: 1rem;
-    padding: 0.5rem 1rem;
-  }
-  
-  .p-card-header h1 {
-    font-size: 1.5rem;
-  }
-  
-  .p-card-header h2 {
-    font-size: 1.25rem;
-  }
-}
 
 /* Стили для сайдбара */
 .sidebar-transition {
@@ -229,13 +107,8 @@ code {
 }
 
 .active-menu-item {
-  background-color: #dbeafe !important;
-  color: #1d4ed8 !important;
-}
-
-.dark .active-menu-item {
-  background-color: #1e3a8a !important;
-  color: #93c5fd !important;
+  background-color: var(--color-surface-active) !important;
+  color: var(--color-accent-primary) !important;
 }
 
 /* Стили для кнопок навигации */
@@ -272,22 +145,4 @@ code {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-}
-
-/* Темная тема (если нужна) */
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: #1a202c;
-    color: #e2e8f0;
-  }
-  
-  .p-card {
-    background-color: #2d3748;
-    color: #e2e8f0;
-  }
-  
-  .p-card-header h1,
-  .p-card-header h2 {
-    color: #e2e8f0;
-  }
 }

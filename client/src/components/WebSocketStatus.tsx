@@ -1,7 +1,6 @@
 import React from 'react';
-import { Badge } from 'primereact/badge';
-import { Button } from 'primereact/button';
-import { Tooltip } from 'primereact/tooltip';
+import { Badge } from './ui/Badge/Badge';
+import { Button } from './ui/Button/Button';
 import { useWebSocketData } from './WebSocketDataProvider';
 
 interface WebSocketStatusProps {
@@ -63,37 +62,45 @@ const WebSocketStatus: React.FC<WebSocketStatusProps> = ({
 
   const statusInfo = getStatusInfo();
 
+  const getBadgeVariant = (severity: string): 'success' | 'error' | 'warning' | 'info' => {
+    if (severity === 'success') return 'success';
+    if (severity === 'danger') return 'error';
+    if (severity === 'warning') return 'warning';
+    return 'info';
+  };
+
+  const getIconColor = (severity: string): string => {
+    if (severity === 'success') return 'var(--color-accent-success)';
+    if (severity === 'danger') return 'var(--color-accent-error)';
+    if (severity === 'warning') return 'var(--color-accent-warning)';
+    return 'var(--color-accent-info)';
+  };
+
   return (
-    <div className={`websocket-status flex align-items-center gap-2 ${className}`}>
+    <div className={`websocket-status flex align-items-center gap-2 ${className}`} title={statusInfo.tooltip}>
       <div className="flex align-items-center gap-2">
         <i 
-          className={`${statusInfo.icon} text-${statusInfo.severity === 'success' ? 'green' : 
-                      statusInfo.severity === 'warning' ? 'orange' : 
-                      statusInfo.severity === 'danger' ? 'red' : 'gray'}-500`}
-          data-pr-tooltip={statusInfo.tooltip}
-          data-pr-position="top"
+          className={statusInfo.icon}
+          style={{ color: getIconColor(statusInfo.severity) }}
         />
         
         <Badge 
-          value={statusInfo.text}
-          severity={statusInfo.severity}
-          className="websocket-status-badge"
-        />
+          variant={getBadgeVariant(statusInfo.severity)}
+          size="sm"
+        >
+          {statusInfo.text}
+        </Badge>
       </div>
 
       {showReconnectButton && !isConnected && (
         <Button
-          icon="pi pi-refresh"
-          size="small"
-          severity="secondary"
-          text
-          tooltip="Переподключиться"
+          variant="ghost"
+          size="sm"
+          icon={<i className="pi pi-refresh"></i>}
           onClick={reconnect}
-          className="p-button-sm"
+          title="Переподключиться"
         />
       )}
-
-      <Tooltip target=".websocket-status i" />
     </div>
   );
 };

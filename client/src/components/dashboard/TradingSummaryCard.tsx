@@ -1,13 +1,13 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { translateRecommendation } from '../../utils/recommendationTranslator';
-import { Card } from 'primereact/card';
-import { Skeleton } from 'primereact/skeleton';
-import { Button } from 'primereact/button';
-import { ProgressBar } from 'primereact/progressbar';
-import { Panel } from 'primereact/panel';
+import { Card } from '../ui/Card/Card';
+import { Skeleton } from '../ui/Skeleton/Skeleton';
+import { Button } from '../ui/Button/Button';
+import { ProgressBar } from '../ui/ProgressBar/ProgressBar';
 import { TradingStats } from '../WebSocketDataProvider';
 import { apiService } from '../../services/apiService';
+import './TradingSummaryCard.css';
 
 interface TradingSummaryCardProps {
   tradingStats: TradingStats | null;
@@ -36,15 +36,27 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
     }
   };
   
+  // Определяем variant для ProgressBar на основе confidence
+  const getProgressVariant = (confidence: number): 'success' | 'warning' | 'error' => {
+    if (confidence >= 0.7) return 'success';
+    if (confidence >= 0.5) return 'warning';
+    return 'error';
+  };
+
   return (
-    <Card title={<span><i className="pi pi-chart-line mr-2"></i>Торговая активность</span>} className="h-full">
+    <Card 
+      variant="glass" 
+      header={<span>Торговая активность</span>} 
+      className="h-full animate-slide-up trading-summary-card"
+      style={{ animationDelay: '0.2s', animationFillMode: 'both' }}
+    >
       {!tradingStats ? (
         <div className="grid">
           {[1, 2].map((item) => (
             <div key={item} className="col-6">
               <div className="text-center p-3">
-                <Skeleton width="60%" height="2rem" className="mb-2" />
-                <Skeleton width="80%" height="1rem" />
+                <Skeleton variant="rectangular" size="md" className="mb-2" style={{ width: '60%', height: '2rem', margin: '0 auto' }} />
+                <Skeleton variant="text" size="sm" style={{ width: '80%', margin: '0 auto' }} />
               </div>
             </div>
           ))}
@@ -52,7 +64,7 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
       ) : (
         <div className="flex flex-column gap-2">
           {/* Активные позиции - компактный вид */}
-          <div className="p-2 border-round surface-100">
+          <div className="p-2 border-round" style={{ background: 'var(--color-surface-hover)', border: '1px solid var(--color-border-default)' }}>
             <div className="text-600 text-xs mb-1">Активные позиции</div>
             <div className="grid">
               <div className="col-6">
@@ -69,20 +81,26 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
               </div>
             </div>
             <Button
-              label="Портфель"
-              icon="pi pi-arrow-right"
-              className="p-button-text p-button-sm w-full mt-2"
+              variant="ghost"
+              size="sm"
+              fullWidth
+              icon={<i className="pi pi-arrow-right"></i>}
+              iconPosition="right"
               onClick={() => navigate('/portfolio')}
-            />
+              className="mt-2"
+            >
+              Портфель
+            </Button>
           </div>
 
-          {/* Топ-3 рекомендаций - компактный вид с сворачиваемой панелью */}
-          <Panel header="Топ рекомендации" toggleable collapsed={false} className="text-xs">
+          {/* Топ-3 рекомендаций */}
+          <div>
+            <div className="text-xs font-semibold mb-2 number-text-secondary">Топ рекомендации</div>
             {!tradingStats.recommendations || tradingStats.recommendations.length === 0 ? (
               <div className="text-500 text-xs text-center py-2">Нет рекомендаций</div>
             ) : (
               <div className="flex flex-column gap-1">
-                {tradingStats.recommendations.slice(0, 3).map((rec) => {
+                {tradingStats.recommendations.slice(0, 3).map((rec, index) => {
                   const strategyNames: { [key: string]: string } = {
                     aggressive: 'Агр.',
                     moderate: 'Умер.',
@@ -91,10 +109,15 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
                   const strategyName = rec.strategyType ? strategyNames[rec.strategyType] || rec.strategyType : '';
                   const confidencePercent = (rec.confidence * 100).toFixed(0);
                   
+                  const isBuy = rec.recommendation === 'BUY';
                   return (
                     <div
                       key={rec.figi}
-                      className="p-2 border-round surface-0 border-1 border-200 hover:border-primary transition-colors cursor-pointer"
+                      className={`recommendation-item ${isBuy ? 'buy' : 'sell'} animate-fade-in`}
+                      style={{ 
+                        animationDelay: `${index * 0.1}s`,
+                        animationFillMode: 'both'
+                      }}
                       onClick={() => navigate(`/stock/${rec.figi}`)}
                     >
                       <div className="flex align-items-center justify-content-between mb-1">
@@ -103,13 +126,13 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
                             {rec.ticker}
                           </div>
                           {strategyName && (
-                            <div className="text-xs text-primary font-semibold">
+                            <div className="text-xs font-semibold number-primary">
                               {strategyName}
                             </div>
                           )}
                         </div>
                         <div className="text-right">
-                          <div className="text-green-500 font-semibold text-xs">
+                          <div className="font-semibold text-xs number-success">
                             {translateRecommendation(rec.recommendation)}
                           </div>
                           <div className="text-xs text-500">{confidencePercent}%</div>
@@ -117,24 +140,27 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
                       </div>
                       <ProgressBar 
                         value={rec.confidence * 100} 
-                        showValue={false}
-                        color={rec.confidence >= 0.7 ? '#22c55e' : rec.confidence >= 0.5 ? '#eab308' : '#ef4444'}
-                        style={{ height: '4px' }}
+                        variant={getProgressVariant(rec.confidence)}
+                        size="sm"
+                        showLabel={false}
                       />
                     </div>
                   );
                 })}
               </div>
             )}
-          </Panel>
+          </div>
 
           {/* Кнопка запуска анализа */}
           <Button
-            icon="pi pi-chart-line"
-            label="Анализ рынка"
-            className="p-button-sm w-full"
+            variant="primary"
+            size="sm"
+            fullWidth
+            icon={<i className="pi pi-chart-line"></i>}
             onClick={handleMarketAnalysis}
-          />
+          >
+            Анализ рынка
+          </Button>
         </div>
       )}
     </Card>
