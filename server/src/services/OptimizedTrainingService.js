@@ -4,6 +4,7 @@ import OptimizedDataService from './OptimizedDataService.js';
 import CacheService from './CacheService.js';
 import ModelManager from '../utils/ModelManager.js';
 import { getService } from './GlobalServiceManager.js';
+import ServiceManager from './ServiceManager.js';
 
 /**
  * Оптимизированный сервис обучения нейросетей
@@ -1117,7 +1118,7 @@ class OptimizedTrainingService {
                         console.log(`🔄 Restored BEST model for ${figi} (accuracy=${bestAccuracy.toFixed(4)})`);
                         
                         // Отправляем уведомление о деградации
-                        const WebSocketService = getService('WebSocketService');
+                        const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                         if (WebSocketService) {
                             WebSocketService.broadcast({
                                 type: 'model_degradation',
@@ -1336,7 +1337,7 @@ class OptimizedTrainingService {
      * Уведомление о прогрессе
      */
     broadcastProgress(instrumentName, accuracy) {
-        const WebSocketService = getService('WebSocketService');
+        const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
         if (WebSocketService) {
             WebSocketService.broadcast({
                 type: 'training_progress',
@@ -1368,7 +1369,7 @@ class OptimizedTrainingService {
         this.emit('training_progress', progressData);
 
         // Отправляем прогресс через WebSocket используя новый метод
-        const WebSocketService = getService('WebSocketService');
+        const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
         if (WebSocketService && typeof WebSocketService.broadcastTrainingProgress === 'function') {
             WebSocketService.broadcastTrainingProgress({
                 modelType: 'neural_network',

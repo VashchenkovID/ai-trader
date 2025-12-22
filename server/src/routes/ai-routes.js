@@ -85,11 +85,15 @@ router.post('/train', async (req, res) => {
             console.log('Обучение ИИ завершено:', result?.success ? 'Успешно' : 'Ошибка');
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
-            if (WebSocketService) {
-                WebSocketService.broadcast('ai_training_completed', {
-                    success: true,
-                    result: result
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'ai_training_completed',
+                    data: {
+                        success: true,
+                        result: result
+                    },
+                    timestamp: new Date().toISOString()
                 });
             }
         } catch (trainingError) {
@@ -104,11 +108,15 @@ router.post('/train', async (req, res) => {
             }
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
-            if (WebSocketService) {
-                WebSocketService.broadcast('ai_training_error', {
-                    success: false,
-                    error: trainingError.message
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'ai_training_error',
+                    data: {
+                        success: false,
+                        error: trainingError.message
+                    },
+                    timestamp: new Date().toISOString()
                 });
             }
         }

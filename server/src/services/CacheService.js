@@ -9,6 +9,9 @@ class CacheService {
         this.cacheTimeout = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
         this.isInitialized = false;
         this.lastFetchMap = new Map(); // key: `${figi}:${interval}` -> timestamp
+        this.cacheInstrumentsInProgress = false; // Флаг для предотвращения параллельных вызовов
+        this.lastCacheUpdate = 0; // Время последнего обновления кеша
+        this.cacheUpdateCooldown = 5 * 60 * 1000; // Минимальный интервал между обновлениями (5 минут)
     }
 
     /**
@@ -36,6 +39,23 @@ class CacheService {
 
     // Кеширование инструментов (акций) - УПРОЩЕННАЯ ВЕРСИЯ
     async cacheInstruments() {
+        // Защита от параллельных вызовов и слишком частых обновлений
+        if (this.cacheInstrumentsInProgress) {
+            console.log('⏳ cacheInstruments уже выполняется, пропускаем...');
+            return [];
+        }
+        
+        const now = Date.now();
+        if (now - this.lastCacheUpdate < this.cacheUpdateCooldown) {
+            const secondsAgo = Math.round((now - this.lastCacheUpdate) / 1000);
+            console.log(`⏳ cacheInstruments вызывался недавно (${secondsAgo} сек назад), пропускаем...`);
+            return [];
+        }
+        
+        // Устанавливаем флаги ДО начала выполнения, чтобы другие вызовы видели их
+        this.cacheInstrumentsInProgress = true;
+        this.lastCacheUpdate = now; // Устанавливаем время обновления сразу
+        
         try {
             const response = await TinkoffApiService.getStocks();
 
@@ -143,6 +163,9 @@ class CacheService {
             console.error('Error caching instruments:', error);
             // Не бросаем ошибку, чтобы сервер мог запуститься
             return [];
+        } finally {
+            // Сбрасываем флаг в любом случае
+            this.cacheInstrumentsInProgress = false;
         }
     }
 
@@ -157,16 +180,24 @@ class CacheService {
             }
 
             if (!instrument || new Date() - new Date(instrument.lastUpdated) > this.cacheTimeout) {
-                try {
-                    await this.cacheInstruments();
-                    instrument = await CachedInstrument.findOne({ where: { figi } });
-                } catch (cacheError) {
-                    console.warn(`Failed to update cache for ${figi}:`, cacheError.message);
-                    // Возвращаем старые данные, если они есть, или null
-                    if (!instrument) {
-                        console.warn(`No cached data available for ${figi}`);
-                        return null;
+                // Проверяем флаг перед вызовом cacheInstruments()
+                // Если кеш уже обновляется или недавно обновлялся, пропускаем
+                if (!this.cacheInstrumentsInProgress) {
+                    const now = Date.now();
+                    if (now - this.lastCacheUpdate >= this.cacheUpdateCooldown) {
+                        try {
+                            await this.cacheInstruments();
+                            instrument = await CachedInstrument.findOne({ where: { figi } });
+                        } catch (cacheError) {
+                            console.warn(`Failed to update cache for ${figi}:`, cacheError.message);
+                        }
                     }
+                }
+                
+                // Если инструмент все еще не найден, возвращаем null или старые данные
+                if (!instrument) {
+                    console.warn(`No cached data available for ${figi}`);
+                    return null;
                 }
             }
 

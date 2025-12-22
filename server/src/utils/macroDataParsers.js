@@ -332,7 +332,7 @@ export function parseCbrXml(xmlString) {
 }
 
 /**
- * Парсинг HTML страницы Investing.com для экономических данных Росстата
+ * Парсинг HTML страницы Investing.com для экономических данных (CPI, ВВП, безработица и др.)
  * Ищет блок <div id="releaseInfo" class="releaseInfo bold"> с данными:
  * - Последний выпуск (дата)
  * - Факт (значение)
@@ -343,7 +343,7 @@ export function parseCbrXml(xmlString) {
  * @param {Date} endDate - Конечная дата фильтрации
  * @returns {Array<Object>} Массив данных {date: Date, value: number, metadata: Object}
  */
-export function parseInvestingRosstatHtml(htmlString, startDate, endDate) {
+export function parseInvestingInflationHtml(htmlString, startDate, endDate) {
     try {
         const records = [];
         
@@ -502,114 +502,166 @@ export function parseInvestingRosstatHtml(htmlString, startDate, endDate) {
                 value: value,
                 metadata: metadata
             });
+            console.log(`✅ Добавлена запись: дата=${recordDate.toISOString()}, значение=${value}`);
+        } else {
+            console.log(`ℹ️ Запись вне диапазона дат: ${recordDate.toISOString()} (диапазон: ${startDate.toISOString()} - ${endDate.toISOString()})`);
         }
         
         return records;
     } catch (error) {
-        console.error('❌ Ошибка парсинга HTML Investing.com (Росстат):', error);
+        console.error('❌ Ошибка парсинга HTML Investing.com (экономический календарь):', error);
         return [];
     }
 }
 
 /**
- * Парсинг HTML страницы Investing.com для индекса волатильности RVI
+ * Парсинг HTML страницы TradingView для индекса волатильности RVI
+ * Ищет элемент с data-qa-id="symbol-last-value" или классом js-symbol-last
+ * Важно: не использовать генерируемые классы типа zoF9r75I, только стабильные селекторы
  * @param {string} htmlString - HTML строка
  * @param {Date} startDate - Начальная дата фильтрации
  * @param {Date} endDate - Конечная дата фильтрации
  * @returns {Array<Object>} Массив данных {date: Date, value: number, metadata: Object}
  */
-export function parseInvestingRviHtml(htmlString, startDate, endDate) {
+export function parseTradingViewRviHtml(htmlString, startDate, endDate) {
     try {
         const records = [];
         
-        // Ищем значение индекса в элементе с data-test="instrument-price-last"
-        // Формат: <div class="text-5xl/9 font-bold text-[#232526] md:text-[42px] md:leading-[60px]" data-test="instrument-price-last">32,370</div>
-        const priceRegex = /<div[^>]*data-test="instrument-price-last"[^>]*>([^<]+)<\/div>/i;
-        const priceMatch = htmlString.match(priceRegex);
+        console.log('🔍 Начинаем парсинг RVI из Investing.com...');
         
-        if (!priceMatch) {
-            console.warn('⚠️ Не найдено значение индекса RVI на странице Investing.com');
-            console.log(`📋 Поиск альтернативных селекторов...`);
-            
-            // Пробуем найти по классу
-            const priceRegex2 = /<div[^>]*class="[^"]*text-5xl[^"]*"[^>]*>([^<]+)<\/div>/i;
-            const priceMatch2 = htmlString.match(priceRegex2);
-            if (priceMatch2) {
-                console.log(`📋 Найдено значение по классу: ${priceMatch2[1]}`);
-            }
-            
-            return [];
-        }
+        // Ищем элемент с атрибутом data-test="instrument-price-last"
+        // Поддерживаем как двойные, так и одинарные кавычки
+        const priceElementRegex = /<[^>]*\s+data-test=["']instrument-price-last["'][^>]*>([\s\S]*?)<\/[^>]+>/i;
+        const priceElementMatch = htmlString.match(priceElementRegex);
         
-        const valueStr = priceMatch[1].trim().replace(',', '.').replace(/\s+/g, '');
-        const value = parseFloat(valueStr);
+        console.log(`📋 Поиск data-test="instrument-price-last": ${priceElementMatch ? 'найден' : 'не найден'}`);
         
-        console.log(`📋 Извлечено значение RVI: ${valueStr} → ${value}`);
+        let valueHtml = null;
+        let foundBy = null;
         
-        if (isNaN(value)) {
-            console.warn(`⚠️ Некорректное значение RVI: ${valueStr}`);
-            return [];
-        }
-        
-        // Извлекаем дату и время из элемента с data-test="trading-time-label"
-        // Формат: <time datetime="2025-12-18T14:36:01.000Z" data-test="trading-time-label">17:36:01</time>
-        let recordDate = new Date(); // По умолчанию текущая дата
-        
-        const timeRegex = /<time[^>]*data-test="trading-time-label"[^>]*datetime="([^"]+)"[^>]*>([^<]+)<\/time>/i;
-        const timeMatch = htmlString.match(timeRegex);
-        
-        if (timeMatch) {
-            const datetimeStr = timeMatch[1]; // ISO формат из атрибута datetime
-            const timeStr = timeMatch[2]; // Время из текста
-            console.log(`📋 Найдена дата/время: datetime=${datetimeStr}, время=${timeStr}`);
-            
-            try {
-                recordDate = new Date(datetimeStr);
-                console.log(`📋 Распарсена дата: ${recordDate.toISOString()}`);
-            } catch (dateError) {
-                console.warn(`⚠️ Ошибка парсинга даты: ${dateError.message}`);
-            }
+        if (priceElementMatch) {
+            valueHtml = priceElementMatch[1];
+            foundBy = 'data-test="instrument-price-last"';
+            console.log(`📋 HTML содержимое элемента: ${valueHtml.substring(0, 300)}`);
         } else {
-            // Пробуем найти только время без datetime
-            const timeRegex2 = /<time[^>]*data-test="trading-time-label"[^>]*>([^<]+)<\/time>/i;
-            const timeMatch2 = htmlString.match(timeRegex2);
-            if (timeMatch2) {
-                console.log(`📋 Найдено время (без datetime): ${timeMatch2[1]}`);
+            // Пробуем альтернативный вариант - ищем элемент с data-test и извлекаем значение из него
+            const altRegex = /<[^>]*\s+data-test=["']instrument-price-last["'][^>]*>([^<]+)/i;
+            const altMatch = htmlString.match(altRegex);
+            if (altMatch) {
+                valueHtml = altMatch[1];
+                foundBy = 'data-test="instrument-price-last" (альтернативный)';
+                console.log(`📋 HTML содержимое элемента (альтернативный способ): ${valueHtml.substring(0, 300)}`);
+            } else {
+                console.warn('⚠️ Элемент с data-test="instrument-price-last" не найден!');
+                // Выводим фрагмент HTML для отладки
+                const dataTestIndex = htmlString.indexOf('data-test');
+                if (dataTestIndex !== -1) {
+                    const debugFragment = htmlString.substring(Math.max(0, dataTestIndex - 200), dataTestIndex + 500);
+                    console.log(`📋 Фрагмент HTML вокруг "data-test" (первые 700 символов): ${debugFragment.substring(0, 700)}`);
+                }
             }
         }
         
-        // Извлекаем дополнительные данные (изменение, диапазон)
-        const metadata = {};
-        
-        // Изменение цены: data-test="instrument-price-change"
-        const changeRegex = /<span[^>]*data-test="instrument-price-change"[^>]*>([^<]+)<\/span>/i;
-        const changeMatch = htmlString.match(changeRegex);
-        if (changeMatch) {
-            const changeStr = changeMatch[1].trim().replace(',', '.').replace(/\+/g, '');
-            metadata.change = parseFloat(changeStr);
+        if (valueHtml) {
+            // Удаляем все HTML теги и собираем текст (значение может быть разбито на несколько span'ов)
+            const valueText = valueHtml.replace(/<[^>]*>/g, '').trim();
+            console.log(`📋 Текст после удаления HTML тегов: "${valueText}"`);
+            
+            // Очищаем строку: заменяем запятую на точку, убираем пробелы и нечисловые символы (кроме точки и минуса)
+            let valueStr = valueText.replace(/,/g, '.').replace(/\s+/g, '').replace(/[^\d.-]/g, '');
+            
+            // Если значение начинается с точки, добавляем ноль
+            if (valueStr.startsWith('.')) {
+                valueStr = '0' + valueStr;
+            }
+            
+            console.log(`📋 Очищенная строка для парсинга: "${valueStr}"`);
+            
+            const value = parseFloat(valueStr);
+            
+            if (!isNaN(value) && value > 0) {
+                console.log(`✅ Извлечено значение RVI из Investing.com (${foundBy}): ${valueText} → ${value}`);
+                
+                // Извлекаем изменение и процент изменения (для Investing.com могут быть другие селекторы)
+                const metadata = {};
+                
+                // Ищем изменение на Investing.com (может быть в разных форматах)
+                // Пробуем найти data-test="instrument-price-change" или похожие атрибуты
+                const changeRegex = /<[^>]*\s+data-test=["']instrument-price-change["'][^>]*>([\s\S]*?)<\/[^>]+>/i;
+                const changeMatch = htmlString.match(changeRegex);
+                if (changeMatch) {
+                    const changeText = changeMatch[1].replace(/<[^>]*>/g, '').trim();
+                    const changeStr = changeText.replace(/[−-]/g, '-').replace(/,/g, '.').replace(/\s+/g, '').replace(/[^\d.-]/g, '');
+                    const changeValue = parseFloat(changeStr);
+                    if (!isNaN(changeValue)) {
+                        metadata.change = changeValue;
+                        console.log(`📋 Найдено изменение: ${changeText} → ${changeValue}`);
+                    }
+                }
+                
+                // Ищем процент изменения
+                const changePercentRegex = /<[^>]*\s+data-test=["']instrument-price-change-percent["'][^>]*>([\s\S]*?)<\/[^>]+>/i;
+                const changePercentMatch = htmlString.match(changePercentRegex);
+                if (changePercentMatch) {
+                    const changePercentText = changePercentMatch[1].replace(/<[^>]*>/g, '').trim();
+                    const changePercentStr = changePercentText.replace(/[−-]/g, '-').replace(/,/g, '.').replace(/%/g, '').replace(/\s+/g, '').replace(/[^\d.-]/g, '');
+                    const changePercentValue = parseFloat(changePercentStr);
+                    if (!isNaN(changePercentValue)) {
+                        metadata.changePercent = changePercentValue;
+                        console.log(`📋 Найден процент изменения: ${changePercentText} → ${changePercentValue}`);
+                    }
+                }
+                
+                // Используем текущую дату
+                const recordDate = new Date();
+                const recordDateStart = new Date(recordDate.getFullYear(), recordDate.getMonth(), recordDate.getDate());
+                
+                // Фильтруем по датам (сравниваем только даты, без времени)
+                if (recordDateStart >= startDate && recordDateStart <= endDate) {
+                    records.push({
+                        date: recordDate,
+                        value: value,
+                        metadata: metadata
+                    });
+                    console.log(`✅ Добавлена запись RVI из Investing.com (${foundBy}): дата=${recordDate.toISOString()}, значение=${value}, изменение=${metadata.change || 'N/A'}, изменение %=${metadata.changePercent || 'N/A'}`);
+                } else {
+                    console.log(`ℹ️ Запись RVI вне диапазона дат: ${recordDateStart.toISOString()} (диапазон: ${startDate.toISOString()} - ${endDate.toISOString()})`);
+                }
+                
+                return records;
+            } else {
+                console.warn(`⚠️ Не удалось распарсить значение RVI из ${foundBy}: "${valueText}" -> "${valueStr}" -> ${value}`);
+                console.log(`📋 HTML элемента значения (полный): ${valueHtml}`);
+                
+                // Пробуем найти число вручную в HTML
+                const numberMatch = valueHtml.match(/(\d+[,\.]\d+)/);
+                if (numberMatch) {
+                    const manualValueStr = numberMatch[1].replace(/,/g, '.');
+                    const manualValue = parseFloat(manualValueStr);
+                    if (!isNaN(manualValue) && manualValue > 0) {
+                        console.log(`📋 Найдено значение вручную: ${manualValueStr} → ${manualValue}`);
+                        // Используем найденное значение
+                        const recordDate = new Date();
+                        const recordDateStart = new Date(recordDate.getFullYear(), recordDate.getMonth(), recordDate.getDate());
+                        const metadata = {};
+                        
+                        if (recordDateStart >= startDate && recordDateStart <= endDate) {
+                            records.push({
+                                date: recordDate,
+                                value: manualValue,
+                                metadata: metadata
+                            });
+                            console.log(`✅ Добавлена запись RVI из Investing.com (ручной поиск): дата=${recordDate.toISOString()}, значение=${manualValue}`);
+                        }
+                        return records;
+                    }
+                }
+            }
         }
         
-        // Процент изменения: data-test="instrument-price-change-percent"
-        const changePercentRegex = /<span[^>]*data-test="instrument-price-change-percent"[^>]*>\([^<]*([^<]+)%[^<]*\)<\/span>/i;
-        const changePercentMatch = htmlString.match(changePercentRegex);
-        if (changePercentMatch) {
-            const changePercentStr = changePercentMatch[1].trim().replace(',', '.').replace(/\+/g, '');
-            metadata.changePercent = parseFloat(changePercentStr);
-        }
-        
-        // Фильтруем по датам
-        if (recordDate >= startDate && recordDate <= endDate) {
-            records.push({
-                date: recordDate,
-                value: value,
-                metadata: metadata
-            });
-            console.log(`✅ Добавлена запись RVI: дата=${recordDate.toISOString()}, значение=${value}`);
-        } else {
-            console.log(`ℹ️ Запись RVI вне диапазона дат: ${recordDate.toISOString()} (диапазон: ${startDate.toISOString()} - ${endDate.toISOString()})`);
-        }
-        
-        return records;
+        // Если дошли сюда, значит не нашли значение ни одним из способов
+        console.warn('⚠️ Не удалось найти значение RVI ни одним из способов');
+        return [];
     } catch (error) {
         console.error('❌ Ошибка парсинга HTML RVI Investing.com:', error);
         return [];

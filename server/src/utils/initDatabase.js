@@ -23,6 +23,10 @@ import TriggeredSignal from '../models/TriggeredSignal.js';
 import InstrumentStats from '../models/InstrumentStats.js';
 import BacktestResult from '../models/BacktestResult.js';
 import MacroIndicator from '../models/MacroIndicator.js';
+import PortfolioRebalancing from '../models/PortfolioRebalancing.js';
+import CorrelationCache from '../models/CorrelationCache.js';
+import PortfolioAnalysis from '../models/PortfolioAnalysis.js';
+import TrailingStop from '../models/TrailingStop.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
@@ -229,6 +233,51 @@ export async function initDatabase() {
             }
         }
         
+        // Синхронизация таблицы истории ребалансировок портфеля
+        try {
+            await PortfolioRebalancing.sync({ force: false });
+            console.log('✅ Таблица истории ребалансировок портфеля создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы истории ребалансировок:', syncError);
+            // Не прерываем инициализацию при ошибке синхронизации
+        }
+        
+        // Создаем таблицу статистики инструментов
+        console.log('📊 Создание таблицы статистики инструментов...');
+        try {
+            await InstrumentStats.sync({ force: false });
+            console.log('✅ Таблица статистики инструментов создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы статистики инструментов:', syncError);
+        }
+        
+        // Создаем таблицу кеша корреляций
+        console.log('🔗 Создание таблицы кеша корреляций...');
+        try {
+            await CorrelationCache.sync({ force: false });
+            console.log('✅ Таблица кеша корреляций создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы кеша корреляций:', syncError);
+        }
+        
+        // Создаем таблицу анализа портфеля
+        console.log('📈 Создание таблицы анализа портфеля...');
+        try {
+            await PortfolioAnalysis.sync({ force: false });
+            console.log('✅ Таблица анализа портфеля создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы анализа портфеля:', syncError);
+        }
+        
+        // Создаем таблицу трейлинг-стопов
+        console.log('🛑 Создание таблицы трейлинг-стопов...');
+        try {
+            await TrailingStop.sync({ force: false });
+            console.log('✅ Таблица трейлинг-стопов создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы трейлинг-стопов:', syncError);
+        }
+        
         // Инициализируем стратегии по умолчанию
         await TradingStrategy.initializeDefaultStrategies();
         
@@ -289,9 +338,9 @@ export async function initDatabase() {
         // Инициализация настроек
         console.log('\n🔧 Инициализация настроек...');
         await initializeRecommendedSettings();
-        // Также инициализируем настройки по умолчанию из Settings (включая макро-данные)
+        // Также инициализируем настройки по умолчанию из Settings (включая макро-данные и формулу Келли)
         await Settings.initializeDefaults();
-        console.log('✅ Настройки инициализированы');
+        console.log('✅ Настройки инициализированы (включая формулу Келли: включена по умолчанию)');
 
         // Показываем статистику
         await showDatabaseStats();
@@ -642,6 +691,38 @@ async function initializeRecommendedSettings() {
                 minValue: 0.0,
                 maxValue: 1.0
             },
+            {
+                key: 'cache_candles_days',
+                value: 365,
+                description: 'Количество дней свечей для кеширования в БД',
+                category: 'scheduler',
+                dataType: 'number',
+                minValue: 180,
+                maxValue: 730
+            },
+            {
+                key: 'nn_retrain_days',
+                value: 180,
+                description: 'Количество дней для переобучения нейросети',
+                category: 'neural_network',
+                dataType: 'number',
+                minValue: 7,
+                maxValue: 90
+            },
+            {
+                key: 'nn_training_strategy',
+                value: 'progressive',
+                description: 'Стратегия обучения нейросети',
+                category: 'neural_network',
+                dataType: 'string',
+                options: [
+                    { value: 'progressive', label: 'Прогрессивное обучение' },
+                    { value: 'ensemble', label: 'Ансамблевое обучение' },
+                    { value: 'adaptive', label: 'Адаптивное обучение' },
+                    { value: 'transfer', label: 'Transfer Learning' },
+                    { value: 'reinforcement', label: 'Reinforcement Learning' }
+                ]
+            },
 
             // ========================================
             // УВЕДОМЛЕНИЯ
@@ -650,6 +731,13 @@ async function initializeRecommendedSettings() {
                 key: 'telegram_notifications_enabled',
                 value: true,
                 description: 'Включить уведомления в Telegram',
+                category: 'notifications',
+                dataType: 'boolean'
+            },
+            {
+                key: 'email_notifications_enabled',
+                value: false,
+                description: 'Включить уведомления по email',
                 category: 'notifications',
                 dataType: 'boolean'
             },
@@ -791,6 +879,51 @@ async function initializeRecommendedSettings() {
                 description: 'Включить получение данных от Мосбиржи',
                 category: 'macro_data',
                 dataType: 'boolean'
+            },
+
+            // ========================================
+            // РЕБАЛАНСИРОВКА ПОРТФЕЛЯ
+            // ========================================
+            {
+                key: 'portfolio_rebalancing_enabled',
+                value: true,
+                description: 'Включить автоматическую ребалансировку портфеля',
+                category: 'portfolio',
+                dataType: 'boolean'
+            },
+            {
+                key: 'portfolio_rebalancing_threshold',
+                value: 5,
+                description: 'Порог отклонения от целевого веса для ребалансировки (%)',
+                category: 'portfolio',
+                dataType: 'number',
+                minValue: 1,
+                maxValue: 50
+            },
+            {
+                key: 'portfolio_rebalancing_check_interval',
+                value: '0 2 * * *',
+                description: 'Интервал проверки необходимости ребалансировки (cron)',
+                category: 'scheduler',
+                dataType: 'string'
+            },
+            {
+                key: 'portfolio_rebalancing_min_amount',
+                value: 1000,
+                description: 'Минимальная сумма операции ребалансировки (руб.)',
+                category: 'portfolio',
+                dataType: 'number',
+                minValue: 100,
+                maxValue: 100000
+            },
+            {
+                key: 'portfolio_rebalancing_min_benefit',
+                value: 50,
+                description: 'Минимальная чистая выгода от ребалансировки (руб.)',
+                category: 'portfolio',
+                dataType: 'number',
+                minValue: 0,
+                maxValue: 10000
             },
 
             // ========================================
@@ -1314,6 +1447,44 @@ async function initializeRecommendedSettings() {
                 dataType: 'number',
                 minValue: 1,
                 maxValue: 168
+            },
+
+            // ========================================
+            // ФОРМУЛА КЕЛЛИ
+            // ========================================
+            {
+                key: 'kelly_enabled',
+                value: true,
+                description: 'Включить использование формулы Келли для расчета размера позиций',
+                category: 'risk_management',
+                dataType: 'boolean'
+            },
+            {
+                key: 'kelly_conservative_factor',
+                value: 0.25,
+                description: 'Консервативный коэффициент Келли (доля от полного Келли, 0.25 = 25%)',
+                category: 'risk_management',
+                dataType: 'number',
+                minValue: 0.1,
+                maxValue: 1.0
+            },
+            {
+                key: 'kelly_min_trades',
+                value: 10,
+                description: 'Минимальное количество сделок для использования формулы Келли',
+                category: 'risk_management',
+                dataType: 'number',
+                minValue: 5,
+                maxValue: 100
+            },
+            {
+                key: 'kelly_volatility_period',
+                value: 30,
+                description: 'Период расчета волатильности для формулы Келли (дни)',
+                category: 'risk_management',
+                dataType: 'number',
+                minValue: 7,
+                maxValue: 365
             },
 
             // ========================================
@@ -1960,6 +2131,10 @@ async function initializeRecommendedSettings() {
         console.log(`   ✅ Добавлено: ${addedCount} настроек`);
         console.log(`   🔄 Обновлено: ${updatedCount} настроек`);
         console.log(`   📋 Всего настроек: ${recommendedSettings.length}`);
+        
+        // Проверяем, что настройки Келли инициализированы
+        const kellyEnabled = await Settings.getSetting('kelly_enabled', false);
+        console.log(`   📊 Формула Келли: ${kellyEnabled ? '✅ включена' : '❌ выключена'} (по умолчанию: включена)`);
 
     } catch (error) {
         console.error('❌ Ошибка инициализации настроек:', error);

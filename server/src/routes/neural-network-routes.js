@@ -129,7 +129,7 @@ router.post('/train-batch', async (req, res) => {
             console.log('Пакетное обучение нейросети завершено:', result);
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('neural_network_batch_training_completed', {
                     success: true,
@@ -148,7 +148,7 @@ router.post('/train-batch', async (req, res) => {
             }
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('neural_network_batch_training_error', {
                     success: false,
@@ -173,7 +173,7 @@ router.post('/batch-train', async (req, res) => {
         res.json({ success: true, message: 'Пакетное обучение нейросети запущено', data: { epochs, batchSize, models } });
         try {
             const result = await NeuralNetworkService.batchTrainModels(epochs, batchSize, models);
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('neural_network_batch_training_completed', { success: true, result });
             }
@@ -181,7 +181,7 @@ router.post('/batch-train', async (req, res) => {
             if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
                 await OptimizedTelegramService.sendAlert('Ошибка пакетного обучения нейросети', `Ошибка: ${trainingError.message}\nСтек: ${trainingError.stack}`);
             }
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('neural_network_batch_training_error', { success: false, error: trainingError.message });
             }

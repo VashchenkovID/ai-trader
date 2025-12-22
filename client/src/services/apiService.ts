@@ -241,6 +241,19 @@ export const apiService = {
     }
   },
 
+  /**
+   * Запустить анализ рынка
+   */
+  async startMarketAnalysis(): Promise<any> {
+    try {
+      const response = await api.post('/api/system/market-analysis');
+      return response.data;
+    } catch (error) {
+      console.error('Error starting market analysis:', error);
+      throw error;
+    }
+  },
+
   // ============================================================================
   // ОБУЧЕНИЕ НЕЙРОСЕТЕЙ
   // ============================================================================
@@ -2970,6 +2983,167 @@ export const apiService = {
     } catch (error: any) {
       console.error('Error updating Kelly settings:', error);
       throw error;
+    }
+  },
+
+  // Advanced Metrics API methods
+  async getAdvancedMetrics(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching advanced metrics:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getSortinoRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30, riskFreeRate?: number) {
+    try {
+      const response = await api.get('/api/advanced-metrics/sortino-ratio', {
+        params: { period, days, ...(riskFreeRate && { riskFreeRate }) }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching Sortino Ratio:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getCalmarRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics/calmar-ratio', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching Calmar Ratio:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getInformationRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics/information-ratio', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching Information Ratio:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getMAEMFE(limit: number = 100) {
+    try {
+      const response = await api.get('/api/advanced-metrics/mae-mfe', {
+        params: { limit }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching MAE/MFE:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getPeriodAnalysis(
+    period: 'daily' | 'weekly' | 'monthly' = 'daily',
+    startDate?: string,
+    endDate?: string
+  ) {
+    try {
+      const response = await api.get('/api/advanced-metrics/period-analysis', {
+        params: { period, ...(startDate && { startDate }), ...(endDate && { endDate }) }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching period analysis:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getAdvancedMetricsSummary(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics/summary', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching advanced metrics summary:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  // Macro Data API methods
+  async getMacroDataLatest(country: string = 'RUS') {
+    try {
+      const response = await api.get('/api/macro-data/latest', {
+        params: { country }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching macro data latest:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getMacroDataIndicators(indicatorType?: string, country: string = 'RUS', limit: number = 100) {
+    try {
+      const response = await api.get('/api/macro-data/indicators', {
+        params: { indicatorType, country, limit }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching macro data indicators:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async updateMacroData(sources?: { cbr?: boolean; rosstat?: boolean; moex?: boolean }) {
+    try {
+      const response = await api.post('/api/macro-data/update', {
+        sources
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating macro data:', error);
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Ошибка обновления макро-данных',
+        error: error.message 
+      };
+    }
+  },
+
+  // Portfolio Rebalancing API methods
+  async getRebalancingStatus() {
+    try {
+      const response = await api.get('/api/portfolio-rebalancing/status');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching rebalancing status:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async checkRebalancingNeeded() {
+    try {
+      const response = await api.get('/api/portfolio-rebalancing/check');
+      return response.data;
+    } catch (error) {
+      console.error('Error checking rebalancing:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async executeRebalancing(dryRun: boolean = false) {
+    try {
+      const response = await api.post('/api/portfolio-rebalancing/execute', { dryRun });
+      return response.data;
+    } catch (error) {
+      console.error('Error executing rebalancing:', error);
+      return { success: false, data: null };
     }
   }
 };

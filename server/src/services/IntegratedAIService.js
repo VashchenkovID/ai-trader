@@ -969,6 +969,76 @@ class IntegratedAIService {
     }
 
     /**
+     * Обучение всех сетей для всех инструментов
+     * @param {number} epochs - Количество эпох
+     * @param {number} batchSize - Размер батча
+     * @returns {Promise<Object>} Результаты обучения
+     */
+    async train(epochs = 10, batchSize = 32) {
+        try {
+            console.log(`🚀 Training all networks for all instruments (epochs: ${epochs}, batchSize: ${batchSize})...`);
+            
+            // Получаем все инструменты из кеша
+            const instruments = await CacheService.getAllInstruments();
+            if (!instruments || instruments.length === 0) {
+                throw new Error('No instruments available for training');
+            }
+            
+            console.log(`📊 Found ${instruments.length} instruments for training`);
+            
+            const results = {
+                total: instruments.length,
+                success: 0,
+                failed: 0,
+                details: {}
+            };
+            
+            // Обучаем каждый инструмент
+            for (const instrument of instruments) {
+                try {
+                    console.log(`🎯 Training ${instrument.ticker} (${instrument.figi})...`);
+                    
+                    const trainingResult = await this.trainAllNetworks(instrument.figi, {
+                        epochs,
+                        batchSize,
+                        days: 180
+                    });
+                    
+                    results.success++;
+                    results.details[instrument.figi] = {
+                        ticker: instrument.ticker,
+                        success: true,
+                        result: trainingResult
+                    };
+                    
+                    console.log(`✅ Training completed for ${instrument.ticker}`);
+                } catch (error) {
+                    results.failed++;
+                    results.details[instrument.figi] = {
+                        ticker: instrument.ticker,
+                        success: false,
+                        error: error.message
+                    };
+                    console.error(`❌ Training failed for ${instrument.ticker}:`, error.message);
+                }
+            }
+            
+            console.log(`✅ Training all networks completed: ${results.success} success, ${results.failed} failed`);
+            return {
+                success: results.failed === 0,
+                total: results.total,
+                successCount: results.success,
+                failedCount: results.failed,
+                details: results.details
+            };
+            
+        } catch (error) {
+            console.error('❌ Training all networks failed:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Обновление статистики производительности
      */
     async updatePerformanceStats() {

@@ -1,5 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { getService } from './GlobalServiceManager.js';
+import ServiceManager from './ServiceManager.js';
 
 /**
  * Оптимизированный сервис Telegram уведомлений
@@ -672,7 +673,7 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
             // Получаем сервисы через GlobalServiceManager
             const IntegratedAIService = getService('IntegratedAIService');
             const TradingEngine = getService('TradingEngine');
-            const WebSocketService = getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             const NeuralNetworkService = getService('NeuralNetworkService');
             const EnsembleService = getService('EnsembleService');
             const MetaLearningService = getService('MetaLearningService');

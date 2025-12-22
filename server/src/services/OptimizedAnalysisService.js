@@ -1,5 +1,11 @@
 import OptimizedDataService from './OptimizedDataService.js';
 import CacheService from './CacheService.js';
+import TradingEngine from './TradingEngine.js';
+import ProfitabilityTracker from './ProfitabilityTracker.js';
+import {
+    analyzeByDayOfWeek,
+    analyzeByMonth
+} from '../utils/advancedMetrics.js';
 
 /**
  * Оптимизированный сервис анализа
@@ -645,6 +651,408 @@ class OptimizedAnalysisService {
         ];
         
         return names[index] || `Feature_${index}`;
+    }
+
+    // ============================================================================
+    // АНАЛИЗ ПРОИЗВОДИТЕЛЬНОСТИ ПО ПЕРИОДАМ
+    // ============================================================================
+
+    /**
+     * Анализ производительности по периодам (дни недели, месяцы)
+     * @param {string} period - Период анализа ('daily', 'weekly', 'monthly')
+     * @param {Date} startDate - Начальная дата (опционально)
+     * @param {Date} endDate - Конечная дата (опционально)
+     * @returns {Object} Результаты анализа по периодам
+     */
+    async analyzePeriodPerformance(period = 'daily', startDate = null, endDate = null) {
+        try {
+            // Получаем сделки из TradingEngine
+            const trades = TradingEngine.virtualPortfolio?.trades || [];
+            
+            if (trades.length === 0) {
+                return {
+                    success: false,
+                    message: 'Нет данных о сделках для анализа',
+                    byDayOfWeek: null,
+                    byMonth: null,
+                    bestDay: null,
+                    worstDay: null,
+                    bestMonth: null,
+                    worstMonth: null,
+                    summary: null
+                };
+            }
+
+            // Фильтруем сделки по датам, если указаны
+            let filteredTrades = trades;
+            if (startDate || endDate) {
+                // Нормализуем даты для сравнения (только дата, без времени)
+                const normalizedStartDate = startDate ? new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()) : null;
+                const normalizedEndDate = endDate ? new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999) : null;
+                
+                filteredTrades = trades.filter(trade => {
+                    const tradeDate = trade.timestamp ? new Date(trade.timestamp) : 
+                                   trade.date ? new Date(trade.date) : null;
+                    
+                    if (!tradeDate || isNaN(tradeDate.getTime())) {
+                        return false;
+                    }
+
+                    // Нормализуем дату сделки для сравнения
+                    const normalizedTradeDate = new Date(tradeDate.getFullYear(), tradeDate.getMonth(), tradeDate.getDate());
+
+                    if (normalizedStartDate && normalizedTradeDate < normalizedStartDate) {
+                        return false;
+                    }
+                    if (normalizedEndDate && normalizedTradeDate > normalizedEndDate) {
+                        return false;
+                    }
+                    return true;
+                });
+            }
+
+            // Если указаны даты и нет сделок в периоде, возвращаем ошибку
+            // Но если даты не указаны, используем все сделки
+            if ((startDate || endDate) && filteredTrades.length === 0) {
+                return {
+                    success: false,
+                    message: 'Нет сделок в указанном периоде',
+                    byDayOfWeek: null,
+                    byMonth: null,
+                    bestDay: null,
+                    worstDay: null,
+                    bestMonth: null,
+                    worstMonth: null,
+                    summary: null
+                };
+            }
+            
+            // Если нет сделок вообще, возвращаем ошибку
+            if (filteredTrades.length === 0) {
+                return {
+                    success: false,
+                    message: 'Нет данных о сделках для анализа',
+                    byDayOfWeek: null,
+                    byMonth: null,
+                    bestDay: null,
+                    worstDay: null,
+                    bestMonth: null,
+                    worstMonth: null,
+                    summary: null
+                };
+            }
+
+            // Получаем статистику из ProfitabilityTracker для фильтрации по периоду
+            let stats = [];
+            try {
+                const periodStartDate = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+                const periodEndDate = endDate || new Date();
+                
+                // Пытаемся получить статистику за период
+                if (period === 'daily') {
+                    stats = ProfitabilityTracker.getDailyStatsForPeriod(periodStartDate, periodEndDate);
+                } else if (period === 'weekly') {
+                    stats = ProfitabilityTracker.getWeeklyStatsForPeriod(periodStartDate, periodEndDate);
+                } else if (period === 'monthly') {
+                    stats = ProfitabilityTracker.getMonthlyStatsForPeriod(periodStartDate, periodEndDate);
+                }
+            } catch (error) {
+                console.warn('⚠️ Не удалось получить статистику из ProfitabilityTracker:', error.message);
+                // Продолжаем без статистики
+            }
+
+            // Фильтруем сделки по периоду статистики, если статистика доступна
+            let periodTrades = filteredTrades;
+            if (stats && stats.length > 0) {
+                periodTrades = ProfitabilityTracker.filterTradesByPeriod(filteredTrades, period, stats);
+            }
+
+            // Анализ по дням недели
+            const dayOfWeekAnalysis = analyzeByDayOfWeek(periodTrades);
+            
+            // Анализ по месяцам
+            const monthAnalysisRaw = analyzeByMonth(periodTrades);
+            
+            // Преобразуем объект месяцев в массив для удобства работы
+            const monthAnalysis = this.formatMonthResults(monthAnalysisRaw);
+
+            // Определяем лучший и худший день недели (используем уже вычисленные значения)
+            const bestDay = dayOfWeekAnalysis.bestDay ? {
+                period: dayOfWeekAnalysis.bestDay.day,
+                profit: dayOfWeekAnalysis.bestDay.profit,
+                trades: dayOfWeekAnalysis[dayOfWeekAnalysis.bestDay.day]?.trades || 0,
+                winRate: dayOfWeekAnalysis[dayOfWeekAnalysis.bestDay.day]?.winRate || 0,
+                avgProfit: dayOfWeekAnalysis[dayOfWeekAnalysis.bestDay.day]?.avgProfit || 0
+            } : null;
+            
+            const worstDay = dayOfWeekAnalysis.worstDay ? {
+                period: dayOfWeekAnalysis.worstDay.day,
+                profit: dayOfWeekAnalysis.worstDay.profit,
+                trades: dayOfWeekAnalysis[dayOfWeekAnalysis.worstDay.day]?.trades || 0,
+                winRate: dayOfWeekAnalysis[dayOfWeekAnalysis.worstDay.day]?.winRate || 0,
+                avgProfit: dayOfWeekAnalysis[dayOfWeekAnalysis.worstDay.day]?.avgProfit || 0
+            } : null;
+
+            // Определяем лучший и худший месяц (месяцы - это массив)
+            const bestMonth = this.findBestPeriod(monthAnalysis, 'month');
+            const worstMonth = this.findWorstPeriod(monthAnalysis, 'month');
+
+            // Формируем сводку
+            const summary = this.generatePeriodSummary(periodTrades, dayOfWeekAnalysis, monthAnalysis);
+
+            const result = {
+                success: true,
+                period: period,
+                totalTrades: periodTrades.length,
+                byDayOfWeek: this.formatDayOfWeekResults(dayOfWeekAnalysis),
+                byMonth: monthAnalysis,
+                bestDay: bestDay,
+                worstDay: worstDay,
+                bestMonth: bestMonth,
+                worstMonth: worstMonth,
+                summary: summary
+            };
+            
+            // Добавляем даты только если они были переданы
+            if (startDate) {
+                result.startDate = startDate;
+            }
+            if (endDate) {
+                result.endDate = endDate;
+            }
+            
+            return result;
+        } catch (error) {
+            console.error('❌ Ошибка анализа производительности по периодам:', error);
+            return {
+                success: false,
+                message: `Ошибка анализа: ${error.message}`,
+                byDayOfWeek: null,
+                byMonth: null,
+                bestDay: null,
+                worstDay: null,
+                bestMonth: null,
+                worstMonth: null,
+                summary: null
+            };
+        }
+    }
+
+    /**
+     * Поиск лучшего периода (для массивов, например месяцев)
+     */
+    findBestPeriod(analysis, type) {
+        if (!analysis || !Array.isArray(analysis) || analysis.length === 0) return null;
+
+        let best = null;
+        let bestProfit = -Infinity;
+
+        for (const item of analysis) {
+            const profit = item.totalProfit || 0;
+            const trades = item.totalTrades || 0;
+            if (profit > bestProfit && trades > 0) {
+                bestProfit = profit;
+                best = {
+                    period: `${item.month} ${item.year}`,
+                    profit: profit,
+                    trades: trades,
+                    winRate: item.winRate || 0,
+                    avgProfit: trades > 0 ? profit / trades : 0
+                };
+            }
+        }
+
+        return best;
+    }
+
+    /**
+     * Поиск худшего периода (для массивов, например месяцев)
+     */
+    findWorstPeriod(analysis, type) {
+        if (!analysis || !Array.isArray(analysis) || analysis.length === 0) return null;
+
+        let worst = null;
+        let worstProfit = Infinity;
+
+        for (const item of analysis) {
+            const profit = item.totalProfit || 0;
+            const trades = item.totalTrades || 0;
+            if (profit < worstProfit && trades > 0) {
+                worstProfit = profit;
+                worst = {
+                    period: `${item.month} ${item.year}`,
+                    profit: profit,
+                    trades: trades,
+                    winRate: item.winRate || 0,
+                    avgProfit: trades > 0 ? profit / trades : 0
+                };
+            }
+        }
+
+        return worst;
+    }
+
+    /**
+     * Форматирование результатов по месяцам (преобразование объекта в массив)
+     */
+    formatMonthResults(monthAnalysisRaw) {
+        if (!monthAnalysisRaw || typeof monthAnalysisRaw !== 'object') {
+            return [];
+        }
+
+        // Если это уже массив, возвращаем как есть
+        if (Array.isArray(monthAnalysisRaw)) {
+            return monthAnalysisRaw;
+        }
+
+        // Преобразуем объект в массив
+        const monthNames = ['january', 'february', 'march', 'april', 'may', 'june',
+                           'july', 'august', 'september', 'october', 'november', 'december'];
+        const monthNamesRu = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                             'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+        
+        const result = [];
+        
+        // Собираем все месяцы с данными
+        const monthsWithData = new Map();
+        
+        for (const [monthName, monthData] of Object.entries(monthAnalysisRaw)) {
+            if (monthNames.includes(monthName) && monthData && typeof monthData === 'object') {
+                const monthIndex = monthNames.indexOf(monthName);
+                const year = new Date().getFullYear(); // Можно улучшить, определяя год из сделок
+                
+                monthsWithData.set(`${year}-${monthIndex.toString().padStart(2, '0')}`, {
+                    year: year,
+                    month: monthNamesRu[monthIndex],
+                    monthIndex: monthIndex,
+                    totalProfit: monthData.profit || 0,
+                    totalTrades: monthData.trades || 0,
+                    winTrades: monthData.profitableTrades || 0,
+                    winRate: monthData.winRate || 0,
+                    avgProfit: monthData.avgProfit || 0
+                });
+            }
+        }
+        
+        // Сортируем по году и месяцу
+        const sortedKeys = Array.from(monthsWithData.keys()).sort();
+        for (const key of sortedKeys) {
+            result.push(monthsWithData.get(key));
+        }
+        
+        return result;
+    }
+
+    /**
+     * Форматирование результатов по дням недели
+     */
+    formatDayOfWeekResults(dayOfWeekAnalysis) {
+        if (!dayOfWeekAnalysis || typeof dayOfWeekAnalysis !== 'object') {
+            return null;
+        }
+
+        // Если это массив (старая версия), преобразуем в объект
+        if (Array.isArray(dayOfWeekAnalysis)) {
+            const result = {};
+            const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+            dayOfWeekAnalysis.forEach((item, index) => {
+                if (index < dayNames.length) {
+                    result[dayNames[index]] = {
+                        profit: item.totalProfit || item.profit || 0,
+                        trades: item.totalTrades || item.trades || 0,
+                        winRate: item.winRate || 0,
+                        avgProfit: item.avgProfit || 0
+                    };
+                }
+            });
+            return result;
+        }
+
+        // Если это объект (новая версия), удаляем bestDay и worstDay, оставляем только дни
+        const result = {};
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        for (const dayName of dayNames) {
+            if (dayOfWeekAnalysis[dayName]) {
+                result[dayName] = {
+                    profit: dayOfWeekAnalysis[dayName].profit || 0,
+                    trades: dayOfWeekAnalysis[dayName].trades || 0,
+                    winRate: dayOfWeekAnalysis[dayName].winRate || 0,
+                    avgProfit: dayOfWeekAnalysis[dayName].avgProfit || 0
+                };
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Генерация сводки по периодам
+     */
+    generatePeriodSummary(trades, dayOfWeekAnalysis, monthAnalysis) {
+        const totalProfit = trades.reduce((sum, trade) => sum + (trade.pnl || trade.profit || 0), 0);
+        const totalTrades = trades.length;
+        const profitableTrades = trades.filter(t => (t.pnl || t.profit || 0) > 0).length;
+        const winRate = totalTrades > 0 ? (profitableTrades / totalTrades) * 100 : 0;
+        const avgProfit = totalTrades > 0 ? totalProfit / totalTrades : 0;
+
+        // Статистика по дням недели
+        let dayStats = null;
+        if (dayOfWeekAnalysis) {
+            const formatted = this.formatDayOfWeekResults(dayOfWeekAnalysis);
+            if (formatted && typeof formatted === 'object' && !Array.isArray(formatted)) {
+                const days = Object.values(formatted);
+                const totalDayTrades = days.reduce((sum, d) => sum + (d.trades || 0), 0);
+                const totalDayProfit = days.reduce((sum, d) => sum + (d.profit || 0), 0);
+                
+                // Находим самый активный и самый прибыльный день
+                let mostActiveDay = null;
+                let mostProfitableDay = null;
+                let maxTrades = 0;
+                let maxProfit = -Infinity;
+                
+                for (const [dayName, dayData] of Object.entries(formatted)) {
+                    if (dayData.trades > maxTrades) {
+                        maxTrades = dayData.trades;
+                        mostActiveDay = { day: dayName, ...dayData };
+                    }
+                    if (dayData.profit > maxProfit) {
+                        maxProfit = dayData.profit;
+                        mostProfitableDay = { day: dayName, ...dayData };
+                    }
+                }
+                
+                dayStats = {
+                    totalTrades: totalDayTrades,
+                    totalProfit: totalDayProfit,
+                    avgProfitPerDay: totalDayTrades > 0 ? totalDayProfit / totalDayTrades : 0,
+                    mostActiveDay: mostActiveDay,
+                    mostProfitableDay: mostProfitableDay
+                };
+            }
+        }
+
+        // Статистика по месяцам
+        let monthStats = null;
+        if (monthAnalysis && monthAnalysis.length > 0) {
+            const totalMonthTrades = monthAnalysis.reduce((sum, m) => sum + m.totalTrades, 0);
+            const totalMonthProfit = monthAnalysis.reduce((sum, m) => sum + m.totalProfit, 0);
+            monthStats = {
+                totalTrades: totalMonthTrades,
+                totalProfit: totalMonthProfit,
+                avgProfitPerMonth: monthAnalysis.length > 0 ? totalMonthProfit / monthAnalysis.length : 0,
+                mostActiveMonth: monthAnalysis.reduce((best, m) => m.totalTrades > (best?.totalTrades || 0) ? m : best, null),
+                mostProfitableMonth: monthAnalysis.reduce((best, m) => m.totalProfit > (best?.totalProfit || -Infinity) ? m : best, null)
+            };
+        }
+
+        return {
+            totalProfit: totalProfit,
+            totalTrades: totalTrades,
+            profitableTrades: profitableTrades,
+            winRate: winRate,
+            avgProfit: avgProfit,
+            dayOfWeek: dayStats,
+            month: monthStats
+        };
     }
 
     /**

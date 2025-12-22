@@ -48,6 +48,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
     { path: '/training-debug', label: 'Отладка обучения', icon: 'pi pi-cog' },
     { path: '/instrument-stats', label: 'Статистика инструментов', icon: 'pi pi-chart-bar' },
     { path: '/metrics', label: 'Метрики', icon: 'pi pi-chart-line' },
+    { path: '/advanced-metrics', label: 'Продвинутые метрики', icon: 'pi pi-chart-bar' },
     { path: '/settings', label: 'Настройки', icon: 'pi pi-wrench' }
   ];
 

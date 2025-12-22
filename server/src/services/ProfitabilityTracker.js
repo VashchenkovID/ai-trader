@@ -3,6 +3,14 @@ import MigrationStatus from '../models/MigrationStatus.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
 import TradingEngine from './TradingEngine.js';
 import sequelize from '../config/database.js';
+import {
+    calculateSortinoRatio,
+    calculateCalmarRatio,
+    calculateInformationRatio,
+    calculateMAEandMFE,
+    analyzeByDayOfWeek,
+    analyzeByMonth
+} from '../utils/advancedMetrics.js';
 
 /**
  * Сервис для отслеживания прибыльности системы
@@ -75,7 +83,10 @@ class ProfitabilityTracker {
             // Анализ
             correlationAnalysis: await Settings.getSetting('profit_correlation_analysis', true),
             riskAdjustedReturns: await Settings.getSetting('profit_risk_adjusted_returns', true),
-            benchmarkComparison: await Settings.getSetting('profit_benchmark_comparison', false)
+            benchmarkComparison: await Settings.getSetting('profit_benchmark_comparison', false),
+            
+            // Продвинутые метрики
+            riskFreeRate: await Settings.getSetting('profit_risk_free_rate', 8) // 8% годовых по умолчанию
         };
     }
 
@@ -478,7 +489,7 @@ class ProfitabilityTracker {
         const grossLoss = stats.reduce((sum, stat) => sum + Math.abs(Math.min(0, stat.totalProfit)), 0);
         const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0;
 
-        return {
+        const baseMetrics = {
             totalProfit,
             averageDailyProfit,
             totalTrades,
@@ -490,6 +501,266 @@ class ProfitabilityTracker {
             grossProfit,
             grossLoss
         };
+
+        // Добавляем продвинутые метрики
+        const advancedMetrics = this.calculateAdvancedMetrics(stats, period, baseMetrics);
+        
+        return {
+            ...baseMetrics,
+            ...advancedMetrics
+        };
+    }
+
+    /**
+     * Расчет продвинутых метрик производительности
+     * @param {Array} stats - Статистика за период
+     * @param {string} period - Период ('daily', 'weekly', 'monthly')
+     * @param {Object} baseMetrics - Базовые метрики (для переиспользования расчетов)
+     * @returns {Object} Продвинутые метрики
+     */
+    calculateAdvancedMetrics(stats, period, baseMetrics = {}) {
+        if (stats.length === 0) {
+            return {
+                sortinoRatio: 0,
+                calmarRatio: 0,
+                informationRatio: null,
+                mae: null,
+                mfe: null,
+                maeMfeAvailable: false,
+                periodAnalysis: null
+            };
+        }
+
+        const advancedMetrics = {};
+
+        // 1. Sortino Ratio
+        try {
+            // Рассчитываем доходности из статистики
+            const returns = stats.map(stat => {
+                // Преобразуем прибыль в процентную доходность
+                // Используем упрощенный подход: доходность = прибыль / средняя прибыль
+                const avgProfit = baseMetrics.averageDailyProfit || 1;
+                return avgProfit > 0 ? (stat.totalProfit / avgProfit) * 100 : 0; // Преобразуем в проценты
+            });
+
+            // Если есть достаточно данных, рассчитываем Sortino Ratio
+            if (returns.length > 0) {
+                const riskFreeRate = this.trackingSettings.riskFreeRate || 8; // 8% годовых по умолчанию
+                advancedMetrics.sortinoRatio = calculateSortinoRatio(returns, riskFreeRate, 252);
+            } else {
+                advancedMetrics.sortinoRatio = 0;
+            }
+        } catch (error) {
+            console.warn('⚠️ Ошибка расчета Sortino Ratio:', error.message);
+            advancedMetrics.sortinoRatio = 0;
+        }
+
+        // 2. Calmar Ratio
+        try {
+            if (baseMetrics.maxDrawdown && baseMetrics.maxDrawdown > 0) {
+                // Рассчитываем годовую доходность
+                const daysInPeriod = stats.length;
+                const tradingDaysPerYear = 252;
+                
+                // Преобразуем среднюю дневную прибыль в годовую доходность (в процентах)
+                // Предполагаем, что averageDailyProfit - это процент от капитала
+                const avgDailyReturn = baseMetrics.averageDailyProfit || 0;
+                const annualReturnPercent = avgDailyReturn * tradingDaysPerYear;
+                
+                advancedMetrics.calmarRatio = calculateCalmarRatio(annualReturnPercent, baseMetrics.maxDrawdown);
+            } else {
+                advancedMetrics.calmarRatio = 0;
+            }
+        } catch (error) {
+            console.warn('⚠️ Ошибка расчета Calmar Ratio:', error.message);
+            advancedMetrics.calmarRatio = 0;
+        }
+
+        // 3. Information Ratio (требует бенчмарк)
+        try {
+            // Information Ratio рассчитывается только если есть бенчмарк
+            // Проверяем настройку benchmarkComparison
+            if (this.trackingSettings.benchmarkComparison) {
+                // Здесь нужно получить доходности бенчмарка
+                // Пока оставляем null, так как бенчмарк не определен
+                advancedMetrics.informationRatio = null;
+            } else {
+                advancedMetrics.informationRatio = null; // null означает, что метрика не применима
+            }
+        } catch (error) {
+            console.warn('⚠️ Ошибка расчета Information Ratio:', error.message);
+            advancedMetrics.informationRatio = null;
+        }
+
+        // 4. MAE/MFE (требует данные о сделках со свечами)
+        try {
+            // Получаем сделки из TradingEngine
+            const trades = TradingEngine.virtualPortfolio?.trades || [];
+            
+            if (trades.length > 0) {
+                // Фильтруем сделки по периоду
+                const periodTrades = this.filterTradesByPeriod(trades, period, stats);
+                
+                // Пытаемся рассчитать MAE/MFE из доступных данных сделок
+                // Если у сделок есть entryPrice/exitPrice или price, используем их
+                const tradesForMAEMFE = periodTrades.map(trade => {
+                    // Преобразуем формат сделки для calculateMAEandMFE
+                    const entryPrice = trade.entryPrice || trade.price || (trade.action === 'BUY' ? trade.price : null);
+                    const exitPrice = trade.exitPrice || trade.price || (trade.action === 'SELL' ? trade.price : null);
+                    const entryTime = trade.entryTime || trade.timestamp || trade.date;
+                    const exitTime = trade.exitTime || trade.timestamp || trade.date;
+                    
+                    return {
+                        ...trade,
+                        entryPrice: entryPrice,
+                        exitPrice: exitPrice,
+                        entryTime: entryTime,
+                        exitTime: exitTime,
+                        historicalPrices: trade.historicalPrices || [] // Если есть исторические цены
+                    };
+                }).filter(trade => trade.entryPrice && trade.exitPrice);
+                
+                if (tradesForMAEMFE.length > 0) {
+                    // Вызываем calculateMAEandMFE (без свечей, будет использован упрощенный расчет)
+                    const { mae, mfe, maeMfeAvailable } = calculateMAEandMFE(tradesForMAEMFE, null);
+                    advancedMetrics.mae = mae || 0;
+                    advancedMetrics.mfe = mfe || 0;
+                    advancedMetrics.maeMfeAvailable = maeMfeAvailable;
+                } else {
+                    advancedMetrics.mae = 0;
+                    advancedMetrics.mfe = 0;
+                    advancedMetrics.maeMfeAvailable = false;
+                }
+            } else {
+                advancedMetrics.mae = 0;
+                advancedMetrics.mfe = 0;
+                advancedMetrics.maeMfeAvailable = false;
+            }
+        } catch (error) {
+            console.warn('⚠️ Ошибка расчета MAE/MFE:', error.message);
+            advancedMetrics.mae = 0;
+            advancedMetrics.mfe = 0;
+            advancedMetrics.maeMfeAvailable = false;
+        }
+
+        // 5. Анализ по периодам (дни недели, месяцы)
+        try {
+            const trades = TradingEngine.virtualPortfolio?.trades || [];
+            
+            if (trades.length > 0) {
+                // Фильтруем сделки по периоду
+                const periodTrades = this.filterTradesByPeriod(trades, period, stats);
+                
+                advancedMetrics.periodAnalysis = {
+                    byDayOfWeek: analyzeByDayOfWeek(periodTrades),
+                    byMonth: analyzeByMonth(periodTrades)
+                };
+            } else {
+                advancedMetrics.periodAnalysis = null;
+            }
+        } catch (error) {
+            console.warn('⚠️ Ошибка анализа по периодам:', error.message);
+            advancedMetrics.periodAnalysis = null;
+        }
+
+        return advancedMetrics;
+    }
+
+    /**
+     * Фильтрация сделок по периоду
+     * @param {Array} trades - Массив сделок
+     * @param {string} period - Период ('daily', 'weekly', 'monthly')
+     * @param {Array} stats - Статистика за период
+     * @returns {Array} Отфильтрованные сделки
+     */
+    filterTradesByPeriod(trades, period, stats) {
+        if (!trades || trades.length === 0 || !stats || stats.length === 0) {
+            return [];
+        }
+
+        // Определяем диапазон дат из статистики в зависимости от типа периода
+        const dates = stats.map(stat => {
+            // Для дневной статистики
+            if (stat.date) {
+                return new Date(stat.date);
+            }
+            // Для недельной статистики (используем первую дату недели)
+            if (stat.week) {
+                const [year, week] = stat.week.split('-W');
+                const date = this.getDateFromWeek(year, parseInt(week));
+                return date;
+            }
+            // Для месячной статистики (используем первое число месяца)
+            if (stat.month) {
+                const [year, month] = stat.month.split('-');
+                return new Date(year, parseInt(month) - 1, 1);
+            }
+            // Fallback для других форматов
+            if (stat.day) {
+                return new Date(stat.day);
+            }
+            return null;
+        }).filter(date => date !== null && !isNaN(date.getTime()));
+
+        if (dates.length === 0) {
+            return [];
+        }
+
+        const startDate = new Date(Math.min(...dates));
+        let endDate = new Date(Math.max(...dates));
+        
+        // Устанавливаем время для корректного сравнения
+        startDate.setHours(0, 0, 0, 0);
+        
+        // Для недельной и месячной статистики расширяем конечную дату
+        if (period === 'weekly') {
+            // Для weekly берем последнюю дату и добавляем 6 дней
+            const lastWeekDate = new Date(Math.max(...dates));
+            endDate = new Date(lastWeekDate);
+            endDate.setDate(lastWeekDate.getDate() + 6); // Добавляем 6 дней к началу последней недели
+        } else if (period === 'monthly') {
+            // Для monthly берем последний месяц и устанавливаем последний день месяца
+            const lastMonthDate = new Date(Math.max(...dates));
+            endDate = new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth() + 1, 0); // Последний день месяца
+        }
+        endDate.setHours(23, 59, 59, 999);
+
+        // Фильтруем сделки
+        const filteredTrades = trades.filter(trade => {
+            const tradeDate = trade.timestamp ? new Date(trade.timestamp) : 
+                            trade.date ? new Date(trade.date) : null;
+            
+            if (!tradeDate || isNaN(tradeDate.getTime())) {
+                return false;
+            }
+
+            // Нормализуем время для сравнения (только дата, без времени)
+            const tradeDateOnly = new Date(tradeDate.getFullYear(), tradeDate.getMonth(), tradeDate.getDate());
+            const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+            const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+
+            return tradeDateOnly >= startDateOnly && tradeDateOnly <= endDateOnly;
+        });
+
+        return filteredTrades;
+    }
+
+    /**
+     * Получение даты из номера недели
+     * @param {number|string} year - Год
+     * @param {number} week - Номер недели
+     * @returns {Date} Дата начала недели
+     */
+    getDateFromWeek(year, week) {
+        const simple = new Date(year, 0, 1 + (week - 1) * 7);
+        const dow = simple.getDay();
+        const ISOweekStart = simple;
+        if (dow <= 4) {
+            ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+        } else {
+            ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+        }
+        return ISOweekStart;
     }
 
     /**

@@ -7,6 +7,95 @@ const api = axios.create({
   timeout: 10000,
 });
 
+// Advanced Metrics API methods
+async getAdvancedMetrics(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching advanced metrics:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getSortinoRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30, riskFreeRate?: number) {
+    try {
+      const response = await api.get('/api/advanced-metrics/sortino-ratio', {
+        params: { period, days, ...(riskFreeRate && { riskFreeRate }) }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching Sortino Ratio:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getCalmarRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics/calmar-ratio', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching Calmar Ratio:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getInformationRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics/information-ratio', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching Information Ratio:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getMAEMFE(limit: number = 100) {
+    try {
+      const response = await api.get('/api/advanced-metrics/mae-mfe', {
+        params: { limit }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching MAE/MFE:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getPeriodAnalysis(
+    period: 'daily' | 'weekly' | 'monthly' = 'daily',
+    startDate?: string,
+    endDate?: string
+  ) {
+    try {
+      const response = await api.get('/api/advanced-metrics/period-analysis', {
+        params: { period, ...(startDate && { startDate }), ...(endDate && { endDate }) }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching period analysis:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getAdvancedMetricsSummary(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics/summary', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching advanced metrics summary:', error);
+      return { success: false, data: null };
+    }
+  },
+
 export const apiService = {
   async getSystemStatus() {
     try {
@@ -464,6 +553,95 @@ export const apiService = {
     } catch (error) {
       console.error('Error resolving alert:', error);
       throw error;
+    }
+  },
+
+  // Advanced Metrics API methods
+  async getAdvancedMetrics(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching advanced metrics:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getSortinoRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30, riskFreeRate?: number) {
+    try {
+      const response = await api.get('/api/advanced-metrics/sortino-ratio', {
+        params: { period, days, ...(riskFreeRate && { riskFreeRate }) }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching Sortino Ratio:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getCalmarRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics/calmar-ratio', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching Calmar Ratio:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getInformationRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics/information-ratio', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching Information Ratio:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getMAEMFE(limit: number = 100) {
+    try {
+      const response = await api.get('/api/advanced-metrics/mae-mfe', {
+        params: { limit }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching MAE/MFE:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getPeriodAnalysis(
+    period: 'daily' | 'weekly' | 'monthly' = 'daily',
+    startDate?: string,
+    endDate?: string
+  ) {
+    try {
+      const response = await api.get('/api/advanced-metrics/period-analysis', {
+        params: { period, ...(startDate && { startDate }), ...(endDate && { endDate }) }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching period analysis:', error);
+      return { success: false, data: null };
+    }
+  },
+
+  async getAdvancedMetricsSummary(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
+    try {
+      const response = await api.get('/api/advanced-metrics/summary', {
+        params: { period, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching advanced metrics summary:', error);
+      return { success: false, data: null };
     }
   }
 };

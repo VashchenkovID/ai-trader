@@ -9,6 +9,7 @@ import TradingHoursCacheService from './TradingHoursCacheService.js';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 import { getService } from './GlobalServiceManager.js';
+import ServiceManager from './ServiceManager.js';
 
 // Импорт утилит планировщика
 import * as SchedulerUtils from '../utils/scheduler/index.js';
@@ -41,6 +42,7 @@ class SchedulerService {
         this.correlationPrecalcTask = null;
         this.weeklyBacktestTask = null;
         this.macroDataUpdateTask = null; // Задача обновления макроэкономических данных
+        this.portfolioRebalancingTask = null; // Задача ребалансировки портфеля
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -75,7 +77,7 @@ class SchedulerService {
             try {
                 // Получаем уже инициализированный экземпляр из глобального ServiceManager
                 // Используем тот же подход, что и для других сервисов
-                this.webSocketService = getService('WebSocketService');
+                this.webSocketService = ServiceManager?.getServiceSafe('WebSocketService') || null;
             } catch (error) {
                 // Сервис не найден - это нормально, если он еще не инициализирован
                 // Не устанавливаем в кеш, чтобы попробовать снова при следующем вызове
@@ -582,6 +584,23 @@ class SchedulerService {
             }
         );
         
+        // Задача 18: Автоматическая ребалансировка портфеля
+        // Расписание из настроек (по умолчанию: ежедневно в 2:00)
+        const portfolioRebalancingSchedule = await SettingsService.getSetting('portfolio_rebalancing_check_interval', '0 2 * * *');
+        this.portfolioRebalancingTask = SchedulerUtils.createScheduledTask(
+            portfolioRebalancingSchedule,
+            async () => {
+                await this.performPortfolioRebalancing();
+            },
+            {
+                taskName: 'portfolio-rebalancing',
+                sendAlerts: true,
+                alertType: 'info',
+                startTime: this.startTime,
+                minDelay: 60 * 60 * 1000 // 1 час
+            }
+        );
+        
         // Запускаем периодическую отправку данных через WebSocket
         this.startWebSocketBroadcasts();
         
@@ -902,14 +921,14 @@ class SchedulerService {
                 let TrainingStatusService = null;
                 
                 try {
-                    WebSocketService = getService('WebSocketService');
+                    WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 } catch (error) {
                     // Сервис не найден - это нормально, если он еще не инициализирован
                     return;
                 }
                 
                 try {
-                    TrainingStatusService = getService('TrainingStatusService');
+                    TrainingStatusService = ServiceManager.getServiceSafe('TrainingStatusService');
                 } catch (error) {
                     // Сервис не найден - используем дефолтный статус
                 }
@@ -1188,6 +1207,13 @@ class SchedulerService {
                 this.macroDataUpdateTask.destroy();
                 this.macroDataUpdateTask = null;
                 console.log('✅ Macro data update task stopped and destroyed');
+            }
+            
+            if (this.portfolioRebalancingTask) {
+                this.portfolioRebalancingTask.stop();
+                this.portfolioRebalancingTask.destroy();
+                this.portfolioRebalancingTask = null;
+                console.log('✅ Portfolio rebalancing task stopped and destroyed');
             }
             
             // Останавливаем все cron задачи из intervals
@@ -4102,6 +4128,64 @@ class SchedulerService {
     }
 
     /**
+     * Выполнение автоматической ребалансировки портфеля
+     */
+    async performPortfolioRebalancing() {
+        try {
+            console.log('🔄 Starting portfolio rebalancing...');
+            
+            const PortfolioRebalancingService = (await import('./PortfolioRebalancingService.js')).default;
+            
+            // Убеждаемся, что сервис инициализирован
+            if (!PortfolioRebalancingService.isInitialized) {
+                await PortfolioRebalancingService.initialize();
+            }
+            
+            // Проверяем, включена ли автоматическая ребалансировка
+            const status = PortfolioRebalancingService.getStatus();
+            if (!status.enabled) {
+                console.log('⏭️ Portfolio rebalancing is disabled, skipping...');
+                return;
+            }
+            
+            // Выполняем ребалансировку
+            const result = await PortfolioRebalancingService.performRebalancing();
+            
+            // Формируем отчет
+            if (result.success) {
+                const summary = {
+                    operations: result.operations?.length || 0,
+                    totalCommission: result.totalCommission || 0,
+                    needsRebalancing: result.needsRebalancing || false
+                };
+                
+                console.log('✅ Portfolio rebalancing completed:', summary);
+                
+                if (result.operations && result.operations.length > 0) {
+                    await OptimizedTelegramService.sendAlert(
+                        'PORTFOLIO_REBALANCING_COMPLETE',
+                        `Ребалансировка портфеля выполнена: ${result.operations.length} операций, комиссия: ${result.totalCommission?.toFixed(2)} ₽`,
+                        'info'
+                    );
+                } else {
+                    console.log('ℹ️ No rebalancing needed');
+                }
+            } else {
+                console.warn('⚠️ Portfolio rebalancing completed with warnings:', result.error || 'Unknown error');
+                await OptimizedTelegramService.sendAlert(
+                    'PORTFOLIO_REBALANCING_WARNING',
+                    `Ребалансировка портфеля: ${result.error || 'Неизвестная ошибка'}`,
+                    'warning'
+                );
+            }
+            
+        } catch (error) {
+            console.error('❌ Error performing portfolio rebalancing:', error);
+            await OptimizedTelegramService.sendAlert('PORTFOLIO_REBALANCING_ERROR', error.message, 'error');
+        }
+    }
+
+    /**
      * Обновление виртуального портфеля - пересчет totalValue на основе текущих цен
      */
     async performVirtualPortfolioUpdate() {
@@ -4185,7 +4269,8 @@ class SchedulerService {
                 dynamicBudgetRebalanceTask: this.dynamicBudgetRebalanceTask ? 'active' : 'inactive',
                 correlationPrecalcTask: this.correlationPrecalcTask ? 'active' : 'inactive',
                 weeklyBacktestTask: this.weeklyBacktestTask ? 'active' : 'inactive',
-                macroDataUpdateTask: this.macroDataUpdateTask ? 'active' : 'inactive'
+                macroDataUpdateTask: this.macroDataUpdateTask ? 'active' : 'inactive',
+                portfolioRebalancingTask: this.portfolioRebalancingTask ? 'active' : 'inactive'
             };
 
             return {

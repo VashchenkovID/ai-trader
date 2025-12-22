@@ -4,6 +4,7 @@ import CacheService from './CacheService.js';
 import OptimizedDataService from './OptimizedDataService.js';
 import WebSocketService from './WebSocketService.js';
 import { getService } from './GlobalServiceManager.js';
+import ServiceManager from './ServiceManager.js';
 
 /**
  * Сервис Meta-Learning (обучение обучению)
@@ -629,17 +630,24 @@ class MetaLearningService {
      * Уведомление о прогрессе мета-обучения
      */
     broadcastMetaTrainingProgress(epoch, logs) {
-        WebSocketService.broadcast({
-            type: 'meta_training_progress',
-            data: {
-                epoch,
-                loss: logs.loss,
-                mae: logs.mae,
-                valLoss: logs.val_loss,
-                valMae: logs.val_mae
-            },
-            timestamp: new Date().toISOString()
-        });
+        try {
+            const WebSocketServiceInstance = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketServiceInstance && typeof WebSocketServiceInstance.broadcast === 'function') {
+                WebSocketServiceInstance.broadcast({
+                    type: 'meta_training_progress',
+                    data: {
+                        epoch,
+                        loss: logs.loss,
+                        mae: logs.mae,
+                        valLoss: logs.val_loss,
+                        valMae: logs.val_mae
+                    },
+                    timestamp: new Date().toISOString()
+                });
+            }
+        } catch (error) {
+            // Подавляем ошибки WebSocket - это не критично
+        }
     }
 
     /**
@@ -775,11 +783,16 @@ class MetaLearningService {
             this.status = 'idle';
             
             // Уведомить через WebSocket
-            if (typeof WebSocketService !== 'undefined' && WebSocketService.broadcast) {
-                WebSocketService.broadcast({
-                    type: 'meta_learning_stopped',
-                    timestamp: new Date().toISOString()
-                });
+            try {
+                const WebSocketServiceInstance = ServiceManager.getServiceSafe('WebSocketService');
+                if (WebSocketServiceInstance && typeof WebSocketServiceInstance.broadcast === 'function') {
+                    WebSocketServiceInstance.broadcast({
+                        type: 'meta_learning_stopped',
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (error) {
+                // Подавляем ошибки WebSocket - это не критично
             }
             
             return {

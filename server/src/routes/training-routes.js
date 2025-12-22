@@ -27,7 +27,7 @@ router.post('/batch-train-all', async (req, res) => {
             console.log('Пакетное обучение всех нейросетей завершено:', result);
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('batch_training_all_completed', {
                     success: true,
@@ -46,7 +46,7 @@ router.post('/batch-train-all', async (req, res) => {
             }
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('batch_training_all_error', {
                     success: false,
@@ -96,7 +96,7 @@ router.post('/meta-learning/train', async (req, res) => {
             
             // Уведомляем через WebSocket
             try {
-                const WebSocketService = ServiceManager.getService('WebSocketService');
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                     WebSocketService.broadcast({
                         type: 'meta_learning_training_completed',
@@ -118,7 +118,7 @@ router.post('/meta-learning/train', async (req, res) => {
             }
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('meta_learning_training_error', {
                     success: false,
@@ -166,7 +166,7 @@ router.post('/meta-learning/batch-train', async (req, res) => {
             console.log('Обучение Meta-Learning завершено:', result?.success ? 'Успешно' : 'Ошибка');
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('meta_learning_batch_training_completed', {
                     success: true,
@@ -185,7 +185,7 @@ router.post('/meta-learning/batch-train', async (req, res) => {
             }
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('meta_learning_batch_training_error', {
                     success: false,
@@ -233,7 +233,7 @@ router.post('/reinforcement-learning/train', async (req, res) => {
             console.log('Обучение Reinforcement Learning завершено:', result?.success ? 'Успешно' : 'Ошибка');
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('reinforcement_learning_training_completed', {
                     success: true,
@@ -252,11 +252,15 @@ router.post('/reinforcement-learning/train', async (req, res) => {
             }
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
-            if (WebSocketService) {
-                WebSocketService.broadcast('reinforcement_learning_training_error', {
-                    success: false,
-                    error: trainingError.message
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'reinforcement_learning_training_error',
+                    data: {
+                        success: false,
+                        error: trainingError.message
+                    },
+                    timestamp: new Date().toISOString()
                 });
             }
         }
@@ -300,7 +304,7 @@ router.post('/reinforcement-learning/batch-train', async (req, res) => {
             console.log('Обучение Reinforcement Learning завершено:', result?.success ? 'Успешно' : 'Ошибка');
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('reinforcement_learning_batch_training_completed', {
                     success: true,
@@ -319,11 +323,15 @@ router.post('/reinforcement-learning/batch-train', async (req, res) => {
             }
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
-            if (WebSocketService) {
-                WebSocketService.broadcast('reinforcement_learning_batch_training_error', {
-                    success: false,
-                    error: trainingError.message
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'reinforcement_learning_batch_training_error',
+                    data: {
+                        success: false,
+                        error: trainingError.message
+                    },
+                    timestamp: new Date().toISOString()
                 });
             }
         }
@@ -357,7 +365,7 @@ router.post('/tune-hyperparameters', async (req, res) => {
             console.log('Подбор гиперпараметров завершен:', result);
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast({
                     type: 'hyperparameter_tuning_completed',
@@ -376,7 +384,7 @@ router.post('/tune-hyperparameters', async (req, res) => {
             }
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast({
                     type: 'hyperparameter_tuning_error',

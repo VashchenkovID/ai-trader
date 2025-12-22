@@ -47,7 +47,7 @@ class RiskManagementService {
         
         // Настройки формулы Келли (инициализируются значениями по умолчанию)
         this.kellySettings = {
-            enabled: false,               // Включен ли индивидуальный расчет Келли
+            enabled: true,                // Включен ли индивидуальный расчет Келли (по умолчанию включен)
             conservativeFactor: 0.25,     // Коэффициент консервативности (1/4 от Келли)
             minTrades: 10,                // Минимальное количество сделок для использования статистики
             volatilityPeriod: 30          // Период расчета волатильности в днях
@@ -827,7 +827,7 @@ class RiskManagementService {
     async loadKellySettings() {
         try {
             this.kellySettings = {
-                enabled: await Settings.getSetting('kelly_enabled', false),
+                enabled: await Settings.getSetting('kelly_enabled', true),
                 conservativeFactor: await Settings.getSetting('kelly_conservative_factor', 0.25),
                 minTrades: await Settings.getSetting('kelly_min_trades', 10),
                 volatilityPeriod: await Settings.getSetting('kelly_volatility_period', 30)
@@ -837,7 +837,7 @@ class RiskManagementService {
             console.warn('⚠️ Ошибка загрузки настроек Келли, используем значения по умолчанию:', error.message);
             // Убеждаемся, что настройки установлены значениями по умолчанию при ошибке
             this.kellySettings = {
-                enabled: false,
+                enabled: true,
                 conservativeFactor: 0.25,
                 minTrades: 10,
                 volatilityPeriod: 30

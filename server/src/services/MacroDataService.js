@@ -5,8 +5,8 @@ import {
     parseCbrXml,
     parseCbrKeyRateXml,
     parseCbrKeyRateHtml,
-    parseInvestingRosstatHtml,
-    parseInvestingRviHtml,
+    parseInvestingInflationHtml,
+    parseTradingViewRviHtml,
     normalizeIndicator as normalizeIndicatorUtil,
     validateIndicator as validateIndicatorUtil,
     calculateChange
@@ -562,17 +562,26 @@ class MacroDataService {
                 {
                     url: 'https://ru.investing.com/economic-calendar/russian-monthly-gdp-407',
                     indicatorType: 'gdp',
-                    name: 'ВВП'
+                    name: 'ВВП',
+                    parser: parseInvestingInflationHtml
                 },
                 {
                     url: 'https://ru.investing.com/economic-calendar/russian-unemployment-rate-556',
                     indicatorType: 'unemployment',
-                    name: 'Безработица'
+                    name: 'Безработица',
+                    parser: parseInvestingInflationHtml
                 },
                 {
                     url: 'https://ru.investing.com/economic-calendar/russian-industrial-production-553',
                     indicatorType: 'industrial_production',
-                    name: 'Промышленное производство'
+                    name: 'Промышленное производство',
+                    parser: parseInvestingInflationHtml
+                },
+                {
+                    url: 'https://ru.investing.com/economic-calendar/russian-cpi-1180',
+                    indicatorType: 'inflation',
+                    name: 'Инфляция (CPI)',
+                    parser: parseInvestingInflationHtml
                 }
             ];
 
@@ -606,7 +615,9 @@ class MacroDataService {
                     const htmlText = await response.text();
                     console.log(`📄 Получен HTML от Investing.com (${source.name}), длина: ${htmlText.length} символов`);
                     
-                    const records = parseInvestingRosstatHtml(htmlText, start, end);
+                    // Используем указанный парсер или парсер по умолчанию
+                    const parser = source.parser || parseInvestingRosstatHtml;
+                    const records = parser(htmlText, start, end);
                     console.log(`📊 Распарсено записей от Investing.com (${source.name}): ${records.length}`);
 
                     if (records.length > 0) {
@@ -703,7 +714,7 @@ class MacroDataService {
                 const htmlText = await response.text();
                 console.log(`📄 Получен HTML от Investing.com, длина: ${htmlText.length} символов`);
                 
-                const records = parseInvestingRviHtml(htmlText, start, end);
+                const records = parseTradingViewRviHtml(htmlText, start, end);
                 console.log(`📊 Распарсено записей от Investing.com: ${records.length}`);
 
                 if (records.length > 0) {

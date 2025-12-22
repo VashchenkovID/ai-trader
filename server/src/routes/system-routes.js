@@ -17,7 +17,7 @@ const router = express.Router();
 router.get('/status', async (req, res) => {
     try {
         // Получаем статусы всех сервисов
-        const WebSocketService = ServiceManager.getService('WebSocketService');
+        const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
         const [neuralNetworkStatus, websocketStatus, tradingEngineStatus, ensembleStatus] = await Promise.allSettled([
             Promise.resolve(NeuralNetworkService.getModelStatus()),
             Promise.resolve(WebSocketService ? WebSocketService.getStatus() : { error: 'WebSocketService not available' }),
@@ -255,7 +255,7 @@ router.put('/settings', async (req, res) => {
 router.get('/settings/kelly', async (req, res) => {
     try {
         const settings = {
-            enabled: await Settings.getSetting('kelly_enabled', false),
+            enabled: await Settings.getSetting('kelly_enabled', true),
             conservativeFactor: await Settings.getSetting('kelly_conservative_factor', 0.25),
             minTrades: await Settings.getSetting('kelly_min_trades', 10),
             volatilityPeriod: await Settings.getSetting('kelly_volatility_period', 30)

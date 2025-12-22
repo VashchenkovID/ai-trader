@@ -695,6 +695,85 @@ Settings.initializeDefaults = async function() {
             description: 'Включить получение данных от Мосбиржи',
             category: 'macro_data',
             dataType: 'boolean'
+        },
+        
+        // Настройки ребалансировки портфеля
+        {
+            key: 'portfolio_rebalancing_enabled',
+            value: true,
+            description: 'Включить автоматическую ребалансировку портфеля',
+            category: 'portfolio',
+            dataType: 'boolean'
+        },
+        {
+            key: 'portfolio_rebalancing_threshold',
+            value: 5,
+            description: 'Порог отклонения от целевого веса для ребалансировки (%)',
+            category: 'portfolio',
+            dataType: 'number',
+            minValue: 1,
+            maxValue: 50
+        },
+        {
+            key: 'portfolio_rebalancing_check_interval',
+            value: '0 2 * * *',
+            description: 'Интервал проверки необходимости ребалансировки (cron)',
+            category: 'scheduler',
+            dataType: 'string'
+        },
+        {
+            key: 'portfolio_rebalancing_min_amount',
+            value: 1000,
+            description: 'Минимальная сумма операции ребалансировки (руб.)',
+            category: 'portfolio',
+            dataType: 'number',
+            minValue: 100,
+            maxValue: 100000
+        },
+        {
+            key: 'portfolio_rebalancing_min_benefit',
+            value: 50,
+            description: 'Минимальная чистая выгода от ребалансировки (руб.)',
+            category: 'portfolio',
+            dataType: 'number',
+            minValue: 0,
+            maxValue: 10000
+        },
+        
+        // Настройки формулы Келли
+        {
+            key: 'kelly_enabled',
+            value: true,
+            description: 'Включить использование формулы Келли для расчета размера позиций',
+            category: 'risk_management',
+            dataType: 'boolean'
+        },
+        {
+            key: 'kelly_conservative_factor',
+            value: 0.25,
+            description: 'Консервативный коэффициент Келли (доля от полного Келли, 0.25 = 25%)',
+            category: 'risk_management',
+            dataType: 'number',
+            minValue: 0.1,
+            maxValue: 1.0
+        },
+        {
+            key: 'kelly_min_trades',
+            value: 10,
+            description: 'Минимальное количество сделок для использования формулы Келли',
+            category: 'risk_management',
+            dataType: 'number',
+            minValue: 5,
+            maxValue: 100
+        },
+        {
+            key: 'kelly_volatility_period',
+            value: 30,
+            description: 'Период расчета волатильности для формулы Келли (дни)',
+            category: 'risk_management',
+            dataType: 'number',
+            minValue: 7,
+            maxValue: 365
         }
     ];
     

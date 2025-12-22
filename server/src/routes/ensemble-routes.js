@@ -150,7 +150,7 @@ router.post('/batch-train', async (req, res) => {
             console.log('Пакетное обучение ансамбля завершено:', result);
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('ensemble_batch_training_completed', {
                     success: true,
@@ -169,7 +169,7 @@ router.post('/batch-train', async (req, res) => {
             }
             
             // Уведомляем через WebSocket
-            const WebSocketService = ServiceManager.getService('WebSocketService');
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
                 WebSocketService.broadcast('ensemble_batch_training_error', {
                     success: false,

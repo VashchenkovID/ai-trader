@@ -3,6 +3,7 @@ import CacheService from './CacheService.js';
 import OptimizedAnalysisService from './OptimizedAnalysisService.js';
 import ModelManager from '../utils/ModelManager.js';
 import { getService } from './GlobalServiceManager.js';
+import ServiceManager from './ServiceManager.js';
 
 /**
  * Сервис ансамбля нейросетей
@@ -372,9 +373,17 @@ class EnsembleService {
             this.isTraining = true;
             this.trainingFigiLocks.add(figi);
             
-            // Обновляем статус обучения
+            // Обновляем статус обучения с текущим инструментом
             if (trainingStatusService) {
                 trainingStatusService.startTraining('ensemble', 1);
+                // Получаем ticker для отображения
+                try {
+                    const instrument = await CacheService.getInstrument(figi, true);
+                    const ticker = instrument?.ticker || figi.substring(0, 10);
+                    trainingStatusService.updateProgress('ensemble', 0, ticker);
+                } catch (e) {
+                    trainingStatusService.updateProgress('ensemble', 0, figi.substring(0, 10));
+                }
             }
 
             // Получаем данные
@@ -420,12 +429,20 @@ class EnsembleService {
 
             // Подготавливаем и обучаем только те модели, для которых достаточно данных
             const results = {};
+            const totalModels = [canTrainLSTM, canTrainCNN, canTrainTransformer].filter(Boolean).length;
+            let completedModels = 0;
             
             if (canTrainLSTM) {
                 try {
+                    // Обновляем прогресс - начало обучения LSTM
+                    if (trainingStatusService) {
+                        const progress = Math.floor((completedModels / totalModels) * 100);
+                        trainingStatusService.updateProgress('ensemble', progress, figi.substring(0, 10));
+                    }
+                    
                     const lstmData = await this.prepareLSTMData(candles);
                     if (lstmData.features.length > 0) {
-                        const lstmResult = await this.trainModel('lstm', lstmData, epochs, batchSize);
+                        const lstmResult = await this.trainModel('lstm', lstmData, epochs, batchSize, trainingStatusService, totalModels, completedModels, figi);
                         this.performance.lstm = lstmResult;
                         this.lastUpdate.lstm = new Date().toISOString();
                         // Сохраняем историю весов для стабильности
@@ -438,6 +455,7 @@ class EnsembleService {
                             this.weightHistory.lstm.shift();
                         }
                         results.lstm = lstmResult;
+                        completedModels++;
                         console.log(`✅ LSTM model trained successfully`);
                     } else {
                         console.warn(`⚠️ LSTM: No training samples generated`);
@@ -451,9 +469,15 @@ class EnsembleService {
             
             if (canTrainCNN) {
                 try {
+                    // Обновляем прогресс - начало обучения CNN
+                    if (trainingStatusService) {
+                        const progress = Math.floor((completedModels / totalModels) * 100);
+                        trainingStatusService.updateProgress('ensemble', progress, figi.substring(0, 10));
+                    }
+                    
                     const cnnData = await this.prepareCNNData(candles);
                     if (cnnData.features.length > 0) {
-                        const cnnResult = await this.trainModel('cnn', cnnData, epochs, batchSize);
+                        const cnnResult = await this.trainModel('cnn', cnnData, epochs, batchSize, trainingStatusService, totalModels, completedModels, figi);
                         this.performance.cnn = cnnResult;
                         this.lastUpdate.cnn = new Date().toISOString();
                         // Сохраняем историю весов для стабильности
@@ -466,6 +490,7 @@ class EnsembleService {
                             this.weightHistory.cnn.shift();
                         }
                         results.cnn = cnnResult;
+                        completedModels++;
                         console.log(`✅ CNN model trained successfully`);
                     } else {
                         console.warn(`⚠️ CNN: No training samples generated`);
@@ -479,9 +504,15 @@ class EnsembleService {
             
             if (canTrainTransformer) {
                 try {
+                    // Обновляем прогресс - начало обучения Transformer
+                    if (trainingStatusService) {
+                        const progress = Math.floor((completedModels / totalModels) * 100);
+                        trainingStatusService.updateProgress('ensemble', progress, figi.substring(0, 10));
+                    }
+                    
                     const transformerData = await this.prepareTransformerData(candles);
                     if (transformerData.features.length > 0) {
-                        const transformerResult = await this.trainModel('transformer', transformerData, epochs, batchSize);
+                        const transformerResult = await this.trainModel('transformer', transformerData, epochs, batchSize, trainingStatusService, totalModels, completedModels, figi);
                         this.performance.transformer = transformerResult;
                         this.lastUpdate.transformer = new Date().toISOString();
                         // Сохраняем историю весов для стабильности
@@ -494,6 +525,7 @@ class EnsembleService {
                             this.weightHistory.transformer.shift();
                         }
                         results.transformer = transformerResult;
+                        completedModels++;
                         console.log(`✅ Transformer model trained successfully`);
                     } else {
                         console.warn(`⚠️ Transformer: No training samples generated`);
@@ -503,6 +535,11 @@ class EnsembleService {
                 }
             } else {
                 console.warn(`⚠️ Skipping Transformer training: insufficient data (${candles.length} < ${minForTransformer})`);
+            }
+            
+            // Обновляем прогресс перед завершением
+            if (trainingStatusService) {
+                trainingStatusService.updateProgress('ensemble', 95, figi.substring(0, 10));
             }
             
             // Проверяем, что хотя бы одна модель обучилась
@@ -602,7 +639,7 @@ class EnsembleService {
     /**
      * Обучение отдельной модели
      */
-    async trainModel(modelType, data, epochs, batchSize) {
+    async trainModel(modelType, data, epochs, batchSize, trainingStatusService = null, totalModels = 1, modelIndex = 0, figi = null) {
         const { features, labels } = data;
         
         // Проверяем наличие данных
@@ -732,6 +769,15 @@ class EnsembleService {
             callbacks: {
                 onEpochEnd: async (epoch, logs) => {
                     this.broadcastProgress(modelType, epoch, logs);
+                    
+                    // Обновляем прогресс обучения в TrainingStatusService
+                    if (trainingStatusService) {
+                        // Прогресс модели = (modelIndex / totalModels) * 100 + (epoch / epochs) * (100 / totalModels)
+                        const modelProgress = (modelIndex / totalModels) * 100;
+                        const epochProgress = ((epoch + 1) / epochs) * (100 / totalModels);
+                        const totalProgress = Math.min(95, Math.floor(modelProgress + epochProgress));
+                        trainingStatusService.updateProgress('ensemble', totalProgress, figi?.substring(0, 10) || null);
+                    }
                     
                     // Сохраняем начальный loss для отслеживания прогресса
                     if (initialLoss === null) {
@@ -2124,8 +2170,15 @@ class EnsembleService {
      * Уведомление о прогрессе
      */
     broadcastProgress(modelType, epoch, logs) {
+        // Молча пропускаем, если WebSocketService не доступен
+        // Это нормальная ситуация, когда WebSocket не инициализирован или не используется
         try {
-            const WebSocketService = getService('WebSocketService');
+            // Используем безопасный метод получения сервиса
+            if (!ServiceManager) {
+                return;
+            }
+            
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                 WebSocketService.broadcast({
                     type: 'ensemble_training_progress',
@@ -2141,7 +2194,9 @@ class EnsembleService {
                 });
             }
         } catch (error) {
-            console.warn('⚠️ Failed to broadcast ensemble training progress:', error.message);
+            // Полностью подавляем все ошибки в этом методе
+            // Отсутствие WebSocketService - это нормальная ситуация
+            // Не логируем ошибки, чтобы не засорять консоль
         }
     }
 

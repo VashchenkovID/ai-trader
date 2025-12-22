@@ -308,15 +308,16 @@ class TradingRequestService {
 
             // Уведомляем через WebSocket (если доступен)
             try {
-                const WebSocketService = ServiceManager.getService('WebSocketService');
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                     WebSocketService.broadcast({
                         type: 'TRADING_REQUEST_CREATED',
-                        data: tradingRequest
+                        data: tradingRequest,
+                        timestamp: new Date().toISOString()
                     });
                 }
             } catch (wsError) {
-                console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
+                // Подавляем ошибки WebSocket - это не критично
             }
 
             // Отправляем заявку в Telegram для подтверждения (для всех заявок) - неблокирующе
@@ -586,7 +587,7 @@ class TradingRequestService {
 
             // Уведомляем через WebSocket (если доступен)
             try {
-                const WebSocketService = ServiceManager.getService('WebSocketService');
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                     WebSocketService.broadcast({
                         type: 'TRADING_REQUEST_CREATED',
@@ -689,7 +690,7 @@ class TradingRequestService {
 
             // Уведомляем через WebSocket (если доступен)
             try {
-                const WebSocketService = ServiceManager.getService('WebSocketService');
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                     WebSocketService.broadcast({
                         type: 'TRADING_REQUEST_APPROVED',
@@ -746,7 +747,7 @@ class TradingRequestService {
 
             // Уведомляем через WebSocket (если доступен)
             try {
-                const WebSocketService = ServiceManager.getService('WebSocketService');
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                     WebSocketService.broadcast({
                         type: 'TRADING_REQUEST_REJECTED',
@@ -808,7 +809,7 @@ class TradingRequestService {
 
             // Уведомляем через WebSocket (если доступен)
             try {
-                const WebSocketService = ServiceManager.getService('WebSocketService');
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                     WebSocketService.broadcast({
                         type: 'TRADING_REQUEST_EXECUTED',
@@ -1017,7 +1018,7 @@ class TradingRequestService {
 
             if (expiredRequests.length > 0) {
                 try {
-                    const WebSocketService = ServiceManager.getService('WebSocketService');
+                    const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                     if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                         WebSocketService.broadcast({
                             type: 'TRADING_REQUESTS_EXPIRED',
@@ -1149,7 +1150,7 @@ class TradingRequestService {
 
             // Уведомляем через WebSocket (если доступен)
             try {
-                const WebSocketService = ServiceManager.getService('WebSocketService');
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                     WebSocketService.broadcast({
                         type: 'TRADING_REQUESTS_CLEANED',
@@ -1285,7 +1286,7 @@ class TradingRequestService {
             
             // Уведомляем через WebSocket об обновлении портфеля
             try {
-                const WebSocketService = ServiceManager.getService('WebSocketService');
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                     const updatedPortfolio = await TradingEngine.getPortfolioValue();
                     WebSocketService.broadcast({
@@ -1589,7 +1590,7 @@ class TradingRequestService {
 
             // Уведомляем
             try {
-                const WebSocketService = ServiceManager.getService('WebSocketService');
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                     WebSocketService.broadcast({
                         type: 'TRADING_REQUEST_CANCELLED',

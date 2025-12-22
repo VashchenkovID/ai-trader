@@ -1,3 +1,5 @@
+import ServiceManager from './ServiceManager.js';
+
 /**
  * Сервис для хранения и управления статусом обучения
  * Обеспечивает персистентность данных о стадиях обучения
@@ -46,6 +48,25 @@ class TrainingStatusService {
     }
 
     /**
+     * Отправить обновление статуса через WebSocket
+     */
+    broadcastStatus() {
+        try {
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                WebSocketService.broadcast({
+                    type: 'training_status_update',
+                    data: this.getStatus(),
+                    timestamp: new Date().toISOString()
+                });
+            }
+        } catch (error) {
+            // Игнорируем ошибки WebSocket, чтобы не прерывать обучение
+            // console.warn('Failed to broadcast training status:', error.message);
+        }
+    }
+
+    /**
      * Обновить статус обучения для конкретной стадии
      */
     updateStatus(stage, data) {
@@ -55,6 +76,9 @@ class TrainingStatusService {
                 ...data
             };
             this.trainingStatus.lastUpdate = new Date().toISOString();
+            
+            // Автоматически отправляем обновление через WebSocket
+            this.broadcastStatus();
         }
     }
 

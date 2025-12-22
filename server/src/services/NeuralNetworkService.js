@@ -10,6 +10,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getService } from './GlobalServiceManager.js';
+import ServiceManager from './ServiceManager.js';
 
 class NeuralNetworkService {
     constructor() {
@@ -51,9 +52,9 @@ class NeuralNetworkService {
     getWebSocketService() {
         if (!this.webSocketService) {
             // Получаем уже инициализированный экземпляр из глобального ServiceManager
-            this.webSocketService = getService('WebSocketService');
+            this.webSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (!this.webSocketService) {
-                console.warn('⚠️ WebSocketService not available, skipping broadcast');
+                // Не логируем предупреждение - это нормальная ситуация, если WebSocket не инициализирован
                 return null;
             }
         }
@@ -3125,7 +3126,7 @@ class NeuralNetworkService {
                 // Отправляем торговый сигнал через WebSocket для BUY/SELL рекомендаций (только для новых)
                 if (created && savedRecommendation && (savedRecommendation.recommendation === 'BUY' || savedRecommendation.recommendation === 'SELL')) {
                     try {
-                        const WebSocketService = getService('WebSocketService');
+                        const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                         if (WebSocketService && typeof WebSocketService.broadcastTradingSignal === 'function') {
                             WebSocketService.broadcastTradingSignal({
                                 figi: savedRecommendation.figi,
@@ -3451,7 +3452,7 @@ class NeuralNetworkService {
                 // Отправляем торговый сигнал через WebSocket для BUY/SELL рекомендаций (только для новых)
                 if (created && savedRecommendation && (savedRecommendation.recommendation === 'BUY' || savedRecommendation.recommendation === 'SELL')) {
                     try {
-                        const WebSocketService = getService('WebSocketService');
+                        const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                         if (WebSocketService && typeof WebSocketService.broadcastTradingSignal === 'function') {
                             WebSocketService.broadcastTradingSignal({
                                 figi: savedRecommendation.figi,

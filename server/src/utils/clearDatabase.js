@@ -20,6 +20,12 @@ import PositionExit from '../models/PositionExit.js';
 import TriggeredSignal from '../models/TriggeredSignal.js';
 import TrainingState from '../models/TrainingState.js';
 import BacktestResult from '../models/BacktestResult.js';
+import MacroIndicator from '../models/MacroIndicator.js';
+import PortfolioRebalancing from '../models/PortfolioRebalancing.js';
+import InstrumentStats from '../models/InstrumentStats.js';
+import CorrelationCache from '../models/CorrelationCache.js';
+import PortfolioAnalysis from '../models/PortfolioAnalysis.js';
+import TrailingStop from '../models/TrailingStop.js';
 import { Op } from 'sequelize';
 
 /**
@@ -62,7 +68,20 @@ async function clearTestData() {
       });
       console.log(`   ✅ Удалено ${deletedExits} записей`);
       totalDeleted += deletedExits;
+      
+      // Очистка трейлинг-стопов для тестовых заявок
+      const deletedTrailingStops = await TrailingStop.destroy({
+        where: { tradingRequestId: { [Op.in]: testRequestIds } }
+      });
+      console.log(`   ✅ Удалено ${deletedTrailingStops} трейлинг-стопов`);
+      totalDeleted += deletedTrailingStops;
     }
+    
+    // 2.1. Трейлинг-стопы по FIGI
+    console.log('🛑 Очистка тестовых трейлинг-стопов...');
+    const deletedTrailingStopsByFigi = await TrailingStop.destroy({ where: testFigiConditions });
+    console.log(`   ✅ Удалено ${deletedTrailingStopsByFigi} записей`);
+    totalDeleted += deletedTrailingStopsByFigi;
 
     // 3. Торговые заявки
     console.log('🎯 Очистка тестовых торговых заявок...');
@@ -105,6 +124,33 @@ async function clearTestData() {
     const deletedPortfolioItems = await PortfolioItem.destroy({ where: testFigiConditions });
     console.log(`   ✅ Удалено ${deletedPortfolioItems} записей`);
     totalDeleted += deletedPortfolioItems;
+    
+    // 10. Статистика инструментов
+    console.log('📊 Очистка тестовой статистики инструментов...');
+    const deletedInstrumentStats = await InstrumentStats.destroy({ where: testFigiConditions });
+    console.log(`   ✅ Удалено ${deletedInstrumentStats} записей`);
+    totalDeleted += deletedInstrumentStats;
+    
+    // 11. Кеш корреляций (по figi1 или figi2)
+    console.log('🔗 Очистка тестового кеша корреляций...');
+    const deletedCorrelations = await CorrelationCache.destroy({
+      where: {
+        [Op.or]: [
+          { figi1: testFigiPattern },
+          { figi1: testPattern },
+          { figi2: testFigiPattern },
+          { figi2: testPattern }
+        ]
+      }
+    });
+    console.log(`   ✅ Удалено ${deletedCorrelations} записей`);
+    totalDeleted += deletedCorrelations;
+    
+    // 12. Анализ портфеля (может содержать ссылки на тестовые инструменты в метаданных)
+    // Очищаем только если в метаданных есть тестовые FIGI - это сложно проверить,
+    // поэтому пропускаем или очищаем все, если нужно
+    // console.log('📈 Очистка тестового анализа портфеля...');
+    // (пропускаем, так как сложно определить тестовые данные в JSONB)
 
     console.log(`\n✅ Очистка тестовых данных завершена! Всего удалено: ${totalDeleted} записей`);
     
@@ -135,6 +181,31 @@ async function clearDatabase() {
     console.log('📊 Очистка макроиндикаторов...');
     await MacroIndicator.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Макроиндикаторы очищены');
+    
+    // 1.2. История ребалансировок портфеля (независимая таблица)
+    console.log('🔄 Очистка истории ребалансировок портфеля...');
+    await PortfolioRebalancing.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    console.log('   ✅ История ребалансировок портфеля очищена');
+    
+    // 1.3. Статистика инструментов (независимая таблица)
+    console.log('📊 Очистка статистики инструментов...');
+    await InstrumentStats.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    console.log('   ✅ Статистика инструментов очищена');
+    
+    // 1.4. Кеш корреляций (независимая таблица)
+    console.log('🔗 Очистка кеша корреляций...');
+    await CorrelationCache.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    console.log('   ✅ Кеш корреляций очищен');
+    
+    // 1.5. Анализ портфеля (независимая таблица)
+    console.log('📈 Очистка анализа портфеля...');
+    await PortfolioAnalysis.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    console.log('   ✅ Анализ портфеля очищен');
+    
+    // 1.6. Трейлинг-стопы (зависят от TradingRequest)
+    console.log('🛑 Очистка трейлинг-стопов...');
+    await TrailingStop.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    console.log('   ✅ Трейлинг-стопы очищены');
 
     // 2. Рекомендации (зависят от TradingStrategy)
     console.log('💡 Очистка рекомендаций...');
@@ -150,6 +221,9 @@ async function clearDatabase() {
     console.log('📊 Очистка частичных закрытий позиций...');
     await PositionExit.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Частичные закрытия позиций очищены');
+    
+    // 4.1. Трейлинг-стопы уже очищены выше, но на всякий случай еще раз (если есть зависимости)
+    // (уже очищено выше в разделе 1.6)
 
     // 5. Торговые заявки (зависят от TradingStrategy)
     console.log('🎯 Очистка торговых заявок...');
@@ -181,6 +255,7 @@ async function clearDatabase() {
     await CachedTelegramSentiment.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     await CachedTradingHours.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     await CachedInstrument.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    // CorrelationCache уже очищен выше в разделе 1.4
     console.log('   ✅ Кешированные данные очищены');
 
     // 9. Компании
@@ -194,12 +269,22 @@ async function clearDatabase() {
     console.log('   ✅ Данные миграций очищены');
 
     // 11. Настройки (опционально - можно закомментировать, если нужно сохранить настройки)
+    // ВАЖНО: При очистке удаляются ВСЕ настройки, включая:
+    // - Настройки портфеля и торговли
+    // - Настройки планировщика
+    // - Настройки нейросети
+    // - Настройки формулы Келли (kelly_enabled, kelly_conservative_factor, kelly_min_trades, kelly_volatility_period)
+    // - Настройки макро-данных
+    // - Настройки масштабирования капитала
+    // - Настройки риск-менеджмента
+    // - И все остальные настройки
+    // Все настройки будут восстановлены при следующем запуске initDatabase через Settings.initializeDefaults() и initializeRecommendedSettings()
     console.log('⚙️  Очистка настроек...');
     await Settings.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
-    console.log('   ✅ Настройки очищены');
+    console.log('   ✅ Настройки очищены (включая настройки формулы Келли)');
 
     console.log('\n✅ База данных полностью очищена!');
-    console.log('💡 Для восстановления структуры запустите: npm run init-db');
+    console.log('💡 Для восстановления структуры и всех настроек (включая формулу Келли) запустите: npm run init-db');
     
     process.exit(0);
   } catch (err) {

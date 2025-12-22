@@ -4,6 +4,7 @@ import CacheService from './CacheService.js';
 import WebSocketService from './WebSocketService.js';
 import OptimizedAnalysisService from './OptimizedAnalysisService.js';
 import { getService } from './GlobalServiceManager.js';
+import ServiceManager from './ServiceManager.js';
 
 /**
  * Сервис Reinforcement Learning
@@ -200,7 +201,7 @@ class ReinforcementLearningService {
                 
                 // Уведомляем через WebSocket, что обучение пропущено
                 try {
-                    const WebSocketService = getService('WebSocketService');
+                    const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                     if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                         WebSocketService.broadcast({
                             type: 'reinforcement_learning_training_skipped',
@@ -543,11 +544,26 @@ class ReinforcementLearningService {
 
         // Выборка батча с приоритезированным сэмплингом
         const batch = this.sampleBatch();
+        
+        // Проверяем, что батч не пустой
+        if (!batch || batch.length === 0) {
+            console.warn('⚠️ RL: Empty batch sampled, skipping training step');
+            return;
+        }
+        
         const states = batch.map(exp => exp.state);
         const actions = batch.map(exp => exp.action);
         const rewards = batch.map(exp => exp.reward);
         const nextStates = batch.map(exp => exp.nextState);
         const dones = batch.map(exp => exp.done);
+
+        // Проверяем, что все данные валидны
+        if (states.length === 0 || nextStates.length === 0 || 
+            states.some(s => !s || !Array.isArray(s)) || 
+            nextStates.some(s => !s || !Array.isArray(s))) {
+            console.warn('⚠️ RL: Invalid batch data, skipping training step');
+            return;
+        }
 
         // Целевые значения
         const targets = await this.computeTargets(states, actions, rewards, nextStates, dones);
@@ -642,8 +658,24 @@ class ReinforcementLearningService {
      * Вычисление целевых Q-значений
      */
     async computeTargets(states, actions, rewards, nextStates, dones) {
+        // Проверяем входные данные
+        if (!states || !nextStates || states.length === 0 || nextStates.length === 0) {
+            throw new Error('computeTargets: Empty states or nextStates arrays');
+        }
+        
         const batchSize = states.length;
         const stateSize = this.config.stateSize;
+        
+        // Проверяем, что все состояния имеют правильный размер
+        if (nextStates.some(s => !Array.isArray(s) || s.length !== stateSize)) {
+            throw new Error(`computeTargets: Invalid nextStates format. Expected arrays of length ${stateSize}`);
+        }
+        
+        // Проверяем, что targetAgent инициализирован
+        if (!this.targetAgent) {
+            throw new Error('computeTargets: targetAgent is not initialized');
+        }
+        
         const nextStatesTensor = tf.tensor2d(nextStates, [batchSize, stateSize]);
         const nextQValues = this.targetAgent.predict(nextStatesTensor);
         const maxNextQValues = tf.max(nextQValues, 1);
@@ -750,7 +782,7 @@ class ReinforcementLearningService {
      */
     broadcastTrainingProgress(episode, totalEpisodes, result) {
         try {
-            const WebSocketServiceInstance = getService('WebSocketService');
+            const WebSocketServiceInstance = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketServiceInstance && typeof WebSocketServiceInstance.broadcast === 'function') {
                 WebSocketServiceInstance.broadcast({
                     type: 'rl_training_progress',
@@ -899,7 +931,7 @@ class ReinforcementLearningService {
             
             // Уведомить через WebSocket
             try {
-                const WebSocketServiceInstance = getService('WebSocketService');
+                const WebSocketServiceInstance = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketServiceInstance && typeof WebSocketServiceInstance.broadcast === 'function') {
                     WebSocketServiceInstance.broadcast({
                         type: 'rl_training_stopped',
@@ -962,7 +994,7 @@ class ReinforcementLearningService {
             
             // Уведомить через WebSocket
             try {
-                const WebSocketServiceInstance = getService('WebSocketService');
+                const WebSocketServiceInstance = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketServiceInstance && typeof WebSocketServiceInstance.broadcast === 'function') {
                     WebSocketServiceInstance.broadcast({
                         type: 'rl_agent_reset',
