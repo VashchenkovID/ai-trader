@@ -1,20 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Card } from 'primereact/card';
-import { DataTable } from 'primereact/datatable';
-import { Column } from 'primereact/column';
-import { Button } from 'primereact/button';
-import { Badge } from 'primereact/badge';
-import { Tag } from 'primereact/tag';
-import { Dialog } from 'primereact/dialog';
-import { InputTextarea } from 'primereact/inputtextarea';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card } from '../components/ui/Card/Card';
+import { Button } from '../components/ui/Button/Button';
+import { Badge } from '../components/ui/Badge/Badge';
+import { Modal } from '../components/ui/Modal/Modal';
+import { Input } from '../components/ui/Input/Input';
 import { Toast } from 'primereact/toast';
-import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { TabView, TabPanel } from 'primereact/tabview';
-import { Skeleton } from 'primereact/skeleton';
-import { Message } from 'primereact/message';
-import { Toolbar } from 'primereact/toolbar';
-import { SplitButton } from 'primereact/splitbutton';
-import { Dropdown } from 'primereact/dropdown';
+import { ConfirmDialog, confirmDialog } from '../components/ui/ConfirmDialog/ConfirmDialog';
+import { TabView, TabPanel } from '../components/ui/TabView/TabView';
+import { Skeleton } from '../components/ui/Skeleton/Skeleton';
+import { Alert } from '../components/ui/Alert/Alert';
+import { Toolbar } from '../components/ui/Toolbar/Toolbar';
+import { SplitButton } from '../components/ui/SplitButton/SplitButton';
+import { Select } from '../components/ui/Select/Select';
+import { DataTable, DataTableColumn } from '../components/ui/Table/DataTable';
 import { apiService } from '../services/apiService';
 import { translateRecommendation } from '../utils/recommendationTranslator';
 
@@ -171,54 +169,53 @@ const TradingRequestManager: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      PENDING: { severity: 'warning', label: 'Ожидает' },
-      APPROVED: { severity: 'info', label: 'Одобрена' },
-      REJECTED: { severity: 'danger', label: 'Отклонена' },
-      EXECUTED: { severity: 'success', label: 'Исполнена' },
-      CANCELLED: { severity: 'secondary', label: 'Отменена' },
-      EXPIRED: { severity: 'secondary', label: 'Истекла' }
+      PENDING: { variant: 'warning' as const, label: 'Ожидает' },
+      APPROVED: { variant: 'info' as const, label: 'Одобрена' },
+      REJECTED: { variant: 'error' as const, label: 'Отклонена' },
+      EXECUTED: { variant: 'success' as const, label: 'Исполнена' },
+      CANCELLED: { variant: 'neutral' as const, label: 'Отменена' },
+      EXPIRED: { variant: 'neutral' as const, label: 'Истекла' }
     };
     
-    const config = statusConfig[status as keyof typeof statusConfig] || { severity: 'secondary', label: status };
-    return <Badge value={config.label} severity={config.severity as any} />;
+    const config = statusConfig[status as keyof typeof statusConfig] || { variant: 'neutral' as const, label: status };
+    return <Badge variant={config.variant} size="md">{config.label}</Badge>;
   };
 
   const getPriorityBadge = (priority: string) => {
     const priorityConfig = {
-      LOW: { severity: 'secondary', label: 'Низкий' },
-      NORMAL: { severity: 'info', label: 'Обычный' },
-      HIGH: { severity: 'warning', label: 'Высокий' },
-      URGENT: { severity: 'danger', label: 'Срочный' }
+      LOW: { variant: 'neutral' as const, label: 'Низкий' },
+      NORMAL: { variant: 'info' as const, label: 'Обычный' },
+      HIGH: { variant: 'warning' as const, label: 'Высокий' },
+      URGENT: { variant: 'error' as const, label: 'Срочный' }
     };
     
-    const config = priorityConfig[priority as keyof typeof priorityConfig] || { severity: 'secondary', label: priority };
-    return <Badge value={config.label} severity={config.severity as any} />;
+    const config = priorityConfig[priority as keyof typeof priorityConfig] || { variant: 'neutral' as const, label: priority };
+    return <Badge variant={config.variant} size="sm">{config.label}</Badge>;
   };
 
   const getRiskBadge = (risk: string) => {
     const riskConfig = {
-      LOW: { severity: 'success', label: 'Низкий' },
-      MEDIUM: { severity: 'warning', label: 'Средний' },
-      HIGH: { severity: 'danger', label: 'Высокий' }
+      LOW: { variant: 'success' as const, label: 'Низкий' },
+      MEDIUM: { variant: 'warning' as const, label: 'Средний' },
+      HIGH: { variant: 'error' as const, label: 'Высокий' }
     };
     
-    const config = riskConfig[risk as keyof typeof riskConfig] || { severity: 'secondary', label: risk };
-    return <Badge value={config.label} severity={config.severity as any} />;
+    const config = riskConfig[risk as keyof typeof riskConfig] || { variant: 'neutral' as const, label: risk };
+    return <Badge variant={config.variant} size="sm">{config.label}</Badge>;
   };
 
   const getTradingModeBadge = (mode: string) => {
     const modeConfig = {
-      paper: { severity: 'info', label: 'Paper', icon: '📝' },
-      micro: { severity: 'warning', label: 'Micro', icon: '🔬' },
-      real: { severity: 'danger', label: 'Real', icon: '💰' }
+      paper: { variant: 'info' as const, label: 'Paper', icon: '📝' },
+      micro: { variant: 'warning' as const, label: 'Micro', icon: '🔬' },
+      real: { variant: 'error' as const, label: 'Real', icon: '💰' }
     };
     
-    const config = modeConfig[mode as keyof typeof modeConfig] || { severity: 'secondary', label: mode, icon: '❓' };
+    const config = modeConfig[mode as keyof typeof modeConfig] || { variant: 'neutral' as const, label: mode, icon: '❓' };
     return (
-      <Badge 
-        value={`${config.icon} ${config.label}`} 
-        severity={config.severity as any} 
-      />
+      <Badge variant={config.variant} size="sm">
+        {config.icon} {config.label}
+      </Badge>
     );
   };
 
@@ -227,26 +224,26 @@ const TradingRequestManager: React.FC = () => {
     const totalTrades = rowData.instrumentStats?.totalTrades;
     
     if (winRate === undefined || winRate === null) {
-      return <span className="text-500">—</span>;
+      return <span style={{ color: 'var(--color-text-secondary)' }}>—</span>;
     }
     
     const winRatePercent = (winRate * 100).toFixed(1);
     
     // Определяем цвет в зависимости от Win Rate
-    let severity: 'success' | 'warning' | 'danger' | 'info' = 'info';
+    let variant: 'success' | 'warning' | 'error' | 'info' = 'info';
     if (winRate >= 0.6) {
-      severity = 'success';
+      variant = 'success';
     } else if (winRate >= 0.5) {
-      severity = 'warning';
+      variant = 'warning';
     } else {
-      severity = 'danger';
+      variant = 'error';
     }
     
     return (
-      <div className="flex align-items-center gap-2">
-        <Tag value={`${winRatePercent}%`} severity={severity} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <Badge variant={variant} size="sm">{winRatePercent}%</Badge>
         {totalTrades !== undefined && totalTrades > 0 && (
-          <span className="text-xs text-500">({totalTrades})</span>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>({totalTrades})</span>
         )}
       </div>
     );
@@ -256,26 +253,24 @@ const TradingRequestManager: React.FC = () => {
     const kellyFraction = rowData.instrumentStats?.kellyFraction;
     
     if (kellyFraction === undefined || kellyFraction === null) {
-      return <span className="text-500">—</span>;
+      return <span style={{ color: 'var(--color-text-secondary)' }}>—</span>;
     }
     
     const kellyPercent = (kellyFraction * 100).toFixed(2);
     
     // Определяем цвет в зависимости от Kelly Fraction
-    let severity: 'success' | 'warning' | 'danger' | 'info' = 'info';
+    let variant: 'success' | 'warning' | 'error' | 'info' = 'info';
     if (kellyFraction >= 0.15) {
-      severity = 'success';
+      variant = 'success';
     } else if (kellyFraction >= 0.05) {
-      severity = 'warning';
+      variant = 'warning';
     } else if (kellyFraction > 0) {
-      severity = 'info';
+      variant = 'info';
     } else {
-      severity = 'danger';
+      variant = 'error';
     }
     
-    return (
-      <Tag value={`${kellyPercent}%`} severity={severity} />
-    );
+    return <Badge variant={variant} size="sm">{kellyPercent}%</Badge>;
   };
 
   // Функции сортировки для вложенных полей (PrimeReact не поддерживает dot notation)
@@ -470,7 +465,7 @@ const TradingRequestManager: React.FC = () => {
         icon={actions[0].icon}
         onClick={actions[0].command}
         model={actions.slice(1)}
-        size="small"
+        size="sm"
       />
     );
   };
@@ -529,96 +524,95 @@ const TradingRequestManager: React.FC = () => {
 
   const toolbarTemplate = () => {
     return (
-      <div className="flex justify-content-between align-items-center">
-        <div className="flex gap-2 align-items-center">
+      <>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <Button
-            label="Обновить"
-            icon="pi pi-refresh"
+            variant="ghost"
+            size="sm"
             onClick={loadData}
             loading={loading}
-            size="small"
-          />
+            icon="pi pi-refresh"
+          >
+            Обновить
+          </Button>
           
-          <Dropdown
+          <Select
             value={selectedMode}
             options={modeOptions}
-            onChange={(e: any) => setSelectedMode(e.value)}
+            onChange={(value) => setSelectedMode(value)}
             placeholder="Выберите режим"
-            className="w-10rem"
+            style={{ minWidth: '150px' }}
           />
 
-          <Dropdown
+          <Select
             value={actionFilter}
             options={[
               { label: 'Все', value: 'all' },
               { label: translateRecommendation('BUY'), value: 'BUY' },
               { label: translateRecommendation('SELL'), value: 'SELL' }
             ]}
-            onChange={(e: any) => setActionFilter(e.value)}
+            onChange={(value) => setActionFilter(value as 'all' | 'BUY' | 'SELL')}
             placeholder="Действие"
-            className="w-10rem"
+            style={{ minWidth: '150px' }}
           />
           
           <Button
-            label="Очистить завершенные"
-            icon="pi pi-trash"
+            variant="warning"
+            size="sm"
             onClick={async () => {
               await loadCleanupStats();
               setShowCleanupDialog(true);
             }}
-            size="small"
-            severity="warning"
-            outlined
-          />
+            icon="pi pi-trash"
+          >
+            Очистить завершенные
+          </Button>
           
           {selectedRequests.length > 0 && (
             <>
               <Button
-                label={`Одобрить (${selectedRequests.length})`}
-                icon="pi pi-check"
+                variant="success"
+                size="sm"
                 onClick={handleBulkApprove}
-                severity="success"
-                size="small"
-              />
+                icon="pi pi-check"
+              >
+                Одобрить ({selectedRequests.length})
+              </Button>
               <Button
-                label={`Отклонить (${selectedRequests.length})`}
-                icon="pi pi-times"
+                variant="error"
+                size="sm"
                 onClick={handleBulkReject}
-                severity="danger"
-                size="small"
-              />
+                icon="pi pi-times"
+              >
+                Отклонить ({selectedRequests.length})
+              </Button>
             </>
           )}
         </div>
         
-        <div className="flex gap-2">
-          {stats && (
-            <div className="flex gap-2">
-              <Badge value={`Всего: ${stats.total}`} severity="info" />
-              <Badge value={`Ожидают: ${stats.pending}`} severity="warning" />
-              <Badge value={`Исполнено: ${stats.executed}`} severity="success" />
-            </div>
-          )}
-          
-        </div>
-      </div>
+        {stats && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Badge variant="info" size="md">Всего: {stats.total}</Badge>
+            <Badge variant="warning" size="md">Ожидают: {stats.pending}</Badge>
+            <Badge variant="success" size="md">Исполнено: {stats.executed}</Badge>
+          </div>
+        )}
+      </>
     );
   };
 
   if (loading && requests.length === 0) {
     return (
-      <Card title="🎯 Торговые заявки" className="h-full">
-        <div className="grid">
+      <Card variant="default" className="h-full" header="🎯 Торговые заявки">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {[1, 2, 3, 4, 5].map((item) => (
-            <div key={item} className="col-12">
-              <div className="flex align-items-center gap-3 p-3">
-                <Skeleton width="3rem" height="3rem" />
-                <div className="flex-1">
-                  <Skeleton width="100%" height="1rem" className="mb-2" />
-                  <Skeleton width="75%" height="0.8rem" />
-                </div>
-                <Skeleton width="5rem" height="2rem" />
+            <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px' }}>
+              <Skeleton variant="rectangular" width="48px" height="48px" />
+              <div style={{ flex: 1 }}>
+                <Skeleton variant="text" width="100%" height="16px" style={{ marginBottom: '8px' }} />
+                <Skeleton variant="text" width="75%" height="12px" />
               </div>
+              <Skeleton variant="rectangular" width="80px" height="32px" />
             </div>
           ))}
         </div>
@@ -637,383 +631,191 @@ const TradingRequestManager: React.FC = () => {
       <Toast ref={toast} />
       <ConfirmDialog />
       
-      <Card title="🎯 Торговые заявки" className="h-full">
+      <Card variant="default" className="h-full" header="🎯 Торговые заявки">
         <TabView activeIndex={activeTab} onTabChange={(e) => setActiveTab(e.index)}>
           <TabPanel header="Все заявки">
-            <Toolbar start={toolbarTemplate} className="mb-3" />
+            <Toolbar start={toolbarTemplate()} className="mb-3" />
             
             {filteredRequests.length === 0 ? (
-              <Message severity="info" text="Нет торговых заявок" />
+              <Alert variant="info" title="Нет торговых заявок" />
             ) : (
               <DataTable
-                value={filteredRequests}
+                data={filteredRequests}
+                columns={getTableColumns()}
                 selection={selectedRequests}
-                onSelectionChange={(e: any) => setSelectedRequests(e.value)}
+                onSelectionChange={(selection) => setSelectedRequests(selection)}
                 selectionMode="multiple"
                 paginator
                 rows={10}
                 loading={loading}
                 sortMode="multiple"
                 removableSort
-                className="p-datatable-sm"
-              >
-                <Column selectionMode="multiple" headerStyle={{ width: '3rem' }} />
-                
-                <Column
-                  field="ticker"
-                  header="Инструмент"
-                  sortable
-                  body={(rowData) => (
-                    <div>
-                      <div className="font-bold">{rowData.ticker}</div>
-                      <div className="text-sm text-600">{rowData.name}</div>
-                    </div>
-                  )}
-                />
-                
-                <Column
-                  field="action"
-                  header="Действие"
-                  sortable
-                  body={(rowData) => (
-                    <Badge
-                      value={translateRecommendation(rowData.action)}
-                      severity={rowData.action === 'BUY' ? 'success' : 'danger'}
-                    />
-                  )}
-                />
-                
-                <Column
-                  field="quantity"
-                  header="Количество"
-                  sortable
-                />
-                
-                <Column
-                  field="estimatedAmount"
-                  header="Сумма"
-                  sortable
-                  body={(rowData) => formatCurrency(rowData.estimatedAmount)}
-                />
-                
-                <Column
-                  field="confidence"
-                  header="Уверенность"
-                  sortable
-                  body={(rowData) => `${(rowData.confidence * 100).toFixed(1)}%`}
-                />
-                
-                <Column
-                  field="status"
-                  header="Статус"
-                  sortable
-                  body={(rowData) => getStatusBadge(rowData.status)}
-                />
-                
-                <Column
-                  field="priority"
-                  header="Приоритет"
-                  sortable
-                  body={(rowData) => getPriorityBadge(rowData.priority)}
-                />
-                
-                <Column
-                  field="riskLevel"
-                  header="Риск"
-                  sortable
-                  body={(rowData) => getRiskBadge(rowData.riskLevel)}
-                />
-                
-                <Column
-                  field="tradingMode"
-                  header="Режим"
-                  sortable
-                  body={(rowData) => getTradingModeBadge(rowData.tradingMode)}
-                />
-                
-                <Column
-                  header="Win Rate"
-                  sortable
-                  sortFunction={(e) => {
-                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
-                      const aValue = winRateSortFunction(a);
-                      const bValue = winRateSortFunction(b);
-                      return e.order * (aValue - bValue);
-                    });
-                  }}
-                  body={getWinRateDisplay}
-                  style={{ minWidth: '100px' }}
-                />
-                
-                <Column
-                  header="Келли"
-                  sortable
-                  sortFunction={(e) => {
-                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
-                      const aValue = kellySortFunction(a);
-                      const bValue = kellySortFunction(b);
-                      return e.order * (aValue - bValue);
-                    });
-                  }}
-                  body={getKellyDisplay}
-                  style={{ minWidth: '90px' }}
-                />
-                
-                <Column
-                  field="createdAt"
-                  header="Создана"
-                  sortable
-                  body={(rowData) => formatDateTime(rowData.createdAt)}
-                />
-                
-                <Column
-                  header="Действия"
-                  body={actionBodyTemplate}
-                  headerStyle={{ width: '8rem' }}
-                />
-              </DataTable>
+                size="sm"
+                emptyMessage="Нет торговых заявок"
+              />
             )}
           </TabPanel>
           
           <TabPanel header="Ожидающие">
-            <Toolbar start={toolbarTemplate} className="mb-3" />
+            <Toolbar start={toolbarTemplate()} className="mb-3" />
             
             {filteredRequests.length === 0 ? (
-              <Message severity="info" text="Нет ожидающих заявок" />
+              <Alert variant="info" title="Нет ожидающих заявок" />
             ) : (
               <DataTable
-                value={filteredRequests}
+                data={filteredRequests}
+                columns={getPendingTableColumns()}
                 selection={selectedRequests}
-                onSelectionChange={(e: any) => setSelectedRequests(e.value)}
+                onSelectionChange={(selection) => setSelectedRequests(selection)}
                 selectionMode="multiple"
                 paginator
                 rows={10}
                 loading={loading}
-                className="p-datatable-sm"
-              >
-                <Column selectionMode="multiple" headerStyle={{ width: '3rem' }} />
-                <Column field="ticker" header="Инструмент" sortable />
-                <Column field="action" header="Действие" sortable body={(rowData) => (
-                  <Badge value={translateRecommendation(rowData.action)} severity={rowData.action === 'BUY' ? 'success' : 'danger'} />
-                )} />
-                <Column field="quantity" header="Количество" sortable />
-                <Column field="estimatedAmount" header="Сумма" sortable body={(rowData) => formatCurrency(rowData.estimatedAmount)} />
-                <Column field="confidence" header="Уверенность" sortable body={(rowData) => `${(rowData.confidence * 100).toFixed(1)}%`} />
-                <Column 
-                  header="Win Rate" 
-                  sortable 
-                  sortFunction={(e) => {
-                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
-                      const aValue = winRateSortFunction(a);
-                      const bValue = winRateSortFunction(b);
-                      return e.order * (aValue - bValue);
-                    });
-                  }}
-                  body={getWinRateDisplay} 
-                  style={{ minWidth: '100px' }} 
-                />
-                <Column 
-                  header="Келли" 
-                  sortable 
-                  sortFunction={(e) => {
-                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
-                      const aValue = kellySortFunction(a);
-                      const bValue = kellySortFunction(b);
-                      return e.order * (aValue - bValue);
-                    });
-                  }}
-                  body={getKellyDisplay} 
-                  style={{ minWidth: '90px' }} 
-                />
-                <Column field="priority" header="Приоритет" sortable body={(rowData) => getPriorityBadge(rowData.priority)} />
-                <Column header="Действия" body={actionBodyTemplate} />
-              </DataTable>
+                size="sm"
+                emptyMessage="Нет ожидающих заявок"
+              />
             )}
           </TabPanel>
           
           <TabPanel header="Одобренные">
-            <Toolbar start={toolbarTemplate} className="mb-3" />
+            <Toolbar start={toolbarTemplate()} className="mb-3" />
             
             {filteredRequests.length === 0 ? (
-              <Message severity="info" text="Нет одобренных заявок" />
+              <Alert variant="info" title="Нет одобренных заявок" />
             ) : (
               <DataTable
-                value={filteredRequests}
+                data={filteredRequests}
+                columns={getApprovedTableColumns()}
                 paginator
                 rows={10}
                 loading={loading}
-                className="p-datatable-sm"
-              >
-                <Column field="ticker" header="Инструмент" sortable />
-                <Column field="action" header="Действие" sortable body={(rowData) => (
-                  <Badge value={translateRecommendation(rowData.action)} severity={rowData.action === 'BUY' ? 'success' : 'danger'} />
-                )} />
-                <Column field="quantity" header="Количество" sortable />
-                <Column field="estimatedAmount" header="Сумма" sortable body={(rowData) => formatCurrency(rowData.estimatedAmount)} />
-                <Column 
-                  header="Win Rate" 
-                  sortable 
-                  sortFunction={(e) => {
-                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
-                      const aValue = winRateSortFunction(a);
-                      const bValue = winRateSortFunction(b);
-                      return e.order * (aValue - bValue);
-                    });
-                  }}
-                  body={getWinRateDisplay} 
-                  style={{ minWidth: '100px' }} 
-                />
-                <Column 
-                  header="Келли" 
-                  sortable 
-                  sortFunction={(e) => {
-                    e.data.sort((a: TradingRequest, b: TradingRequest) => {
-                      const aValue = kellySortFunction(a);
-                      const bValue = kellySortFunction(b);
-                      return e.order * (aValue - bValue);
-                    });
-                  }}
-                  body={getKellyDisplay} 
-                  style={{ minWidth: '90px' }} 
-                />
-                <Column field="approvedAt" header="Одобрена" sortable body={(rowData) => formatDateTime(rowData.approvedAt)} />
-                <Column header="Действия" body={actionBodyTemplate} />
-              </DataTable>
+                size="sm"
+                emptyMessage="Нет одобренных заявок"
+              />
             )}
           </TabPanel>
         </TabView>
       </Card>
 
       {/* Диалог одобрения */}
-      <Dialog
-        header="Одобрение заявки"
-        visible={showApprovalDialog}
-        onHide={() => setShowApprovalDialog(false)}
-        style={{ width: '450px' }}
+      <Modal
+        isOpen={showApprovalDialog}
+        onClose={() => setShowApprovalDialog(false)}
+        title="Одобрение заявки"
+        size="sm"
       >
         {currentRequest && (
           <div>
-            <div className="mb-3">
+            <div style={{ marginBottom: '16px' }}>
               <strong>{currentRequest.action} {currentRequest.ticker}</strong>
               <div>Количество: {currentRequest.quantity}</div>
               <div>Сумма: {formatCurrency(currentRequest.estimatedAmount)}</div>
               <div>Уверенность: {(currentRequest.confidence * 100).toFixed(1)}%</div>
             </div>
             
-            <div className="field">
-              <label htmlFor="comment">Комментарий (необязательно)</label>
-              <InputTextarea
+            <div style={{ marginBottom: '16px' }}>
+              <label htmlFor="comment" style={{ display: 'block', marginBottom: '8px' }}>Комментарий (необязательно)</label>
+              <Input
                 id="comment"
+                type="textarea"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={3}
-                className="w-full"
                 placeholder="Добавьте комментарий к одобрению..."
+                style={{ width: '100%' }}
               />
             </div>
             
-            <div className="flex justify-content-end gap-2 mt-3">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
               <Button
-                label="Отмена"
-                icon="pi pi-times"
+                variant="ghost"
+                size="md"
                 onClick={() => setShowApprovalDialog(false)}
-                severity="secondary"
-              />
+                icon="pi pi-times"
+              >
+                Отмена
+              </Button>
               <Button
-                label="Одобрить"
-                icon="pi pi-check"
+                variant="success"
+                size="md"
                 onClick={confirmApproval}
-                severity="success"
-              />
+                icon="pi pi-check"
+              >
+                Одобрить
+              </Button>
             </div>
           </div>
         )}
-      </Dialog>
+      </Modal>
 
       {/* Диалог отклонения */}
-      <Dialog
-        header="Отклонение заявки"
-        visible={showRejectionDialog}
-        onHide={() => setShowRejectionDialog(false)}
-        style={{ width: '450px' }}
+      <Modal
+        isOpen={showRejectionDialog}
+        onClose={() => setShowRejectionDialog(false)}
+        title="Отклонение заявки"
+        size="sm"
       >
         {currentRequest && (
           <div>
-            <div className="mb-3">
+            <div style={{ marginBottom: '16px' }}>
               <strong>{currentRequest.action} {currentRequest.ticker}</strong>
               <div>Количество: {currentRequest.quantity}</div>
               <div>Сумма: {formatCurrency(currentRequest.estimatedAmount)}</div>
             </div>
             
-            <div className="field">
-              <label htmlFor="reason">Причина отклонения *</label>
-              <InputTextarea
+            <div style={{ marginBottom: '16px' }}>
+              <label htmlFor="reason" style={{ display: 'block', marginBottom: '8px' }}>Причина отклонения *</label>
+              <Input
                 id="reason"
+                type="textarea"
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
                 rows={3}
-                className="w-full"
                 placeholder="Укажите причину отклонения заявки..."
                 required
+                style={{ width: '100%' }}
               />
             </div>
             
-            <div className="flex justify-content-end gap-2 mt-3">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
               <Button
-                label="Отмена"
-                icon="pi pi-times"
+                variant="ghost"
+                size="md"
                 onClick={() => setShowRejectionDialog(false)}
-                severity="secondary"
-              />
+                icon="pi pi-times"
+              >
+                Отмена
+              </Button>
               <Button
-                label="Отклонить"
-                icon="pi pi-ban"
+                variant="error"
+                size="md"
                 onClick={confirmRejection}
-                severity="danger"
+                icon="pi pi-ban"
                 disabled={!rejectionReason.trim()}
-              />
+              >
+                Отклонить
+              </Button>
             </div>
           </div>
         )}
-      </Dialog>
+      </Modal>
 
       {/* Диалог очистки завершенных заявок */}
-      <Dialog
-        header="🧹 Очистка завершенных заявок"
-        visible={showCleanupDialog}
-        style={{ width: '500px' }}
-        onHide={() => {
+      <Modal
+        isOpen={showCleanupDialog}
+        onClose={() => {
           setShowCleanupDialog(false);
           setCleanupOlderThanDays(null);
         }}
-        footer={
-          <div className="flex justify-content-end gap-2">
-            <Button
-              label="Отмена"
-              icon="pi pi-times"
-              onClick={() => {
-                setShowCleanupDialog(false);
-                setCleanupOlderThanDays(null);
-              }}
-              severity="secondary"
-            />
-            <Button
-              label="Очистить"
-              icon="pi pi-trash"
-              onClick={handleCleanup}
-              loading={cleaningUp}
-              severity="warning"
-            />
-          </div>
-        }
+        title="🧹 Очистка завершенных заявок"
+        size="md"
       >
         <div>
           {cleanupStats && (
-            <div className="mb-4">
-              <Message severity="info" className="mb-3">
+            <div style={{ marginBottom: '16px' }}>
+              <Alert variant="info" title="Статистика завершенных заявок">
                 <div>
-                  <strong>Статистика завершенных заявок:</strong>
-                  <ul className="mt-2 mb-0 pl-4">
+                  <ul style={{ marginTop: '8px', marginBottom: 0, paddingLeft: '16px' }}>
                     <li>Всего: <strong>{cleanupStats.total}</strong></li>
                     <li>Одобренных: <strong>{cleanupStats.approved}</strong></li>
                     <li>Отклоненных: <strong>{cleanupStats.rejected}</strong></li>
@@ -1025,41 +827,62 @@ const TradingRequestManager: React.FC = () => {
                     )}
                   </ul>
                 </div>
-              </Message>
+              </Alert>
             </div>
           )}
 
-          <div className="mb-3">
-            <label htmlFor="olderThanDays" className="block mb-2">
+          <div style={{ marginBottom: '16px' }}>
+            <label htmlFor="olderThanDays" style={{ display: 'block', marginBottom: '8px' }}>
               Удалять заявки старше (дней):
             </label>
-            <div className="flex gap-2 align-items-center">
-              <input
-                id="olderThanDays"
-                type="number"
-                min="0"
-                value={cleanupOlderThanDays || ''}
-                onChange={(e) => setCleanupOlderThanDays(e.target.value ? parseInt(e.target.value) : null)}
-                className="p-inputtext p-component w-full"
-                placeholder="Оставить пустым для удаления всех"
-              />
-            </div>
-            <small className="text-600">
+            <Input
+              id="olderThanDays"
+              type="number"
+              min="0"
+              value={cleanupOlderThanDays || ''}
+              onChange={(e) => setCleanupOlderThanDays(e.target.value ? parseInt(e.target.value) : null)}
+              placeholder="Оставить пустым для удаления всех"
+              style={{ width: '100%' }}
+            />
+            <small style={{ color: 'var(--color-text-secondary)', display: 'block', marginTop: '4px' }}>
               Оставьте пустым, чтобы удалить все завершенные заявки (одобренные и отклоненные)
             </small>
           </div>
 
-          <Message severity="warn" className="mt-3">
+          <Alert variant="warning" title="Внимание!">
             <div>
-              <strong>Внимание!</strong> Это действие нельзя отменить. Будут удалены все заявки со статусом:
-              <ul className="mt-2 mb-0 pl-4">
+              Это действие нельзя отменить. Будут удалены все заявки со статусом:
+              <ul style={{ marginTop: '8px', marginBottom: 0, paddingLeft: '16px' }}>
                 <li>APPROVED (Одобренные)</li>
                 <li>REJECTED (Отклоненные)</li>
               </ul>
             </div>
-          </Message>
+          </Alert>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={() => {
+                setShowCleanupDialog(false);
+                setCleanupOlderThanDays(null);
+              }}
+              icon="pi pi-times"
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="warning"
+              size="md"
+              onClick={handleCleanup}
+              loading={cleaningUp}
+              icon="pi pi-trash"
+            >
+              Очистить
+            </Button>
+          </div>
         </div>
-      </Dialog>
+      </Modal>
     </div>
   );
 };

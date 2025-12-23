@@ -1,0 +1,303 @@
+/* PortfolioSummaryCard Styles */
+
+.portfolio-summary-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.portfolio-summary-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  font-family: var(--font-family-primary);
+}
+
+.portfolio-summary-empty {
+  text-align: center;
+  padding: var(--spacing-8);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+/* Grid Layout */
+.portfolio-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+}
+
+@media (min-width: 768px) {
+  .portfolio-summary-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1200px) {
+  .portfolio-summary-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+/* Metric Cards */
+.portfolio-summary-metric {
+  position: relative;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-2);
+  transition: var(--transition-default);
+}
+
+/* Градиентные фоны для метрик (как в HeroMetricsCard) */
+.portfolio-summary-metric-total {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.5) 0%, rgba(37, 99, 235, 0.5) 50%, rgba(29, 78, 216, 0.5) 100%);
+}
+
+.portfolio-summary-metric-cash {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.5) 0%, rgba(5, 150, 105, 0.5) 50%, rgba(4, 120, 87, 0.5) 100%);
+}
+
+.portfolio-summary-metric-invested {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.5) 0%, rgba(8, 145, 178, 0.5) 50%, rgba(14, 116, 144, 0.5) 100%);
+}
+
+.portfolio-summary-metric-pnl {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.5) 0%, rgba(5, 150, 105, 0.5) 50%, rgba(4, 120, 87, 0.5) 100%);
+}
+
+.portfolio-summary-metric-pnl.portfolio-summary-metric-negative,
+.portfolio-summary-metric-pnl:has(.portfolio-summary-metric-error) {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.5) 0%, rgba(220, 38, 38, 0.5) 50%, rgba(185, 28, 28, 0.5) 100%);
+}
+
+.portfolio-summary-metric-day-change {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.5) 0%, rgba(139, 92, 246, 0.5) 50%, rgba(124, 58, 237, 0.5) 100%);
+}
+
+.portfolio-summary-metric-positions {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.5) 0%, rgba(139, 92, 246, 0.5) 50%, rgba(236, 72, 153, 0.5) 100%);
+}
+
+/* Glassmorphism эффект для контента метрики */
+.portfolio-summary-metric-content {
+  position: relative;
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  text-align: center;
+  transition: var(--transition-default);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  z-index: 1;
+}
+
+.portfolio-summary-metric:hover .portfolio-summary-metric-content {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Значения метрик */
+.portfolio-summary-metric-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-family: var(--font-family-mono);
+  margin-bottom: var(--spacing-2);
+  line-height: 1.2;
+}
+
+.portfolio-summary-metric-primary {
+  color: var(--color-accent-primary);
+}
+
+.portfolio-summary-metric-success {
+  color: var(--color-accent-success);
+}
+
+.portfolio-summary-metric-error {
+  color: var(--color-accent-error);
+}
+
+.portfolio-summary-metric-info {
+  color: var(--color-accent-info);
+}
+
+/* Лейблы и подтекст */
+.portfolio-summary-metric-label {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-2);
+  font-weight: 500;
+}
+
+.portfolio-summary-metric-subtext {
+  font-size: 0.8125rem;
+  color: var(--color-text-tertiary);
+  margin-top: var(--spacing-1);
+}
+
+/* LIVE Badge */
+.portfolio-summary-live-badge {
+  margin-top: var(--spacing-2);
+  display: inline-block;
+}
+
+/* Mismatch Warning */
+.portfolio-summary-mismatch {
+  font-size: 0.75rem;
+  color: var(--color-accent-warning);
+  margin-top: var(--spacing-1);
+}
+
+.portfolio-summary-mismatch-warning {
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-3);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-base);
+  color: var(--color-accent-warning);
+}
+
+.portfolio-summary-mismatch-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-2);
+}
+
+.portfolio-summary-mismatch-details {
+  font-size: 0.8125rem;
+  margin-bottom: var(--spacing-1);
+  color: var(--color-text-secondary);
+}
+
+.portfolio-summary-mismatch-diff {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  margin-top: var(--spacing-1);
+}
+
+/* Strategies Section */
+.portfolio-summary-strategies {
+  margin-top: var(--spacing-6);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--color-border-default);
+}
+
+.portfolio-summary-strategies-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-4);
+  font-family: var(--font-family-primary);
+}
+
+.portfolio-summary-strategies-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--spacing-4);
+}
+
+/* Strategy Card */
+.portfolio-summary-strategy-card {
+  background: var(--color-surface-default);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-base);
+  padding: var(--spacing-4);
+  transition: var(--transition-default);
+}
+
+.portfolio-summary-strategy-card:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.portfolio-summary-strategy-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-4);
+}
+
+.portfolio-summary-strategy-icon {
+  font-size: 1.5rem;
+}
+
+.portfolio-summary-strategy-allocated {
+  margin-bottom: var(--spacing-4);
+}
+
+.portfolio-summary-strategy-label {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-1);
+  display: block;
+}
+
+.portfolio-summary-strategy-amount {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-accent-primary);
+  font-family: var(--font-family-mono);
+}
+
+.portfolio-summary-strategy-progress {
+  margin-bottom: var(--spacing-4);
+}
+
+.portfolio-summary-strategy-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-2);
+}
+
+.portfolio-summary-strategy-percent {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.portfolio-summary-strategy-progress-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--spacing-2);
+}
+
+.portfolio-summary-strategy-text {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.portfolio-summary-strategy-positions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--spacing-3);
+  border-top: 1px solid var(--color-border-default);
+}
+
+.portfolio-summary-strategy-positions-count {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-accent-info);
+  font-family: var(--font-family-mono);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .portfolio-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-3);
+  }
+
+  .portfolio-summary-metric-value {
+    font-size: 1.5rem;
+  }
+
+  .portfolio-summary-strategies-grid {
+    grid-template-columns: 1fr;
+  }
+}

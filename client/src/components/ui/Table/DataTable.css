@@ -1,0 +1,35 @@
+.datatable-wrapper {
+  width: 100%;
+}
+
+.datatable-loading {
+  width: 100%;
+  padding: 20px;
+}
+
+.datatable-paginator {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-top: 1px solid var(--color-border-default);
+  background: var(--color-surface-default);
+}
+
+.datatable-paginator-info {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.datatable-paginator-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.datatable-paginator-page {
+  color: var(--color-text-primary);
+  font-size: 14px;
+  margin: 0 8px;
+}
+

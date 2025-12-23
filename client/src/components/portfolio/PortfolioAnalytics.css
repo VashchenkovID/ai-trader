@@ -1,0 +1,108 @@
+/* PortfolioAnalytics Styles */
+
+.portfolio-analytics-card {
+  height: 100%;
+}
+
+.portfolio-analytics-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  font-family: var(--font-family-primary);
+}
+
+.portfolio-analytics-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.portfolio-analytics-empty {
+  text-align: center;
+  padding: var(--spacing-8);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+}
+
+.portfolio-analytics-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.portfolio-analytics-label {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  margin-bottom: var(--spacing-2);
+}
+
+.portfolio-analytics-hint {
+  font-size: 0.8125rem;
+  color: var(--color-text-tertiary);
+  margin-top: var(--spacing-1);
+}
+
+.portfolio-analytics-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-4);
+  text-align: center;
+}
+
+.portfolio-analytics-metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.portfolio-analytics-metric-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-family: var(--font-family-mono);
+  line-height: 1.2;
+}
+
+.portfolio-analytics-metric-info {
+  color: var(--color-accent-info);
+}
+
+.portfolio-analytics-metric-success {
+  color: var(--color-accent-success);
+}
+
+.portfolio-analytics-metric-label {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.portfolio-analytics-top-positions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.portfolio-analytics-position {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-2) 0;
+}
+
+.portfolio-analytics-position-ticker {
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .portfolio-analytics-metrics {
+    gap: var(--spacing-3);
+  }
+
+  .portfolio-analytics-metric-value {
+    font-size: 1.25rem;
+  }
+}

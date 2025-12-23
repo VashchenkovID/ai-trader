@@ -3,7 +3,6 @@ import { Skeleton } from '../components/ui/Skeleton/Skeleton';
 import { Toast } from 'primereact/toast';
 import { ProgressBar } from '../components/ui/ProgressBar/ProgressBar';
 import { apiService } from '../services/apiService';
-import { ConfirmDialog } from 'primereact/confirmdialog';
 import { useWebSocketData } from '../components/WebSocketDataProvider';
 import TradingSummaryCard from '../components/dashboard/TradingSummaryCard';
 import CachedSignalsCard from '../components/dashboard/CachedSignalsCard';
@@ -390,7 +389,6 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
       </div>
 
       <Toast ref={toast} />
-      <ConfirmDialog />
     </div>
   );
 };

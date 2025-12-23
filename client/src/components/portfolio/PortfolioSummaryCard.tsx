@@ -1,9 +1,9 @@
 import React from 'react';
-import { Card } from 'primereact/card';
-import { Badge } from 'primereact/badge';
-import { Skeleton } from 'primereact/skeleton';
-import { ProgressBar } from 'primereact/progressbar';
-import { Tag } from 'primereact/tag';
+import { Card } from '../ui/Card/Card';
+import { Badge } from '../ui/Badge/Badge';
+import { Skeleton } from '../ui/Skeleton/Skeleton';
+import { ProgressBar } from '../ui/ProgressBar/ProgressBar';
+import './PortfolioSummaryCard.css';
 
 export interface PortfolioSummary {
   totalValue: number;
@@ -64,11 +64,14 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
 
   if (loading && !portfolio) {
     return (
-      <Card title="💼 Сводка портфеля" className={className}>
-        <div className="grid">
-          {[1, 2, 3, 4].map((item) => (
-            <div key={item} className="col-12 md:col-3">
-              <Skeleton width="100%" height="4rem" />
+      <Card 
+        header={<h3 className="portfolio-summary-title">💼 Сводка портфеля</h3>}
+        className={`portfolio-summary-card ${className}`}
+      >
+        <div className="portfolio-summary-grid">
+          {[1, 2, 3, 4, 5, 6].map((item) => (
+            <div key={item} className="portfolio-summary-metric">
+              <Skeleton variant="rectangular" height="120px" />
             </div>
           ))}
         </div>
@@ -78,8 +81,11 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
 
   if (!portfolio) {
     return (
-      <Card title="💼 Сводка портфеля" className={className}>
-        <div className="text-center p-4 text-600">
+      <Card 
+        header={<h3 className="portfolio-summary-title">💼 Сводка портфеля</h3>}
+        className={`portfolio-summary-card ${className}`}
+      >
+        <div className="portfolio-summary-empty">
           Нет данных о портфеле
         </div>
       </Card>
@@ -91,32 +97,37 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
   const totalValueMismatch = Math.abs(calculatedTotalValue - portfolio.totalValue) > 0.01;
 
   return (
-    <Card title="💼 Сводка портфеля" className={className}>
-      <div className="grid">
-        <div className="col-12 md:col-2">
-          <div className="text-center p-3 border-round surface-100">
-            <div className="text-2xl font-bold text-primary mb-2">
+    <Card 
+      header={<h3 className="portfolio-summary-title">💼 Сводка портфеля</h3>}
+      className={`portfolio-summary-card ${className}`}
+    >
+      <div className="portfolio-summary-grid">
+        <div className="portfolio-summary-metric portfolio-summary-metric-total">
+          <div className="portfolio-summary-metric-content">
+            <div className="portfolio-summary-metric-value portfolio-summary-metric-primary">
               {formatCurrency(portfolio.totalValue)}
             </div>
-            <div className="text-600">Общая стоимость</div>
+            <div className="portfolio-summary-metric-label">Общая стоимость</div>
             {isConnected && (
-              <Badge value="LIVE" severity="success" className="mt-2" />
+              <Badge variant="success" size="sm" className="portfolio-summary-live-badge">
+                LIVE
+              </Badge>
             )}
             {totalValueMismatch && (
-              <div className="text-xs text-orange-500 mt-1">
+              <div className="portfolio-summary-mismatch">
                 ⚠️ Несоответствие
               </div>
             )}
           </div>
         </div>
         
-        <div className="col-12 md:col-2">
-          <div className="text-center p-3 border-round surface-100">
-            <div className="text-2xl font-bold text-green-600 mb-2">
+        <div className="portfolio-summary-metric portfolio-summary-metric-cash">
+          <div className="portfolio-summary-metric-content">
+            <div className="portfolio-summary-metric-value portfolio-summary-metric-success">
               {formatCurrency(portfolio.cash)}
             </div>
-            <div className="text-600">Наличные</div>
-            <div className="text-sm text-600 mt-1">
+            <div className="portfolio-summary-metric-label">Наличные</div>
+            <div className="portfolio-summary-metric-subtext">
               {portfolio.totalValue > 0 
                 ? `${((portfolio.cash / portfolio.totalValue) * 100).toFixed(1)}% от портфеля`
                 : '—'
@@ -125,13 +136,13 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
           </div>
         </div>
         
-        <div className="col-12 md:col-2">
-          <div className="text-center p-3 border-round surface-100">
-            <div className="text-2xl font-bold text-blue-600 mb-2">
+        <div className="portfolio-summary-metric portfolio-summary-metric-invested">
+          <div className="portfolio-summary-metric-content">
+            <div className="portfolio-summary-metric-value portfolio-summary-metric-info">
               {formatCurrency(portfolio.investedAmount)}
             </div>
-            <div className="text-600">В акциях</div>
-            <div className="text-sm text-600 mt-1">
+            <div className="portfolio-summary-metric-label">В акциях</div>
+            <div className="portfolio-summary-metric-subtext">
               {portfolio.totalValue > 0 
                 ? `${((portfolio.investedAmount / portfolio.totalValue) * 100).toFixed(1)}% от портфеля`
                 : '—'
@@ -140,45 +151,45 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
           </div>
         </div>
         
-        <div className="col-12 md:col-2">
-          <div className="text-center p-3 border-round surface-100">
-            <div className={`text-2xl font-bold mb-2 ${
-              portfolio.totalPnL >= 0 ? 'text-green-500' : 'text-red-500'
+        <div className="portfolio-summary-metric portfolio-summary-metric-pnl">
+          <div className="portfolio-summary-metric-content">
+            <div className={`portfolio-summary-metric-value ${
+              portfolio.totalPnL >= 0 ? 'portfolio-summary-metric-success' : 'portfolio-summary-metric-error'
             }`}>
               {formatCurrency(portfolio.totalPnL)}
             </div>
-            <div className="text-600">Прибыль/убыток</div>
-            <div className={`text-sm ${
-              portfolio.totalPnLPercent >= 0 ? 'text-green-500' : 'text-red-500'
+            <div className="portfolio-summary-metric-label">Прибыль/убыток</div>
+            <div className={`portfolio-summary-metric-subtext ${
+              portfolio.totalPnLPercent >= 0 ? 'portfolio-summary-metric-success' : 'portfolio-summary-metric-error'
             }`}>
               {formatPercent(portfolio.totalPnLPercent)}
             </div>
           </div>
         </div>
         
-        <div className="col-12 md:col-2">
-          <div className="text-center p-3 border-round surface-100">
-            <div className={`text-2xl font-bold mb-2 ${
-              portfolio.dayChange >= 0 ? 'text-green-500' : 'text-red-500'
+        <div className="portfolio-summary-metric portfolio-summary-metric-day-change">
+          <div className="portfolio-summary-metric-content">
+            <div className={`portfolio-summary-metric-value ${
+              portfolio.dayChange >= 0 ? 'portfolio-summary-metric-success' : 'portfolio-summary-metric-error'
             }`}>
               {formatCurrency(portfolio.dayChange)}
             </div>
-            <div className="text-600">Изменение за день</div>
-            <div className={`text-sm ${
-              portfolio.dayChangePercent >= 0 ? 'text-green-500' : 'text-red-500'
+            <div className="portfolio-summary-metric-label">Изменение за день</div>
+            <div className={`portfolio-summary-metric-subtext ${
+              portfolio.dayChangePercent >= 0 ? 'portfolio-summary-metric-success' : 'portfolio-summary-metric-error'
             }`}>
               {formatPercent(portfolio.dayChangePercent)}
             </div>
           </div>
         </div>
         
-        <div className="col-12 md:col-2">
-          <div className="text-center p-3 border-round surface-100">
-            <div className="text-2xl font-bold text-blue-500 mb-2">
+        <div className="portfolio-summary-metric portfolio-summary-metric-positions">
+          <div className="portfolio-summary-metric-content">
+            <div className="portfolio-summary-metric-value portfolio-summary-metric-info">
               {portfolio.positionsCount}
             </div>
-            <div className="text-600">Позиций</div>
-            <div className="text-sm text-600 mt-1">
+            <div className="portfolio-summary-metric-label">Позиций</div>
+            <div className="portfolio-summary-metric-subtext">
               Активных позиций
             </div>
           </div>
@@ -187,9 +198,9 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
       
       {/* Карточки распределения по стратегиям */}
       {Array.isArray(strategies) && strategies.length > 0 && (
-        <div className="mt-4 pt-4 border-top-1 surface-border">
-          <div className="text-lg font-semibold mb-3">💰 Распределение по стратегиям</div>
-          <div className="grid">
+        <div className="portfolio-summary-strategies">
+          <div className="portfolio-summary-strategies-title">💰 Распределение по стратегиям</div>
+          <div className="portfolio-summary-strategies-grid">
             {strategies.map((strategy) => {
               const allocation = strategy.allocation;
               
@@ -213,16 +224,16 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
                 : 0;
               const positionsCount = allocation.positionsCount || 0;
 
-              const getStrategyColor = (type: string) => {
+              const getStrategyVariant = (type: string): 'info' | 'warning' | 'error' | 'neutral' => {
                 switch (type) {
                   case 'conservative':
                     return 'info';
                   case 'moderate':
                     return 'warning';
                   case 'aggressive':
-                    return 'danger';
+                    return 'error';
                   default:
-                    return 'secondary';
+                    return 'neutral';
                 }
               };
 
@@ -239,56 +250,55 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
                 }
               };
 
+              const getProgressVariant = (percent: number): 'success' | 'warning' | 'error' => {
+                if (percent > 90) return 'error';
+                if (percent > 70) return 'warning';
+                return 'success';
+              };
+
               return (
-                <div key={strategy.id} className="col-12 md:col-4">
-                  <div className="p-3 border-round surface-100 h-full">
-                    <div className="flex align-items-center justify-content-between mb-3">
-                      <div className="flex align-items-center gap-2">
-                        <span className="text-xl">{getStrategyIcon(strategy.type)}</span>
-                        <Tag 
-                          value={strategy.name} 
-                          severity={getStrategyColor(strategy.type) as any}
-                        />
-                      </div>
-                    </div>
+                <div key={strategy.id} className="portfolio-summary-strategy-card">
+                  <div className="portfolio-summary-strategy-header">
+                    <div className="portfolio-summary-strategy-icon">{getStrategyIcon(strategy.type)}</div>
+                    <Badge variant={getStrategyVariant(strategy.type)} size="sm">
+                      {strategy.name}
+                    </Badge>
+                  </div>
 
-                    <div className="mb-3">
-                      <div className="text-sm text-600 mb-1">Выделено</div>
-                      <div className="text-lg font-bold text-primary">
-                        {formatCurrency(allocatedAmount)}
-                      </div>
+                  <div className="portfolio-summary-strategy-allocated">
+                    <div className="portfolio-summary-strategy-label">Выделено</div>
+                    <div className="portfolio-summary-strategy-amount">
+                      {formatCurrency(allocatedAmount)}
                     </div>
+                  </div>
 
-                    <div className="mb-3">
-                      <div className="flex justify-content-between mb-1">
-                        <span className="text-sm text-600">Использовано</span>
-                        <span className="text-sm font-semibold">
-                          {usedPercent.toFixed(1)}%
-                        </span>
-                      </div>
-                      <ProgressBar 
-                        value={usedPercent} 
-                        showValue={false}
-                        color={usedPercent > 90 ? '#ef4444' : usedPercent > 70 ? '#f59e0b' : '#22c55e'}
-                      />
-                      <div className="flex justify-content-between mt-1">
-                        <span className="text-sm text-600">
-                          {formatCurrency(usedAmount)}
-                        </span>
-                        <span className="text-sm text-600">
-                          Доступно: {formatCurrency(availableAmount)}
-                        </span>
-                      </div>
+                  <div className="portfolio-summary-strategy-progress">
+                    <div className="portfolio-summary-strategy-progress-header">
+                      <span className="portfolio-summary-strategy-label">Использовано</span>
+                      <span className="portfolio-summary-strategy-percent">
+                        {usedPercent.toFixed(1)}%
+                      </span>
                     </div>
+                    <ProgressBar 
+                      value={usedPercent} 
+                      variant={getProgressVariant(usedPercent)}
+                      size="sm"
+                    />
+                    <div className="portfolio-summary-strategy-progress-footer">
+                      <span className="portfolio-summary-strategy-text">
+                        {formatCurrency(usedAmount)}
+                      </span>
+                      <span className="portfolio-summary-strategy-text">
+                        Доступно: {formatCurrency(availableAmount)}
+                      </span>
+                    </div>
+                  </div>
 
-                    <div className="pt-2 border-top-1 surface-border">
-                      <div className="flex justify-content-between align-items-center">
-                        <span className="text-sm text-600">Позиций:</span>
-                        <span className="text-base font-bold text-blue-500">
-                          {positionsCount}
-                        </span>
-                      </div>
-                    </div>
+                  <div className="portfolio-summary-strategy-positions">
+                    <span className="portfolio-summary-strategy-label">Позиций:</span>
+                    <span className="portfolio-summary-strategy-positions-count">
+                      {positionsCount}
+                    </span>
                   </div>
                 </div>
               );
@@ -299,18 +309,18 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
       
       {/* Проверка подсчета */}
       {totalValueMismatch && (
-        <div className="mt-3 p-2 border-round surface-200">
-          <div className="text-sm text-orange-600">
+        <div className="portfolio-summary-mismatch-warning">
+          <div className="portfolio-summary-mismatch-title">
             <strong>⚠️ Обнаружено несоответствие в подсчете:</strong>
-            <div className="mt-1">
-              Наличные: {formatCurrency(portfolio.cash)} + В акциях: {formatCurrency(portfolio.investedAmount)} = {formatCurrency(calculatedTotalValue)}
-            </div>
-            <div>
-              Общая стоимость (из API): {formatCurrency(portfolio.totalValue)}
-            </div>
-            <div className="text-xs text-600 mt-1">
-              Разница: {formatCurrency(Math.abs(calculatedTotalValue - portfolio.totalValue))}
-            </div>
+          </div>
+          <div className="portfolio-summary-mismatch-details">
+            Наличные: {formatCurrency(portfolio.cash)} + В акциях: {formatCurrency(portfolio.investedAmount)} = {formatCurrency(calculatedTotalValue)}
+          </div>
+          <div className="portfolio-summary-mismatch-details">
+            Общая стоимость (из API): {formatCurrency(portfolio.totalValue)}
+          </div>
+          <div className="portfolio-summary-mismatch-diff">
+            Разница: {formatCurrency(Math.abs(calculatedTotalValue - portfolio.totalValue))}
           </div>
         </div>
       )}

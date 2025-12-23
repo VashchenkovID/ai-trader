@@ -161,6 +161,7 @@ interface WebSocketDataContextType {
   // Состояние подключения
   isConnected: boolean;
   error: string | null;
+  socket: WebSocket | null;
   
   // Данные
   systemStatus: SystemStatus | null;
@@ -181,6 +182,8 @@ interface WebSocketDataContextType {
   reconnect: () => void;
   clearAlerts: () => void;
   clearTradingSignals: () => void;
+  subscribe: (channel: string, type?: string) => void;
+  unsubscribe: (channel: string, type?: string) => void;
 }
 
 const WebSocketDataContext = createContext<WebSocketDataContextType | undefined>(undefined);
@@ -596,9 +599,33 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
     setTradingSignals([]);
   };
 
+  // Методы для подписки/отписки
+  const subscribe = (channel: string, type?: string) => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        action: 'subscribe',
+        channel,
+        type: type || 'default'
+      }));
+      console.log(`📡 Subscribed to channel: ${channel}`);
+    }
+  };
+
+  const unsubscribe = (channel: string, type?: string) => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        action: 'unsubscribe',
+        channel,
+        type: type || 'default'
+      }));
+      console.log(`📡 Unsubscribed from channel: ${channel}`);
+    }
+  };
+
   const contextValue: WebSocketDataContextType = {
     isConnected,
     error,
+    socket,
     systemStatus,
     cacheStatus,
     systemResources,
@@ -612,7 +639,9 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
     trainingProgress,
     reconnect,
     clearAlerts,
-    clearTradingSignals
+    clearTradingSignals,
+    subscribe,
+    unsubscribe
   };
 
   return (

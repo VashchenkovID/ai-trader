@@ -1,0 +1,111 @@
+/* StrategyPositionsTable Styles */
+
+.strategy-positions-card {
+  margin-bottom: var(--spacing-4);
+}
+
+.strategy-positions-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+}
+
+.strategy-positions-count {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+.strategy-positions-loading {
+  padding: var(--spacing-4);
+}
+
+.strategy-positions-table {
+  width: 100%;
+}
+
+/* Ticker cell */
+.strategy-positions-ticker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  cursor: pointer;
+  transition: color var(--transition-colors);
+}
+
+.strategy-positions-ticker:hover {
+  color: var(--color-accent-primary);
+}
+
+.strategy-positions-ticker-name {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-size: 0.9375rem;
+}
+
+.strategy-positions-ticker-symbol {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+/* Cell styles */
+.strategy-positions-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  text-align: left;
+}
+
+.strategy-positions-value {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-size: 0.9375rem;
+  font-family: var(--font-family-mono);
+}
+
+.strategy-positions-subtext {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+/* Positive/Negative colors */
+.strategy-positions-positive {
+  color: var(--color-accent-success) !important;
+}
+
+.strategy-positions-negative {
+  color: var(--color-accent-error) !important;
+}
+
+/* Prediction details */
+.strategy-positions-prediction-details {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-1);
+  line-height: 1.4;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .strategy-positions-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .strategy-positions-ticker-name {
+    font-size: 0.875rem;
+  }
+
+  .strategy-positions-ticker-symbol {
+    font-size: 0.75rem;
+  }
+
+  .strategy-positions-value {
+    font-size: 0.875rem;
+  }
+
+  .strategy-positions-subtext {
+    font-size: 0.75rem;
+  }
+}

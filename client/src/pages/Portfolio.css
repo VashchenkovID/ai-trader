@@ -1,0 +1,14 @@
+/* Portfolio Page Styles */
+
+.portfolio-page {
+  padding: var(--spacing-4);
+  min-height: 100vh;
+  background: var(--color-bg-primary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .portfolio-page {
+    padding: var(--spacing-3);
+  }
+}

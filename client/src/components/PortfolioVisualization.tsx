@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Message } from 'primereact/message';
+import { Alert } from './ui/Alert/Alert';
 import { Toast } from 'primereact/toast';
+import './PortfolioVisualization.css';
 import { apiService } from '../services/apiService';
 import { useWebSocketData } from './WebSocketDataProvider';
 import useWebSocket from '../hooks/useWebSocket';
@@ -588,22 +589,25 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
       <Toast ref={toast} />
       
       {/* Сводка портфеля */}
-      <PortfolioSummaryCard
-        portfolio={portfolio}
-        loading={loading}
-        isConnected={isConnected}
-        className="mb-4"
-        strategies={strategies}
-      />
+      <div className="portfolio-visualization-section">
+        <PortfolioSummaryCard
+          portfolio={portfolio}
+          loading={loading}
+          isConnected={isConnected}
+          strategies={strategies}
+        />
+      </div>
 
       {error && (
-        <div className="mb-3">
-          <Message severity="error" text={error} className="w-full" />
+        <div className="portfolio-visualization-error">
+          <Alert variant="error" size="md">
+            {error}
+          </Alert>
         </div>
       )}
 
       {/* Карточка Позиции */}
-      <div className="mb-4">
+      <div className="portfolio-visualization-section">
         <PortfolioPositionsTable
           positions={positions}
           loading={loading}
@@ -617,34 +621,36 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
 
       {/* Таблицы по стратегиям */}
       {strategies.length > 0 && (
-        <div className="mb-4">
-          <h2 className="text-2xl font-bold mb-3">Позиции по стратегиям</h2>
-          {strategies.map((strategy) => {
-            const strategyPositionsList = strategyPositions[strategy.id] || [];
-            return (
-              <div key={strategy.id} className="mb-4">
-                <StrategyPositionsTable
-                  strategyId={strategy.id}
-                  strategyName={strategy.name}
-                  strategyType={strategy.type}
-                  positions={strategyPositionsList}
-                  loading={loading}
-                />
-              </div>
-            );
-          })}
+        <div className="portfolio-visualization-section">
+          <h2 className="portfolio-visualization-strategies-title">Позиции по стратегиям</h2>
+          <div className="portfolio-visualization-strategies">
+            {strategies.map((strategy) => {
+              const strategyPositionsList = strategyPositions[strategy.id] || [];
+              return (
+                <div key={strategy.id} className="portfolio-visualization-strategy-item">
+                  <StrategyPositionsTable
+                    strategyId={strategy.id}
+                    strategyName={strategy.name}
+                    strategyType={strategy.type}
+                    positions={strategyPositionsList}
+                    loading={loading}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {/* Карточка Аналитика */}
-      <div className="grid">
-        <div className="col-12 lg:col-8">
+      <div className="portfolio-visualization-analytics">
+        <div className="portfolio-visualization-charts">
           <PortfolioCharts
             positions={positions}
             portfolio={portfolio}
           />
         </div>
-        <div className="col-12 lg:col-4">
+        <div className="portfolio-visualization-stats">
           <PortfolioAnalytics
             portfolio={portfolio}
             positions={positions}

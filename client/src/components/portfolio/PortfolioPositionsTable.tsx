@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from 'primereact/card';
-import { DataTable } from 'primereact/datatable';
-import { Column } from 'primereact/column';
-import { Button } from 'primereact/button';
-import { Tag } from 'primereact/tag';
-import { Message } from 'primereact/message';
+import { Card } from '../ui/Card/Card';
+import { Table, TableColumn } from '../ui/Table/Table';
+import { Button } from '../ui/Button/Button';
+import { Badge } from '../ui/Badge/Badge';
+import { Alert } from '../ui/Alert/Alert';
 import { Toast } from 'primereact/toast';
-import { Dialog } from 'primereact/dialog';
-import { InputNumber } from 'primereact/inputnumber';
+import { Modal } from '../ui/Modal/Modal';
+import { InputNumber } from '../ui/InputNumber/InputNumber';
 import { translateSector } from '../../utils/sectorTranslator';
 import { translateRecommendation } from '../../utils/recommendationTranslator';
 import apiService from '../../services/apiService';
+import './PortfolioPositionsTable.css';
 
 export interface Position {
   figi: string;
@@ -83,18 +83,20 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
   };
 
   const predictionTemplate = (rowData: Position) => {
-    if (!rowData.prediction) return <div className="text-left">—</div>;
+    if (!rowData.prediction) return <div className="portfolio-positions-text-left">—</div>;
 
     const { recommendation, score, confidence } = rowData.prediction;
-    const severity =
+    const variant: 'success' | 'error' | 'info' =
       recommendation === 'BUY' ? 'success' :
-      recommendation === 'SELL' ? 'danger' : 'info';
+      recommendation === 'SELL' ? 'error' : 'info';
 
     return (
-      <div className="text-left">
-        <Tag value={translateRecommendation(recommendation)} severity={severity as any} />
+      <div className="portfolio-positions-text-left">
+        <Badge variant={variant} size="sm">
+          {translateRecommendation(recommendation)}
+        </Badge>
         {(score !== undefined || confidence !== undefined) && (
-          <div className="text-sm text-600 mt-1">
+          <div className="portfolio-positions-prediction-details">
             {score !== undefined ? `Score: ${(score * 100).toFixed(1)}%` : ''}
             {score !== undefined && confidence !== undefined ? ' · ' : ''}
             {confidence !== undefined ? `Conf: ${(confidence * 100).toFixed(1)}%` : ''}
@@ -116,13 +118,13 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
     
     return (
       <div 
-        className="flex align-items-center gap-2 cursor-pointer hover:text-primary transition-colors"
+        className="portfolio-positions-ticker"
         onClick={() => navigate(`/stock/${rowData.figi}`)}
         title="Нажмите для просмотра детальной информации"
       >
         <div>
-          <div className="font-medium">{name}</div>
-          <div className="text-sm text-600">{ticker}</div>
+          <div className="portfolio-positions-ticker-name">{name}</div>
+          <div className="portfolio-positions-ticker-symbol">{ticker}</div>
         </div>
       </div>
     );
@@ -134,9 +136,9 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
       : 0;
     
     return (
-      <div className="text-left">
-        <div className="font-medium">{quantity > 0 ? quantity.toLocaleString('ru-RU') : '—'}</div>
-        <div className="text-sm text-600">шт.</div>
+      <div className="portfolio-positions-text-left">
+        <div className="portfolio-positions-value">{quantity > 0 ? quantity.toLocaleString('ru-RU') : '—'}</div>
+        <div className="portfolio-positions-subtext">шт.</div>
       </div>
     );
   };
@@ -178,7 +180,7 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
       : 0;
     
     if (averagePrice === 0 || currentPrice === 0) {
-      return <div className="text-left">—</div>;
+      return <div className="portfolio-positions-text-left">—</div>;
     }
     
     const difference = currentPrice - averagePrice;
@@ -186,11 +188,11 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
     const isPositive = difference >= 0;
     
     return (
-      <div className="text-left">
-        <div className={`font-medium ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+      <div className="portfolio-positions-text-left">
+        <div className={`portfolio-positions-value ${isPositive ? 'portfolio-positions-positive' : 'portfolio-positions-negative'}`}>
           {formatCurrency(difference, rowData.currency)}
         </div>
-        <div className={`text-sm ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+        <div className={`portfolio-positions-subtext ${isPositive ? 'portfolio-positions-positive' : 'portfolio-positions-negative'}`}>
           {formatPercent(differencePercent)}
         </div>
       </div>
@@ -206,21 +208,21 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
       : 0;
     
     return (
-      <div className="text-left">
-        <div className="font-medium">
+      <div className="portfolio-positions-text-left">
+        <div className="portfolio-positions-value">
           {marketValue > 0 ? formatCurrency(marketValue) : '—'}
         </div>
-        <div className="text-sm text-600">{weight > 0 ? `${weight.toFixed(1)}%` : '—'}</div>
+        <div className="portfolio-positions-subtext">{weight > 0 ? `${weight.toFixed(1)}%` : '—'}</div>
       </div>
     );
   };
 
   const pnlTemplate = (rowData: Position) => (
-    <div className="text-left">
-      <div className={`font-medium ${rowData.unrealizedPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+    <div className="portfolio-positions-text-left">
+      <div className={`portfolio-positions-value ${rowData.unrealizedPnL >= 0 ? 'portfolio-positions-positive' : 'portfolio-positions-negative'}`}>
         {formatCurrency(rowData.unrealizedPnL)}
       </div>
-      <div className={`text-sm ${rowData.unrealizedPnLPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+      <div className={`portfolio-positions-subtext ${rowData.unrealizedPnLPercent >= 0 ? 'portfolio-positions-positive' : 'portfolio-positions-negative'}`}>
         {formatPercent(rowData.unrealizedPnLPercent)}
       </div>
     </div>
@@ -228,26 +230,27 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
 
   const sectorTemplate = (rowData: Position) => {
     const translatedSector = translateSector(rowData.sector);
-    return <Tag value={translatedSector} severity="info" />;
+    return <Badge variant="info" size="sm">{translatedSector}</Badge>;
   };
 
   const strategyTemplate = (rowData: Position) => {
+    if (!rowData.strategy) return <span className="portfolio-positions-empty">—</span>;
     
-    if (!rowData.strategy) return <span className="text-500">—</span>;
-    
-    const typeMap: Record<string, { severity: string }> = {
-      conservative: { severity: 'info' },
-      moderate: { severity: 'warning' },
-      aggressive: { severity: 'danger' }
+    const variantMap: Record<string, 'info' | 'warning' | 'error' | 'neutral'> = {
+      conservative: 'info',
+      moderate: 'warning',
+      aggressive: 'error'
     };
-    const typeInfo = typeMap[rowData.strategy.type] || { severity: 'secondary' };
+    const variant = variantMap[rowData.strategy.type] || 'neutral';
     
     return (
-      <Tag 
-        value={rowData.strategy.name} 
-        severity={typeInfo.severity as any}
+      <Badge 
+        variant={variant}
+        size="sm"
         title={`Тип: ${rowData.strategy.type}`}
-      />
+      >
+        {rowData.strategy.name}
+      </Badge>
     );
   };
 
@@ -370,6 +373,87 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
     setSellQuantity(0);
   };
 
+  // Определяем колонки таблицы после всех template функций
+  const columns = useMemo<TableColumn<Position>[]>(() => [
+    {
+      key: 'ticker',
+      header: 'Инструмент',
+      render: (_, row) => tickerTemplate(row),
+      sortable: true,
+      width: '200px',
+    },
+    {
+      key: 'quantity',
+      header: 'Количество',
+      render: (_, row) => quantityTemplate(row),
+      sortable: true,
+      width: '120px',
+    },
+    {
+      key: 'currentPrice',
+      header: 'Текущая цена',
+      render: (_, row) => priceTemplate(row),
+      sortable: true,
+      width: '140px',
+    },
+    {
+      key: 'averagePrice',
+      header: 'Цена закупки',
+      render: (_, row) => purchasePriceTemplate(row),
+      sortable: true,
+      width: '140px',
+    },
+    {
+      key: 'priceDifference',
+      header: 'Разница в цене',
+      render: (_, row) => priceDifferenceTemplate(row),
+      sortable: true,
+      width: '160px',
+    },
+    {
+      key: 'marketValue',
+      header: 'Рыночная стоимость',
+      render: (_, row) => marketValueTemplate(row),
+      sortable: true,
+      width: '160px',
+    },
+    {
+      key: 'unrealizedPnL',
+      header: 'P&L',
+      render: (_, row) => pnlTemplate(row),
+      sortable: true,
+      width: '140px',
+    },
+    {
+      key: 'sector',
+      header: 'Сектор',
+      render: (_, row) => sectorTemplate(row),
+      sortable: true,
+      width: '120px',
+    },
+    {
+      key: 'strategy',
+      header: 'Стратегия',
+      render: (_, row) => strategyTemplate(row),
+      sortable: true,
+      width: '150px',
+    },
+    {
+      key: 'prediction',
+      header: 'Предсказание',
+      render: (_, row) => predictionTemplate(row),
+      sortable: true,
+      width: '160px',
+    },
+    {
+      key: 'action',
+      header: 'Действия',
+      render: (_, row) => sellButtonTemplate(row),
+      width: '120px',
+      align: 'right',
+    },
+  ], [sellingFigi]);
+
   const sellButtonTemplate = (rowData: Position) => {
     const isSelling = sellingFigi === rowData.figi;
     const quantity = rowData.quantity;
@@ -377,69 +461,69 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
 
     return (
       <Button
-        icon="pi pi-arrow-down"
-        label="Продать"
-        size="small"
-        severity="danger"
-        loading={isSelling}
-        disabled={!canSell || isSelling}
+        variant="error"
+        size="sm"
+        icon={<i className="pi pi-arrow-down"></i>}
         onClick={() => handleSellClick(rowData)}
-        tooltip={canSell ? `Продать ${quantity} шт.` : 'Нет акций для продажи'}
-        tooltipOptions={{ position: 'top' }}
-      />
+        disabled={!canSell || isSelling}
+        loading={isSelling}
+        title={canSell ? `Продать ${quantity} шт.` : 'Нет акций для продажи'}
+      >
+        Продать
+      </Button>
     );
   };
 
   const sellDialogFooter = (
-    <div>
+    <div className="portfolio-positions-modal-footer">
       <Button 
-        label="Отмена" 
-        icon="pi pi-times" 
-        onClick={handleSellDialogHide} 
-        className="p-button-text" 
-      />
+        variant="ghost"
+        size="md"
+        icon={<i className="pi pi-times"></i>}
+        onClick={handleSellDialogHide}
+      >
+        Отмена
+      </Button>
       <Button 
-        label="Продать" 
-        icon="pi pi-check" 
-        onClick={handleSellConfirm} 
-        severity="danger"
+        variant="error"
+        size="md"
+        icon={<i className="pi pi-check"></i>}
+        onClick={handleSellConfirm}
         disabled={!sellQuantity || sellQuantity <= 0 || sellQuantity > (selectedPosition?.quantity || 0)}
-      />
+      >
+        Продать
+      </Button>
     </div>
   );
 
   return (
     <>
       <Toast ref={toast} />
-      <Dialog
-        header="Продажа акций"
-        visible={showSellDialog}
-        style={{ width: '450px' }}
+      <Modal
+        isOpen={showSellDialog}
+        onClose={handleSellDialogHide}
+        title="Продажа акций"
+        size="sm"
         footer={sellDialogFooter}
-        onHide={handleSellDialogHide}
-        modal
       >
         {selectedPosition && (
-          <div className="flex flex-column gap-3">
-            <div>
-              <label className="block mb-2 font-medium">
+          <div className="portfolio-positions-sell-dialog">
+            <div className="portfolio-positions-sell-field">
+              <label className="portfolio-positions-sell-label">
                 Инструмент: <strong>{selectedPosition.name} ({selectedPosition.ticker})</strong>
               </label>
             </div>
-            <div>
-              <label className="block mb-2 font-medium">
+            <div className="portfolio-positions-sell-field">
+              <label className="portfolio-positions-sell-label">
                 Доступно для продажи: <strong>{selectedPosition.quantity} шт.</strong>
               </label>
             </div>
-            <div>
-              <label className="block mb-2 font-medium">
+            <div className="portfolio-positions-sell-field">
+              <label className="portfolio-positions-sell-label">
                 Текущая цена: <strong>{formatCurrency(selectedPosition.currentPrice, selectedPosition.currency)}</strong>
               </label>
             </div>
-            <div>
-              <label htmlFor="sellQuantity" className="block mb-2 font-medium">
-                Количество для продажи:
-              </label>
+            <div className="portfolio-positions-sell-field">
               <InputNumber
                 id="sellQuantity"
                 value={sellQuantity}
@@ -448,147 +532,75 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
                 max={selectedPosition.quantity}
                 showButtons
                 buttonLayout="horizontal"
-                decrementButtonClassName="p-button-danger"
-                incrementButtonClassName="p-button-success"
-                incrementButtonIcon="pi pi-plus"
-                decrementButtonIcon="pi pi-minus"
-                className="w-full"
+                label="Количество для продажи"
+                fullWidth
               />
             </div>
             {sellQuantity > 0 && (
-              <div className="mt-2 p-3 bg-blue-50 border-round">
-                <div className="text-sm text-600 mb-1">Сумма продажи:</div>
-                <div className="text-xl font-bold text-blue-600">
+              <div className="portfolio-positions-sell-summary">
+                <div className="portfolio-positions-sell-summary-label">Сумма продажи:</div>
+                <div className="portfolio-positions-sell-summary-value">
                   {formatCurrency(sellQuantity * selectedPosition.currentPrice, selectedPosition.currency)}
                 </div>
               </div>
             )}
           </div>
         )}
-      </Dialog>
-      <Card title="📋 Позиции" className={className}>
-        <div className="flex justify-content-between align-items-center mb-3">
-          <h3 className="m-0">Текущие позиции</h3>
-          <div className="flex gap-2">
+      </Modal>
+      <Card 
+        header={<h3 className="portfolio-positions-title">📋 Позиции</h3>}
+        className={`portfolio-positions-card ${className}`}
+      >
+        <div className="portfolio-positions-header">
+          <h3 className="portfolio-positions-subtitle">Текущие позиции</h3>
+          <div className="portfolio-positions-actions">
             {onAnalyze && (
               <Button
-                icon="pi pi-chart-line"
-                label="Предсказание"
-                size="small"
-                loading={analyzing}
+                variant="info"
+                size="sm"
+                icon={<i className="pi pi-chart-line"></i>}
                 onClick={onAnalyze}
-                severity="info"
-                tooltip="Проанализировать портфель и получить рекомендации по продаже/удержанию"
-                tooltipOptions={{ position: 'bottom' }}
-              />
+                loading={analyzing}
+                title="Проанализировать портфель и получить рекомендации по продаже/удержанию"
+              >
+                Предсказание
+              </Button>
             )}
             {onRefresh && (
               <Button
-                icon="pi pi-refresh"
-                label="Обновить"
-                size="small"
-                loading={loading}
+                variant="default"
+                size="sm"
+                icon={<i className="pi pi-refresh"></i>}
                 onClick={onRefresh}
-              />
+                loading={loading}
+              >
+                Обновить
+              </Button>
             )}
           </div>
         </div>
         
         {error && (
-          <div className="mb-3">
-            <Message severity="error" text={error} />
+          <div className="portfolio-positions-error">
+            <Alert variant="error" size="sm">
+              {error}
+            </Alert>
           </div>
         )}
 
-        <DataTable 
-        value={positions} 
-        loading={loading}
-        emptyMessage="Нет позиций в портфеле"
-        paginator={positions.length > 10}
-        rows={10}
-        sortMode="multiple"
-        className="p-datatable-sm"
-      >
-        <Column 
-          field="ticker" 
-          header="Инструмент" 
-          body={tickerTemplate}
-          sortable
-          style={{ minWidth: '200px' }}
-        />
-        <Column 
-          field="quantity" 
-          header="Количество" 
-          body={quantityTemplate}
-          sortable
-          style={{ minWidth: '120px' }}
-        />
-        <Column 
-          field="currentPrice" 
-          header="Текущая цена" 
-          body={priceTemplate}
-          sortable
-          style={{ minWidth: '140px' }}
-        />
-        <Column 
-          field="averagePrice" 
-          header="Цена закупки" 
-          body={purchasePriceTemplate}
-          sortable
-          style={{ minWidth: '140px' }}
-        />
-        <Column 
-          field="priceDifference" 
-          header="Разница в цене" 
-          body={priceDifferenceTemplate}
-          sortable
-          style={{ minWidth: '160px' }}
-        />
-        <Column 
-          field="marketValue" 
-          header="Рыночная стоимость" 
-          body={marketValueTemplate}
-          sortable
-          style={{ minWidth: '160px' }}
-        />
-        <Column 
-          field="unrealizedPnL" 
-          header="P&L" 
-          body={pnlTemplate}
-          sortable
-          style={{ minWidth: '140px' }}
-        />
-        <Column 
-          field="sector" 
-          header="Сектор" 
-          body={sectorTemplate}
-          sortable
-          style={{ minWidth: '120px' }}
-        />
-        <Column 
-          field="strategy" 
-          header="Стратегия" 
-          body={strategyTemplate}
-          sortable
-          style={{ minWidth: '150px' }}
-        />
-        <Column 
-          field="prediction" 
-          header="Предсказание" 
-          body={predictionTemplate}
-          sortable
-          style={{ minWidth: '160px' }}
-        />
-        <Column 
-          field="action" 
-          header="Действия" 
-          body={sellButtonTemplate}
-          style={{ minWidth: '120px' }}
-          frozen
-          alignFrozen="right"
-        />
-      </DataTable>
-    </Card>
+        {loading ? (
+          <div className="portfolio-positions-loading">Загрузка...</div>
+        ) : (
+          <Table<Position>
+            data={positions}
+            columns={columns}
+            size="sm"
+            hoverable
+            emptyMessage="Нет позиций в портфеле"
+            className="portfolio-positions-table"
+          />
+        )}
+      </Card>
     </>
   );
 };

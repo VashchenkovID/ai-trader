@@ -1,0 +1,225 @@
+.stock-hero {
+  margin-bottom: 24px;
+}
+
+.stock-hero-header {
+  margin-bottom: 24px;
+}
+
+.stock-hero-title {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stock-hero-name {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.stock-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.stock-hero-main {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: var(--color-surface-default);
+  border-radius: 12px;
+  border: 1px solid var(--color-border-default);
+}
+
+.stock-hero-price-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stock-hero-price-label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.stock-hero-price-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1;
+}
+
+.stock-hero-price-change {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stock-hero-price-change.positive {
+  color: var(--color-accent-success);
+}
+
+.stock-hero-price-change.negative {
+  color: var(--color-accent-error);
+}
+
+.stock-hero-price-time {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.stock-hero-recommendation-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stock-hero-recommendation-label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stock-hero-recommendation-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stock-hero-confidence {
+  display: flex;
+  align-items: center;
+}
+
+.stock-hero-analysis-date {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.stock-hero-targets-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stock-hero-target {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stock-hero-target-label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stock-hero-target-value {
+  font-size: 20px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.stock-hero-target-value.positive {
+  color: var(--color-accent-success);
+}
+
+.stock-hero-target-value.negative {
+  color: var(--color-accent-error);
+}
+
+.stock-hero-target-percent {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.stock-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: stretch;
+}
+
+.stock-hero-actions > * {
+  flex: 1 1 140px;
+  min-width: 140px;
+}
+
+.stock-hero-actions .p-button,
+.stock-hero-actions [data-buy-trigger] {
+  width: 100%;
+  min-height: 38px;
+}
+
+.stock-hero-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-default);
+}
+
+.stock-hero-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.stock-hero-detail-label {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.stock-hero-detail-value {
+  color: var(--color-text-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .stock-hero-name {
+    font-size: 24px;
+  }
+
+  .stock-hero-main {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 16px;
+  }
+
+  .stock-hero-price-value {
+    font-size: 28px;
+  }
+
+  .stock-hero-actions {
+    flex-direction: column;
+  }
+
+  .stock-hero-actions > * {
+    width: 100%;
+    min-width: 100%;
+  }
+}
+

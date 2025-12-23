@@ -4,15 +4,24 @@ import CachedInstrument from '../models/CachedInstrument.js';
 import TradingEngine from '../services/TradingEngine.js';
 import ServiceManager from '../services/ServiceManager.js';
 import { setGlobalServiceManager } from '../services/GlobalServiceManager.js';
+import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+
+// Устанавливаем флаг воркера
+process.env.WORKER = 'true';
 
 async function performPortfolioPricesUpdate() {
     try {
         // Инициализируем ServiceManager для использования в сервисах
         setGlobalServiceManager(ServiceManager);
         
-        if (!ServiceManager.isInitialized) {
-            console.log('🔧 [Portfolio Worker] ServiceManager not initialized, initializing...');
+        // Проверяем глобальную инициализацию
+        const isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
+        
+        if (!isServiceManagerGlobal && !ServiceManager.isInitialized) {
+            console.log('🔧 [Portfolio Worker] ServiceManager not initialized globally, initializing in worker...');
             await ServiceManager.initialize();
+        } else if (isServiceManagerGlobal) {
+            console.log('ℹ️ [Portfolio Worker] ServiceManager already initialized globally, skipping full initialization');
         }
 
         const startTime = Date.now();

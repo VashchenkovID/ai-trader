@@ -1,25 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card } from 'primereact/card';
-import { Chart } from 'primereact/chart';
-import { DataTable } from 'primereact/datatable';
-import { Column } from 'primereact/column';
-import { Tag } from 'primereact/tag';
-import { Badge } from 'primereact/badge';
-import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
-import { ProgressSpinner } from 'primereact/progressspinner';
-import { Message } from 'primereact/message';
-import { SelectButton } from 'primereact/selectbutton';
-import { Divider } from 'primereact/divider';
-import { Dialog } from 'primereact/dialog';
 import { apiService } from '../services/apiService';
-import { translateSector } from '../utils/sectorTranslator';
-import { translateRecommendation } from '../utils/recommendationTranslator';
-import { getConfidenceDescription, getScoreDescription } from '../utils/confidenceTranslator';
-import BuyButton from '../components/recommendations/BuyButton';
-import AnalyzeButton from '../components/recommendations/AnalyzeButton';
-import TrainButton from '../components/recommendations/TrainButton';
+import { useStockDataCache } from '../hooks/useStockDataCache';
+import { useWebSocketData } from '../components/WebSocketDataProvider';
+import { Button as UIButton, Card as UICard, Modal, Alert, Skeleton } from '../components/ui';
+import StockHero from '../components/stock/StockHero';
+import HorizonCards from '../components/stock/HorizonCards';
+import StockDetailSkeleton from '../components/stock/StockDetailSkeleton';
+import PriceChart from '../components/stock/PriceChart';
+import VolumeChart from '../components/stock/VolumeChart';
+import SignalsList from '../components/stock/SignalsList';
+import NewsList from '../components/stock/NewsList';
+import SignalCard from '../components/stock/SignalCard';
+import NewsCard from '../components/stock/NewsCard';
+import './StockDetail.css';
 
 interface StockDetail {
   figi: string;
@@ -43,14 +38,6 @@ interface Candle {
   volume: number;
 }
 
-interface PredictionHistory {
-  id: string;
-  analysisDate: string;
-  recommendation: 'BUY' | 'SELL' | 'HOLD';
-  score: number;
-  confidence: number;
-  explanation?: any;
-}
 
 interface NewsItem {
   title: string;
@@ -84,12 +71,12 @@ const StockDetail: React.FC = () => {
   const { figi } = useParams<{ figi: string }>();
   const navigate = useNavigate();
   const toast = useRef<Toast>(null);
+  const { getCached, setCached } = useStockDataCache();
   
   const [loading, setLoading] = useState(true);
   const [stockDetail, setStockDetail] = useState<StockDetail | null>(null);
   const [priceCandles, setPriceCandles] = useState<Candle[]>([]);
   const [volumeCandles, setVolumeCandles] = useState<Candle[]>([]);
-  const [predictionHistory, setPredictionHistory] = useState<PredictionHistory[]>([]);
   const [currentPrediction, setCurrentPrediction] = useState<any>(null);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [signals, setSignals] = useState<SignalItem[]>([]);
@@ -109,12 +96,198 @@ const StockDetail: React.FC = () => {
   const signalsModalRef = useRef<HTMLDivElement>(null);
   const newsModalRef = useRef<HTMLDivElement>(null);
 
-  const periodOptions = [
-    { label: 'День', value: 'day' },
-    { label: 'Неделя', value: 'week' },
-    { label: 'Месяц', value: 'month' },
-    { label: 'Год', value: 'year' }
-  ];
+  // WebSocket для реал-тайм обновлений
+  const { socket, isConnected, subscribe, unsubscribe } = useWebSocketData();
+
+  // Подписка на WebSocket обновления для конкретной акции
+  useEffect(() => {
+    if (!figi || !isConnected || !socket) return;
+
+    // Подписываемся на обновления для конкретной акции
+    subscribe(`stock_${figi}`, 'stock_updates');
+
+    // Обработчик сообщений WebSocket
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data);
+        
+        // Обновление цены акции
+        if (message.type === 'stock_price_update' && message.data?.figi === figi) {
+          const priceData = message.data;
+          setStockDetail(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              currentPrice: priceData.price || prev.currentPrice,
+              lastPrice: prev.currentPrice,
+              lastPriceTime: priceData.timestamp || new Date().toISOString()
+            };
+          });
+          
+          // Обновляем кэш
+          setStockDetail(prev => {
+            if (!prev) return prev;
+            const updated = {
+              ...prev,
+              currentPrice: priceData.price || prev.currentPrice,
+              lastPrice: prev.currentPrice,
+              lastPriceTime: priceData.timestamp || new Date().toISOString()
+            };
+            setCached('stockDetail', figi, updated);
+            return updated;
+          });
+          
+          // Добавляем новую свечу в график, если есть
+          if (priceData.price) {
+            setPriceCandles(prev => {
+              if (prev.length === 0) return prev;
+              const lastCandle = prev[prev.length - 1];
+              const newCandle: Candle = {
+                time: priceData.timestamp || new Date().toISOString(),
+                open: lastCandle.close,
+                high: Math.max(lastCandle.high, priceData.price),
+                low: Math.min(lastCandle.low, priceData.price),
+                close: priceData.price,
+                volume: priceData.volume || lastCandle.volume
+              };
+              
+              const updated = [...prev];
+              updated[updated.length - 1] = newCandle;
+              return updated;
+            });
+          }
+        }
+        
+        // Новый сигнал для этой акции
+        if (message.type === 'trading_signal' && message.data?.figi === figi) {
+          const signalData = message.data;
+          const newSignal: SignalItem = {
+            signalId: signalData.signalId || `signal_${Date.now()}`,
+            strategyId: signalData.strategyId || '',
+            strategyName: signalData.strategyName || signalData.strategy || 'Неизвестная стратегия',
+            direction: signalData.direction || signalData.signalType || 'SIGNAL_DIRECTION_UNSPECIFIED',
+            probability: signalData.probability || (signalData.confidence ? Math.round(signalData.confidence * 100) : undefined),
+            name: signalData.name || '',
+            createDt: signalData.timestamp || signalData.createDt || new Date().toISOString(),
+            endDt: signalData.endDt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            initialPrice: signalData.entryPrice || signalData.initialPrice || null,
+            targetPrice: signalData.takeProfit || signalData.targetPrice || null,
+            stoploss: signalData.stopLoss || signalData.stoploss || null,
+            info: signalData.info || signalData.description || '',
+            isActive: true
+          };
+          
+          setSignals(prev => {
+            const exists = prev.some(s => s.signalId === newSignal.signalId);
+            if (exists) return prev;
+            return [newSignal, ...prev];
+          });
+          
+          // Показываем уведомление для важных сигналов
+          if (signalData.confidence && signalData.confidence > 0.7) {
+            toast.current?.show({
+              severity: 'info',
+              summary: 'Новый торговый сигнал',
+              detail: `${signalData.signalType || 'Сигнал'} для ${stockDetail?.ticker || figi}`,
+              life: 5000
+            });
+          }
+        }
+        
+        // Новая новость для этой акции
+        if (message.type === 'news_update' && message.data?.figi === figi) {
+          const newsData = message.data;
+          const newNews: NewsItem = {
+            title: newsData.title || '',
+            description: newsData.description || '',
+            url: newsData.url || '',
+            publishedAt: newsData.publishedAt || newsData.timestamp || new Date().toISOString(),
+            source: newsData.source ? (typeof newsData.source === 'string' ? { name: newsData.source } : newsData.source) : { name: 'Неизвестный источник' }
+          };
+          
+          setNews(prev => {
+            const exists = prev.some(n => n.title === newNews.title && n.publishedAt === newNews.publishedAt);
+            if (exists) return prev;
+            const updated = [newNews, ...prev];
+            setCached('news', figi, updated);
+            return updated;
+          });
+          
+          // Показываем уведомление
+          toast.current?.show({
+            severity: 'info',
+            summary: 'Новая новость',
+            detail: newNews.title,
+            life: 5000
+          });
+        }
+        
+        // Обновление рекомендации
+        if (message.type === 'recommendation' && message.data?.figi === figi) {
+          const recommendationData = message.data;
+          
+          // Обрабатываем рекомендацию так же, как при загрузке
+          let analysisObj = recommendationData.analysis;
+          if (typeof analysisObj === 'string') {
+            try {
+              analysisObj = JSON.parse(analysisObj);
+            } catch (e) {
+              analysisObj = null;
+            }
+          }
+          
+          let explanationObj = recommendationData.explanation;
+          if (typeof explanationObj === 'string') {
+            try {
+              explanationObj = JSON.parse(explanationObj);
+            } catch (e) {
+              explanationObj = null;
+            }
+          }
+          
+          let horizons = recommendationData.horizons || 
+            (analysisObj?.horizons) || 
+            (explanationObj?.details?.ensemble?.horizons) || 
+            null;
+          
+          let confidence = recommendationData.confidence;
+          let score = recommendationData.score;
+          if (typeof confidence === 'number' && confidence > 1) confidence /= 100;
+          if (typeof score === 'number' && score > 1) score /= 100;
+          
+          setCurrentPrediction({
+            ...recommendationData,
+            analysis: analysisObj || recommendationData.analysis || null,
+            explanation: explanationObj || recommendationData.explanation || null,
+            horizons: horizons,
+            confidence,
+            score,
+            priceAtAnalysis: recommendationData.priceAtAnalysis || recommendationData.price || stockDetail?.currentPrice || 0
+          });
+          
+          // Обновляем кэш
+          setCached('recommendation', figi, { success: true, data: recommendationData });
+          
+          // Показываем уведомление
+          toast.current?.show({
+            severity: 'success',
+            summary: 'Обновлена рекомендация',
+            detail: `Новая рекомендация для ${stockDetail?.ticker || figi}`,
+            life: 5000
+          });
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
+      }
+    };
+
+    socket.addEventListener('message', handleMessage);
+
+    return () => {
+      socket.removeEventListener('message', handleMessage);
+      unsubscribe(`stock_${figi}`, 'stock_updates');
+    };
+  }, [figi, socket, isConnected, subscribe, unsubscribe, setCached]);
 
   useEffect(() => {
     if (figi) {
@@ -141,24 +314,96 @@ const StockDetail: React.FC = () => {
       setLoading(true);
       setError(null);
       
+      // Проверяем кэш для основных данных
+      const cachedDetail = getCached<StockDetail>('stockDetail', figi);
+      const cachedNews = getCached<NewsItem[]>('news', figi);
+      const cachedSignals = getCached<{ success: boolean; data: SignalItem[] }>('signals', figi);
+      const cachedRecommendation = getCached<{ success: boolean; data: any }>('recommendation', figi);
+      
+      // Если есть кэшированные данные, используем их для быстрого отображения
+      if (cachedDetail) {
+        setStockDetail(cachedDetail);
+      }
+      if (cachedNews) {
+        setNews(cachedNews);
+      }
+      if (cachedSignals?.success) {
+        setSignals(cachedSignals.data);
+      }
+      // Обрабатываем кэшированную рекомендацию, если она есть
+      if (cachedRecommendation?.success && cachedRecommendation.data) {
+        const dbPrediction = cachedRecommendation.data;
+        // Парсим analysis и explanation, если они строки JSON
+        let analysisObj = dbPrediction.analysis;
+        if (typeof analysisObj === 'string') {
+          try {
+            analysisObj = JSON.parse(analysisObj);
+          } catch (e) {
+            analysisObj = null;
+          }
+        }
+        
+        let explanationObj = dbPrediction.explanation;
+        if (typeof explanationObj === 'string') {
+          try {
+            explanationObj = JSON.parse(explanationObj);
+          } catch (e) {
+            explanationObj = null;
+          }
+        }
+        
+        // Извлекаем горизонты
+        let horizons = dbPrediction.horizons || 
+          (analysisObj?.horizons) || 
+          (explanationObj?.details?.ensemble?.horizons) || 
+          null;
+        
+        // Нормализуем confidence и score
+        let confidence = dbPrediction.confidence;
+        let score = dbPrediction.score;
+        if (typeof confidence === 'number' && confidence > 1) confidence /= 100;
+        if (typeof score === 'number' && score > 1) score /= 100;
+        
+        setCurrentPrediction({
+          ...dbPrediction,
+          analysis: analysisObj || dbPrediction.analysis || null,
+          explanation: explanationObj || dbPrediction.explanation || null,
+          horizons: horizons,
+          confidence,
+          score,
+          priceAtAnalysis: dbPrediction.priceAtAnalysis || dbPrediction.price || cachedDetail?.currentPrice || 0
+        });
+      }
+      
       // Загружаем данные из БД (как в таблице рекомендаций)
       console.log(`📊 Loading stock data for ${figi} from database...`);
       
-      // Загружаем остальные данные параллельно
-      const [detailData, priceCandlesData, volumeCandlesData, historyData, newsData, signalsData, recommendationData] = await Promise.all([
-        apiService.getStockDetail(figi),
-        apiService.getStockCandles(figi, 365, 'DAY'), // За год по умолчанию для цены
-        apiService.getStockCandles(figi, 365, 'DAY'), // За год по умолчанию для объема
-        apiService.getStockPredictionHistory(figi),
-        apiService.getNews(figi, 20, 30).catch(() => []), // Новости за 30 дней из БД
-        apiService.getStockSignals(figi, 20, false).catch(() => ({ success: true, data: [] })), // Сигналы из БД
-        apiService.getLatestStockRecommendation(figi, 24).catch(() => ({ success: true, data: null })) // Рекомендация из БД (макс 24 часа)
+      // Загружаем данные параллельно, но только если их нет в кэше или они устарели
+      const [detailData, newsData, signalsData, recommendationData] = await Promise.all([
+        cachedDetail ? Promise.resolve(cachedDetail) : apiService.getStockDetail(figi),
+        cachedNews ? Promise.resolve(cachedNews) : apiService.getNews(figi, 20, 30).catch(() => []),
+        cachedSignals?.success ? Promise.resolve(cachedSignals) : apiService.getStockSignals(figi, 20, false).catch(() => ({ success: true, data: [] })),
+        cachedRecommendation?.success ? Promise.resolve(cachedRecommendation) : apiService.getLatestStockRecommendation(figi, 240).catch(() => ({ success: true, data: null }))
       ]);
       
+      // Кэшируем загруженные данные
+      if (detailData && !cachedDetail) {
+        setCached('stockDetail', figi, detailData);
+      }
+      if (newsData && !cachedNews) {
+        setCached('news', figi, newsData);
+      }
+      if (signalsData?.success && !cachedSignals?.success) {
+        setCached('signals', figi, signalsData);
+      }
+      if (recommendationData?.success && !cachedRecommendation?.success) {
+        setCached('recommendation', figi, recommendationData);
+      }
+      
+      // Графики загружаем лениво (только при необходимости)
+      // Не загружаем их здесь, чтобы ускорить первоначальную загрузку
+      
       setStockDetail(detailData);
-      setPriceCandles(priceCandlesData || []);
-      setVolumeCandles(volumeCandlesData || []);
-      setPredictionHistory(historyData || []);
       
       // Используем данные из БД (как в таблице)
       if (recommendationData?.success && recommendationData?.data) {
@@ -289,9 +534,24 @@ const StockDetail: React.FC = () => {
         break;
     }
     
+    // Проверяем кэш
+    const cacheKey = `candles_price_${period}`;
+    const cached = getCached<Candle[]>('candles', figi, cacheKey);
+    
+    if (cached) {
+      setPriceCandles(cached);
+      return;
+    }
+    
     try {
       const candlesData = await apiService.getStockCandles(figi, days, interval);
-      setPriceCandles(candlesData || []);
+      const candles = candlesData || [];
+      setPriceCandles(candles);
+      
+      // Кэшируем данные
+      if (candles.length > 0) {
+        setCached('candles', figi, candles, undefined, cacheKey);
+      }
     } catch (err: any) {
       console.error('Error loading price candles:', err);
     }
@@ -322,9 +582,24 @@ const StockDetail: React.FC = () => {
         break;
     }
     
+    // Проверяем кэш
+    const cacheKey = `candles_volume_${period}`;
+    const cached = getCached<Candle[]>('candles', figi, cacheKey);
+    
+    if (cached) {
+      setVolumeCandles(cached);
+      return;
+    }
+    
     try {
       const candlesData = await apiService.getStockCandles(figi, days, interval);
-      setVolumeCandles(candlesData || []);
+      const candles = candlesData || [];
+      setVolumeCandles(candles);
+      
+      // Кэшируем данные
+      if (candles.length > 0) {
+        setCached('candles', figi, candles, undefined, cacheKey);
+      }
     } catch (err: any) {
       console.error('Error loading volume candles:', err);
     }
@@ -614,1025 +889,198 @@ const StockDetail: React.FC = () => {
     });
   };
 
-  const formatDateShort = (date: string | Date) => {
-    return new Date(date).toLocaleDateString('ru-RU', {
-      day: '2-digit',
-      month: 'short'
-    });
-  };
 
-  // Используем загруженные свечи напрямую (они уже загружены для нужного периода)
-  const filteredCandlesForPrice = priceCandles;
-  const filteredCandlesForVolume = volumeCandles;
 
-  // График цены
-  const priceChartData = {
-    labels: filteredCandlesForPrice.map(c => formatDateShort(c.time)),
-    datasets: [
-      {
-        label: 'Цена закрытия',
-        data: filteredCandlesForPrice.map(c => c.close),
-        borderColor: '#42A5F5',
-        backgroundColor: 'rgba(66, 165, 245, 0.1)',
-        tension: 0.4,
-        fill: true
-      },
-      {
-        label: 'Максимум',
-        data: filteredCandlesForPrice.map(c => c.high),
-        borderColor: '#66BB6A',
-        backgroundColor: 'transparent',
-        tension: 0.4,
-        borderDash: [5, 5],
-        pointRadius: 0
-      },
-      {
-        label: 'Минимум',
-        data: filteredCandlesForPrice.map(c => c.low),
-        borderColor: '#EF5350',
-        backgroundColor: 'transparent',
-        tension: 0.4,
-        borderDash: [5, 5],
-        pointRadius: 0
-      }
-    ]
-  };
-
-  const priceChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'top' as const,
-        labels: {
-          usePointStyle: true
-        }
-      },
-      tooltip: {
-        callbacks: {
-          label: function(context: any) {
-            return `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`;
-          }
-        }
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: false,
-        ticks: {
-          callback: function(value: any) {
-            return formatCurrency(value);
-          }
-        }
-      }
-    }
-  };
-
-  // График объема
-  const volumeChartData = {
-    labels: filteredCandlesForVolume.map(c => formatDateShort(c.time)),
-    datasets: [
-      {
-        label: 'Объем торгов',
-        data: filteredCandlesForVolume.map(c => c.volume),
-        backgroundColor: 'rgba(102, 187, 106, 0.5)',
-        borderColor: '#66BB6A',
-        borderWidth: 1
-      }
-    ]
-  };
-
-  const volumeChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: {
-          callback: function(value: any) {
-            if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
-            if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
-            return value;
-          }
-        }
-      }
-    }
-  };
-
-  // График истории предсказаний
-  const predictionChartData = {
-    labels: predictionHistory.map(p => formatDate(p.analysisDate)),
-    datasets: [
-      {
-        label: 'Score',
-        data: predictionHistory.map(p => p.score * 100),
-        borderColor: '#42A5F5',
-        backgroundColor: 'rgba(66, 165, 245, 0.1)',
-        tension: 0.4,
-        yAxisID: 'y'
-      },
-      {
-        label: 'Confidence',
-        data: predictionHistory.map(p => p.confidence * 100),
-        borderColor: '#66BB6A',
-        backgroundColor: 'rgba(102, 187, 106, 0.1)',
-        tension: 0.4,
-        yAxisID: 'y'
-      }
-    ]
-  };
-
-  const predictionChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'top' as const
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 100,
-        ticks: {
-          callback: function(value: any) {
-            return value + '%';
-          }
-        }
-      }
-    }
-  };
-
-  const recommendationTemplate = (rowData: PredictionHistory) => {
-    const severity =
-      rowData.recommendation === 'BUY' ? 'success' :
-      rowData.recommendation === 'SELL' ? 'danger' : 'info';
-    
-    return (
-      <Tag value={translateRecommendation(rowData.recommendation)} severity={severity as any} />
-    );
-  };
-
-  const confidenceTemplate = (rowData: PredictionHistory) => {
-    const confidenceDesc = getConfidenceDescription(rowData.confidence);
-    const scoreDesc = getScoreDescription(rowData.score);
-    
-    return (
-      <div className="flex flex-column">
-        <div className={`text-sm ${confidenceDesc.colorClass}`}>
-          Уверенность: {confidenceDesc.text} ({confidenceDesc.percentage})
-        </div>
-        <div className={`text-xs ${scoreDesc.colorClass}`}>
-          Оценка: {scoreDesc.text} ({scoreDesc.percentage})
-        </div>
-      </div>
-    );
-  };
 
   if (loading) {
-    return (
-      <div className="flex align-items-center justify-content-center" style={{ height: '100vh' }}>
-        <ProgressSpinner />
-      </div>
-    );
+    return <StockDetailSkeleton />;
   }
 
   if (error || !stockDetail) {
     return (
-      <div className="p-4">
-        <Card>
-          <Message severity="error" text={error || 'Акция не найдена'} />
-          <Button 
-            label="Назад" 
-            icon="pi pi-arrow-left" 
-            onClick={() => navigate(-1)}
-            className="mt-3"
-          />
-        </Card>
+      <div className="stock-detail-page p-4">
+        <UICard variant="default">
+          <Alert variant="error" size="md">
+            {error || 'Акция не найдена'}
+          </Alert>
+          <div style={{ marginTop: '16px' }}>
+            <UIButton 
+              variant="ghost"
+              size="md"
+              onClick={() => navigate(-1)}
+            >
+              ← Назад
+            </UIButton>
+          </div>
+        </UICard>
       </div>
     );
   }
-
-  const confidenceDesc = currentPrediction ? getConfidenceDescription(currentPrediction.confidence || 0) : null;
-  const scoreDesc = currentPrediction ? getScoreDescription(currentPrediction.score || 0) : null;
 
   return (
     <div className="stock-detail-page p-4">
       <Toast ref={toast} />
       
       {/* Заголовок с кнопкой назад */}
-      <div className="flex align-items-center mb-4">
-        <Button 
-          icon="pi pi-arrow-left" 
-          label="Назад" 
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', gap: '12px' }}>
+        <UIButton 
+          variant="ghost"
+          size="md"
           onClick={() => navigate(-1)}
-          className="mr-3"
-          text
-        />
-        <h1 className="m-0">{stockDetail.name} ({stockDetail.ticker})</h1>
+          icon={<span>←</span>}
+        >
+          Назад
+        </UIButton>
       </div>
 
-      {/* Детальная информация наверху */}
-      <Card className="mb-4">
-        <div className="grid">
-          <div className="col-12 md:col-2">
-            <div className="mb-3">
-              <div className="text-600 mb-1 text-sm">FIGI</div>
-              <div className="font-medium">{stockDetail.figi}</div>
-            </div>
-            <div className="mb-3">
-              <div className="text-600 mb-1 text-sm">Тикер</div>
-              <div className="font-medium">{stockDetail.ticker}</div>
-            </div>
-            <div className="mb-3">
-              <div className="text-600 mb-1 text-sm">Название</div>
-              <div className="font-medium">{stockDetail.name}</div>
-            </div>
-          </div>
-          
-          <div className="col-12 md:col-2">
-            <div className="mb-3">
-              <div className="text-600 mb-1 text-sm">Сектор</div>
-              <div className="font-medium">
-                {stockDetail.sector ? translateSector(stockDetail.sector) : 'Не указан'}
-              </div>
-            </div>
-            <div className="mb-3">
-              <div className="text-600 mb-1 text-sm">Лот</div>
-              <div className="font-medium">{stockDetail.lot}</div>
-            </div>
-            {stockDetail.dividendYield && (
-              <div className="mb-3">
-                <div className="text-600 mb-1 text-sm">Дивидендная доходность</div>
-                <div className="font-medium">{(stockDetail.dividendYield * 100).toFixed(2)}%</div>
-              </div>
-            )}
-          </div>
-          
-          <div className="col-12 md:col-2">
-            <div className="mb-3">
-              <div className="text-600 mb-1 text-sm">Текущая цена</div>
-              <div className="text-2xl font-bold text-primary">
-                {formatCurrency(stockDetail.currentPrice)}
-              </div>
-              {stockDetail.lastPriceTime && (
-                <div className="text-xs text-500 mt-1">
-                  Обновлено: {formatDate(stockDetail.lastPriceTime)}
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <div className="col-12 md:col-3">
-            <div className="mb-3">
-              <div className="text-600 text-sm mb-2">Текущее предсказание (из БД)</div>
-              {currentPrediction ? (
-                <div>
-                  <div className="mb-2">
-                    <Tag 
-                      value={translateRecommendation(currentPrediction.recommendation || 'HOLD')} 
-                      severity={currentPrediction.recommendation === 'BUY' ? 'success' : currentPrediction.recommendation === 'SELL' ? 'danger' : 'info'} 
-                    />
-                  </div>
-                  {confidenceDesc && (
-                    <div className={`text-sm ${confidenceDesc.colorClass} mb-1`}>
-                      Уверенность: {confidenceDesc.text} ({confidenceDesc.percentage})
-                    </div>
-                  )}
-                  {scoreDesc && (
-                    <div className={`text-sm ${scoreDesc.colorClass} mb-1`}>
-                      Оценка: {scoreDesc.text} ({scoreDesc.percentage})
-                    </div>
-                  )}
-                  {currentPrediction.analysisDate && (
-                    <div className="text-xs text-500 mt-1">
-                      Дата анализа: {formatDate(currentPrediction.analysisDate)}
-                    </div>
-                  )}
-                  {currentPrediction.isFromDatabase && (
-                    <div className="text-xs text-green-500 mt-1">
-                      ✓ Данные из БД
-                    </div>
-                  )}
-                  {/* Убираем formatFullPrediction отсюда - горизонты будут показаны ниже крупнее */}
-                </div>
-              ) : (
-                <div className="text-500">
-                  <div className="mb-2">Нет данных в БД</div>
-                  <div className="text-xs mt-2">(Рекомендация будет создана при следующем обновлении или нажмите "Анализ" для немедленного анализа)</div>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <div className="col-12 md:col-3">
-            <div className="mb-3">
-              <div className="text-600 text-sm mb-2">Действия</div>
-              <div className="flex flex-column gap-2">
-                {currentPrediction ? (
-                  <>
-                    <BuyButton 
-                      rowData={{
-                        figi: currentPrediction.figi || figi || '',
-                        ticker: currentPrediction.ticker || stockDetail?.ticker || '',
-                        name: currentPrediction.name || stockDetail?.name || '',
-                        recommendation: currentPrediction.recommendation || 'HOLD',
-                        confidence: currentPrediction.confidence || 0,
-                        score: currentPrediction.score || 0,
-                        priceAtAnalysis: currentPrediction.priceAtAnalysis || currentPrediction.price || stockDetail?.currentPrice || 0,
-                        targetPrice: currentPrediction.targetPrice,
-                        stopLoss: currentPrediction.stopLoss,
-                        takeProfit: currentPrediction.takeProfit,
-                        explanation: currentPrediction.explanation,
-                        horizons: currentPrediction.horizons
-                      }}
-                    />
-                    <AnalyzeButton 
-                      rowData={{
-                        figi: currentPrediction.figi || figi || '',
-                        ticker: currentPrediction.ticker || stockDetail?.ticker || '',
-                        name: currentPrediction.name || stockDetail?.name || ''
-                      }}
-                      onAnalysisComplete={loadStockData}
-                    />
-                    <TrainButton 
-                      rowData={{
-                        figi: currentPrediction.figi || figi || '',
-                        ticker: currentPrediction.ticker || stockDetail?.ticker || '',
-                        name: currentPrediction.name || stockDetail?.name || ''
-                      }}
-                      onTrainingComplete={loadStockData}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <AnalyzeButton 
-                      rowData={{
-                        figi: figi || '',
-                        ticker: stockDetail?.ticker || '',
-                        name: stockDetail?.name || ''
-                      }}
-                      onAnalysisComplete={loadStockData}
-                    />
-                    <TrainButton 
-                      rowData={{
-                        figi: figi || '',
-                        ticker: stockDetail?.ticker || '',
-                        name: stockDetail?.name || ''
-                      }}
-                      onTrainingComplete={loadStockData}
-                    />
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Hero секция с основной информацией */}
+      {stockDetail && (
+        <StockHero
+          stockDetail={stockDetail}
+          currentPrediction={currentPrediction}
+          onAnalysisComplete={loadStockData}
+          onTrainingComplete={loadStockData}
+        />
+      )}
+
+      {/* Прогнозы по горизонтам */}
+      {currentPrediction && (() => {
+        // Извлекаем горизонты из разных возможных мест
+        let horizons = null;
+        if (currentPrediction.horizons) {
+          horizons = currentPrediction.horizons;
+        } else if (currentPrediction.analysis?.horizons) {
+          horizons = currentPrediction.analysis.horizons;
+        } else if (currentPrediction.explanation?.details?.ensemble?.horizons) {
+          horizons = currentPrediction.explanation.details.ensemble.horizons;
+        } else if (currentPrediction.explanation?.details?.horizons) {
+          horizons = currentPrediction.explanation.details.horizons;
+        }
         
-        {/* Прогнозы по горизонтам - крупнее, под основными данными */}
-        {currentPrediction && (() => {
-          // Извлекаем горизонты из разных возможных мест
-          let horizons = null;
-          if (currentPrediction.horizons) {
-            horizons = currentPrediction.horizons;
-          } else if (currentPrediction.analysis?.horizons) {
-            horizons = currentPrediction.analysis.horizons;
-          } else if (currentPrediction.explanation?.details?.ensemble?.horizons) {
-            horizons = currentPrediction.explanation.details.ensemble.horizons;
-          } else if (currentPrediction.explanation?.details?.horizons) {
-            horizons = currentPrediction.explanation.details.horizons;
-          }
-          
-          if (!horizons) return null;
-          
-          const { shortTerm, mediumTerm, longTerm } = horizons;
-          const agreement = currentPrediction.agreement || currentPrediction.analysis?.agreement;
-          
-          const getRecColor = (rec: string) => {
-            if (rec === 'BUY') return 'text-green-600';
-            if (rec === 'SELL') return 'text-red-600';
-            return 'text-blue-600';
-          };
-          
-          const getRecSeverity = (rec: string) => {
-            if (rec === 'BUY') return 'success';
-            if (rec === 'SELL') return 'danger';
-            return 'info';
-          };
-          
-          return (
-            <div className="col-12 mt-3 pt-3 border-top-1 surface-border">
-              <div className="text-lg font-semibold mb-3">📊 Прогнозы по горизонтам</div>
-              <div className="grid">
-                {shortTerm && (
-                  <div className="col-12 md:col-4">
-                    <Card className="h-full">
-                      <div className="text-600 text-sm mb-2">{shortTerm.name || 'Краткосрочный прогноз'}</div>
-                      <div className="text-xs text-500 mb-2">{shortTerm.description || 'Прогноз на 1-3 дня'}</div>
-                      <Tag 
-                        value={translateRecommendation(shortTerm.recommendation || 'HOLD')} 
-                        severity={getRecSeverity(shortTerm.recommendation || 'HOLD')}
-                        className="mb-2"
-                      />
-                      <div className="text-sm mb-1">
-                        <span className="text-600">Сигнал: </span>
-                        <span className={getRecColor(shortTerm.recommendation || 'HOLD')}>
-                          {((shortTerm.score || 0) * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="text-sm mb-3">
-                        <span className="text-600">Уверенность: </span>
-                        <span className="font-semibold">
-                          {((shortTerm.confidence || 0) * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      
-                      {/* Стратегии для горизонта */}
-                      {shortTerm.strategies && (
-                        <div className="mt-3 pt-3 border-top-1 surface-border">
-                          <div className="text-xs text-600 font-semibold mb-2">Рекомендации по стратегиям:</div>
-                          <div className="flex flex-column gap-2">
-                            {shortTerm.strategies.aggressive && (
-                              <div className="p-2 bg-red-50 border-round">
-                                <div className="flex align-items-center gap-2 mb-1">
-                                  <Tag 
-                                    value="Агрессивная" 
-                                    severity="danger"
-                                    className="text-xs"
-                                  />
-                          
-                                </div>
-                                <div className="text-xs text-600">
-                                  {shortTerm.strategies.aggressive.explanation || 'Нет описания'}
-                                </div>
-                              </div>
-                            )}
-                            {shortTerm.strategies.moderate && (
-                              <div className="p-2 bg-yellow-50 border-round">
-                                <div className="flex align-items-center gap-2 mb-1">
-                                  <Tag 
-                                    value="Умеренная" 
-                                    severity="warning"
-                                    className="text-xs"
-                                  />
-                            
-                                </div>
-                                <div className="text-xs text-600">
-                                  {shortTerm.strategies.moderate.explanation || 'Нет описания'}
-                                </div>
-                              </div>
-                            )}
-                            {shortTerm.strategies.conservative && (
-                              <div className="p-2 bg-green-50 border-round">
-                                <div className="flex align-items-center gap-2 mb-1">
-                                  <Tag 
-                                    value="Консервативная" 
-                                    severity="success"
-                                    className="text-xs"
-                                  />
-                                </div>
-                                <div className="text-xs text-600">
-                                  {shortTerm.strategies.conservative.explanation || 'Нет описания'}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </Card>
-                  </div>
-                )}
-                {mediumTerm && (
-                  <div className="col-12 md:col-4">
-                    <Card className="h-full">
-                      <div className="text-600 text-sm mb-2">{mediumTerm.name || 'Среднесрочный прогноз'}</div>
-                      <div className="text-xs text-500 mb-2">{mediumTerm.description || 'Прогноз на 1-4 недели'}</div>
-                      <Tag 
-                        value={translateRecommendation(mediumTerm.recommendation || 'HOLD')} 
-                        severity={getRecSeverity(mediumTerm.recommendation || 'HOLD')}
-                        className="mb-2"
-                      />
-                      <div className="text-sm mb-1">
-                        <span className="text-600">Сигнал: </span>
-                        <span className={getRecColor(mediumTerm.recommendation || 'HOLD')}>
-                          {((mediumTerm.score || 0) * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="text-sm mb-3">
-                        <span className="text-600">Уверенность: </span>
-                        <span className="font-semibold">
-                          {((mediumTerm.confidence || 0) * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      
-                      {/* Стратегии для горизонта */}
-                      {mediumTerm.strategies && (
-                        <div className="mt-3 pt-3 border-top-1 surface-border">
-                          <div className="text-xs text-600 font-semibold mb-2">Рекомендации по стратегиям:</div>
-                          <div className="flex flex-column gap-2">
-                            {mediumTerm.strategies.aggressive && (
-                              <div className="p-2 bg-red-50 border-round">
-                                <div className="flex align-items-center gap-2 mb-1">
-                                  <Tag 
-                                    value="Агрессивная" 
-                                    severity="danger"
-                                    className="text-xs"
-                                  />
-                                </div>
-                                <div className="text-xs text-600">
-                                  {mediumTerm.strategies.aggressive.explanation || 'Нет описания'}
-                                </div>
-                              </div>
-                            )}
-                            {mediumTerm.strategies.moderate && (
-                              <div className="p-2 bg-yellow-50 border-round">
-                                <div className="flex align-items-center gap-2 mb-1">
-                                  <Tag 
-                                    value="Умеренная" 
-                                    severity="warning"
-                                    className="text-xs"
-                                  />
-                                </div>
-                                <div className="text-xs text-600">
-                                  {mediumTerm.strategies.moderate.explanation || 'Нет описания'}
-                                </div>
-                              </div>
-                            )}
-                            {mediumTerm.strategies.conservative && (
-                              <div className="p-2 bg-green-50 border-round">
-                                <div className="flex align-items-center gap-2 mb-1">
-                                  <Tag 
-                                    value="Консервативная" 
-                                    severity="success"
-                                    className="text-xs"
-                                  />
-                                </div>
-                                <div className="text-xs text-600">
-                                  {mediumTerm.strategies.conservative.explanation || 'Нет описания'}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </Card>
-                  </div>
-                )}
-                {longTerm && (
-                  <div className="col-12 md:col-4">
-                    <Card className="h-full">
-                      <div className="text-600 text-sm mb-2">{longTerm.name || 'Долгосрочный прогноз'}</div>
-                      <div className="text-xs text-500 mb-2">{longTerm.description || 'Прогноз на 2-3 месяца'}</div>
-                      <Tag 
-                        value={translateRecommendation(longTerm.recommendation || 'HOLD')} 
-                        severity={getRecSeverity(longTerm.recommendation || 'HOLD')}
-                        className="mb-2"
-                      />
-                      <div className="text-sm mb-1">
-                        <span className="text-600">Сигнал: </span>
-                        <span className={getRecColor(longTerm.recommendation || 'HOLD')}>
-                          {((longTerm.score || 0) * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="text-sm mb-3">
-                        <span className="text-600">Уверенность: </span>
-                        <span className="font-semibold">
-                          {((longTerm.confidence || 0) * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      
-                      {/* Стратегии для горизонта */}
-                      {longTerm.strategies && (
-                        <div className="mt-3 pt-3 border-top-1 surface-border">
-                          <div className="text-xs text-600 font-semibold mb-2">Рекомендации по стратегиям:</div>
-                          <div className="flex flex-column gap-2">
-                            {longTerm.strategies.aggressive && (
-                              <div className="p-2 bg-red-50 border-round">
-                                <div className="flex align-items-center gap-2 mb-1">
-                                  <Tag 
-                                    value="Агрессивная" 
-                                    severity="danger"
-                                    className="text-xs"
-                                  />
-                                </div>
-                                <div className="text-xs text-600">
-                                  {longTerm.strategies.aggressive.explanation || 'Нет описания'}
-                                </div>
-                              </div>
-                            )}
-                            {longTerm.strategies.moderate && (
-                              <div className="p-2 bg-yellow-50 border-round">
-                                <div className="flex align-items-center gap-2 mb-1">
-                                  <Tag 
-                                    value="Умеренная" 
-                                    severity="warning"
-                                    className="text-xs"
-                                  />
-                                </div>
-                                <div className="text-xs text-600">
-                                  {longTerm.strategies.moderate.explanation || 'Нет описания'}
-                                </div>
-                              </div>
-                            )}
-                            {longTerm.strategies.conservative && (
-                              <div className="p-2 bg-green-50 border-round">
-                                <div className="flex align-items-center gap-2 mb-1">
-                                  <Tag 
-                                    value="Консервативная" 
-                                    severity="success"
-                                    className="text-xs"
-                                  />
-                                </div>
-                                <div className="text-xs text-600">
-                                  {longTerm.strategies.conservative.explanation || 'Нет описания'}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </Card>
-                  </div>
-                )}
-              </div>
-              {agreement !== undefined && agreement !== null && (
-                <div className="mt-3 text-center">
-                  <div className="text-600 text-sm mb-1">Согласованность горизонтов</div>
-                  <div className="text-xl font-bold text-primary">
-                    {(agreement * 100).toFixed(0)}%
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-      </Card>
+        if (!horizons) return null;
+        
+        const agreement = currentPrediction.agreement || currentPrediction.analysis?.agreement;
+        
+        return (
+          <HorizonCards 
+            horizons={horizons} 
+            agreement={agreement}
+          />
+        );
+      })()}
 
       {/* Основной контент */}
       <div className="grid">
         {/* Левая колонка - Графики и предсказания */}
         <div className="col-12 lg:col-8">
           {/* График динамики цены */}
-          <Card className="mb-4">
-            <div className="flex align-items-center justify-content-between mb-3">
-              <h3 className="m-0">Динамика цены</h3>
-              <SelectButton
-                value={pricePeriod}
-                options={periodOptions}
-                onChange={(e) => setPricePeriod(e.value)}
-              />
-            </div>
-            <div style={{ height: '400px' }}>
-              {filteredCandlesForPrice.length > 0 ? (
-                <Chart type="line" data={priceChartData} options={priceChartOptions} />
-              ) : (
-                <div className="flex align-items-center justify-content-center h-full text-600">
-                  Нет данных для отображения
-                </div>
-              )}
-            </div>
-          </Card>
+          <PriceChart
+            candles={priceCandles}
+            period={pricePeriod}
+            onPeriodChange={setPricePeriod}
+            currency={stockDetail.currency}
+          />
 
           {/* График объема торгов */}
-          <Card className="mb-4">
-            <div className="flex align-items-center justify-content-between mb-3">
-              <h3 className="m-0">Объем торгов</h3>
-              <SelectButton
-                value={volumePeriod}
-                options={periodOptions}
-                onChange={(e) => setVolumePeriod(e.value)}
-              />
-            </div>
-            <div style={{ height: '300px' }}>
-              {filteredCandlesForVolume.length > 0 ? (
-                <Chart type="bar" data={volumeChartData} options={volumeChartOptions} />
-              ) : (
-                <div className="flex align-items-center justify-content-center h-full text-600">
-                  Нет данных для отображения
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* История предсказаний */}
-          <Card className="mb-4">
-            <h3 className="mb-3">История предсказаний</h3>
-            <div style={{ height: '300px' }} className="mb-4">
-              {predictionHistory.length > 0 ? (
-                <Chart type="line" data={predictionChartData} options={predictionChartOptions} />
-              ) : (
-                <div className="flex align-items-center justify-content-center h-full text-600">
-                  Нет истории предсказаний
-                </div>
-              )}
-            </div>
-            
-            <Divider />
-            
-            <DataTable 
-              value={predictionHistory}
-              paginator
-              rows={10}
-              emptyMessage="Нет истории предсказаний"
-            >
-              <Column
-                field="analysisDate"
-                header="Дата"
-                body={(rowData) => formatDate(rowData.analysisDate)}
-                sortable
-              />
-              <Column
-                field="recommendation"
-                header="Рекомендация"
-                body={recommendationTemplate}
-                sortable
-              />
-              <Column
-                field="confidence"
-                header="Уверенность / Оценка"
-                body={confidenceTemplate}
-                sortable
-              />
-            </DataTable>
-          </Card>
+          <VolumeChart
+            candles={volumeCandles}
+            period={volumePeriod}
+            onPeriodChange={setVolumePeriod}
+          />
         </div>
 
         {/* Правая колонка - Сигналы и Новости */}
         <div className="col-12 lg:col-4">
           {/* Сигналы */}
-          <Card className="mb-4">
-            <div className="flex align-items-center justify-content-between mb-3">
-              <h3 className="m-0">⚡ Торговые сигналы</h3>
-              <Button
-                icon="pi pi-refresh"
-                label="Запросить сигналы"
-                size="small"
-                onClick={handleFetchFreshSignals}
-                loading={loadingSignals}
-                disabled={!figi || loadingSignals}
-                className="p-button-text p-button-sm"
-              />
-            </div>
-            {signals.length > 0 ? (
-              <>
-                <div className="flex flex-column gap-3">
-                  {signals.slice(0, 5).map((signal) => {
-                  const directionText = signal.direction === 'SIGNAL_DIRECTION_BUY' 
-                    ? 'ПОКУПКА' 
-                    : signal.direction === 'SIGNAL_DIRECTION_SELL' 
-                    ? 'ПРОДАЖА' 
-                    : 'НЕОПРЕДЕЛЕНО';
-                  const directionSeverity = signal.direction === 'SIGNAL_DIRECTION_BUY' 
-                    ? 'success' 
-                    : signal.direction === 'SIGNAL_DIRECTION_SELL' 
-                    ? 'danger' 
-                    : 'info';
-                  
-                  return (
-                    <div key={signal.signalId} className="border-bottom-1 surface-border pb-3">
-                      <div className="flex align-items-center justify-content-between mb-2">
-                        <Tag value={directionText} severity={directionSeverity} />
-                        {signal.isActive && (
-                          <Badge value="Активен" severity="success" />
-                        )}
-                      </div>
-                      <div className="text-sm text-500 mb-2">
-                        {signal.strategyName}
-                        {signal.probability && ` • Вероятность: ${signal.probability}%`}
-                      </div>
-                      {signal.name && (
-                        <div className="font-medium mb-2">{signal.name}</div>
-                      )}
-                      <div className="text-sm text-600 mb-2">
-                        <div>Создан: {formatDate(signal.createDt)}</div>
-                        <div>Действует до: {formatDate(signal.endDt)}</div>
-                        {signal.initialPrice && (
-                          <div>Начальная цена: {formatCurrency(signal.initialPrice)}</div>
-                        )}
-                        {signal.targetPrice && (
-                          <div>Целевая цена: {formatCurrency(signal.targetPrice)}</div>
-                        )}
-                        {signal.stoploss && (
-                          <div>Стоп-лосс: {formatCurrency(signal.stoploss)}</div>
-                        )}
-                      </div>
-                      {signal.info && (
-                        <div className="text-sm text-500">{signal.info}</div>
-                      )}
-                    </div>
-                  );
-                  })}
-                </div>
-                {signals.length > 5 && (
-                  <div className="mt-3 text-center">
-                    <Button
-                      label="Еще"
-                      icon="pi pi-arrow-down"
-                      onClick={() => handleOpenSignalsModal()}
-                      className="p-button-text"
-                      size="small"
-                    />
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-center text-500 py-4">
-                Нет сигналов
-              </div>
-            )}
-          </Card>
+          <SignalsList
+            signals={signals}
+            loading={loadingSignals}
+            onRefresh={handleFetchFreshSignals}
+            onShowMore={handleOpenSignalsModal}
+            formatDate={formatDate}
+            formatCurrency={formatCurrency}
+            figi={figi}
+          />
 
           {/* Новости */}
-          <Card className="mb-4">
-            <div className="flex align-items-center justify-content-between mb-3">
-              <h3 className="m-0">📰 Новости</h3>
-              <Button
-                icon="pi pi-refresh"
-                label="Загрузить свежие"
-                size="small"
-                onClick={handleFetchFreshNews}
-                loading={loadingNews}
-                disabled={!figi || !stockDetail?.ticker || loadingNews}
-                className="p-button-text p-button-sm"
-                tooltip="Загрузить свежие новости из NewsAPI и сохранить в БД"
-                tooltipOptions={{ position: 'top' }}
-              />
-            </div>
-            {news.length > 0 ? (
-              <>
-                <div className="flex flex-column gap-3" style={{ maxHeight: '800px', overflowY: 'auto' }}>
-                  {news.slice(0, 5).map((item, index) => (
-                  <div key={index} className="border-bottom-1 surface-border pb-3">
-                    <div className="text-sm text-500 mb-2">
-                      {formatDate(item.publishedAt)}
-                      {item.source?.name && ` • ${item.source.name}`}
-                    </div>
-                    <div className="font-medium mb-2">{item.title}</div>
-                    {item.description && (
-                      <div className="text-sm text-600 mb-2">{item.description}</div>
-                    )}
-                    {item.url && (
-                      <a 
-                        href={item.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-sm text-primary"
-                      >
-                        Читать далее →
-                      </a>
-                    )}
-                  </div>
-                  ))}
-                </div>
-                {news.length > 5 && (
-                  <div className="mt-3 text-center">
-                    <Button
-                      label="Еще"
-                      icon="pi pi-arrow-down"
-                      onClick={() => handleOpenNewsModal()}
-                      className="p-button-text"
-                      size="small"
-                    />
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-center text-500 py-4">
-                Нет новостей
-              </div>
-            )}
-          </Card>
+          <NewsList
+            news={news}
+            loading={loadingNews}
+            onRefresh={handleFetchFreshNews}
+            onShowMore={handleOpenNewsModal}
+            formatDate={formatDate}
+            figi={figi}
+            ticker={stockDetail?.ticker}
+          />
         </div>
       </div>
 
       {/* Модальное окно для сигналов */}
-      <Dialog
-        header="⚡ Торговые сигналы"
-        visible={showSignalsModal}
-        onHide={() => setShowSignalsModal(false)}
-        style={{ width: '90vw', maxWidth: '800px' }}
-        modal
-        maximizable
+      <Modal
+        isOpen={showSignalsModal}
+        onClose={() => setShowSignalsModal(false)}
+        title="⚡ Торговые сигналы"
+        size="lg"
       >
         <div
           ref={signalsModalRef}
-          className="flex flex-column gap-3"
-          style={{ maxHeight: '70vh', overflowY: 'auto' }}
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '70vh', overflowY: 'auto' }}
           onScroll={handleSignalsScroll}
         >
-          {modalSignals.map((signal) => {
-            const directionText = signal.direction === 'SIGNAL_DIRECTION_BUY' 
-              ? 'ПОКУПКА' 
-              : signal.direction === 'SIGNAL_DIRECTION_SELL' 
-              ? 'ПРОДАЖА' 
-              : 'НЕОПРЕДЕЛЕНО';
-            const directionSeverity = signal.direction === 'SIGNAL_DIRECTION_BUY' 
-              ? 'success' 
-              : signal.direction === 'SIGNAL_DIRECTION_SELL' 
-              ? 'danger' 
-              : 'info';
-            
-            return (
-              <div key={signal.signalId} className="border-bottom-1 surface-border pb-3">
-                <div className="flex align-items-center justify-content-between mb-2">
-                  <Tag value={directionText} severity={directionSeverity} />
-                  {signal.isActive && (
-                    <Badge value="Активен" severity="success" />
-                  )}
-                </div>
-                <div className="text-sm text-500 mb-2">
-                  {signal.strategyName}
-                  {signal.probability && ` • Вероятность: ${signal.probability}%`}
-                </div>
-                {signal.name && (
-                  <div className="font-medium mb-2">{signal.name}</div>
-                )}
-                <div className="text-sm text-600 mb-2">
-                  <div>Создан: {formatDate(signal.createDt)}</div>
-                  <div>Действует до: {formatDate(signal.endDt)}</div>
-                  {signal.initialPrice && (
-                    <div>Начальная цена: {formatCurrency(signal.initialPrice)}</div>
-                  )}
-                  {signal.targetPrice && (
-                    <div>Целевая цена: {formatCurrency(signal.targetPrice)}</div>
-                  )}
-                  {signal.stoploss && (
-                    <div>Стоп-лосс: {formatCurrency(signal.stoploss)}</div>
-                  )}
-                </div>
-                {signal.info && (
-                  <div className="text-sm text-500">{signal.info}</div>
-                )}
-              </div>
-            );
-          })}
+          {modalSignals.map((signal) => (
+            <SignalCard
+              key={signal.signalId}
+              signal={signal}
+              formatDate={formatDate}
+              formatCurrency={formatCurrency}
+            />
+          ))}
           {loadingMoreSignals && (
-            <div className="text-center py-3">
-              <ProgressSpinner />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px 0' }}>
+              <Skeleton variant="rectangular" width="100%" height={120} />
+              <Skeleton variant="rectangular" width="100%" height={120} />
             </div>
           )}
           {!hasMoreSignals && modalSignals.length > 0 && (
-            <div className="text-center text-500 py-3">
+            <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: '16px 0' }}>
               Все сигналы загружены
             </div>
           )}
         </div>
-      </Dialog>
+      </Modal>
 
       {/* Модальное окно для новостей */}
-      <Dialog
-        header="📰 Новости"
-        visible={showNewsModal}
-        onHide={() => setShowNewsModal(false)}
-        style={{ width: '90vw', maxWidth: '800px' }}
-        modal
-        maximizable
+      <Modal
+        isOpen={showNewsModal}
+        onClose={() => setShowNewsModal(false)}
+        title="📰 Новости"
+        size="lg"
       >
         <div
           ref={newsModalRef}
-          className="flex flex-column gap-3"
-          style={{ maxHeight: '70vh', overflowY: 'auto' }}
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '70vh', overflowY: 'auto' }}
           onScroll={handleNewsScroll}
         >
           {modalNews.map((item, index) => (
-            <div key={index} className="border-bottom-1 surface-border pb-3">
-              <div className="text-sm text-500 mb-2">
-                {formatDate(item.publishedAt)}
-                {item.source?.name && ` • ${item.source.name}`}
-              </div>
-              <div className="font-medium mb-2">{item.title}</div>
-              {item.description && (
-                <div className="text-sm text-600 mb-2">{item.description}</div>
-              )}
-              {item.url && (
-                <a 
-                  href={item.url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-sm text-primary"
-                >
-                  Читать далее →
-                </a>
-              )}
-            </div>
+            <NewsCard
+              key={index}
+              news={item}
+              formatDate={formatDate}
+            />
           ))}
           {loadingMoreNews && (
-            <div className="text-center py-3">
-              <ProgressSpinner />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px 0' }}>
+              <Skeleton variant="rectangular" width="100%" height={100} />
+              <Skeleton variant="rectangular" width="100%" height={100} />
             </div>
           )}
           {!hasMoreNews && modalNews.length > 0 && (
-            <div className="text-center text-500 py-3">
+            <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: '16px 0' }}>
               Все новости загружены
             </div>
           )}
         </div>
-      </Dialog>
+      </Modal>
     </div>
   );
 };

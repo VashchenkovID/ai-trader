@@ -81,9 +81,15 @@ const server = createServer(app);
 
 // Initialize services
 async function initializeServices() {
-    try {        
+    try {
+        // Импортируем трекер для отметки сервисов как глобально инициализированных
+        const ServiceInitializationTracker = (await import('./utils/ServiceInitializationTracker.js')).default;
+        
         // Initialize complete system through ServiceManager
         await ServiceManager.initializeSystem(server, sequelize);
+        
+        // Отмечаем ServiceManager как глобально инициализированный
+        await ServiceInitializationTracker.markServiceInitialized('ServiceManager');
         
         // Устанавливаем глобальный ServiceManager
         setGlobalServiceManager(ServiceManager);
@@ -98,6 +104,9 @@ async function initializeServices() {
             // Проверяем, не инициализирован ли уже бот
             if (!OptimizedTelegramService.isInitialized) {
                 await OptimizedTelegramService.initialize();
+                // Отмечаем Telegram сервис как глобально инициализированный
+                const ServiceInitializationTracker = (await import('./utils/ServiceInitializationTracker.js')).default;
+                await ServiceInitializationTracker.markServiceInitialized('OptimizedTelegramService');
             } else {
                 console.log('⚠️ Optimized Telegram service already initialized, skipping...');
             }

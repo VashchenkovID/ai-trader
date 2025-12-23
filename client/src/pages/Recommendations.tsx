@@ -1,22 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card } from 'primereact/card';
-import { DataTable } from 'primereact/datatable';
-import { Column } from 'primereact/column';
-import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
-import { Dropdown } from 'primereact/dropdown';
-import { InputText } from 'primereact/inputtext';
-import { Message } from 'primereact/message';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
-import { translateRecommendation } from '../utils/recommendationTranslator';
-import HorizonsTemplate from '../components/recommendations/HorizonsTemplate';
+import { Card } from '../components/ui';
+import { RecommendationCard } from '../components/recommendations/RecommendationCard';
+import { RecommendationFilters } from '../components/recommendations/RecommendationFilters';
+import { Skeleton } from '../components/ui';
 import BuyButton from '../components/recommendations/BuyButton';
-import RecommendationTemplate from '../components/recommendations/RecommendationTemplate';
-import ConfidenceTemplate from '../components/recommendations/ConfidenceTemplate';
-import StrategyTemplate from '../components/recommendations/StrategyTemplate';
-import PriceTemplate from '../components/recommendations/PriceTemplate';
-import SectorTemplate from '../components/recommendations/SectorTemplate';
+import { useWebSocketData } from '../components/WebSocketDataProvider';
+import './Recommendations.css';
 
 interface Recommendation {
   figi: string;
@@ -72,29 +64,128 @@ interface Recommendation {
 const Recommendations: React.FC = () => {
   const navigate = useNavigate();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [filteredRecommendations, setFilteredRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterConfidence, setFilterConfidence] = useState<string>('all');
   const [filterStrategy, setFilterStrategy] = useState<number | null>(null);
-  const [globalFilter, setGlobalFilter] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [strategies, setStrategies] = useState<any[]>([]);
+  const [buyingFigi, setBuyingFigi] = useState<string | null>(null);
+  const [newRecommendations, setNewRecommendations] = useState<Set<string>>(new Set());
   const toast = useRef<Toast>(null);
+  
+  // WebSocket для real-time обновлений
+  const { tradingStats } = useWebSocketData();
 
-  const filterOptions = [
-    { label: 'Все рекомендации', value: 'all' },
-    { label: `Только ${translateRecommendation('BUY')}`, value: 'BUY' },
-    { label: `Только ${translateRecommendation('SELL')}`, value: 'SELL' },
-    { label: `Только ${translateRecommendation('HOLD')}`, value: 'HOLD' }
-  ];
 
   useEffect(() => {
     loadStrategies();
   }, []);
+
+  // Обработка новых рекомендаций из WebSocket
+  useEffect(() => {
+    if (tradingStats?.recommendations && Array.isArray(tradingStats.recommendations)) {
+      const wsRecommendations = tradingStats.recommendations;
+      
+      // Добавляем новые рекомендации в список
+      wsRecommendations.forEach((wsRec: any) => {
+        const existingIndex = recommendations.findIndex((r) => r.figi === wsRec.figi);
+        
+        if (existingIndex === -1) {
+          // Новая рекомендация - добавляем в начало списка
+          const newRec: Recommendation = {
+            figi: wsRec.figi || '',
+            ticker: wsRec.ticker || '',
+            name: wsRec.name || 'Неизвестно',
+            recommendation: wsRec.recommendation || 'HOLD',
+            confidence: wsRec.confidence || 0,
+            score: wsRec.score || 0,
+            priceAtAnalysis: wsRec.priceAtAnalysis || wsRec.price || 0,
+            targetPrice: wsRec.targetPrice,
+            stopLoss: wsRec.stopLoss,
+            takeProfit: wsRec.takeProfit,
+            sector: wsRec.sector,
+            analysisDate: wsRec.analysisDate || new Date().toISOString(),
+            isActive: true,
+            explanation: wsRec.explanation,
+            analysis: wsRec.analysis,
+            horizons: wsRec.horizons,
+            strategy: wsRec.strategy,
+            suggestedStrategy: wsRec.suggestedStrategy,
+          };
+          
+          setRecommendations((prev) => [newRec, ...prev]);
+          setNewRecommendations((prev) => new Set([...prev, wsRec.figi]));
+          
+          // Показываем уведомление для важных рекомендаций
+          if (wsRec.confidence > 0.7) {
+            toast.current?.show({
+              severity: 'info',
+              summary: 'Новая рекомендация',
+              detail: `${wsRec.recommendation === 'BUY' ? 'Покупка' : wsRec.recommendation === 'SELL' ? 'Продажа' : 'Удержание'} ${wsRec.ticker} (уверенность: ${Math.round(wsRec.confidence * 100)}%)`,
+              life: 5000,
+            });
+          }
+          
+          // Убираем badge "Новое" через 30 секунд
+          setTimeout(() => {
+            setNewRecommendations((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(wsRec.figi);
+              return newSet;
+            });
+          }, 30000);
+        } else {
+          // Обновляем существующую рекомендацию
+          setRecommendations((prev) => {
+            const updated = [...prev];
+            updated[existingIndex] = {
+              ...updated[existingIndex],
+              ...wsRec,
+              analysisDate: wsRec.analysisDate || updated[existingIndex].analysisDate,
+            };
+            return updated;
+          });
+        }
+      });
+    }
+  }, [tradingStats?.recommendations]);
 
   useEffect(() => {
     if (strategies.length > 0) {
       loadRecommendations(); // Загружаем рекомендации только после загрузки стратегий
     }
   }, [strategies.length, filterType, filterStrategy]);
+
+  // Фильтрация рекомендаций
+  useEffect(() => {
+    let filtered = [...recommendations];
+
+    // Фильтр по поиску
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (rec) =>
+          rec.name.toLowerCase().includes(searchLower) ||
+          rec.ticker.toLowerCase().includes(searchLower) ||
+          rec.sector?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Фильтр по уверенности
+    if (filterConfidence !== 'all') {
+      filtered = filtered.filter((rec) => {
+        const confidence = rec.confidence;
+        if (filterConfidence === 'high') return confidence >= 0.8;
+        if (filterConfidence === 'medium') return confidence >= 0.5 && confidence < 0.8;
+        if (filterConfidence === 'low') return confidence < 0.5;
+        return true;
+      });
+    }
+
+    setFilteredRecommendations(filtered);
+  }, [recommendations, searchTerm, filterConfidence]);
   
   useEffect(() => {
     const interval = setInterval(() => {
@@ -272,154 +363,120 @@ const Recommendations: React.FC = () => {
     }
   };
 
+  const handleBuy = (figi: string) => {
+    // Проверяем, доступна ли цена — иначе покупка недоступна
+    const rec = recommendations.find((r) => r.figi === figi);
+    if (!rec || !rec.priceAtAnalysis || rec.priceAtAnalysis <= 0) {
+      toast.current?.show({
+        severity: 'warn',
+        summary: 'Покупка недоступна',
+        detail: 'Нет цены для инструмента, заявка не может быть создана',
+        life: 4000,
+      });
+      setBuyingFigi(null);
+      return;
+    }
+
+    // Ставим индикатор загрузки
+    setBuyingFigi(figi);
+
+    // Находим скрытый BuyButton и кликаем по нему
+    setTimeout(() => {
+      const buyButtonContainer = document.querySelector(`[data-buy-button-figi="${figi}"]`);
+      if (buyButtonContainer) {
+        const buyButton = buyButtonContainer.querySelector('button[data-buy-trigger]') || 
+                          buyButtonContainer.querySelector('button.btn') ||
+                          buyButtonContainer.querySelector('button');
+        if (buyButton && !(buyButton as HTMLButtonElement).disabled) {
+          (buyButton as HTMLButtonElement).click();
+        } else {
+          // Если кнопка не найдена или disabled, сбрасываем лоадер
+          setBuyingFigi(null);
+        }
+      } else {
+        // Если контейнер не найден, сбрасываем лоадер
+        setBuyingFigi(null);
+      }
+    }, 100); // Небольшая задержка для гарантии, что DOM готов
+  };
+
+  const handleBuyComplete = () => {
+    setBuyingFigi(null);
+    loadRecommendations();
+  };
+
+  const handleDetails = (figi: string) => {
+    navigate(`/stock/${figi}`);
+  };
+
   return (
-    <div className="recommendations-page p-4">
+    <div className="recommendations-page">
       <Toast ref={toast} />
       
-      <Card title="📊 Рекомендации AI для торговли" className="mb-4">
-        <div className="flex flex-column gap-3 mb-3">
-          <div className="flex justify-content-between align-items-center flex-wrap gap-2">
-            <div className="flex align-items-center gap-3 flex-wrap">
-              <span className="p-input-icon-left" style={{ minWidth: '300px' }}>
-                <i className="pi pi-search" />
-                <InputText
-                  value={globalFilter}
-                  onChange={(e) => setGlobalFilter(e.target.value)}
-                  placeholder="Поиск по названию компании, тикеру или сектору..."
-                  className="w-full"
-                />
-              </span>
-              <span className="text-600">Фильтр:</span>
-              <Dropdown
-                value={filterType}
-                options={filterOptions}
-                onChange={(e) => setFilterType(e.value)}
-                placeholder="Тип рекомендации"
-                style={{ minWidth: '200px' }}
-              />
-              <Dropdown
-                value={filterStrategy}
-                options={[
-                  { label: 'Все стратегии', value: null },
-                  ...strategies.map((s: any) => ({ label: s.name, value: s.id }))
-                ]}
-                onChange={(e) => setFilterStrategy(e.value)}
-                placeholder="Стратегия"
-                style={{ minWidth: '200px' }}
-              />
-              <Button
-                icon="pi pi-refresh"
-                label="Обновить"
-                size="small"
-                onClick={() => loadRecommendations()}
-                loading={loading}
-              />
-            </div>
-            <div className="text-sm text-600">
-              Всего рекомендаций: <strong>{recommendations.length}</strong>
-            </div>
-          </div>
+      <div className="recommendations-header">
+        <h1 className="recommendations-title">📊 Рекомендации AI для торговли</h1>
+        <div className="recommendations-count">
+          Всего рекомендаций: <strong>{filteredRecommendations.length}</strong>
         </div>
+      </div>
 
-        {recommendations.length === 0 && !loading && (
-          <Message 
-            severity="info" 
-            text="Нет активных рекомендаций. Запустите анализ портфеля для получения рекомендаций." 
-            className="mb-3"
-          />
-        )}
+      <RecommendationFilters
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        filterType={filterType}
+        onFilterTypeChange={setFilterType}
+        filterConfidence={filterConfidence}
+        onFilterConfidenceChange={setFilterConfidence}
+        filterStrategy={filterStrategy}
+        onFilterStrategyChange={setFilterStrategy}
+        strategies={strategies}
+        onRefresh={loadRecommendations}
+        loading={loading}
+      />
 
-        <DataTable
-          value={recommendations}
-          loading={loading}
-          emptyMessage="Нет рекомендаций"
-          paginator={recommendations.length > 10}
-          rows={10}
-          sortMode="multiple"
-          className="p-datatable-sm"
-          globalFilter={globalFilter}
-          globalFilterFields={['ticker', 'name', 'recommendation', 'sector']}
-          header={
-            <div className="flex justify-content-between align-items-center">
-              <span className="p-input-icon-left w-full">
-                <i className="pi pi-search" />
-                <InputText
-                  value={globalFilter}
-                  onChange={(e) => setGlobalFilter(e.target.value)}
-                  placeholder="Поиск по названию компании, тикеру или сектору..."
-                  className="w-full"
-                />
-              </span>
-            </div>
-          }
+      {loading ? (
+        <div className="recommendations-grid">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} variant="card" height="300px" />
+          ))}
+        </div>
+      ) : filteredRecommendations.length === 0 ? (
+        <Card variant="default" className="recommendations-empty">
+          <div className="recommendations-empty-content">
+            <span className="recommendations-empty-icon">📊</span>
+            <h3>Нет активных рекомендаций</h3>
+            <p>Запустите анализ портфеля для получения рекомендаций.</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="recommendations-grid">
+          {filteredRecommendations.map((recommendation) => (
+            <RecommendationCard
+              key={recommendation.figi}
+              recommendation={recommendation}
+              onBuy={handleBuy}
+              onDetails={handleDetails}
+              loading={buyingFigi === recommendation.figi}
+              isNew={newRecommendations.has(recommendation.figi)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* BuyButton компоненты для модальных окон - скрыты, но доступны для клика */}
+      {filteredRecommendations.map((recommendation) => (
+        <div 
+          key={`buy-button-${recommendation.figi}`} 
+          data-buy-button-figi={recommendation.figi}
+          style={{ position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'auto' }}
         >
-          <Column
-            field="name"
-            header="Инструмент"
-            sortable
-            style={{ minWidth: '250px' }}
-            body={(rowData: Recommendation) => (
-              <div 
-                className="cursor-pointer hover:text-primary transition-colors"
-                onClick={() => navigate(`/stock/${rowData.figi}`)}
-                title="Нажмите для просмотра детальной информации"
-              >
-                <div className="font-medium">{rowData.name}</div>
-                <div className="text-sm text-600">{rowData.ticker}</div>
-              </div>
-            )}
+          <BuyButton
+            rowData={recommendation}
+            onRequestCreated={handleBuyComplete}
+            onModalOpen={() => setBuyingFigi(null)}
           />
-          <Column
-            field="recommendation"
-            header="Общая рекомендация"
-            body={(rowData: Recommendation) => <RecommendationTemplate rowData={rowData} />}
-            sortable
-            style={{ minWidth: '150px' }}
-          />
-          <Column
-            field="horizons"
-            header="Рекомендации по горизонтам"
-            body={(rowData: Recommendation) => <HorizonsTemplate rowData={rowData} />}
-            style={{ minWidth: '250px' }}
-          />
-          <Column
-            field="confidence"
-            header="Уверенность / Score"
-            body={(rowData: Recommendation) => <ConfidenceTemplate rowData={rowData} />}
-            sortable
-            style={{ minWidth: '180px' }}
-          />
-          <Column
-            field="priceAtAnalysis"
-            header="Цена"
-            body={(rowData: Recommendation) => <PriceTemplate rowData={rowData} />}
-            sortable
-            style={{ minWidth: '150px' }}
-          />
-          <Column
-            field="sector"
-            header="Сектор"
-            body={(rowData: Recommendation) => <SectorTemplate rowData={rowData} />}
-            sortable
-            style={{ minWidth: '150px' }}
-          />
-          <Column
-            field="analysisDate"
-            header="Дата анализа"
-            body={(rowData: Recommendation) => formatDate(rowData.analysisDate)}
-            sortable
-            style={{ minWidth: '150px' }}
-          />
-          <Column
-            field="buy"
-            header="Купить"
-            body={(rowData: Recommendation) => <BuyButton rowData={rowData} onRequestCreated={loadRecommendations} />}
-            style={{ minWidth: '120px' }}
-            frozen
-            alignFrozen="right"
-          />
-        </DataTable>
-      </Card>
+        </div>
+      ))}
     </div>
   );
 };

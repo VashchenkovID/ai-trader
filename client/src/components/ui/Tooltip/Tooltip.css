@@ -1,0 +1,200 @@
+.tooltip-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 1000;
+  padding: 8px 12px;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-border-default);
+  max-width: 300px;
+  word-wrap: break-word;
+  pointer-events: none;
+  animation: tooltipFadeIn 0.2s ease-out;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tooltip-content {
+  position: relative;
+  z-index: 1;
+}
+
+.tooltip-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+/* Позиции tooltip */
+.tooltip-top {
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tooltip-top .tooltip-arrow-top {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px 6px 0 6px;
+  border-color: var(--color-surface-elevated) transparent transparent transparent;
+}
+
+.tooltip-bottom {
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tooltip-bottom .tooltip-arrow-bottom {
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 0 6px 6px 6px;
+  border-color: transparent transparent var(--color-surface-elevated) transparent;
+}
+
+.tooltip-left {
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.tooltip-left .tooltip-arrow-left {
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border-width: 6px 0 6px 6px;
+  border-color: transparent transparent transparent var(--color-surface-elevated);
+}
+
+.tooltip-right {
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.tooltip-right .tooltip-arrow-right {
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border-width: 6px 6px 6px 0;
+  border-color: transparent var(--color-surface-elevated) transparent transparent;
+}
+
+/* Варианты */
+.tooltip-info {
+  background: rgba(59, 130, 246, 0.95);
+  color: white;
+  border-color: rgba(59, 130, 246, 1);
+}
+
+.tooltip-info .tooltip-arrow-top {
+  border-color: rgba(59, 130, 246, 1) transparent transparent transparent;
+}
+
+.tooltip-info .tooltip-arrow-bottom {
+  border-color: transparent transparent rgba(59, 130, 246, 1) transparent;
+}
+
+.tooltip-info .tooltip-arrow-left {
+  border-color: transparent transparent transparent rgba(59, 130, 246, 1);
+}
+
+.tooltip-info .tooltip-arrow-right {
+  border-color: transparent rgba(59, 130, 246, 1) transparent transparent;
+}
+
+.tooltip-success {
+  background: rgba(34, 197, 94, 0.95);
+  color: white;
+  border-color: rgba(34, 197, 94, 1);
+}
+
+.tooltip-success .tooltip-arrow-top {
+  border-color: rgba(34, 197, 94, 1) transparent transparent transparent;
+}
+
+.tooltip-success .tooltip-arrow-bottom {
+  border-color: transparent transparent rgba(34, 197, 94, 1) transparent;
+}
+
+.tooltip-success .tooltip-arrow-left {
+  border-color: transparent transparent transparent rgba(34, 197, 94, 1);
+}
+
+.tooltip-success .tooltip-arrow-right {
+  border-color: transparent rgba(34, 197, 94, 1) transparent transparent;
+}
+
+.tooltip-warning {
+  background: rgba(251, 191, 36, 0.95);
+  color: white;
+  border-color: rgba(251, 191, 36, 1);
+}
+
+.tooltip-warning .tooltip-arrow-top {
+  border-color: rgba(251, 191, 36, 1) transparent transparent transparent;
+}
+
+.tooltip-warning .tooltip-arrow-bottom {
+  border-color: transparent transparent rgba(251, 191, 36, 1) transparent;
+}
+
+.tooltip-warning .tooltip-arrow-left {
+  border-color: transparent transparent transparent rgba(251, 191, 36, 1);
+}
+
+.tooltip-warning .tooltip-arrow-right {
+  border-color: transparent rgba(251, 191, 36, 1) transparent transparent;
+}
+
+.tooltip-error {
+  background: rgba(239, 68, 68, 0.95);
+  color: white;
+  border-color: rgba(239, 68, 68, 1);
+}
+
+.tooltip-error .tooltip-arrow-top {
+  border-color: rgba(239, 68, 68, 1) transparent transparent transparent;
+}
+
+.tooltip-error .tooltip-arrow-bottom {
+  border-color: transparent transparent rgba(239, 68, 68, 1) transparent;
+}
+
+.tooltip-error .tooltip-arrow-left {
+  border-color: transparent transparent transparent rgba(239, 68, 68, 1);
+}
+
+.tooltip-error .tooltip-arrow-right {
+  border-color: transparent rgba(239, 68, 68, 1) transparent transparent;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .tooltip {
+    max-width: 250px;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+}
+

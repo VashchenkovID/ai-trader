@@ -1,0 +1,40 @@
+.news-card {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.news-card:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.news-card-meta {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+.news-card-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--color-text-primary);
+}
+
+.news-card-description {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.news-card-link {
+  font-size: 14px;
+  color: var(--color-accent-primary);
+  text-decoration: none;
+  transition: text-decoration 0.2s ease;
+}
+
+.news-card-link:hover {
+  text-decoration: underline;
+}
+

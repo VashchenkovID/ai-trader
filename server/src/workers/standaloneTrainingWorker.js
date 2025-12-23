@@ -2,9 +2,13 @@ import * as tf from '@tensorflow/tfjs';
 import { parentPort, workerData } from 'worker_threads';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Устанавливаем флаг воркера
+process.env.WORKER = 'true';
 
 // Автономный воркер для обучения без импорта сервисов
 class StandaloneTrainingWorker {
@@ -574,11 +578,20 @@ class StandaloneTrainingWorker {
             // Отправляем алерт в Telegram об ошибке обучения
             try {
                 const OptimizedTelegramService = (await import('../services/OptimizedTelegramService.js')).default;
-                await OptimizedTelegramService.sendAlert(
-                    'STANDALONE_WORKER_TRAINING_ERROR',
-                    `❌ <b>ОШИБКА ОБУЧЕНИЯ В STANDALONE ВОРКЕРЕ</b>\n\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
-                    'error'
-                );
+                
+                // Проверяем глобальную инициализацию перед использованием
+                const isTelegramGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('OptimizedTelegramService');
+                
+                if (isTelegramGlobal || OptimizedTelegramService.isInitialized) {
+                    await OptimizedTelegramService.sendAlert(
+                        'STANDALONE_WORKER_TRAINING_ERROR',
+                        `❌ <b>ОШИБКА ОБУЧЕНИЯ В STANDALONE ВОРКЕРЕ</b>\n\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
+                        'error'
+                    );
+                } else {
+                    // Если сервис не инициализирован, просто логируем
+                    console.warn('Telegram service not initialized, skipping alert');
+                }
             } catch (telegramError) {
                 console.warn('Failed to send standalone worker training error alert:', telegramError.message);
             }

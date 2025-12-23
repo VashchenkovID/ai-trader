@@ -5,15 +5,24 @@ import CachedSignal from '../models/CachedSignal.js';
 import { Op } from 'sequelize';
 import ServiceManager from '../services/ServiceManager.js';
 import { setGlobalServiceManager } from '../services/GlobalServiceManager.js';
+import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+
+// Устанавливаем флаг воркера
+process.env.WORKER = 'true';
 
 async function performActiveSignalsPricesUpdate() {
     try {
         // Инициализируем ServiceManager для использования в сервисах
         setGlobalServiceManager(ServiceManager);
         
-        if (!ServiceManager.isInitialized) {
-            console.log('🔧 [Active Signals Worker] ServiceManager not initialized, initializing...');
+        // Проверяем глобальную инициализацию
+        const isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
+        
+        if (!isServiceManagerGlobal && !ServiceManager.isInitialized) {
+            console.log('🔧 [Active Signals Worker] ServiceManager not initialized globally, initializing in worker...');
             await ServiceManager.initialize();
+        } else if (isServiceManagerGlobal) {
+            console.log('ℹ️ [Active Signals Worker] ServiceManager already initialized globally, skipping full initialization');
         }
 
         const startTime = Date.now();

@@ -1,0 +1,259 @@
+.recommendation-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: all 0.2s ease;
+}
+
+.recommendation-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.recommendation-card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recommendation-card-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.recommendation-card-ticker {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.recommendation-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.recommendation-card-main-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+}
+
+.recommendation-card-confidence {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.recommendation-card-confidence-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.recommendation-card-explanation {
+  padding: 12px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+  border-left: 3px solid var(--color-accent-primary);
+}
+
+.recommendation-card-explanation-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.recommendation-card-strategy {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--color-surface-default);
+  border-radius: 6px;
+}
+
+.recommendation-card-strategy-label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.recommendation-card-price-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+}
+
+.recommendation-card-profit,
+.recommendation-card-risk {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.recommendation-card-profit-label,
+.recommendation-card-risk-label {
+  color: var(--color-text-secondary);
+}
+
+.recommendation-card-profit-value,
+.recommendation-card-risk-value {
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.recommendation-card-simple-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recommendation-card-simple-metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--color-surface-default);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.recommendation-card-simple-metric-icon {
+  font-size: 16px;
+}
+
+.recommendation-card-simple-metric-label {
+  color: var(--color-text-secondary);
+  flex: 1;
+}
+
+.recommendation-card-simple-metric-value {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.recommendation-card-price {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.recommendation-card-price-label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.recommendation-card-price-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.recommendation-card-recommendation {
+  display: flex;
+  justify-content: center;
+}
+
+.recommendation-card-metrics {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.recommendation-card-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.recommendation-card-metric-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.recommendation-card-metric-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.recommendation-card-target {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--color-surface-default);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.recommendation-card-target-label {
+  color: var(--color-text-secondary);
+}
+
+.recommendation-card-target-value {
+  font-weight: 600;
+  color: var(--color-accent-success);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.recommendation-card-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.recommendation-card-date-icon {
+  font-size: 14px;
+}
+
+.recommendation-card-footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.recommendation-card-footer .btn {
+  flex: 1;
+}
+
+.recommendation-card-footer .btn:last-child {
+  flex: 0 0 auto;
+  min-width: auto;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .recommendation-card-metrics {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .recommendation-card-footer {
+    flex-direction: column;
+  }
+
+  .recommendation-card-footer .btn:last-child {
+    flex: 1;
+  }
+}
+

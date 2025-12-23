@@ -1,9 +1,10 @@
 import React from 'react';
 import PortfolioVisualization from '../components/PortfolioVisualization';
+import './Portfolio.css';
 
 const Portfolio: React.FC = () => {
   return (
-    <div className="p-4">
+    <div className="portfolio-page">
       <PortfolioVisualization />
     </div>
   );

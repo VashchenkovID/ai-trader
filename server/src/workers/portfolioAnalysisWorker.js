@@ -1,4 +1,8 @@
 import { parentPort, workerData } from 'worker_threads';
+import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+
+// Устанавливаем флаг воркера
+process.env.WORKER = 'true';
 
 async function performPortfolioAnalysis() {
     let connection = null;
@@ -29,9 +33,16 @@ async function performPortfolioAnalysis() {
         const StrategyAllocationService = (await import('../services/StrategyAllocationService.js')).default;
         const { Op } = await import('sequelize');
 
-        // Инициализируем сервисы если нужно
-        if (!NeuralNetworkService.isActive) {
-            await NeuralNetworkService.setStatus('active');
+        // Проверяем глобальную инициализацию перед локальной
+        const isNeuralNetworkGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('NeuralNetworkService');
+        
+        if (isNeuralNetworkGlobal) {
+            console.log('ℹ️ NeuralNetworkService already initialized globally, skipping full initialization in worker');
+        } else {
+            // Инициализируем сервисы если нужно
+            if (!NeuralNetworkService.isActive) {
+                await NeuralNetworkService.setStatus('active');
+            }
         }
 
         let analysis;
@@ -80,8 +91,21 @@ async function performPortfolioAnalysis() {
                     // В worker'е используем прямой импорт, так как getService не работает в изолированном потоке
                     const IntegratedAIService = (await import('../services/IntegratedAIService.js')).default;
                     
-                    if (!IntegratedAIService.isInitialized) {
+                    // Проверяем глобальную инициализацию
+                    const isIntegratedAIGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('IntegratedAIService');
+                    
+                    if (!isIntegratedAIGlobal && !IntegratedAIService.isInitialized) {
+                        console.log('🔧 IntegratedAIService not initialized globally, initializing in worker...');
                         await IntegratedAIService.initialize();
+                    } else if (isIntegratedAIGlobal) {
+                        console.log('ℹ️ IntegratedAIService already initialized globally, using lightweight initialization');
+                        if (!IntegratedAIService.isInitialized) {
+                            if (typeof IntegratedAIService.initializeLightweight === 'function') {
+                                await IntegratedAIService.initializeLightweight();
+                            } else {
+                                await IntegratedAIService.initialize();
+                            }
+                        }
                     }
                     
                     let prediction;

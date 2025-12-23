@@ -1,10 +1,11 @@
 import React from 'react';
-import { Card } from 'primereact/card';
-import { ProgressBar } from 'primereact/progressbar';
-import { Divider } from 'primereact/divider';
-import { Badge } from 'primereact/badge';
+import { Card } from '../ui/Card/Card';
+import { ProgressBar } from '../ui/ProgressBar/ProgressBar';
+import { Divider } from '../ui/Divider/Divider';
+import { Badge } from '../ui/Badge/Badge';
 import { Position } from './PortfolioPositionsTable';
 import { PortfolioSummary } from './PortfolioSummaryCard';
+import './PortfolioAnalytics.css';
 
 interface PortfolioAnalyticsProps {
   portfolio: PortfolioSummary | null;
@@ -19,56 +20,73 @@ const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({
 }) => {
   if (!portfolio || !positions.length) {
     return (
-      <Card title="📊 Статистика портфеля" className={className}>
-        <div className="text-center text-600">
+      <Card 
+        header={<h3 className="portfolio-analytics-title">📊 Статистика портфеля</h3>}
+        className={`portfolio-analytics-card ${className}`}
+      >
+        <div className="portfolio-analytics-empty">
           Нет данных для анализа
         </div>
       </Card>
     );
   }
 
+  const diversificationPercent = Math.min((positions.length / 20) * 100, 100);
+  const investedPercent = portfolio.totalValue > 0 
+    ? ((portfolio.investedAmount / portfolio.totalValue) * 100).toFixed(1)
+    : '0';
+  const cashPercent = portfolio.totalValue > 0
+    ? ((portfolio.cash / portfolio.totalValue) * 100).toFixed(1)
+    : '0';
+
   return (
-    <Card title="📊 Статистика портфеля" className={className}>
-      <div className="flex flex-column gap-3">
-        <div>
-          <div className="text-600 mb-2">Диверсификация</div>
+    <Card 
+      header={<h3 className="portfolio-analytics-title">📊 Статистика портфеля</h3>}
+      className={`portfolio-analytics-card ${className}`}
+    >
+      <div className="portfolio-analytics-content">
+        <div className="portfolio-analytics-section">
+          <div className="portfolio-analytics-label">Диверсификация</div>
           <ProgressBar 
-            value={Math.min((positions.length / 20) * 100, 100)} 
-            className="mb-2"
+            value={diversificationPercent}
+            variant={diversificationPercent >= 75 ? 'success' : diversificationPercent >= 50 ? 'warning' : 'error'}
+            size="sm"
           />
-          <small className="text-500">
+          <div className="portfolio-analytics-hint">
             {positions.length} позиций (рекомендуется 15-25)
-          </small>
-        </div>
-        
-        <Divider />
-        
-        <div className="grid text-center">
-          <div className="col-6">
-            <div className="text-xl font-bold text-blue-500">
-              {((portfolio.investedAmount / portfolio.totalValue) * 100).toFixed(1)}%
-            </div>
-            <div className="text-sm text-600">Инвестировано</div>
-          </div>
-          <div className="col-6">
-            <div className="text-xl font-bold text-green-500">
-              {((portfolio.cash / portfolio.totalValue) * 100).toFixed(1)}%
-            </div>
-            <div className="text-sm text-600">Наличные</div>
           </div>
         </div>
         
-        <Divider />
+        <Divider spacing="md" />
         
-        <div>
-          <div className="text-600 mb-2">Топ позиции по весу</div>
+        <div className="portfolio-analytics-metrics">
+          <div className="portfolio-analytics-metric">
+            <div className="portfolio-analytics-metric-value portfolio-analytics-metric-info">
+              {investedPercent}%
+            </div>
+            <div className="portfolio-analytics-metric-label">Инвестировано</div>
+          </div>
+          <div className="portfolio-analytics-metric">
+            <div className="portfolio-analytics-metric-value portfolio-analytics-metric-success">
+              {cashPercent}%
+            </div>
+            <div className="portfolio-analytics-metric-label">Наличные</div>
+          </div>
+        </div>
+        
+        <Divider spacing="md" />
+        
+        <div className="portfolio-analytics-top-positions">
+          <div className="portfolio-analytics-label">Топ позиции по весу</div>
           {positions
             .sort((a, b) => b.weight - a.weight)
             .slice(0, 3)
-            .map((pos, index) => (
-              <div key={pos.figi} className="flex justify-content-between align-items-center mb-2">
-                <span className="text-sm">{pos.ticker}</span>
-                <Badge value={`${pos.weight.toFixed(1)}%`} severity="info" />
+            .map((pos) => (
+              <div key={pos.figi} className="portfolio-analytics-position">
+                <span className="portfolio-analytics-position-ticker">{pos.ticker}</span>
+                <Badge variant="info" size="sm">
+                  {pos.weight.toFixed(1)}%
+                </Badge>
               </div>
             ))}
         </div>

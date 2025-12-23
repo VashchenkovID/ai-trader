@@ -3,11 +3,14 @@
  * Управляет инициализацией и доступом ко всем сервисам
  */
 
+import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+
 class ServiceManager {
     constructor() {
         this.services = new Map();
         this.initializationPromises = new Map();
         this.isInitialized = false;
+        this.isWorker = typeof process.env.WORKER === 'string' && process.env.WORKER === 'true';
     }
 
     /**
@@ -82,6 +85,11 @@ class ServiceManager {
                 webSocketService.initialize(server);
                 this.services.set('WebSocketService', webSocketService);
                 
+                // Отмечаем WebSocketService как глобально инициализированный (если не воркер)
+                if (!this.isWorker) {
+                    await ServiceInitializationTracker.markServiceInitialized('WebSocketService');
+                }
+                
                 // Передаем WebSocketService в SchedulerService
                 const schedulerService = this.getService('SchedulerService');
                 if (schedulerService && typeof schedulerService.setWebSocketService === 'function') {
@@ -90,6 +98,13 @@ class ServiceManager {
             }
 
             this.isInitialized = true;
+            
+            // Отмечаем все инициализированные сервисы как глобально инициализированные (если не воркер)
+            if (!this.isWorker) {
+                for (const serviceName of this.services.keys()) {
+                    await ServiceInitializationTracker.markServiceInitialized(serviceName);
+                }
+            }
         } catch (error) {
             console.error('❌ System initialization failed:', error);
             throw error;
@@ -106,7 +121,7 @@ class ServiceManager {
     /**
      * Инициализация отдельного сервиса
      */
-    async initializeService(serviceName, importFunction) {
+    async initializeService(serviceName, importFunction, options = {}) {
         if (this.services.has(serviceName)) {
             return this.services.get(serviceName);
         }
@@ -116,7 +131,16 @@ class ServiceManager {
             return await this.initializationPromises.get(serviceName);
         }
 
+        // Проверяем, не инициализирован ли сервис глобально (в основном процессе)
+        // Это особенно важно для воркеров
+        const isGloballyInitialized = await ServiceInitializationTracker.isServiceInitializedGlobally(serviceName);
         
+        if (isGloballyInitialized && this.isWorker && !options.forceReinit) {
+            // В воркере и сервис уже инициализирован в основном процессе
+            // Используем легковесную инициализацию или пропускаем тяжелые части
+            console.log(`ℹ️ Service ${serviceName} already initialized globally, using lightweight initialization in worker`);
+        }
+
         const initPromise = (async () => {
             try {
                 const ServiceModule = (await importFunction()).default;
@@ -136,10 +160,22 @@ class ServiceManager {
                 // Инициализируем сервис, если у него есть метод initialize
                 // Исключение для WebSocketService - он инициализируется отдельно с сервером
                 if (typeof service.initialize === 'function' && serviceName !== 'WebSocketService') {
-                    await service.initialize();
+                    // Если сервис уже инициализирован глобально и мы в воркере,
+                    // используем легковесную инициализацию если она доступна
+                    if (isGloballyInitialized && this.isWorker && typeof service.initializeLightweight === 'function') {
+                        await service.initializeLightweight();
+                    } else {
+                        await service.initialize();
+                    }
                 }
                 
                 this.services.set(serviceName, service);
+                
+                // Отмечаем сервис как инициализированный глобально (если не воркер или принудительно)
+                if (!this.isWorker || options.markAsGlobal) {
+                    await ServiceInitializationTracker.markServiceInitialized(serviceName);
+                }
+                
                 return service;
             } catch (error) {
                 console.error(`❌ Failed to initialize ${serviceName}:`, error);
@@ -216,6 +252,11 @@ class ServiceManager {
                         console.error(`❌ Error stopping ${serviceName}:`, error)
                     )
                 );
+            }
+            
+            // Отмечаем сервис как не инициализированный
+            if (!this.isWorker) {
+                ServiceInitializationTracker.markServiceUninitialized(serviceName).catch(() => {});
             }
         }
         
