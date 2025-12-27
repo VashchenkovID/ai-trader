@@ -15,16 +15,11 @@ import { useErrorHandler } from './hooks/useErrorHandler';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import NeuralNetworks from './pages/NeuralNetworks';
-import TradingModeManager from './pages/TradingModeManager';
-import MetricsMonitoring from './pages/MetricsMonitoring';
-import AdvancedMetrics from './pages/AdvancedMetrics';
 import TradingRequests from './pages/TradingRequests';
 import Recommendations from './pages/Recommendations';
 import Portfolio from './pages/Portfolio';
 import TrainingDebug from './pages/TrainingDebug';
 import StockDetail from './pages/StockDetail';
-import Strategies from './pages/Strategies';
-import InstrumentStats from './pages/InstrumentStats';
 import DesignSystemTest from './pages/DesignSystemTest';
 
 function App() {
@@ -43,15 +38,10 @@ function App() {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/neural-networks" element={<NeuralNetworks />} />
-                  <Route path="/trading-mode" element={<TradingModeManager />} />
-                  <Route path="/metrics" element={<MetricsMonitoring />} />
-                  <Route path="/advanced-metrics" element={<AdvancedMetrics />} />
                   <Route path="/trading-requests" element={<TradingRequests />} />
                   <Route path="/recommendations" element={<Recommendations />} />
                   <Route path="/portfolio" element={<Portfolio />} />
-                  <Route path="/strategies" element={<Strategies />} />
                   <Route path="/training-debug" element={<TrainingDebug />} />
-                  <Route path="/instrument-stats" element={<InstrumentStats />} />
                   <Route path="/design-system-test" element={<DesignSystemTest />} />
                   <Route path="/stock/:figi" element={<StockDetail />} />
                 </Routes>

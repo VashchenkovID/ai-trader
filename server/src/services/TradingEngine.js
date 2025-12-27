@@ -740,8 +740,125 @@ class TradingEngine {
     async getRealPortfolioValue() {
         try {
             const portfolio = await this.broker.getPortfolio();
+            
+            // Преобразуем positions из массива в объект {figi: quantity} для совместимости
+            let positions = {};
+            let cash = 0;
+            let positionsValue = 0;
+            
+            if (portfolio.positions && Array.isArray(portfolio.positions)) {
+                // Если positions - массив объектов из Tinkoff API
+                // transformPortfolioData уже преобразовал quantity в число
+                console.log(`📊 Processing ${portfolio.positions.length} positions from array`);
+                for (const position of portfolio.positions) {
+                    if (!position.figi) {
+                        console.warn('⚠️ Position without figi:', position);
+                        continue;
+                    }
+                    
+                    // quantity может быть числом или строкой после transformPortfolioData
+                    // Преобразуем в число
+                    let quantity = 0;
+                    if (typeof position.quantity === 'number') {
+                        quantity = position.quantity;
+                    } else if (typeof position.quantity === 'string') {
+                        quantity = parseFloat(position.quantity) || 0;
+                    } else if (position.quantity && typeof position.quantity === 'object') {
+                        // Если это объект с units
+                        const units = position.quantity.units || position.quantity.value || 0;
+                        quantity = typeof units === 'string' ? parseFloat(units) || 0 : units;
+                    }
+                    
+                    if (quantity > 0) {
+                        positions[position.figi] = quantity;
+                        console.log(`  ✅ ${position.figi}: ${quantity} units`);
+                        
+                        // Рассчитываем стоимость позиции
+                        // currentPrice может быть объектом {value, currency} или числом
+                        let currentPrice = 0;
+                        if (typeof position.currentPrice === 'number') {
+                            currentPrice = position.currentPrice;
+                        } else if (position.currentPrice && typeof position.currentPrice === 'object') {
+                            currentPrice = position.currentPrice.value || position.currentPrice.units || 0;
+                        }
+                        
+                        if (currentPrice > 0) {
+                            positionsValue += currentPrice * quantity;
+                            console.log(`    💰 Price: ${currentPrice}, Value: ${currentPrice * quantity}`);
+                        } else {
+                            console.warn(`  ⚠️ No price for ${position.figi}, will calculate from cache`);
+                        }
+                    } else {
+                        console.warn(`  ⚠️ Position ${position.figi} has zero or invalid quantity:`, position.quantity);
+                    }
+                }
+            } else if (portfolio.positions && typeof portfolio.positions === 'object' && !Array.isArray(portfolio.positions)) {
+                // Если positions уже объект
+                positions = portfolio.positions;
+                console.log(`📊 Using positions as object: ${Object.keys(positions).length} positions`);
+            } else {
+                console.warn('⚠️ No positions found or invalid format:', portfolio.positions);
+            }
+            
+            // Извлекаем cash из totalAmountCurrencies
+            let cashFromCurrencies = null;
+            if (portfolio.totalAmountCurrencies && Array.isArray(portfolio.totalAmountCurrencies) && portfolio.totalAmountCurrencies.length > 0) {
+                const rubCurrency = portfolio.totalAmountCurrencies.find(c => 
+                    c.currency === 'RUB' || c.currency === 'rub' || c.currency === 'RUR'
+                );
+                if (rubCurrency) {
+                    const cashValue = rubCurrency.value;
+                    cashFromCurrencies = typeof cashValue === 'number' 
+                        ? cashValue 
+                        : (typeof cashValue === 'string' ? parseFloat(cashValue) || 0 : (cashValue?.units || 0));
+                    console.log(`💰 Cash from totalAmountCurrencies: ${cashFromCurrencies} RUB`);
+                }
+            }
+            
+            // Если cash не найден в totalAmountCurrencies, пробуем portfolio.cash
+            if (cashFromCurrencies === null && portfolio.cash !== undefined) {
+                cashFromCurrencies = typeof portfolio.cash === 'string' ? parseFloat(portfolio.cash) || 0 : portfolio.cash;
+                console.log(`💰 Cash from portfolio.cash: ${cashFromCurrencies} RUB`);
+            }
+            
+            // Извлекаем totalAmountPortfolio для проверки
+            let totalPortfolio = null;
+            if (portfolio.totalAmountPortfolio) {
+                const totalPortfolioValue = portfolio.totalAmountPortfolio.value || portfolio.totalAmountPortfolio.units || 0;
+                totalPortfolio = typeof totalPortfolioValue === 'string' 
+                    ? parseFloat(totalPortfolioValue) || 0 
+                    : (typeof totalPortfolioValue === 'number' ? totalPortfolioValue : 0);
+                console.log(`📊 totalAmountPortfolio from API: ${totalPortfolio} RUB`);
+            }
+            
+            // Определяем cash и positionsValue
+            if (cashFromCurrencies !== null) {
+                // Если cash найден в totalAmountCurrencies или portfolio.cash, используем его
+                cash = cashFromCurrencies;
+                // Если positionsValue не рассчитан, вычисляем из totalPortfolio
+                if (positionsValue === 0 && totalPortfolio !== null) {
+                    positionsValue = Math.max(0, totalPortfolio - cash);
+                    console.log(`📊 Calculated positionsValue from totalAmountPortfolio (${totalPortfolio} - ${cash}): ${positionsValue} RUB`);
+                }
+            } else if (totalPortfolio !== null) {
+                // Если cash не найден, но есть totalPortfolio, вычисляем cash как разницу
+                // totalPortfolio = cash + positionsValue
+                cash = Math.max(0, totalPortfolio - positionsValue);
+                console.log(`💰 Calculated cash from totalAmountPortfolio (${totalPortfolio} - ${positionsValue}): ${cash} RUB`);
+            } else {
+                // Если ничего не найдено, cash = 0 (все средства в позициях)
+                console.log(`💰 Cash not found, assuming 0 (all funds in positions)`);
+            }
+            
+            console.log(`✅ Converted portfolio: ${Object.keys(positions).length} positions, cash=${cash}, positionsValue=${positionsValue}, totalValue=${cash + positionsValue}`);
+            
             return {
-                ...portfolio,
+                cash,
+                positions,
+                positionsValue,
+                totalValue: cash + positionsValue,
+                trades: portfolio.trades || [],
+                initialCapital: portfolio.initialCapital || null,
                 mode: this.modeManager.getCurrentMode()
             };
         } catch (error) {

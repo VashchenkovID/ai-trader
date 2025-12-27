@@ -80,6 +80,44 @@ class TradingRequestService {
                 throw new Error(`Invalid price for ${recommendation.figi}: ${currentPrice}. Cannot create trading request. Please provide a valid price.`);
             }
             
+            // Анализ входа через EntryOptimizationService (если включен)
+            let entryAnalysis = null;
+            let optimizedPrice = currentPrice;
+            let orderType = 'market';
+            
+            try {
+                const EntryOptimizationService = (await import('./EntryOptimizationService.js')).default;
+                if (EntryOptimizationService && EntryOptimizationService.isInitialized) {
+                    const signal = {
+                        figi: recommendation.figi,
+                        action: recommendation.recommendation === 'HOLD' ? 'BUY' : recommendation.recommendation,
+                        price: currentPrice,
+                        confidence: recommendation.confidence,
+                        score: recommendation.score
+                    };
+                    
+                    entryAnalysis = await EntryOptimizationService.analyzeEntry(signal, options);
+                    
+                    // Используем оптимизированную цену и тип ордера, если анализ успешен
+                    if (entryAnalysis && entryAnalysis.recommendation !== 'error') {
+                        if (entryAnalysis.recommendation === 'limit_order' && entryAnalysis.recommendedPrice) {
+                            optimizedPrice = entryAnalysis.recommendedPrice;
+                            orderType = 'limit';
+                        } else if (entryAnalysis.recommendation === 'wait' && !options.forceEntry) {
+                            // Если рекомендуется подождать, выбрасываем ошибку (если не forceEntry)
+                            throw new Error(`Вход не рекомендуется: ${entryAnalysis.reason}. ${entryAnalysis.indicators ? Object.values(entryAnalysis.indicators).map(i => i.reason).filter(Boolean).join('; ') : ''}`);
+                        }
+                    }
+                }
+            } catch (error) {
+                // Если ошибка связана с ожиданием коррекции, пробрасываем её
+                if (error.message.includes('Ожидание коррекции') || error.message.includes('Вход не рекомендуется')) {
+                    throw error;
+                }
+                // Иначе логируем и продолжаем с обычной ценой
+                console.warn(`⚠️ Entry optimization analysis failed, using default price: ${error.message}`);
+            }
+            
             // Определяем стратегию для рекомендации
             let strategy = null;
             let positionSize = null;
@@ -226,6 +264,10 @@ class TradingRequestService {
             // Определяем action: для HOLD рекомендаций создаем BUY заявку (пользователь хочет купить, несмотря на HOLD)
             const action = recommendation.recommendation === 'HOLD' ? 'BUY' : recommendation.recommendation;
             
+            // Используем оптимизированную цену и уверенность
+            const finalPrice = optimizedPrice;
+            const finalConfidence = entryAnalysis && entryAnalysis.confidence ? entryAnalysis.confidence : recommendation.confidence;
+            
             // Создаем заявку
             const tradingRequest = await TradingRequest.create({
                 recommendationId: recommendation.figi,
@@ -234,18 +276,25 @@ class TradingRequestService {
                 name: recommendation.name,
                 action: action,
                 quantity,
-                priceAtRequest: currentPrice,
-                estimatedAmount,
-                confidence: recommendation.confidence,
+                priceAtRequest: finalPrice,
+                estimatedAmount: quantity * finalPrice,
+                confidence: finalConfidence,
                 score: recommendation.score,
-                reasoning: this.generateReasoning(recommendation),
+                reasoning: this.generateReasoning(recommendation, entryAnalysis),
                 aiExplanation: recommendation.explanation,
                 tradingMode: currentMode,
                 strategyId: strategy ? strategy.id : null,
                 stopLoss,
                 takeProfit,
                 maxLoss: options.maxLoss,
-                userComment: options.comment
+                userComment: options.comment,
+                // Сохраняем информацию об оптимизации входа
+                entryOptimization: entryAnalysis ? {
+                    canEnter: entryAnalysis.canEnter,
+                    confirmingIndicators: entryAnalysis.confirmingIndicators,
+                    orderType: entryAnalysis.orderType || orderType,
+                    indicators: entryAnalysis.indicators
+                } : null
             });
             
             // Создаем запись PositionStrategy, если стратегия определена
@@ -1497,7 +1546,7 @@ class TradingRequestService {
     /**
      * Генерация обоснования для заявки
      */
-    generateReasoning(recommendation) {
+    generateReasoning(recommendation, entryAnalysis = null) {
         const reasons = [];
         
         reasons.push(`AI рекомендация: ${recommendation.recommendation}`);
@@ -1510,6 +1559,31 @@ class TradingRequestService {
             }
             if (recommendation.analysis.fundamentalFactors) {
                 reasons.push(`Фундаментальные факторы: ${recommendation.analysis.fundamentalFactors.join(', ')}`);
+            }
+        }
+        
+        // Добавляем информацию об оптимизации входа, если есть
+        if (entryAnalysis) {
+            reasons.push(`\n📊 Анализ входа:`);
+            reasons.push(`Подтверждающих индикаторов: ${entryAnalysis.confirmingIndicators || 0}`);
+            
+            if (entryAnalysis.indicators) {
+                if (entryAnalysis.indicators.rsi) {
+                    reasons.push(`RSI: ${entryAnalysis.indicators.rsi.value?.toFixed(2) || 'N/A'} - ${entryAnalysis.indicators.rsi.reason}`);
+                }
+                if (entryAnalysis.indicators.macd) {
+                    reasons.push(`MACD: ${entryAnalysis.indicators.macd.value?.toFixed(4) || 'N/A'} - ${entryAnalysis.indicators.macd.reason}`);
+                }
+                if (entryAnalysis.indicators.bollinger) {
+                    reasons.push(`Bollinger Bands: ${entryAnalysis.indicators.bollinger.reason}`);
+                }
+                if (entryAnalysis.indicators.volume) {
+                    reasons.push(`Объем: ${entryAnalysis.indicators.volume.reason}`);
+                }
+            }
+            
+            if (entryAnalysis.orderType === 'limit') {
+                reasons.push(`Тип ордера: Лимитный (рекомендуемая цена: ${entryAnalysis.recommendedPrice?.toFixed(2) || 'N/A'})`);
             }
         }
         

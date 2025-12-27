@@ -370,6 +370,33 @@ export const apiService = {
   },
 
   /**
+   * Получить реальный портфель
+   */
+  async getRealPortfolio(): Promise<Portfolio | null> {
+    try {
+      const response = await api.get('/api/portfolio/real');
+      return response.data.data;
+    } catch (error) {
+      console.error('Error fetching real portfolio:', error);
+      // Возвращаем null если реальный портфель недоступен
+      return null;
+    }
+  },
+
+  /**
+   * Синхронизировать реальный портфель из Tinkoff API
+   */
+  async syncRealPortfolio(): Promise<any> {
+    try {
+      const response = await api.post('/api/portfolio/real/sync');
+      return response.data;
+    } catch (error) {
+      console.error('Error syncing real portfolio:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Получить статистику торговли
    */
   async getTradingStats(): Promise<TradingStats> {
@@ -460,10 +487,36 @@ export const apiService = {
    */
   async getCacheStatus(): Promise<CacheStatus> {
     try {
-      const response = await api.get('/api/debug/cache-status');
-      return response.data.data.cacheStatus;
+      const response = await api.get('/api/system/cache/status');
+      return response.data.data;
     } catch (error) {
       console.error('Error fetching cache status:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить статистику кеша
+   */
+  async getCacheStats(): Promise<any> {
+    try {
+      const response = await api.get('/api/system/cache/stats');
+      return response.data.data;
+    } catch (error) {
+      console.error('Error fetching cache stats:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить статус планировщика
+   */
+  async getSchedulerStatus(): Promise<any> {
+    try {
+      const response = await api.get('/api/system/scheduler/status');
+      return response.data.data;
+    } catch (error) {
+      console.error('Error fetching scheduler status:', error);
       throw error;
     }
   },
@@ -782,7 +835,7 @@ export const apiService = {
   async getRiskManagementStatus(): Promise<RiskManagementStatus> {
     try {
       const response = await api.get('/api/risk-management/status');
-      return response.data.status;
+      return response.data.data || response.data;
     } catch (error) {
       console.error('Error fetching risk management status:', error);
       throw error;
@@ -934,13 +987,25 @@ export const apiService = {
   /**
    * Выполнить предварительную проверку системы
    */
-  async runPreflightCheck(): Promise<PreflightCheckResults> {
+  async runPreflightCheck(): Promise<any> {
     try {
       const response = await api.post('/api/preflight-check/run');
-      return response.data.results;
+      // API возвращает { success: true, results: {...} }
+      return response.data;
     } catch (error) {
       console.error('Error running preflight check:', error);
-      throw error;
+      // Возвращаем безопасный результат вместо выброса ошибки
+      return {
+        success: false,
+        results: {
+          passed: false,
+          checks: [{
+            name: 'error',
+            passed: false,
+            message: 'Ошибка выполнения проверки'
+          }]
+        }
+      };
     }
   },
 
@@ -2565,6 +2630,62 @@ export const apiService = {
     }
   },
 
+  // ============================================================================
+  // УВЕДОМЛЕНИЯ
+  // ============================================================================
+
+  /**
+   * Получить настройки уведомлений
+   */
+  async getNotificationSettings(): Promise<any> {
+    try {
+      const response = await api.get('/api/notifications/settings');
+      return response.data.data;
+    } catch (error) {
+      console.error('Error fetching notification settings:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Обновить настройки уведомлений
+   */
+  async updateNotificationSettings(settings: Record<string, any>): Promise<any> {
+    try {
+      const response = await api.put('/api/notifications/settings', settings);
+      return response.data.data;
+    } catch (error) {
+      console.error('Error updating notification settings:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Тестировать Telegram подключение
+   */
+  async testTelegramConnection(token: string, chatId: string): Promise<any> {
+    try {
+      const response = await api.post('/api/telegram/test', { token, chatId });
+      return response.data.data;
+    } catch (error) {
+      console.error('Error testing Telegram connection:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Отправить тестовое уведомление
+   */
+  async sendTestNotification(type: string = 'telegram'): Promise<any> {
+    try {
+      const response = await api.post('/api/notifications/test', { type });
+      return response.data.data;
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      throw error;
+    }
+  },
+
   /**
    * Получить недавние рекомендации
    */
@@ -3144,6 +3265,29 @@ export const apiService = {
     } catch (error) {
       console.error('Error executing rebalancing:', error);
       return { success: false, data: null };
+    }
+  },
+
+  // Training Management
+  async startBatchTraining(options?: { epochs?: number; batchSize?: number }) {
+    try {
+      const response = await api.post('/api/training/batch-train-all', options || {});
+      return response.data;
+    } catch (error: any) {
+      console.error('Error starting batch training:', error);
+      throw error;
+    }
+  },
+
+  async getTrainingStatus(): Promise<any> {
+    try {
+      // TODO: Добавить endpoint для получения статуса обучения
+      // const response = await api.get('/api/training/status');
+      // return response.data;
+      return { isTraining: false };
+    } catch (error) {
+      console.error('Error fetching training status:', error);
+      return { isTraining: false };
     }
   }
 };

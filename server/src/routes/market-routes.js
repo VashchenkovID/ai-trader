@@ -66,6 +66,95 @@ router.post('/refresh', async (req, res) => {
 });
 
 /**
+ * Тестовый endpoint для проверки fallback
+ * GET /api/market/test-fallback/stocks
+ * Напрямую вызывает TinkoffApiService.getStocks() для тестирования fallback
+ */
+router.get('/test-fallback/stocks', async (req, res) => {
+    try {
+        console.log('🧪 Тестовый запрос к TinkoffApiService.getStocks() для проверки fallback');
+        const stocks = await TinkoffApiService.getStocks();
+        
+        // Проверяем, откуда пришли данные
+        const fromCache = stocks._fromCache || false;
+        const cacheAge = stocks._cacheAge || null;
+        const simplified = stocks._simplified || false;
+        
+        // Убираем метаданные из ответа
+        const cleanStocks = { ...stocks };
+        delete cleanStocks._fromCache;
+        delete cleanStocks._cacheAge;
+        delete cleanStocks._simplified;
+        delete cleanStocks._originalError;
+        
+        res.json({
+            success: true,
+            data: cleanStocks,
+            meta: {
+                fromCache: fromCache,
+                cacheAge: cacheAge ? Math.round(cacheAge / 1000 / 60) : null, // в минутах
+                simplified: simplified
+            }
+        });
+    } catch (error) {
+        console.error('❌ Ошибка тестового запроса:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка тестового запроса',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Тестовый endpoint для проверки fallback свечей
+ * GET /api/market/test-fallback/candles/:figi?days=30&interval=DAY
+ */
+router.get('/test-fallback/candles/:figi', async (req, res) => {
+    try {
+        const { figi } = req.params;
+        const days = parseInt(req.query.days) || 30;
+        const interval = req.query.interval || 'DAY';
+        
+        const to = new Date();
+        const from = new Date();
+        from.setDate(from.getDate() - days);
+        
+        console.log(`🧪 Тестовый запрос к TinkoffApiService.getCandles() для ${figi}`);
+        const candles = await TinkoffApiService.getCandles(figi, interval, from, to);
+        
+        // Проверяем, откуда пришли данные
+        const fromCache = candles._fromCache || false;
+        const cacheAge = candles._cacheAge || null;
+        const simplified = candles._simplified || false;
+        
+        // Убираем метаданные из ответа
+        const cleanCandles = { ...candles };
+        delete cleanCandles._fromCache;
+        delete cleanCandles._cacheAge;
+        delete cleanCandles._simplified;
+        delete cleanCandles._originalError;
+        
+        res.json({
+            success: true,
+            data: cleanCandles,
+            meta: {
+                fromCache: fromCache,
+                cacheAge: cacheAge ? Math.round(cacheAge / 1000 / 60) : null, // в минутах
+                simplified: simplified
+            }
+        });
+    } catch (error) {
+        console.error('❌ Ошибка тестового запроса свечей:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка тестового запроса свечей',
+            error: error.message
+        });
+    }
+});
+
+/**
  * Детальная информация об инструменте
  * GET /api/market/stock/:figi
  */

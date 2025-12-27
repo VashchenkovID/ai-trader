@@ -76,14 +76,25 @@ CachedInstrument.init({
     tableName: 'cached_instruments',
     indexes: [
         {
+            name: 'idx_cached_instruments_figi',
             unique: true,
             fields: ['figi']
         },
         {
+            name: 'idx_cached_instruments_ticker',
             fields: ['ticker']
         },
         {
+            name: 'idx_cached_instruments_last_updated',
             fields: ['lastUpdated']
+        },
+        {
+            name: 'idx_cached_instruments_is_active',
+            fields: ['isActive']
+        },
+        {
+            name: 'idx_cached_instruments_sector',
+            fields: ['sector']
         }
     ]
 });

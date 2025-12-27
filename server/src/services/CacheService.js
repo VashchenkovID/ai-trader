@@ -558,6 +558,55 @@ class CacheService {
             throw error;
         }
     }
+
+    /**
+     * Получить статистику кеша
+     * Возвращает количество инструментов, свечей и сигналов
+     */
+    async getCacheStats() {
+        try {
+            const CachedSignal = (await import('../models/CachedSignal.js')).default;
+            
+            const [totalInstruments, activeInstruments, totalCandles, totalSignals] = await Promise.all([
+                CachedInstrument.count(),
+                CachedInstrument.count({ where: { isActive: true } }),
+                CachedCandle.count(),
+                CachedSignal.count().catch(() => 0) // Если ошибка, возвращаем 0
+            ]);
+
+            // Получаем информацию о последнем обновлении
+            const lastUpdatedInstrument = await CachedInstrument.findOne({
+                order: [['lastUpdated', 'DESC']],
+                attributes: ['lastUpdated']
+            });
+
+            return {
+                instruments: {
+                    total: totalInstruments,
+                    active: activeInstruments,
+                    inactive: totalInstruments - activeInstruments
+                },
+                candles: {
+                    total: totalCandles
+                },
+                signals: {
+                    total: totalSignals
+                },
+                lastUpdated: lastUpdatedInstrument?.lastUpdated ? new Date(lastUpdatedInstrument.lastUpdated).toISOString() : null,
+                timestamp: new Date().toISOString()
+            };
+        } catch (error) {
+            console.error('❌ Ошибка получения статистики кеша:', error);
+            return {
+                instruments: { total: 0, active: 0, inactive: 0 },
+                candles: { total: 0 },
+                signals: { total: 0 },
+                lastUpdated: null,
+                timestamp: new Date().toISOString(),
+                error: error.message
+            };
+        }
+    }
 }
 
 export default new CacheService();

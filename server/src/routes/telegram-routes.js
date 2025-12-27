@@ -128,4 +128,39 @@ router.get('/sentiment/:figi', async (req, res) => {
     }
 });
 
+/**
+ * Тестирование Telegram подключения
+ */
+router.post('/test', async (req, res) => {
+    try {
+        const { token, chatId } = req.body;
+        
+        if (!token || !chatId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Требуются token и chatId'
+            });
+        }
+        
+        // Создаем временный бот для тестирования
+        const TelegramBot = (await import('node-telegram-bot-api')).default;
+        const testBot = new TelegramBot(token, { polling: false });
+        
+        // Отправляем тестовое сообщение
+        await testBot.sendMessage(chatId, '✅ Тестовое сообщение от AI Trader. Telegram подключение работает!');
+        
+        res.json({
+            success: true,
+            data: { message: 'Тестовое сообщение отправлено успешно' }
+        });
+    } catch (error) {
+        console.error('Ошибка тестирования Telegram:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Ошибка тестирования Telegram подключения',
+            error: error.message
+        });
+    }
+});
+
 export default router;

@@ -4,6 +4,7 @@
  */
 
 import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+import LoggerService from './LoggerService.js';
 
 class ServiceManager {
     constructor() {
@@ -34,6 +35,14 @@ class ServiceManager {
             }
 
             // 2. Инициализируем основные сервисы
+            // LoggerService должен быть инициализирован первым для логирования остальных сервисов
+            await this.initializeService('LoggerService', () => import('./LoggerService.js'));
+            // MonitoringService должен быть инициализирован вторым, так как используется в middleware
+            await this.initializeService('MonitoringService', () => import('./MonitoringService.js'));
+            await this.initializeService('RetryService', () => import('./RetryService.js'));
+            await this.initializeService('FallbackService', () => import('./FallbackService.js'));
+            await this.initializeService('RecoveryService', () => import('./RecoveryService.js'));
+            await this.initializeService('BackupService', () => import('./BackupService.js'));
             await this.initializeService('CacheService', () => import('./CacheService.js'));
             // WebSocketService инициализируется отдельно, так как требует сервер
             
@@ -76,6 +85,8 @@ class ServiceManager {
             await this.initializeService('TrainingStatusService', () => import('./TrainingStatusService.js'));
             await this.initializeService('TradingRequestService', () => import('./TradingRequestService.js'));
             await this.initializeService('StrategyAllocationService', () => import('./StrategyAllocationService.js'));
+            await this.initializeService('EntryOptimizationService', () => import('./EntryOptimizationService.js'));
+            await this.initializeService('ExitOptimizationService', () => import('./ExitOptimizationService.js'));
 
             // 5. Инициализируем WebSocket с сервером (если передан)
             if (server) {
@@ -106,7 +117,17 @@ class ServiceManager {
                 }
             }
         } catch (error) {
-            console.error('❌ System initialization failed:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('System initialization failed', {
+                    service: 'ServiceManager',
+                    error: {
+                        message: error.message,
+                        stack: error.stack
+                    }
+                });
+            } else {
+                console.error('❌ System initialization failed:', error);
+            }
             throw error;
         }
     }
@@ -138,7 +159,7 @@ class ServiceManager {
         if (isGloballyInitialized && this.isWorker && !options.forceReinit) {
             // В воркере и сервис уже инициализирован в основном процессе
             // Используем легковесную инициализацию или пропускаем тяжелые части
-            console.log(`ℹ️ Service ${serviceName} already initialized globally, using lightweight initialization in worker`);
+            // Логируем только если нужно
         }
 
         const initPromise = (async () => {
@@ -153,8 +174,17 @@ class ServiceManager {
                 } else if (typeof ServiceModule === 'object' && ServiceModule !== null) {
                     service = ServiceModule;
                 } else {
-                    console.error(`❌ Invalid service export for ${serviceName}:`, typeof ServiceModule, ServiceModule);
-                    throw new Error(`Invalid service export for ${serviceName}: expected class or object, got ${typeof ServiceModule}`);
+                    const errorMsg = `Invalid service export for ${serviceName}: expected class or object, got ${typeof ServiceModule}`;
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error(errorMsg, {
+                            service: 'ServiceManager',
+                            serviceName,
+                            exportType: typeof ServiceModule
+                        });
+                    } else {
+                        console.error(`❌ ${errorMsg}:`, ServiceModule);
+                    }
+                    throw new Error(errorMsg);
                 }
                 
                 // Инициализируем сервис, если у него есть метод initialize
@@ -178,7 +208,18 @@ class ServiceManager {
                 
                 return service;
             } catch (error) {
-                console.error(`❌ Failed to initialize ${serviceName}:`, error);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error(`Failed to initialize ${serviceName}`, {
+                        service: 'ServiceManager',
+                        serviceName,
+                        error: {
+                            message: error.message,
+                            stack: error.stack
+                        }
+                    });
+                } else {
+                    console.error(`❌ Failed to initialize ${serviceName}:`, error);
+                }
                 throw error;
             }
         })();
@@ -227,13 +268,24 @@ class ServiceManager {
             
             // Проверяем, инициализирован ли сервис
             if (!telegramService.isInitialized) {
-                console.log('🔧 Telegram service not initialized, initializing...');
                 await telegramService.initialize();
             }
             
             await telegramService.sendAlert(alertType, message, severity);
         } catch (error) {
-            console.error('❌ Failed to send Telegram alert:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to send Telegram alert', {
+                    service: 'ServiceManager',
+                    operation: 'sendTelegramAlert',
+                    alertType,
+                    error: {
+                        message: error.message,
+                        stack: error.stack
+                    }
+                });
+            } else {
+                console.error('❌ Failed to send Telegram alert:', error);
+            }
         }
     }
 
@@ -248,9 +300,20 @@ class ServiceManager {
         for (const [serviceName, service] of this.services) {
             if (typeof service.stop === 'function') {
                 stopPromises.push(
-                    service.stop().catch(error => 
-                        console.error(`❌ Error stopping ${serviceName}:`, error)
-                    )
+                    service.stop().catch(error => {
+                        if (LoggerService.isInitialized) {
+                            LoggerService.error(`Error stopping ${serviceName}`, {
+                                service: 'ServiceManager',
+                                serviceName,
+                                error: {
+                                    message: error.message,
+                                    stack: error.stack
+                                }
+                            });
+                        } else {
+                            console.error(`❌ Error stopping ${serviceName}:`, error);
+                        }
+                    })
                 );
             }
             

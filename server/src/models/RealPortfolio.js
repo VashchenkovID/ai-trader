@@ -154,6 +154,15 @@ RealPortfolio.savePortfolio = async function(portfolioData) {
             console.log(`   💼 Общая стоимость: ${portfolioData.totalValue}`);
             console.log(`   📊 Сделок: ${tradesCount}`);
             
+            // Логируем позиции перед сохранением
+            if (portfolioData.positions && typeof portfolioData.positions === 'object' && !Array.isArray(portfolioData.positions)) {
+                const positionsEntries = Object.entries(portfolioData.positions);
+                console.log(`   📋 Позиции для сохранения (${positionsEntries.length}):`);
+                positionsEntries.forEach(([figi, qty]) => {
+                    console.log(`      - ${figi}: ${qty} units`);
+                });
+            }
+            
             await portfolio.update({
                 cash: portfolioData.cash || 0,
                 positions: portfolioData.positions || {},
@@ -166,7 +175,25 @@ RealPortfolio.savePortfolio = async function(portfolioData) {
             
             // Проверяем, что данные действительно обновились
             await portfolio.reload();
-            console.log(`✅ Реальный портфель обновлен в БД: ID=${portfolio.id}, totalValue=${portfolio.totalValue}`);
+            
+            // Проверяем сохраненные позиции
+            let savedPositions = portfolio.positions;
+            if (typeof savedPositions === 'string') {
+                try {
+                    savedPositions = JSON.parse(savedPositions);
+                } catch (e) {
+                    console.warn('⚠️ Ошибка парсинга сохраненных positions:', e.message);
+                    savedPositions = {};
+                }
+            }
+            const savedPositionsCount = savedPositions && typeof savedPositions === 'object' && !Array.isArray(savedPositions)
+                ? Object.keys(savedPositions).length
+                : 0;
+            
+            console.log(`✅ Реальный портфель обновлен в БД: ID=${portfolio.id}, totalValue=${portfolio.totalValue}, savedPositions=${savedPositionsCount}`);
+            if (savedPositionsCount > 0) {
+                console.log(`   📋 Сохраненные позиции:`, Object.entries(savedPositions).map(([figi, qty]) => `${figi}:${qty}`).join(', '));
+            }
         }
         
         return portfolio;

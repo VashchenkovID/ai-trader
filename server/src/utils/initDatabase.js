@@ -27,6 +27,7 @@ import PortfolioRebalancing from '../models/PortfolioRebalancing.js';
 import CorrelationCache from '../models/CorrelationCache.js';
 import PortfolioAnalysis from '../models/PortfolioAnalysis.js';
 import TrailingStop from '../models/TrailingStop.js';
+import TradingNotificationSettings from '../models/TradingNotificationSettings.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
@@ -94,6 +95,20 @@ export async function initDatabase() {
         console.log('🎯 Создание таблицы торговых заявок...');
         await TradingRequest.sync({ force: false });
         console.log('✅ Таблица торговых заявок создана/обновлена');
+        
+        // Добавляем столбец entryOptimization, если его нет
+        try {
+            await sequelize.query(`
+                ALTER TABLE trading_requests 
+                ADD COLUMN IF NOT EXISTS "entryOptimization" JSONB;
+            `);
+            console.log('✅ Столбец entryOptimization проверен/добавлен');
+        } catch (error) {
+            // Игнорируем ошибку, если столбец уже существует или таблицы нет
+            if (!error.message.includes('не существует') && !error.message.includes('does not exist')) {
+                console.warn('⚠️ Предупреждение при добавлении столбца entryOptimization:', error.message);
+            }
+        }
         
         // Создаем таблицу виртуального портфеля
         console.log('💼 Создание таблицы виртуального портфеля...');
@@ -242,6 +257,16 @@ export async function initDatabase() {
             // Не прерываем инициализацию при ошибке синхронизации
         }
         
+        // Создаем таблицу настроек уведомлений
+        console.log('🔔 Создание таблицы настроек уведомлений...');
+        try {
+            await TradingNotificationSettings.sync({ force: false });
+            console.log('✅ Таблица настроек уведомлений создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы настроек уведомлений:', syncError);
+            // Не прерываем инициализацию при ошибке синхронизации
+        }
+        
         // Создаем таблицу статистики инструментов
         console.log('📊 Создание таблицы статистики инструментов...');
         try {
@@ -280,6 +305,21 @@ export async function initDatabase() {
         
         // Инициализируем стратегии по умолчанию
         await TradingStrategy.initializeDefaultStrategies();
+        
+        // Создаем дополнительные индексы для оптимизации
+        console.log('🔍 Создание дополнительных индексов для оптимизации...');
+        try {
+            const DatabaseOptimization = (await import('./databaseOptimization.js')).default;
+            const indexResults = await DatabaseOptimization.createRecommendedIndexes(false);
+            const createdCount = indexResults.created.length;
+            const skippedCount = indexResults.skipped.length;
+            if (createdCount > 0 || skippedCount > 0) {
+                console.log(`   ✅ Индексы проверены: создано ${createdCount}, пропущено ${skippedCount}`);
+            }
+        } catch (indexError) {
+            console.warn('⚠️ Предупреждение при создании индексов:', indexError.message);
+            // Не прерываем инициализацию при ошибке создания индексов
+        }
         
         // Устанавливаем ассоциации между моделями
         console.log('🔗 Установка ассоциаций между моделями...');

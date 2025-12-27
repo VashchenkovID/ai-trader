@@ -1,0 +1,82 @@
+{
+  "version": "1.0",
+  "exportDate": "2025-12-27T21:19:07.583Z",
+  "metrics": {
+    "application": {
+      "requests": 0,
+      "errors": 0,
+      "responseTime": 0,
+      "activeConnections": 0,
+      "memory": null,
+      "lastUpdate": null
+    },
+    "database": {
+      "queries": 0,
+      "slowQueries": 0,
+      "errors": 0,
+      "lastQueryTime": null,
+      "lastUpdate": null
+    },
+    "neuralNetwork": {
+      "trainings": 0,
+      "errors": 0,
+      "lastTraining": null,
+      "status": "unknown",
+      "lastUpdate": null
+    },
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "operations": 0,
+      "size": 0,
+      "lastUpdate": null
+    },
+    "system": {
+      "cpu": null,
+      "memory": null,
+      "disk": null,
+      "uptime": 0,
+      "lastUpdate": null
+    }
+  },
+  "performance": {
+    "responseTime": {
+      "current": 0,
+      "average": 0,
+      "threshold": 5000
+    },
+    "errorRate": {
+      "current": 0,
+      "threshold": 0.05
+    },
+    "throughput": {
+      "requestsPerSecond": 0
+    },
+    "cacheHitRate": {
+      "current": 0
+    },
+    "database": {
+      "queriesPerSecond": 0,
+      "slowQueryRate": 0
+    }
+  },
+  "health": {
+    "status": "healthy",
+    "checks": {
+      "system": {
+        "status": "ok",
+        "cpu": "unknown",
+        "memory": "unknown"
+      },
+      "application": {
+        "status": "ok",
+        "errorRate": 0
+      },
+      "database": {
+        "status": "ok",
+        "errors": 0
+      }
+    },
+    "timestamp": "2025-12-27T21:19:07.583Z"
+  }
+}

@@ -1,0 +1,128 @@
+.trading-mode-validation-card {
+  width: 100%;
+}
+
+.trading-mode-validation-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.trading-mode-validation-skeleton-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.trading-mode-validation-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.trading-mode-validation-alert {
+  margin-bottom: var(--spacing-sm);
+}
+
+.trading-mode-validation-warnings {
+  margin-top: var(--spacing-xs);
+}
+
+.trading-mode-validation-warnings ul {
+  margin: var(--spacing-xs) 0 0 var(--spacing-md);
+  padding: 0;
+}
+
+.trading-mode-validation-warnings li {
+  margin-bottom: var(--spacing-xs);
+}
+
+.trading-mode-validation-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.trading-mode-validation-check {
+  padding: var(--spacing-md);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.trading-mode-validation-check-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.trading-mode-validation-check-name {
+  font-weight: 600;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+
+.trading-mode-validation-check-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-sm) 0;
+}
+
+.trading-mode-validation-check-score {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  min-width: 40px;
+  text-align: right;
+}
+
+.trading-mode-validation-check-message {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-xs);
+}
+
+.trading-mode-validation-check-details {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.trading-mode-validation-check-detail {
+  display: flex;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+}
+
+.trading-mode-validation-check-detail-key {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  min-width: 120px;
+}
+
+.trading-mode-validation-check-detail-value {
+  color: var(--color-text-primary);
+  flex: 1;
+}
+
+.trading-mode-validation-overall {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 2px solid var(--color-border);
+}
+
+.trading-mode-validation-overall-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+  font-weight: 600;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+

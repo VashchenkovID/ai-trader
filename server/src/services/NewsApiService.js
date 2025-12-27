@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import FallbackService from './FallbackService.js';
 
 /**
  * Сервис для работы с NewsAPI.org
@@ -32,16 +33,20 @@ class NewsApiService {
      * @returns {Promise<object>} - Ответ от API
      */
     async makeRequest(endpoint, params = {}) {
-        try {
-            if (!this.isInitialized) {
-                await this.initialize();
-            }
+        // Импортируем RetryService динамически
+        const RetryService = (await import('./RetryService.js')).default;
+        
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
 
+        // Используем RetryService для автоматических повторов
+        return await RetryService.executeWithRetry(async () => {
             // Добавляем задержку между запросами (rate limiting)
             const timeSinceLastRequest = Date.now() - this.lastRequestTime;
             if (timeSinceLastRequest < this.requestDelay) {
                 const waitTime = this.requestDelay - timeSinceLastRequest;
-                await this.delay(waitTime);
+                await RetryService.delay(waitTime);
             }
 
             // Добавляем API ключ к параметрам
@@ -88,8 +93,11 @@ class NewsApiService {
                 const errorMessage = errorData?.message || errorText || `HTTP ${response.status}`;
                 const errorCode = errorData?.code || 'http_error';
                 
-                console.error(`❌ NewsAPI.org HTTP Error [${response.status}]:`, errorMessage);
-                throw new Error(`HTTP error! status: ${response.status}, code: ${errorCode}, details: ${errorMessage}`);
+                const error = new Error(`HTTP error! status: ${response.status}, code: ${errorCode}, details: ${errorMessage}`);
+                error.status = response.status;
+                error.statusCode = response.status;
+                error.response = { status: response.status, statusText: response.statusText };
+                throw error;
             }
 
             let data;
@@ -121,22 +129,24 @@ class NewsApiService {
             }
 
             return data;
-
-        } catch (error) {
-            // Если это уже наша обработанная ошибка, просто пробрасываем
-            if (error.message && error.message.includes('NewsAPI.org')) {
-                throw error;
-            }
-            
-            // Обрабатываем сетевые ошибки и другие исключения
-            if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                console.error(`❌ NewsAPI.org network error:`, error.message);
-                throw new Error(`Network error: Не удалось подключиться к NewsAPI.org. Проверьте интернет-соединение.`);
-            }
-            
-            console.error(`❌ NewsAPI.org request failed:`, error.message);
-            throw error;
-        }
+            }, {
+                maxRetries: 3,
+                initialDelay: 2000,
+                maxDelay: 30000,
+                exponentialBase: 2,
+                jitter: true,
+                retryableStatusCodes: [429, 500, 502, 503, 504],
+                retryableErrors: ['TypeError', 'fetch', 'network', 'ECONNRESET', 'ENOTFOUND', 'ECONNREFUSED'],
+                serviceName: 'NewsAPI',
+                circuitBreaker: true,
+                onRetry: (attempt, delay, error) => {
+                    if (error.status === 429 || error.statusCode === 429) {
+                        console.warn(`⚠️ NewsAPI rate limit. Retrying in ${Math.round(delay/1000)}s... (attempt ${attempt}/3)`);
+                    } else {
+                        console.warn(`⚠️ NewsAPI error. Retrying in ${Math.round(delay/1000)}s... (attempt ${attempt}/3)`);
+                    }
+                }
+            });
     }
 
     /**
@@ -204,11 +214,23 @@ class NewsApiService {
                 }
             }
             
-            const response = await this.makeRequest('/everything', params);
+            // Используем FallbackService для получения новостей с fallback на кеш
+            const response = await FallbackService.getNewsWithFallback(query, {
+                ...params,
+                from: options.from,
+                to: options.to,
+                pageSize: params.pageSize,
+                figi: options.figi
+            });
+
+            // Проверяем, откуда пришли данные (API или кеш)
+            if (response._fromCache) {
+                console.log(`📦 Использованы кешированные новости (возраст: ${Math.round(response._cacheAge / 1000 / 60)} минут)`);
+            }
 
             // NewsAPI возвращает данные в формате:
             // { status: 'ok', totalResults: 123, articles: [...] }
-            if (response.status === 'ok') {
+            if (response.status === 'ok' || response.articles) {
                 if (response.articles && Array.isArray(response.articles)) {
                     return response.articles;
                 } else {

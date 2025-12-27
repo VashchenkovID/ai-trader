@@ -377,4 +377,134 @@ router.get('/cleanup/stats', async (req, res) => {
     }
 });
 
+/**
+ * Тестирование Exit Optimization Service
+ * POST /api/trading-requests/test-exit-optimization
+ * 
+ * Поддерживает два режима:
+ * 1. С реальной позицией: { positionId: "..." }
+ * 2. С мок-данными: { mockPosition: { ... } }
+ */
+router.post('/test-exit-optimization', async (req, res) => {
+    try {
+        const { positionId, mockPosition, options = {} } = req.body;
+        
+        const ExitOptimizationService = (await import('../services/ExitOptimizationService.js')).default;
+        
+        if (!ExitOptimizationService || !ExitOptimizationService.isInitialized) {
+            return res.status(503).json({
+                success: false,
+                message: 'ExitOptimizationService не инициализирован'
+            });
+        }
+
+        let position = null;
+
+        // Режим 1: Используем реальную позицию
+        if (positionId) {
+            position = await TradingRequest.findByPk(positionId);
+            if (!position) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Позиция не найдена'
+                });
+            }
+        }
+        // Режим 2: Используем мок-данные
+        else if (mockPosition) {
+            // Создаем временный объект позиции из мок-данных
+            position = {
+                id: mockPosition.id || 'test-position-id',
+                figi: mockPosition.figi || 'BBG004730N88',
+                ticker: mockPosition.ticker || 'SBER',
+                name: mockPosition.name || 'Сбербанк',
+                action: mockPosition.action || 'BUY',
+                priceAtRequest: mockPosition.priceAtRequest || 300,
+                actualPrice: mockPosition.actualPrice || mockPosition.priceAtRequest || 300,
+                confidence: mockPosition.confidence || 0.7,
+                score: mockPosition.score || 0.7,
+                stopLoss: mockPosition.stopLoss || null,
+                takeProfit: mockPosition.takeProfit || null,
+                createdAt: mockPosition.createdAt ? new Date(mockPosition.createdAt) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 дней назад
+                status: mockPosition.status || 'EXECUTED',
+                tradingMode: mockPosition.tradingMode || 'paper'
+            };
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: 'Either positionId or mockPosition is required'
+            });
+        }
+
+        // Получаем текущую цену, если не передана
+        const currentPrice = options.currentPrice || null;
+
+        const analysis = await ExitOptimizationService.analyzeExit(position, {
+            ...options,
+            currentPrice
+        });
+        
+        res.json({
+            success: true,
+            data: analysis,
+            isMock: !!mockPosition
+        });
+    } catch (error) {
+        console.error('Ошибка тестирования Exit Optimization:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка тестирования Exit Optimization',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Тестирование Entry Optimization Service
+ * POST /api/trading-requests/test-entry-optimization
+ */
+router.post('/test-entry-optimization', async (req, res) => {
+    try {
+        const { figi, action, price, confidence, score } = req.body;
+        
+        if (!figi || !action || !price) {
+            return res.status(400).json({
+                success: false,
+                message: 'figi, action, and price are required'
+            });
+        }
+
+        const EntryOptimizationService = (await import('../services/EntryOptimizationService.js')).default;
+        
+        if (!EntryOptimizationService || !EntryOptimizationService.isInitialized) {
+            return res.status(503).json({
+                success: false,
+                message: 'EntryOptimizationService не инициализирован'
+            });
+        }
+
+        const signal = {
+            figi,
+            action,
+            price: parseFloat(price),
+            confidence: confidence ? parseFloat(confidence) : 0.7,
+            score: score ? parseFloat(score) : 0.7
+        };
+
+        const analysis = await EntryOptimizationService.analyzeEntry(signal, req.body.options || {});
+        
+        res.json({
+            success: true,
+            data: analysis
+        });
+    } catch (error) {
+        console.error('Ошибка тестирования Entry Optimization:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка тестирования Entry Optimization',
+            error: error.message
+        });
+    }
+});
+
 export default router;

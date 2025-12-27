@@ -175,24 +175,56 @@ const TradingRequest = sequelize.define('TradingRequest', {
     takeProfit: {
         type: DataTypes.FLOAT,
         allowNull: true
+    },
+    
+    // Информация об оптимизации входа
+    entryOptimization: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        comment: 'Информация об анализе входа через EntryOptimizationService'
     }
 }, {
     tableName: 'trading_requests',
     timestamps: true,
     indexes: [
         {
+            name: 'idx_trading_requests_status_created_at',
             fields: ['status', 'createdAt']
         },
         {
+            name: 'idx_trading_requests_figi_status',
             fields: ['figi', 'status']
         },
         {
+            name: 'idx_trading_requests_figi',
+            fields: ['figi']
+        },
+        {
+            name: 'idx_trading_requests_action_status',
+            fields: ['action', 'status']
+        },
+        {
+            name: 'idx_trading_requests_executed_at',
+            fields: ['executedAt']
+        },
+        {
+            name: 'idx_trading_requests_created_at',
+            fields: ['createdAt']
+        },
+        {
+            name: 'idx_trading_requests_figi_action_status',
+            fields: ['figi', 'action', 'status']
+        },
+        {
+            name: 'idx_trading_requests_expires_at',
             fields: ['expiresAt']
         },
         {
+            name: 'idx_trading_requests_trading_mode_status',
             fields: ['tradingMode', 'status']
         },
         {
+            name: 'idx_trading_requests_priority_created_at',
             fields: ['priority', 'createdAt']
         }
     ]

@@ -42,14 +42,9 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
     { path: '/portfolio', label: 'Портфель', icon: 'pi pi-briefcase' },
     { path: '/neural-networks', label: 'Нейросети', icon: 'pi pi-brain' },
     { path: '/recommendations', label: 'Рекомендации', icon: 'pi pi-star' },
-    { path: '/strategies', label: 'Стратегии', icon: 'pi pi-sitemap' },
     { path: '/trading-requests', label: 'Торговые заявки', icon: 'pi pi-list-check' },
-    { path: '/trading-mode', label: 'Режимы торговли', icon: 'pi pi-cog' },
     { path: '/training-debug', label: 'Отладка обучения', icon: 'pi pi-cog' },
     { path: '/design-system-test', label: '🎨 Тест дизайн-системы', icon: 'pi pi-palette' },
-    { path: '/instrument-stats', label: 'Статистика инструментов', icon: 'pi pi-chart-bar' },
-    { path: '/metrics', label: 'Метрики', icon: 'pi pi-chart-line' },
-    { path: '/advanced-metrics', label: 'Продвинутые метрики', icon: 'pi pi-chart-bar' },
     { path: '/settings', label: 'Настройки', icon: 'pi pi-wrench' }
   ];
 

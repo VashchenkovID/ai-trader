@@ -1,0 +1,73 @@
+.training-settings-section {
+  padding: var(--spacing-4);
+}
+
+.training-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: var(--spacing-8);
+}
+
+.training-settings-card {
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-6);
+}
+
+.training-settings-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-4);
+}
+
+.training-settings-card-header h3 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.training-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.training-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.training-settings-field label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.training-settings-switch {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.training-settings-hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.training-settings-info {
+  padding: var(--spacing-2);
+  background: var(--background-secondary);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .training-settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

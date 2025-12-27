@@ -1,0 +1,74 @@
+/* PreflightCheckCard Styles */
+
+.preflight-check-card {
+  position: relative;
+}
+
+.preflight-check-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.preflight-check-summary {
+  display: flex;
+  justify-content: center;
+}
+
+.preflight-check-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.preflight-check-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-2);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border-default);
+}
+
+.preflight-check-item-content {
+  flex: 1;
+}
+
+.preflight-check-item-name {
+  font-size: 0.875rem; /* text-sm */
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-1);
+  font-family: var(--font-family-primary);
+}
+
+.preflight-check-item-message {
+  font-size: 0.75rem; /* text-xs */
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-primary);
+}
+
+.preflight-check-empty {
+  text-align: center;
+  padding: var(--spacing-4);
+}
+
+.preflight-check-empty-text {
+  font-size: 0.875rem; /* text-sm */
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-primary);
+}
+
+.preflight-check-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.preflight-check-actions {
+  margin-top: var(--spacing-2);
+}
+

@@ -1,0 +1,59 @@
+/* ServicesStatusCard Styles */
+
+.services-status-card {
+  position: relative;
+}
+
+.services-status-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.services-status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-2);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border-default);
+  transition: all 0.2s ease;
+}
+
+.services-status-item:hover {
+  background: var(--color-surface-active);
+  border-color: var(--color-border-hover);
+}
+
+.services-status-item-content {
+  flex: 1;
+}
+
+.services-status-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.services-status-item-name {
+  font-size: 0.875rem; /* text-sm */
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-primary);
+}
+
+.services-status-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.services-status-skeleton-item {
+  padding: var(--spacing-2);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border-default);
+}
+

@@ -76,7 +76,13 @@ const PositionStrategy = sequelize.define('PositionStrategy', {
     timestamps: true,
     indexes: [
         {
-            fields: ['positionId']
+            name: 'idx_position_strategies_position_id',
+            fields: ['positionId'],
+            unique: true
+        },
+        {
+            name: 'idx_position_strategies_strategy_id',
+            fields: ['strategyId']
         },
         {
             fields: ['strategyId']

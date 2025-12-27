@@ -1,0 +1,132 @@
+/* SchedulerStatusCard Styles */
+
+.scheduler-status-card {
+  position: relative;
+}
+
+.scheduler-status-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.scheduler-status-header {
+  display: flex;
+  justify-content: center;
+}
+
+.scheduler-status-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.scheduler-status-task {
+  padding: var(--spacing-2);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border-default);
+}
+
+.scheduler-status-task-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.scheduler-status-task-name {
+  font-size: 0.875rem; /* text-sm */
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-primary);
+}
+
+.scheduler-status-task-schedule {
+  font-size: 0.75rem; /* text-xs */
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-primary);
+}
+
+.scheduler-status-task-time {
+  font-size: 0.75rem; /* text-xs */
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-primary);
+}
+
+.scheduler-status-empty {
+  text-align: center;
+  padding: var(--spacing-4);
+}
+
+.scheduler-status-empty-text {
+  font-size: 0.875rem; /* text-sm */
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-primary);
+}
+
+.scheduler-status-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.scheduler-status-skeleton-item {
+  padding: var(--spacing-2);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border-default);
+}
+
+.scheduler-status-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  padding: var(--spacing-2);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border-default);
+  margin-bottom: var(--spacing-2);
+}
+
+.scheduler-status-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scheduler-status-info-label {
+  font-size: 0.75rem; /* text-xs */
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-primary);
+}
+
+.scheduler-status-info-value {
+  font-size: 0.75rem; /* text-xs */
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-primary);
+}
+
+.scheduler-status-cache-update {
+  margin-top: var(--spacing-2);
+  padding: var(--spacing-2);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border-default);
+}
+
+.scheduler-status-cache-update-label {
+  font-size: 0.75rem; /* text-xs */
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-1);
+  font-family: var(--font-family-primary);
+}
+
+.scheduler-status-cache-update-value {
+  font-size: 0.75rem; /* text-xs */
+  color: var(--color-text-primary);
+  font-family: var(--font-family-primary);
+}
+

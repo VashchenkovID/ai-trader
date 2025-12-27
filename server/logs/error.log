@@ -1,2 +1,618 @@
-{"context":"PortfolioSyncService","level":"error","message":"Portfolio sync failed: WebSocketService.sendMessage is not a function","service":"ivashka-trade-helper","stack":"TypeError: WebSocketService.sendMessage is not a function\n    at PortfolioSyncService.syncPortfolio (file:///C:/Users/Vashh/WebstormProjects/IvashkaTradeHelper/server/src/services/PortfolioSyncService.js:72:30)\n    at file:///C:/Users/Vashh/WebstormProjects/IvashkaTradeHelper/server/src/routes/portfolio-sync.js:97:51\n    at Layer.handle [as handle_request] (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at Function.handle (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:47:12)\n    at Layer.handle [as handle_request] (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at serveStatic (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\serve-static\\index.js:75:16)\n    at Layer.handle [as handle_request] (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Vashh\\WebstormProjects\\IvashkaTradeHelper\\server\\node_modules\\express\\lib\\router\\index.js:280:10)","timestamp":"2025-09-28 17:44:21"}
-{"context":"PortfolioSyncRoutes","level":"error","message":"Error in POST /api/portfolio-sync/sync: WebSocketService.sendMessage is not a function","service":"ivashka-trade-helper","timestamp":"2025-09-28 17:44:21"}
+2025-12-28 00:37:27.337 [ERROR] Request error: GET /api/settings
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447335_2dfuv0tsz",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:27.340 [ERROR] GET /api/settings 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447335_2dfuv0tsz",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "4.77ms"
+}
+2025-12-28 00:37:27.342 [ERROR] Request error: GET /api/settings
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447341_l0n1utiqt",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:27.345 [ERROR] GET /api/settings 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447341_l0n1utiqt",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.98ms"
+}
+2025-12-28 00:37:27.347 [ERROR] Request error: GET /api/settings
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447346_6xcnwnzjj",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:27.350 [ERROR] GET /api/settings 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447346_6xcnwnzjj",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "3.76ms"
+}
+2025-12-28 00:37:27.352 [ERROR] Request error: GET /api/settings
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447351_hkwwk7tye",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:27.355 [ERROR] GET /api/settings 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447351_hkwwk7tye",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "3.84ms"
+}
+2025-12-28 00:37:27.357 [ERROR] Request error: GET /api/settings
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447357_62b9vanbs",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:27.360 [ERROR] GET /api/settings 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447357_62b9vanbs",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.97ms"
+}
+2025-12-28 00:37:27.614 [ERROR] Request error: GET /api/settings
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447613_3jwuuar86",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:27.616 [ERROR] GET /api/settings 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871447613_3jwuuar86",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.87ms"
+}
+2025-12-28 00:37:28.636 [ERROR] Request error: POST /api/training/batch-train-all
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448635_2hab4s8n1",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:85:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\read.js:137:5\n    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)\n    at invokeCallback (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\raw-body\\index.js:238:16)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:28.638 [ERROR] POST /api/training/batch-train-all 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448635_2hab4s8n1",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.36ms"
+}
+2025-12-28 00:37:28.640 [ERROR] Request error: POST /api/training/batch-train-all
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448639_qjm0pro8c",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:85:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\read.js:137:5\n    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)\n    at invokeCallback (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\raw-body\\index.js:238:16)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:28.642 [ERROR] POST /api/training/batch-train-all 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448639_qjm0pro8c",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.12ms"
+}
+2025-12-28 00:37:28.643 [ERROR] Request error: POST /api/training/batch-train-all
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448643_hh3i4yw1e",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:85:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\read.js:137:5\n    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)\n    at invokeCallback (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\raw-body\\index.js:238:16)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:28.645 [ERROR] POST /api/training/batch-train-all 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448643_hh3i4yw1e",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.60ms"
+}
+2025-12-28 00:37:28.647 [ERROR] Request error: POST /api/training/batch-train-all
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448646_xpmqdgrka",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:85:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\read.js:137:5\n    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)\n    at invokeCallback (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\raw-body\\index.js:238:16)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:28.649 [ERROR] POST /api/training/batch-train-all 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448646_xpmqdgrka",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.35ms"
+}
+2025-12-28 00:37:28.651 [ERROR] Request error: POST /api/training/batch-train-all
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448650_05zj29t5g",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:85:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\read.js:137:5\n    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)\n    at invokeCallback (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\raw-body\\index.js:238:16)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:28.652 [ERROR] POST /api/training/batch-train-all 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448650_05zj29t5g",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.34ms"
+}
+2025-12-28 00:37:28.654 [ERROR] Request error: POST /api/training/batch-train-all
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448653_tulgyy1nn",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:85:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\read.js:137:5\n    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)\n    at invokeCallback (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\raw-body\\index.js:238:16)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:28.656 [ERROR] POST /api/training/batch-train-all 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448653_tulgyy1nn",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.22ms"
+}
+2025-12-28 00:37:28.657 [ERROR] Request error: POST /api/training/batch-train-all
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448657_iroc3eu2n",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:85:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\read.js:137:5\n    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)\n    at invokeCallback (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\raw-body\\index.js:238:16)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:28.659 [ERROR] POST /api/training/batch-train-all 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871448657_iroc3eu2n",
+  "method": "POST",
+  "path": "/api/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.16ms"
+}
+2025-12-28 00:37:29.664 [ERROR] Request error: GET /api/settings
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449663_bj2xn6hfv",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:29.666 [ERROR] GET /api/settings 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449663_bj2xn6hfv",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.37ms"
+}
+2025-12-28 00:37:29.668 [ERROR] Request error: GET /api/settings
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449667_zhba3k6a2",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:29.669 [ERROR] GET /api/settings 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449667_zhba3k6a2",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.19ms"
+}
+2025-12-28 00:37:29.671 [ERROR] Request error: GET /api/settings
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449670_d6sc7zgay",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:29.673 [ERROR] GET /api/settings 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449670_d6sc7zgay",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.14ms"
+}
+2025-12-28 00:37:29.674 [ERROR] Request error: GET /api/settings
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449674_un2paupdr",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:29.676 [ERROR] GET /api/settings 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449674_un2paupdr",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "1.97ms"
+}
+2025-12-28 00:37:29.677 [ERROR] Request error: GET /api/settings
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449677_7k6nuon5n",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:29.679 [ERROR] GET /api/settings 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449677_7k6nuon5n",
+  "method": "GET",
+  "path": "/api/settings",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "1.93ms"
+}
+2025-12-28 00:37:29.683 [ERROR] Request error: GET /api/rate-limit/stats
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449682_vb45s5l5o",
+  "method": "GET",
+  "path": "/api/rate-limit/stats",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "error": {
+    "message": "MonitoringService.createAlert(...).catch is not a function",
+    "stack": "TypeError: MonitoringService.createAlert(...).catch is not a function\n    at Object.handler (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:57:21)\n    at file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/rateLimiter.js:114:28\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at requestTracing (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/middleware/requestTracing.js:65:5)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at urlencodedParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\urlencoded.js:94:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:286:9\n    at Function.process_params (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at jsonParser (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\body-parser\\lib\\types\\json.js:113:7)\n    at Layer.handle [as handle_request] (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at trim_prefix (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\express\\lib\\router\\index.js:328:13)",
+    "name": "TypeError"
+  }
+}
+2025-12-28 00:37:29.684 [ERROR] GET /api/rate-limit/stats 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766871449682_vb45s5l5o",
+  "method": "GET",
+  "path": "/api/rate-limit/stats",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "2.22ms"
+}
+2025-12-28 00:54:03.946 [ERROR] GET / 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766872443936_ki6l5wg68",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "axios/1.12.2",
+  "statusCode": 500,
+  "duration": "10.45ms"
+}
+2025-12-28 00:56:34.414 [ERROR] ❌ Error analyzing exit: неверный синтаксис для типа uuid: "test-position-1"
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "name": "SequelizeDatabaseError",
+  "parent": {
+    "length": 144,
+    "name": "error",
+    "severity": "ОШИБКА",
+    "code": "22P02",
+    "position": "252",
+    "file": "uuid.c",
+    "line": "141",
+    "routine": "string_to_uuid",
+    "sql": "SELECT \"id\", \"positionId\", \"strategyId\", \"entryReason\", \"targetTimeframe\", \"entryDate\", \"expectedExitDate\", \"exitDate\", \"resultPercent\", \"createdAt\", \"updatedAt\" FROM \"position_strategies\" AS \"PositionStrategy\" WHERE \"PositionStrategy\".\"positionId\" = 'test-position-1';"
+  },
+  "original": {
+    "length": 144,
+    "name": "error",
+    "severity": "ОШИБКА",
+    "code": "22P02",
+    "position": "252",
+    "file": "uuid.c",
+    "line": "141",
+    "routine": "string_to_uuid",
+    "sql": "SELECT \"id\", \"positionId\", \"strategyId\", \"entryReason\", \"targetTimeframe\", \"entryDate\", \"expectedExitDate\", \"exitDate\", \"resultPercent\", \"createdAt\", \"updatedAt\" FROM \"position_strategies\" AS \"PositionStrategy\" WHERE \"PositionStrategy\".\"positionId\" = 'test-position-1';"
+  },
+  "sql": "SELECT \"id\", \"positionId\", \"strategyId\", \"entryReason\", \"targetTimeframe\", \"entryDate\", \"expectedExitDate\", \"exitDate\", \"resultPercent\", \"createdAt\", \"updatedAt\" FROM \"position_strategies\" AS \"PositionStrategy\" WHERE \"PositionStrategy\".\"positionId\" = 'test-position-1';",
+  "parameters": {},
+  "stack": "Error\n    at Query.run (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\dialects\\postgres\\query.js:50:25)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\sequelize.js:315:28\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async PostgresQueryInterface.select (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\dialects\\abstract\\query-interface.js:407:12)\n    at async PositionStrategy.findAll (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\model.js:1140:21)\n    at async PositionStrategy.findOne (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\model.js:1240:12)\n    at async ExitOptimizationService.analyzeExit (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/services/ExitOptimizationService.js:112:38)\n    at async file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/routes/trading-requests-routes.js:442:26"
+}
+2025-12-28 00:56:34.418 [ERROR] ❌ Error analyzing exit: неверный синтаксис для типа uuid: "test-position-2"
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "name": "SequelizeDatabaseError",
+  "parent": {
+    "length": 144,
+    "name": "error",
+    "severity": "ОШИБКА",
+    "code": "22P02",
+    "position": "252",
+    "file": "uuid.c",
+    "line": "141",
+    "routine": "string_to_uuid",
+    "sql": "SELECT \"id\", \"positionId\", \"strategyId\", \"entryReason\", \"targetTimeframe\", \"entryDate\", \"expectedExitDate\", \"exitDate\", \"resultPercent\", \"createdAt\", \"updatedAt\" FROM \"position_strategies\" AS \"PositionStrategy\" WHERE \"PositionStrategy\".\"positionId\" = 'test-position-2';"
+  },
+  "original": {
+    "length": 144,
+    "name": "error",
+    "severity": "ОШИБКА",
+    "code": "22P02",
+    "position": "252",
+    "file": "uuid.c",
+    "line": "141",
+    "routine": "string_to_uuid",
+    "sql": "SELECT \"id\", \"positionId\", \"strategyId\", \"entryReason\", \"targetTimeframe\", \"entryDate\", \"expectedExitDate\", \"exitDate\", \"resultPercent\", \"createdAt\", \"updatedAt\" FROM \"position_strategies\" AS \"PositionStrategy\" WHERE \"PositionStrategy\".\"positionId\" = 'test-position-2';"
+  },
+  "sql": "SELECT \"id\", \"positionId\", \"strategyId\", \"entryReason\", \"targetTimeframe\", \"entryDate\", \"expectedExitDate\", \"exitDate\", \"resultPercent\", \"createdAt\", \"updatedAt\" FROM \"position_strategies\" AS \"PositionStrategy\" WHERE \"PositionStrategy\".\"positionId\" = 'test-position-2';",
+  "parameters": {},
+  "stack": "Error\n    at Query.run (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\dialects\\postgres\\query.js:50:25)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\sequelize.js:315:28\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async PostgresQueryInterface.select (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\dialects\\abstract\\query-interface.js:407:12)\n    at async PositionStrategy.findAll (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\model.js:1140:21)\n    at async PositionStrategy.findOne (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\model.js:1240:12)\n    at async ExitOptimizationService.analyzeExit (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/services/ExitOptimizationService.js:112:38)\n    at async file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/routes/trading-requests-routes.js:442:26"
+}
+2025-12-28 00:56:34.421 [ERROR] ❌ Error analyzing exit: неверный синтаксис для типа uuid: "test-position-3"
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "name": "SequelizeDatabaseError",
+  "parent": {
+    "length": 144,
+    "name": "error",
+    "severity": "ОШИБКА",
+    "code": "22P02",
+    "position": "252",
+    "file": "uuid.c",
+    "line": "141",
+    "routine": "string_to_uuid",
+    "sql": "SELECT \"id\", \"positionId\", \"strategyId\", \"entryReason\", \"targetTimeframe\", \"entryDate\", \"expectedExitDate\", \"exitDate\", \"resultPercent\", \"createdAt\", \"updatedAt\" FROM \"position_strategies\" AS \"PositionStrategy\" WHERE \"PositionStrategy\".\"positionId\" = 'test-position-3';"
+  },
+  "original": {
+    "length": 144,
+    "name": "error",
+    "severity": "ОШИБКА",
+    "code": "22P02",
+    "position": "252",
+    "file": "uuid.c",
+    "line": "141",
+    "routine": "string_to_uuid",
+    "sql": "SELECT \"id\", \"positionId\", \"strategyId\", \"entryReason\", \"targetTimeframe\", \"entryDate\", \"expectedExitDate\", \"exitDate\", \"resultPercent\", \"createdAt\", \"updatedAt\" FROM \"position_strategies\" AS \"PositionStrategy\" WHERE \"PositionStrategy\".\"positionId\" = 'test-position-3';"
+  },
+  "sql": "SELECT \"id\", \"positionId\", \"strategyId\", \"entryReason\", \"targetTimeframe\", \"entryDate\", \"expectedExitDate\", \"exitDate\", \"resultPercent\", \"createdAt\", \"updatedAt\" FROM \"position_strategies\" AS \"PositionStrategy\" WHERE \"PositionStrategy\".\"positionId\" = 'test-position-3';",
+  "parameters": {},
+  "stack": "Error\n    at Query.run (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\dialects\\postgres\\query.js:50:25)\n    at C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\sequelize.js:315:28\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async PostgresQueryInterface.select (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\dialects\\abstract\\query-interface.js:407:12)\n    at async PositionStrategy.findAll (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\model.js:1140:21)\n    at async PositionStrategy.findOne (C:\\Users\\Фронтендер3000\\projects\\ai-trader\\server\\node_modules\\sequelize\\lib\\model.js:1240:12)\n    at async ExitOptimizationService.analyzeExit (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/services/ExitOptimizationService.js:112:38)\n    at async file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/routes/trading-requests-routes.js:442:26"
+}

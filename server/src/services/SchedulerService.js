@@ -3759,15 +3759,16 @@ class SchedulerService {
                 return;
             }
             
-            // Рассчитываем стоимость позиций
-            let positionsValue = 0;
+            // TradingEngine.getRealPortfolioValue() уже преобразует данные в правильный формат
+            // positions уже объект {figi: quantity}, cash и positionsValue уже рассчитаны
             const rawPositions = portfolioData.positions || {};
+            const positionsValue = portfolioData.positionsValue || 0;
+            const cash = portfolioData.cash || 0;
+            const totalValue = portfolioData.totalValue || (cash + positionsValue);
             
-            // Если positionsValue уже есть в данных, используем его
-            if (portfolioData.positionsValue) {
-                positionsValue = portfolioData.positionsValue;
-            } else {
-                // Иначе рассчитываем вручную
+            // Если positionsValue не был рассчитан, рассчитываем вручную
+            let calculatedPositionsValue = positionsValue;
+            if (calculatedPositionsValue === 0) {
                 const CacheService = (await import('./CacheService.js')).default;
                 for (const [figi, quantity] of Object.entries(rawPositions)) {
                     if (typeof quantity === 'number' && quantity > 0) {
@@ -3775,7 +3776,7 @@ class SchedulerService {
                             const instrument = await CacheService.getInstrument(figi, true);
                             const currentPrice = instrument?.lastPrice || 0;
                             if (currentPrice > 0) {
-                                positionsValue += currentPrice * quantity;
+                                calculatedPositionsValue += currentPrice * quantity;
                             }
                         } catch (error) {
                             console.warn(`⚠️ Не удалось получить цену для ${figi}:`, error.message);
@@ -3784,16 +3785,13 @@ class SchedulerService {
                 }
             }
             
-            const cash = portfolioData.cash || 0;
-            const totalValue = cash + positionsValue;
-            
             // Сохраняем в БД
             await RealPortfolio.savePortfolio({
                 cash,
-                positions: rawPositions,
+                positions: rawPositions, // Уже объект {figi: quantity}
                 trades: portfolioData.trades || [],
-                totalValue,
-                positionsValue,
+                totalValue: cash + calculatedPositionsValue,
+                positionsValue: calculatedPositionsValue,
                 initialCapital: portfolioData.initialCapital || null
             });
             

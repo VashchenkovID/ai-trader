@@ -256,26 +256,64 @@ class SwitchValidator {
     async checkTechnicalReadiness() {
         try {
             // Проверяем доступность всех необходимых сервисов
+            const riskManagementInitialized = RiskManagementService.isInitialized;
+            const telegramInitialized = OptimizedTelegramService.isInitialized;
+            const databaseConnected = await this.checkDatabaseConnection();
+            const apiConnected = await this.checkApiConnection();
+            const monitoringActive = await this.checkMonitoringServices();
+            
+            // Формируем детализированные проверки с value и threshold
             const checks = {
-                riskManagement: RiskManagementService.isInitialized,
-                telegram: OptimizedTelegramService.isInitialized,
-                // Проверки других сервисов
-                database: await this.checkDatabaseConnection(),
-                api: await this.checkApiConnection(),
-                monitoring: await this.checkMonitoringServices()
+                riskManagement: {
+                    passed: riskManagementInitialized,
+                    value: riskManagementInitialized ? 1 : 0,
+                    threshold: 1,
+                    message: `Risk Management Service: ${riskManagementInitialized ? 'Инициализирован' : 'Не инициализирован'}`
+                },
+                telegram: {
+                    passed: telegramInitialized,
+                    value: telegramInitialized ? 1 : 0,
+                    threshold: 1,
+                    message: `Telegram Service: ${telegramInitialized ? 'Инициализирован' : 'Не инициализирован'}`
+                },
+                database: {
+                    passed: databaseConnected,
+                    value: databaseConnected ? 1 : 0,
+                    threshold: 1,
+                    message: `Database: ${databaseConnected ? 'Подключена' : 'Не подключена'}`
+                },
+                api: {
+                    passed: apiConnected,
+                    value: apiConnected ? 1 : 0,
+                    threshold: 1,
+                    message: `API: ${apiConnected ? 'Доступен' : 'Не доступен'}`
+                },
+                monitoring: {
+                    passed: monitoringActive,
+                    value: monitoringActive ? 1 : 0,
+                    threshold: 1,
+                    message: `Monitoring: ${monitoringActive ? 'Активен' : 'Не активен'}`
+                }
             };
 
             return {
-                passed: Object.values(checks).every(Boolean),
+                passed: Object.values(checks).every(check => check.passed),
                 details: checks,
-                score: Object.values(checks).filter(Boolean).length / Object.keys(checks).length
+                score: Object.values(checks).filter(check => check.passed).length / Object.keys(checks).length
             };
 
         } catch (error) {
             console.error('❌ Ошибка проверки технической готовности:', error);
             return {
                 passed: false,
-                details: { error: error.message },
+                details: { 
+                    error: {
+                        passed: false,
+                        value: 0,
+                        threshold: 1,
+                        message: `Ошибка: ${error.message}`
+                    }
+                },
                 score: 0
             };
         }

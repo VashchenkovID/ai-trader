@@ -1,5 +1,6 @@
 import { performance } from 'perf_hooks';
 import MonitoringService from '../services/MonitoringService.js';
+import LoggerService from '../services/LoggerService.js';
 
 // Middleware для мониторинга запросов
 export const requestMonitoring = (req, res, next) => {
@@ -27,12 +28,18 @@ export const requestMonitoring = (req, res, next) => {
         
         // Логируем медленные запросы
         if (duration > 1000) { // > 1 секунды
-            console.warn(`🐌 Slow request: ${req.method} ${req.path} (${duration.toFixed(2)}ms)`);
+            LoggerService.logSlowRequest(req, duration);
         }
         
         // Логируем запросы с большим потреблением памяти
         if (memoryDelta > 10 * 1024 * 1024) { // > 10MB
-            console.warn(`💾 High memory usage: ${req.method} ${req.path} (${(memoryDelta / 1024 / 1024).toFixed(2)}MB)`);
+            LoggerService.warn('High memory usage', {
+                requestId: req.requestId,
+                method: req.method,
+                path: req.path,
+                memoryDelta: `${(memoryDelta / 1024 / 1024).toFixed(2)}MB`,
+                threshold: '10MB'
+            });
         }
         
         // Вызываем оригинальный send

@@ -1,5 +1,7 @@
 import fetch from 'node-fetch';
 import https from 'https';
+import RetryService from './RetryService.js';
+import FallbackService from './FallbackService.js';
 
 const agent = new https.Agent({
     rejectUnauthorized: false
@@ -17,11 +19,13 @@ class TinkoffApiService {
     }
 
     async makeRequest(path, body = {}, retryCount = 0) {
-        try {
+        // Используем RetryService для автоматических повторов
+        return await RetryService.executeWithRetry(async () => {
+            try {
             // Добавляем задержку между запросами
             const timeSinceLastRequest = Date.now() - this.lastRequestTime;
             if (timeSinceLastRequest < this.requestDelay) {
-                await this.delay(this.requestDelay - timeSinceLastRequest);
+                await RetryService.delay(this.requestDelay - timeSinceLastRequest);
             }
 
             const controller = new AbortController();
@@ -69,73 +73,64 @@ class TinkoffApiService {
                     throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
                 }
                 
-                // Обработка ошибки 429 (Too Many Requests)
-                if (response.status === 429) {
-                    if (retryCount < this.maxRetries) {
-                        // Exponential backoff с минимальной задержкой 5 секунд для rate limit
-                        const waitTime = Math.max(5000, this.retryDelay * Math.pow(2, retryCount));
-                        console.warn(`⚠️ Rate limit exceeded. Retrying in ${Math.round(waitTime/1000)}s... (attempt ${retryCount + 1}/${this.maxRetries})`);
-                        await this.delay(waitTime);
-                        return this.makeRequest(path, body, retryCount + 1);
-                    } else {
-                        // При превышении лимита повторов возвращаем пустой результат вместо ошибки
-                        console.error(`❌ Rate limit exceeded. Max retries (${this.maxRetries}) exceeded for ${path}`);
-                        // Для некоторых методов возвращаем пустой результат вместо ошибки
-                        if (path.includes('GetCandles')) {
-                            console.warn(`⚠️ Returning empty candles array due to rate limit`);
-                            return {candles: []};
-                        }
-                        throw new Error(`Rate limit exceeded. Max retries (${this.maxRetries}) exceeded.`);
-                    }
-                }
-
-                console.error('API Error details:', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    path: path,
-                    body: body,
-                    error: errorText
-                });
-                throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
+                // Все ошибки обрабатываются RetryService
+                const error = new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
+                error.status = response.status;
+                error.statusCode = response.status;
+                error.response = { status: response.status, statusText: response.statusText };
+                throw error;
             }
 
             const data = await response.json();
             return data;
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                console.error('Tinkoff API request timeout:', error);
-                throw new Error('Request timeout - API server is not responding');
-            }
-            
-            // Обработка сетевых ошибок с повторными попытками
-            if (error.code === 'ECONNRESET' || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-                if (retryCount < this.maxRetries) {
-                    const waitTime = this.retryDelay * Math.pow(2, retryCount); // Exponential backoff
-                    console.warn(`Network error (${error.code}). Retrying in ${waitTime}ms... (attempt ${retryCount + 1}/${this.maxRetries})`);
-                    await this.delay(waitTime);
-                    return this.makeRequest(path, body, retryCount + 1);
-                } else {
-                    console.error(`Max retries exceeded for network error: ${error.code}`);
-                    throw new Error(`Network error: ${error.code}. Max retries (${this.maxRetries}) exceeded.`);
+            } catch (error) {
+                // Обработка таймаутов
+                if (error.name === 'AbortError') {
+                    const timeoutError = new Error('Request timeout - API server is not responding');
+                    timeoutError.code = 'ETIMEDOUT';
+                    throw timeoutError;
                 }
-            }
-            
-            // Специальная обработка для Shares endpoint
-            if (path.includes('/Shares') && error.code === 'ECONNRESET') {
-                console.warn('⚠️ Shares endpoint returned ECONNRESET - this is a known issue with Tinkoff API');
-                console.warn('💡 Consider using cached data or alternative endpoints');
-                throw new Error('Shares endpoint temporarily unavailable due to ECONNRESET');
-            }
-            
-            // Не логируем 404 для GetInstrumentBy - это нормально (инструмент не найден)
-            if (error.message && error.message.includes('404') && path.includes('GetInstrumentBy')) {
-                // Просто пробрасываем ошибку без логирования
+                
+                // Добавляем статус код для RetryService, если его нет
+                if (!error.status && !error.statusCode && error.message && error.message.includes('status:')) {
+                    const statusMatch = error.message.match(/status:\s*(\d+)/);
+                    if (statusMatch) {
+                        error.status = parseInt(statusMatch[1]);
+                        error.statusCode = parseInt(statusMatch[1]);
+                    }
+                }
+                
+                // Не логируем 404 для GetInstrumentBy - это нормально (инструмент не найден)
+                if (error.message && error.message.includes('404') && path.includes('GetInstrumentBy')) {
+                    throw error;
+                }
+                
+                // Специальная обработка для Shares endpoint
+                if (path.includes('/Shares') && error.code === 'ECONNRESET') {
+                    console.warn('⚠️ Shares endpoint returned ECONNRESET - this is a known issue with Tinkoff API');
+                    console.warn('💡 Consider using cached data or alternative endpoints');
+                }
+                
                 throw error;
             }
-            
-            console.error('Tinkoff API request failed:', error);
-            throw error;
-        }
+        }, {
+            maxRetries: this.maxRetries,
+            initialDelay: 2000,
+            maxDelay: 30000,
+            exponentialBase: 2,
+            jitter: true,
+            retryableStatusCodes: [429, 500, 502, 503, 504],
+            retryableErrors: ['ECONNRESET', 'ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'timeout', 'AbortError'],
+            serviceName: 'TinkoffAPI',
+            circuitBreaker: true,
+            onRetry: (attempt, delay, error) => {
+                if (error.status === 429 || error.statusCode === 429) {
+                    console.warn(`⚠️ Rate limit exceeded. Retrying in ${Math.round(delay/1000)}s... (attempt ${attempt}/${this.maxRetries})`);
+                } else {
+                    console.warn(`⚠️ Tinkoff API error. Retrying in ${Math.round(delay/1000)}s... (attempt ${attempt}/${this.maxRetries})`);
+                }
+            }
+        });
     }
 
     // Вспомогательная функция для задержки
@@ -155,88 +150,91 @@ class TinkoffApiService {
         return units + nano / 1e9;
     }
 
-    // Получение списка акций с пагинацией
+    // Получение списка акций с пагинацией (с fallback на кеш)
     async getStocks() {
-        try {
-            
-            const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares', {
-                instrumentStatus: 'INSTRUMENT_STATUS_BASE'
-            });
+        return await FallbackService.executeWithFallback(
+            // API запрос
+            async () => {
+                const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares', {
+                    instrumentStatus: 'INSTRUMENT_STATUS_BASE'
+                });
 
-            const allInstruments = response?.instruments || [];
-            console.log(`📊 Получено из API: ${allInstruments.length} инструментов`);
+                const allInstruments = response?.instruments || [];
+                console.log(`📊 Получено из API: ${allInstruments.length} инструментов`);
 
-            // Сначала фильтруем по наличию обязательных полей
-            const validInstruments = allInstruments.filter(inst => {
-                return inst && inst.figi && inst.ticker;
-            });
-            console.log(`✅ С FIGI и ticker: ${validInstruments.length} инструментов`);
+                // Сначала фильтруем по наличию обязательных полей
+                const validInstruments = allInstruments.filter(inst => {
+                    return inst && inst.figi && inst.ticker;
+                });
+                console.log(`✅ С FIGI и ticker: ${validInstruments.length} инструментов`);
 
+                // Фильтруем только российские акции по стране и валюте
+                const russianInstruments = validInstruments.filter(inst => {
+                    const countryOfRisk = (inst.countryOfRisk || '').toUpperCase();
+                    const countryOfRiskCode = (inst.countryOfRiskCode || '').toUpperCase();
+                    const currency = (inst.currency || '').toUpperCase();
+                    const exchange = (inst.exchange || '').toUpperCase();
+                    
+                    const hasRussianCountry = countryOfRisk === 'RU' || 
+                                            countryOfRisk === 'RUS' ||
+                                            countryOfRiskCode === 'RU' ||
+                                            countryOfRiskCode === 'RUS';
+                    
+                    const isMoexExchange = exchange.includes('MOEX') || exchange.includes('MOSCOW');
+                    const hasRussianCurrency = currency === 'RUB' || currency === 'RUR';
+                    
+                    const isRussian = (hasRussianCountry || isMoexExchange) && hasRussianCurrency;
+                    return isRussian;
+                });
 
-            // Фильтруем только российские акции по стране и валюте
-            const russianInstruments = validInstruments.filter(inst => {
-                // Проверяем различные поля для определения страны
-                const countryOfRisk = (inst.countryOfRisk || '').toUpperCase();
-                const countryOfRiskCode = (inst.countryOfRiskCode || '').toUpperCase();
-                const currency = (inst.currency || '').toUpperCase();
-                const exchange = (inst.exchange || '').toUpperCase();
+                console.log(`🇷🇺 Российских акций после фильтрации по стране: ${russianInstruments.length}`);
+                return { ...response, instruments: russianInstruments };
+            },
+            // Кеш запрос
+            async () => {
+                const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+                const cached = await CachedInstrument.findAll({
+                    where: { isActive: true },
+                    limit: 1000
+                });
                 
-                // Российские акции определяются по:
-                // 1. Явному указанию страны: "RU" или "RUS"
-                // 2. Бирже MOEX (Московская биржа)
-                // 3. Валюте RUB/RUR (только российские рубли)
-                
-                const hasRussianCountry = countryOfRisk === 'RU' || 
-                                        countryOfRisk === 'RUS' ||
-                                        countryOfRiskCode === 'RU' ||
-                                        countryOfRiskCode === 'RUS';
-                
-                const isMoexExchange = exchange.includes('MOEX') || exchange.includes('MOSCOW');
-                const hasRussianCurrency = currency === 'RUB' || currency === 'RUR';
-                
-                // Российская акция если:
-                // - явно указана страна RU/RUS И валюта RUB/RUR, ИЛИ
-                // - биржа MOEX И валюта RUB/RUR
-                const isRussian = (hasRussianCountry || isMoexExchange) && hasRussianCurrency;
-                
-                return isRussian;
-            });
-
-            console.log(`🇷🇺 Российских акций после фильтрации по стране: ${russianInstruments.length}`);
-
-            return { ...response, instruments: russianInstruments };
-        } catch (error) {
-            console.error('Error getting stocks:', error);
-            // Возвращаем пустой результат при ошибке
-            return { instruments: [] };
-        }
+                if (cached && cached.length > 0) {
+                    return {
+                        instruments: cached.map(inst => ({
+                            figi: inst.figi,
+                            ticker: inst.ticker,
+                            name: inst.name,
+                            currency: inst.currency,
+                            exchange: inst.exchange,
+                            countryOfRisk: inst.countryOfRisk,
+                            countryOfRiskCode: inst.countryOfRiskCode,
+                            lastUpdated: inst.lastUpdated
+                        })),
+                        _fromCache: true
+                    };
+                }
+                return null;
+            },
+            {
+                serviceName: 'TinkoffAPI',
+                maxCacheAge: 24 * 60 * 60 * 1000, // 24 часа
+                notifyUser: true
+            }
+        );
     }
 
-    // Получение исторических свечей
+    // Получение исторических свечей (с fallback на кеш)
     async getCandles(figi, from, to, interval = 'DAY') {
-        try {
-            // Проверяем и корректируем даты
-            const fromDate = new Date(from);
-            const toDate = new Date(to);
+        // Проверяем и корректируем даты
+        const fromDate = new Date(from);
+        const toDate = new Date(to);
 
-            // Если from >= to, корректируем на безопасный интервал
-            if (fromDate >= toDate) {
-                // Отматываем на 31 день, чтобы включить минимум месяц
-                fromDate.setDate(toDate.getDate() - 31);
-            }
-
-            const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles', {
-                figi: figi,
-                from: fromDate.toISOString(),
-                to: toDate.toISOString(),
-                interval: `CANDLE_INTERVAL_${interval}`
-            });
-
-            return response;
-        } catch (error) {
-            console.error(`Error getting candles for ${figi}:`, error);
-            return {candles: []};
+        // Если from >= to, корректируем на безопасный интервал
+        if (fromDate >= toDate) {
+            fromDate.setDate(toDate.getDate() - 31);
         }
+
+        return await FallbackService.getCandlesWithFallback(figi, interval, fromDate, toDate);
     }
 
     // Получение последних цен
@@ -277,24 +275,44 @@ class TinkoffApiService {
         }
     }
 
-    // Получение информации по конкретному инструменту по FIGI
+    // Получение информации по конкретному инструменту по FIGI (с fallback на кеш)
     async getInstrumentByFigi(figi) {
-        try {
-            const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetInstrumentBy', {
-                id: figi,
-                idType: 'INSTRUMENT_ID_TYPE_FIGI'
-            });
-
-            return response;
-        } catch (error) {
-            // 404 - это нормально, инструмент просто не найден (не логируем как ошибку)
-            if (error.message && error.message.includes('404')) {
+        return await FallbackService.executeWithFallback(
+            // API запрос
+            async () => {
+                const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetInstrumentBy', {
+                    id: figi,
+                    idType: 'INSTRUMENT_ID_TYPE_FIGI'
+                });
+                return response;
+            },
+            // Кеш запрос
+            async () => {
+                const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+                const cached = await CachedInstrument.findOne({ where: { figi } });
+                if (cached) {
+                    return {
+                        instrument: {
+                            figi: cached.figi,
+                            ticker: cached.ticker,
+                            name: cached.name,
+                            currency: cached.currency,
+                            exchange: cached.exchange,
+                            countryOfRisk: cached.countryOfRisk,
+                            countryOfRiskCode: cached.countryOfRiskCode,
+                            lastUpdated: cached.lastUpdated
+                        }
+                    };
+                }
                 return null;
+            },
+            {
+                serviceName: 'TinkoffAPI',
+                maxCacheAge: 24 * 60 * 60 * 1000,
+                notifyUser: true,
+                retryFirst: false // Для 404 не делаем retry
             }
-            // Другие ошибки логируем
-            console.error(`Error getting instrument ${figi}:`, error);
-            return null;
-        }
+        );
     }
 
     // Поиск инструмента через FindInstrument (более универсальный метод)
@@ -504,17 +522,30 @@ class TinkoffApiService {
                     figi: position.figi,
                     ticker: position.ticker,
                     instrumentType: position.instrumentType,
-                    quantity: position.quantity?.units || 0,
+                    quantity: (() => {
+                        const qty = position.quantity?.units || position.quantity || 0;
+                        // Преобразуем в число, если это строка
+                        return typeof qty === 'string' ? parseFloat(qty) || 0 : (typeof qty === 'number' ? qty : 0);
+                    })(),
                     averagePositionPrice: {
-                        value: position.averagePositionPrice?.units || 0,
+                        value: (() => {
+                            const val = position.averagePositionPrice?.units || 0;
+                            return typeof val === 'string' ? parseFloat(val) || 0 : (typeof val === 'number' ? val : 0);
+                        })(),
                         currency: position.averagePositionPrice?.currency || 'RUB'
                     },
                     expectedYield: {
-                        value: position.expectedYield?.units || 0,
+                        value: (() => {
+                            const val = position.expectedYield?.units || 0;
+                            return typeof val === 'string' ? parseFloat(val) || 0 : (typeof val === 'number' ? val : 0);
+                        })(),
                         currency: position.expectedYield?.currency || 'RUB'
                     },
                 currentPrice: {
-                    value: position.currentPrice?.units || 0,
+                    value: (() => {
+                        const val = position.currentPrice?.units || 0;
+                        return typeof val === 'string' ? parseFloat(val) || 0 : (typeof val === 'number' ? val : 0);
+                    })(),
                     currency: position.currentPrice?.currency || 'RUB'
                 },
                 currentNkd: {

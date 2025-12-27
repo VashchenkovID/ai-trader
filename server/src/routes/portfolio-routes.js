@@ -65,6 +65,74 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * Реальный портфель
+ */
+router.get('/real', async (req, res) => {
+    try {
+        const portfolio = await TradingEngine.getRealPortfolioValue();
+        
+        if (!portfolio) {
+            return res.json({
+                success: true,
+                data: null,
+                message: 'Реальный портфель недоступен'
+            });
+        }
+        
+        // TradingEngine.getRealPortfolioValue() уже преобразует positions в объект {figi: quantity}
+        // и рассчитывает positionsValue, но можем пересчитать для точности
+        let positionsValue = portfolio.positionsValue || 0;
+        const rawPositions = portfolio?.positions || {};
+        
+        // Если positionsValue не был рассчитан, рассчитываем вручную
+        if (positionsValue === 0) {
+            for (const [figi, quantity] of Object.entries(rawPositions)) {
+                if (typeof quantity === 'number' && quantity > 0) {
+                    try {
+                        const instrument = await CacheService.getInstrument(figi, true);
+                        const currentPrice = instrument?.lastPrice || 0;
+                        positionsValue += currentPrice * quantity;
+                    } catch (error) {
+                        console.warn(`⚠️ Не удалось получить цену для ${figi}:`, error.message);
+                    }
+                }
+            }
+        }
+        
+        const cash = portfolio?.cash || 0;
+        const totalValue = portfolio?.totalValue || (cash + positionsValue);
+        
+        // Рассчитываем PnL (если есть начальный капитал)
+        const initialCapital = portfolio?.initialCapital || 0;
+        const totalPnL = initialCapital > 0 ? totalValue - initialCapital : 0;
+        const totalPnLPercent = initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
+        
+        res.json({
+            success: true,
+            data: {
+                cash,
+                positions: rawPositions,
+                positionsValue,
+                totalValue,
+                totalPnL,
+                totalPnLPercent,
+                trades: portfolio?.trades || [],
+                mode: 'real',
+                initialCapital
+            },
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Ошибка получения реального портфеля:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения реального портфеля',
+            error: error.message
+        });
+    }
+});
+
+/**
  * Позиции портфеля
  */
 router.get('/positions', async (req, res) => {
@@ -317,6 +385,31 @@ router.get('/risk-metrics', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Ошибка получения риск-метрик портфеля',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Синхронизация реального портфеля из Tinkoff API
+ */
+router.post('/real/sync', async (req, res) => {
+    try {
+        const SchedulerService = (await import('../services/SchedulerService.js')).default;
+        
+        // Выполняем синхронизацию реального портфеля
+        const result = await SchedulerService.performRealPortfolioSync();
+        
+        res.json({
+            success: true,
+            message: 'Синхронизация реального портфеля завершена',
+            data: result
+        });
+    } catch (error) {
+        console.error('Ошибка синхронизации реального портфеля:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка синхронизации реального портфеля',
             error: error.message
         });
     }

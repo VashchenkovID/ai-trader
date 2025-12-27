@@ -136,15 +136,31 @@ const Recommendation = sequelize.define('Recommendation', {
     timestamps: true,
     indexes: [
         {
+            name: 'idx_recommendations_figi_analysis_date',
             fields: ['figi', 'analysisDate']
         },
         {
+            name: 'idx_recommendations_analysis_date',
+            fields: ['analysisDate']
+        },
+        {
+            name: 'idx_recommendations_valid_until',
+            fields: ['validUntil']
+        },
+        {
+            name: 'idx_recommendations_is_active',
+            fields: ['isActive']
+        },
+        {
+            name: 'idx_recommendations_recommendation_confidence',
             fields: ['recommendation', 'confidence']
         },
         {
+            name: 'idx_recommendations_is_active_analysis_date',
             fields: ['isActive', 'analysisDate']
         },
         {
+            name: 'idx_recommendations_sector_recommendation',
             fields: ['sector', 'recommendation']
         }
     ]

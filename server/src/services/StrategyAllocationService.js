@@ -406,61 +406,99 @@ class StrategyAllocationService {
                 order: [['priority', 'ASC']]
             });
 
+            if (strategies.length === 0) {
+                return [];
+            }
+
             const TradingRequest = (await import('../models/TradingRequest.js')).default;
             const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
             const { Op } = await import('sequelize');
 
+            // Оптимизация N+1: загружаем все данные одним запросом
+            const strategyIds = strategies.map(s => s.id);
+            
+            // Загружаем все allocations одним запросом
+            const allAllocations = await PortfolioAllocation.findAll({
+                where: { strategyId: { [Op.in]: strategyIds } }
+            });
+            const allocationsByStrategyId = new Map();
+            for (const alloc of allAllocations) {
+                allocationsByStrategyId.set(alloc.strategyId, alloc);
+            }
+            
+            // Загружаем все PositionStrategy одним запросом
+            const allActivePositions = await PositionStrategy.findAll({
+                where: {
+                    strategyId: { [Op.in]: strategyIds },
+                    exitDate: null // Только открытые позиции
+                }
+            });
+            
+            // Группируем позиции по strategyId
+            const positionsByStrategyId = new Map();
+            const allPositionIds = new Set();
+            for (const pos of allActivePositions) {
+                if (!positionsByStrategyId.has(pos.strategyId)) {
+                    positionsByStrategyId.set(pos.strategyId, []);
+                }
+                positionsByStrategyId.get(pos.strategyId).push(pos);
+                allPositionIds.add(pos.positionId);
+            }
+            
+            // Загружаем все торговые заявки одним запросом
+            const allActiveRequests = await TradingRequest.findAll({
+                where: {
+                    [Op.or]: [
+                        { id: { [Op.in]: Array.from(allPositionIds) } },
+                        { strategyId: { [Op.in]: strategyIds } }
+                    ],
+                    status: { [Op.in]: ['APPROVED', 'EXECUTED', 'PENDING'] },
+                    action: 'BUY'
+                }
+            });
+            
+            // Группируем заявки по strategyId и по positionId
+            const requestsByStrategyId = new Map();
+            const requestsByPositionId = new Map();
+            for (const request of allActiveRequests) {
+                if (request.strategyId) {
+                    if (!requestsByStrategyId.has(request.strategyId)) {
+                        requestsByStrategyId.set(request.strategyId, []);
+                    }
+                    requestsByStrategyId.get(request.strategyId).push(request);
+                }
+                if (allPositionIds.has(request.id)) {
+                    requestsByPositionId.set(request.id, request);
+                }
+            }
+
             const result = [];
             for (const strategy of strategies) {
-                const allocation = await PortfolioAllocation.getOrCreateAllocation(strategy.id);
+                // Получаем или создаем allocation
+                let allocation = allocationsByStrategyId.get(strategy.id);
+                if (!allocation) {
+                    allocation = await PortfolioAllocation.getOrCreateAllocation(strategy.id);
+                }
                 
-                // Рассчитываем реальное использование на основе торговых заявок
-                // Берем только активные/исполненные заявки (не отмененные/отклоненные)
-                const activePositions = await PositionStrategy.findAll({
-                    where: {
-                        strategyId: strategy.id,
-                        exitDate: null // Только открытые позиции
-                    }
-                });
-
-                // Получаем торговые заявки для этих позиций
+                // Получаем позиции для стратегии
+                const activePositions = positionsByStrategyId.get(strategy.id) || [];
                 const positionIds = activePositions.map(p => p.positionId);
+                
+                // Рассчитываем реальное использование
                 let realUsedAmount = 0;
                 
-                if (positionIds.length > 0) {
-                    const activeRequests = await TradingRequest.findAll({
-                        where: {
-                            id: {
-                                [Op.in]: positionIds
-                            },
-                            status: {
-                                [Op.in]: ['APPROVED', 'EXECUTED', 'PENDING'] // Активные статусы
-                            },
-                            action: 'BUY' // Только покупки учитываем в использовании бюджета
-                        }
-                    });
-
-                    // Суммируем реальное использование из торговых заявок
-                    for (const request of activeRequests) {
-                        // Используем actualAmount если есть, иначе estimatedAmount
+                // Суммируем использование из заявок через PositionStrategy
+                for (const posId of positionIds) {
+                    const request = requestsByPositionId.get(posId);
+                    if (request) {
                         const amount = parseFloat(request.actualAmount || request.estimatedAmount || 0);
                         realUsedAmount += amount;
                     }
                 }
-
-                // Также учитываем заявки без PositionStrategy (старые заявки или новые)
-                const directRequests = await TradingRequest.findAll({
-                    where: {
-                        strategyId: strategy.id,
-                        status: {
-                            [Op.in]: ['APPROVED', 'EXECUTED', 'PENDING']
-                        },
-                        action: 'BUY' // Только покупки
-                    }
-                });
-
-                // Проверяем, какие заявки уже учтены через PositionStrategy
+                
+                // Учитываем прямые заявки без PositionStrategy
                 const accountedIds = new Set(positionIds);
+                const directRequests = requestsByStrategyId.get(strategy.id) || [];
                 for (const request of directRequests) {
                     if (!accountedIds.has(request.id)) {
                         const amount = parseFloat(request.actualAmount || request.estimatedAmount || 0);

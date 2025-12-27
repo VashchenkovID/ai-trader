@@ -173,7 +173,29 @@ Settings.setSetting = async function(key, value, options = {}) {
 Settings.getAllSettings = async function(category = null) {
     try {
         const where = category ? { category } : {};
-        const settings = await this.findAll({ where, order: [['category', 'ASC'], ['key', 'ASC']] });
+        
+        // Пытаемся использовать безопасный запрос, если доступен
+        let settings;
+        try {
+            const DatabaseConnectionManager = (await import('../utils/DatabaseConnectionManager.js')).default;
+            if (DatabaseConnectionManager && typeof DatabaseConnectionManager.safeQuery === 'function') {
+                settings = await DatabaseConnectionManager.safeQuery(
+                    this.findAll.bind(this),
+                    { where, order: [['category', 'ASC'], ['key', 'ASC']] }
+                );
+            } else {
+                // Если DatabaseConnectionManager недоступен, используем прямой запрос
+                settings = await this.findAll({ where, order: [['category', 'ASC'], ['key', 'ASC']] });
+            }
+        } catch (dbError) {
+            // Если ошибка с DatabaseConnectionManager, пробуем прямой запрос
+            console.warn('DatabaseConnectionManager недоступен, используем прямой запрос:', dbError.message);
+            settings = await this.findAll({ where, order: [['category', 'ASC'], ['key', 'ASC']] });
+        }
+        
+        if (!settings || !Array.isArray(settings)) {
+            return [];
+        }
         
         // Преобразуем настройки в удобный формат
         return settings.map(setting => {
@@ -186,20 +208,30 @@ Settings.getAllSettings = async function(category = null) {
                 } else if (setting.dataType === 'boolean') {
                     parsedValue = setting.value === 'true';
                 }
-            } catch {
+            } catch (parseError) {
                 // Оставляем исходное значение если не удалось распарсить
+                console.warn(`Error parsing setting ${setting.key}:`, parseError.message);
+            }
+            
+            let parsedOptions = null;
+            try {
+                if (setting.options) {
+                    parsedOptions = JSON.parse(setting.options);
+                }
+            } catch (parseError) {
+                console.warn(`Error parsing options for setting ${setting.key}:`, parseError.message);
             }
             
             return {
                 key: setting.key,
                 value: parsedValue,
-                description: setting.description,
-                category: setting.category,
-                dataType: setting.dataType,
-                isEditable: setting.isEditable,
-                minValue: setting.minValue,
-                maxValue: setting.maxValue,
-                options: setting.options ? JSON.parse(setting.options) : null,
+                description: setting.description || null,
+                category: setting.category || 'other',
+                dataType: setting.dataType || 'string',
+                isEditable: setting.isEditable !== false,
+                minValue: setting.minValue || null,
+                maxValue: setting.maxValue || null,
+                options: parsedOptions,
                 lastUpdated: setting.lastUpdated
             };
         });

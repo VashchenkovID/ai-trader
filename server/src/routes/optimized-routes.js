@@ -30,17 +30,240 @@ import backtestRoutes from './backtest-routes.js';
 import macroDataRoutes from './macro-data-routes.js';
 import advancedMetricsRoutes from './advanced-metrics-routes.js';
 import portfolioRebalancingRoutes from './portfolio-rebalancing-routes.js';
+import monitoringRoutes from './monitoring-routes.js';
+import backupRoutes from './backup-routes.js';
+import retryRoutes from './retry-routes.js';
+import fallbackRoutes from './fallback-routes.js';
+import recoveryRoutes from './recovery-routes.js';
+import rateLimitRoutes from './rate-limit-routes.js';
 import ServiceManager from '../services/ServiceManager.js';
 import Recommendation from '../models/Recommendation.js';
 import { Op } from 'sequelize';
 
 const router = express.Router();
 
+// Простой трекер метрик (в памяти) - должен быть определен ДО middleware
+const performanceMetricsTracker = {
+    requestCount: 0,
+    errorCount: 0,
+    totalResponseTime: 0,
+    responseTimes: [],
+    cacheHits: 0,
+    cacheMisses: 0,
+    startTime: Date.now(),
+    
+    recordRequest(responseTime) {
+        this.requestCount++;
+        this.totalResponseTime += responseTime;
+        this.responseTimes.push(responseTime);
+        // Храним только последние 1000 значений
+        if (this.responseTimes.length > 1000) {
+            this.responseTimes.shift();
+        }
+    },
+    
+    recordError() {
+        this.errorCount++;
+    },
+    
+    recordCacheHit() {
+        this.cacheHits++;
+    },
+    
+    recordCacheMiss() {
+        this.cacheMisses++;
+    },
+    
+    getMetrics() {
+        const uptime = (Date.now() - this.startTime) / 1000; // в секундах
+        const avgResponseTime = this.responseTimes.length > 0 
+            ? this.responseTimes.reduce((a, b) => a + b, 0) / this.responseTimes.length 
+            : 0;
+        const throughput = uptime > 0 ? (this.requestCount / uptime) * 60 : 0; // запросов в минуту
+        const errorRate = this.requestCount > 0 ? (this.errorCount / this.requestCount) * 100 : 0;
+        const totalCacheRequests = this.cacheHits + this.cacheMisses;
+        const cacheHitRate = totalCacheRequests > 0 ? (this.cacheHits / totalCacheRequests) * 100 : 0;
+        
+        return {
+            responseTime: Math.round(avgResponseTime),
+            throughput: Math.round(throughput * 100) / 100,
+            errorRate: Math.round(errorRate * 100) / 100,
+            cacheHitRate: Math.round(cacheHitRate * 100) / 100
+        };
+    }
+};
+
+// Middleware для отслеживания метрик - должен быть ПЕРВЫМ
+router.use((req, res, next) => {
+    const startTime = Date.now();
+    const originalSend = res.send;
+    res.send = function(data) {
+        const responseTime = Date.now() - startTime;
+        performanceMetricsTracker.recordRequest(responseTime);
+        if (res.statusCode >= 400) {
+            performanceMetricsTracker.recordError();
+        }
+        return originalSend.call(this, data);
+    };
+    next();
+});
+
 // Подключаем все модули роутов
 router.use('/neural-network', neuralNetworkRoutes);
 router.use('/ensemble', ensembleRoutes);
 router.use('/training', trainingRoutes);
 router.use('/system', systemRoutes);
+router.use('/monitoring', monitoringRoutes);
+router.use('/backup', backupRoutes);
+router.use('/retry', retryRoutes);
+router.use('/fallback', fallbackRoutes);
+router.use('/recovery', recoveryRoutes);
+router.use('/rate-limit', rateLimitRoutes);
+
+// Прямые роуты для совместимости с фронтендом (копируем логику из system-routes)
+router.get('/settings', async (req, res) => {
+    // Импортируем SettingsService напрямую
+    const SettingsService = (await import('../services/SettingsService.js')).default;
+    
+    let formattedSettings = [];
+    
+    if (!SettingsService) {
+        console.warn('SettingsService не импортирован');
+        return res.json({
+            success: true,
+            data: []
+        });
+    }
+    
+    try {
+        let settings = [];
+        
+        try {
+            if (typeof SettingsService.getAllSettings === 'function') {
+                const result = await Promise.resolve(SettingsService.getAllSettings());
+                settings = result || [];
+            } else {
+                console.warn('SettingsService.getAllSettings не является функцией');
+                settings = [];
+            }
+        } catch (serviceError) {
+            console.error('Ошибка в SettingsService.getAllSettings:', serviceError);
+            console.error('Stack:', serviceError.stack);
+            settings = [];
+        }
+        
+        if (!Array.isArray(settings)) {
+            console.warn('Settings.getAllSettings вернул не массив:', typeof settings, settings);
+            settings = [];
+        }
+        
+        try {
+            formattedSettings = settings.map(setting => {
+                try {
+                    if (!setting || typeof setting !== 'object') {
+                        return null;
+                    }
+                    return {
+                        key: String(setting.key || ''),
+                        value: setting.value !== undefined ? setting.value : '',
+                        type: String(setting.dataType || 'string'),
+                        module: String(setting.category || 'other'),
+                        description: String(setting.description || ''),
+                        min: setting.minValue !== null && setting.minValue !== undefined ? Number(setting.minValue) : undefined,
+                        max: setting.maxValue !== null && setting.maxValue !== undefined ? Number(setting.maxValue) : undefined,
+                        options: setting.options || undefined
+                    };
+                } catch (mapError) {
+                    console.warn('Ошибка форматирования настройки:', mapError);
+                    return null;
+                }
+            }).filter(setting => setting !== null);
+        } catch (formatError) {
+            console.error('Ошибка форматирования настроек:', formatError);
+            formattedSettings = [];
+        }
+    } catch (error) {
+        console.error('Критическая ошибка получения настроек:', error);
+        console.error('Stack:', error.stack);
+        formattedSettings = [];
+    }
+    
+    return res.json({
+        success: true,
+        data: formattedSettings
+    });
+});
+
+router.get('/performance/metrics', async (req, res) => {
+    const defaultMetrics = {
+        responseTime: 0,
+        throughput: 0,
+        errorRate: 0,
+        cacheHitRate: 0
+    };
+
+    try {
+        // Получаем метрики из трекера
+        const trackedMetrics = performanceMetricsTracker.getMetrics();
+        
+        // Пытаемся получить дополнительные метрики из PerformanceAnalyzer
+        try {
+            let PerformanceAnalyzer;
+            try {
+                PerformanceAnalyzer = ServiceManager.getService('PerformanceAnalyzer');
+            } catch (serviceError) {
+                PerformanceAnalyzer = null;
+            }
+            
+            if (PerformanceAnalyzer) {
+                try {
+                    // Пытаемся получить метрики через getSystemMetrics
+                    let metrics = null;
+                    if (typeof PerformanceAnalyzer.getSystemMetrics === 'function') {
+                        metrics = await PerformanceAnalyzer.getSystemMetrics();
+                    } else if (typeof PerformanceAnalyzer.getMetrics === 'function') {
+                        const allMetrics = await PerformanceAnalyzer.getMetrics();
+                        metrics = allMetrics?.system || null;
+                    }
+                    
+                    // Если есть метрики из PerformanceAnalyzer, используем их для дополнения
+                    if (metrics && typeof metrics === 'object') {
+                        // Объединяем метрики: приоритет у трекера, но используем PerformanceAnalyzer если трекер пустой
+                        const finalMetrics = {
+                            responseTime: trackedMetrics.responseTime || Number(metrics.responseTime || metrics.avgResponseTime || 0) || 0,
+                            throughput: trackedMetrics.throughput || Number(metrics.throughput || metrics.requestsPerSecond || 0) || 0,
+                            errorRate: trackedMetrics.errorRate || Number(metrics.errorRate || metrics.errorPercentage || 0) || 0,
+                            cacheHitRate: trackedMetrics.cacheHitRate || Number(metrics.cacheHitRate || metrics.cacheHitPercentage || 0) || 0
+                        };
+                        return res.json({
+                            success: true,
+                            data: finalMetrics
+                        });
+                    }
+                } catch (metricsError) {
+                    console.warn('Ошибка получения метрик из PerformanceAnalyzer:', metricsError.message);
+                }
+            }
+        } catch (analyzerError) {
+            console.warn('PerformanceAnalyzer недоступен, используем трекер:', analyzerError.message);
+        }
+        
+        // Возвращаем метрики из трекера
+        return res.json({
+            success: true,
+            data: trackedMetrics.responseTime > 0 || trackedMetrics.throughput > 0 
+                ? trackedMetrics 
+                : defaultMetrics
+        });
+    } catch (error) {
+        console.error('Критическая ошибка получения метрик производительности:', error);
+        return res.json({
+            success: true,
+            data: defaultMetrics
+        });
+    }
+});
+
 router.use('/trading', tradingRoutes);
 router.use('/portfolio', portfolioRoutes);
 router.use('/ai', aiRoutes);

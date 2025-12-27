@@ -1515,37 +1515,91 @@ class NeuralNetworkService {
         
         const recommendationsByStrategy = {}; // Группировка по стратегиям
         
+        // Оптимизация N+1: загружаем все данные одним запросом
+        const figis = portfolioItems.map(item => item.figi);
+        
+        // Загружаем все BUY заявки для всех FIGI одним запросом
+        const allBuyRequests = await TradingRequest.findAll({
+            where: {
+                figi: { [Op.in]: figis },
+                action: 'BUY',
+                status: { [Op.in]: ['APPROVED', 'EXECUTED', 'PENDING'] }
+            },
+            order: [['figi', 'ASC'], ['executedAt', 'DESC'], ['createdAt', 'DESC']],
+            include: [{
+                model: TradingStrategy,
+                as: 'strategy',
+                required: false
+            }]
+        });
+        
+        // Группируем заявки по FIGI, берем последнюю для каждого FIGI
+        const buyRequestsByFigi = new Map();
+        const requestIds = new Set();
+        for (const request of allBuyRequests) {
+            if (!buyRequestsByFigi.has(request.figi)) {
+                buyRequestsByFigi.set(request.figi, request);
+                requestIds.add(request.id);
+            }
+        }
+        
+        // Загружаем все PositionStrategy для всех заявок одним запросом
+        const allPositionStrategies = await PositionStrategy.findAll({
+            where: {
+                positionId: { [Op.in]: Array.from(requestIds) }
+            },
+            include: [{
+                model: TradingStrategy,
+                as: 'strategy',
+                required: false
+            }]
+        });
+        
+        // Создаем мапу PositionStrategy по positionId
+        const positionStrategyByRequestId = new Map();
+        for (const ps of allPositionStrategies) {
+            positionStrategyByRequestId.set(ps.positionId, ps);
+        }
+        
+        // Загружаем все стратегии одним запросом (на случай если не загрузились через include)
+        const strategyIds = new Set();
+        for (const request of allBuyRequests) {
+            if (request.strategyId) strategyIds.add(request.strategyId);
+        }
+        for (const ps of allPositionStrategies) {
+            if (ps.strategyId) strategyIds.add(ps.strategyId);
+        }
+        
+        const allStrategies = await TradingStrategy.findAll({
+            where: { id: { [Op.in]: Array.from(strategyIds) } }
+        });
+        const strategiesById = new Map();
+        for (const strategy of allStrategies) {
+            strategiesById.set(strategy.id, strategy);
+        }
+        
+        // Загружаем все цены одним запросом (если метод getCurrentPrice поддерживает батчинг)
+        // Пока оставляем как есть, но можно оптимизировать если есть метод getCurrentPrices()
+        
         for (const item of portfolioItems) {
             try {
-                // Получаем стратегию для позиции
+                // Получаем стратегию для позиции из предзагруженных данных
                 let positionStrategy = null;
                 let strategyInfo = null;
                 try {
-                    // Ищем последнюю BUY заявку для этого FIGI
-                    const buyRequest = await TradingRequest.findOne({
-                        where: {
-                            figi: item.figi,
-                            action: 'BUY',
-                            status: {
-                                [Op.in]: ['APPROVED', 'EXECUTED', 'PENDING']
-                            }
-                        },
-                        order: [['executedAt', 'DESC'], ['createdAt', 'DESC']]
-                    });
+                    const buyRequest = buyRequestsByFigi.get(item.figi);
                     
                     if (buyRequest) {
                         // Сначала проверяем strategyId в самой заявке
                         if (buyRequest.strategyId) {
-                            strategyInfo = await TradingStrategy.findByPk(buyRequest.strategyId);
+                            strategyInfo = buyRequest.strategy || strategiesById.get(buyRequest.strategyId);
                         }
                         
                         // Если не найдено, пытаемся найти через PositionStrategy
                         if (!strategyInfo) {
-                            positionStrategy = await PositionStrategy.findOne({
-                                where: { positionId: buyRequest.id }
-                            });
+                            positionStrategy = positionStrategyByRequestId.get(buyRequest.id);
                             if (positionStrategy && positionStrategy.strategyId) {
-                                strategyInfo = await TradingStrategy.findByPk(positionStrategy.strategyId);
+                                strategyInfo = positionStrategy.strategy || strategiesById.get(positionStrategy.strategyId);
                             }
                         }
                     }

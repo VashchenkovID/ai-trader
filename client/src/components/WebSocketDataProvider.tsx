@@ -5,7 +5,8 @@ export interface SystemStatus {
   neuralNetwork: any;
   websocket: any;
   database: any;
-  trading: any;
+  trading?: any;
+  tradingEngine?: any;
   ensemble?: any;
 }
 

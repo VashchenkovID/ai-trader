@@ -47,10 +47,21 @@ CachedCandle.init({
     tableName: 'cached_candles',
     indexes: [
         {
-            fields: ['figi', 'interval', 'time']
+            name: 'idx_cached_candles_figi_interval_time',
+            fields: ['figi', 'interval', 'time'],
+            unique: true
         },
         {
+            name: 'idx_cached_candles_figi_interval',
+            fields: ['figi', 'interval']
+        },
+        {
+            name: 'idx_cached_candles_time',
             fields: ['time']
+        },
+        {
+            name: 'idx_cached_candles_figi',
+            fields: ['figi']
         }
     ]
 });

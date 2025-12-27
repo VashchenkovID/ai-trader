@@ -12,9 +12,14 @@
     "migrate:instrument-type": "node migrations/create-portfolio-analysis-table.js",
     "migrate:instrument-stats": "node migrations/create-instrument-stats-table.js",
     "migrate:correlation-cache": "node migrations/create-correlation-cache-table.js",
+    "migrate:entry-optimization": "node migrations/add-entry-optimization-column.js",
     "start:optimized": "node src/app-optimized.js",
     "start:backup": "node src/app-backup.js",
-    "cleanup": "node cleanup-unused-files.js"
+    "cleanup": "node cleanup-unused-files.js",
+    "test:db-optimizations": "node test-db-optimizations.js",
+    "test:rate-limiting": "node test-rate-limiting.js",
+    "test:entry-optimization": "node test-entry-optimization.js",
+    "test:exit-optimization": "node test-exit-optimization.js"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.15.0",
@@ -23,6 +28,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "multer": "^2.0.2",
     "newsapi": "^2.4.1",
     "node-cache": "^5.1.2",
     "node-cron": "^3.0.3",

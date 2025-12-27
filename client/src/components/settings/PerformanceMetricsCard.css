@@ -1,0 +1,54 @@
+/* PerformanceMetricsCard Styles */
+
+.performance-metrics-card {
+  position: relative;
+}
+
+.performance-metrics-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.performance-metrics-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.performance-metrics-label-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-1);
+}
+
+.performance-metrics-label {
+  font-size: 0.75rem; /* text-xs */
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-primary);
+}
+
+.performance-metrics-value {
+  font-size: 0.75rem; /* text-xs */
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-primary);
+}
+
+.performance-metrics-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.performance-metrics-skeleton-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.performance-metrics-skeleton-large {
+  width: 100%;
+  height: 1rem;
+}
+

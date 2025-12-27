@@ -13,6 +13,15 @@ import optimizedRoutes from './routes/optimized-routes.js';
 import ServiceManager from './services/ServiceManager.js';
 import { setGlobalServiceManager } from './services/GlobalServiceManager.js';
 
+// Import error handlers
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+// Import request tracing
+import { requestTracing, errorTracing } from './middleware/requestTracing.js';
+// Import rate limiting
+import { generalLimiter } from './middleware/rateLimiter.js';
+// Import LoggerService (будет инициализирован через ServiceManager)
+import LoggerService from './services/LoggerService.js';
+
 // Load environment variables
 dotenv.config();
 
@@ -23,26 +32,25 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy для правильного определения IP адреса (важно для rate limiting)
+app.set('trust proxy', true);
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging
-app.use((req, res, next) => {
-    const start = Date.now();
-    const userAgent = req.get('User-Agent') || 'Unknown';
-    const ip = req.ip || req.connection.remoteAddress || 'Unknown';
-    
-    
-    res.on('finish', () => {
-        const duration = Date.now() - start;
-        if (duration > 1000) {
-            console.log(`🐌 Slow request: ${req.method} ${req.path} (${duration}ms)`);
-        }
-    });
-    
-    next();
+// Request tracing middleware (добавляет requestId и логирует запросы)
+app.use(requestTracing);
+
+// Rate limiting middleware (применяется ко всем API запросам, кроме rate-limit endpoints)
+// Исключаем rate-limit endpoints из общего лимита, чтобы можно было мониторить даже после превышения
+app.use('/api', (req, res, next) => {
+    // Пропускаем rate-limit endpoints без ограничений
+    if (req.path.startsWith('/rate-limit')) {
+        return next();
+    }
+    return generalLimiter(req, res, next);
 });
 
 // Health check
@@ -61,20 +69,19 @@ app.use('/api', optimizedRoutes);
 const clientDistPath = path.resolve(__dirname, '../../client/dist');
 app.use(express.static(clientDistPath));
 
-// Catch-all handler for SPA
+// 404 handler - должен быть перед catch-all для SPA
+app.use('/api/*', notFoundHandler);
+
+// Catch-all handler for SPA (должен быть последним перед error handler)
 app.get('*', (req, res) => {
     res.sendFile(path.join(clientDistPath, 'index.html'));
 });
 
-// Error handling middleware
-app.use((error, req, res, next) => {
-    console.error('❌ Server error:', error);
-    res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
-    });
-});
+// Error tracing middleware (добавляет requestId к ошибкам)
+app.use(errorTracing);
+
+// Centralized error handling middleware (должен быть последним)
+app.use(errorHandler);
 
 // Create HTTP server
 const server = createServer(app);
@@ -121,12 +128,26 @@ async function initializeServices() {
                     );
                 }
             } catch (error) {
-                console.error('❌ Error sending startup notification:', error);
+                LoggerService.error('Error sending startup notification', {
+                    service: 'app',
+                    operation: 'sendStartupNotification',
+                    error: {
+                        message: error.message,
+                        stack: error.stack
+                    }
+                });
             }
         }
         
     } catch (error) {
-        console.error('❌ Failed to initialize services:', error);
+        LoggerService.error('Failed to initialize services', {
+            service: 'app',
+            operation: 'initializeServices',
+            error: {
+                message: error.message,
+                stack: error.stack
+            }
+        });
         process.exit(1);
     }
 }
@@ -143,7 +164,14 @@ async function startServer() {
         });
         
     } catch (error) {
-        console.error('❌ Failed to start server:', error);
+        LoggerService.error('Failed to start server', {
+            service: 'app',
+            operation: 'startServer',
+            error: {
+                message: error.message,
+                stack: error.stack
+            }
+        });
         process.exit(1);
     }
 }
@@ -183,7 +211,14 @@ async function gracefulShutdown(signal) {
                     'warning'
                 );
             } catch (error) {
-                console.error('❌ Error sending shutdown notification:', error);
+                LoggerService.error('Error sending shutdown notification', {
+                    service: 'app',
+                    operation: 'gracefulShutdown',
+                    error: {
+                        message: error.message,
+                        stack: error.stack
+                    }
+                });
             }
         }
         
@@ -204,7 +239,14 @@ async function gracefulShutdown(signal) {
                 }
             });
         } catch (error) {
-            console.error('❌ Error force stopping cron tasks:', error);
+            LoggerService.error('Error force stopping cron tasks', {
+                service: 'app',
+                operation: 'gracefulShutdown',
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
         }
         
         // Ждем немного, чтобы cron задачи успели завершиться
@@ -217,27 +259,52 @@ async function gracefulShutdown(signal) {
             process.exit(0);
         });
     } catch (error) {
-        console.error('❌ Error during shutdown:', error);
+        LoggerService.error('Error during shutdown', {
+            service: 'app',
+            operation: 'gracefulShutdown',
+            signal,
+            error: {
+                message: error.message,
+                stack: error.stack
+            }
+        });
         process.exit(1);
     }
 }
 
 // Обработка необработанных исключений
 process.on('uncaughtException', (error) => {
-    console.error('❌ Uncaught Exception:', error);
+    LoggerService.logCritical('Uncaught Exception', {
+        service: 'app',
+        error: {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        }
+    });
     gracefulShutdown('uncaughtException').catch(() => {
         process.exit(1);
     });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+    LoggerService.logCritical('Unhandled Rejection', {
+        service: 'app',
+        reason: reason instanceof Error ? {
+            message: reason.message,
+            stack: reason.stack,
+            name: reason.name
+        } : String(reason),
+        promise: promise?.toString()
+    });
     gracefulShutdown('unhandledRejection').catch(() => {
         process.exit(1);
     });
 });
 
 // Start the server
-startServer();export default app;
+startServer();
+
+export default app;
 
 

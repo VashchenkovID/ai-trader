@@ -4,8 +4,12 @@ import MetaLearningService from '../services/MetaLearningService.js';
 import ReinforcementLearningService from '../services/ReinforcementLearningService.js';
 import ServiceManager from '../services/ServiceManager.js';
 import OptimizedTelegramService from '../services/OptimizedTelegramService.js';
+import { heavyOperationLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
+
+// Применяем строгие лимиты к тяжелым операциям обучения
+router.use(heavyOperationLimiter);
 
 /**
  * Пакетное обучение всех нейросетей
