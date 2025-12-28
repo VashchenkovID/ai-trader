@@ -2,4 +2,6 @@
 */dist
 */build
 */models
+*/backups
+*/logs
 node_modules

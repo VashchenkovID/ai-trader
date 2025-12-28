@@ -19,7 +19,15 @@
     "test:db-optimizations": "node test-db-optimizations.js",
     "test:rate-limiting": "node test-rate-limiting.js",
     "test:entry-optimization": "node test-entry-optimization.js",
-    "test:exit-optimization": "node test-exit-optimization.js"
+    "test:exit-optimization": "node test-exit-optimization.js",
+    "test:position-monitoring": "node test-position-monitoring.js",
+    "test:tax-optimization": "node test-tax-optimization.js",
+    "test:secret-management": "node test-secret-management.js",
+    "test:pyramiding": "node test-pyramiding.js",
+    "test:model-weighting": "node test-model-weighting.js",
+    "test:diversification": "node test-diversification.js",
+    "test:migration": "node test-migration.js",
+    "test:data-cleanup": "node test-data-cleanup.js"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.15.0",

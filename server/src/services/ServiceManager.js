@@ -87,6 +87,15 @@ class ServiceManager {
             await this.initializeService('StrategyAllocationService', () => import('./StrategyAllocationService.js'));
             await this.initializeService('EntryOptimizationService', () => import('./EntryOptimizationService.js'));
             await this.initializeService('ExitOptimizationService', () => import('./ExitOptimizationService.js'));
+            await this.initializeService('PositionMonitoringService', () => import('./PositionMonitoringService.js'));
+            await this.initializeService('DailyReportService', () => import('./DailyReportService.js'));
+            await this.initializeService('TaxOptimizationService', () => import('./TaxOptimizationService.js'));
+            await this.initializeService('SecretManagementService', () => import('./SecretManagementService.js'));
+            await this.initializeService('PyramidingService', () => import('./PyramidingService.js'));
+            await this.initializeService('ModelWeightingService', () => import('./ModelWeightingService.js'));
+            await this.initializeService('DiversificationService', () => import('./DiversificationService.js'));
+            await this.initializeService('MigrationService', () => import('./MigrationService.js'));
+            await this.initializeService('DataCleanupService', () => import('./DataCleanupService.js'));
 
             // 5. Инициализируем WebSocket с сервером (если передан)
             if (server) {

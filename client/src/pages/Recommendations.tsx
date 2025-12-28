@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Toast } from 'primereact/toast';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
 import { Card } from '../components/ui';
-import { RecommendationCard } from '../components/recommendations/RecommendationCard';
-import { RecommendationFilters } from '../components/recommendations/RecommendationFilters';
 import { Skeleton } from '../components/ui';
 import BuyButton from '../components/recommendations/BuyButton';
 import { useWebSocketData } from '../components/WebSocketDataProvider';
+import RecommendationsLayout from '../components/recommendations/RecommendationsLayout';
+import RecommendationsSummary from '../components/recommendations/RecommendationsSummary';
+import RecommendationsFiltersExtended from '../components/recommendations/RecommendationsFiltersExtended';
+import RecommendationInstrumentCard from '../components/recommendations/RecommendationInstrumentCard';
+import RecommendationsSidebar from '../components/recommendations/RecommendationsSidebar';
 import './Recommendations.css';
 
 interface Recommendation {
@@ -18,13 +21,14 @@ interface Recommendation {
   confidence: number;
   score: number;
   priceAtAnalysis: number;
+  currentPrice?: number;
   targetPrice?: number;
   stopLoss?: number;
   takeProfit?: number;
   sector?: string;
   analysisDate: string;
   isActive: boolean;
-  explanation?: any; // JSON с объяснением стратегии
+  explanation?: any;
   analysis?: any;
   horizons?: {
     shortTerm?: {
@@ -48,7 +52,7 @@ interface Recommendation {
       name: string;
       description: string;
     };
-  }; // JSON с деталями анализа
+  };
   strategy?: {
     id: number;
     name: string;
@@ -59,41 +63,104 @@ interface Recommendation {
     name: string;
     type: 'conservative' | 'moderate' | 'aggressive';
   };
+  // Дополнительные поля для расширенной карточки
+  portfolioPosition?: {
+    size: number;
+    pnl: number;
+    entryDate: string;
+    entryPrice: number;
+  };
+  risk?: {
+    level: 'low' | 'medium' | 'high';
+    volatility: number;
+    maxRisk: number;
+    withinLimits: boolean;
+  };
+  news?: {
+    count: number;
+    sentiment: 'bullish' | 'bearish' | 'neutral';
+    latest?: string;
+  };
+  sentiment?: {
+    telegram: 'bullish' | 'bearish' | 'neutral';
+    analysts: 'bullish' | 'bearish' | 'neutral';
+  };
+  priority?: 'critical' | 'high' | 'medium' | 'low';
+}
+
+interface PortfolioPosition {
+  figi: string;
+  ticker: string;
+  name: string;
+  size: number;
+  pnl: number;
+  currentPrice: number;
+  entryPrice: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  proximityToStopLoss?: number;
+  proximityToTakeProfit?: number;
 }
 
 const Recommendations: React.FC = () => {
   const navigate = useNavigate();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [filteredRecommendations, setFilteredRecommendations] = useState<Recommendation[]>([]);
+  const [portfolioPositions, setPortfolioPositions] = useState<PortfolioPosition[]>([]);
   const [loading, setLoading] = useState(true);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  
+  // Фильтры
   const [filterType, setFilterType] = useState<string>('all');
   const [filterConfidence, setFilterConfidence] = useState<string>('all');
   const [filterStrategy, setFilterStrategy] = useState<number | null>(null);
+  const [filterSector, setFilterSector] = useState<string>('all');
+  const [filterPriority, setFilterPriority] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [sortBy, setSortBy] = useState<string>('confidence');
+  
   const [strategies, setStrategies] = useState<any[]>([]);
+  const [sectors, setSectors] = useState<string[]>([]);
   const [buyingFigi, setBuyingFigi] = useState<string | null>(null);
   const [newRecommendations, setNewRecommendations] = useState<Set<string>>(new Set());
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const toast = useRef<Toast>(null);
   
   // WebSocket для real-time обновлений
   const { tradingStats } = useWebSocketData();
 
-
+  // Загрузка стратегий
   useEffect(() => {
     loadStrategies();
   }, []);
+
+  // Загрузка рекомендаций и портфеля
+  useEffect(() => {
+    if (strategies.length > 0) {
+      loadRecommendations();
+      loadPortfolioPositions();
+    }
+  }, [strategies.length, filterType, filterStrategy]);
+
+  // Обновление данных каждую минуту
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (strategies.length > 0) {
+        loadRecommendations();
+        loadPortfolioPositions();
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [strategies.length]);
 
   // Обработка новых рекомендаций из WebSocket
   useEffect(() => {
     if (tradingStats?.recommendations && Array.isArray(tradingStats.recommendations)) {
       const wsRecommendations = tradingStats.recommendations;
       
-      // Добавляем новые рекомендации в список
       wsRecommendations.forEach((wsRec: any) => {
         const existingIndex = recommendations.findIndex((r) => r.figi === wsRec.figi);
         
         if (existingIndex === -1) {
-          // Новая рекомендация - добавляем в начало списка
           const newRec: Recommendation = {
             figi: wsRec.figi || '',
             ticker: wsRec.ticker || '',
@@ -118,7 +185,6 @@ const Recommendations: React.FC = () => {
           setRecommendations((prev) => [newRec, ...prev]);
           setNewRecommendations((prev) => new Set([...prev, wsRec.figi]));
           
-          // Показываем уведомление для важных рекомендаций
           if (wsRec.confidence > 0.7) {
             toast.current?.show({
               severity: 'info',
@@ -128,7 +194,6 @@ const Recommendations: React.FC = () => {
             });
           }
           
-          // Убираем badge "Новое" через 30 секунд
           setTimeout(() => {
             setNewRecommendations((prev) => {
               const newSet = new Set(prev);
@@ -137,7 +202,6 @@ const Recommendations: React.FC = () => {
             });
           }, 30000);
         } else {
-          // Обновляем существующую рекомендацию
           setRecommendations((prev) => {
             const updated = [...prev];
             updated[existingIndex] = {
@@ -151,50 +215,6 @@ const Recommendations: React.FC = () => {
       });
     }
   }, [tradingStats?.recommendations]);
-
-  useEffect(() => {
-    if (strategies.length > 0) {
-      loadRecommendations(); // Загружаем рекомендации только после загрузки стратегий
-    }
-  }, [strategies.length, filterType, filterStrategy]);
-
-  // Фильтрация рекомендаций
-  useEffect(() => {
-    let filtered = [...recommendations];
-
-    // Фильтр по поиску
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (rec) =>
-          rec.name.toLowerCase().includes(searchLower) ||
-          rec.ticker.toLowerCase().includes(searchLower) ||
-          rec.sector?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Фильтр по уверенности
-    if (filterConfidence !== 'all') {
-      filtered = filtered.filter((rec) => {
-        const confidence = rec.confidence;
-        if (filterConfidence === 'high') return confidence >= 0.8;
-        if (filterConfidence === 'medium') return confidence >= 0.5 && confidence < 0.8;
-        if (filterConfidence === 'low') return confidence < 0.5;
-        return true;
-      });
-    }
-
-    setFilteredRecommendations(filtered);
-  }, [recommendations, searchTerm, filterConfidence]);
-  
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (strategies.length > 0) {
-        loadRecommendations();
-      }
-    }, 60000); // Обновляем каждую минуту
-    return () => clearInterval(interval);
-  }, [strategies.length]);
 
   const loadStrategies = async () => {
     try {
@@ -216,7 +236,6 @@ const Recommendations: React.FC = () => {
         data = await apiService.getRecommendationsByType(filterType);
       }
       
-      // Обрабатываем ответ
       let recommendationsData = [];
       if (Array.isArray(data)) {
         recommendationsData = data;
@@ -224,48 +243,39 @@ const Recommendations: React.FC = () => {
         recommendationsData = data.data;
       }
       
-      // Фильтруем только активные рекомендации и просто отображаем данные из БД
-      // Предсказания обновляются автоматически на бэкенде каждые 20 минут через планировщик
       const filteredData = recommendationsData.filter((rec: any) => rec.isActive !== false);
       
-      // Определяем стратегии для всех рекомендаций (синхронно, так как strategies уже загружены)
       const recommendationsWithStrategies = filteredData.map((rec: any) => {
-          // Используем стратегию из БД, если она есть
-          let strategy = null;
-          
-          // Проверяем, есть ли стратегия в объекте rec.strategy (из include)
-          if (rec.strategy && typeof rec.strategy === 'object' && rec.strategy !== null) {
-            // Если strategy - объект с данными стратегии (из include)
-            if (rec.strategy.id || rec.strategy.name) {
-              strategy = rec.strategy;
+        let strategy = null;
+        
+        if (rec.strategy && typeof rec.strategy === 'object' && rec.strategy !== null) {
+          if (rec.strategy.id || rec.strategy.name) {
+            strategy = rec.strategy;
+          }
+        }
+        
+        if (!strategy && rec.strategyId) {
+          strategy = strategies.find((s: any) => s.id === rec.strategyId);
+        }
+        
+        let suggestedStrategy = strategy;
+        if (!suggestedStrategy && strategies.length > 0) {
+          try {
+            const confidence = rec.confidence || 0;
+            const score = rec.score || 0;
+            
+            if (confidence > 0.8 && score > 0.75) {
+              suggestedStrategy = strategies.find((s: any) => s.type === 'aggressive');
+            } else if (confidence >= 0.6 && score >= 0.6) {
+              suggestedStrategy = strategies.find((s: any) => s.type === 'moderate');
+            } else if (confidence >= 0.5 && score >= 0.5) {
+              suggestedStrategy = strategies.find((s: any) => s.type === 'conservative');
             }
+          } catch (error) {
+            // Игнорируем ошибки
           }
-          
-          // Если стратегия не найдена, проверяем strategyId
-          if (!strategy && rec.strategyId) {
-            strategy = strategies.find((s: any) => s.id === rec.strategyId);
-          }
-          
-          // Если стратегия не найдена в БД, определяем на основе confidence и score
-          let suggestedStrategy = strategy;
-          if (!suggestedStrategy && strategies.length > 0) {
-            try {
-              const confidence = rec.confidence || 0;
-              const score = rec.score || 0;
-              
-              if (confidence > 0.8 && score > 0.75) {
-                suggestedStrategy = strategies.find((s: any) => s.type === 'aggressive');
-              } else if (confidence >= 0.6 && score >= 0.6) {
-                suggestedStrategy = strategies.find((s: any) => s.type === 'moderate');
-              } else if (confidence >= 0.5 && score >= 0.5) {
-                suggestedStrategy = strategies.find((s: any) => s.type === 'conservative');
-              }
-            } catch (error) {
-              // Игнорируем ошибки определения стратегии
-            }
-          }
-          
-        // Парсим analysis и explanation, если они строки JSON
+        }
+        
         let analysisObj = rec.analysis;
         if (typeof analysisObj === 'string') {
           try {
@@ -284,22 +294,37 @@ const Recommendations: React.FC = () => {
           }
         }
         
-        // Извлекаем горизонты из разных мест (в порядке приоритета)
         let horizons = null;
-        // Приоритет 1: прямое поле horizons
         if (rec.horizons) {
           horizons = rec.horizons;
-        }
-        // Приоритет 2: analysis.horizons (как в БД)
-        else if (analysisObj && typeof analysisObj === 'object' && analysisObj.horizons) {
+        } else if (analysisObj && typeof analysisObj === 'object' && analysisObj.horizons) {
           horizons = analysisObj.horizons;
-        }
-        // Приоритет 3: explanation.details.ensemble.horizons
-        else if (explanationObj && typeof explanationObj === 'object') {
+        } else if (explanationObj && typeof explanationObj === 'object') {
           horizons = explanationObj.details?.ensemble?.horizons || 
                      explanationObj.details?.horizons || 
                      explanationObj.horizons || 
                      null;
+        }
+        
+        // Получаем текущую цену (если есть в портфеле)
+        const portfolioPosition = portfolioPositions.find((p) => p.figi === rec.figi);
+        const currentPrice = portfolioPosition?.currentPrice;
+        
+        // Определяем приоритет
+        let priority: 'critical' | 'high' | 'medium' | 'low' = 'medium';
+        if (rec.confidence >= 0.9 && rec.score >= 0.85) {
+          priority = 'critical';
+        } else if (rec.confidence >= 0.8 && rec.score >= 0.75) {
+          priority = 'high';
+        } else if (rec.confidence >= 0.6) {
+          priority = 'medium';
+        } else {
+          priority = 'low';
+        }
+        
+        // Если есть позиция в портфеле и близко к стоп-лоссу - критический приоритет
+        if (portfolioPosition && portfolioPosition.proximityToStopLoss !== undefined && portfolioPosition.proximityToStopLoss < 5) {
+          priority = 'critical';
         }
         
         return {
@@ -310,6 +335,7 @@ const Recommendations: React.FC = () => {
           confidence: rec.confidence || 0,
           score: rec.score || 0,
           priceAtAnalysis: rec.priceAtAnalysis || rec.price || 0,
+          currentPrice: currentPrice,
           targetPrice: rec.targetPrice,
           stopLoss: rec.stopLoss,
           takeProfit: rec.takeProfit,
@@ -321,7 +347,20 @@ const Recommendations: React.FC = () => {
           strategy: strategy,
           suggestedStrategy: suggestedStrategy,
           strategyId: rec.strategyId || strategy?.id || suggestedStrategy?.id || null,
-          horizons: horizons
+          horizons: horizons,
+          portfolioPosition: portfolioPosition ? {
+            size: portfolioPosition.size,
+            pnl: portfolioPosition.pnl,
+            entryDate: portfolioPosition.entryPrice.toString(), // Временно
+            entryPrice: portfolioPosition.entryPrice,
+          } : undefined,
+          risk: {
+            level: rec.confidence >= 0.8 ? 'high' : rec.confidence >= 0.6 ? 'medium' : 'low',
+            volatility: 0.15, // TODO: получать из API
+            maxRisk: 2, // TODO: получать из настроек
+            withinLimits: true,
+          },
+          priority: priority,
         };
       });
       
@@ -334,6 +373,12 @@ const Recommendations: React.FC = () => {
       }
       
       setRecommendations(filteredRecommendations);
+      
+      // Извлекаем уникальные секторы
+      const uniqueSectors = Array.from(
+        new Set(filteredRecommendations.map((r) => r.sector).filter(Boolean))
+      ) as string[];
+      setSectors(uniqueSectors);
     } catch (error: any) {
       console.error('Error loading recommendations:', error);
       toast.current?.show({
@@ -348,23 +393,209 @@ const Recommendations: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const loadPortfolioPositions = async () => {
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('ru-RU', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+      setPortfolioLoading(true);
+      const data = await apiService.getPortfolioPositions();
+      
+      let positionsData = [];
+      if (Array.isArray(data?.data)) {
+        positionsData = data.data;
+      } else if (Array.isArray(data)) {
+        positionsData = data;
+      }
+      
+      const positions: PortfolioPosition[] = positionsData.map((pos: any) => {
+        const currentPrice = pos.currentPrice || pos.price || 0;
+        const entryPrice = pos.entryPrice || pos.averagePrice || 0;
+        const pnl = entryPrice > 0 ? ((currentPrice - entryPrice) / entryPrice) * 100 : 0;
+        
+        // Вычисляем близость к стоп-лоссу и тейк-профиту
+        let proximityToStopLoss: number | undefined;
+        let proximityToTakeProfit: number | undefined;
+        
+        if (pos.stopLoss && currentPrice > 0) {
+          proximityToStopLoss = ((currentPrice - pos.stopLoss) / currentPrice) * 100;
+        }
+        
+        if (pos.takeProfit && currentPrice > 0) {
+          proximityToTakeProfit = ((pos.takeProfit - currentPrice) / currentPrice) * 100;
+        }
+        
+        return {
+          figi: pos.figi || pos.instrumentId || '',
+          ticker: pos.ticker || '',
+          name: pos.name || 'Неизвестно',
+          size: pos.size || pos.quantity || 0,
+          pnl: pnl,
+          currentPrice: currentPrice,
+          entryPrice: entryPrice,
+          stopLoss: pos.stopLoss,
+          takeProfit: pos.takeProfit,
+          proximityToStopLoss: proximityToStopLoss,
+          proximityToTakeProfit: proximityToTakeProfit,
+        };
       });
-    } catch {
-      return '—';
+      
+      setPortfolioPositions(positions);
+    } catch (error) {
+      console.error('Error loading portfolio positions:', error);
+      // Не показываем ошибку пользователю, просто оставляем пустой массив
+      setPortfolioPositions([]);
+    } finally {
+      setPortfolioLoading(false);
     }
   };
 
+  // Фильтрация и сортировка рекомендаций
+  const filteredAndSortedRecommendations = useMemo(() => {
+    let filtered = [...recommendations];
+
+    // Поиск
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (rec) =>
+          rec.name.toLowerCase().includes(searchLower) ||
+          rec.ticker.toLowerCase().includes(searchLower) ||
+          rec.sector?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Фильтр по типу
+    if (filterType !== 'all') {
+      filtered = filtered.filter((rec) => rec.recommendation === filterType);
+    }
+
+    // Фильтр по уверенности
+    if (filterConfidence !== 'all') {
+      filtered = filtered.filter((rec) => {
+        const confidence = rec.confidence;
+        if (filterConfidence === 'high') return confidence >= 0.8;
+        if (filterConfidence === 'medium') return confidence >= 0.5 && confidence < 0.8;
+        if (filterConfidence === 'low') return confidence < 0.5;
+        return true;
+      });
+    }
+
+    // Фильтр по сектору
+    if (filterSector !== 'all') {
+      filtered = filtered.filter((rec) => rec.sector === filterSector);
+    }
+
+    // Фильтр по приоритету
+    if (filterPriority !== 'all') {
+      filtered = filtered.filter((rec) => rec.priority === filterPriority);
+    }
+
+    // Сортировка
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'confidence':
+          return b.confidence - a.confidence;
+        case 'profit':
+          const profitA = a.targetPrice && a.recommendation === 'BUY'
+            ? ((a.targetPrice - a.priceAtAnalysis) / a.priceAtAnalysis) * 100
+            : 0;
+          const profitB = b.targetPrice && b.recommendation === 'BUY'
+            ? ((b.targetPrice - b.priceAtAnalysis) / b.priceAtAnalysis) * 100
+            : 0;
+          return profitB - profitA;
+        case 'risk':
+          const riskA = a.stopLoss && a.recommendation === 'BUY'
+            ? ((a.priceAtAnalysis - a.stopLoss) / a.priceAtAnalysis) * 100
+            : 100;
+          const riskB = b.stopLoss && b.recommendation === 'BUY'
+            ? ((b.priceAtAnalysis - b.stopLoss) / b.priceAtAnalysis) * 100
+            : 100;
+          return riskA - riskB;
+        case 'time':
+          return new Date(b.analysisDate).getTime() - new Date(a.analysisDate).getTime();
+        default:
+          return 0;
+      }
+    });
+
+    // Приоритизация: критические в начало
+    filtered.sort((a, b) => {
+      const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+      return (priorityOrder[a.priority || 'medium'] || 2) - (priorityOrder[b.priority || 'medium'] || 2);
+    });
+
+    return filtered;
+  }, [recommendations, searchTerm, filterType, filterConfidence, filterSector, filterPriority, sortBy]);
+
+  // Вычисление сводки
+  const summaryData = useMemo(() => {
+    const buyCount = filteredAndSortedRecommendations.filter((r) => r.recommendation === 'BUY').length;
+    const sellCount = filteredAndSortedRecommendations.filter((r) => r.recommendation === 'SELL').length;
+    const holdCount = filteredAndSortedRecommendations.filter((r) => r.recommendation === 'HOLD').length;
+    const highConfidenceCount = filteredAndSortedRecommendations.filter((r) => r.confidence >= 0.8).length;
+    
+    // Вычисляем согласованность (на основе горизонтов)
+    const recommendationsWithHorizons = filteredAndSortedRecommendations.filter((r) => r.horizons);
+    let agreementScore = 0;
+    if (recommendationsWithHorizons.length > 0) {
+      const agreements = recommendationsWithHorizons.map((r) => {
+        const horizons = [
+          r.horizons?.shortTerm,
+          r.horizons?.mediumTerm,
+          r.horizons?.longTerm,
+        ].filter(Boolean);
+        
+        if (horizons.length === 0) return 0;
+        
+        const sameRecommendation = horizons.filter(
+          (h) => h?.recommendation === r.recommendation
+        ).length;
+        
+        return sameRecommendation / horizons.length;
+      });
+      
+      agreementScore = agreements.reduce((sum, a) => sum + a, 0) / agreements.length;
+    }
+    
+    // Топ покупок
+    const topBuy = filteredAndSortedRecommendations
+      .filter((r) => r.recommendation === 'BUY')
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 5)
+      .map((r) => ({
+        figi: r.figi,
+        ticker: r.ticker,
+        name: r.name,
+        confidence: r.confidence,
+        potentialProfit: r.targetPrice && r.recommendation === 'BUY'
+          ? ((r.targetPrice - r.priceAtAnalysis) / r.priceAtAnalysis) * 100
+          : undefined,
+      }));
+    
+    // Топ продаж
+    const topSell = filteredAndSortedRecommendations
+      .filter((r) => r.recommendation === 'SELL')
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 5)
+      .map((r) => ({
+        figi: r.figi,
+        ticker: r.ticker,
+        name: r.name,
+        confidence: r.confidence,
+        currentLoss: r.portfolioPosition?.pnl || undefined,
+      }));
+    
+    return {
+      totalRecommendations: filteredAndSortedRecommendations.length,
+      buyCount,
+      sellCount,
+      holdCount,
+      highConfidenceCount,
+      agreementScore,
+      topBuyRecommendations: topBuy,
+      topSellRecommendations: topSell,
+    };
+  }, [filteredAndSortedRecommendations]);
+
   const handleBuy = (figi: string) => {
-    // Проверяем, доступна ли цена — иначе покупка недоступна
     const rec = recommendations.find((r) => r.figi === figi);
     if (!rec || !rec.priceAtAnalysis || rec.priceAtAnalysis <= 0) {
       toast.current?.show({
@@ -377,10 +608,7 @@ const Recommendations: React.FC = () => {
       return;
     }
 
-    // Ставим индикатор загрузки
     setBuyingFigi(figi);
-
-    // Находим скрытый BuyButton и кликаем по нему
     setTimeout(() => {
       const buyButtonContainer = document.querySelector(`[data-buy-button-figi="${figi}"]`);
       if (buyButtonContainer) {
@@ -390,81 +618,145 @@ const Recommendations: React.FC = () => {
         if (buyButton && !(buyButton as HTMLButtonElement).disabled) {
           (buyButton as HTMLButtonElement).click();
         } else {
-          // Если кнопка не найдена или disabled, сбрасываем лоадер
           setBuyingFigi(null);
         }
       } else {
-        // Если контейнер не найден, сбрасываем лоадер
         setBuyingFigi(null);
       }
-    }, 100); // Небольшая задержка для гарантии, что DOM готов
+    }, 100);
   };
 
   const handleBuyComplete = () => {
     setBuyingFigi(null);
     loadRecommendations();
+    loadPortfolioPositions();
   };
 
   const handleDetails = (figi: string) => {
     navigate(`/stock/${figi}`);
   };
 
+  const handleWatchlist = (figi: string) => {
+    // TODO: реализовать добавление в наблюдение
+    toast.current?.show({
+      severity: 'info',
+      summary: 'Добавлено в наблюдение',
+      detail: `Инструмент ${figi} добавлен в список наблюдения`,
+      life: 3000,
+    });
+  };
+
+  const handleToggleExpand = (figi: string) => {
+    setExpandedCards((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(figi)) {
+        newSet.delete(figi);
+      } else {
+        newSet.add(figi);
+      }
+      return newSet;
+    });
+  };
+
+  const handleClearFilters = () => {
+    setFilterType('all');
+    setFilterConfidence('all');
+    setFilterStrategy(null);
+    setFilterSector('all');
+    setFilterPriority('all');
+    setSearchTerm('');
+    setSortBy('confidence');
+  };
+
   return (
     <div className="recommendations-page">
       <Toast ref={toast} />
       
-      <div className="recommendations-header">
-        <h1 className="recommendations-title">📊 Рекомендации AI для торговли</h1>
-        <div className="recommendations-count">
-          Всего рекомендаций: <strong>{filteredRecommendations.length}</strong>
-        </div>
-      </div>
-
-      <RecommendationFilters
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        filterType={filterType}
-        onFilterTypeChange={setFilterType}
-        filterConfidence={filterConfidence}
-        onFilterConfidenceChange={setFilterConfidence}
-        filterStrategy={filterStrategy}
-        onFilterStrategyChange={setFilterStrategy}
-        strategies={strategies}
-        onRefresh={loadRecommendations}
-        loading={loading}
+      <RecommendationsLayout
+        summary={
+          <RecommendationsSummary
+            totalRecommendations={summaryData.totalRecommendations}
+            buyCount={summaryData.buyCount}
+            sellCount={summaryData.sellCount}
+            holdCount={summaryData.holdCount}
+            highConfidenceCount={summaryData.highConfidenceCount}
+            agreementScore={summaryData.agreementScore}
+            topBuyRecommendations={summaryData.topBuyRecommendations}
+            topSellRecommendations={summaryData.topSellRecommendations}
+          />
+        }
+        filters={
+          <RecommendationsFiltersExtended
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            filterType={filterType}
+            onFilterTypeChange={setFilterType}
+            filterConfidence={filterConfidence}
+            onFilterConfidenceChange={setFilterConfidence}
+            filterStrategy={filterStrategy}
+            onFilterStrategyChange={setFilterStrategy}
+            filterSector={filterSector}
+            onFilterSectorChange={setFilterSector}
+            filterPriority={filterPriority}
+            onFilterPriorityChange={setFilterPriority}
+            sortBy={sortBy}
+            onSortByChange={setSortBy}
+            strategies={strategies}
+            sectors={sectors}
+            onRefresh={loadRecommendations}
+            loading={loading}
+            onClearFilters={handleClearFilters}
+          />
+        }
+        content={
+          loading ? (
+            <div className="recommendations-grid">
+              {[...Array(6)].map((_, i) => (
+                <Skeleton key={i} variant="card" height="400px" />
+              ))}
+            </div>
+          ) : filteredAndSortedRecommendations.length === 0 ? (
+            <Card variant="default" className="recommendations-empty">
+              <div className="recommendations-empty-content">
+                <span className="recommendations-empty-icon">📊</span>
+                <h3>Нет активных рекомендаций</h3>
+                <p>Запустите анализ портфеля для получения рекомендаций.</p>
+              </div>
+            </Card>
+          ) : (
+            <div className="recommendations-grid">
+              {filteredAndSortedRecommendations.map((recommendation) => (
+                <RecommendationInstrumentCard
+                  key={recommendation.figi}
+                  recommendation={recommendation}
+                  onBuy={handleBuy}
+                  onDetails={handleDetails}
+                  onWatchlist={handleWatchlist}
+                  loading={buyingFigi === recommendation.figi}
+                  isNew={newRecommendations.has(recommendation.figi)}
+                  expanded={expandedCards.has(recommendation.figi)}
+                  onToggleExpand={() => handleToggleExpand(recommendation.figi)}
+                />
+              ))}
+            </div>
+          )
+        }
+        sidebar={
+          <RecommendationsSidebar
+            portfolioPositions={portfolioPositions}
+            topBuyRecommendations={summaryData.topBuyRecommendations}
+            topSellRecommendations={summaryData.topSellRecommendations}
+            recentChanges={[]} // TODO: получать из истории
+            alerts={[]} // TODO: получать из системы алертов
+            statistics={undefined} // TODO: получать из статистики
+            onPositionClick={handleDetails}
+            onRecommendationClick={handleDetails}
+          />
+        }
       />
 
-      {loading ? (
-        <div className="recommendations-grid">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} variant="card" height="300px" />
-          ))}
-        </div>
-      ) : filteredRecommendations.length === 0 ? (
-        <Card variant="default" className="recommendations-empty">
-          <div className="recommendations-empty-content">
-            <span className="recommendations-empty-icon">📊</span>
-            <h3>Нет активных рекомендаций</h3>
-            <p>Запустите анализ портфеля для получения рекомендаций.</p>
-          </div>
-        </Card>
-      ) : (
-        <div className="recommendations-grid">
-          {filteredRecommendations.map((recommendation) => (
-            <RecommendationCard
-              key={recommendation.figi}
-              recommendation={recommendation}
-              onBuy={handleBuy}
-              onDetails={handleDetails}
-              loading={buyingFigi === recommendation.figi}
-              isNew={newRecommendations.has(recommendation.figi)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* BuyButton компоненты для модальных окон - скрыты, но доступны для клика */}
-      {filteredRecommendations.map((recommendation) => (
+      {/* BuyButton компоненты для модальных окон - скрыты */}
+      {filteredAndSortedRecommendations.map((recommendation) => (
         <div 
           key={`buy-button-${recommendation.figi}`} 
           data-buy-button-figi={recommendation.figi}
@@ -482,4 +774,3 @@ const Recommendations: React.FC = () => {
 };
 
 export default Recommendations;
-

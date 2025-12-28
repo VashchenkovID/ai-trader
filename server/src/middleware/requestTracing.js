@@ -41,7 +41,7 @@ export const requestTracing = (req, res, next) => {
     res.send = function(data) {
         const duration = performance.now() - startTime;
         
-        // Логируем запрос
+        // Логируем запрос (используем оригинальный req, но замаскированные данные уже применены через middleware)
         LoggerService.logRequest(req, res, duration);
         
         // Логируем медленные запросы

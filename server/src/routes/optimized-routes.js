@@ -36,6 +36,14 @@ import retryRoutes from './retry-routes.js';
 import fallbackRoutes from './fallback-routes.js';
 import recoveryRoutes from './recovery-routes.js';
 import rateLimitRoutes from './rate-limit-routes.js';
+import positionMonitoringRoutes from './position-monitoring-routes.js';
+import taxOptimizationRoutes from './tax-optimization-routes.js';
+import secretManagementRoutes from './secret-management-routes.js';
+import pyramidingRoutes from './pyramiding-routes.js';
+import modelWeightingRoutes from './model-weighting-routes.js';
+import diversificationRoutes from './diversification-routes.js';
+import migrationRoutes from './migration-routes.js';
+import dataCleanupRoutes from './data-cleanup-routes.js';
 import ServiceManager from '../services/ServiceManager.js';
 import Recommendation from '../models/Recommendation.js';
 import { Op } from 'sequelize';
@@ -119,6 +127,16 @@ router.use('/retry', retryRoutes);
 router.use('/fallback', fallbackRoutes);
 router.use('/recovery', recoveryRoutes);
 router.use('/rate-limit', rateLimitRoutes);
+router.use('/position-monitoring', positionMonitoringRoutes);
+// Daily reports routes находятся в position-monitoring-routes, но доступны по /api/daily-reports/*
+router.use('/daily-reports', positionMonitoringRoutes);
+router.use('/tax-optimization', taxOptimizationRoutes);
+router.use('/secret-management', secretManagementRoutes);
+router.use('/pyramiding', pyramidingRoutes);
+router.use('/model-weighting', modelWeightingRoutes);
+router.use('/diversification', diversificationRoutes);
+router.use('/migration', migrationRoutes);
+router.use('/data-cleanup', dataCleanupRoutes);
 
 // Прямые роуты для совместимости с фронтендом (копируем логику из system-routes)
 router.get('/settings', async (req, res) => {

@@ -1,0 +1,80 @@
+.recommendations-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 1920px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.recommendations-layout-summary {
+  width: 100%;
+}
+
+.recommendations-layout-main {
+  display: grid;
+  grid-template-columns: 280px 1fr 320px;
+  gap: 24px;
+  align-items: start;
+}
+
+.recommendations-layout-filters {
+  /* Фильтры слева */
+}
+
+.recommendations-layout-content {
+  /* Основной контент в центре */
+  min-width: 0; /* Предотвращает переполнение */
+}
+
+.recommendations-layout-sidebar {
+  /* Сайдбар справа */
+}
+
+/* Адаптивность для планшетов */
+@media (max-width: 1400px) {
+  .recommendations-layout-main {
+    grid-template-columns: 260px 1fr 300px;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .recommendations-layout-main {
+    grid-template-columns: 240px 1fr 280px;
+    gap: 16px;
+  }
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 1024px) {
+  .recommendations-layout {
+    padding: 16px;
+  }
+
+  .recommendations-layout-main {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .recommendations-layout-filters {
+    order: 2;
+  }
+
+  .recommendations-layout-content {
+    order: 1;
+  }
+
+  .recommendations-layout-sidebar {
+    order: 3;
+  }
+}
+
+@media (max-width: 768px) {
+  .recommendations-layout {
+    padding: 12px;
+    gap: 16px;
+  }
+}
+

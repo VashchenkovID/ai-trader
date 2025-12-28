@@ -220,13 +220,25 @@ class LoggerService {
     }
     
     /**
-     * Логирование с автоматическим добавлением контекста
+     * Логирование с автоматическим добавлением контекста и маскированием секретов
      */
-    _log(level, message, meta = {}) {
+    async _log(level, message, meta = {}) {
         if (!this.isInitialized) {
             // Fallback на console если сервис не инициализирован
             const consoleMethod = level === 'error' ? console.error : 
                                  level === 'warn' ? console.warn : console.log;
+            
+            // Маскируем секреты даже в fallback режиме
+            try {
+                const SecretManagementService = (await import('./SecretManagementService.js')).default;
+                if (SecretManagementService && SecretManagementService.isInitialized) {
+                    message = SecretManagementService.maskSecretsInString(message);
+                    meta = SecretManagementService.maskSecretsInObject(meta);
+                }
+            } catch (error) {
+                // Игнорируем ошибки при маскировании в fallback режиме
+            }
+            
             consoleMethod(`[${level.toUpperCase()}] ${message}`, meta);
             return;
         }
@@ -237,6 +249,21 @@ class LoggerService {
             meta = { ...context, ...meta };
         }
         
+        // Маскируем секреты перед логированием
+        try {
+            const SecretManagementService = (await import('./SecretManagementService.js')).default;
+            if (SecretManagementService && SecretManagementService.isInitialized) {
+                message = SecretManagementService.maskSecretsInString(message);
+                meta = SecretManagementService.maskSecretsInObject(meta);
+            }
+        } catch (error) {
+            // Если SecretManagementService не доступен, логируем без маскирования
+            // но предупреждаем об этом
+            if (level === 'error') {
+                console.warn('⚠️ SecretManagementService не доступен для маскирования секретов');
+            }
+        }
+        
         this.logger.log(level, message, meta);
     }
     
@@ -244,35 +271,45 @@ class LoggerService {
      * Логирование ошибки
      */
     error(message, meta = {}) {
-        this._log('error', message, meta);
+        this._log('error', message, meta).catch(err => {
+            console.error('Ошибка при логировании:', err);
+        });
     }
     
     /**
      * Логирование предупреждения
      */
     warn(message, meta = {}) {
-        this._log('warn', message, meta);
+        this._log('warn', message, meta).catch(err => {
+            console.error('Ошибка при логировании:', err);
+        });
     }
     
     /**
      * Логирование информации
      */
     info(message, meta = {}) {
-        this._log('info', message, meta);
+        this._log('info', message, meta).catch(err => {
+            console.error('Ошибка при логировании:', err);
+        });
     }
     
     /**
      * Логирование отладки
      */
     debug(message, meta = {}) {
-        this._log('debug', message, meta);
+        this._log('debug', message, meta).catch(err => {
+            console.error('Ошибка при логировании:', err);
+        });
     }
     
     /**
      * Логирование подробной информации
      */
     verbose(message, meta = {}) {
-        this._log('verbose', message, meta);
+        this._log('verbose', message, meta).catch(err => {
+            console.error('Ошибка при логировании:', err);
+        });
     }
     
     /**
@@ -291,6 +328,11 @@ class LoggerService {
         const level = statusCode >= 500 ? 'error' : 
                      statusCode >= 400 ? 'warn' : 'info';
         
+        // Используем замаскированные данные если они доступны (через middleware secretMasking)
+        const body = req._maskedBody !== undefined ? req._maskedBody : req.body;
+        const query = req._maskedQuery !== undefined ? req._maskedQuery : req.query;
+        const params = req._maskedParams !== undefined ? req._maskedParams : req.params;
+        
         const meta = {
             requestId,
             method,
@@ -300,6 +342,17 @@ class LoggerService {
             userAgent,
             duration: duration ? `${duration.toFixed(2)}ms` : null
         };
+        
+        // Добавляем замаскированные данные в метаданные только если они есть
+        if (body && Object.keys(body).length > 0) {
+            meta.body = body;
+        }
+        if (query && Object.keys(query).length > 0) {
+            meta.query = query;
+        }
+        if (params && Object.keys(params).length > 0) {
+            meta.params = params;
+        }
         
         // Добавляем userId если есть
         if (req.user?.id) {

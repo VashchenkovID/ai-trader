@@ -8,6 +8,7 @@ import OptimizedTelegramService from './OptimizedTelegramService.js';
 import SignalCacheService from './SignalCacheService.js';
 import SignalValidationService from './SignalValidationService.js';
 import NewsAnalysisService from './NewsAnalysisService.js';
+import ModelWeightingService from './ModelWeightingService.js';
 
 /**
  * Интегрированный сервис для управления всеми тремя нейросетями
@@ -112,6 +113,17 @@ class IntegratedAIService {
             }
             
             const recommendations = [];
+            
+            // Получаем динамические веса моделей из ModelWeightingService
+            let dynamicWeights = {};
+            try {
+                if (ModelWeightingService && ModelWeightingService.isInitialized) {
+                    dynamicWeights = await ModelWeightingService.getModelWeights(figi);
+                }
+            } catch (weightError) {
+                console.warn('⚠️ Failed to get dynamic weights, using confidence-based weights:', weightError.message);
+            }
+            
             const weights = {};
 
             // 1. Рекомендация от ансамбля (с горизонтами)
@@ -131,7 +143,8 @@ class IntegratedAIService {
                         error: ensembleRec.error || null, // Сохраняем ошибку, если есть
                         reason: ensembleRec.reason || null // Сохраняем причину, если есть
                     });
-                    weights.ensemble = ensembleRec.confidence || 0.3;
+                    // Используем динамический вес, если доступен, иначе confidence
+                    weights.ensemble = dynamicWeights.ensemble || ensembleRec.confidence || 0.3;
                 } catch (error) {
                     console.warn('⚠️ Ensemble recommendation failed:', error.message);
                     // При ошибке просто пропускаем ансамбль, используем другие источники
@@ -149,7 +162,8 @@ class IntegratedAIService {
                         recommendation: traditionalRec.recommendation,
                         details: traditionalRec.explanation
                     });
-                    weights.traditional = traditionalRec.confidence;
+                    // Используем динамический вес, если доступен, иначе confidence
+                    weights.traditional = dynamicWeights.traditional || traditionalRec.confidence;
                 } catch (error) {
                     console.warn('⚠️ Traditional recommendation failed:', error.message);
                 }
@@ -167,7 +181,8 @@ class IntegratedAIService {
                         recommendation: rlRec.actionName,
                         details: rlRec.qValues
                     });
-                    weights.reinforcement = rlRec.confidence;
+                    // Используем динамический вес, если доступен, иначе confidence
+                    weights.reinforcement = dynamicWeights.reinforcementLearning || rlRec.confidence;
                 } catch (error) {
                     console.warn('⚠️ RL recommendation failed:', error.message);
                 }
@@ -320,6 +335,29 @@ class IntegratedAIService {
             // Вычисляем интегрированную рекомендацию
             const integratedRec = this.calculateIntegratedRecommendation(recommendations, weights);
             
+            // Обновляем согласованность моделей для ModelWeightingService
+            if (ModelWeightingService && ModelWeightingService.isInitialized && recommendations.length > 1) {
+                try {
+                    const allRecommendations = recommendations.map(r => ({
+                        source: r.source,
+                        recommendation: r.recommendation
+                    }));
+                    
+                    // Обновляем согласованность для каждой модели
+                    for (const rec of recommendations) {
+                        const otherRecs = recommendations.filter(r => r.source !== rec.source);
+                        if (otherRecs.length > 0) {
+                            const modelType = this.mapSourceToModelType(rec.source);
+                            if (modelType) {
+                                await ModelWeightingService.updateAgreement(modelType, otherRecs);
+                            }
+                        }
+                    }
+                } catch (agreementError) {
+                    console.warn('⚠️ Failed to update model agreement:', agreementError.message);
+                }
+            }
+            
             // Добавляем информацию о валидации сигналов, если она была выполнена
             if (validationResult && validationResult.success && validationResult.hasSignals) {
                 integratedRec.signalsValidation = {
@@ -393,6 +431,19 @@ class IntegratedAIService {
                 sources: 0
             };
         }
+    }
+
+    /**
+     * Маппинг источника рекомендации на тип модели
+     */
+    mapSourceToModelType(source) {
+        const mapping = {
+            'ensemble': 'ensemble',
+            'traditional': 'traditional',
+            'reinforcement': 'reinforcementLearning',
+            'meta': 'metaLearning'
+        };
+        return mapping[source] || null;
     }
 
     /**

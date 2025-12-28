@@ -19,6 +19,8 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { requestTracing, errorTracing } from './middleware/requestTracing.js';
 // Import rate limiting
 import { generalLimiter } from './middleware/rateLimiter.js';
+// Import secret masking middleware
+import { maskSecretsInResponse, maskSecretsInRequest, checkSecretsInRequest } from './middleware/secretMasking.js';
 // Import LoggerService (будет инициализирован через ServiceManager)
 import LoggerService from './services/LoggerService.js';
 
@@ -42,6 +44,11 @@ app.use(express.urlencoded({ extended: true }));
 
 // Request tracing middleware (добавляет requestId и логирует запросы)
 app.use(requestTracing);
+
+// Secret masking middleware (маскирует секреты в запросах и ответах)
+app.use(checkSecretsInRequest);
+app.use(maskSecretsInRequest);
+app.use(maskSecretsInResponse);
 
 // Rate limiting middleware (применяется ко всем API запросам, кроме rate-limit endpoints)
 // Исключаем rate-limit endpoints из общего лимита, чтобы можно было мониторить даже после превышения

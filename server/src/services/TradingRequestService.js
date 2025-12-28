@@ -194,11 +194,29 @@ class TradingRequestService {
 
             // Используем указанное количество или рассчитываем автоматически
             let quantity;
+            let availableCapital = null;
+            
             if (options.quantity && options.quantity > 0 && !isNaN(options.quantity)) {
                 quantity = Math.floor(Math.abs(options.quantity)); // Округляем вниз до целого числа
             } else if (positionSize && positionSize.amount > 0) {
                 // Используем размер позиции из стратегии
-                quantity = Math.floor(positionSize.amount / currentPrice);
+                availableCapital = positionSize.amount;
+                // Учитываем комиссию при расчете количества
+                try {
+                    const TaxOptimizationService = (await import('./TaxOptimizationService.js')).default;
+                    if (TaxOptimizationService && TaxOptimizationService.isInitialized) {
+                        const positionSizeWithCommission = TaxOptimizationService.calculatePositionSizeWithCommission(
+                            availableCapital,
+                            currentPrice
+                        );
+                        quantity = positionSizeWithCommission.quantity;
+                    } else {
+                        quantity = Math.floor(availableCapital / currentPrice);
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Could not use TaxOptimizationService, using simple calculation:', error.message);
+                    quantity = Math.floor(availableCapital / currentPrice);
+                }
             } else {
                 // Рассчитываем количество акций с учетом режима
                 quantity = await this.calculateQuantity(
@@ -217,7 +235,30 @@ class TradingRequestService {
             
             quantity = Math.floor(Math.abs(quantity)); // Убеждаемся, что это целое положительное число
 
-            const estimatedAmount = currentPrice * quantity;
+            // Рассчитываем сумму и комиссию
+            let estimatedAmount = currentPrice * quantity;
+            let estimatedCommission = null;
+            
+            try {
+                const TaxOptimizationService = (await import('./TaxOptimizationService.js')).default;
+                if (TaxOptimizationService && TaxOptimizationService.isInitialized) {
+                    const commissionInfo = TaxOptimizationService.calculateCommission(currentPrice, quantity);
+                    estimatedCommission = commissionInfo.amount;
+                    // Обновляем сумму с учетом комиссии, если нужно
+                    if (availableCapital && estimatedAmount + estimatedCommission > availableCapital) {
+                        // Пересчитываем количество с учетом комиссии
+                        const positionSizeWithCommission = TaxOptimizationService.calculatePositionSizeWithCommission(
+                            availableCapital,
+                            currentPrice
+                        );
+                        quantity = positionSizeWithCommission.quantity;
+                        estimatedAmount = positionSizeWithCommission.dealAmount;
+                        estimatedCommission = positionSizeWithCommission.commission;
+                    }
+                }
+            } catch (error) {
+                console.warn('⚠️ Could not calculate commission:', error.message);
+            }
             
             // Проверяем доступный бюджет стратегии, если стратегия определена
             if (strategy && positionSize) {
@@ -277,10 +318,10 @@ class TradingRequestService {
                 action: action,
                 quantity,
                 priceAtRequest: finalPrice,
-                estimatedAmount: quantity * finalPrice,
+                estimatedAmount: estimatedAmount, // Уже рассчитано с учетом комиссии, если включено
                 confidence: finalConfidence,
                 score: recommendation.score,
-                reasoning: this.generateReasoning(recommendation, entryAnalysis),
+                reasoning: this.generateReasoning(recommendation, entryAnalysis, estimatedCommission),
                 aiExplanation: recommendation.explanation,
                 tradingMode: currentMode,
                 strategyId: strategy ? strategy.id : null,
@@ -874,6 +915,41 @@ class TradingRequestService {
                 await this.sendTelegramNotification(request, 'EXECUTED');
             } catch (telegramError) {
                 console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
+            }
+
+            // Интеграция с PyramidingService (если включен пирамидинг)
+            if (request.action === 'BUY' && request.status === 'EXECUTED') {
+                try {
+                    const PyramidingService = (await import('./PyramidingService.js')).default;
+                    const PositionPyramid = (await import('../models/PositionPyramid.js')).default;
+                    
+                    if (PyramidingService && PyramidingService.isInitialized) {
+                        // Проверяем, есть ли уже активная пирамида для этого инструмента
+                        const existingPyramid = await PositionPyramid.findActiveByFigi(request.figi);
+                        
+                        if (existingPyramid) {
+                            // Добавляем следующий вход в существующую пирамиду
+                            await PyramidingService.addNextEntry(existingPyramid, request);
+                            console.log(`📊 Added next entry to pyramid for ${request.ticker}`);
+                        } else {
+                            // Проверяем, нужно ли создавать новую пирамиду
+                            // Создаем только если есть стратегия
+                            if (request.strategyId) {
+                                // Рассчитываем целевой размер позиции (100% = 2x от первого входа, так как первый вход 50%)
+                                const targetSize = finalAmount * 2;
+                                const recommendation = await (await import('../models/Recommendation.js')).default.findByPk(request.figi);
+                                
+                                if (recommendation) {
+                                    await PyramidingService.createPyramid(request, recommendation, targetSize);
+                                    console.log(`📊 Created pyramid for ${request.ticker}: target ${targetSize}₽`);
+                                }
+                            }
+                        }
+                    }
+                } catch (pyramidError) {
+                    console.warn('⚠️ Could not process pyramiding:', pyramidError.message);
+                    // Не блокируем выполнение, если пирамидинг не работает
+                }
             }
 
             console.log(`✅ Trading request marked as executed: ${requestId} (User confirmed manual execution)`);
@@ -1546,7 +1622,7 @@ class TradingRequestService {
     /**
      * Генерация обоснования для заявки
      */
-    generateReasoning(recommendation, entryAnalysis = null) {
+    generateReasoning(recommendation, entryAnalysis = null, estimatedCommission = null) {
         const reasons = [];
         
         reasons.push(`AI рекомендация: ${recommendation.recommendation}`);
@@ -1585,6 +1661,11 @@ class TradingRequestService {
             if (entryAnalysis.orderType === 'limit') {
                 reasons.push(`Тип ордера: Лимитный (рекомендуемая цена: ${entryAnalysis.recommendedPrice?.toFixed(2) || 'N/A'})`);
             }
+        }
+        
+        // Добавляем информацию о комиссии, если рассчитана
+        if (estimatedCommission !== null && estimatedCommission !== undefined) {
+            reasons.push(`\n💰 Комиссия: ${estimatedCommission.toFixed(2)} ₽ (${((estimatedCommission / recommendation.priceAtAnalysis) * 100).toFixed(3)}%)`);
         }
         
         return reasons.join('\n');

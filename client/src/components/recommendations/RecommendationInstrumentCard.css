@@ -1,0 +1,351 @@
+.recommendation-instrument-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.recommendation-instrument-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.recommendation-instrument-card.expanded {
+  max-height: none;
+}
+
+.recommendation-instrument-card.priority-critical {
+  border-left: 4px solid var(--color-accent-error);
+}
+
+.recommendation-instrument-card.priority-high {
+  border-left: 4px solid var(--color-accent-warning);
+}
+
+.recommendation-instrument-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.recommendation-instrument-card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.recommendation-instrument-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recommendation-instrument-card-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.recommendation-instrument-card-ticker {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.recommendation-instrument-card-header-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.recommendation-instrument-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.recommendation-instrument-card-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+}
+
+.recommendation-instrument-card-confidence {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recommendation-instrument-card-confidence-label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.recommendation-instrument-card-price {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recommendation-instrument-card-price-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.recommendation-instrument-card-price-label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.recommendation-instrument-card-price-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.recommendation-instrument-card-price-change {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.recommendation-instrument-card-price-change.positive {
+  color: var(--color-accent-success);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.recommendation-instrument-card-price-change.negative {
+  color: var(--color-accent-error);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.recommendation-instrument-card-current-price {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.recommendation-instrument-card-trading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.recommendation-instrument-card-trading-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.recommendation-instrument-card-trading-label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.recommendation-instrument-card-trading-value {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recommendation-instrument-card-trading-value.profit {
+  color: var(--color-accent-success);
+}
+
+.recommendation-instrument-card-trading-value.risk {
+  color: var(--color-accent-error);
+}
+
+.recommendation-instrument-card-trading-percent {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.recommendation-instrument-card-portfolio {
+  padding: 12px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border-left: 3px solid var(--color-accent-primary);
+}
+
+.recommendation-instrument-card-portfolio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.recommendation-instrument-card-portfolio-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.recommendation-instrument-card-portfolio-details {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.recommendation-instrument-card-risk {
+  padding: 12px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.recommendation-instrument-card-risk-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.recommendation-instrument-card-risk-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.recommendation-instrument-card-risk-details {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.recommendation-instrument-card-horizons {
+  padding: 16px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.recommendation-instrument-card-horizons-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 12px 0;
+}
+
+.recommendation-instrument-card-horizons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recommendation-instrument-card-horizon {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  background: var(--color-surface-hover);
+  border-radius: 6px;
+}
+
+.recommendation-instrument-card-horizon-label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  min-width: 120px;
+}
+
+.recommendation-instrument-card-horizon-confidence {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  margin-left: auto;
+}
+
+.recommendation-instrument-card-context {
+  padding: 16px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.recommendation-instrument-card-context-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.recommendation-instrument-card-context-item:last-child {
+  margin-bottom: 0;
+}
+
+.recommendation-instrument-card-context-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.recommendation-instrument-card-context-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.recommendation-instrument-card-context-sentiment {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recommendation-instrument-card-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-default);
+}
+
+.recommendation-instrument-card-footer-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.recommendation-instrument-card-footer-date {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .recommendation-instrument-card-header {
+    flex-direction: column;
+  }
+
+  .recommendation-instrument-card-header-badges {
+    align-items: flex-start;
+    flex-direction: row;
+  }
+
+  .recommendation-instrument-card-footer-actions {
+    flex-direction: column;
+  }
+}
+

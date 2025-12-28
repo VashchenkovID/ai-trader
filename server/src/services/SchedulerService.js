@@ -43,6 +43,9 @@ class SchedulerService {
         this.weeklyBacktestTask = null;
         this.macroDataUpdateTask = null; // Задача обновления макроэкономических данных
         this.portfolioRebalancingTask = null; // Задача ребалансировки портфеля
+        this.positionMonitoringTask = null; // Задача мониторинга позиций
+        this.dailyReportTask = null; // Задача ежедневных отчетов
+        this.dataCleanupTask = null; // Задача автоматической очистки данных
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -393,6 +396,79 @@ class SchedulerService {
                 minDelay: 60 * 1000
             }
         );
+
+        // Задача 7.5: Мониторинг открытых позиций (каждые 5 минут)
+        this.positionMonitoringTask = SchedulerUtils.createScheduledTask(
+            '*/5 * * * *',
+            async () => {
+                console.log('📊 Scheduled position monitoring started...');
+                const PositionMonitoringService = (await import('./PositionMonitoringService.js')).default;
+                if (!PositionMonitoringService.isInitialized) {
+                    await PositionMonitoringService.initialize();
+                }
+                await PositionMonitoringService.checkAllPositions();
+            },
+            {
+                taskName: 'position-monitoring',
+                sendAlerts: false, // Алерты отправляются самим PositionMonitoringService
+                startTime: this.startTime,
+                minDelay: 60 * 1000 // 1 минута
+            }
+        );
+
+        // Задача 7.6: Ежедневный отчет (в 20:00)
+        const dailyReportTime = notificationSettings.daily_report_time || '20:00';
+        const [reportHour, reportMinute] = dailyReportTime.split(':').map(Number);
+        const dailyReportSchedule = `${reportMinute} ${reportHour} * * *`;
+        this.dailyReportTask = SchedulerUtils.createScheduledTask(
+            dailyReportSchedule,
+            async () => {
+                console.log('📊 Scheduled daily report generation started...');
+                const DailyReportService = (await import('./DailyReportService.js')).default;
+                if (!DailyReportService.isInitialized) {
+                    await DailyReportService.initialize();
+                }
+                const report = await DailyReportService.generateDailyReport();
+                await DailyReportService.sendReportToTelegram(report);
+            },
+            {
+                taskName: 'daily-report',
+                sendAlerts: false, // Отчет отправляется самим DailyReportService
+                startTime: this.startTime,
+                minDelay: 60 * 1000 // 1 минута
+            }
+        );
+
+        // Задача 7.7: Автоматическая очистка данных (каждый день в 2:00)
+        try {
+            const DataCleanupService = (await import('./DataCleanupService.js')).default;
+            if (!DataCleanupService.isInitialized) {
+                await DataCleanupService.initialize();
+            }
+            const settings = DataCleanupService.getSettings();
+            const cleanupSchedule = settings?.cleanupSchedule || '0 2 * * *';
+            if (settings?.autoCleanup) {
+                this.dataCleanupTask = SchedulerUtils.createScheduledTask(
+                    cleanupSchedule,
+                    async () => {
+                        console.log('🧹 Scheduled data cleanup started...');
+                        try {
+                            await DataCleanupService.performCleanup();
+                        } catch (error) {
+                            console.error('❌ Error in scheduled data cleanup:', error);
+                        }
+                    },
+                    {
+                        taskName: 'data-cleanup',
+                        sendAlerts: false,
+                        startTime: this.startTime,
+                        minDelay: 60 * 1000 // 1 минута
+                    }
+                );
+            }
+        } catch (error) {
+            console.warn('⚠️ Could not initialize data cleanup task:', error.message);
+        }
 
         // Задача 8: Проверка торговых часов и уведомлений (каждые 5 минут)
         this.tradingHoursTask = SchedulerUtils.createScheduledTask(
@@ -1214,6 +1290,24 @@ class SchedulerService {
                 this.portfolioRebalancingTask.destroy();
                 this.portfolioRebalancingTask = null;
                 console.log('✅ Portfolio rebalancing task stopped and destroyed');
+            }
+            if (this.positionMonitoringTask) {
+                this.positionMonitoringTask.stop();
+                this.positionMonitoringTask.destroy();
+                this.positionMonitoringTask = null;
+                console.log('✅ Position monitoring task stopped and destroyed');
+            }
+            if (this.dailyReportTask) {
+                this.dailyReportTask.stop();
+                this.dailyReportTask.destroy();
+                this.dailyReportTask = null;
+                console.log('✅ Daily report task stopped and destroyed');
+            }
+            if (this.dataCleanupTask) {
+                this.dataCleanupTask.stop();
+                this.dataCleanupTask.destroy();
+                this.dataCleanupTask = null;
+                console.log('✅ Data cleanup task stopped and destroyed');
             }
             
             // Останавливаем все cron задачи из intervals

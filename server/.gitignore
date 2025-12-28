@@ -15,3 +15,6 @@ node_modules/
 # Service initialization tracker
 .service-init-tracker.json
 .service-init-tracker.json.tmp
+
+backups/
+logs/

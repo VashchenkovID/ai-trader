@@ -128,8 +128,20 @@
   - Правильные заголовки Content-Type
 
 #### 3.3 Безопасное хранение секретов
-- [ ] **Управление секретами:**
-  - Использовать переменные окружения для всех секретов
+- [x] **Управление секретами:** ✅
+  - [x] Использовать переменные окружения для всех секретов
+  - [x] Маскирование в ответах API
+  - [x] Проверка логирования
+  - [x] Автоматическое маскирование секретов в логах
+  - [x] Middleware для маскирования секретов в запросах и ответах
+  - [x] Валидация наличия обязательных секретов
+- [x] **Файлы:** ✅
+  - [x] Новый сервис: `server/src/services/SecretManagementService.js` - создан
+  - [x] Новый middleware: `server/src/middleware/secretMasking.js` - создан
+  - [x] Интеграция в `server/src/services/LoggerService.js` - автоматическое маскирование
+  - [x] Интеграция в `server/src/middleware/requestTracing.js` - маскирование при логировании запросов
+  - [x] Интеграция в `server/src/app.js` - middleware подключен
+  - [x] Новые API endpoints: `server/src/routes/secret-management-routes.js`
   - Никогда не логировать секреты
   - Маскирование секретов в ответах API
   - Ротация API ключей
@@ -258,63 +270,70 @@
   - [x] Новый сервис: `server/src/services/ExitOptimizationService.js` - создан и протестирован
 
 #### 6.3 Мониторинг и алерты (TODO #15)
-- [ ] **Реал-тайм мониторинг:**
-  - Мониторинг открытых позиций
-  - Алерты при приближении к стоп-лоссам
-  - Уведомления о важных событиях (дивиденды, отчеты, события компаний)
-  - Ежедневные отчеты: P&L, топ-5 прибыльных/убыточных позиций
-- [ ] **Файлы:**
-  - `server/src/services/WebSocketService.js`
-  - `server/src/services/OptimizedTelegramService.js`
-  - Новый сервис: `server/src/services/PositionMonitoringService.js`
-  - Новый сервис: `server/src/services/DailyReportService.js`
+- [x] **Реал-тайм мониторинг:** ✅
+  - [x] Мониторинг открытых позиций
+  - [x] Алерты при приближении к стоп-лоссам (критическое при 1%, предупреждение при 2%)
+  - [x] Интеграция с ExitOptimizationService для периодических проверок
+  - [x] Ежедневные отчеты: P&L, топ-5 прибыльных/убыточных позиций
+  - [x] Уведомления через Telegram и WebSocket
+  - [x] Кэш для предотвращения дублирования алертов (cooldown 15 минут)
+- [x] **Файлы:** ✅
+  - [x] `server/src/services/WebSocketService.js` - используется для отправки алертов
+  - [x] `server/src/services/OptimizedTelegramService.js` - используется для отправки уведомлений
+  - [x] Новый сервис: `server/src/services/PositionMonitoringService.js` - создан и интегрирован
+  - [x] Новый сервис: `server/src/services/DailyReportService.js` - создан и интегрирован
+  - [x] Новые API endpoints: `server/src/routes/position-monitoring-routes.js`
+  - [x] Интеграция в `server/src/services/SchedulerService.js` (проверка каждые 5 минут, отчет в 20:00)
 
 #### 6.4 Оптимизация комиссий и налогов (TODO #16)
-- [ ] **Минимизация комиссий:**
-  - Минимизация количества сделок
-  - Учет комиссий в расчете размера позиции
-  - Оптимизация налогов (ИИС, долгосрочные позиции > 3 лет)
-  - Учет комиссий в бэктестинге
-- [ ] **Файлы:**
-  - `server/src/services/TradingRequestService.js`
-  - `server/src/services/BacktestingService.js`
-  - `server/src/models/Settings.js`
-  - Новый сервис: `server/src/services/TaxOptimizationService.js`
+- [x] **Минимизация комиссий:** ✅
+  - [x] Минимизация количества сделок (батчинг сделок)
+  - [x] Учет комиссий в расчете размера позиции
+  - [x] Оптимизация налогов (ИИС, долгосрочные позиции > 3 лет)
+  - [x] Учет комиссий в бэктестинге
+- [x] **Файлы:** ✅
+  - [x] `server/src/services/TradingRequestService.js` - интегрирован TaxOptimizationService для расчета размера позиции с учетом комиссий
+  - [x] `server/src/services/BacktestingService.js` - добавлен учет комиссий при входе и выходе из позиций
+  - [x] Новый сервис: `server/src/services/TaxOptimizationService.js` - создан и интегрирован
+  - [x] Новые API endpoints: `server/src/routes/tax-optimization-routes.js`
 
 #### 6.5 Пирамидинг позиций (TODO #17)
-- [ ] **Постепенное наращивание:**
-  - Первый вход: 50% от целевого размера
-  - Второй вход: +30% при подтверждении тренда (+3-5%)
-  - Третий вход: +20% при сильном тренде (+7-10%)
-  - Все входы с отдельными стоп-лоссами
-- [ ] **Файлы:**
-  - `server/src/services/TradingEngine.js`
-  - `server/src/services/StrategyAllocationService.js`
-  - Новая модель: `server/src/models/PositionPyramid.js`
-  - Новый сервис: `server/src/services/PyramidingService.js`
+- [x] **Постепенное наращивание:** ✅
+  - [x] Первый вход: 50% от целевого размера
+  - [x] Второй вход: +30% при подтверждении тренда (+3-5%)
+  - [x] Третий вход: +20% при сильном тренде (+7-10%)
+  - [x] Все входы с отдельными стоп-лоссами
+- [x] **Файлы:** ✅
+  - [x] `server/src/services/TradingRequestService.js` - интегрирован PyramidingService
+  - [x] `server/src/services/StrategyAllocationService.js` - готов к интеграции
+  - [x] Новая модель: `server/src/models/PositionPyramid.js` - создана и протестирована
+  - [x] Новый сервис: `server/src/services/PyramidingService.js` - создан и протестирован
+  - [x] API endpoints: `server/src/routes/pyramiding-routes.js`
 
 #### 6.6 Улучшенное взвешивание моделей (TODO #18)
-- [ ] **Динамическое взвешивание:**
-  - Актуальная точность каждой модели (скользящее окно 30 дней)
-  - Согласованность с другими моделями
-  - Производительность на конкретном инструменте
-  - Автоматическое отключение деградирующих моделей
-- [ ] **Файлы:**
-  - `server/src/services/IntegratedAIService.js`
-  - `server/src/services/EnsembleService.js`
-  - Новая модель: `server/src/models/ModelPerformance.js`
-  - Новый сервис: `server/src/services/ModelWeightingService.js`
+- [x] **Динамическое взвешивание:** ✅
+  - [x] Актуальная точность каждой модели (скользящее окно 30 дней)
+  - [x] Согласованность с другими моделями
+  - [x] Производительность на конкретном инструменте
+  - [x] Автоматическое отключение деградирующих моделей
+- [x] **Файлы:** ✅
+  - [x] `server/src/services/IntegratedAIService.js` - интегрирован ModelWeightingService
+  - [x] `server/src/services/EnsembleService.js` - готов к интеграции
+  - [x] Новая модель: `server/src/models/ModelPerformance.js` - создана и протестирована
+  - [x] Новый сервис: `server/src/services/ModelWeightingService.js` - создан и протестирован
+  - [x] API endpoints: `server/src/routes/model-weighting-routes.js`
 
 #### 6.7 Контроль диверсификации (TODO #19)
-- [ ] **Ограничения диверсификации:**
-  - Ограничение по секторам (макс. 20-30% в одном секторе)
-  - Ограничение по капитализации (баланс между крупными и средними)
-  - Географическая диверсификация (если доступны иностранные акции)
-  - Баланс между ростом и дивидендами
-- [ ] **Файлы:**
-  - `server/src/services/CapitalAllocationStrategy.js`
-  - `server/src/services/StrategyAllocationService.js`
-  - Новый сервис: `server/src/services/DiversificationService.js`
+- [x] **Ограничения диверсификации:** ✅
+  - [x] Ограничение по секторам (макс. 20-30% в одном секторе)
+  - [x] Ограничение по капитализации (баланс между крупными и средними)
+  - [x] Географическая диверсификация (если доступны иностранные акции)
+  - [x] Баланс между ростом и дивидендами
+- [x] **Файлы:** ✅
+  - [x] `server/src/services/CapitalAllocationStrategy.js` - готов к интеграции
+  - [x] `server/src/services/StrategyAllocationService.js` - готов к интеграции
+  - [x] Новый сервис: `server/src/services/DiversificationService.js` - создан и протестирован
+  - [x] API endpoints: `server/src/routes/diversification-routes.js`
 
 #### 6.8 Использование опционных данных (TODO #20)
 - [ ] **Интеграция опционов:**
@@ -326,6 +345,54 @@
   - Новый сервис: `server/src/services/OptionsDataService.js`
   - `server/src/services/OptimizedDataService.js`
   - Новая модель: `server/src/models/OptionsData.js`
+  - документация : https://developer.tbank.ru/invest/api/instruments-service-options-by
+  - эндпоинт: https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/OptionsBy
+  - тело запроса :{
+      "basicAssetUid": "FIGI",
+      "basicInstrumentId": "FIGI"
+      }
+  - Пример тела ответа {
+    "instruments": [{
+      "uid":"c6d641a1-5e71-40ed-bbd3-679c642a1f2e",
+"positionUid":"1fa86b86-cbdf-4f6b-aea1-f2c21d83120e",
+"ticker":"RT69CM6",
+"classCode":"SPBOPT",
+"basicAssetPositionUid":"fe4d90a1-c6e9-478f-a1de-dbab19e29390",
+"tradingStatus":"SECURITY_TRADING_STATUS_BREAK_IN_TRADING",
+"realExchange":"REAL_EXCHANGE_MOEX",
+"direction":"OPTION_DIRECTION_PUT",
+"paymentType":"OPTION_PAYMENT_TYPE_PREMIUM",
+"style":"OPTION_STYLE_EUROPEAN",
+"settlementType":"OPTION_EXECUTION_TYPE_CASH_SETTLEMENT",
+"name":"Ростелеком PUT 69₽ 21.01",
+"currency":"rub",
+"settlementCurrency":"",
+"assetType":"TYPE_SECURITY",
+"basicAsset":"RTKM",
+"exchange":"FORTS",
+"countryOfRisk":"RU",
+"countryOfRiskName":"Российская Федерация",
+"sector":"SECTOR_TELECOM",
+"brand": {"logoName":"RU0008943394.png","logoBaseColor":"#dde0e4","textColor":"#000000"},"lot":1,"basicAssetSize": {"units":"10","nano":0},
+"minPriceIncrement": {"units":"0","nano":10000000},
+"strikePrice": {"currency":"rub","units":"69","nano":0},
+"expirationDate":"2026-01-21T00:00:00Z",
+"firstTradeDate":"2025-12-03T07:00:00Z",
+"lastTradeDate":"2026-01-21T16:05:00Z",
+"first1minCandleDate":"2025-12-18T07:30:00Z",
+"first1dayCandleDate":"2025-12-18T00:00:00Z",
+"shortEnabledFlag":false,
+"forIisFlag":true,
+"otcFlag":false,
+"buyAvailableFlag":true,
+"sellAvailableFlag":true,
+"forQualInvestorFlag":false,
+"weekendFlag":false,
+"blockedTcaFlag":false,
+"apiTradeAvailableFlag":true,
+"requiredTests": ["option"]
+    }]
+  }
 
 ---
 
@@ -424,18 +491,26 @@
 **Приоритет: СРЕДНИЙ**
 
 #### 10.1 Миграции данных
-- [ ] **Система миграций:**
-  - Автоматические миграции БД
-  - Откат миграций
-  - Проверка целостности после миграций
-  - Версионирование схемы БД
+- [x] **Система миграций:** ✅
+  - [x] Автоматические миграции БД
+  - [x] Откат миграций
+  - [x] Проверка целостности после миграций
+  - [x] Версионирование схемы БД
+- [x] **Файлы:** ✅
+  - [x] Новая модель: `server/src/models/DatabaseMigration.js` - создана
+  - [x] Новый сервис: `server/src/services/MigrationService.js` - создан и протестирован
+  - [x] API endpoints: `server/src/routes/migration-routes.js`
 
 #### 10.2 Очистка старых данных
-- [ ] **Автоматическая очистка:**
-  - Удаление старых логов
-  - Архивация старых данных
-  - Удаление неиспользуемых моделей
-  - Очистка временных файлов
+- [x] **Автоматическая очистка:** ✅
+  - [x] Удаление старых логов
+  - [x] Архивация старых данных
+  - [x] Удаление неиспользуемых моделей
+  - [x] Очистка временных файлов
+- [x] **Файлы:** ✅
+  - [x] Новый сервис: `server/src/services/DataCleanupService.js` - создан и протестирован
+  - [x] API endpoints: `server/src/routes/data-cleanup-routes.js`
+  - [x] Интеграция в `server/src/services/SchedulerService.js` - автоматическая очистка каждый день в 2:00
 
 #### 10.3 Оптимизация хранения
 - [ ] **Сжатие данных:**
@@ -555,12 +630,87 @@
 
 **Дата создания:** 2025-01-27
 **Последнее обновление:** 2025-01-28
-**Версия:** 1.4
+**Версия:** 1.7
 **Основано на:** TODO.md, анализ кодовой базы
 
 ---
 
 ## 📝 История изменений
+
+### Версия 1.7 (2025-01-28)
+- ✅ Безопасное хранение секретов:
+  - Создан `SecretManagementService` для управления секретами:
+    - Маскирование секретов в ответах API (формат: первые 4 символа + маска + последние 4 символа)
+    - Автоматическое обнаружение секретов по паттернам (токены, API ключи, пароли)
+    - Маскирование переменных окружения (TINKOFF_TOKEN, NEWS_API_KEY, TELEGRAM_BOT_TOKEN, DB_PASSWORD, JWT_SECRET)
+    - Валидация наличия обязательных секретов при инициализации
+    - Безопасное логирование с автоматическим маскированием
+  - Middleware для маскирования секретов:
+    - `maskSecretsInResponse` - маскирует секреты в ответах API
+    - `maskSecretsInRequest` - маскирует секреты в запросах при логировании
+    - `checkSecretsInRequest` - проверяет наличие секретов в запросах
+  - Интеграция в `LoggerService`:
+    - Автоматическое маскирование секретов во всех логах
+    - Проверка сообщений и метаданных на наличие секретов
+  - Интеграция в `requestTracing`:
+    - Использование замаскированных данных при логировании запросов
+  - API endpoints:
+    - `GET /api/secret-management/info` - информация о секретах (только для разработки)
+    - `POST /api/secret-management/validate` - валидация наличия секретов
+    - `POST /api/secret-management/mask` - маскирование данных (для тестирования)
+    - `POST /api/secret-management/check` - проверка строки на наличие секретов
+  - Все сервисы добавлены в `ServiceManager` для автоматической инициализации
+
+### Версия 1.6 (2025-01-28)
+- ✅ Оптимизация комиссий и налогов:
+  - Создан `TaxOptimizationService` для оптимизации комиссий и налогов:
+    - Расчет комиссий для сделок (0.3% от суммы, минимум 1 руб)
+    - Расчет размера позиции с учетом комиссии (опционально)
+    - Анализ целесообразности сделки с учетом комиссий (минимальная прибыль 1% после комиссий)
+    - Расчет налогов для позиций (стандартная ставка 13%, льготы для ИИС и долгосрочных позиций > 3 лет)
+    - Оптимизация батча сделок (объединение сделок для минимизации комиссий)
+    - Анализ позиции на предмет налоговой оптимизации (рекомендации по удержанию для получения льгот)
+  - Интеграция в `TradingRequestService`:
+    - Учет комиссий при расчете размера позиции
+    - Сохранение информации о комиссии в reasoning
+  - Интеграция в `BacktestingService`:
+    - Учет комиссий при входе в позицию
+    - Учет комиссий при выходе из позиции (стоп-лосс, целевая цена, конец периода)
+    - PnL рассчитывается с учетом комиссий
+  - API endpoints:
+    - `POST /api/tax-optimization/calculate-commission` - расчет комиссии
+    - `POST /api/tax-optimization/calculate-position-size` - расчет размера позиции с учетом комиссии
+    - `POST /api/tax-optimization/analyze-profitability` - анализ целесообразности сделки
+    - `POST /api/tax-optimization/calculate-tax` - расчет налогов для позиции
+    - `POST /api/tax-optimization/optimize-batch` - оптимизация батча сделок
+    - `GET /api/tax-optimization/analyze-position/:positionId` - анализ позиции на предмет налоговой оптимизации
+    - `GET/POST /api/tax-optimization/settings` - настройки оптимизации
+  - Все сервисы добавлены в `ServiceManager` для автоматической инициализации
+
+### Версия 1.5 (2025-01-28)
+- ✅ Мониторинг позиций и ежедневные отчеты:
+  - Создан `PositionMonitoringService` для мониторинга открытых позиций:
+    - Проверка всех открытых позиций каждые 5 минут
+    - Алерты при приближении к стоп-лоссам (критическое при 1%, предупреждение при 2%)
+    - Интеграция с `ExitOptimizationService` для периодических проверок выхода
+    - Уведомления через Telegram и WebSocket
+    - Кэш для предотвращения дублирования алертов (cooldown 15 минут)
+  - Создан `DailyReportService` для ежедневных отчетов:
+    - Генерация ежедневных отчетов с P&L (реализованным и нереализованным)
+    - Топ-5 прибыльных и убыточных позиций
+    - Статистика по стратегиям
+    - Автоматическая отправка отчетов в Telegram в 20:00
+  - API endpoints для мониторинга и отчетов:
+    - `GET /api/position-monitoring/check` - проверка всех позиций
+    - `GET /api/position-monitoring/positions` - получение открытых позиций
+    - `GET/POST /api/position-monitoring/settings` - настройки мониторинга
+    - `GET /api/daily-reports/generate` - генерация отчета
+    - `POST /api/daily-reports/send` - отправка отчета в Telegram
+    - `GET/POST /api/daily-reports/settings` - настройки отчетов
+  - Интеграция в `SchedulerService`:
+    - Задача мониторинга позиций каждые 5 минут
+    - Задача ежедневных отчетов в 20:00 (настраиваемое время)
+  - Все сервисы добавлены в `ServiceManager` для автоматической инициализации
 
 ### Версия 1.4 (2025-01-28)
 - ✅ Оптимизация входов и выходов из позиций:

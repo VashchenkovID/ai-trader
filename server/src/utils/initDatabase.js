@@ -28,6 +28,9 @@ import CorrelationCache from '../models/CorrelationCache.js';
 import PortfolioAnalysis from '../models/PortfolioAnalysis.js';
 import TrailingStop from '../models/TrailingStop.js';
 import TradingNotificationSettings from '../models/TradingNotificationSettings.js';
+import PositionPyramid from '../models/PositionPyramid.js';
+import ModelPerformance from '../models/ModelPerformance.js';
+import DatabaseMigration from '../models/DatabaseMigration.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');

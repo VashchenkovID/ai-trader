@@ -168,16 +168,39 @@ class BacktestingService {
 
                     // Выход из позиции
                     if (exitReason) {
-                        const pnl = currentPosition.direction === 'BUY' 
+                        // Рассчитываем комиссию при выходе
+                        let exitCommission = 0;
+                        try {
+                            const TaxOptimizationService = (await import('./TaxOptimizationService.js')).default;
+                            if (TaxOptimizationService && TaxOptimizationService.isInitialized) {
+                                const commissionInfo = TaxOptimizationService.calculateCommission(exitPrice, currentPosition.quantity);
+                                exitCommission = commissionInfo.amount;
+                            } else {
+                                // Fallback к простому расчету
+                                const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
+                                const commissionInfo = TinkoffApiService.calculateCommission(exitPrice, currentPosition.quantity);
+                                exitCommission = commissionInfo.amount || 0;
+                            }
+                        } catch (error) {
+                            console.warn('⚠️ Could not calculate exit commission in backtesting:', error.message);
+                        }
+                        
+                        const entryCommission = currentPosition.entryCommission || 0;
+                        const totalCommission = entryCommission + exitCommission;
+                        
+                        // PnL с учетом комиссий
+                        const grossPnl = currentPosition.direction === 'BUY' 
                             ? (exitPrice - currentPosition.entryPrice) * currentPosition.quantity
                             : (currentPosition.entryPrice - exitPrice) * currentPosition.quantity;
+                        const pnl = grossPnl - totalCommission;
                         
                         const pnlPercent = currentPosition.direction === 'BUY'
                             ? ((exitPrice - currentPosition.entryPrice) / currentPosition.entryPrice) * 100
                             : ((currentPosition.entryPrice - exitPrice) / currentPosition.entryPrice) * 100;
 
-                        // Возвращаем капитал от позиции и добавляем PnL
-                        availableCapital += currentPosition.positionCost + pnl;
+                        // Возвращаем капитал от позиции (без комиссии входа, она уже учтена) и добавляем PnL
+                        const positionCostWithoutCommission = currentPosition.quantity * currentPosition.entryPrice;
+                        availableCapital += positionCostWithoutCommission + pnl;
                         const totalCapital = availableCapital;
 
                         trades.push({
@@ -191,6 +214,9 @@ class BacktestingService {
                             direction: currentPosition.direction,
                             pnl: pnl,
                             pnlPercent: pnlPercent,
+                            entryCommission: entryCommission,
+                            exitCommission: exitCommission,
+                            totalCommission: totalCommission,
                             exitReason: exitReason,
                             signalId: currentPosition.signalId
                         });
@@ -310,7 +336,24 @@ class BacktestingService {
                                 targetTimeframe = 90; // 3 месяца
                             }
 
-                            const positionCost = quantity * currentPrice;
+                            // Рассчитываем комиссию при входе
+                            let entryCommission = 0;
+                            try {
+                                const TaxOptimizationService = (await import('./TaxOptimizationService.js')).default;
+                                if (TaxOptimizationService && TaxOptimizationService.isInitialized) {
+                                    const commissionInfo = TaxOptimizationService.calculateCommission(currentPrice, quantity);
+                                    entryCommission = commissionInfo.amount;
+                                } else {
+                                    // Fallback к простому расчету
+                                    const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
+                                    const commissionInfo = TinkoffApiService.calculateCommission(currentPrice, quantity);
+                                    entryCommission = commissionInfo.amount || 0;
+                                }
+                            } catch (error) {
+                                console.warn('⚠️ Could not calculate commission in backtesting:', error.message);
+                            }
+                            
+                            const positionCost = quantity * currentPrice + entryCommission;
                             
                             currentPosition = {
                                 figi: figi,
@@ -324,10 +367,11 @@ class BacktestingService {
                                 signalId: entrySignal?.signalId || null,
                                 signalEndDt: entrySignal ? new Date(entrySignal.endDt) : null,
                                 targetTimeframe: targetTimeframe,
-                                positionCost: positionCost
+                                positionCost: positionCost,
+                                entryCommission: entryCommission
                             };
 
-                            // Резервируем средства для позиции
+                            // Резервируем средства для позиции (включая комиссию)
                             availableCapital -= positionCost;
                             
                             // Обновляем кривую капитала (пока без unrealized PnL)
@@ -344,16 +388,40 @@ class BacktestingService {
             if (currentPosition && periodCandles.length > 0) {
                 const lastCandle = periodCandles[periodCandles.length - 1];
                 const exitPrice = lastCandle.close;
-                const pnl = currentPosition.direction === 'BUY'
+                
+                // Рассчитываем комиссию при выходе
+                let exitCommission = 0;
+                try {
+                    const TaxOptimizationService = (await import('./TaxOptimizationService.js')).default;
+                    if (TaxOptimizationService && TaxOptimizationService.isInitialized) {
+                        const commissionInfo = TaxOptimizationService.calculateCommission(exitPrice, currentPosition.quantity);
+                        exitCommission = commissionInfo.amount;
+                    } else {
+                        // Fallback к простому расчету
+                        const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
+                        const commissionInfo = TinkoffApiService.calculateCommission(exitPrice, currentPosition.quantity);
+                        exitCommission = commissionInfo.amount || 0;
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Could not calculate exit commission in backtesting:', error.message);
+                }
+                
+                const entryCommission = currentPosition.entryCommission || 0;
+                const totalCommission = entryCommission + exitCommission;
+                
+                // PnL с учетом комиссий
+                const grossPnl = currentPosition.direction === 'BUY'
                     ? (exitPrice - currentPosition.entryPrice) * currentPosition.quantity
                     : (currentPosition.entryPrice - exitPrice) * currentPosition.quantity;
+                const pnl = grossPnl - totalCommission;
                 
                 const pnlPercent = currentPosition.direction === 'BUY'
                     ? ((exitPrice - currentPosition.entryPrice) / currentPosition.entryPrice) * 100
                     : ((currentPosition.entryPrice - exitPrice) / currentPosition.entryPrice) * 100;
 
-                // Возвращаем капитал от позиции и добавляем PnL
-                availableCapital += currentPosition.positionCost + pnl;
+                // Возвращаем капитал от позиции (без комиссии входа, она уже учтена) и добавляем PnL
+                const positionCostWithoutCommission = currentPosition.quantity * currentPosition.entryPrice;
+                availableCapital += positionCostWithoutCommission + pnl;
                 const finalCapital = availableCapital;
 
                 trades.push({
@@ -367,6 +435,9 @@ class BacktestingService {
                     direction: currentPosition.direction,
                     pnl: pnl,
                     pnlPercent: pnlPercent,
+                    entryCommission: entryCommission,
+                    exitCommission: exitCommission,
+                    totalCommission: totalCommission,
                     exitReason: 'period_end',
                     signalId: currentPosition.signalId
                 });
