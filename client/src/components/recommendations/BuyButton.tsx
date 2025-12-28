@@ -85,9 +85,20 @@ interface BuyButtonProps {
   rowData: Recommendation;
   onRequestCreated?: () => void;
   onModalOpen?: () => void;
+  mode?: 'buy' | 'sell'; // Режим работы: покупка или продажа
+  portfolioPosition?: {
+    size: number; // Количество акций в портфеле
+    entryPrice: number; // Цена входа
+  };
 }
 
-const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModalOpen }) => {
+const BuyButton: React.FC<BuyButtonProps> = ({ 
+  rowData, 
+  onRequestCreated, 
+  onModalOpen,
+  mode = 'buy', // По умолчанию режим покупки
+  portfolioPosition
+}) => {
   const [showDialog, setShowDialog] = useState(false);
   const [quantity, setQuantity] = useState<number>(0);
   const [creatingRequest, setCreatingRequest] = useState(false);
@@ -97,6 +108,7 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
   const [showHoldWarning, setShowHoldWarning] = useState(false);
   const [strategyWarning, setStrategyWarning] = useState<string | null>(null);
   const [inlineMessage, setInlineMessage] = useState<{ variant: 'success' | 'warning' | 'error'; text: string } | null>(null);
+  const [forceEntry, setForceEntry] = useState<boolean>(false); // Опция для обхода валидации
 
   // Получаем детальное объяснение, почему кнопка заблокирована
   // Находим лучший прогноз (с максимальным confidence и score)
@@ -132,16 +144,26 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
     return sorted[0] || null;
   };
 
-  const buttonLabel = 'Купить';
+  // Определяем режим работы: если есть позиция в портфеле, то продажа, иначе покупка
+  const actualMode = mode === 'sell' || portfolioPosition ? 'sell' : 'buy';
+  const isSellMode = actualMode === 'sell';
   
-  // Покупка должна быть доступна всегда, если известна цена
-  const isButtonDisabled = !rowData.priceAtAnalysis || rowData.priceAtAnalysis <= 0;
+  const buttonLabel = isSellMode ? 'Продать' : 'Купить';
+  
+  // Для продажи проверяем наличие позиции в портфеле
+  const isButtonDisabled = isSellMode
+    ? !portfolioPosition || portfolioPosition.size <= 0 || !rowData.priceAtAnalysis || rowData.priceAtAnalysis <= 0
+    : !rowData.priceAtAnalysis || rowData.priceAtAnalysis <= 0;
   
   const tooltipText = isButtonDisabled 
-    ? 'Покупка недоступна: цена не определена'
-    : 'Создать заявку на покупку';
+    ? isSellMode
+      ? 'Продажа недоступна: нет позиции в портфеле или цена не определена'
+      : 'Покупка недоступна: цена не определена'
+    : isSellMode
+      ? 'Создать заявку на продажу'
+      : 'Создать заявку на покупку';
 
-  const handleBuyClick = async () => {
+  const handleButtonClick = async () => {
     try {
       // Загружаем список стратегий
       const allStrategies = await apiService.getAllStrategies();
@@ -182,7 +204,21 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
 
       setSelectedStrategyId(defaultStrategyId);
       const bestHorizonRec = getBestHorizon();
-      setShowHoldWarning(recommendation === 'HOLD' || (bestHorizonRec !== null && bestHorizonRec.recommendation === 'HOLD'));
+      
+      // Для режима продажи устанавливаем количество по умолчанию равным размеру позиции
+      if (isSellMode && portfolioPosition) {
+        setQuantity(portfolioPosition.size);
+      } else {
+        setQuantity(0);
+      }
+      
+      // Предупреждение показываем только для покупки при HOLD
+      if (!isSellMode) {
+        setShowHoldWarning(recommendation === 'HOLD' || (bestHorizonRec !== null && bestHorizonRec.recommendation === 'HOLD'));
+      } else {
+        setShowHoldWarning(false);
+      }
+      
       setStrategyWarning(null); // Очищаем предыдущее предупреждение при открытии диалога
       setShowDialog(true);
       // Уведомляем родителя, что модалка открылась (для сброса лоадера)
@@ -207,6 +243,15 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
       return;
     }
 
+    // Для продажи проверяем, что количество не превышает размер позиции
+    if (isSellMode && portfolioPosition && quantity > portfolioPosition.size) {
+      setInlineMessage({
+        variant: 'warning',
+        text: `Нельзя продать больше, чем есть в портфеле (${portfolioPosition.size} шт.)`,
+      });
+      return;
+    }
+
     if (!selectedStrategyId) {
       setInlineMessage({
         variant: 'warning',
@@ -218,6 +263,11 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
     try {
       setCreatingRequest(true);
 
+      // Определяем действие: SELL для продажи, BUY для покупки
+      const action = isSellMode ? 'SELL' : 'BUY';
+      
+      // Для продажи используем текущую цену, для покупки - цену анализа
+      const price = isSellMode && rowData.currentPrice ? rowData.currentPrice : rowData.priceAtAnalysis;
 
       // Проверяем наличие предупреждения в ответе
       const response = await apiService.createTradingRequest(
@@ -225,17 +275,20 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
         {
           quantity: quantity,
           comment: userReason || undefined,
-          strategyId: selectedStrategyId
+          strategyId: selectedStrategyId,
+          action: action, // Явно указываем действие
+          autoApprove: isSellMode, // Автоматически одобряем продажи из портфеля
+          forceEntry: forceEntry, // Обход валидации входа (если включено)
         },
         {
           figi: rowData.figi,
           ticker: rowData.ticker,
           name: rowData.name,
-          recommendation: rowData.recommendation,
+          recommendation: action, // Используем действие вместо исходной рекомендации
           confidence: rowData.confidence,
           score: rowData.score,
-          priceAtAnalysis: rowData.priceAtAnalysis,
-          price: rowData.priceAtAnalysis,
+          priceAtAnalysis: price,
+          price: price,
           targetPrice: rowData.targetPrice,
           stopLoss: rowData.stopLoss,
           takeProfit: rowData.takeProfit
@@ -253,7 +306,7 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
         variant: response?.strategyWarning ? 'warning' : 'success',
         text: response?.strategyWarning
           ? `Заявка создана, но: ${response.strategyWarning.message || response.strategyWarning.warnings?.join('; ')}`
-          : `Заявка на покупку ${quantity} акций ${rowData.ticker} создана`,
+          : `Заявка на ${isSellMode ? 'продажу' : 'покупку'} ${quantity} акций ${rowData.ticker} создана`,
       });
 
       setShowDialog(false);
@@ -266,11 +319,27 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
         onRequestCreated();
       }
     } catch (error: any) {
-      console.error('Error creating buy request:', error);
+      console.error(`Error creating ${isSellMode ? 'sell' : 'buy'} request:`, error);
+      
+      // Извлекаем детальное сообщение об ошибке
+      // Приоритет: error.response.data.error (детальное объяснение) > error.response.data.message > error.message
+      let errorMessage = error.response?.data?.error || 
+                        error.response?.data?.message || 
+                        error.message || 
+                        `Не удалось создать заявку на ${isSellMode ? 'продажу' : 'покупку'}`;
+      
+      // Если ошибка содержит детальное объяснение (например, от EntryOptimizationService)
+      if (error.response?.data?.details || error.response?.data?.explanation) {
+        errorMessage = error.response.data.details || error.response.data.explanation;
+      }
+      
+      // Показываем ошибку в модальном окне
       setInlineMessage({
         variant: 'error',
-        text: error.response?.data?.message || error.message || 'Не удалось создать заявку на покупку',
+        text: errorMessage,
       });
+      
+      // Не закрываем модальное окно при ошибке, чтобы пользователь мог увидеть объяснение
     } finally {
       setCreatingRequest(false);
     }
@@ -284,6 +353,7 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
     setSelectedStrategyId(null);
     setStrategyWarning(null); // Очищаем предупреждение при закрытии
     setInlineMessage(null);
+    setForceEntry(false); // Сбрасываем опцию обхода валидации
   };
 
   const strategyOptions = [
@@ -312,10 +382,10 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
           style={{ display: 'inline-block', cursor: isButtonDisabled ? 'not-allowed' : 'pointer' }}
         >
           <Button
-            icon="🛒"
+            icon={isSellMode ? "💸" : "🛒"}
             size="sm"
-            variant={rowData.recommendation === 'SELL' ? 'secondary' : 'primary'}
-            onClick={handleBuyClick}
+            variant={isSellMode ? 'error' : (rowData.recommendation === 'SELL' ? 'secondary' : 'primary')}
+            onClick={handleButtonClick}
             disabled={isButtonDisabled}
             data-buy-trigger="true"
           >
@@ -327,7 +397,7 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
       <Modal
         isOpen={showDialog}
         onClose={handleCancel}
-        title={`Покупка акций ${rowData.ticker}`}
+        title={isSellMode ? `Продажа акций ${rowData.ticker}` : `Покупка акций ${rowData.ticker}`}
         size="md"
         footer={
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
@@ -399,11 +469,22 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
               value={quantity}
               onValueChange={(e) => setQuantity(e.value || 0)}
               min={1}
+              max={isSellMode && portfolioPosition ? portfolioPosition.size : undefined}
               fullWidth
               showButtons
               buttonLayout="horizontal"
               disabled={creatingRequest}
             />
+            {isSellMode && portfolioPosition && (
+              <div className="buy-helper">
+                В портфеле: {portfolioPosition.size} шт. (цена входа: {new Intl.NumberFormat('ru-RU', {
+                  style: 'currency',
+                  currency: 'RUB',
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                }).format(portfolioPosition.entryPrice)})
+              </div>
+            )}
           </div>
 
           <div className="buy-field">
@@ -414,14 +495,59 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
                 currency: 'RUB',
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
-              }).format(rowData.priceAtAnalysis)}
+              }).format(isSellMode && rowData.currentPrice ? rowData.currentPrice : rowData.priceAtAnalysis)}
             </div>
+            {isSellMode && portfolioPosition && (
+              <div className="buy-helper">
+                Прибыль/убыток: {((rowData.currentPrice || rowData.priceAtAnalysis) - portfolioPosition.entryPrice) > 0 ? '+' : ''}
+                {new Intl.NumberFormat('ru-RU', {
+                  style: 'currency',
+                  currency: 'RUB',
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                }).format((rowData.currentPrice || rowData.priceAtAnalysis) - portfolioPosition.entryPrice)} за акцию
+                ({((((rowData.currentPrice || rowData.priceAtAnalysis) - portfolioPosition.entryPrice) / portfolioPosition.entryPrice) * 100).toFixed(2)}%)
+              </div>
+            )}
           </div>
 
-          {showHoldWarning && (
+          {showHoldWarning && !isSellMode && (
             <Alert variant="warning" size="sm">
               AI рекомендует удержание позиции. Убедитесь, что покупка соответствует вашей стратегии.
             </Alert>
+          )}
+          {isSellMode && rowData.recommendation !== 'SELL' && (
+            <Alert variant="warning" size="sm">
+              AI не рекомендует продажу. Убедитесь, что продажа соответствует вашей стратегии.
+            </Alert>
+          )}
+          
+          {/* Показываем детальное объяснение ошибки, если она есть */}
+          {inlineMessage && inlineMessage.variant === 'error' && (
+            <Alert variant="error" size="sm">
+              <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                <strong>Ошибка создания заявки:</strong>
+                <br />
+                {inlineMessage.text}
+              </div>
+            </Alert>
+          )}
+          
+          {/* Опция для обхода валидации (показываем при ошибке или предупреждении) */}
+          {(inlineMessage?.variant === 'error' || showHoldWarning) && (
+            <div className="buy-field" style={{ marginTop: '8px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
+                <input
+                  type="checkbox"
+                  checked={forceEntry}
+                  onChange={(e) => setForceEntry(e.target.checked)}
+                  disabled={creatingRequest}
+                />
+                <span style={{ color: 'var(--color-text-secondary)' }}>
+                  Обойти валидацию входа (⚠️ только для тестирования, не рекомендуется в продакшене)
+                </span>
+              </label>
+            </div>
           )}
 
           <div className="buy-field">
@@ -431,12 +557,12 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
               onChange={(e) => setUserReason(e.target.value)}
               rows={3}
               className="buy-textarea"
-              placeholder="Укажите причину покупки, если AI рекомендует HOLD"
+              placeholder={isSellMode ? "Укажите причину продажи, если AI не рекомендует SELL" : "Укажите причину покупки, если AI рекомендует HOLD"}
               disabled={creatingRequest}
             />
           </div>
 
-          {quantity > 0 && rowData.priceAtAnalysis > 0 && (
+          {quantity > 0 && (isSellMode && rowData.currentPrice ? rowData.currentPrice : rowData.priceAtAnalysis) > 0 && (
             <div className="buy-summary">
               <div className="buy-summary-title">Общая сумма</div>
               <div className="buy-summary-value">
@@ -445,8 +571,22 @@ const BuyButton: React.FC<BuyButtonProps> = ({ rowData, onRequestCreated, onModa
                   currency: 'RUB',
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2
-                }).format(quantity * rowData.priceAtAnalysis)}
+                }).format(quantity * (isSellMode && rowData.currentPrice ? rowData.currentPrice : rowData.priceAtAnalysis))}
               </div>
+              {isSellMode && portfolioPosition && (
+                <div className="buy-summary">
+                  <div className="buy-summary-title">Прибыль/убыток</div>
+                  <div className={`buy-summary-value ${((rowData.currentPrice || rowData.priceAtAnalysis) - portfolioPosition.entryPrice) >= 0 ? 'positive' : 'negative'}`}>
+                    {((rowData.currentPrice || rowData.priceAtAnalysis) - portfolioPosition.entryPrice) >= 0 ? '+' : ''}
+                    {new Intl.NumberFormat('ru-RU', {
+                      style: 'currency',
+                      currency: 'RUB',
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    }).format(quantity * ((rowData.currentPrice || rowData.priceAtAnalysis) - portfolioPosition.entryPrice))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -6,8 +6,10 @@
 
 .recommendations-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
+  width: 100%;
+  align-items: start; /* Выравнивание по верху для карточек разной высоты */
 }
 
 .recommendations-empty {
@@ -48,20 +50,9 @@
   }
 }
 
-@media (min-width: 1025px) and (max-width: 1440px) {
+/* На больших экранах всегда 2 столбца */
+@media (min-width: 1025px) {
   .recommendations-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (min-width: 1441px) and (max-width: 1920px) {
-  .recommendations-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (min-width: 1921px) {
-  .recommendations-grid {
-    grid-template-columns: repeat(3, 1fr);
   }
 }

@@ -151,7 +151,7 @@
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  z-index: 1000;
+  z-index: 1050; /* Выше модального окна (1040) */
   max-height: 300px;
   overflow: hidden;
   display: flex;

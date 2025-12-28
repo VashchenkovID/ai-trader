@@ -96,7 +96,29 @@ const PositionStrategy = sequelize.define('PositionStrategy', {
     ]
 });
 
-// Ассоциации
+// Ассоциации - устанавливаем напрямую после определения модели
+// Используем динамический импорт для избежания циклических зависимостей
+(async () => {
+    try {
+        const TradingRequest = (await import('./TradingRequest.js')).default;
+        const TradingStrategy = (await import('./TradingStrategy.js')).default;
+        
+        PositionStrategy.belongsTo(TradingRequest, {
+            foreignKey: 'positionId',
+            as: 'position'
+        });
+        
+        PositionStrategy.belongsTo(TradingStrategy, {
+            foreignKey: 'strategyId',
+            as: 'strategy'
+        });
+    } catch (error) {
+        // Игнорируем ошибки при установке ассоциаций (могут быть циклические зависимости)
+        console.warn('⚠️ Could not set PositionStrategy associations immediately:', error.message);
+    }
+})();
+
+// Также оставляем метод associate для совместимости
 PositionStrategy.associate = function(models) {
     PositionStrategy.belongsTo(models.TradingRequest, {
         foreignKey: 'positionId',

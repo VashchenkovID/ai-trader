@@ -1518,6 +1518,14 @@ class NeuralNetworkService {
         // Оптимизация N+1: загружаем все данные одним запросом
         const figis = portfolioItems.map(item => item.figi);
         
+        // Убеждаемся, что все ассоциации установлены перед использованием
+        try {
+            const { ensureAssociations } = await import('../utils/ensureAssociations.js');
+            await ensureAssociations();
+        } catch (assocError) {
+            console.warn('⚠️ Could not ensure associations in analyzePortfolio:', assocError.message);
+        }
+        
         // Загружаем все BUY заявки для всех FIGI одним запросом
         const allBuyRequests = await TradingRequest.findAll({
             where: {

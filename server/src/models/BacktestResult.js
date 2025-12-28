@@ -187,7 +187,23 @@ const BacktestResult = sequelize.define('BacktestResult', {
     ]
 });
 
-// Ассоциации
+// Ассоциации - устанавливаем напрямую после определения модели
+// Используем динамический импорт для избежания циклических зависимостей
+(async () => {
+    try {
+        const TradingStrategy = (await import('./TradingStrategy.js')).default;
+        
+        BacktestResult.belongsTo(TradingStrategy, {
+            foreignKey: 'strategyId',
+            as: 'strategy'
+        });
+    } catch (error) {
+        // Игнорируем ошибки при установке ассоциаций (могут быть циклические зависимости)
+        console.warn('⚠️ Could not set BacktestResult associations immediately:', error.message);
+    }
+})();
+
+// Также оставляем метод associate для совместимости
 BacktestResult.associate = function(models) {
     BacktestResult.belongsTo(models.TradingStrategy, {
         foreignKey: 'strategyId',

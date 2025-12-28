@@ -170,6 +170,17 @@ export const heavyOperationLimiter = createRateLimiter({
 });
 
 /**
+ * Rate limiter для batch-train-all (более мягкие ограничения)
+ * 10 запросов за 30 минут (для тестирования и разработки)
+ * В production можно уменьшить до 3-5 запросов
+ */
+export const batchTrainLimiter = createRateLimiter({
+    windowMs: 30 * 60 * 1000, // 30 минут
+    max: process.env.NODE_ENV === 'production' ? 3 : 10, // 10 для разработки, 3 для production
+    message: 'Too many batch training requests. Please wait before trying again. You can reset the limit via /api/rate-limit/reset'
+});
+
+/**
  * Получить статистику rate limiting для IP
  * @param {string} ip - IP адрес
  * @returns {Object|null} Статистика или null если нет данных

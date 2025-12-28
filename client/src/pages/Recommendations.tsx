@@ -755,20 +755,6 @@ const Recommendations: React.FC = () => {
         }
       />
 
-      {/* BuyButton компоненты для модальных окон - скрыты */}
-      {filteredAndSortedRecommendations.map((recommendation) => (
-        <div 
-          key={`buy-button-${recommendation.figi}`} 
-          data-buy-button-figi={recommendation.figi}
-          style={{ position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'auto' }}
-        >
-          <BuyButton
-            rowData={recommendation}
-            onRequestCreated={handleBuyComplete}
-            onModalOpen={() => setBuyingFigi(null)}
-          />
-        </div>
-      ))}
     </div>
   );
 };

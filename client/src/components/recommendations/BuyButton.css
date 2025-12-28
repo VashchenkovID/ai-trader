@@ -94,3 +94,11 @@
   font-family: 'JetBrains Mono', monospace;
 }
 
+.buy-summary-value.positive {
+  color: var(--color-accent-success, #10b981);
+}
+
+.buy-summary-value.negative {
+  color: var(--color-accent-error, #ef4444);
+}
+

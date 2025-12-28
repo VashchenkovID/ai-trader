@@ -2138,3 +2138,158 @@
     "stack": "Error: No cached data available\n    at FallbackService.executeWithFallback (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/services/FallbackService.js:152:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async TinkoffApiService.getInstrumentByFigi (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/services/TinkoffApiService.js:280:16)\n    at async OptionsDataService.fetchOptionsFromAPI (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/services/OptionsDataService.js:249:30)\n    at async OptionsDataService.updateOptionsData (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/services/OptionsDataService.js:200:33)\n    at async OptionsDataService.getOptionsData (file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/services/OptionsDataService.js:157:21)\n    at async file:///C:/Users/%D0%A4%D1%80%D0%BE%D0%BD%D1%82%D0%B5%D0%BD%D0%B4%D0%B5%D1%803000/projects/ai-trader/server/src/routes/options-data-routes.js:27:22"
   }
 }
+2025-12-28 17:13:58.214 [ERROR] POST /create 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931238158_zqdff87bf",
+  "method": "POST",
+  "path": "/create",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 500,
+  "duration": "55.45ms",
+  "body": {
+    "recommendationFigi": "TCS00A0ZZFS9",
+    "recommendationData": {
+      "figi": "TCS00A0ZZFS9",
+      "ticker": "LEAS",
+      "name": "Европлан",
+      "recommendation": "BUY",
+      "confidence": 0.41865002923748756,
+      "score": 0.6534701850360453,
+      "priceAtAnalysis": 562.1,
+      "price": 562.1
+    },
+    "options": {
+      "quantity": 5,
+      "strategyId": 2,
+      "action": "BUY",
+      "autoApprove": false
+    }
+  }
+}
+2025-12-28 17:14:04.710 [ERROR] POST /create 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931244659_xsdy4hasv",
+  "method": "POST",
+  "path": "/create",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 500,
+  "duration": "50.59ms",
+  "body": {
+    "recommendationFigi": "TCS00A0ZZFS9",
+    "recommendationData": {
+      "figi": "TCS00A0ZZFS9",
+      "ticker": "LEAS",
+      "name": "Европлан",
+      "recommendation": "BUY",
+      "confidence": 0.41865002923748756,
+      "score": 0.6534701850360453,
+      "priceAtAnalysis": 562.1,
+      "price": 562.1
+    },
+    "options": {
+      "quantity": 100,
+      "strategyId": 2,
+      "action": "BUY",
+      "autoApprove": false
+    }
+  }
+}
+2025-12-28 17:14:09.754 [ERROR] POST /create 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931249687_r0ntmdfk1",
+  "method": "POST",
+  "path": "/create",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 500,
+  "duration": "66.33ms",
+  "body": {
+    "recommendationFigi": "TCS00A0ZZFS9",
+    "recommendationData": {
+      "figi": "TCS00A0ZZFS9",
+      "ticker": "LEAS",
+      "name": "Европлан",
+      "recommendation": "BUY",
+      "confidence": 0.41865002923748756,
+      "score": 0.6534701850360453,
+      "priceAtAnalysis": 562.1,
+      "price": 562.1
+    },
+    "options": {
+      "quantity": 100,
+      "strategyId": 2,
+      "action": "BUY",
+      "autoApprove": false
+    }
+  }
+}
+2025-12-28 17:18:13.561 [ERROR] POST /create 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931492397_dbbtlqrcz",
+  "method": "POST",
+  "path": "/create",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 500,
+  "duration": "1163.40ms",
+  "body": {
+    "recommendationFigi": "TCS00A0ZZFS9",
+    "recommendationData": {
+      "figi": "TCS00A0ZZFS9",
+      "ticker": "LEAS",
+      "name": "Европлан",
+      "recommendation": "BUY",
+      "confidence": 0.41865002923748756,
+      "score": 0.6534701850360453,
+      "priceAtAnalysis": 562.1,
+      "price": 562.1
+    },
+    "options": {
+      "quantity": 100,
+      "strategyId": 1,
+      "action": "BUY",
+      "autoApprove": false
+    }
+  }
+}
+2025-12-28 17:18:30.246 [ERROR] POST /create 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931510185_h7brkkuwg",
+  "method": "POST",
+  "path": "/create",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 500,
+  "duration": "60.50ms",
+  "body": {
+    "recommendationFigi": "TCS00A0ZZFS9",
+    "recommendationData": {
+      "figi": "TCS00A0ZZFS9",
+      "ticker": "LEAS",
+      "name": "Европлан",
+      "recommendation": "BUY",
+      "confidence": 0.41865002923748756,
+      "score": 0.6534701850360453,
+      "priceAtAnalysis": 562.1,
+      "price": 562.1
+    },
+    "options": {
+      "quantity": 10000,
+      "strategyId": 1,
+      "action": "BUY",
+      "autoApprove": false
+    }
+  }
+}

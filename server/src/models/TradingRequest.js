@@ -387,4 +387,26 @@ TradingRequest.addHook('afterFind', (instances) => {
     });
 });
 
+// Ассоциации - устанавливаем напрямую после определения модели
+// Используем динамический импорт для избежания циклических зависимостей
+(async () => {
+    try {
+        const TradingStrategy = (await import('./TradingStrategy.js')).default;
+        const PositionStrategy = (await import('./PositionStrategy.js')).default;
+        
+        TradingRequest.belongsTo(TradingStrategy, {
+            foreignKey: 'strategyId',
+            as: 'strategy'
+        });
+        
+        TradingRequest.hasOne(PositionStrategy, {
+            foreignKey: 'positionId',
+            as: 'positionStrategy'
+        });
+    } catch (error) {
+        // Игнорируем ошибки при установке ассоциаций (могут быть циклические зависимости)
+        console.warn('⚠️ Could not set TradingRequest associations immediately:', error.message);
+    }
+})();
+
 export default TradingRequest;

@@ -22317,3 +22317,4054 @@
   "statusCode": 200,
   "duration": "0.11ms"
 }
+2025-12-28 16:32:41.508 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-28 16:32:41.645 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-28 16:32:41.673 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.676 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.871 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.871 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.872 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.874 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.874 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.875 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.877 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.879 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.881 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.881 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.883 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.884 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.887 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.887 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.889 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.890 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.891 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.896 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.899 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.900 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.902 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.908 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.910 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:41.911 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:32:50.631 [INFO] GET /summary 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928770627_1pc4lledi",
+  "method": "GET",
+  "path": "/summary",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "2.03ms",
+  "query": {
+    "period": "daily",
+    "days": "30"
+  }
+}
+2025-12-28 16:32:50.634 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928770624_stj4s8gpm",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "9.24ms"
+}
+2025-12-28 16:32:50.654 [INFO] GET /signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928770631_m0u6l4adf",
+  "method": "GET",
+  "path": "/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "21.80ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-28 16:32:50.704 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928770702_wswz2n9uj",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.65ms"
+}
+2025-12-28 16:32:50.714 [INFO] GET /latest 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928770704_3zgnziamc",
+  "method": "GET",
+  "path": "/latest",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "10.10ms",
+  "query": {
+    "country": "RUS"
+  }
+}
+2025-12-28 16:32:52.280 [INFO] GET / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928772265_2lvl05abh",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "14.82ms"
+}
+2025-12-28 16:32:52.287 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928772286_pcg3w9o03",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.76ms"
+}
+2025-12-28 16:32:52.296 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928772288_5d5o1l87q",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "7.74ms"
+}
+2025-12-28 16:32:57.542 [INFO] GET /summary 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928777541_0lxbfh86x",
+  "method": "GET",
+  "path": "/summary",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.30ms",
+  "query": {
+    "period": "daily",
+    "days": "30"
+  }
+}
+2025-12-28 16:32:57.545 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928777544_315gil5f1",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.23ms"
+}
+2025-12-28 16:32:57.552 [INFO] GET /signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928777540_rpkrurqhn",
+  "method": "GET",
+  "path": "/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "10.99ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-28 16:32:57.557 [INFO] GET /latest 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928777545_entsfobmm",
+  "method": "GET",
+  "path": "/latest",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "11.65ms",
+  "query": {
+    "country": "RUS"
+  }
+}
+2025-12-28 16:32:59.992 [INFO] POST /activate 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928779991_gforhseuf",
+  "method": "POST",
+  "path": "/activate",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.49ms"
+}
+2025-12-28 16:32:59.998 [INFO] POST /market-analysis 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928779997_owd4ks80e",
+  "method": "POST",
+  "path": "/market-analysis",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.30ms"
+}
+2025-12-28 16:33:21.149 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928801148_350n4noe6",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.89ms"
+}
+2025-12-28 16:33:51.144 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928831143_lxg49jvs9",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.05ms"
+}
+2025-12-28 16:34:21.140 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928861139_0c3oswgvt",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.91ms"
+}
+2025-12-28 16:34:51.135 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928891134_2m9yik1e1",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.86ms"
+}
+2025-12-28 16:35:21.138 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928921137_iczz46611",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.91ms"
+}
+2025-12-28 16:35:51.148 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928951147_vttr6cqr7",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.00ms"
+}
+2025-12-28 16:36:21.138 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766928981136_q5apovn9z",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.09ms"
+}
+2025-12-28 16:36:51.147 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929011145_z0eeafqwk",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.11ms"
+}
+2025-12-28 16:38:20.136 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929100134_552z0pp2d",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.00ms"
+}
+2025-12-28 16:39:20.144 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929160142_djqehb2xi",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.47ms"
+}
+2025-12-28 16:40:20.139 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929220137_2fmey3smf",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.00ms"
+}
+2025-12-28 16:41:20.138 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929280136_79r5nyzpd",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.09ms"
+}
+2025-12-28 16:42:20.135 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929340133_rtwghl69o",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.07ms"
+}
+2025-12-28 16:43:20.138 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929400137_ml7wz20g3",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.85ms"
+}
+2025-12-28 16:43:59.374 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-28 16:43:59.506 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-28 16:43:59.535 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.538 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.734 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.735 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.735 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.737 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.737 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.737 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.739 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.740 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.741 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.742 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.744 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.744 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.746 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.747 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.748 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.749 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.751 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.756 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.758 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.759 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.760 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.766 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.768 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:43:59.768 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:44:01.779 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929441774_wj9rxvtx6",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.07ms"
+}
+2025-12-28 16:44:04.017 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929444013_7icstgwvn",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.60ms"
+}
+2025-12-28 16:44:04.019 [INFO] GET /summary 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929444017_81xk2yvvs",
+  "method": "GET",
+  "path": "/summary",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.23ms",
+  "query": {
+    "period": "daily",
+    "days": "30"
+  }
+}
+2025-12-28 16:44:04.030 [INFO] GET /signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929444014_f0n30jkih",
+  "method": "GET",
+  "path": "/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "14.97ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-28 16:44:04.058 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929444057_o4vc1o6jf",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.58ms"
+}
+2025-12-28 16:44:04.067 [INFO] GET /latest 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929444059_zybx1nf5n",
+  "method": "GET",
+  "path": "/latest",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "7.87ms",
+  "query": {
+    "country": "RUS"
+  }
+}
+2025-12-28 16:44:06.076 [INFO] GET / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929446060_zoc1hb2rg",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "14.90ms"
+}
+2025-12-28 16:44:06.084 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929446083_obdpay7ky",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.50ms"
+}
+2025-12-28 16:44:06.087 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929446080_zfv5rmltv",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "6.96ms"
+}
+2025-12-28 16:44:06.722 [INFO] GET /summary 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929446722_fc2n77w5s",
+  "method": "GET",
+  "path": "/summary",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.33ms",
+  "query": {
+    "period": "daily",
+    "days": "30"
+  }
+}
+2025-12-28 16:44:06.726 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929446725_stmgth0vk",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.22ms"
+}
+2025-12-28 16:44:06.732 [INFO] GET /signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929446721_ul9v9r88h",
+  "method": "GET",
+  "path": "/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "11.08ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-28 16:44:06.738 [INFO] GET /latest 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929446726_9e8idxwh2",
+  "method": "GET",
+  "path": "/latest",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "11.10ms",
+  "query": {
+    "country": "RUS"
+  }
+}
+2025-12-28 16:44:07.655 [INFO] POST /activate 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929447654_kx1xkx0qe",
+  "method": "POST",
+  "path": "/activate",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.39ms"
+}
+2025-12-28 16:44:07.657 [INFO] POST /market-analysis 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929447656_yldk86x29",
+  "method": "POST",
+  "path": "/market-analysis",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.30ms"
+}
+2025-12-28 16:44:34.147 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929474145_9kskh2axd",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.97ms"
+}
+2025-12-28 16:45:04.145 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929504143_7fxv6qobx",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.75ms"
+}
+2025-12-28 16:45:34.136 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929534134_tzw2mx5ty",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.84ms"
+}
+2025-12-28 16:46:04.144 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929564142_fv9yrjprh",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.15ms"
+}
+2025-12-28 16:46:34.145 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929594143_ve5ra6dzs",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.95ms"
+}
+2025-12-28 16:47:04.143 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929624142_8fvz48cvb",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.10ms"
+}
+2025-12-28 16:48:20.140 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929700138_nvi9fahyc",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.10ms"
+}
+2025-12-28 16:49:20.145 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929760143_eam2eu80u",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.14ms"
+}
+2025-12-28 16:50:20.146 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929820144_k1nox4wgb",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.02ms"
+}
+2025-12-28 16:51:20.144 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929880142_m8f6agdx6",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.36ms"
+}
+2025-12-28 16:52:20.137 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766929940135_q1p4e46f1",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.80ms"
+}
+2025-12-28 16:56:24.795 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-28 16:56:24.935 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-28 16:56:24.967 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:24.970 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.176 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.177 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.177 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.179 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.179 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.180 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.182 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.183 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.184 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.185 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.187 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.187 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.189 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.189 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.191 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.192 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.194 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.199 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.200 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.201 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.203 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.210 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.212 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:25.213 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 16:56:31.553 [INFO] GET /summary 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930191550_4bengavdn",
+  "method": "GET",
+  "path": "/summary",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.68ms",
+  "query": {
+    "period": "daily",
+    "days": "30"
+  }
+}
+2025-12-28 16:56:31.555 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930191545_lhyg0q3ur",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "9.00ms"
+}
+2025-12-28 16:56:31.571 [INFO] GET /signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930191548_yii8rnuzi",
+  "method": "GET",
+  "path": "/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "22.61ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-28 16:56:31.581 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930191580_pk4m91i4h",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.65ms"
+}
+2025-12-28 16:56:31.590 [INFO] GET /latest 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930191581_knrsmyksb",
+  "method": "GET",
+  "path": "/latest",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "8.83ms",
+  "query": {
+    "country": "RUS"
+  }
+}
+2025-12-28 16:56:32.477 [INFO] POST /activate 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930192476_drk68a0t9",
+  "method": "POST",
+  "path": "/activate",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.36ms"
+}
+2025-12-28 16:56:32.479 [INFO] POST /market-analysis 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930192478_1emg6zgi7",
+  "method": "POST",
+  "path": "/market-analysis",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.19ms"
+}
+2025-12-28 16:57:02.136 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930222133_xpzl34le6",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.57ms"
+}
+2025-12-28 16:57:32.149 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930252146_7toxcdc57",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.36ms"
+}
+2025-12-28 16:58:02.138 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930282136_oi1fsmpo7",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.01ms"
+}
+2025-12-28 16:58:32.140 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930312139_8b2uarpx9",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.98ms"
+}
+2025-12-28 16:59:02.144 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930342142_vc7psvrl1",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.14ms"
+}
+2025-12-28 16:59:32.143 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930372141_6wigmhffv",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.01ms"
+}
+2025-12-28 17:00:20.137 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930420135_rzo1d9f2d",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.99ms"
+}
+2025-12-28 17:00:31.548 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930431547_5ur71ifcf",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.96ms"
+}
+2025-12-28 17:01:01.550 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930461548_614lqgzyt",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.10ms"
+}
+2025-12-28 17:01:32.141 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930492140_bpjn1pqj5",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.18ms"
+}
+2025-12-28 17:02:02.140 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930522139_qm0n45nkm",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.10ms"
+}
+2025-12-28 17:02:32.144 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930552142_60c66ixd8",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.79ms"
+}
+2025-12-28 17:03:02.138 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930582137_kz25hsqsj",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.82ms"
+}
+2025-12-28 17:04:20.146 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930660145_rziq0jc5o",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.02ms"
+}
+2025-12-28 17:05:05.490 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930705488_fv3c0ce4r",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.37ms"
+}
+2025-12-28 17:05:08.063 [INFO] GET /summary 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930708062_yeml4e5r0",
+  "method": "GET",
+  "path": "/summary",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.57ms",
+  "query": {
+    "period": "daily",
+    "days": "30"
+  }
+}
+2025-12-28 17:05:08.063 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930708060_eb8lwj9n1",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.58ms"
+}
+2025-12-28 17:05:08.083 [INFO] GET /signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930708061_hhqqzudpa",
+  "method": "GET",
+  "path": "/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "21.04ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-28 17:05:08.089 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930708088_0c0moa8va",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.37ms"
+}
+2025-12-28 17:05:08.097 [INFO] GET /latest 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930708089_o1vn5ip08",
+  "method": "GET",
+  "path": "/latest",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "7.50ms",
+  "query": {
+    "country": "RUS"
+  }
+}
+2025-12-28 17:05:11.271 [INFO] GET / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930711260_8gp01k7oh",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "10.73ms"
+}
+2025-12-28 17:05:11.281 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930711280_6576bzt54",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.41ms"
+}
+2025-12-28 17:05:11.370 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930711277_wo4vh323o",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "89.59ms"
+}
+2025-12-28 17:05:38.137 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930738136_nsila02ap",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.05ms"
+}
+2025-12-28 17:06:08.138 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930768137_q6spk3f3o",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.80ms"
+}
+2025-12-28 17:06:12.136 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930772135_odbc5ck1g",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.29ms"
+}
+2025-12-28 17:06:12.212 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930772134_tvemwow0e",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "74.80ms"
+}
+2025-12-28 17:06:38.144 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930798142_bkjuioepk",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.44ms"
+}
+2025-12-28 17:07:08.138 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930828137_o9vj8g2df",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.12ms"
+}
+2025-12-28 17:07:12.146 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930832146_7tc05yxlu",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.24ms"
+}
+2025-12-28 17:07:12.246 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930832143_75rmcfgc1",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "98.49ms"
+}
+2025-12-28 17:07:38.067 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930858065_tlmjtodpe",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.91ms"
+}
+2025-12-28 17:07:39.721 [INFO] GET /stock/TCS10A0JR514 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930859717_iyhm6s7kl",
+  "method": "GET",
+  "path": "/stock/TCS10A0JR514",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.23ms"
+}
+2025-12-28 17:07:39.728 [INFO] GET /stock/TCS10A0JR514/latest-recommendation 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930859719_kngjga8hg",
+  "method": "GET",
+  "path": "/stock/TCS10A0JR514/latest-recommendation",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "8.57ms",
+  "query": {
+    "maxAgeHours": "240"
+  }
+}
+2025-12-28 17:07:39.729 [INFO] GET /TCS10A0JR514 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930859716_jmrplautr",
+  "method": "GET",
+  "path": "/TCS10A0JR514",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "12.77ms",
+  "query": {
+    "limit": "20",
+    "days": "30"
+  }
+}
+2025-12-28 17:07:40.054 [INFO] GET /stock/TCS10A0JR514/signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930859718_i5sszkdrb",
+  "method": "GET",
+  "path": "/stock/TCS10A0JR514/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "335.36ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-28 17:07:43.464 [INFO] POST /train 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930863463_dpnc9oyoo",
+  "method": "POST",
+  "path": "/train",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.26ms",
+  "body": {
+    "figi": "TCS10A0JR514",
+    "options": {
+      "useNews": true
+    }
+  }
+}
+2025-12-28 17:07:44.216 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-28 17:07:44.234 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-28 17:07:45.363 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.366 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.605 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.606 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.606 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.610 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.610 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.610 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.614 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.615 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.618 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.619 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.623 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.624 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.627 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.627 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.632 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.633 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.634 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.639 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.645 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.646 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.650 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.658 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.660 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:07:45.661 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-28 17:08:08.142 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930888141_1p0oe4kp1",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.93ms"
+}
+2025-12-28 17:08:38.145 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930918143_eb51efyz2",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.34ms"
+}
+2025-12-28 17:09:20.148 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930960146_6nbqhg6g3",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.38ms"
+}
+2025-12-28 17:09:48.756 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930988754_bqeqguhqc",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.41ms"
+}
+2025-12-28 17:09:52.238 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930992133_lu8e8ncuv",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "104.22ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766930991108:215:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at updateFunctionComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14582:28)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15924:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766930991108",
+      "lineno": 215,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:09:52.122Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:09:52.345 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766930992136_dv18dw37y",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "208.10ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766930991108:215:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at updateFunctionComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14582:28)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15924:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766930991108",
+      "lineno": 215,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:09:52.127Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:03.156 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931003154_ceer21196",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.16ms"
+}
+2025-12-28 17:10:03.250 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931003160_lg4x6ifrt",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "89.19ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931002652:224:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931002652",
+      "lineno": 224,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:03.158Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:03.284 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931003179_9alldm8vx",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "103.85ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931002652:224:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19753:22)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)\n    at renderRootSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19116:15)\n    at recoverFromConcurrentError (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:18736:28)\n    at performConcurrentWorkOnRoot (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:18684:30)",
+      "filename": "http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2",
+      "lineno": 19413,
+      "colno": 13,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:03.173Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:03.317 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931003178_oxrdrrjti",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "138.23ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931002652:224:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931002652",
+      "lineno": 224,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:03.167Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:16.147 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931016146_sdhizcsw3",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.84ms"
+}
+2025-12-28 17:10:16.252 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931016162_t5r73zruo",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "89.14ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931016022:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931016022",
+      "lineno": 238,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:16.148Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:16.285 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931016164_22ywlatlp",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "120.18ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931016022:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931016022",
+      "lineno": 238,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:16.158Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:16.311 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931016169_6uqdg0022",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "141.76ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931016022:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19753:22)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)\n    at renderRootSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19116:15)\n    at recoverFromConcurrentError (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:18736:28)\n    at performConcurrentWorkOnRoot (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:18684:30)",
+      "filename": "http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2",
+      "lineno": 19413,
+      "colno": 13,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:16.166Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:28.164 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931028147_brfyufhaw",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "16.38ms"
+}
+2025-12-28 17:10:28.258 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931028165_ns0d7n3fg",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "91.91ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931027949:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931027949",
+      "lineno": 238,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:28.150Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:28.289 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931028166_t9lmies04",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "121.90ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931027949:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931027949",
+      "lineno": 238,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:28.157Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:28.378 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931028168_aujxq2qxh",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "208.66ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931027949:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19753:22)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)\n    at renderRootSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19116:15)\n    at recoverFromConcurrentError (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:18736:28)\n    at performConcurrentWorkOnRoot (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:18684:30)",
+      "filename": "http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2",
+      "lineno": 19413,
+      "colno": 13,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:28.162Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:36.387 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931036385_rw0m9sb00",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.37ms"
+}
+2025-12-28 17:10:36.395 [INFO] GET /stock/TCS10A0JR514 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931036388_iov4ra27q",
+  "method": "GET",
+  "path": "/stock/TCS10A0JR514",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "6.55ms"
+}
+2025-12-28 17:10:36.396 [INFO] GET /TCS10A0JR514 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931036389_g7hn55ex7",
+  "method": "GET",
+  "path": "/TCS10A0JR514",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "5.96ms",
+  "query": {
+    "limit": "20",
+    "days": "30"
+  }
+}
+2025-12-28 17:10:36.414 [INFO] GET /stock/TCS10A0JR514/latest-recommendation 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931036392_ebx1d9jlk",
+  "method": "GET",
+  "path": "/stock/TCS10A0JR514/latest-recommendation",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "21.40ms",
+  "query": {
+    "maxAgeHours": "240"
+  }
+}
+2025-12-28 17:10:36.703 [INFO] GET /stock/TCS10A0JR514/signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931036391_83frripx7",
+  "method": "GET",
+  "path": "/stock/TCS10A0JR514/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "311.00ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-28 17:10:36.810 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931036713_5r765re8b",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "96.85ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931027949:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931027949",
+      "lineno": 238,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:36.710Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:36.845 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931036721_9dyjm871r",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "123.08ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931027949:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931027949",
+      "lineno": 238,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:36.719Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:36.876 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931036726_i6wfgyial",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "149.31ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931027949:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19753:22)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)\n    at renderRootSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19116:15)\n    at recoverFromConcurrentError (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:18736:28)\n    at performConcurrentWorkOnRoot (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:18684:30)",
+      "filename": "http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2",
+      "lineno": 19413,
+      "colno": 13,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:36.725Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:37.349 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931037347_hrp4euxl1",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.82ms"
+}
+2025-12-28 17:10:37.614 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931037361_cfl9dx397",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "252.52ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931037256:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931037256",
+      "lineno": 238,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:37.350Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:37.648 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931037362_fqktuauyy",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "286.09ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931037256:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at HTMLUnknownElement.callCallback2 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3674:22)\n    at Object.invokeGuardedCallbackDev (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3699:24)\n    at invokeGuardedCallback (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:3733:39)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19765:15)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)",
+      "filename": "http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931037256",
+      "lineno": 238,
+      "colno": 24,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:37.357Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:37.695 [INFO] POST / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931037363_7gi3vp1ng",
+  "method": "POST",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "331.34ms",
+  "body": {
+    "error": "Uncaught ReferenceError: handleBuyClick is not defined",
+    "context": {
+      "stack": "ReferenceError: handleBuyClick is not defined\n    at BuyButton (http://localhost:3000/src/components/recommendations/BuyButton.tsx?t=1766931037256:238:24)\n    at renderWithHooks (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:11548:26)\n    at mountIndeterminateComponent (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:14926:21)\n    at beginWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:15914:22)\n    at beginWork$1 (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19753:22)\n    at performUnitOfWork (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19198:20)\n    at workLoopSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19137:13)\n    at renderRootSync (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:19116:15)\n    at recoverFromConcurrentError (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:18736:28)\n    at performConcurrentWorkOnRoot (http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2:18684:30)",
+      "filename": "http://localhost:3000/node_modules/.vite/deps/chunk-NUMECXU6.js?v=48900fa2",
+      "lineno": 19413,
+      "colno": 13,
+      "type": "javascript",
+      "timestamp": "2025-12-28T14:10:37.361Z",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "url": "http://localhost:3000/stock/TCS10A0JR514"
+    },
+    "severity": "error"
+  }
+}
+2025-12-28 17:10:46.160 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931046144_2zovodvsn",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "15.51ms"
+}
+2025-12-28 17:11:17.146 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931077144_k8062yl9y",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.96ms"
+}
+2025-12-28 17:11:47.139 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931107137_s22wqiiia",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.92ms"
+}
+2025-12-28 17:12:17.135 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931137133_zbsydey42",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.36ms"
+}
+2025-12-28 17:12:47.147 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931167145_o1v6s2sv4",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.86ms"
+}
+2025-12-28 17:13:17.148 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931197147_mnsy2lpvn",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.86ms"
+}
+2025-12-28 17:13:32.902 [INFO] GET / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931212889_xk1y0wyq4",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "12.03ms"
+}
+2025-12-28 17:13:32.910 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931212909_k40u6c5ux",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.54ms"
+}
+2025-12-28 17:13:33.000 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931212908_4pc7m4jq6",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "89.42ms"
+}
+2025-12-28 17:13:34.946 [INFO] GET / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931214942_cwaq9pg71",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.79ms"
+}
+2025-12-28 17:13:38.765 [INFO] GET / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931218762_nl10xsuzk",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.04ms"
+}
+2025-12-28 17:13:43.101 [INFO] GET /stock/TCS00A0ZZFS9/latest-recommendation 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931223099_7twv3k3k3",
+  "method": "GET",
+  "path": "/stock/TCS00A0ZZFS9/latest-recommendation",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.85ms",
+  "query": {
+    "maxAgeHours": "240"
+  }
+}
+2025-12-28 17:13:43.102 [INFO] GET /TCS00A0ZZFS9 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931223098_czu2fvfmi",
+  "method": "GET",
+  "path": "/TCS00A0ZZFS9",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.86ms",
+  "query": {
+    "limit": "20",
+    "days": "30"
+  }
+}
+2025-12-28 17:13:43.103 [INFO] GET /stock/TCS00A0ZZFS9 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931223096_1uv0isa26",
+  "method": "GET",
+  "path": "/stock/TCS00A0ZZFS9",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "5.88ms"
+}
+2025-12-28 17:13:43.499 [INFO] GET /stock/TCS00A0ZZFS9/signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931223098_ga0e7rtqe",
+  "method": "GET",
+  "path": "/stock/TCS00A0ZZFS9/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "400.73ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-28 17:13:46.150 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931226148_5h7bqgjoi",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.91ms"
+}
+2025-12-28 17:13:48.470 [INFO] POST /analyze-single-instrument 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931226355_ti93h40pp",
+  "method": "POST",
+  "path": "/analyze-single-instrument",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "2113.91ms",
+  "body": {
+    "figi": "TCS00A0ZZFS9"
+  }
+}
+2025-12-28 17:13:48.470 [WARN] Slow request: POST /analyze-single-instrument
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931226355_ti93h40pp",
+  "method": "POST",
+  "path": "/analyze-single-instrument",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "duration": "2113.91ms",
+  "threshold": "1000ms"
+}
+2025-12-28 17:13:54.754 [INFO] GET / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931234744_boicpqk9o",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "9.75ms"
+}
+2025-12-28 17:13:58.214 [ERROR] POST /create 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931238158_zqdff87bf",
+  "method": "POST",
+  "path": "/create",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 500,
+  "duration": "55.45ms",
+  "body": {
+    "recommendationFigi": "TCS00A0ZZFS9",
+    "recommendationData": {
+      "figi": "TCS00A0ZZFS9",
+      "ticker": "LEAS",
+      "name": "Европлан",
+      "recommendation": "BUY",
+      "confidence": 0.41865002923748756,
+      "score": 0.6534701850360453,
+      "priceAtAnalysis": 562.1,
+      "price": 562.1
+    },
+    "options": {
+      "quantity": 5,
+      "strategyId": 2,
+      "action": "BUY",
+      "autoApprove": false
+    }
+  }
+}
+2025-12-28 17:14:01.569 [INFO] GET / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931241566_ghi1wnapp",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "2.70ms"
+}
+2025-12-28 17:14:04.710 [ERROR] POST /create 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931244659_xsdy4hasv",
+  "method": "POST",
+  "path": "/create",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 500,
+  "duration": "50.59ms",
+  "body": {
+    "recommendationFigi": "TCS00A0ZZFS9",
+    "recommendationData": {
+      "figi": "TCS00A0ZZFS9",
+      "ticker": "LEAS",
+      "name": "Европлан",
+      "recommendation": "BUY",
+      "confidence": 0.41865002923748756,
+      "score": 0.6534701850360453,
+      "priceAtAnalysis": 562.1,
+      "price": 562.1
+    },
+    "options": {
+      "quantity": 100,
+      "strategyId": 2,
+      "action": "BUY",
+      "autoApprove": false
+    }
+  }
+}
+2025-12-28 17:14:09.754 [ERROR] POST /create 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931249687_r0ntmdfk1",
+  "method": "POST",
+  "path": "/create",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 500,
+  "duration": "66.33ms",
+  "body": {
+    "recommendationFigi": "TCS00A0ZZFS9",
+    "recommendationData": {
+      "figi": "TCS00A0ZZFS9",
+      "ticker": "LEAS",
+      "name": "Европлан",
+      "recommendation": "BUY",
+      "confidence": 0.41865002923748756,
+      "score": 0.6534701850360453,
+      "priceAtAnalysis": 562.1,
+      "price": 562.1
+    },
+    "options": {
+      "quantity": 100,
+      "strategyId": 2,
+      "action": "BUY",
+      "autoApprove": false
+    }
+  }
+}
+2025-12-28 17:14:17.135 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931257133_5le8syd12",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.78ms"
+}
+2025-12-28 17:14:47.141 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931287140_c3o8dhp4q",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.92ms"
+}
+2025-12-28 17:15:17.139 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931317138_zm764x6pl",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.02ms"
+}
+2025-12-28 17:16:20.145 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931380143_r1krzlpxj",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.05ms"
+}
+2025-12-28 17:17:20.146 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931440144_7wyf4rsiy",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.26ms"
+}
+2025-12-28 17:18:03.580 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931483578_mou2gljzj",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.58ms"
+}
+2025-12-28 17:18:13.561 [ERROR] POST /create 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931492397_dbbtlqrcz",
+  "method": "POST",
+  "path": "/create",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 500,
+  "duration": "1163.40ms",
+  "body": {
+    "recommendationFigi": "TCS00A0ZZFS9",
+    "recommendationData": {
+      "figi": "TCS00A0ZZFS9",
+      "ticker": "LEAS",
+      "name": "Европлан",
+      "recommendation": "BUY",
+      "confidence": 0.41865002923748756,
+      "score": 0.6534701850360453,
+      "priceAtAnalysis": 562.1,
+      "price": 562.1
+    },
+    "options": {
+      "quantity": 100,
+      "strategyId": 1,
+      "action": "BUY",
+      "autoApprove": false
+    }
+  }
+}
+2025-12-28 17:18:13.561 [WARN] Slow request: POST /create
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931492397_dbbtlqrcz",
+  "method": "POST",
+  "path": "/create",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "duration": "1163.40ms",
+  "threshold": "1000ms"
+}
+2025-12-28 17:18:16.143 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931496142_b60vzll5n",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.75ms"
+}
+2025-12-28 17:18:30.245 [ERROR] POST /create 500
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931510185_h7brkkuwg",
+  "method": "POST",
+  "path": "/create",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 500,
+  "duration": "60.50ms",
+  "body": {
+    "recommendationFigi": "TCS00A0ZZFS9",
+    "recommendationData": {
+      "figi": "TCS00A0ZZFS9",
+      "ticker": "LEAS",
+      "name": "Европлан",
+      "recommendation": "BUY",
+      "confidence": 0.41865002923748756,
+      "score": 0.6534701850360453,
+      "priceAtAnalysis": 562.1,
+      "price": 562.1
+    },
+    "options": {
+      "quantity": 10000,
+      "strategyId": 1,
+      "action": "BUY",
+      "autoApprove": false
+    }
+  }
+}
+2025-12-28 17:18:36.722 [INFO] GET / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931516710_3c53fvw3j",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "11.58ms"
+}
+2025-12-28 17:18:36.731 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931516731_pfsjf6hpr",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.18ms"
+}
+2025-12-28 17:18:36.822 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931516729_alyykgduw",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "89.07ms"
+}
+2025-12-28 17:18:46.315 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931526312_4anifpz8t",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "2.05ms"
+}
+2025-12-28 17:18:46.343 [INFO] GET / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931526313_ocj7uypgf",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "29.55ms"
+}
+2025-12-28 17:18:46.367 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931526366_d7wx7t5u3",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.29ms"
+}
+2025-12-28 17:18:46.459 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931526364_7yjrrkjmm",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "89.14ms"
+}
+2025-12-28 17:19:17.137 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931557135_mzczbx5an",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.12ms"
+}
+2025-12-28 17:19:33.813 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931573812_3d9y60mdq",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.21ms"
+}
+2025-12-28 17:19:33.814 [INFO] GET /recommendations/type/BUY 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931573811_ssokscemx",
+  "method": "GET",
+  "path": "/recommendations/type/BUY",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "2.79ms"
+}
+2025-12-28 17:19:35.660 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931575660_8a21e5o2n",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.25ms"
+}
+2025-12-28 17:19:35.696 [INFO] GET /recommendations/type/HOLD 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931575659_qt81dg9g8",
+  "method": "GET",
+  "path": "/recommendations/type/HOLD",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "35.44ms"
+}
+2025-12-28 17:19:40.109 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931580109_by8tlh57r",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.29ms"
+}
+2025-12-28 17:19:40.207 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931580107_3cn89knl8",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "95.80ms"
+}
+2025-12-28 17:19:44.011 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931584011_4ekij94m6",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.18ms"
+}
+2025-12-28 17:19:44.093 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931584010_yk97b1i1b",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "79.36ms"
+}
+2025-12-28 17:19:46.314 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931586312_st3cs0xgz",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.11ms"
+}
+2025-12-28 17:19:46.367 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931586366_9xynj1l3d",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.15ms"
+}
+2025-12-28 17:19:46.442 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931586365_wg8doi4qo",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "72.13ms"
+}
+2025-12-28 17:19:46.691 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931586691_um0xwybbc",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.17ms"
+}
+2025-12-28 17:19:46.769 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931586690_uxtneko5n",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "74.13ms"
+}
+2025-12-28 17:19:48.410 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931588409_cmypyrxsu",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.17ms"
+}
+2025-12-28 17:19:48.487 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931588408_5n71up705",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "73.97ms"
+}
+2025-12-28 17:19:49.647 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931589647_duy7n16jz",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.16ms"
+}
+2025-12-28 17:19:49.718 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931589646_puxmiznr4",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "67.85ms"
+}
+2025-12-28 17:20:17.139 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931617137_3cm8gn8k9",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.12ms"
+}
+2025-12-28 17:20:47.145 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931647144_7sjqxr1hc",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.81ms"
+}
+2025-12-28 17:20:47.147 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931647147_d8apwikwd",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.12ms"
+}
+2025-12-28 17:20:47.237 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931647146_0m4hkhja8",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "86.64ms"
+}
+2025-12-28 17:21:17.137 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931677135_yekmzsqbc",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.34ms"
+}
+2025-12-28 17:21:47.146 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931707145_78etkkgl1",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.02ms"
+}
+2025-12-28 17:21:47.149 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931707148_88lgbejtq",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.25ms"
+}
+2025-12-28 17:21:47.248 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931707147_u9or1gdfo",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "96.52ms"
+}
+2025-12-28 17:22:20.145 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931740143_oulf4lgdx",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.15ms"
+}
+2025-12-28 17:22:47.137 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931767136_3eckjcrbe",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.26ms"
+}
+2025-12-28 17:22:47.231 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931767135_ts7lcneci",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "91.11ms"
+}
+2025-12-28 17:23:20.155 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931800153_kqu3c91mb",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.98ms"
+}
+2025-12-28 17:23:47.144 [INFO] GET /positions 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931827144_ymxq74zvu",
+  "method": "GET",
+  "path": "/positions",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.15ms"
+}
+2025-12-28 17:23:47.145 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931827142_0lkonclne",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.07ms"
+}
+2025-12-28 17:23:47.215 [INFO] GET /recommendations 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931827143_dpsulgbpj",
+  "method": "GET",
+  "path": "/recommendations",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "68.95ms"
+}
+2025-12-28 17:24:06.890 [INFO] GET / 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931846883_ejuewnem1",
+  "method": "GET",
+  "path": "/",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "6.61ms"
+}
+2025-12-28 17:24:12.869 [INFO] GET /summary 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931852868_q32bsue9m",
+  "method": "GET",
+  "path": "/summary",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.59ms",
+  "query": {
+    "period": "daily",
+    "days": "30"
+  }
+}
+2025-12-28 17:24:12.872 [INFO] GET /signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931852867_eciq7e6mf",
+  "method": "GET",
+  "path": "/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "5.29ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-28 17:24:12.891 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931852890_jnt93g9bv",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.40ms"
+}
+2025-12-28 17:24:12.900 [INFO] GET /latest 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931852892_9p80czpuw",
+  "method": "GET",
+  "path": "/latest",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "7.79ms",
+  "query": {
+    "country": "RUS"
+  }
+}
+2025-12-28 17:24:15.383 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931855383_qzdrbu282",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.27ms"
+}
+2025-12-28 17:24:15.385 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931855384_gkf63sc65",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.42ms"
+}
+2025-12-28 17:24:15.386 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931855385_tbz3hi59u",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.55ms"
+}
+2025-12-28 17:24:15.387 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931855384_2yw5xmvwr",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "2.60ms"
+}
+2025-12-28 17:24:15.392 [INFO] GET /settings 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931855382_trlk0b74m",
+  "method": "GET",
+  "path": "/settings",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "10.10ms"
+}
+2025-12-28 17:24:16.314 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931856313_mjw4yxv3y",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.78ms"
+}
+2025-12-28 17:24:17.130 [INFO] GET /settings 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931857122_bc3j5jego",
+  "method": "GET",
+  "path": "/settings",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "6.79ms"
+}
+2025-12-28 17:24:19.750 [WARN] Rate limit exceeded
+{
+  "service": "RateLimiter",
+  "environment": "development",
+  "ip": "::1",
+  "path": "/batch-train-all",
+  "method": "POST",
+  "count": 83
+}
+2025-12-28 17:24:19.750 [WARN] POST /batch-train-all 429
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1766931859749_lllibgwug",
+  "method": "POST",
+  "path": "/batch-train-all",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+  "statusCode": 429,
+  "duration": "0.43ms",
+  "body": {
+    "epochs": 50,
+    "batchSize": 16
+  }
+}

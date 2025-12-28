@@ -32,6 +32,16 @@ async function performPortfolioAnalysis() {
         const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
         const StrategyAllocationService = (await import('../services/StrategyAllocationService.js')).default;
         const { Op } = await import('sequelize');
+        
+        // Устанавливаем ассоциации для моделей в worker'е
+        // Это необходимо, так как ассоциации могут не быть установлены в worker'е
+        try {
+            const { ensureAssociations } = await import('../utils/ensureAssociations.js');
+            await ensureAssociations();
+            console.log('✅ [Worker] All associations ensured');
+        } catch (assocError) {
+            console.warn('⚠️ [Worker] Could not ensure associations:', assocError.message);
+        }
 
         // Проверяем глобальную инициализацию перед локальной
         const isNeuralNetworkGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('NeuralNetworkService');

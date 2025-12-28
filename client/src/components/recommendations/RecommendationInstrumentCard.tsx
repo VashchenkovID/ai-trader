@@ -4,6 +4,7 @@ import { Button } from '../ui';
 import { Badge } from '../ui';
 import { useNavigate } from 'react-router-dom';
 import { translateRecommendation } from '../../utils/recommendationTranslator';
+import BuyButton from './BuyButton';
 import './RecommendationInstrumentCard.css';
 
 interface Recommendation {
@@ -488,46 +489,47 @@ export const RecommendationInstrumentCard: React.FC<RecommendationInstrumentCard
       {/* Футер с действиями */}
       <div className="recommendation-instrument-card-footer" onClick={(e) => e.stopPropagation()}>
         <div className="recommendation-instrument-card-footer-actions">
-          {recommendation.recommendation === 'BUY' && (
-            <Button
-              variant="success"
-              size="md"
-              onClick={handleBuy}
-              loading={loading}
-              icon={<span>💰</span>}
-              fullWidth
-            >
-              Купить
-            </Button>
+          {/* Используем BuyButton для покупки и продажи */}
+          {(recommendation.recommendation === 'BUY' || recommendation.recommendation === 'SELL' || recommendation.portfolioPosition) && (
+            <div style={{ width: '100%' }}>
+              <BuyButton
+                rowData={recommendation}
+                mode={recommendation.portfolioPosition ? 'sell' : 'buy'}
+                portfolioPosition={recommendation.portfolioPosition ? {
+                  size: recommendation.portfolioPosition.size,
+                  entryPrice: recommendation.portfolioPosition.entryPrice
+                } : undefined}
+                onRequestCreated={() => {
+                  if (recommendation.portfolioPosition && onSell) {
+                    onSell(recommendation.figi);
+                  } else if (onBuy) {
+                    onBuy(recommendation.figi);
+                  }
+                }}
+                onModalOpen={() => {
+                  // Сброс лоадера при открытии модалки
+                }}
+              />
+            </div>
           )}
-          {recommendation.recommendation === 'SELL' && (
+          <div style={{ display: 'flex', gap: '8px', width: '100%', marginTop: '8px' }}>
             <Button
-              variant="error"
-              size="md"
-              onClick={handleSell}
-              loading={loading}
-              icon={<span>💸</span>}
-              fullWidth
+              variant="ghost"
+              size="sm"
+              onClick={handleDetails}
+              icon={<span>🔍</span>}
             >
-              Продать
+              Детали
             </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDetails}
-            icon={<span>🔍</span>}
-          >
-            Детали
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleWatchlist}
-            icon={<span>⭐</span>}
-          >
-            В наблюдение
-          </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleWatchlist}
+              icon={<span>⭐</span>}
+            >
+              В наблюдение
+            </Button>
+          </div>
         </div>
         <div className="recommendation-instrument-card-footer-date">
           <span>Обновлено: {new Date(recommendation.analysisDate).toLocaleString('ru-RU')}</span>

@@ -4,17 +4,29 @@ import MetaLearningService from '../services/MetaLearningService.js';
 import ReinforcementLearningService from '../services/ReinforcementLearningService.js';
 import ServiceManager from '../services/ServiceManager.js';
 import OptimizedTelegramService from '../services/OptimizedTelegramService.js';
-import { heavyOperationLimiter } from '../middleware/rateLimiter.js';
+import { heavyOperationLimiter, batchTrainLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
-// Применяем строгие лимиты к тяжелым операциям обучения
-router.use(heavyOperationLimiter);
+// Middleware для применения лимитера ко всем роутам, кроме batch-train-all
+const applyHeavyLimiter = (req, res, next) => {
+    // Пропускаем batch-train-all, для него используется отдельный лимитер
+    // Проверяем как полный путь, так и базовый путь
+    const path = req.path || req.url || '';
+    if (path.includes('/batch-train-all') || path.endsWith('/batch-train-all')) {
+        return next();
+    }
+    return heavyOperationLimiter(req, res, next);
+};
+
+// Применяем строгие лимиты к тяжелым операциям обучения (кроме batch-train-all)
+router.use(applyHeavyLimiter);
 
 /**
  * Пакетное обучение всех нейросетей
+ * Использует отдельный лимитер с более мягкими ограничениями
  */
-router.post('/batch-train-all', async (req, res) => {
+router.post('/batch-train-all', batchTrainLimiter, async (req, res) => {
     try {
         const { epochs = 10, batchSize = 32 } = req.body;
         
