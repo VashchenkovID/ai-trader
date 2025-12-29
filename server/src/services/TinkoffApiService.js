@@ -1048,6 +1048,90 @@ class TinkoffApiService {
     }
 
     /**
+     * Получение списка активов через GetAssets
+     * @param {Object} options - Опции запроса
+     * @param {string} options.instrumentType - Тип инструмента (INSTRUMENT_TYPE_SHARE, INSTRUMENT_TYPE_BOND и т.д.)
+     * @param {string} options.instrumentStatus - Статус инструмента (INSTRUMENT_STATUS_BASE, INSTRUMENT_STATUS_ALL)
+     * @returns {Promise<Array>} - Массив активов
+     */
+    async getAssets(options = {}) {
+        try {
+            const {
+                instrumentType = 'INSTRUMENT_TYPE_UNSPECIFIED',
+                instrumentStatus = 'INSTRUMENT_STATUS_BASE'
+            } = options;
+
+            const response = await this.makeRequest(
+                '/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssets',
+                {
+                    instrumentType,
+                    instrumentStatus
+                }
+            );
+
+            return response.assets || [];
+        } catch (error) {
+            console.error('❌ Ошибка получения активов:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Получение фундаментальных показателей по активам
+     * @param {Array<string>} assetIdentifiers - Массив идентификаторов активов (asset_uid, до 100 шт)
+     * @returns {Promise<Array>} - Массив объектов с фундаментальными данными
+     */
+    async getAssetFundamentals(assetIdentifiers) {
+        try {
+            // Валидация входных данных
+            if (!Array.isArray(assetIdentifiers)) {
+                // Если передан один идентификатор как строка, преобразуем в массив
+                if (typeof assetIdentifiers === 'string') {
+                    assetIdentifiers = [assetIdentifiers];
+                } else {
+                    console.warn('⚠️ getAssetFundamentals: assetIdentifiers должен быть массивом или строкой');
+                    return [];
+                }
+            }
+
+            // Фильтруем только валидные строки
+            const validIdentifiers = assetIdentifiers.filter(id => typeof id === 'string' && id.length > 0);
+            
+            if (validIdentifiers.length === 0) {
+                console.warn('⚠️ getAssetFundamentals: нет валидных идентификаторов активов');
+                return [];
+            }
+
+            // API принимает до 100 активов за раз
+            if (validIdentifiers.length > 100) {
+                console.warn(`⚠️ Слишком много активов (${validIdentifiers.length}), будет выполнено несколько запросов`);
+                const results = [];
+                for (let i = 0; i < validIdentifiers.length; i += 100) {
+                    const batch = validIdentifiers.slice(i, i + 100);
+                    const batchResults = await this.getAssetFundamentals(batch);
+                    results.push(...batchResults);
+                }
+                return results;
+            }
+
+            // Формируем запрос - передаем идентификаторы активов
+            // Request body: { "assets": ["asset_uid1", "asset_uid2", ...] }
+            const response = await this.makeRequest(
+                '/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssetFundamentals',
+                {
+                    assets: validIdentifiers
+                }
+            );
+
+            // Ответ содержит массив fundamentals
+            return response.fundamentals || [];
+        } catch (error) {
+            console.error('❌ Ошибка получения фундаментальных данных:', error);
+            return [];
+        }
+    }
+
+    /**
      * Получение торговых сигналов для инструмента (альтернативный вариант с instrumentId)
      * @param {string} figi - FIGI инструмента
      * @returns {Promise<Object>} - Объект с сигналами

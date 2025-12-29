@@ -2,6 +2,7 @@ import CacheService from './CacheService.js';
 import TinkoffApiService from './TinkoffApiService.js';
 import DividendService from './DividendService.js';
 import MacroDataService from './MacroDataService.js';
+import FundamentalDataService from './FundamentalDataService.js';
 // import CompanySyncService from './CompanySyncService.js'; // Временно отключено
 // import PortfolioSyncService from './PortfolioSyncService.js'; // Временно отключено
 
@@ -29,6 +30,10 @@ class OptimizedDataService {
             // Инициализируем MacroDataService для работы с макро-фичами
             if (!MacroDataService.isInitialized) {
                 await MacroDataService.initialize();
+            }
+            // Инициализируем FundamentalDataService для работы с фундаментальными данными
+            if (!FundamentalDataService.isInitialized) {
+                await FundamentalDataService.initialize();
             }
             // TinkoffApiService не требует инициализации - это экземпляр
             // await DividendService.initialize(); // Проверим, есть ли у DividendService метод initialize
@@ -209,6 +214,11 @@ class OptimizedDataService {
             // Макроэкономические фичи
             const macroFeatures = await this.getMacroFeatures(window[window.length - 1].time);
             
+            // Фундаментальные фичи (P/E, P/B, EV/EBITDA, ROE, Debt/EBITDA, Operating Margin, Net Margin)
+            const fundamentalFeatures = figi 
+                ? await FundamentalDataService.getFundamentalFeatures(figi, window[window.length - 1].time)
+                : new Array(7).fill(0);
+            
             // Объединяем все фичи
             features.push(...normalizedPrices);
             features.push(...normalizedVolumes);
@@ -219,10 +229,11 @@ class OptimizedDataService {
             features.push(...telegramFeatures);
             features.push(...signalsFeatures);
             features.push(...macroFeatures);
+            features.push(...fundamentalFeatures);
             
             // Логирование и исправление размеров фичей
-            // Упрощенный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) + 8 (macro) = 38
-            const expectedSize = 38;
+            // Полный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) + 8 (macro) + 7 (fundamental) = 45
+            const expectedSize = 45;
             if (features.length !== expectedSize) {
                 console.warn(`⚠️ Unexpected feature size: ${features.length}, expected ${expectedSize}`);
                 
@@ -244,8 +255,8 @@ class OptimizedDataService {
         } catch (error) {
             console.error('Error creating feature vector:', error);
             // Возвращаем нулевой вектор при ошибке с правильным размером
-            // Упрощенный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 + 8 = 38
-            return new Array(38).fill(0);
+            // Полный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 + 8 + 7 = 45
+            return new Array(45).fill(0);
         }
     }
 

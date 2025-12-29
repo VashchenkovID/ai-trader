@@ -24,6 +24,8 @@ import MacroIndicator from '../models/MacroIndicator.js';
 import PortfolioRebalancing from '../models/PortfolioRebalancing.js';
 import InstrumentStats from '../models/InstrumentStats.js';
 import CorrelationCache from '../models/CorrelationCache.js';
+import FundamentalData from '../models/FundamentalData.js';
+import Asset from '../models/Asset.js';
 import PortfolioAnalysis from '../models/PortfolioAnalysis.js';
 import TrailingStop from '../models/TrailingStop.js';
 import { Op } from 'sequelize';
@@ -131,6 +133,18 @@ async function clearTestData() {
     console.log(`   ✅ Удалено ${deletedInstrumentStats} записей`);
     totalDeleted += deletedInstrumentStats;
     
+    // 10.1. Активы
+    console.log('📊 Очистка тестовых активов...');
+    const deletedAssets = await Asset.destroy({ where: testFigiConditions });
+    console.log(`   ✅ Удалено ${deletedAssets} записей`);
+    totalDeleted += deletedAssets;
+    
+    // 10.2. Фундаментальные данные
+    console.log('📊 Очистка тестовых фундаментальных данных...');
+    const deletedFundamentalData = await FundamentalData.destroy({ where: testFigiConditions });
+    console.log(`   ✅ Удалено ${deletedFundamentalData} записей`);
+    totalDeleted += deletedFundamentalData;
+    
     // 11. Кеш корреляций (по figi1 или figi2)
     console.log('🔗 Очистка тестового кеша корреляций...');
     const deletedCorrelations = await CorrelationCache.destroy({
@@ -181,6 +195,16 @@ async function clearDatabase() {
     console.log('📊 Очистка макроиндикаторов...');
     await MacroIndicator.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Макроиндикаторы очищены');
+    
+    // 1.1.1. Активы (независимая таблица)
+    console.log('📊 Очистка активов...');
+    await Asset.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    console.log('   ✅ Активы очищены');
+    
+    // 1.1.2. Фундаментальные данные (независимая таблица)
+    console.log('📊 Очистка фундаментальных данных...');
+    await FundamentalData.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    console.log('   ✅ Фундаментальные данные очищены');
     
     // 1.2. История ребалансировок портфеля (независимая таблица)
     console.log('🔄 Очистка истории ребалансировок портфеля...');

@@ -13,6 +13,9 @@
     "migrate:instrument-stats": "node migrations/create-instrument-stats-table.js",
     "migrate:correlation-cache": "node migrations/create-correlation-cache-table.js",
     "migrate:entry-optimization": "node migrations/add-entry-optimization-column.js",
+    "migrate:fundamental-data": "node migrations/create-fundamental-data-table.js",
+    "migrate:assets": "node migrations/create-assets-table.js",
+    "migrate:assets-simplify": "node migrations/migrate-assets-table-simplify.js",
     "start:optimized": "node src/app-optimized.js",
     "start:backup": "node src/app-backup.js",
     "cleanup": "node cleanup-unused-files.js",
@@ -27,7 +30,8 @@
     "test:model-weighting": "node test-model-weighting.js",
     "test:diversification": "node test-diversification.js",
     "test:migration": "node test-migration.js",
-    "test:data-cleanup": "node test-data-cleanup.js"
+    "test:data-cleanup": "node test-data-cleanup.js",
+    "test:fundamental-data": "node test-fundamental-data.js"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.15.0",

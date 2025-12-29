@@ -66,6 +66,8 @@ class ServiceManager {
             await this.initializeService('PortfolioOptimizer', () => import('./PortfolioOptimizer.js'));
             await this.initializeService('PortfolioRebalancingService', () => import('./PortfolioRebalancingService.js'));
             await this.initializeService('MacroDataService', () => import('./MacroDataService.js'));
+            await this.initializeService('FundamentalDataService', () => import('./FundamentalDataService.js'));
+            await this.initializeService('AssetSyncService', () => import('./AssetSyncService.js'));
             await this.initializeService('DividendService', () => import('./DividendService.js'));
             await this.initializeService('ModelSaveService', () => import('./ModelSaveService.js'));
             await this.initializeService('NewsAnalysisService', () => import('./NewsAnalysisService.js'));

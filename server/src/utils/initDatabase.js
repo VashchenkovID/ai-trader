@@ -25,6 +25,8 @@ import BacktestResult from '../models/BacktestResult.js';
 import MacroIndicator from '../models/MacroIndicator.js';
 import PortfolioRebalancing from '../models/PortfolioRebalancing.js';
 import CorrelationCache from '../models/CorrelationCache.js';
+import FundamentalData from '../models/FundamentalData.js';
+import Asset from '../models/Asset.js';
 import PortfolioAnalysis from '../models/PortfolioAnalysis.js';
 import TrailingStop from '../models/TrailingStop.js';
 import TradingNotificationSettings from '../models/TradingNotificationSettings.js';
@@ -295,6 +297,39 @@ export async function initDatabase() {
             console.log('✅ Таблица анализа портфеля создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы анализа портфеля:', syncError);
+        }
+        
+        // Создаем таблицу активов
+        console.log('📊 Создание таблицы активов...');
+        try {
+            await Asset.sync({ force: false });
+            // Создаем GIN индекс для JSONB поиска по apiData, если его еще нет
+            await sequelize.query(`
+                CREATE INDEX IF NOT EXISTS assets_api_data_gin_idx ON assets USING gin (apiData);
+            `);
+            console.log('✅ Таблица активов создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы активов:', syncError);
+            // Не прерываем инициализацию при ошибке синхронизации
+        }
+        
+        // Создаем таблицу фундаментальных данных
+        console.log('📊 Создание таблицы фундаментальных данных...');
+        try {
+            // Сначала создаем ENUM для periodType, если его еще нет
+            await sequelize.query(`
+                DO $$ 
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_fundamental_data_periodType') THEN
+                        CREATE TYPE enum_fundamental_data_periodType AS ENUM ('quarterly', 'yearly');
+                    END IF;
+                END $$;
+            `);
+            await FundamentalData.sync({ force: false });
+            console.log('✅ Таблица фундаментальных данных создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы фундаментальных данных:', syncError);
+            // Не прерываем инициализацию при ошибке синхронизации
         }
         
         // Создаем таблицу трейлинг-стопов
