@@ -1,0 +1,161 @@
+.training-debug-page {
+  padding: var(--spacing-4);
+  max-width: 1400px;
+  margin: 0 auto;
+  animation: fadeIn 0.5s ease-in;
+}
+
+.training-debug-main-card {
+  margin-bottom: var(--spacing-4);
+}
+
+.training-debug-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+/* Секция выбора инструмента */
+.training-debug-instrument-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.training-debug-label {
+  font-weight: 600;
+  font-size: var(--font-size-md);
+  color: var(--text-color-primary);
+  margin-bottom: var(--spacing-2);
+}
+
+.training-debug-helper-text {
+  font-size: var(--font-size-sm);
+  color: var(--text-color-secondary);
+  margin-top: var(--spacing-1);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+}
+
+.training-debug-selected {
+  color: var(--text-color-primary);
+}
+
+/* Секции обучения */
+.training-debug-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.training-debug-section-title {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  color: var(--text-color-primary);
+  margin: 0;
+}
+
+.training-debug-section-description {
+  color: var(--text-color-secondary);
+  font-size: var(--font-size-md);
+  margin: 0;
+}
+
+/* Сетка карточек обучения */
+.training-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-2);
+}
+
+@media (max-width: 768px) {
+  .training-debug-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Карточка обучения */
+.training-debug-card-wrapper {
+  min-height: 100%;
+}
+
+.training-debug-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.training-debug-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  flex: 1;
+}
+
+.training-debug-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.training-debug-icon {
+  font-size: var(--font-size-xl);
+  color: var(--text-color-primary);
+}
+
+.training-debug-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--text-color-primary);
+  margin: 0;
+}
+
+.training-debug-description {
+  font-size: var(--font-size-sm);
+  color: var(--text-color-secondary);
+  margin: 0;
+  line-height: 1.5;
+  flex: 1;
+}
+
+/* Статус обучения */
+.training-debug-status {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-2);
+  border-radius: var(--border-radius-md);
+}
+
+.training-debug-status-success {
+  color: var(--color-success, #10b981);
+  background-color: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.training-debug-status-error {
+  color: var(--color-error, #ef4444);
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.training-debug-status i {
+  font-size: var(--font-size-md);
+}
+
+/* Анимация появления */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

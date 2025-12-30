@@ -23,6 +23,7 @@ MacroIndicator.init({
             'investments',
             'exports',
             'imports',
+            'currency_rate',
             'other'
         ),
         allowNull: false,

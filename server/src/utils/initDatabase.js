@@ -184,7 +184,7 @@ export async function initDatabase() {
         console.log('📊 Создание таблицы макроиндикаторов...');
         try {
             // Сначала добавляем новые значения в ENUM, если их еще нет
-            const newEnumValues = ['industrial_production', 'retail_sales', 'investments', 'exports', 'imports'];
+            const newEnumValues = ['industrial_production', 'retail_sales', 'investments', 'exports', 'imports', 'currency_rate'];
             for (const enumValue of newEnumValues) {
                 try {
                     await sequelize.query(`

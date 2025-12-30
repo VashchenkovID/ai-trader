@@ -609,15 +609,15 @@ class NeuralNetworkService {
             }
 
 
-            // Получаем исторические данные
-            let candles = await CacheService.getCandles(figi, 'DAY', days);
+            // Получаем исторические данные (skipUpdate = true - режим обучения, не делаем запросы к API)
+            let candles = await CacheService.getCandles(figi, 'DAY', days, true);
             let closingPrices = candles.map(c => c.close);
 
-            // Если данных мало — пытаемся расширить окно до 720 дней
+            // Если данных мало — пытаемся расширить окно до 720 дней (только из кеша)
             let attemptDays = days;
             while (closingPrices.length < 100 && attemptDays < 720) {
                 attemptDays = Math.min(720, attemptDays * 2);
-                candles = await CacheService.getCandles(figi, 'DAY', attemptDays);
+                candles = await CacheService.getCandles(figi, 'DAY', attemptDays, true);
                 closingPrices = candles.map(c => c.close);
                 if (closingPrices.length < 100) break;
             }

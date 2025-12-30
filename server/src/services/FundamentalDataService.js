@@ -349,27 +349,13 @@ class FundamentalDataService {
 
             const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
             
-            // Пытаемся получить данные из БД, если нет - загружаем из Tinkoff API
+            // Получаем данные только из БД (не делаем запросы к API)
+            // Это важно для режима обучения, чтобы не делать запросы к API
             let fundamentalData = await this.getFundamentalData(figi, date, false);
             
-            // Если данных нет, пытаемся загрузить из Tinkoff API (fallback)
+            // НЕ делаем fallback к API - используем только данные из БД
+            // Если данных нет в БД, возвращаем нули
             if (!fundamentalData) {
-                try {
-                    fundamentalData = await this.fetchFromTinkoff(figi, date);
-                } catch (fetchError) {
-                    // Игнорируем ошибки загрузки, просто возвращаем нули
-                    if (LoggerService.isInitialized) {
-                        LoggerService.debug('Failed to fetch from Tinkoff API, using zeros', {
-                            service: 'FundamentalDataService',
-                            figi,
-                            error: { message: fetchError.message }
-                        });
-                    }
-                }
-            }
-
-            if (!fundamentalData) {
-                // Если данных все еще нет, возвращаем нули
                 return new Array(7).fill(0);
             }
 

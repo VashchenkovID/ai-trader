@@ -88,7 +88,8 @@ class OptimizedTrainingService {
             this.trainingFigiLocks.add(figi);
 
             // 1. Проверяем, существует ли инструмент в кеше
-            const instrument = await CacheService.getInstrument(figi, false);
+            // skipUpdate = true - режим обучения, не делаем запросы к API
+            const instrument = await CacheService.getInstrument(figi, true);
             if (!instrument) {
                 const errorMsg = `Instrument ${figi} not found in cache. Please ensure the instrument is cached before training.`;
                 console.warn(`⚠️ ${errorMsg}`);
@@ -281,17 +282,18 @@ class OptimizedTrainingService {
      * Получение данных для обучения
      */
     async getTrainingData(figi, days) {
-        let candles = await CacheService.getCandles(figi, 'DAY', days);
+        // skipUpdate = true - режим обучения, не делаем запросы к API
+        let candles = await CacheService.getCandles(figi, 'DAY', days, true);
         
-        // Если данных мало, пытаемся расширить окно
+        // Если данных мало, пытаемся расширить окно (только из кеша)
         if (candles.length < 100) {
-            console.log(`📊 Insufficient data for ${figi}: ${candles.length} candles, trying to extend...`);
+            console.log(`📊 Insufficient data for ${figi}: ${candles.length} candles, trying to extend from cache...`);
             
-            // Пробуем разные периоды
+            // Пробуем разные периоды (skipUpdate = true для всех запросов)
             const periods = [days * 2, days * 3, 365, 720, 1080];
             
             for (const period of periods) {
-                const extendedCandles = await CacheService.getCandles(figi, 'DAY', period);
+                const extendedCandles = await CacheService.getCandles(figi, 'DAY', period, true);
                 if (extendedCandles.length > candles.length) {
                     candles = extendedCandles;
                     console.log(`📈 Extended data for ${figi}: ${candles.length} candles (${period} days)`);
@@ -582,7 +584,26 @@ class OptimizedTrainingService {
             // Получаем предсказания
             // Убеждаемся, что features - это массив массивов, и указываем форму явно
             const featuresArray = Array.isArray(features[0]) ? features : [features];
-            const xs = tf.tensor2d(featuresArray, [featuresArray.length, featuresArray[0].length]);
+            const featureSize = featuresArray[0]?.length || 0;
+            
+            // Проверяем совместимость размера фичей с моделью
+            if (model.inputs && model.inputs[0] && model.inputs[0].shape) {
+                const expectedSize = model.inputs[0].shape[1];
+                if (expectedSize !== featureSize) {
+                    console.warn(`⚠️ Feature size mismatch in calculateMetrics: model expects ${expectedSize}, got ${featureSize}. Skipping metrics calculation.`);
+                    // Возвращаем нулевые метрики при несовместимости
+                    return {
+                        accuracy: 0,
+                        precision: 0,
+                        recall: 0,
+                        f1: 0,
+                        auc: 0,
+                        confusionMatrix: { tp: 0, fp: 0, tn: 0, fn: 0 }
+                    };
+                }
+            }
+            
+            const xs = tf.tensor2d(featuresArray, [featuresArray.length, featureSize]);
             const predictions = await model.predict(xs).data();
             xs.dispose();
             

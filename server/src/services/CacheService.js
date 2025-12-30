@@ -298,11 +298,40 @@ class CacheService {
 
             const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
             if (toInsert.length > 0) {
-                await CachedCandle.bulkCreate(toInsert);
+                // Индивидуальная вставка с обработкой дубликатов
+                let insertedCount = 0;
+                for (const candle of toInsert) {
+                    try {
+                        await CachedCandle.create(candle);
+                        insertedCount++;
+                    } catch (createError) {
+                        // Игнорируем ошибки уникальности - это нормально, данные уже есть в БД
+                        if (createError.name !== 'SequelizeUniqueConstraintError' && 
+                            createError.code !== '23505' &&
+                            !createError.message?.includes('unique') &&
+                            !createError.message?.includes('уникальности')) {
+                            // Логируем только другие ошибки
+                            console.warn(`⚠️ Error inserting candle for ${figi} at ${candle.time}:`, createError.message);
+                        }
+                    }
+                }
+                if (insertedCount > 0) {
+                    console.log(`✅ Inserted ${insertedCount} new candles for ${figi} (skipped ${toInsert.length - insertedCount} duplicates)`);
+                } else if (toInsert.length > 0) {
+                    console.log(`ℹ️ All ${toInsert.length} candles for ${figi} already exist in cache`);
+                }
             }
 
             return toInsert;
         } catch (error) {
+            // Игнорируем ошибки уникальности - это нормально, данные уже есть
+            if (error.name === 'SequelizeUniqueConstraintError' || 
+                error.code === '23505' ||
+                error.message?.includes('unique') ||
+                error.message?.includes('уникальности')) {
+                console.log(`ℹ️ Candles for ${figi} already exist in cache, skipping`);
+                return [];
+            }
             console.error(`Error caching candles for ${figi}:`, error);
             return [];
         }
@@ -474,7 +503,7 @@ class CacheService {
     }
 
     // Получение свечей из кеша (с догрузкой при дефиците)
-    async getCandles(figi, interval = 'DAY', days = 365) {
+    async getCandles(figi, interval = 'DAY', days = 365, skipUpdate = false) {
         try {
             // Для тестовых FIGI возвращаем пустой массив без запросов к API
             if (this.isTestFigi(figi)) {
@@ -507,6 +536,11 @@ class CacheService {
                 },
                 order: [['time', 'ASC']]
             });
+
+            // Если skipUpdate = true (режим обучения), не делаем запросы к API - используем только кеш
+            if (skipUpdate) {
+                return candles;
+            }
 
             // Если данных нет или их мало/обрезаны, догружаем историю (только для реальных FIGI)
             const minRequired = Math.max(100, Math.floor(days * 0.8)); // Минимум 80% от запрошенных дней

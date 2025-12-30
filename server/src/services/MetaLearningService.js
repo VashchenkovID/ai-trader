@@ -183,8 +183,8 @@ class MetaLearningService {
                 trainingStatusService.startTraining('metaLearning', 1);
             }
             
-            // Получаем данные для задачи
-            const candles = await CacheService.getCandles(figi, 'DAY', 30);
+            // Получаем данные для задачи (skipUpdate = true - режим обучения, не делаем запросы к API)
+            const candles = await CacheService.getCandles(figi, 'DAY', 30, true);
             if (candles.length < 10) {
                 throw new Error(`Insufficient data: ${candles.length} candles`);
             }

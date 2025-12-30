@@ -117,13 +117,7 @@ class OptionsDataService {
                 } catch (cacheError) {
                     // Игнорируем ошибки кеширования (например, уникальность ключа)
                     // Продолжаем с существующими данными или возвращаем null
-                    if (LoggerService.isInitialized && !cacheError.message?.includes('уникальности')) {
-                        LoggerService.debug('Error getting candles via CacheService (non-critical)', {
-                            service: 'OptionsDataService',
-                            baseFigi,
-                            error: { message: cacheError.message }
-                        });
-                    }
+                    // Убрали debug логирование для уменьшения шума в логах
                 }
                 
                 return null;
@@ -253,13 +247,7 @@ class OptionsDataService {
             });
 
             if (!options || options.length === 0) {
-                if (LoggerService.isInitialized) {
-                    LoggerService.debug('No options found for asset', {
-                        service: 'OptionsDataService',
-                        baseFigi,
-                        assetUid
-                    });
-                }
+                // Убрали debug логирование для уменьшения шума в логах
                 return [];
             }
 
@@ -325,14 +313,7 @@ class OptionsDataService {
                     if (impliedVolatility === null && historicalVolatility !== null && historicalVolatility > 0) {
                         impliedVolatility = historicalVolatility;
                         ivSource = 'historical';
-                        
-                        if (LoggerService.isInitialized) {
-                            LoggerService.debug('Using historical volatility as IV fallback', {
-                                service: 'OptionsDataService',
-                                baseFigi,
-                                historicalVolatility: historicalVolatility.toFixed(2)
-                            });
-                        }
+                        // Убрали debug логирование для уменьшения шума в логах
                     }
 
                     // Сохраняем или обновляем запись

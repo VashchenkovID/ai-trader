@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card } from 'primereact/card';
-import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
-import { Dropdown } from 'primereact/dropdown';
-import { ProgressBar } from 'primereact/progressbar';
-import { Divider } from 'primereact/divider';
+import { Card } from '../components/ui/Card/Card';
+import { Button } from '../components/ui/Button/Button';
+import { Select } from '../components/ui/Select/Select';
+import { ProgressBar } from '../components/ui/ProgressBar/ProgressBar';
+import { Divider } from '../components/ui/Divider/Divider';
+import { Badge } from '../components/ui/Badge/Badge';
 import { apiService } from '../services/apiService';
+import './TrainingDebug.css';
 
 interface Instrument {
   figi: string;
@@ -41,15 +43,29 @@ const TrainingDebug: React.FC = () => {
         if (successResponse.success) {
           instruments = successResponse.data || [];
         }
+      } else if (response && typeof response === 'object' && 'data' in response) {
+        // Если данные в поле data
+        instruments = Array.isArray((response as any).data) ? (response as any).data : [];
       }
       
-      // Фильтруем только акции в рублях
+      // Фильтруем только акции в рублях и обрабатываем данные
+      // Данные приходят как объекты Sequelize, нужно извлечь из dataValues или использовать toJSON()
       const filtered = instruments
-        .map((inst: any) => ({
-          figi: inst.figi,
-          ticker: inst.ticker,
-          name: inst.name
-        }));
+        .map((inst: any) => {
+          // Извлекаем данные из Sequelize модели
+          const data = inst.dataValues || inst.toJSON?.() || inst;
+          return {
+            figi: data.figi || '',
+            ticker: data.ticker || '',
+            name: data.name || ''
+          };
+        })
+        .filter(inst => inst.figi && (inst.ticker || inst.name)); // Фильтруем записи без figi и названия
+
+      console.log('📊 Загружено инструментов:', filtered.length);
+      if (filtered.length > 0) {
+        console.log('📊 Пример инструмента:', filtered[0]);
+      }
 
       setAvailableInstruments(filtered);
     } catch (error) {
@@ -120,7 +136,7 @@ const TrainingDebug: React.FC = () => {
       handler: () => handleTraining('analyze-single', () => 
         apiService.analyzeSingleInstrument(selectedInstrument!.figi)
       ),
-      severity: 'info' as const
+      variant: 'secondary' as const
     },
     {
       key: 'neural',
@@ -130,7 +146,7 @@ const TrainingDebug: React.FC = () => {
       handler: () => handleTraining('neural', () => 
         apiService.trainNeuralNetwork(selectedInstrument!.figi, { useNews: true, epochs: 10 })
       ),
-      severity: 'success' as const
+      variant: 'success' as const
     },
     {
       key: 'ensemble',
@@ -140,7 +156,7 @@ const TrainingDebug: React.FC = () => {
       handler: () => handleTraining('ensemble', () => 
         apiService.trainEnsemble(selectedInstrument!.figi, { useNews: true })
       ),
-      severity: 'info' as const
+      variant: 'secondary' as const
     },
     {
       key: 'meta',
@@ -150,7 +166,7 @@ const TrainingDebug: React.FC = () => {
       handler: () => handleTraining('meta', () => 
         apiService.trainMetaLearning(selectedInstrument!.figi, { useNews: true })
       ),
-      severity: 'warning' as const
+      variant: 'secondary' as const
     },
     {
       key: 'reinforcement',
@@ -160,7 +176,7 @@ const TrainingDebug: React.FC = () => {
       handler: () => handleTraining('reinforcement', () => 
         apiService.trainReinforcementLearning(selectedInstrument!.figi, { useNews: true })
       ),
-      severity: 'help' as const
+      variant: 'secondary' as const
     },
     {
       key: 'all',
@@ -170,7 +186,7 @@ const TrainingDebug: React.FC = () => {
       handler: () => handleTraining('all', () => 
         apiService.trainAllAI(selectedInstrument!.figi, { useNews: true })
       ),
-      severity: 'secondary' as const
+      variant: 'primary' as const
     }
   ];
 
@@ -184,7 +200,7 @@ const TrainingDebug: React.FC = () => {
       handler: () => handleTraining('batch-neural', () => 
         apiService.trainBatchNeuralNetwork([selectedInstrument!.figi], { useNews: true })
       ),
-      severity: 'success' as const
+      variant: 'success' as const
     },
     {
       key: 'batch-ensemble',
@@ -194,7 +210,7 @@ const TrainingDebug: React.FC = () => {
       handler: () => handleTraining('batch-ensemble', () => 
         apiService.trainBatchEnsemble([selectedInstrument!.figi], { useNews: true })
       ),
-      severity: 'info' as const
+      variant: 'secondary' as const
     },
     {
       key: 'batch-meta',
@@ -204,7 +220,7 @@ const TrainingDebug: React.FC = () => {
       handler: () => handleTraining('batch-meta', () => 
         apiService.trainBatchMetaLearning([selectedInstrument!.figi], { useNews: true })
       ),
-      severity: 'warning' as const
+      variant: 'secondary' as const
     },
     {
       key: 'batch-reinforcement',
@@ -214,16 +230,27 @@ const TrainingDebug: React.FC = () => {
       handler: () => handleTraining('batch-reinforcement', () => 
         apiService.trainBatchReinforcementLearning([selectedInstrument!.figi], { useNews: true })
       ),
-      severity: 'help' as const
+      variant: 'secondary' as const
     }
   ];
 
-  // Форматирование опций для Dropdown
-  const instrumentOptions = availableInstruments.map(inst => ({
-    label: `${inst.ticker} - ${inst.name}`,
-    value: inst.figi,
-    instrument: inst
-  }));
+  // Форматирование опций для Select
+  const instrumentOptions = availableInstruments.map(inst => {
+    const ticker = inst.ticker || '';
+    const name = inst.name || '';
+    const label = ticker && name 
+      ? `${ticker} - ${name}` 
+      : ticker 
+        ? ticker 
+        : name 
+          ? name 
+          : inst.figi;
+    
+    return {
+      label,
+      value: inst.figi
+    };
+  });
 
   // Получение статуса для типа обучения
   const getStatusForType = (type: string): TrainingStatus => {
@@ -237,40 +264,41 @@ const TrainingDebug: React.FC = () => {
     const isDisabled = !selectedInstrument || isLoading;
 
     return (
-      <div key={trainingType.key} className="col-12 md:col-6 lg:col-4">
-        <Card className="h-full">
-          <div className="flex flex-column gap-3">
-            <div className="flex align-items-center gap-2">
-              <i className={`pi ${trainingType.icon} text-2xl`}></i>
-              <h3 className="text-lg font-semibold m-0">{trainingType.label}</h3>
+      <div key={trainingType.key} className="training-debug-card-wrapper">
+        <Card variant="glass" className="training-debug-card h-full">
+          <div className="training-debug-card-content">
+            <div className="training-debug-card-header">
+              <i className={`pi ${trainingType.icon} training-debug-icon`}></i>
+              <h3 className="training-debug-title">{trainingType.label}</h3>
             </div>
-            <p className="text-sm text-500 m-0">{trainingType.description}</p>
+            <p className="training-debug-description">{trainingType.description}</p>
             
             <Button
-              label={isLoading ? 'Обучение...' : 'Запустить обучение'}
-              icon={isLoading ? 'pi pi-spin pi-spinner' : 'pi pi-play'}
+              variant={trainingType.variant}
               onClick={trainingType.handler}
               disabled={isDisabled}
               loading={isLoading}
-              severity={trainingType.severity}
-              className="w-full"
-            />
+              icon={<i className={isLoading ? 'pi pi-spin pi-spinner' : 'pi pi-play'}></i>}
+              fullWidth
+            >
+              {isLoading ? 'Обучение...' : 'Запустить обучение'}
+            </Button>
 
             {status.status === 'loading' && (
-              <ProgressBar mode="indeterminate" style={{ height: '4px' }} />
+              <ProgressBar value={0} animated size="sm" />
             )}
 
             {status.status === 'success' && status.message && (
-              <div className="text-sm text-green-500">
-                <i className="pi pi-check-circle mr-2"></i>
-                {status.message}
+              <div className="training-debug-status training-debug-status-success">
+                <i className="pi pi-check-circle"></i>
+                <span>{status.message}</span>
               </div>
             )}
 
             {status.status === 'error' && status.error && (
-              <div className="text-sm text-red-500">
-                <i className="pi pi-times-circle mr-2"></i>
-                {status.error}
+              <div className="training-debug-status training-debug-status-error">
+                <i className="pi pi-times-circle"></i>
+                <span>{status.error}</span>
               </div>
             )}
           </div>
@@ -280,80 +308,73 @@ const TrainingDebug: React.FC = () => {
   };
 
   return (
-    <div className="grid">
-      <div className="col-12">
-        <Toast ref={toast} />
-        
-        <Card title="🔧 Отладка обучения нейросетей" className="mb-4">
-          <div className="grid">
-            {/* Выбор инструмента */}
-            <div className="col-12">
-              <div className="field">
-                <label htmlFor="instrument" className="font-semibold mb-2 block">
-                  Выберите инструмент для обучения
-                </label>
-                <Dropdown
-                  id="instrument"
-                  value={selectedInstrument?.figi || null}
-                  onChange={(e) => {
-                    const figi = e.value;
-                    if (figi) {
-                      const instrument = availableInstruments.find(inst => inst.figi === figi);
-                      setSelectedInstrument(instrument || null);
-                    } else {
-                      setSelectedInstrument(null);
-                    }
-                  }}
-                  options={instrumentOptions}
-                  optionLabel="label"
-                  optionValue="value"
-                  placeholder={isLoadingInstruments ? "Загрузка..." : "Выберите инструмент"}
-                  disabled={isLoadingInstruments}
-                  className="w-full"
-                  filter
-                  showClear
-                />
-                <div className="text-xs text-500 mt-1">
-                  Доступно инструментов: {availableInstruments.length}
-                  {selectedInstrument && (
-                    <span className="ml-2">
-                      | Выбрано: {selectedInstrument.ticker} ({selectedInstrument.figi})
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <Divider />
-
-            {/* Обучение по одному инструменту */}
-            <div className="col-12">
-              <h2 className="text-2xl font-semibold mb-3">🎓 Обучение по одному инструменту</h2>
-              <p className="text-500 mb-4">
-                Выберите инструмент и запустите обучение выбранного типа нейросети
-              </p>
-              
-              <div className="grid">
-                {trainingTypes.map(renderTrainingButton)}
-              </div>
-            </div>
-
-            <Divider />
-
-            {/* Пакетное обучение */}
-            <div className="col-12">
-              <h2 className="text-2xl font-semibold mb-3">📦 Пакетное обучение</h2>
-              <p className="text-500 mb-4">
-                Пакетное обучение для нескольких инструментов (в текущей версии используется один выбранный инструмент)
-              </p>
-              
-              <div className="grid">
-                {batchTrainingTypes.map(renderTrainingButton)}
-              </div>
+    <div className="training-debug-page">
+      <Toast ref={toast} />
+      
+      <Card variant="glass" header="🔧 Отладка обучения нейросетей" className="training-debug-main-card">
+        <div className="training-debug-content">
+          {/* Выбор инструмента */}
+          <div className="training-debug-instrument-section">
+            <label htmlFor="instrument" className="training-debug-label">
+              Выберите инструмент для обучения
+            </label>
+            <Select
+              id="instrument"
+              value={selectedInstrument?.figi || ''}
+              onChange={(e) => {
+                const figi = e.target.value;
+                if (figi && figi !== '') {
+                  const instrument = availableInstruments.find(inst => inst.figi === figi);
+                  setSelectedInstrument(instrument || null);
+                } else {
+                  setSelectedInstrument(null);
+                }
+              }}
+              options={instrumentOptions}
+              placeholder={isLoadingInstruments ? "Загрузка..." : "Выберите инструмент"}
+              disabled={isLoadingInstruments}
+              fullWidth
+              searchable
+            />
+            <div className="training-debug-helper-text">
+              Доступно инструментов: <Badge variant="info" size="sm">{availableInstruments.length}</Badge>
+              {selectedInstrument && (
+                <span className="training-debug-selected">
+                  | Выбрано: <strong>{selectedInstrument.ticker}</strong> ({selectedInstrument.figi})
+                </span>
+              )}
             </div>
           </div>
-        </Card>
-      </div>
+
+          <Divider />
+
+          {/* Обучение по одному инструменту */}
+          <div className="training-debug-section">
+            <h2 className="training-debug-section-title">🎓 Обучение по одному инструменту</h2>
+            <p className="training-debug-section-description">
+              Выберите инструмент и запустите обучение выбранного типа нейросети
+            </p>
+            
+            <div className="training-debug-grid">
+              {trainingTypes.map(renderTrainingButton)}
+            </div>
+          </div>
+
+          <Divider />
+
+          {/* Пакетное обучение */}
+          <div className="training-debug-section">
+            <h2 className="training-debug-section-title">📦 Пакетное обучение</h2>
+            <p className="training-debug-section-description">
+              Пакетное обучение для нескольких инструментов (в текущей версии используется один выбранный инструмент)
+            </p>
+            
+            <div className="training-debug-grid">
+              {batchTrainingTypes.map(renderTrainingButton)}
+            </div>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 };

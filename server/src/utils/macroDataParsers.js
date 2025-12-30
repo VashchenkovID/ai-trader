@@ -3,6 +3,76 @@
  */
 
 /**
+ * Парсинг JSON ответа от API ЦБ РФ для курсов валют
+ * @param {Object} jsonData - JSON объект от https://www.cbr-xml-daily.ru/daily_json.js
+ * @returns {Array<Object>} Массив данных {date: Date, value: number, currencyCode: string, previousValue: number}
+ */
+export function parseCbrCurrencyJson(jsonData) {
+    try {
+        const records = [];
+        
+        if (!jsonData || !jsonData.Valute) {
+            console.warn('⚠️ JSON от ЦБ РФ не содержит данных о валютах');
+            return records;
+        }
+
+        // Дата данных
+        const dateStr = jsonData.Date || jsonData.Timestamp || new Date().toISOString();
+        const date = new Date(dateStr);
+        
+        if (isNaN(date.getTime())) {
+            console.warn('⚠️ Некорректная дата в JSON от ЦБ РФ:', dateStr);
+            return records;
+        }
+
+        // Обрабатываем только нужные валюты: USD, EUR
+        const targetCurrencies = ['USD', 'EUR'];
+        
+        for (const currencyCode of targetCurrencies) {
+            const currencyData = jsonData.Valute[currencyCode];
+            
+            if (!currencyData) {
+                console.log(`ℹ️ Валюта ${currencyCode} не найдена в ответе ЦБ РФ`);
+                continue;
+            }
+
+            // Значение курса (Value уже включает номинал)
+            const value = parseFloat(currencyData.Value);
+            const previousValue = currencyData.Previous ? parseFloat(currencyData.Previous) : null;
+            const nominal = currencyData.Nominal ? parseInt(currencyData.Nominal) : 1;
+            
+            if (isNaN(value) || value <= 0) {
+                console.warn(`⚠️ Некорректное значение курса для ${currencyCode}:`, currencyData.Value);
+                continue;
+            }
+
+            // Сохраняем курс за 1 единицу валюты (нормализуем по номиналу)
+            const normalizedValue = value / nominal;
+
+            records.push({
+                date: date,
+                value: normalizedValue,
+                currencyCode: currencyCode,
+                previousValue: previousValue ? previousValue / nominal : null,
+                metadata: {
+                    currencyCode: currencyCode,
+                    currencyName: currencyData.Name || '',
+                    nominal: nominal,
+                    rawValue: value,
+                    rawPreviousValue: previousValue
+                }
+            });
+        }
+
+        console.log(`📊 Распарсено ${records.length} курсов валют из JSON ЦБ РФ`);
+        return records;
+    } catch (error) {
+        console.error('❌ Ошибка парсинга JSON курсов валют ЦБ РФ:', error);
+        return [];
+    }
+}
+
+/**
  * Парсинг XML ответа от API ЦБ РФ для ключевой ставки
  * @param {string} xmlString - XML строка от DailyInfoWebServ/DailyInfo.asmx/KeyRate
  * @returns {Array<Object>} Массив данных {date: Date, value: number}
@@ -1051,8 +1121,8 @@ function determinePeriodType(date, indicatorType) {
         return 'quarterly';
     }
 
-    // Ставки и индексы обычно ежедневные
-    if (indicatorType === 'interest_rate' || indicatorType === 'volatility_index') {
+    // Ставки, индексы и курсы валют обычно ежедневные
+    if (indicatorType === 'interest_rate' || indicatorType === 'volatility_index' || indicatorType === 'currency_rate') {
         return 'daily';
     }
 
@@ -1071,7 +1141,8 @@ function determineUnit(indicatorType) {
         'unemployment': 'percent',
         'sentiment': 'index',
         'volatility_index': 'index',
-        'oil_price': 'absolute'
+        'oil_price': 'absolute',
+        'currency_rate': 'absolute'
     };
 
     return unitMap[indicatorType] || 'percent';
@@ -1133,6 +1204,15 @@ export function validateIndicator(indicator) {
             case 'gdp':
                 if (indicator.value < -50 || indicator.value > 50) {
                     errors.push(`Некорректное значение роста ВВП: ${indicator.value}%`);
+                }
+                break;
+            case 'currency_rate':
+                // Курсы валют к RUB обычно в диапазоне 10-500
+                // Значения вне этого диапазона подозрительны, но не отклоняем полностью
+                if (indicator.value <= 0) {
+                    errors.push(`Некорректное значение курса валюты: ${indicator.value} (должно быть положительным)`);
+                } else if (indicator.value > 1000) {
+                    console.warn(`⚠️ Подозрительное значение курса валюты: ${indicator.value} (обычно ожидается 10-500)`);
                 }
                 break;
         }

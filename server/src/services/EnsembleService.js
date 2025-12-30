@@ -386,8 +386,8 @@ class EnsembleService {
                 }
             }
 
-            // Получаем данные
-            const candles = await CacheService.getCandles(figi, 'DAY', days);
+            // Получаем данные (skipUpdate = true - режим обучения, не делаем запросы к API)
+            const candles = await CacheService.getCandles(figi, 'DAY', days, true);
             console.log(`📊 Retrieved ${candles.length} candles for ${figi}`);
             
             // Адаптивная проверка данных

@@ -82,10 +82,11 @@ class OptimizedDataService {
 
             // Загружаем все свечи один раз для использования в getMarketFeatures
             // Это предотвращает множественные запросы к кешу
+            // skipUpdate = true - режим обучения, не делаем запросы к API
             let allCandles = null;
             if (figi) {
                 try {
-                    allCandles = await CacheService.getCandles(figi, 'DAY', 365);
+                    allCandles = await CacheService.getCandles(figi, 'DAY', 365, true);
                 } catch (error) {
                     console.warn(`⚠️ Failed to preload candles for market features: ${error.message}`);
                 }
@@ -637,10 +638,11 @@ class OptimizedDataService {
             }
             
             // Используем предзагруженные свечи, если они переданы, иначе загружаем из кеша
+            // skipUpdate = true - режим обучения, не делаем запросы к API
             let candles = preloadedCandles;
             if (!candles || candles.length === 0) {
-                // Загружаем только если не переданы предзагруженные свечи
-                candles = await CacheService.getCandles(figi, 'DAY', 30);
+                // Загружаем только если не переданы предзагруженные свечи (только из БД, без обновления)
+                candles = await CacheService.getCandles(figi, 'DAY', 30, true);
             }
             
             if (!candles || candles.length < 10) {
@@ -1034,9 +1036,10 @@ class OptimizedDataService {
             };
 
             // Получаем текущую цену из последней свечи (если доступна)
+            // skipUpdate = true - режим обучения, не делаем запросы к API
             let currentPrice = 0;
             try {
-                const candles = await CacheService.getCandles(figi, 'DAY', 1);
+                const candles = await CacheService.getCandles(figi, 'DAY', 1, true);
                 if (candles && candles.length > 0) {
                     // Берем последнюю свечу до timestamp
                     const filteredCandles = candles.filter(c => new Date(c.time) <= timestampDate);

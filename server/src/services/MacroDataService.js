@@ -5,6 +5,7 @@ import {
     parseCbrXml,
     parseCbrKeyRateXml,
     parseCbrKeyRateHtml,
+    parseCbrCurrencyJson,
     parseInvestingInflationHtml,
     parseTradingViewRviHtml,
     normalizeIndicator as normalizeIndicatorUtil,
@@ -520,7 +521,94 @@ class MacroDataService {
                 }
             }
 
-            // 2. Инфляция (месячная)
+            // 2. Курсы валют (USD/RUB, EUR/RUB)
+            try {
+                const currencyUrl = 'https://www.cbr-xml-daily.ru/daily_json.js';
+                console.log(`📡 Запрос курсов валют от ЦБ РФ: ${currencyUrl}`);
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
+                
+                const currencyResponse = await fetch(currencyUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    },
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (currencyResponse.ok) {
+                    const currencyJson = await currencyResponse.json();
+                    console.log(`📄 Получен JSON от ЦБ РФ для курсов валют`);
+                    
+                    const currencyRecords = parseCbrCurrencyJson(currencyJson);
+                    
+                    // Получаем предыдущие значения для каждой валюты
+                    for (const record of currencyRecords) {
+                        // Ищем предыдущий индикатор для этой валюты
+                        const previousDate = new Date(record.date.getTime() - 86400000);
+                        const previousIndicator = await MacroIndicator.findOne({
+                            where: {
+                                indicatorType: 'currency_rate',
+                                country: 'RUS',
+                                source: `cbr_${record.currencyCode.toLowerCase()}`,
+                                period: {
+                                    [Op.lte]: previousDate
+                                }
+                            },
+                            order: [['period', 'DESC']],
+                            limit: 1
+                        });
+                        
+                        const previousValue = record.previousValue !== null && record.previousValue !== undefined
+                            ? record.previousValue
+                            : (previousIndicator?.value ? parseFloat(previousIndicator.value) : null);
+
+                        const normalized = this.normalizeIndicator('currency_rate', {
+                            value: record.value,
+                            date: record.date,
+                            source: `cbr_${record.currencyCode.toLowerCase()}`,
+                            previousValue: previousValue,
+                            metadata: {
+                                currencyCode: record.currencyCode,
+                                currencyName: record.metadata.currencyName,
+                                ...record.metadata
+                            }
+                        });
+                        
+                        if (normalized) {
+                            normalized.source = `cbr_${record.currencyCode.toLowerCase()}`;
+                            normalized.country = 'RUS';
+                            normalized.indicatorType = 'currency_rate';
+                            
+                            // Валидация перед добавлением
+                            const validation = this.validateIndicator(normalized);
+                            if (validation.valid) {
+                                indicators.push(normalized);
+                            } else {
+                                console.warn(`⚠️ Индикатор курса валюты ${record.currencyCode} не прошел валидацию:`, validation.errors);
+                            }
+                        }
+                    }
+                    
+                    console.log(`✅ Обработано ${currencyRecords.length} курсов валют от ЦБ РФ`);
+                } else {
+                    const errorText = await currencyResponse.text().catch(() => 'Не удалось прочитать ответ');
+                    console.warn(`⚠️ ЦБ РФ (валюты) вернул статус ${currencyResponse.status}: ${errorText.substring(0, 200)}`);
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    console.warn('⚠️ Таймаут запроса курсов валют от ЦБ РФ');
+                } else {
+                    console.warn('⚠️ Ошибка получения курсов валют от ЦБ РФ:', error.message);
+                    console.error('Детали ошибки:', error);
+                }
+            }
+
+            // 3. Инфляция (месячная)
             try {
                 // ЦБ РФ публикует инфляцию ежемесячно
                 // Используем упрощенный подход - получаем последние данные
