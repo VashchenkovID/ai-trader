@@ -17,6 +17,7 @@ import RiskManagementSection from '../components/settings/RiskManagementSection'
 import PortfolioSettingsSection from '../components/settings/PortfolioSettingsSection';
 import TrainingSettingsSection from '../components/settings/TrainingSettingsSection';
 import LogsMonitoringSection from '../components/settings/LogsMonitoringSection';
+import QuarterlyDataSection from '../components/settings/QuarterlyDataSection';
 import SettingsTabs from '../components/settings/SettingsTabs';
 import './Settings.css';
 
@@ -471,6 +472,12 @@ const Settings: React.FC<SettingsProps> = ({ className = '' }) => {
         <TabPanel header="Обучение нейросетей">
           <div className="settings-training-container">
             <TrainingSettingsSection />
+          </div>
+        </TabPanel>
+
+        <TabPanel header="Квартальные данные">
+          <div className="settings-quarterly-data-container">
+            <QuarterlyDataSection />
           </div>
         </TabPanel>
 

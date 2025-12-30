@@ -49293,3 +49293,4500 @@
   "service": "ai-trader",
   "environment": "development"
 }
+2025-12-30 10:56:14.698 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-30 10:56:14.712 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-30 10:56:14.756 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:14.760 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:14.955 [INFO] Initializing FundamentalDataService
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 10:56:14.955 [INFO] FundamentalDataService initialized
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 10:56:14.958 [INFO] Initializing AssetSyncService
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 10:56:14.958 [INFO] AssetSyncService initialized
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 10:56:15.093 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.094 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.094 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.097 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.098 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.098 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.101 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.102 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.104 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.105 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.108 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.109 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.111 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.112 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.114 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.116 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.119 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.127 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.129 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.130 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.133 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.143 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.145 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:15.147 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 10:56:31.540 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081391532_5xas0f8nn",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "5.12ms"
+}
+2025-12-30 10:56:41.184 [INFO] GET /summary 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081401176_eecfnipz7",
+  "method": "GET",
+  "path": "/summary",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "7.27ms",
+  "query": {
+    "period": "daily",
+    "days": "30"
+  }
+}
+2025-12-30 10:56:41.200 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081401171_zl4vsb150",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "27.41ms"
+}
+2025-12-30 10:56:41.213 [INFO] GET /signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081401158_9yzj34wg1",
+  "method": "GET",
+  "path": "/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "50.85ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-30 10:56:41.348 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081401345_0hhww8laf",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.22ms"
+}
+2025-12-30 10:56:41.358 [INFO] GET /latest 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081401348_fdlg0gvnx",
+  "method": "GET",
+  "path": "/latest",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "7.96ms",
+  "query": {
+    "country": "RUS"
+  }
+}
+2025-12-30 10:56:56.146 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081416144_thm0n5ryk",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.44ms"
+}
+2025-12-30 10:56:56.161 [INFO] GET /settings 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081416137_4pu9x9025",
+  "method": "GET",
+  "path": "/settings",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "22.05ms"
+}
+2025-12-30 10:56:56.163 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081416142_f46il5zgq",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "19.53ms"
+}
+2025-12-30 10:56:56.166 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081416164_m2noej2fo",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.38ms"
+}
+2025-12-30 10:56:56.168 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081416140_zondqw3kn",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "26.87ms"
+}
+2025-12-30 10:57:02.868 [INFO] POST /cache/full-update 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081422862_65enx1ixq",
+  "method": "POST",
+  "path": "/cache/full-update",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.63ms"
+}
+2025-12-30 10:57:02.877 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081422868_m4t7crga3",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "7.66ms"
+}
+2025-12-30 10:57:11.601 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081431599_sa8oox1uf",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.51ms"
+}
+2025-12-30 10:57:26.611 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081446609_icnmpjx4q",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.57ms"
+}
+2025-12-30 10:57:26.612 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081446611_ru4z1ybfa",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.33ms"
+}
+2025-12-30 10:57:26.614 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081446607_a3vpida1z",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "5.57ms"
+}
+2025-12-30 10:57:41.603 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081461601_814i4cyq8",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.02ms"
+}
+2025-12-30 10:57:56.614 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081476613_n47oagqic",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.32ms"
+}
+2025-12-30 10:57:56.615 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081476614_udtkgsp1a",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.34ms"
+}
+2025-12-30 10:57:56.619 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081476612_j29u8p5gg",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "6.06ms"
+}
+2025-12-30 10:58:11.606 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081491604_1p9afhvax",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.11ms"
+}
+2025-12-30 10:58:26.607 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081506606_nrcj3jc9c",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.26ms"
+}
+2025-12-30 10:58:26.607 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081506607_chnry9p6j",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.22ms"
+}
+2025-12-30 10:58:26.608 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081506605_nx183gy4e",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.28ms"
+}
+2025-12-30 10:58:41.613 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081521611_3t1sww8gk",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.19ms"
+}
+2025-12-30 10:58:56.613 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081536613_xzua50u68",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.30ms"
+}
+2025-12-30 10:58:56.615 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081536614_1clu6y6i7",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.68ms"
+}
+2025-12-30 10:58:56.616 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081536612_zqflyqh1d",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.94ms"
+}
+2025-12-30 10:59:11.613 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081551612_z0k143obn",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.05ms"
+}
+2025-12-30 10:59:26.612 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081566611_36usv4imm",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.30ms"
+}
+2025-12-30 10:59:26.613 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081566612_rh29pmd1n",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.39ms"
+}
+2025-12-30 10:59:26.614 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081566610_1pfi6xyiv",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.93ms"
+}
+2025-12-30 10:59:41.610 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081581608_8dpklrx16",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.50ms"
+}
+2025-12-30 10:59:56.601 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081596601_xwvlegosl",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.42ms"
+}
+2025-12-30 10:59:56.603 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081596602_8iugxmhcx",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.27ms"
+}
+2025-12-30 10:59:56.604 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081596599_s2flff5wc",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.94ms"
+}
+2025-12-30 11:00:37.633 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081637630_u6ywh3yog",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "2.87ms"
+}
+2025-12-30 11:00:37.636 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081637634_3o3kyp87x",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.58ms"
+}
+2025-12-30 11:00:37.637 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081637636_5ho6hweo5",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.46ms"
+}
+2025-12-30 11:00:37.646 [INFO] GET /settings 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081637631_pz64mnp48",
+  "method": "GET",
+  "path": "/settings",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "13.75ms"
+}
+2025-12-30 11:00:37.647 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081637632_zc9ptvdtw",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "14.74ms"
+}
+2025-12-30 11:00:37.650 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081637648_odeju7t95",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.64ms"
+}
+2025-12-30 11:01:04.637 [INFO] GET /settings 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081664627_suis3btr2",
+  "method": "GET",
+  "path": "/settings",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "9.38ms"
+}
+2025-12-30 11:01:04.638 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081664629_84jiabsxa",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "9.43ms"
+}
+2025-12-30 11:01:04.640 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081664639_pzn5hv4a9",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.29ms"
+}
+2025-12-30 11:01:04.641 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081664640_5zlu6lmn0",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.30ms"
+}
+2025-12-30 11:01:04.641 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081664630_p2nzpi1lc",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "10.85ms"
+}
+2025-12-30 11:01:07.620 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081667619_exos2j6is",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.33ms"
+}
+2025-12-30 11:01:07.621 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081667620_cjlg9vqxn",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.43ms"
+}
+2025-12-30 11:01:07.622 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081667618_3zreg489u",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "4.01ms"
+}
+2025-12-30 11:01:07.623 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081667619_vwjgi7zaa",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "4.24ms"
+}
+2025-12-30 11:01:07.629 [INFO] GET /settings 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081667617_qk3qlmc67",
+  "method": "GET",
+  "path": "/settings",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "11.89ms"
+}
+2025-12-30 11:01:08.608 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081668607_zp0fi02sa",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.00ms"
+}
+2025-12-30 11:01:36.621 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081696620_hmw1t20at",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.19ms"
+}
+2025-12-30 11:01:36.626 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081696626_loiuicx8n",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.36ms"
+}
+2025-12-30 11:01:36.636 [INFO] GET /settings 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081696623_vnkpfboa8",
+  "method": "GET",
+  "path": "/settings",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "12.54ms"
+}
+2025-12-30 11:01:36.637 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081696624_cchgobmue",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "12.72ms"
+}
+2025-12-30 11:01:36.639 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081696638_zhxb1ior0",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.55ms"
+}
+2025-12-30 11:01:36.641 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081696625_7noyoth1b",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "15.25ms"
+}
+2025-12-30 11:02:07.608 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081727606_ddvwmqqnp",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.87ms"
+}
+2025-12-30 11:02:07.609 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081727608_phxncmbs5",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.34ms"
+}
+2025-12-30 11:02:07.610 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081727609_1pbfklqej",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.32ms"
+}
+2025-12-30 11:02:07.611 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081727607_28kkb3cdq",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "4.21ms"
+}
+2025-12-30 11:02:37.602 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081757598_snkndbdl0",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "2.78ms"
+}
+2025-12-30 11:02:37.604 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081757603_lau402vzt",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.41ms"
+}
+2025-12-30 11:02:37.605 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081757604_z014a3ihu",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.42ms"
+}
+2025-12-30 11:02:37.606 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081757599_5gfmwqpsv",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "6.36ms"
+}
+2025-12-30 11:03:07.602 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081787602_15kgj19u9",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.25ms"
+}
+2025-12-30 11:03:07.603 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081787600_ebne5bspr",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "2.71ms"
+}
+2025-12-30 11:03:07.604 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081787601_pvvtznyvr",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.23ms"
+}
+2025-12-30 11:03:07.605 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081787605_k2o7st7t3",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.30ms"
+}
+2025-12-30 11:03:37.609 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081817607_x4og23jw1",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.49ms"
+}
+2025-12-30 11:03:37.612 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081817611_3irv94cgr",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.35ms"
+}
+2025-12-30 11:03:37.613 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081817609_7kbpbtho4",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.72ms"
+}
+2025-12-30 11:03:37.614 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081817610_kwbrk0flc",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "4.11ms"
+}
+2025-12-30 11:04:07.602 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081847600_buj2fv4rf",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.81ms"
+}
+2025-12-30 11:04:07.603 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081847603_g2bvwxiy4",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.29ms"
+}
+2025-12-30 11:04:07.604 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081847604_oo0o33xve",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.21ms"
+}
+2025-12-30 11:04:07.606 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081847601_w9zg8kf9n",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "4.23ms"
+}
+2025-12-30 11:04:30.451 [INFO] Received request to sync assets and fill fundamental data
+{
+  "service": "FundamentalDataRoutes",
+  "environment": "development",
+  "syncAssets": true,
+  "forceUpdateAssets": false,
+  "delayMs": 1000,
+  "forceUpdateFundamentals": false
+}
+2025-12-30 11:04:30.451 [INFO] Starting sync and fill of fundamental data
+{
+  "service": "FundamentalDataService",
+  "environment": "development",
+  "syncAssets": true,
+  "forceUpdateAssets": false,
+  "delayMs": 1000,
+  "forceUpdateFundamentals": false
+}
+2025-12-30 11:04:30.453 [INFO] Starting sync of Russian shares
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:04:30.463 [INFO] Found 171 active instruments in database
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:04:31.518 [INFO] Filtered assets: 171 out of 1921 (filtered out: 1750)
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:04:31.861 [INFO] Sync completed
+{
+  "service": "AssetSyncService",
+  "environment": "development",
+  "synced": 171,
+  "created": 171,
+  "updated": 0,
+  "errors": 0,
+  "filtered": 1750,
+  "cleaned": 0
+}
+2025-12-30 11:04:31.861 [INFO] Assets sync completed
+{
+  "service": "FundamentalDataService",
+  "environment": "development",
+  "synced": 171,
+  "created": 171,
+  "updated": 0,
+  "errors": 0,
+  "filtered": 1750,
+  "cleaned": 0
+}
+2025-12-30 11:04:31.862 [INFO] Starting mass fill of fundamental data for all assets
+{
+  "service": "FundamentalDataService",
+  "environment": "development",
+  "delayMs": 1000
+}
+2025-12-30 11:04:31.867 [INFO] Found 172 instruments across 171 assets
+{
+  "service": "FundamentalDataService",
+  "environment": "development",
+  "uniqueAssetUids": 171,
+  "requestCount": 2
+}
+2025-12-30 11:04:33.714 [INFO] Mass fill of fundamental data completed
+{
+  "service": "FundamentalDataService",
+  "environment": "development",
+  "totalAssets": 171,
+  "totalInstruments": 172,
+  "processed": 172,
+  "saved": 167,
+  "skipped": 0,
+  "errors": 0,
+  "noData": 5,
+  "requestCount": 2
+}
+2025-12-30 11:04:33.715 [INFO] Sync and fill completed
+{
+  "service": "FundamentalDataService",
+  "environment": "development",
+  "assetsSynced": 171,
+  "fundamentalsSaved": 167,
+  "requestCount": 2
+}
+2025-12-30 11:04:33.715 [INFO] POST /sync-and-fill 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081870448_5cw75lmgr",
+  "method": "POST",
+  "path": "/sync-and-fill",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3265.30ms",
+  "body": {
+    "syncAssets": true,
+    "forceUpdateFundamentals": false,
+    "delayMs": 1000
+  }
+}
+2025-12-30 11:04:33.715 [WARN] Slow request: POST /sync-and-fill
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081870448_5cw75lmgr",
+  "method": "POST",
+  "path": "/sync-and-fill",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "duration": "3265.30ms",
+  "threshold": "1000ms"
+}
+2025-12-30 11:04:49.663 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081889662_4dkhbppgk",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.19ms"
+}
+2025-12-30 11:04:49.664 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081889663_iuxbqd7vj",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.28ms"
+}
+2025-12-30 11:04:49.665 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081889664_l415z0or8",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.34ms"
+}
+2025-12-30 11:04:49.667 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081889662_8674ksq5h",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "4.51ms"
+}
+2025-12-30 11:05:01.758 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-30 11:05:01.782 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-30 11:05:01.788 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-30 11:05:01.814 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-30 11:05:03.257 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.265 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.275 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.282 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.580 [INFO] Initializing FundamentalDataService
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:05:03.581 [INFO] FundamentalDataService initialized
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:05:03.585 [INFO] Initializing AssetSyncService
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:05:03.586 [INFO] AssetSyncService initialized
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:05:03.596 [INFO] Initializing FundamentalDataService
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:05:03.597 [INFO] FundamentalDataService initialized
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:05:03.602 [INFO] Initializing AssetSyncService
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:05:03.602 [INFO] AssetSyncService initialized
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:05:03.778 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.780 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.780 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.788 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.788 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.789 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.796 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.798 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.804 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.805 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.811 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.812 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.817 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.818 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.818 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.819 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.820 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.827 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.827 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.827 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.828 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.828 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.833 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.834 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.836 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.843 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.844 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.844 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.968 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.969 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.971 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.972 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.974 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.974 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.980 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.982 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.984 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.987 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.993 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.996 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.998 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:03.998 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:04.007 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:04.009 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:04.143 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:04.156 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:04.159 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:04.161 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:05:06.626 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081906625_14vnfhv5c",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.30ms"
+}
+2025-12-30 11:05:06.628 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081906624_zyf2obs4q",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "3.06ms"
+}
+2025-12-30 11:05:06.629 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081906628_20nksp0ce",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.39ms"
+}
+2025-12-30 11:05:06.631 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081906630_j8xd6k69s",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.42ms"
+}
+2025-12-30 11:05:15.434 [INFO] GET /summary 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081915433_du5hbfbda",
+  "method": "GET",
+  "path": "/summary",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.49ms",
+  "query": {
+    "period": "daily",
+    "days": "30"
+  }
+}
+2025-12-30 11:05:15.445 [INFO] GET /signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081915431_6ohj23yxk",
+  "method": "GET",
+  "path": "/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "12.99ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-30 11:05:15.637 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081915636_aiikhqs1u",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.33ms"
+}
+2025-12-30 11:05:15.643 [INFO] GET /latest 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081915640_01c0sim14",
+  "method": "GET",
+  "path": "/latest",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.58ms",
+  "query": {
+    "country": "RUS"
+  }
+}
+2025-12-30 11:05:17.806 [INFO] GET /instruments 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081917748_day9t1si8",
+  "method": "GET",
+  "path": "/instruments",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "55.06ms"
+}
+2025-12-30 11:05:20.211 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081920211_vqtrzo62o",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.29ms"
+}
+2025-12-30 11:05:20.222 [INFO] GET /settings 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081920209_t7q3g6uac",
+  "method": "GET",
+  "path": "/settings",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "11.78ms"
+}
+2025-12-30 11:05:20.224 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081920212_gwtb6s53l",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "11.19ms"
+}
+2025-12-30 11:05:20.226 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081920225_5gfkvpfrl",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.89ms"
+}
+2025-12-30 11:05:20.228 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081920227_ckgls511g",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.44ms"
+}
+2025-12-30 11:05:22.037 [INFO] GET /settings 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081922028_x4wite4kz",
+  "method": "GET",
+  "path": "/settings",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "7.43ms"
+}
+2025-12-30 11:05:26.037 [WARN] Rate limit exceeded
+{
+  "service": "RateLimiter",
+  "environment": "development",
+  "ip": "::1",
+  "path": "/training/batch-train-all",
+  "method": "POST",
+  "count": 101
+}
+2025-12-30 11:05:26.037 [WARN] POST /training/batch-train-all 429
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081926036_g2m7xjfe1",
+  "method": "POST",
+  "path": "/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 429,
+  "duration": "0.53ms",
+  "body": {
+    "epochs": 50,
+    "batchSize": 16
+  }
+}
+2025-12-30 11:05:37.601 [WARN] Rate limit exceeded
+{
+  "service": "RateLimiter",
+  "environment": "development",
+  "ip": "::1",
+  "path": "/system/status",
+  "method": "GET",
+  "count": 102
+}
+2025-12-30 11:05:37.602 [WARN] GET /system/status 429
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081937600_7emmhh0ch",
+  "method": "GET",
+  "path": "/system/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 429,
+  "duration": "0.44ms"
+}
+2025-12-30 11:05:50.602 [WARN] Rate limit exceeded
+{
+  "service": "RateLimiter",
+  "environment": "development",
+  "ip": "::1",
+  "path": "/system/cache/status",
+  "method": "GET",
+  "count": 103
+}
+2025-12-30 11:05:50.602 [WARN] GET /system/cache/status 429
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081950601_jafbbsxbx",
+  "method": "GET",
+  "path": "/system/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 429,
+  "duration": "0.32ms"
+}
+2025-12-30 11:05:50.604 [WARN] Rate limit exceeded
+{
+  "service": "RateLimiter",
+  "environment": "development",
+  "ip": "::1",
+  "path": "/system/scheduler/status",
+  "method": "GET",
+  "count": 104
+}
+2025-12-30 11:05:50.604 [WARN] GET /system/scheduler/status 429
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081950603_j5xz6aa48",
+  "method": "GET",
+  "path": "/system/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 429,
+  "duration": "0.77ms"
+}
+2025-12-30 11:05:50.605 [WARN] Rate limit exceeded
+{
+  "service": "RateLimiter",
+  "environment": "development",
+  "ip": "::1",
+  "path": "/performance/metrics",
+  "method": "GET",
+  "count": 105
+}
+2025-12-30 11:05:50.606 [WARN] GET /performance/metrics 429
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081950605_g3uk95zeb",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 429,
+  "duration": "0.25ms"
+}
+2025-12-30 11:05:58.834 [WARN] Rate limit exceeded
+{
+  "service": "RateLimiter",
+  "environment": "development",
+  "ip": "::1",
+  "path": "/training/batch-train-all",
+  "method": "POST",
+  "count": 106
+}
+2025-12-30 11:05:58.834 [WARN] POST /training/batch-train-all 429
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081958833_uyfvqsilm",
+  "method": "POST",
+  "path": "/training/batch-train-all",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 429,
+  "duration": "0.33ms",
+  "body": {
+    "epochs": 50,
+    "batchSize": 16
+  }
+}
+2025-12-30 11:06:01.091 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-30 11:06:01.113 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-30 11:06:01.188 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-30 11:06:01.210 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-30 11:06:02.454 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.454 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.460 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.460 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.682 [INFO] Initializing FundamentalDataService
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:06:02.683 [INFO] FundamentalDataService initialized
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:06:02.686 [INFO] Initializing AssetSyncService
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:06:02.686 [INFO] AssetSyncService initialized
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:06:02.747 [INFO] Initializing FundamentalDataService
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:06:02.747 [INFO] FundamentalDataService initialized
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:06:02.750 [INFO] Initializing AssetSyncService
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:06:02.750 [INFO] AssetSyncService initialized
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:06:02.825 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.826 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.827 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.833 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.833 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.833 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.839 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.840 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.846 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.847 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.852 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.854 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.857 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.858 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.865 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.866 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.869 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.877 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.884 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.885 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.892 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.903 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.906 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.907 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.934 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.935 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.936 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.941 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.941 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.942 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.947 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.948 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.953 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.954 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.958 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.959 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.962 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.962 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.968 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.970 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.972 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.979 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.987 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.988 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:02.995 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:03.005 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:03.008 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:03.009 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:06:07.603 [WARN] Rate limit exceeded
+{
+  "service": "RateLimiter",
+  "environment": "development",
+  "ip": "::1",
+  "path": "/system/status",
+  "method": "GET",
+  "count": 107
+}
+2025-12-30 11:06:07.604 [WARN] GET /system/status 429
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767081967603_ywqlmbplw",
+  "method": "GET",
+  "path": "/system/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 429,
+  "duration": "0.35ms"
+}
+2025-12-30 11:31:04.409 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-30 11:31:04.547 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-30 11:31:04.581 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.585 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.768 [INFO] Initializing FundamentalDataService
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:31:04.769 [INFO] FundamentalDataService initialized
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:31:04.771 [INFO] Initializing AssetSyncService
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:31:04.772 [INFO] AssetSyncService initialized
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:31:04.782 [INFO] Initializing OptionsDataService
+{
+  "service": "OptionsDataService",
+  "environment": "development"
+}
+2025-12-30 11:31:04.782 [INFO] OptionsDataService initialized
+{
+  "service": "OptionsDataService",
+  "environment": "development"
+}
+2025-12-30 11:31:04.889 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.889 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.889 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.893 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.894 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.894 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.897 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.899 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.902 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.903 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.906 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.907 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.910 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.911 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.913 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.914 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.917 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.925 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.928 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.929 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.932 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.942 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.944 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:04.945 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:31:13.413 [INFO] GET /summary 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083473406_6672loi80",
+  "method": "GET",
+  "path": "/summary",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "4.29ms",
+  "query": {
+    "period": "daily",
+    "days": "30"
+  }
+}
+2025-12-30 11:31:13.423 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083473391_3qfuujd1j",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "30.31ms"
+}
+2025-12-30 11:31:13.443 [INFO] GET /signals 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083473400_8zwc0asdg",
+  "method": "GET",
+  "path": "/signals",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "42.33ms",
+  "query": {
+    "limit": "20"
+  }
+}
+2025-12-30 11:31:13.460 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083473457_yhjhz0fp6",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.41ms"
+}
+2025-12-30 11:31:13.468 [INFO] GET /latest 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083473461_38o5hyig0",
+  "method": "GET",
+  "path": "/latest",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "6.34ms",
+  "query": {
+    "country": "RUS"
+  }
+}
+2025-12-30 11:31:16.203 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083476202_qq5pv7s9a",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.59ms"
+}
+2025-12-30 11:31:16.208 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083476206_b1o57gz7a",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.98ms"
+}
+2025-12-30 11:31:16.212 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083476209_7a6onuei8",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.07ms"
+}
+2025-12-30 11:31:16.230 [INFO] GET /settings 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083476200_x5x3lded4",
+  "method": "GET",
+  "path": "/settings",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "28.24ms"
+}
+2025-12-30 11:31:16.231 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083476205_eyn701vw7",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "25.86ms"
+}
+2025-12-30 11:31:17.726 [INFO] POST /cache/update 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083477724_oq4z3rt54",
+  "method": "POST",
+  "path": "/cache/update",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.61ms"
+}
+2025-12-30 11:31:17.733 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083477732_jhdluavpj",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.69ms"
+}
+2025-12-30 11:31:40.113 [INFO] Received request to update options for all instruments
+{
+  "service": "OptionsDataRoutes",
+  "environment": "development",
+  "delayMs": 2000,
+  "forceUpdate": false,
+  "limit": null
+}
+2025-12-30 11:31:43.603 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083503601_qz5qhnsnm",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.12ms"
+}
+2025-12-30 11:31:46.613 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083506612_egv2ngiyf",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.42ms"
+}
+2025-12-30 11:31:46.614 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083506614_d8joac3j7",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.23ms"
+}
+2025-12-30 11:31:46.615 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083506615_9mo51a6e8",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.28ms"
+}
+2025-12-30 11:31:50.250 [INFO] Options fetched and saved
+{
+  "service": "OptionsDataService",
+  "environment": "development",
+  "baseFigi": "TCS00A106YF0",
+  "count": 458
+}
+2025-12-30 11:31:57.641 [INFO] Options fetched and saved
+{
+  "service": "OptionsDataService",
+  "environment": "development",
+  "baseFigi": "BBG004RVFCY3",
+  "count": 874
+}
+2025-12-30 11:34:47.097 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-30 11:34:47.230 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-30 11:34:47.267 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.271 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.455 [INFO] Initializing FundamentalDataService
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:34:47.456 [INFO] FundamentalDataService initialized
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:34:47.459 [INFO] Initializing AssetSyncService
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:34:47.459 [INFO] AssetSyncService initialized
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:34:47.469 [INFO] Initializing OptionsDataService
+{
+  "service": "OptionsDataService",
+  "environment": "development"
+}
+2025-12-30 11:34:47.469 [INFO] OptionsDataService initialized
+{
+  "service": "OptionsDataService",
+  "environment": "development"
+}
+2025-12-30 11:34:47.578 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.578 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.578 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.581 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.581 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.582 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.584 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.585 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.588 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.589 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.591 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.592 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.595 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.595 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.598 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.599 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.602 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.610 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.612 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.613 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.616 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.626 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.628 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:47.629 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:34:51.349 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083691344_j7ynlq08p",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.87ms"
+}
+2025-12-30 11:34:51.353 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083691351_wedmphu3f",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.25ms"
+}
+2025-12-30 11:34:51.357 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083691354_32ik8n1mq",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "1.82ms"
+}
+2025-12-30 11:34:51.360 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083691340_jlob4mofg",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "18.76ms"
+}
+2025-12-30 11:34:54.930 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083694929_qpo0rwukd",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.57ms"
+}
+2025-12-30 11:34:54.933 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083694932_oxrb1d4x4",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.68ms"
+}
+2025-12-30 11:34:54.936 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083694935_52svfsm8x",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.62ms"
+}
+2025-12-30 11:34:54.938 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083694924_4d4aumtvo",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "13.15ms"
+}
+2025-12-30 11:34:54.951 [INFO] GET /settings 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083694926_s3wyb09s7",
+  "method": "GET",
+  "path": "/settings",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "23.86ms"
+}
+2025-12-30 11:34:54.959 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083694956_yk9snvmnl",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "2.32ms"
+}
+2025-12-30 11:34:59.488 [INFO] Received request to update options for all instruments
+{
+  "service": "OptionsDataRoutes",
+  "environment": "development",
+  "delayMs": 2000,
+  "forceUpdate": false,
+  "limit": null
+}
+2025-12-30 11:35:05.433 [INFO] Options fetched and saved
+{
+  "service": "OptionsDataService",
+  "environment": "development",
+  "baseFigi": "TCS00A106YF0",
+  "count": 458
+}
+2025-12-30 11:35:10.203 [INFO] Options fetched and saved
+{
+  "service": "OptionsDataService",
+  "environment": "development",
+  "baseFigi": "BBG004RVFCY3",
+  "count": 874
+}
+2025-12-30 11:35:25.603 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083725601_34yt0ow17",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.53ms"
+}
+2025-12-30 11:35:25.604 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083725603_4kuf5opqv",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.37ms"
+}
+2025-12-30 11:35:25.605 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083725604_11gvt3lf0",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.27ms"
+}
+2025-12-30 11:35:25.606 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083725600_sdgxffxlm",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "5.35ms"
+}
+2025-12-30 11:35:38.995 [INFO] Options fetched and saved
+{
+  "service": "OptionsDataService",
+  "environment": "development",
+  "baseFigi": "TCS00A107ER5",
+  "count": 854
+}
+2025-12-30 11:35:44.218 [INFO] Options fetched and saved
+{
+  "service": "OptionsDataService",
+  "environment": "development",
+  "baseFigi": "BBG004S68B31",
+  "count": 472
+}
+2025-12-30 11:35:55.601 [INFO] GET /cache/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083755601_n03ftw43v",
+  "method": "GET",
+  "path": "/cache/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.22ms"
+}
+2025-12-30 11:35:55.603 [INFO] GET /scheduler/status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083755602_knm51tzmr",
+  "method": "GET",
+  "path": "/scheduler/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.38ms"
+}
+2025-12-30 11:35:55.604 [INFO] GET /performance/metrics 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083755603_p985y0m7c",
+  "method": "GET",
+  "path": "/performance/metrics",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "0.36ms"
+}
+2025-12-30 11:35:55.604 [INFO] GET /status 200
+{
+  "service": "ai-trader",
+  "environment": "development",
+  "requestId": "req_1767083755600_95p5lz0zx",
+  "method": "GET",
+  "path": "/status",
+  "ip": "::1",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36",
+  "statusCode": 200,
+  "duration": "4.02ms"
+}
+2025-12-30 11:35:59.365 [INFO] Options fetched and saved
+{
+  "service": "OptionsDataService",
+  "environment": "development",
+  "baseFigi": "BBG004S681M2",
+  "count": 66
+}
+2025-12-30 11:36:01.723 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-30 11:36:01.745 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-30 11:36:01.864 [INFO] LoggerService initialized
+{
+  "service": "LoggerService",
+  "environment": "development",
+  "logLevel": "debug"
+}
+2025-12-30 11:36:01.884 [WARN] Обнаружены проблемы с сервисами: CacheService, TradingEngine, SchedulerService
+{
+  "service": "RecoveryService",
+  "environment": "development",
+  "component": "services",
+  "failedServices": [
+    "CacheService",
+    "TradingEngine",
+    "SchedulerService"
+  ]
+}
+2025-12-30 11:36:03.035 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.040 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.114 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.120 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.258 [INFO] Initializing FundamentalDataService
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.259 [INFO] FundamentalDataService initialized
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.261 [INFO] Initializing AssetSyncService
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.262 [INFO] AssetSyncService initialized
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.272 [INFO] Initializing OptionsDataService
+{
+  "service": "OptionsDataService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.273 [INFO] OptionsDataService initialized
+{
+  "service": "OptionsDataService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.333 [INFO] Initializing FundamentalDataService
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.334 [INFO] FundamentalDataService initialized
+{
+  "service": "FundamentalDataService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.464 [INFO] Initializing AssetSyncService
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.465 [INFO] AssetSyncService initialized
+{
+  "service": "AssetSyncService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.474 [INFO] Initializing OptionsDataService
+{
+  "service": "OptionsDataService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.474 [INFO] OptionsDataService initialized
+{
+  "service": "OptionsDataService",
+  "environment": "development"
+}
+2025-12-30 11:36:03.511 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.511 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.512 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.516 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.517 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.517 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.521 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.522 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.526 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.527 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.660 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.661 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.665 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.665 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.671 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.672 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.675 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.682 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.688 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.689 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.815 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.822 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.824 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.825 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.831 [INFO] 🎯 Initializing Entry Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.832 [WARN] ⚠️ Failed to load entry optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.832 [INFO] ✅ Entry Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.893 [INFO] 🚪 Initializing Exit Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.894 [WARN] ⚠️ Failed to load exit optimization settings, using defaults:
+{
+  "0": "S",
+  "1": "e",
+  "2": "t",
+  "3": "t",
+  "4": "i",
+  "5": "n",
+  "6": "g",
+  "7": "s",
+  "8": "S",
+  "9": "e",
+  "10": "r",
+  "11": "v",
+  "12": "i",
+  "13": "c",
+  "14": "e",
+  "15": ".",
+  "16": "g",
+  "17": "e",
+  "18": "t",
+  "19": "S",
+  "20": "e",
+  "21": "t",
+  "22": "t",
+  "23": "i",
+  "24": "n",
+  "25": "g",
+  "26": "s",
+  "27": "B",
+  "28": "y",
+  "29": "C",
+  "30": "a",
+  "31": "t",
+  "32": "e",
+  "33": "g",
+  "34": "o",
+  "35": "r",
+  "36": "y",
+  "37": " ",
+  "38": "i",
+  "39": "s",
+  "40": " ",
+  "41": "n",
+  "42": "o",
+  "43": "t",
+  "44": " ",
+  "45": "a",
+  "46": " ",
+  "47": "f",
+  "48": "u",
+  "49": "n",
+  "50": "c",
+  "51": "t",
+  "52": "i",
+  "53": "o",
+  "54": "n",
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.894 [INFO] ✅ Exit Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.898 [INFO] 📊 Initializing Position Monitoring Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.899 [INFO] ✅ Position Monitoring Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.903 [INFO] 📊 Initializing Daily Report Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.904 [INFO] ✅ Daily Report Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.909 [INFO] 💰 Initializing Tax Optimization Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.910 [INFO] ✅ Tax Optimization Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.913 [INFO] 🔐 Initializing Secret Management Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.913 [INFO] ✅ Secret Management Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.919 [INFO] 📊 Initializing Pyramiding Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.920 [INFO] ✅ Pyramiding Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.922 [INFO] ⚖️ Initializing Model Weighting Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.928 [INFO] ✅ Model Weighting Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.934 [INFO] 🌍 Initializing Diversification Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.936 [INFO] ✅ Diversification Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.941 [INFO] 🔄 Initializing Migration Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.951 [INFO] ✅ Migration Service initialized (current schema version: 0.0.0)
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.954 [INFO] 🧹 Initializing Data Cleanup Service...
+{
+  "service": "ai-trader",
+  "environment": "development"
+}
+2025-12-30 11:36:03.955 [INFO] ✅ Data Cleanup Service initialized
+{
+  "service": "ai-trader",
+  "environment": "development"
+}

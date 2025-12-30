@@ -33,6 +33,7 @@ import TradingNotificationSettings from '../models/TradingNotificationSettings.j
 import PositionPyramid from '../models/PositionPyramid.js';
 import ModelPerformance from '../models/ModelPerformance.js';
 import DatabaseMigration from '../models/DatabaseMigration.js';
+import OptionsData from '../models/OptionsData.js';
 
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
@@ -304,10 +305,22 @@ export async function initDatabase() {
         try {
             await Asset.sync({ force: false });
             // Создаем GIN индекс для JSONB поиска по apiData, если его еще нет
-            await sequelize.query(`
-                CREATE INDEX IF NOT EXISTS assets_api_data_gin_idx ON assets USING gin (apiData);
+            // Проверяем, существует ли столбец apiData перед созданием индекса
+            const [columns] = await sequelize.query(`
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'assets' 
+                AND column_name = 'apiData';
             `);
-            console.log('✅ Таблица активов создана/обновлена');
+            
+            if (columns.length > 0) {
+                await sequelize.query(`
+                    CREATE INDEX IF NOT EXISTS assets_api_data_gin_idx ON assets USING gin ("apiData");
+                `);
+                console.log('✅ Таблица активов создана/обновлена');
+            } else {
+                console.warn('⚠️ Столбец apiData не найден в таблице assets, индекс не создан');
+            }
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы активов:', syncError);
             // Не прерываем инициализацию при ошибке синхронизации
@@ -330,6 +343,34 @@ export async function initDatabase() {
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы фундаментальных данных:', syncError);
             // Не прерываем инициализацию при ошибке синхронизации
+        }
+        
+        // Создаем таблицу опционных данных
+        console.log('📊 Создание таблицы опционных данных...');
+        try {
+            // Создаем ENUM тип для optionType, если его еще нет
+            await sequelize.query(`
+                DO $$ 
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_options_data_optiontype') THEN
+                        CREATE TYPE enum_options_data_optiontype AS ENUM ('call', 'put');
+                    END IF;
+                END $$;
+            `);
+            
+            await OptionsData.sync({ force: false });
+            console.log('✅ Таблица опционных данных создана/обновлена');
+        } catch (syncError) {
+            // Игнорируем ошибки создания ENUM типов, если они уже существуют
+            if (syncError.name === 'SequelizeUniqueConstraintError' && 
+                syncError.original && syncError.original.code === '23505' &&
+                (syncError.message && syncError.message.includes('enum_options_data') ||
+                 syncError.original.detail && syncError.original.detail.includes('enum_options_data'))) {
+                console.log('✅ Таблица опционных данных уже существует');
+            } else {
+                console.error('❌ Ошибка синхронизации таблицы опционных данных:', syncError);
+                // Не прерываем инициализацию при ошибке синхронизации
+            }
         }
         
         // Создаем таблицу трейлинг-стопов

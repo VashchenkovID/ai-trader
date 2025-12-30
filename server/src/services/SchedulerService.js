@@ -42,6 +42,7 @@ class SchedulerService {
         this.correlationPrecalcTask = null;
         this.weeklyBacktestTask = null;
         this.macroDataUpdateTask = null; // Задача обновления макроэкономических данных
+        this.optionsDataUpdateTask = null; // Задача обновления опционных данных
         this.portfolioRebalancingTask = null; // Задача ребалансировки портфеля
         this.positionMonitoringTask = null; // Задача мониторинга позиций
         this.dailyReportTask = null; // Задача ежедневных отчетов
@@ -1285,6 +1286,13 @@ class SchedulerService {
                 console.log('✅ Macro data update task stopped and destroyed');
             }
             
+            if (this.optionsDataUpdateTask) {
+                this.optionsDataUpdateTask.stop();
+                this.optionsDataUpdateTask.destroy();
+                this.optionsDataUpdateTask = null;
+                console.log('✅ Options data update task stopped and destroyed');
+            }
+            
             if (this.portfolioRebalancingTask) {
                 this.portfolioRebalancingTask.stop();
                 this.portfolioRebalancingTask.destroy();
@@ -1591,7 +1599,15 @@ class SchedulerService {
             console.log('▶️ Resumed: macro data update task');
         }
         
-        console.log('✅ All processes resumed gradually (total delay: ~20 seconds)');
+        // Задержка перед следующей группой
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
+        
+        if (this.optionsDataUpdateTask) {
+            this.optionsDataUpdateTask.start();
+            console.log('▶️ Resumed: options data update task');
+        }
+        
+        console.log('✅ All processes resumed gradually (total delay: ~22 seconds)');
     }
 
     /**
@@ -4216,6 +4232,58 @@ class SchedulerService {
                 `❌ Ошибка при обновлении макроэкономических данных:\n${error.message}`,
                 'error'
             );
+        }
+    }
+
+    /**
+     * Обновление опционных данных
+     */
+    async performOptionsDataUpdate() {
+        try {
+            console.log('📊 Starting options data update...');
+            
+            const OptionsDataService = (await import('./OptionsDataService.js')).default;
+            
+            // Убеждаемся, что сервис инициализирован
+            if (!OptionsDataService.isInitialized) {
+                await OptionsDataService.initialize();
+            }
+            
+            // Выполняем массовое обновление опционов
+            const updateStats = await OptionsDataService.updateOptionsForAllInstruments({
+                delayMs: 2000, // 2 секунды между запросами
+                forceUpdate: false // Не принуждаем обновление существующих записей
+            });
+            
+            // Формируем отчет
+            const summary = `Обновление опционных данных завершено:
+• Обработано инструментов: ${updateStats.processed} / ${updateStats.total}
+• Сохранено опционов: ${updateStats.saved}
+• Ошибок: ${updateStats.errors}
+• Пропущено: ${updateStats.skipped}`;
+            
+            console.log(`✅ Options data update completed:\n${summary}`);
+            
+            // Отправляем уведомление в Telegram
+            await OptimizedTelegramService.sendAlert(
+                'OPTIONS_DATA_UPDATE',
+                summary,
+                updateStats.errors > 0 ? 'warning' : 'info'
+            );
+            
+            return {
+                success: true,
+                stats: updateStats,
+                summary
+            };
+        } catch (error) {
+            console.error('❌ Error in performOptionsDataUpdate:', error);
+            await OptimizedTelegramService.sendAlert(
+                'OPTIONS_DATA_UPDATE_ERROR',
+                `❌ Ошибка при обновлении опционных данных:\n${error.message}`,
+                'error'
+            );
+            throw error;
         }
     }
 

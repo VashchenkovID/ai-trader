@@ -1077,6 +1077,42 @@ class TinkoffApiService {
     }
 
     /**
+     * Получение опционов по базовому активу
+     * Документация: https://developer.tbank.ru/invest/api/instruments-service-options-by
+     * @param {Object} params - Параметры запроса
+     * @param {string} params.basicAssetUid - Идентификатор базового актива (обязательный)
+     * @param {string} params.basicAssetPositionUid - Идентификатор позиции базового актива (опционально)
+     * @param {string} params.basicInstrumentId - Идентификатор базового инструмента (figi, instrument_uid или ticker+"_"+classCode) (опционально)
+     * @returns {Promise<Array>} - Массив опционов
+     */
+    async getOptionsBy(params) {
+        try {
+            const { basicAssetUid, basicAssetPositionUid, basicInstrumentId } = params;
+
+            if (!basicAssetUid && !basicInstrumentId) {
+                console.warn('⚠️ getOptionsBy: требуется basicAssetUid или basicInstrumentId');
+                return [];
+            }
+
+            const requestBody = {};
+            if (basicAssetUid) requestBody.basicAssetUid = basicAssetUid;
+            if (basicAssetPositionUid) requestBody.basicAssetPositionUid = basicAssetPositionUid;
+            if (basicInstrumentId) requestBody.basicInstrumentId = basicInstrumentId;
+
+            const response = await this.makeRequest(
+                '/tinkoff.public.invest.api.contract.v1.InstrumentsService/OptionsBy',
+                requestBody
+            );
+
+            // Ответ содержит массив instruments
+            return response.instruments || [];
+        } catch (error) {
+            console.error('❌ Ошибка получения опционов:', error);
+            return [];
+        }
+    }
+
+    /**
      * Получение фундаментальных показателей по активам
      * @param {Array<string>} assetIdentifiers - Массив идентификаторов активов (asset_uid, до 100 шт)
      * @returns {Promise<Array>} - Массив объектов с фундаментальными данными

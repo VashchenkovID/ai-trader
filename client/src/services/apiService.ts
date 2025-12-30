@@ -3237,6 +3237,78 @@ export const apiService = {
     }
   },
 
+  // Fundamental Data API methods
+  async updateFundamentalData(options?: { forceUpdate?: boolean; syncAssets?: boolean }) {
+    try {
+      const response = await api.post('/api/fundamental-data/sync-and-fill', {
+        syncAssets: options?.syncAssets !== false, // По умолчанию true
+        forceUpdateFundamentals: options?.forceUpdate || false,
+        delayMs: 1000
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating fundamental data:', error);
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Ошибка обновления фундаментальных данных',
+        error: error.message 
+      };
+    }
+  },
+
+  // Options Data API methods
+  async updateOptionsData(options?: { forceUpdate?: boolean; delayMs?: number; limit?: number }) {
+    try {
+      const response = await api.post('/api/options-data/update-all', {
+        forceUpdate: options?.forceUpdate || false,
+        delayMs: options?.delayMs || 2000,
+        limit: options?.limit || null
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating options data:', error);
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Ошибка обновления опционных данных',
+        error: error.message 
+      };
+    }
+  },
+
+  async updateOptionsForFigi(figi: string, options?: { forceUpdate?: boolean }) {
+    try {
+      const response = await api.post(`/api/options-data/update/${figi}`, {
+        forceUpdate: options?.forceUpdate || false
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating options for figi:', error);
+      throw error;
+    }
+  },
+
+  async updateMissingIV(baseFigi?: string) {
+    try {
+      const response = await api.post('/api/options-data/update-missing-iv', {
+        baseFigi: baseFigi || null
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating missing IV:', error);
+      throw error;
+    }
+  },
+
+  async getOptionsStats() {
+    try {
+      const response = await api.get('/api/options-data/stats');
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching options stats:', error);
+      throw error;
+    }
+  },
+
   // Portfolio Rebalancing API methods
   async getRebalancingStatus() {
     try {

@@ -3,6 +3,7 @@ import TinkoffApiService from './TinkoffApiService.js';
 import DividendService from './DividendService.js';
 import MacroDataService from './MacroDataService.js';
 import FundamentalDataService from './FundamentalDataService.js';
+import OptionsDataService from './OptionsDataService.js';
 // import CompanySyncService from './CompanySyncService.js'; // Временно отключено
 // import PortfolioSyncService from './PortfolioSyncService.js'; // Временно отключено
 
@@ -34,6 +35,10 @@ class OptimizedDataService {
             // Инициализируем FundamentalDataService для работы с фундаментальными данными
             if (!FundamentalDataService.isInitialized) {
                 await FundamentalDataService.initialize();
+            }
+            // Инициализируем OptionsDataService для работы с опционами и IV
+            if (!OptionsDataService.isInitialized) {
+                await OptionsDataService.initialize();
             }
             // TinkoffApiService не требует инициализации - это экземпляр
             // await DividendService.initialize(); // Проверим, есть ли у DividendService метод initialize
@@ -219,6 +224,14 @@ class OptimizedDataService {
                 ? await FundamentalDataService.getFundamentalFeatures(figi, window[window.length - 1].time)
                 : new Array(7).fill(0);
             
+            // Опционные фичи (IV текущая, IV средняя за 30 дней, IV rank, флаг наличия данных)
+            // Возвращает 4 фичи, но используем только первые 3 (currentIV, avgIV30d, ivRank)
+            const optionsFeatures = figi 
+                ? await OptionsDataService.getOptionsFeatures(figi, window[window.length - 1].time)
+                : new Array(4).fill(0);
+            // Берем только первые 3 фичи (без флага hasOptionsData)
+            const optionsFeaturesForModel = optionsFeatures.slice(0, 3);
+            
             // Объединяем все фичи
             features.push(...normalizedPrices);
             features.push(...normalizedVolumes);
@@ -230,10 +243,11 @@ class OptimizedDataService {
             features.push(...signalsFeatures);
             features.push(...macroFeatures);
             features.push(...fundamentalFeatures);
+            features.push(...optionsFeaturesForModel);
             
             // Логирование и исправление размеров фичей
-            // Полный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) + 8 (macro) + 7 (fundamental) = 45
-            const expectedSize = 45;
+            // Полный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) + 8 (macro) + 7 (fundamental) + 3 (options) = 48
+            const expectedSize = 48;
             if (features.length !== expectedSize) {
                 console.warn(`⚠️ Unexpected feature size: ${features.length}, expected ${expectedSize}`);
                 
@@ -255,8 +269,8 @@ class OptimizedDataService {
         } catch (error) {
             console.error('Error creating feature vector:', error);
             // Возвращаем нулевой вектор при ошибке с правильным размером
-            // Полный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 + 8 + 7 = 45
-            return new Array(45).fill(0);
+            // Полный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 + 8 + 7 + 3 = 48
+            return new Array(48).fill(0);
         }
     }
 

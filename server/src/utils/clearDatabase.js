@@ -28,6 +28,7 @@ import FundamentalData from '../models/FundamentalData.js';
 import Asset from '../models/Asset.js';
 import PortfolioAnalysis from '../models/PortfolioAnalysis.js';
 import TrailingStop from '../models/TrailingStop.js';
+import OptionsData from '../models/OptionsData.js';
 import { Op } from 'sequelize';
 
 /**
@@ -205,6 +206,11 @@ async function clearDatabase() {
     console.log('📊 Очистка фундаментальных данных...');
     await FundamentalData.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
     console.log('   ✅ Фундаментальные данные очищены');
+    
+    // 1.1.3. Опционные данные (независимая таблица)
+    console.log('📊 Очистка опционных данных...');
+    await OptionsData.destroy({ where: {}, truncate: true, cascade: true, restartIdentity: true });
+    console.log('   ✅ Опционные данные очищены');
     
     // 1.2. История ребалансировок портфеля (независимая таблица)
     console.log('🔄 Очистка истории ребалансировок портфеля...');
