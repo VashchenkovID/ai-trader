@@ -310,6 +310,33 @@ router.get('/features', async (req, res) => {
 });
 
 /**
+ * Загрузка рыночных индексов (IMOEX, RTS) в CachedInstrument и их свечей
+ * POST /api/macro-data/load-indices
+ */
+router.post('/load-indices', async (req, res) => {
+    try {
+        if (!MacroDataService.isInitialized) {
+            await MacroDataService.initialize();
+        }
+
+        const stats = await MacroDataService.loadMarketIndices();
+
+        res.json({
+            success: true,
+            message: 'Загрузка индексов завершена',
+            data: stats
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки индексов:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка загрузки индексов',
+            error: error.message
+        });
+    }
+});
+
+/**
  * Принудительное обновление данных
  * Body параметры (опционально):
  * - sources: объект с настройками источников { cbr: true, rosstat: true, moex: true }

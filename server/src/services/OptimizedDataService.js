@@ -153,15 +153,20 @@ class OptimizedDataService {
     /**
      * Создание вектора фичей из окна данных
      */
-    async createFeatureVector(window, figi = null, preloadedCandles = null) {
+    async createFeatureVector(candles, figi = null, preloadedCandles = null) {
         try {
             const features = [];
             
+            // Проверяем, что candles - это массив
+            if (!Array.isArray(candles) || candles.length === 0) {
+                throw new Error('candles must be a non-empty array');
+            }
+            
             // Базовые фичи: цены и объемы
-            const prices = window.map(c => c.close);
-            const volumes = window.map(c => c.volume);
-            const highs = window.map(c => c.high);
-            const lows = window.map(c => c.low);
+            const prices = candles.map(c => c.close);
+            const volumes = candles.map(c => c.volume);
+            const highs = candles.map(c => c.high);
+            const lows = candles.map(c => c.low);
             
             // Упрощенная нормализация: берем только последние 5 значений (достаточно для тренда)
             const pricesForFeatures = prices.slice(-5);
@@ -203,32 +208,32 @@ class OptimizedDataService {
             const technicalFeatures = this.calculateTechnicalIndicators(prices, volumes, highs, lows);
             
             // Временные фичи
-            const timeFeatures = this.createTimeFeatures(window[window.length - 1].time);
+            const timeFeatures = this.createTimeFeatures(candles[candles.length - 1].time);
             
             // Рыночные фичи (если доступны) - передаем предзагруженные свечи для оптимизации
-            const marketFeatures = await this.getMarketFeatures(figi, window[window.length - 1].time, preloadedCandles);
+            const marketFeatures = await this.getMarketFeatures(figi, candles[candles.length - 1].time, preloadedCandles);
             
             // Новостные фичи и анализ настроений
-            const newsFeatures = await this.getNewsFeatures(figi, window[window.length - 1].time);
+            const newsFeatures = await this.getNewsFeatures(figi, candles[candles.length - 1].time);
             
             // Telegram настроения
-            const telegramFeatures = await this.getTelegramFeatures(figi, window[window.length - 1].time);
+            const telegramFeatures = await this.getTelegramFeatures(figi, candles[candles.length - 1].time);
             
             // Сигналы аналитиков
-            const signalsFeatures = await this.getSignalsFeatures(figi, window[window.length - 1].time);
+            const signalsFeatures = await this.getSignalsFeatures(figi, candles[candles.length - 1].time);
             
-            // Макроэкономические фичи
-            const macroFeatures = await this.getMacroFeatures(window[window.length - 1].time);
+            // Макроэкономические фичи (11 фичей: 8 базовых + 3 сырьевых: нефть, газ, золото)
+            const macroFeatures = await this.getMacroFeatures(candles[candles.length - 1].time);
             
             // Фундаментальные фичи (P/E, P/B, EV/EBITDA, ROE, Debt/EBITDA, Operating Margin, Net Margin)
             const fundamentalFeatures = figi 
-                ? await FundamentalDataService.getFundamentalFeatures(figi, window[window.length - 1].time)
+                ? await FundamentalDataService.getFundamentalFeatures(figi, candles[candles.length - 1].time)
                 : new Array(7).fill(0);
             
             // Опционные фичи (IV текущая, IV средняя за 30 дней, IV rank, флаг наличия данных)
             // Возвращает 4 фичи, но используем только первые 3 (currentIV, avgIV30d, ivRank)
             const optionsFeatures = figi 
-                ? await OptionsDataService.getOptionsFeatures(figi, window[window.length - 1].time)
+                ? await OptionsDataService.getOptionsFeatures(figi, candles[candles.length - 1].time)
                 : new Array(4).fill(0);
             // Берем только первые 3 фичи (без флага hasOptionsData)
             const optionsFeaturesForModel = optionsFeatures.slice(0, 3);
@@ -247,8 +252,8 @@ class OptimizedDataService {
             features.push(...optionsFeaturesForModel);
             
             // Логирование и исправление размеров фичей
-            // Полный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) + 8 (macro) + 7 (fundamental) + 3 (options) = 48
-            const expectedSize = 48;
+            // Полный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) + 15 (macro: 8 базовых + 3 сырьевых + 2 валютных + 2 индекса) + 7 (fundamental) + 3 (options) = 55
+            const expectedSize = 55;
             if (features.length !== expectedSize) {
                 console.warn(`⚠️ Unexpected feature size: ${features.length}, expected ${expectedSize}`);
                 
@@ -270,8 +275,8 @@ class OptimizedDataService {
         } catch (error) {
             console.error('Error creating feature vector:', error);
             // Возвращаем нулевой вектор при ошибке с правильным размером
-            // Полный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 + 8 + 7 + 3 = 48
-            return new Array(48).fill(0);
+            // Полный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 + 15 + 7 + 3 = 55
+            return new Array(55).fill(0);
         }
     }
 
@@ -975,22 +980,22 @@ class OptimizedDataService {
             // Проверяем валидность даты
             if (!date || isNaN(date.getTime())) {
                 console.warn('⚠️ Невалидная дата для макро-фичей:', timestamp);
-                return new Array(8).fill(0);
+                return new Array(11).fill(0);
             }
             
-            // Получаем макро-фичи для указанной даты
+            // Получаем макро-фичи для указанной даты (теперь 15 фичей: 8 базовых + 3 сырьевых + 2 валютных + 2 индекса)
             const macroFeatures = await MacroDataService.getMacroFeatures(date, country);
             
-            // Убеждаемся, что возвращаем ровно 8 фичей
-            if (macroFeatures.length !== 8) {
-                console.warn(`⚠️ Macro features count mismatch: expected 8, got ${macroFeatures.length}`);
-                // Дополняем или обрезаем до 8
+            // Убеждаемся, что возвращаем ровно 15 фичей
+            if (macroFeatures.length !== 15) {
+                console.warn(`⚠️ Macro features count mismatch: expected 15, got ${macroFeatures.length}`);
+                // Дополняем или обрезаем до 15
                 const fixedFeatures = [...macroFeatures];
-                while (fixedFeatures.length < 8) {
+                while (fixedFeatures.length < 15) {
                     fixedFeatures.push(0);
                 }
-                if (fixedFeatures.length > 8) {
-                    fixedFeatures.splice(8);
+                if (fixedFeatures.length > 15) {
+                    fixedFeatures.splice(15);
                 }
                 return fixedFeatures;
             }
@@ -999,8 +1004,8 @@ class OptimizedDataService {
             
         } catch (error) {
             console.error('❌ Ошибка получения макро-фичей:', error);
-            // Возвращаем 8 нулевых фичей при ошибке
-            return new Array(8).fill(0);
+            // Возвращаем 15 нулевых фичей при ошибке (8 базовых + 3 сырьевых + 2 валютных + 2 индекса)
+            return new Array(15).fill(0);
         }
     }
 

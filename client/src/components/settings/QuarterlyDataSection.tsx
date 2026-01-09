@@ -9,8 +9,12 @@ import './QuarterlyDataSection.css';
 const QuarterlyDataSection: React.FC = () => {
   const [updatingFundamental, setUpdatingFundamental] = useState(false);
   const [updatingOptions, setUpdatingOptions] = useState(false);
+  const [updatingMacro, setUpdatingMacro] = useState(false);
+  const [updatingIndices, setUpdatingIndices] = useState(false);
   const [fundamentalResult, setFundamentalResult] = useState<any>(null);
   const [optionsResult, setOptionsResult] = useState<any>(null);
+  const [macroResult, setMacroResult] = useState<any>(null);
+  const [indicesResult, setIndicesResult] = useState<any>(null);
 
   const handleUpdateFundamentalData = async () => {
     if (!window.confirm('Обновление фундаментальных данных может занять некоторое время. Продолжить?')) {
@@ -148,7 +152,7 @@ const QuarterlyDataSection: React.FC = () => {
             <Button
               onClick={handleUpdateFundamentalData}
               loading={updatingFundamental}
-              disabled={updatingFundamental || updatingOptions}
+              disabled={updatingFundamental || updatingOptions || updatingMacro || updatingIndices}
               size="md"
               icon={<i className="pi pi-refresh"></i>}
               fullWidth
@@ -210,12 +214,210 @@ const QuarterlyDataSection: React.FC = () => {
             <Button
               onClick={handleUpdateOptionsData}
               loading={updatingOptions}
-              disabled={updatingOptions || updatingFundamental}
+              disabled={updatingOptions || updatingFundamental || updatingMacro || updatingIndices}
               size="md"
               icon={<i className="pi pi-refresh"></i>}
               fullWidth
             >
               Обновить опционные данные
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Макроэкономические данные */}
+      <Card variant="glass" header="📈 Макроэкономические данные" className="quarterly-data-section">
+        <div className="quarterly-data-content">
+          <div className="quarterly-data-description">
+            <p>
+              Макроэкономические данные обновляются из различных источников и включают:
+            </p>
+            <ul>
+              <li>ЦБ РФ: ключевая ставка, курсы валют (USD/RUB, EUR/RUB)</li>
+              <li>Росстат: инфляция, ВВП, безработица, промышленное производство</li>
+              <li>Мосбиржа: индекс волатильности, цены на сырье (нефть, газ, золото, алюминий)</li>
+              <li>Рыночные индексы: IMOEX, RTS</li>
+            </ul>
+            <p className="quarterly-data-note">
+              <strong>Примечание:</strong> Макро-данные обновляются ежедневно автоматически (в 10:00) и используются для улучшения точности прогнозов нейросети, особенно для среднесрочных и долгосрочных стратегий. Данные включают 15 фичей в feature vector.
+            </p>
+          </div>
+
+          {updatingMacro && (
+            <div className="quarterly-data-progress">
+              <ProgressBar value={0} animated size="sm" />
+              <div className="quarterly-data-progress-text">Обновление макро-данных...</div>
+              <div className="quarterly-data-progress-note">
+                Это может занять несколько минут
+              </div>
+            </div>
+          )}
+
+          {macroResult && macroResult.data && (
+            <div className="quarterly-data-stats">
+              <div className="quarterly-data-stat-item">
+                <span className="quarterly-data-stat-label">ЦБ РФ:</span>
+                <Badge variant="info" size="sm">{macroResult.data.cbr?.saved || 0} сохранено</Badge>
+              </div>
+              <div className="quarterly-data-stat-item">
+                <span className="quarterly-data-stat-label">Росстат:</span>
+                <Badge variant="info" size="sm">{macroResult.data.rosstat?.saved || 0} сохранено</Badge>
+              </div>
+              <div className="quarterly-data-stat-item">
+                <span className="quarterly-data-stat-label">Мосбиржа (волатильность):</span>
+                <Badge variant="info" size="sm">{macroResult.data.moex?.saved || 0} сохранено</Badge>
+              </div>
+              <div className="quarterly-data-stat-item">
+                <span className="quarterly-data-stat-label">Мосбиржа (сырье):</span>
+                <Badge variant="info" size="sm">{macroResult.data.moexCommodity?.saved || 0} сохранено</Badge>
+              </div>
+              <div className="quarterly-data-stat-item">
+                <span className="quarterly-data-stat-label">Рыночные индексы:</span>
+                <Badge variant="info" size="sm">{macroResult.data.marketIndices?.saved || 0} сохранено</Badge>
+              </div>
+              <div className="quarterly-data-stat-item">
+                <span className="quarterly-data-stat-label">Всего сохранено:</span>
+                <Badge variant="success" size="sm">{macroResult.data.total?.saved || 0}</Badge>
+              </div>
+              {(macroResult.data.cbr?.errors?.length > 0 || 
+                macroResult.data.rosstat?.errors?.length > 0 || 
+                macroResult.data.moex?.errors?.length > 0 ||
+                macroResult.data.moexCommodity?.errors?.length > 0 ||
+                macroResult.data.marketIndices?.errors?.length > 0) && (
+                <div className="quarterly-data-stat-item">
+                  <span className="quarterly-data-stat-label">Ошибок:</span>
+                  <Badge variant="danger" size="sm">
+                    {(macroResult.data.cbr?.errors?.length || 0) + 
+                     (macroResult.data.rosstat?.errors?.length || 0) + 
+                     (macroResult.data.moex?.errors?.length || 0) +
+                     (macroResult.data.moexCommodity?.errors?.length || 0) +
+                     (macroResult.data.marketIndices?.errors?.length || 0)}
+                  </Badge>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="quarterly-data-actions">
+            <Button
+              onClick={async () => {
+                if (!window.confirm('Обновление макро-данных может занять некоторое время. Продолжить?')) {
+                  return;
+                }
+
+                setUpdatingMacro(true);
+                setMacroResult(null);
+
+                try {
+                  const result = await apiService.updateMacroData();
+                  setMacroResult(result);
+
+                  if (result.success) {
+                    alert('Макро-данные успешно обновлены!');
+                  } else {
+                    alert(`Ошибка обновления: ${result.message || 'Неизвестная ошибка'}`);
+                  }
+                } catch (error: any) {
+                  console.error('Error updating macro data:', error);
+                  setMacroResult({
+                    success: false,
+                    message: error.message || 'Ошибка обновления макро-данных'
+                  });
+                  alert(`Ошибка обновления: ${error.message || 'Неизвестная ошибка'}`);
+                } finally {
+                  setUpdatingMacro(false);
+                }
+              }}
+              loading={updatingMacro}
+              disabled={updatingMacro || updatingFundamental || updatingOptions || updatingIndices}
+              size="md"
+              icon={<i className="pi pi-refresh"></i>}
+              fullWidth
+            >
+              Обновить макро-данные
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Рыночные индексы */}
+      <Card variant="glass" header="📊 Рыночные индексы (IMOEX, RTS)" className="quarterly-data-section">
+        <div className="quarterly-data-content">
+          <div className="quarterly-data-description">
+            <p>
+              Рыночные индексы загружаются из Tinkoff API и включают:
+            </p>
+            <ul>
+              <li>IMOEXF - Индекс МосБиржи</li>
+              <li>RTSI - Индекс RTS</li>
+            </ul>
+            <p className="quarterly-data-note">
+              <strong>Примечание:</strong> Индексы загружаются в CachedInstrument и их свечи кешируются. Затем их цены используются в макро-данных. Рекомендуется загружать индексы перед обновлением макро-данных.
+            </p>
+          </div>
+
+          {updatingIndices && (
+            <div className="quarterly-data-progress">
+              <ProgressBar value={0} animated size="sm" />
+              <div className="quarterly-data-progress-text">Загрузка рыночных индексов...</div>
+              <div className="quarterly-data-progress-note">
+                Это может занять несколько минут
+              </div>
+            </div>
+          )}
+
+          {indicesResult && indicesResult.data && (
+            <div className="quarterly-data-stats">
+              <div className="quarterly-data-stat-item">
+                <span className="quarterly-data-stat-label">Загружено индексов:</span>
+                <Badge variant="success" size="sm">{indicesResult.data.loaded || 0}</Badge>
+              </div>
+              {indicesResult.data.errors && indicesResult.data.errors.length > 0 && (
+                <div className="quarterly-data-stat-item">
+                  <span className="quarterly-data-stat-label">Ошибок:</span>
+                  <Badge variant="danger" size="sm">{indicesResult.data.errors.length}</Badge>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="quarterly-data-actions">
+            <Button
+              onClick={async () => {
+                if (!window.confirm('Загрузка индексов может занять некоторое время. Продолжить?')) {
+                  return;
+                }
+
+                setUpdatingIndices(true);
+                setIndicesResult(null);
+
+                try {
+                  const result = await apiService.loadMarketIndices();
+                  setIndicesResult(result);
+
+                  if (result.success) {
+                    alert('Рыночные индексы успешно загружены!');
+                  } else {
+                    alert(`Ошибка загрузки: ${result.message || 'Неизвестная ошибка'}`);
+                  }
+                } catch (error: any) {
+                  console.error('Error loading market indices:', error);
+                  setIndicesResult({
+                    success: false,
+                    message: error.message || 'Ошибка загрузки индексов'
+                  });
+                  alert(`Ошибка загрузки: ${error.message || 'Неизвестная ошибка'}`);
+                } finally {
+                  setUpdatingIndices(false);
+                }
+              }}
+              loading={updatingIndices}
+              disabled={updatingIndices || updatingFundamental || updatingOptions || updatingMacro}
+              size="md"
+              icon={<i className="pi pi-refresh"></i>}
+              fullWidth
+            >
+              Загрузить рыночные индексы
             </Button>
           </div>
         </div>

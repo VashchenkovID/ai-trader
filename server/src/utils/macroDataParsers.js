@@ -1077,6 +1077,129 @@ export function parseMoexJson(jsonData) {
 }
 
 /**
+ * Парсинг JSON ответа от MOEX ISS API для исторических данных по сырьевым товарам
+ * @param {Object} jsonData - JSON ответ от MOEX ISS API
+ * @param {string} commodityType - Тип сырья ('oil', 'gas', 'gold', 'silver', 'copper', 'nickel', 'aluminum')
+ * @param {string} commodityCode - Код инструмента (например, 'BR', 'NG', 'GD')
+ * @returns {Array<Object>} Массив данных {date: Date, value: number, metadata: Object}
+ */
+export function parseMoexCommodityJson(jsonData, commodityType, commodityCode) {
+    try {
+        const records = [];
+        
+        if (!jsonData || !jsonData.history) {
+            console.warn(`⚠️ JSON от MOEX ISS API не содержит данных history для ${commodityType}`);
+            return records;
+        }
+
+        const history = jsonData.history;
+        const columns = history.columns || [];
+        const dataArray = history.data || [];
+
+        if (!Array.isArray(dataArray) || dataArray.length === 0) {
+            console.log(`ℹ️ Нет данных для ${commodityType} (${commodityCode})`);
+            return records;
+        }
+
+        // Определяем индексы колонок
+        const dateIndex = columns.indexOf('TRADEDATE');
+        const openIndex = columns.indexOf('OPEN');
+        const highIndex = columns.indexOf('HIGH');
+        const lowIndex = columns.indexOf('LOW');
+        const closeIndex = columns.indexOf('CLOSE');
+        const settleIndex = columns.indexOf('SETTLEPRICE');
+        const volumeIndex = columns.indexOf('VOLUME');
+        const secidIndex = columns.indexOf('SECID');
+
+        if (dateIndex === -1 || closeIndex === -1) {
+            console.warn(`⚠️ Не найдены обязательные колонки в ответе MOEX ISS API для ${commodityType}`);
+            return records;
+        }
+
+        // Обрабатываем данные, сортируя по дате (от старых к новым)
+        const sortedData = [...dataArray].sort((a, b) => {
+            const dateA = new Date(a[dateIndex]);
+            const dateB = new Date(b[dateIndex]);
+            return dateA - dateB;
+        });
+
+        for (let i = 0; i < sortedData.length; i++) {
+            const row = sortedData[i];
+            
+            if (!Array.isArray(row) || row.length <= Math.max(dateIndex, closeIndex)) {
+                continue;
+            }
+
+            // Парсим дату
+            const dateStr = row[dateIndex];
+            const date = new Date(dateStr);
+            
+            if (isNaN(date.getTime())) {
+                console.warn(`⚠️ Некорректная дата в данных MOEX для ${commodityType}: ${dateStr}`);
+                continue;
+            }
+
+            // Парсим цену закрытия (используем SETTLEPRICE если есть, иначе CLOSE)
+            const closePrice = settleIndex !== -1 && row[settleIndex] !== null 
+                ? parseFloat(row[settleIndex])
+                : parseFloat(row[closeIndex]);
+            
+            if (isNaN(closePrice) || closePrice <= 0) {
+                console.warn(`⚠️ Некорректная цена закрытия для ${commodityType} на ${dateStr}`);
+                continue;
+            }
+
+            // Получаем предыдущее значение для расчета изменения
+            let previousValue = null;
+            if (i > 0) {
+                const prevRow = sortedData[i - 1];
+                previousValue = settleIndex !== -1 && prevRow[settleIndex] !== null
+                    ? parseFloat(prevRow[settleIndex])
+                    : parseFloat(prevRow[closeIndex]);
+            }
+
+            // Парсим дополнительные данные
+            const open = openIndex !== -1 ? parseFloat(row[openIndex]) : null;
+            const high = highIndex !== -1 ? parseFloat(row[highIndex]) : null;
+            const low = lowIndex !== -1 ? parseFloat(row[lowIndex]) : null;
+            const volume = volumeIndex !== -1 ? parseInt(row[volumeIndex]) : null;
+            const secid = secidIndex !== -1 ? row[secidIndex] : null;
+
+            // Рассчитываем изменение
+            let change = null;
+            let changePercent = null;
+            if (previousValue !== null && !isNaN(previousValue) && previousValue > 0) {
+                change = closePrice - previousValue;
+                changePercent = (change / previousValue) * 100;
+            }
+
+            records.push({
+                date: date,
+                value: closePrice,
+                previousValue: previousValue,
+                metadata: {
+                    commodityType: commodityType,
+                    commodityCode: commodityCode,
+                    futuresContract: secid,
+                    open: open,
+                    high: high,
+                    low: low,
+                    volume: volume,
+                    change: change,
+                    changePercent: changePercent
+                }
+            });
+        }
+
+        console.log(`📊 Распарсено ${records.length} записей для ${commodityType} (${commodityCode}) из MOEX ISS API`);
+        return records;
+    } catch (error) {
+        console.error(`❌ Ошибка парсинга JSON MOEX ISS API для ${commodityType}:`, error);
+        return [];
+    }
+}
+
+/**
  * Нормализация данных индикатора
  * @param {string} indicatorType - Тип индикатора
  * @param {Object} rawData - Сырые данные
@@ -1121,8 +1244,8 @@ function determinePeriodType(date, indicatorType) {
         return 'quarterly';
     }
 
-    // Ставки, индексы и курсы валют обычно ежедневные
-    if (indicatorType === 'interest_rate' || indicatorType === 'volatility_index' || indicatorType === 'currency_rate') {
+    // Ставки, индексы, курсы валют и цены на сырье обычно ежедневные
+    if (indicatorType === 'interest_rate' || indicatorType === 'volatility_index' || indicatorType === 'currency_rate' || indicatorType === 'oil_price') {
         return 'daily';
     }
 
@@ -1214,6 +1337,16 @@ export function validateIndicator(indicator) {
                 } else if (indicator.value > 1000) {
                     console.warn(`⚠️ Подозрительное значение курса валюты: ${indicator.value} (обычно ожидается 10-500)`);
                 }
+                break;
+            case 'oil_price':
+                // Цены на сырье должны быть положительными
+                // Для нефти: обычно 50-150 USD
+                // Для газа: обычно 100-500 RUB
+                // Для золота: обычно 1500-2500 USD
+                if (indicator.value <= 0) {
+                    errors.push(`Некорректное значение цены на сырье: ${indicator.value} (должно быть положительным)`);
+                }
+                // Значения могут сильно различаться в зависимости от типа сырья, поэтому не устанавливаем жестких ограничений
                 break;
         }
     }

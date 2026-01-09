@@ -43,6 +43,8 @@ class SchedulerService {
         this.weeklyBacktestTask = null;
         this.macroDataUpdateTask = null; // Задача обновления макроэкономических данных
         this.optionsDataUpdateTask = null; // Задача обновления опционных данных
+        this.fundamentalDataUpdateTask = null; // Задача обновления фундаментальных данных
+        this.marketIndicesLoadTask = null; // Задача загрузки рыночных индексов
         this.portfolioRebalancingTask = null; // Задача ребалансировки портфеля
         this.positionMonitoringTask = null; // Задача мониторинга позиций
         this.dailyReportTask = null; // Задача ежедневных отчетов
@@ -661,7 +663,41 @@ class SchedulerService {
             }
         );
         
-        // Задача 18: Автоматическая ребалансировка портфеля
+        // Задача 18: Обновление опционных данных
+        // Расписание из настроек (по умолчанию: ежедневно в 01:00)
+        const optionsDataUpdateSchedule = await SettingsService.getSetting('options_data_update_interval', '0 1 * * *');
+        this.optionsDataUpdateTask = SchedulerUtils.createScheduledTask(
+            optionsDataUpdateSchedule,
+            async () => {
+                await this.performOptionsDataUpdate();
+            },
+            {
+                taskName: 'options-data-update',
+                sendAlerts: true,
+                alertType: 'info',
+                startTime: this.startTime,
+                minDelay: 23 * 60 * 60 * 1000 // 23 часа (обновляем раз в день)
+            }
+        );
+
+        // Задача 19: Обновление фундаментальных данных (квартальные данные)
+        // Расписание из настроек (по умолчанию: еженедельно в воскресенье в 02:00)
+        const fundamentalDataUpdateSchedule = await SettingsService.getSetting('fundamental_data_update_interval', '0 2 * * 0');
+        this.fundamentalDataUpdateTask = SchedulerUtils.createScheduledTask(
+            fundamentalDataUpdateSchedule,
+            async () => {
+                await this.performFundamentalDataUpdate();
+            },
+            {
+                taskName: 'fundamental-data-update',
+                sendAlerts: true,
+                alertType: 'info',
+                startTime: this.startTime,
+                minDelay: 6 * 24 * 60 * 60 * 1000 // 6 дней (обновляем раз в неделю)
+            }
+        );
+
+        // Задача 20: Автоматическая ребалансировка портфеля
         // Расписание из настроек (по умолчанию: ежедневно в 2:00)
         const portfolioRebalancingSchedule = await SettingsService.getSetting('portfolio_rebalancing_check_interval', '0 2 * * *');
         this.portfolioRebalancingTask = SchedulerUtils.createScheduledTask(
@@ -1476,6 +1512,21 @@ class SchedulerService {
             console.log('⏸️ Paused: macro data update task');
         }
         
+        if (this.optionsDataUpdateTask) {
+            this.optionsDataUpdateTask.stop();
+            console.log('⏸️ Paused: options data update task');
+        }
+        
+        if (this.fundamentalDataUpdateTask) {
+            this.fundamentalDataUpdateTask.stop();
+            console.log('⏸️ Paused: fundamental data update task');
+        }
+        
+        if (this.marketIndicesLoadTask) {
+            this.marketIndicesLoadTask.stop();
+            console.log('⏸️ Paused: market indices load task');
+        }
+        
         console.log('✅ All processes paused');
     }
 
@@ -1607,7 +1658,17 @@ class SchedulerService {
             console.log('▶️ Resumed: options data update task');
         }
         
-        console.log('✅ All processes resumed gradually (total delay: ~22 seconds)');
+        if (this.fundamentalDataUpdateTask) {
+            this.fundamentalDataUpdateTask.start();
+            console.log('▶️ Resumed: fundamental data update task');
+        }
+        
+        if (this.marketIndicesLoadTask) {
+            this.marketIndicesLoadTask.start();
+            console.log('▶️ Resumed: market indices load task');
+        }
+        
+        console.log('✅ All processes resumed gradually (total delay: ~24 seconds)');
     }
 
     /**
@@ -4147,6 +4208,16 @@ class SchedulerService {
                     saved: updateStats.moex?.saved || 0,
                     errors: updateStats.moex?.errors || []
                 },
+                moexCommodity: {
+                    fetched: updateStats.moexCommodity?.fetched || 0,
+                    saved: updateStats.moexCommodity?.saved || 0,
+                    errors: updateStats.moexCommodity?.errors || []
+                },
+                marketIndices: {
+                    fetched: updateStats.marketIndices?.fetched || 0,
+                    saved: updateStats.marketIndices?.saved || 0,
+                    errors: updateStats.marketIndices?.errors || []
+                },
                 total: {
                     fetched: updateStats.total?.fetched || 0,
                     saved: updateStats.total?.saved || 0
@@ -4156,11 +4227,14 @@ class SchedulerService {
             console.log(`\n📊 Macro data update completed:`);
             console.log(`   ЦБ РФ: получено ${summary.cbr.fetched}, сохранено ${summary.cbr.saved}`);
             console.log(`   Росстат: получено ${summary.rosstat.fetched}, сохранено ${summary.rosstat.saved}`);
-            console.log(`   Мосбиржа: получено ${summary.moex.fetched}, сохранено ${summary.moex.saved}`);
+            console.log(`   Мосбиржа (волатильность): получено ${summary.moex.fetched}, сохранено ${summary.moex.saved}`);
+            console.log(`   Мосбиржа (сырье): получено ${summary.moexCommodity.fetched}, сохранено ${summary.moexCommodity.saved}`);
+            console.log(`   Рыночные индексы: получено ${summary.marketIndices.fetched}, сохранено ${summary.marketIndices.saved}`);
             console.log(`   Всего: получено ${summary.total.fetched}, сохранено ${summary.total.saved}`);
             
             // Проверяем наличие ошибок
-            const totalErrors = summary.cbr.errors.length + summary.rosstat.errors.length + summary.moex.errors.length;
+            const totalErrors = summary.cbr.errors.length + summary.rosstat.errors.length + summary.moex.errors.length + 
+                               summary.moexCommodity.errors.length + summary.marketIndices.errors.length;
             
             if (totalErrors > 0) {
                 // Есть ошибки - отправляем предупреждение
@@ -4192,12 +4266,34 @@ class SchedulerService {
                 }
                 
                 if (summary.moex.errors.length > 0) {
-                    errorMessage += `<b>Мосбиржа:</b>\n`;
+                    errorMessage += `<b>Мосбиржа (волатильность):</b>\n`;
                     summary.moex.errors.slice(0, 3).forEach(err => {
                         errorMessage += `• ${err}\n`;
                     });
                     if (summary.moex.errors.length > 3) {
                         errorMessage += `... и еще ${summary.moex.errors.length - 3} ошибок\n`;
+                    }
+                    errorMessage += `\n`;
+                }
+                
+                if (summary.moexCommodity.errors.length > 0) {
+                    errorMessage += `<b>Мосбиржа (сырье):</b>\n`;
+                    summary.moexCommodity.errors.slice(0, 3).forEach(err => {
+                        errorMessage += `• ${err}\n`;
+                    });
+                    if (summary.moexCommodity.errors.length > 3) {
+                        errorMessage += `... и еще ${summary.moexCommodity.errors.length - 3} ошибок\n`;
+                    }
+                    errorMessage += `\n`;
+                }
+                
+                if (summary.marketIndices.errors.length > 0) {
+                    errorMessage += `<b>Рыночные индексы:</b>\n`;
+                    summary.marketIndices.errors.slice(0, 3).forEach(err => {
+                        errorMessage += `• ${err}\n`;
+                    });
+                    if (summary.marketIndices.errors.length > 3) {
+                        errorMessage += `... и еще ${summary.marketIndices.errors.length - 3} ошибок\n`;
                     }
                 }
                 
@@ -4213,7 +4309,9 @@ class SchedulerService {
                     `Сохранено: <b>${summary.total.saved}</b>\n\n` +
                     `ЦБ РФ: ${summary.cbr.saved} записей\n` +
                     `Росстат: ${summary.rosstat.saved} записей\n` +
-                    `Мосбиржа: ${summary.moex.saved} записей`;
+                    `Мосбиржа (волатильность): ${summary.moex.saved} записей\n` +
+                    `Мосбиржа (сырье): ${summary.moexCommodity.saved} записей\n` +
+                    `Рыночные индексы: ${summary.marketIndices.saved} записей`;
                 
                 await OptimizedTelegramService.sendAlert(
                     'MACRO_DATA_UPDATE_SUCCESS',
@@ -4232,6 +4330,125 @@ class SchedulerService {
                 `❌ Ошибка при обновлении макроэкономических данных:\n${error.message}`,
                 'error'
             );
+        }
+    }
+
+    /**
+     * Загрузка рыночных индексов (IMOEX, RTS)
+     */
+    async performMarketIndicesLoad() {
+        try {
+            console.log('📊 Starting market indices load...');
+            
+            const MacroDataService = (await import('./MacroDataService.js')).default;
+            
+            // Убеждаемся, что сервис инициализирован
+            if (!MacroDataService.isInitialized) {
+                await MacroDataService.initialize();
+            }
+            
+            // Выполняем загрузку индексов
+            const loadStats = await MacroDataService.loadMarketIndices();
+            
+            // Формируем отчет
+            const summary = `Загрузка рыночных индексов завершена:
+• Загружено индексов: ${loadStats.loaded}
+• Ошибок: ${loadStats.errors.length}`;
+            
+            console.log(`✅ Market indices load completed:\n${summary}`);
+            
+            // Отправляем уведомление в Telegram
+            if (loadStats.errors.length === 0 && loadStats.loaded > 0) {
+                await OptimizedTelegramService.sendAlert(
+                    'MARKET_INDICES_LOAD_SUCCESS',
+                    `✅ <b>ЗАГРУЗКА РЫНОЧНЫХ ИНДЕКСОВ</b>\n\n${summary}`,
+                    'info'
+                );
+            } else if (loadStats.errors.length > 0) {
+                const errorMessage = `⚠️ <b>ЗАГРУЗКА РЫНОЧНЫХ ИНДЕКСОВ</b>\n\n${summary}\n\nОшибки:\n${loadStats.errors.slice(0, 5).map(e => `• ${e}`).join('\n')}`;
+                await OptimizedTelegramService.sendAlert(
+                    'MARKET_INDICES_LOAD_WARNING',
+                    errorMessage,
+                    'warning'
+                );
+            }
+            
+            return {
+                success: true,
+                stats: loadStats,
+                summary
+            };
+        } catch (error) {
+            console.error('❌ Error in performMarketIndicesLoad:', error);
+            await OptimizedTelegramService.sendAlert(
+                'MARKET_INDICES_LOAD_ERROR',
+                `❌ Ошибка при загрузке рыночных индексов:\n${error.message}`,
+                'error'
+            );
+            throw error;
+        }
+    }
+
+    /**
+     * Обновление фундаментальных данных
+     */
+    async performFundamentalDataUpdate() {
+        try {
+            console.log('📊 Starting fundamental data update...');
+            
+            const FundamentalDataService = (await import('./FundamentalDataService.js')).default;
+            
+            // Убеждаемся, что сервис инициализирован
+            if (!FundamentalDataService.isInitialized) {
+                await FundamentalDataService.initialize();
+            }
+            
+            // Выполняем синхронизацию и заполнение фундаментальных данных
+            const result = await FundamentalDataService.syncAndFillFundamentalData({
+                syncAssets: true,
+                forceUpdateFundamentals: false,
+                delayMs: 1000
+            });
+            
+            // Формируем отчет
+            const stats = result.fundamentalsFill || {};
+            const summary = `Обновление фундаментальных данных завершено:
+• Обработано активов: ${stats.totalAssets || 0}
+• Обработано инструментов: ${stats.totalInstruments || 0}
+• Сохранено записей: ${stats.saved || 0}
+• Пропущено: ${stats.skipped || 0}
+• Ошибок: ${stats.errors || 0}`;
+            
+            console.log(`✅ Fundamental data update completed:\n${summary}`);
+            
+            // Отправляем уведомление в Telegram
+            if (stats.errors === 0 && (stats.saved || 0) > 0) {
+                await OptimizedTelegramService.sendAlert(
+                    'FUNDAMENTAL_DATA_UPDATE_SUCCESS',
+                    `✅ <b>ОБНОВЛЕНИЕ ФУНДАМЕНТАЛЬНЫХ ДАННЫХ</b>\n\n${summary}`,
+                    'info'
+                );
+            } else if (stats.errors > 0) {
+                await OptimizedTelegramService.sendAlert(
+                    'FUNDAMENTAL_DATA_UPDATE_WARNING',
+                    `⚠️ <b>ОБНОВЛЕНИЕ ФУНДАМЕНТАЛЬНЫХ ДАННЫХ</b>\n\n${summary}`,
+                    'warning'
+                );
+            }
+            
+            return {
+                success: true,
+                stats: stats,
+                summary
+            };
+        } catch (error) {
+            console.error('❌ Error in performFundamentalDataUpdate:', error);
+            await OptimizedTelegramService.sendAlert(
+                'FUNDAMENTAL_DATA_UPDATE_ERROR',
+                `❌ Ошибка при обновлении фундаментальных данных:\n${error.message}`,
+                'error'
+            );
+            throw error;
         }
     }
 

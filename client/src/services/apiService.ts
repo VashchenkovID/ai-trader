@@ -3237,6 +3237,20 @@ export const apiService = {
     }
   },
 
+  async loadMarketIndices() {
+    try {
+      const response = await api.post('/api/macro-data/load-indices');
+      return response.data;
+    } catch (error: any) {
+      console.error('Error loading market indices:', error);
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Ошибка загрузки индексов',
+        error: error.message 
+      };
+    }
+  },
+
   // Fundamental Data API methods
   async updateFundamentalData(options?: { forceUpdate?: boolean; syncAssets?: boolean }) {
     try {
