@@ -247,7 +247,29 @@ class MacroDataService {
                 });
                 
                 if (latestIndicator) {
-                    latest[ind.indicatorType] = latestIndicator;
+                    // Получаем предыдущее значение для расчета изменения
+                    const previousIndicator = await MacroIndicator.findOne({
+                        where: {
+                            indicatorType: ind.indicatorType,
+                            country: country,
+                            period: { [Op.lt]: ind.latestPeriod }
+                        },
+                        order: [['period', 'DESC']]
+                    });
+                    
+                    // Преобразуем в plain object
+                    const plain = latestIndicator.get({ plain: true });
+                    
+                    // Рассчитываем изменение, если есть предыдущее значение
+                    if (previousIndicator && previousIndicator.value) {
+                        const currentValue = parseFloat(plain.value);
+                        const previousValue = parseFloat(previousIndicator.value);
+                        if (!isNaN(currentValue) && !isNaN(previousValue) && previousValue !== 0) {
+                            plain.change = ((currentValue - previousValue) / previousValue) * 100;
+                        }
+                    }
+                    
+                    latest[ind.indicatorType] = plain;
                 }
             }
 

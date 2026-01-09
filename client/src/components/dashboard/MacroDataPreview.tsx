@@ -11,8 +11,8 @@ interface MacroDataPreviewProps {
 
 interface MacroIndicator {
   indicatorType: string;
-  value: string;
-  period: string;
+  value: string | null;
+  period: string | null;
   change?: number;
 }
 
@@ -57,17 +57,54 @@ export const MacroDataPreview: React.FC<MacroDataPreviewProps> = ({ className = 
       // Загружаем последние макро-данные через apiService
       const { apiService } = await import('../../services/apiService');
       const result = await apiService.getMacroDataLatest('RUS');
+      
       if (result.success && result.data?.indicators) {
         const indicators = result.data.indicators;
+        
+        // Преобразуем Sequelize модели в простые объекты
+        const transformIndicator = (indicator: any): MacroIndicator | undefined => {
+          if (!indicator) return undefined;
+          
+          // Если это Sequelize модель, получаем plain object
+          // getLatestIndicators уже возвращает plain objects с change
+          const plain = indicator.dataValues || indicator.toJSON?.() || indicator.get?.({ plain: true }) || indicator;
+          
+          // change уже рассчитан на сервере, используем его
+          const change = plain.change !== undefined && plain.change !== null && !isNaN(plain.change) 
+            ? plain.change 
+            : undefined;
+          
+          return {
+            indicatorType: plain.indicatorType || '',
+            value: plain.value !== null && plain.value !== undefined ? String(plain.value) : null,
+            period: plain.period ? (typeof plain.period === 'string' ? plain.period : new Date(plain.period).toISOString()) : null,
+            change: change
+          };
+        };
+        
         setMacroData({
-          interestRate: indicators.interest_rate,
-          inflation: indicators.inflation,
-          gdp: indicators.gdp,
-          volatilityIndex: indicators.volatility_index
+          interestRate: transformIndicator(indicators.interest_rate),
+          inflation: transformIndicator(indicators.inflation),
+          gdp: transformIndicator(indicators.gdp),
+          volatilityIndex: transformIndicator(indicators.volatility_index)
+        });
+      } else {
+        // Если данных нет, устанавливаем пустой объект
+        console.warn('No macro data available. Try updating macro data.');
+        setMacroData({});
+        
+        // Показываем информативное сообщение пользователю
+        toast.current?.show({
+          severity: 'info',
+          summary: 'Нет данных',
+          detail: 'Макроэкономические данные отсутствуют. Нажмите кнопку обновления для загрузки данных.',
+          life: 5000
         });
       }
     } catch (error) {
       console.error('Error loading macro data:', error);
+      // При ошибке устанавливаем пустой объект
+      setMacroData({});
     } finally {
       setLoading(false);
     }
@@ -179,9 +216,10 @@ export const MacroDataPreview: React.FC<MacroDataPreviewProps> = ({ className = 
       ) : (
         <div className="macro-indicator-grid">
           {indicators.map((indicator, index) => {
-            const value = indicator.data?.value;
-            const change = indicator.data?.change;
-            const hasData = indicator.data && value !== null && value !== undefined;
+            const data = indicator.data;
+            const value = data?.value;
+            const change = data?.change;
+            const hasData = data && value !== null && value !== undefined && value !== '';
             
             return (
               <div 
@@ -199,7 +237,7 @@ export const MacroDataPreview: React.FC<MacroDataPreviewProps> = ({ className = 
                     <div className="flex-1">
                       <div className="text-sm font-medium number-text-primary">{indicator.label}</div>
                       <small className="text-xs number-text-tertiary">
-                        {hasData && indicator.data?.period ? new Date(indicator.data.period).toLocaleDateString('ru-RU') : 'Нет данных'}
+                        {hasData && data?.period ? new Date(data.period).toLocaleDateString('ru-RU') : 'Нет данных'}
                       </small>
                     </div>
                   </div>
@@ -207,7 +245,7 @@ export const MacroDataPreview: React.FC<MacroDataPreviewProps> = ({ className = 
                     <div className={`number-sm font-bold ${hasData ? 'number-text-primary' : 'number-text-tertiary'}`}>
                       {hasData ? formatPercent(value) : '—'}
                     </div>
-                    {hasData && change !== undefined && change !== null && (
+                    {hasData && change !== undefined && change !== null && !isNaN(change) && (
                       <div className={`text-xs ${change >= 0 ? 'number-success' : 'number-error'}`}>
                         {getTrendIcon(change)} {formatChange(change)}
                       </div>

@@ -10,6 +10,7 @@ import Settings from '../pages/Settings'
 import Strategies from '../pages/Strategies'
 import ServerMonitoring from '../pages/ServerMonitoring'
 import TradingHours from '../pages/TradingHours'
+import MetricsMonitoring from '../pages/MetricsMonitoring'
 
 const AppRouter: FC = () => {
 
@@ -27,6 +28,7 @@ const AppRouter: FC = () => {
                 <Route path="/strategies" element={<Strategies/>}/>
                 <Route path="/server-monitoring" element={<ServerMonitoring/>}/>
                 <Route path="/trading-hours" element={<TradingHours/>}/>
+                <Route path="/metrics-monitoring" element={<MetricsMonitoring/>}/>
                 <Route path="*" element={<>Нет роута</>}/>
             </Routes>
 
