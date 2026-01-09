@@ -664,10 +664,198 @@ class OptionsDataService {
     }
 
     /**
+     * Вычисление Put/Call Ratio (PCR) для опционов
+     * PCR = (количество PUT опционов) / (количество CALL опционов)
+     * Если доступны объемы, использует их, иначе использует количество опционов
+     * @param {string} baseFigi - FIGI базового актива
+     * @param {Date} timestamp - Дата для расчета PCR
+     * @param {number} daysBack - Количество дней назад для поиска данных (по умолчанию 7)
+     * @returns {Promise<number|null>} - PCR (или null, если недостаточно данных)
+     */
+    async calculatePCR(baseFigi, timestamp = new Date(), daysBack = 7) {
+        try {
+            const dateFrom = new Date(timestamp);
+            dateFrom.setDate(dateFrom.getDate() - daysBack);
+
+            // Получаем опционы за указанный период
+            const options = await OptionsData.findAll({
+                where: {
+                    baseFigi: baseFigi,
+                    timestamp: { [Op.gte]: dateFrom, [Op.lte]: timestamp }
+                },
+                attributes: ['optionType', 'metadata']
+            });
+
+            if (options.length === 0) {
+                return null;
+            }
+
+            let putCount = 0;
+            let callCount = 0;
+            let putVolume = 0;
+            let callVolume = 0;
+            let hasVolumeData = false;
+
+            // Считаем PUT и CALL опционы, а также объемы, если доступны
+            for (const option of options) {
+                if (option.optionType === 'put') {
+                    putCount++;
+                    // Пытаемся извлечь объем из metadata
+                    if (option.metadata) {
+                        const volume = option.metadata.openInterest || option.metadata.volume || option.metadata.lotSize;
+                        if (volume && typeof volume === 'number' && volume > 0) {
+                            putVolume += volume;
+                            hasVolumeData = true;
+                        }
+                    }
+                } else if (option.optionType === 'call') {
+                    callCount++;
+                    // Пытаемся извлечь объем из metadata
+                    if (option.metadata) {
+                        const volume = option.metadata.openInterest || option.metadata.volume || option.metadata.lotSize;
+                        if (volume && typeof volume === 'number' && volume > 0) {
+                            callVolume += volume;
+                            hasVolumeData = true;
+                        }
+                    }
+                }
+            }
+
+            // Если нет ни PUT, ни CALL опционов, возвращаем null
+            if (putCount === 0 && callCount === 0) {
+                return null;
+            }
+
+            // Если есть данные об объемах, используем их для расчета PCR
+            if (hasVolumeData && callVolume > 0) {
+                return putVolume / callVolume;
+            }
+
+            // Иначе используем количество опционов
+            if (callCount === 0) {
+                // Если нет CALL опционов, но есть PUT, возвращаем большое значение (например, 10)
+                return putCount > 0 ? 10 : null;
+            }
+
+            return putCount / callCount;
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error calculating PCR', {
+                    service: 'OptionsDataService',
+                    baseFigi,
+                    error: { message: error.message }
+                });
+            }
+            return null;
+        }
+    }
+
+    /**
+     * Вычисление нормализованного Open Interest (OI)
+     * OI нормализуется относительно среднего значения за 30 дней
+     * @param {string} baseFigi - FIGI базового актива
+     * @param {Date} timestamp - Дата для расчета OI
+     * @returns {Promise<number>} - Нормализованный OI (0-1, где 0.5 соответствует среднему значению)
+     */
+    async calculateNormalizedOpenInterest(baseFigi, timestamp = new Date()) {
+        try {
+            // Получаем опционы за последние 7 дней (текущий OI)
+            const date7dAgo = new Date(timestamp);
+            date7dAgo.setDate(date7dAgo.getDate() - 7);
+
+            const currentOptions = await OptionsData.findAll({
+                where: {
+                    baseFigi: baseFigi,
+                    timestamp: { [Op.gte]: date7dAgo, [Op.lte]: timestamp }
+                },
+                attributes: ['metadata']
+            });
+
+            // Вычисляем текущий общий OI
+            let currentOI = 0;
+            for (const option of currentOptions) {
+                if (option.metadata) {
+                    const oi = option.metadata.openInterest || option.metadata.volume || option.metadata.lotSize;
+                    if (oi && typeof oi === 'number' && oi > 0) {
+                        currentOI += oi;
+                    }
+                }
+            }
+
+            // Получаем исторические данные за 30 дней для расчета среднего OI
+            const date30dAgo = new Date(timestamp);
+            date30dAgo.setDate(date30dAgo.getDate() - 30);
+
+            const historicalOptions = await OptionsData.findAll({
+                where: {
+                    baseFigi: baseFigi,
+                    timestamp: { [Op.gte]: date30dAgo, [Op.lte]: timestamp }
+                },
+                attributes: ['metadata', 'timestamp']
+            });
+
+            // Вычисляем средний OI за 30 дней
+            const oiValues = [];
+            const oiByDate = new Map();
+
+            for (const option of historicalOptions) {
+                if (option.metadata) {
+                    const dateKey = option.timestamp.toISOString().split('T')[0];
+                    const oi = option.metadata.openInterest || option.metadata.volume || option.metadata.lotSize;
+                    if (oi && typeof oi === 'number' && oi > 0) {
+                        if (!oiByDate.has(dateKey)) {
+                            oiByDate.set(dateKey, 0);
+                        }
+                        oiByDate.set(dateKey, oiByDate.get(dateKey) + oi);
+                    }
+                }
+            }
+
+            // Собираем OI по дням
+            for (const [date, dailyOI] of oiByDate) {
+                oiValues.push(dailyOI);
+            }
+
+            // Если нет исторических данных, возвращаем среднее значение (0.5)
+            if (oiValues.length === 0) {
+                return currentOI > 0 ? 0.5 : 0; // Если есть текущий OI, но нет истории - среднее
+            }
+
+            // Вычисляем средний OI
+            const avgOI = oiValues.reduce((sum, oi) => sum + oi, 0) / oiValues.length;
+
+            // Если средний OI = 0, возвращаем 0
+            if (avgOI === 0) {
+                return 0;
+            }
+
+            // Нормализуем: текущий OI относительно среднего
+            // OI / avgOI = 1.0 соответствует среднему значению
+            // Нормализуем так, чтобы 0.5 соответствовало среднему, 0 - очень низкое, 1 - очень высокое
+            const ratio = currentOI / avgOI;
+            
+            // Используем сигмоиду для нормализации: ratio 0.5 -> 0.25, ratio 1.0 -> 0.5, ratio 2.0 -> 0.75
+            // Это обеспечивает более плавную нормализацию
+            const normalized = 1 / (1 + Math.exp(-2 * (ratio - 1))); // Сигмоида с центром в 1.0
+
+            return Math.min(1, Math.max(0, normalized));
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error calculating normalized Open Interest', {
+                    service: 'OptionsDataService',
+                    baseFigi,
+                    error: { message: error.message }
+                });
+            }
+            return 0.5; // Среднее значение при ошибке
+        }
+    }
+
+    /**
      * Получение опционных фичей для нейросети
      * @param {string} baseFigi - FIGI базового актива
      * @param {Date} timestamp - Дата для получения фичей
-     * @returns {Promise<Array<number>>} - Массив из 3 фичей: [currentIV, avgIV30d, ivRank]
+     * @returns {Promise<Array<number>>} - Массив из 6 фичей: [currentIV, avgIV30d, ivRank, currentPCR, avgPCR30d, normalizedOI]
      */
     async getOptionsFeatures(baseFigi, timestamp = new Date()) {
         try {
@@ -675,9 +863,10 @@ class OptionsDataService {
             const atmOptions = await this.getATMOptions(baseFigi, timestamp);
             
             if (atmOptions.length === 0) {
-                // Нет опционных данных - используем fallback на историческую волатильность
-                // Возвращаем нули и флаг доступности
-                return [0, 0, 0, 0]; // [currentIV, avgIV30d, ivRank, hasOptionsData]
+                // Нет опционных данных - возвращаем нули и средние значения
+                // Вычисляем OI даже при отсутствии IV (может быть доступен)
+                const normalizedOI = await this.calculateNormalizedOpenInterest(baseFigi, timestamp);
+                return [0, 0, 0, 0.4, 0.4, normalizedOI]; // [currentIV, avgIV30d, ivRank, currentPCR, avgPCR30d, normalizedOI]
             }
 
             // Вычисляем среднюю IV из ATM опционов
@@ -690,25 +879,28 @@ class OptionsDataService {
                 .filter(iv => iv !== null && iv !== undefined && !isNaN(iv) && iv > 0);
 
             if (validIVs.length === 0) {
-                return [0, 0, 0, 0];
+                // Нет валидных IV, но можем вернуть OI
+                const normalizedOI = await this.calculateNormalizedOpenInterest(baseFigi, timestamp);
+                return [0, 0, 0, 0.4, 0.4, normalizedOI];
             }
 
             const currentIV = validIVs.reduce((sum, iv) => sum + iv, 0) / validIVs.length;
 
-            // 2. Получаем среднюю IV за 30 дней
+            // 2-5. Получаем опционы за последние 30 дней для расчета IV, PCR и других метрик
             const date30dAgo = new Date(timestamp);
             date30dAgo.setDate(date30dAgo.getDate() - 30);
-
+            
+            // Получаем все опционы за последние 30 дней (один запрос для всех расчетов)
             const historicalOptions = await OptionsData.findAll({
                 where: {
                     baseFigi: baseFigi,
-                    timestamp: { [Op.gte]: date30dAgo, [Op.lte]: timestamp },
-                    impliedVolatility: { [Op.ne]: null }
+                    timestamp: { [Op.gte]: date30dAgo, [Op.lte]: timestamp }
                 },
-                attributes: ['impliedVolatility', 'timestamp'],
+                attributes: ['impliedVolatility', 'optionType', 'timestamp', 'metadata'],
                 order: [['timestamp', 'ASC']]
             });
 
+            // 2. Вычисляем среднюю IV за 30 дней
             const historicalIVs = historicalOptions
                 .map(opt => {
                     const iv = opt.impliedVolatility;
@@ -734,14 +926,84 @@ class OptionsDataService {
             const normalizedAvgIV30d = Math.min(1, Math.max(0, avgIV30d / 100));
             const normalizedIVRank = Math.min(1, Math.max(0, ivRank));
 
-            // Флаг доступности опционных данных
-            const hasOptionsData = 1;
+            // 4. Вычисляем текущий PCR (Put/Call Ratio)
+            const currentPCR = await this.calculatePCR(baseFigi, timestamp, 7);
+            
+            // 5. Вычисляем средний PCR за 30 дней, используя уже загруженные historicalOptions
+
+            let avgPCR30d = 0.8; // По умолчанию 0.8 (среднее значение по рынку)
+            
+            if (historicalOptions.length > 0) {
+                // Группируем опционы по датам для расчета среднего PCR
+                const pcrValues = [];
+                const datesMap = new Map();
+                
+                for (const option of historicalOptions) {
+                    const dateKey = option.timestamp.toISOString().split('T')[0];
+                    if (!datesMap.has(dateKey)) {
+                        datesMap.set(dateKey, { puts: 0, calls: 0, putVolume: 0, callVolume: 0, hasVolume: false });
+                    }
+                    const dayData = datesMap.get(dateKey);
+                    
+                    if (option.optionType === 'put') {
+                        dayData.puts++;
+                        if (option.metadata) {
+                            const volume = option.metadata.openInterest || option.metadata.volume || option.metadata.lotSize;
+                            if (volume && typeof volume === 'number' && volume > 0) {
+                                dayData.putVolume += volume;
+                                dayData.hasVolume = true;
+                            }
+                        }
+                    } else if (option.optionType === 'call') {
+                        dayData.calls++;
+                        if (option.metadata) {
+                            const volume = option.metadata.openInterest || option.metadata.volume || option.metadata.lotSize;
+                            if (volume && typeof volume === 'number' && volume > 0) {
+                                dayData.callVolume += volume;
+                                dayData.hasVolume = true;
+                            }
+                        }
+                    }
+                }
+                
+                // Вычисляем PCR для каждого дня
+                for (const [date, dayData] of datesMap) {
+                    if (dayData.hasVolume && dayData.callVolume > 0) {
+                        pcrValues.push(dayData.putVolume / dayData.callVolume);
+                    } else if (dayData.calls > 0) {
+                        pcrValues.push(dayData.puts / dayData.calls);
+                    } else if (dayData.puts > 0) {
+                        pcrValues.push(10); // Если только PUT опционы
+                    }
+                }
+                
+                if (pcrValues.length > 0) {
+                    avgPCR30d = pcrValues.reduce((sum, pcr) => sum + pcr, 0) / pcrValues.length;
+                } else if (currentPCR !== null) {
+                    avgPCR30d = currentPCR;
+                }
+            } else if (currentPCR !== null) {
+                avgPCR30d = currentPCR;
+            }
+
+            // Нормализация PCR (0-2 -> 0-1, где 0.8 примерно соответствует среднему рынку)
+            // PCR обычно находится в диапазоне 0.5-1.5, редко выше 2
+            const normalizedCurrentPCR = currentPCR !== null
+                ? Math.min(1, Math.max(0, currentPCR / 2)) // 0-2 -> 0-1
+                : 0.4; // Среднее значение по рынку (0.8/2 = 0.4) при отсутствии данных
+            
+            const normalizedAvgPCR30d = Math.min(1, Math.max(0, avgPCR30d / 2)); // 0-2 -> 0-1
+
+            // 6. Вычисляем нормализованный Open Interest
+            const normalizedOI = await this.calculateNormalizedOpenInterest(baseFigi, timestamp);
 
             return [
                 normalizedCurrentIV,
                 normalizedAvgIV30d,
                 normalizedIVRank,
-                hasOptionsData
+                normalizedCurrentPCR,
+                normalizedAvgPCR30d,
+                normalizedOI
             ];
         } catch (error) {
             if (LoggerService.isInitialized) {
@@ -751,8 +1013,8 @@ class OptionsDataService {
                     error: { message: error.message, stack: error.stack }
                 });
             }
-            // Возвращаем нули при ошибке
-            return [0, 0, 0, 0];
+            // Возвращаем значения по умолчанию при ошибке (6 фичей: IV, avgIV, ivRank, PCR, avgPCR, OI)
+            return [0, 0, 0, 0.4, 0.4, 0.5]; // 0.4 соответствует среднему PCR (0.8), 0.5 - средний OI
         }
     }
 }

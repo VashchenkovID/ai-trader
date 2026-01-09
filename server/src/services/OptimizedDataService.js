@@ -40,8 +40,11 @@ class OptimizedDataService {
             if (!OptionsDataService.isInitialized) {
                 await OptionsDataService.initialize();
             }
+            // Инициализируем DividendService для работы с дивидендами
+            if (!DividendService.isInitialized) {
+                await DividendService.initialize();
+            }
             // TinkoffApiService не требует инициализации - это экземпляр
-            // await DividendService.initialize(); // Проверим, есть ли у DividendService метод initialize
             // await CompanySyncService.initialize(); // Временно отключено
             // await PortfolioSyncService.initialize(); // Временно отключено
             
@@ -61,6 +64,7 @@ class OptimizedDataService {
      * Подготовка данных для обучения нейросети
      */
     async prepareTrainingData(candles, lookbackPeriod = 60, predictionHorizon = 5, figi = null) {
+        const startTime = Date.now();
         try {
             // Адаптивная проверка данных
             const minRequired = lookbackPeriod + predictionHorizon;
@@ -79,6 +83,8 @@ class OptimizedDataService {
                     return { features: [], labels: [] };
                 }
             }
+            
+            console.log(`📊 Starting prepareTrainingData: ${candles.length} candles, lookback=${lookbackPeriod}, horizon=${predictionHorizon}`);
 
             // Загружаем все свечи один раз для использования в getMarketFeatures
             // Это предотвращает множественные запросы к кешу
@@ -96,6 +102,10 @@ class OptimizedDataService {
             const labels = [];
             let expectedFeatureSize = null;
             let skippedSamples = 0;
+            
+            const totalSamples = candles.length - lookbackPeriod - predictionHorizon;
+            let processedSamples = 0;
+            const logInterval = Math.max(1, Math.floor(totalSamples / 10)); // Логируем каждые 10%
 
             for (let i = lookbackPeriod; i < candles.length - predictionHorizon; i++) {
                 // Создаем окно данных
@@ -104,6 +114,12 @@ class OptimizedDataService {
                 
                 if (window.length === lookbackPeriod && futureCandle) {
                     try {
+                        // Логируем прогресс
+                        processedSamples++;
+                        if (processedSamples % logInterval === 0 || processedSamples === 1) {
+                            console.log(`📊 Preparing training data: ${processedSamples}/${totalSamples} samples (${Math.round(processedSamples / totalSamples * 100)}%)`);
+                        }
+                        
                         // Подготавливаем фичи, передавая предзагруженные свечи
                         const featureVector = await this.createFeatureVector(window, figi, allCandles);
                         
@@ -117,17 +133,10 @@ class OptimizedDataService {
                         }
                         
                         // Создаем лейбл
-                        // Сначала пробуем использовать исторические сигналы как метки
-                        let label = null;
-                        if (figi) {
-                            label = await this.getLabelFromSignals(figi, futureCandle.time);
-                        }
-                        
-                        // Если сигналов нет, используем стандартную логику (рост > 1%)
-                        if (label === null) {
-                            const priceChange = ((futureCandle.close - window[window.length - 1].close) / window[window.length - 1].close) * 100;
-                            label = priceChange > 1 ? 1 : 0;
-                        }
+                        // Пропускаем медленный вызов getLabelFromSignals для ускорения
+                        // Используем стандартную логику (рост > 1%)
+                        const priceChange = ((futureCandle.close - window[window.length - 1].close) / window[window.length - 1].close) * 100;
+                        const label = priceChange > 1 ? 1 : 0;
                         
                         features.push(featureVector);
                         labels.push(label);
@@ -143,9 +152,13 @@ class OptimizedDataService {
                 console.warn(`⚠️ Skipped ${skippedSamples} samples due to inconsistent feature sizes`);
             }
 
+            const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+            console.log(`✅ Prepared ${features.length} training samples in ${elapsedTime}s`);
+            
             return { features, labels };
         } catch (error) {
             console.error('❌ Error preparing training data:', error);
+            console.error('Error stack:', error.stack);
             return { features: [], labels: [] };
         }
     }
@@ -162,11 +175,32 @@ class OptimizedDataService {
                 throw new Error('candles must be a non-empty array');
             }
             
-            // Базовые фичи: цены и объемы
-            const prices = candles.map(c => c.close);
-            const volumes = candles.map(c => c.volume);
-            const highs = candles.map(c => c.high);
-            const lows = candles.map(c => c.low);
+            // Валидация свечей - проверяем наличие всех обязательных полей
+            const validCandles = candles.filter(c => 
+                c && 
+                typeof c.close === 'number' && !isNaN(c.close) && c.close > 0 &&
+                typeof c.volume === 'number' && !isNaN(c.volume) && c.volume >= 0 &&
+                typeof c.high === 'number' && !isNaN(c.high) && c.high > 0 &&
+                typeof c.low === 'number' && !isNaN(c.low) && c.low > 0 &&
+                typeof c.time !== 'undefined' && c.time !== null &&
+                c.high >= c.low &&
+                c.high >= c.close &&
+                c.low <= c.close
+            );
+            
+            if (validCandles.length === 0) {
+                throw new Error('No valid candles found - all candles missing required fields or have invalid values');
+            }
+            
+            if (validCandles.length < candles.length) {
+                console.warn(`⚠️ Filtered out ${candles.length - validCandles.length} invalid candles`);
+            }
+            
+            // Базовые фичи: цены и объемы (используем только валидные свечи)
+            const prices = validCandles.map(c => c.close);
+            const volumes = validCandles.map(c => c.volume);
+            const highs = validCandles.map(c => c.high);
+            const lows = validCandles.map(c => c.low);
             
             // Упрощенная нормализация: берем только последние 5 значений (достаточно для тренда)
             const pricesForFeatures = prices.slice(-5);
@@ -207,36 +241,51 @@ class OptimizedDataService {
             // Технические индикаторы
             const technicalFeatures = this.calculateTechnicalIndicators(prices, volumes, highs, lows);
             
-            // Временные фичи
-            const timeFeatures = this.createTimeFeatures(candles[candles.length - 1].time);
+            // Временные фичи (используем последнюю валидную свечу)
+            const timeFeatures = this.createTimeFeatures(validCandles[validCandles.length - 1].time);
+            
+            // Используем время последней валидной свечи для всех временных фичей
+            const lastCandleTime = validCandles[validCandles.length - 1].time;
             
             // Рыночные фичи (если доступны) - передаем предзагруженные свечи для оптимизации
-            const marketFeatures = await this.getMarketFeatures(figi, candles[candles.length - 1].time, preloadedCandles);
+            const marketFeatures = await this.getMarketFeatures(figi, lastCandleTime, preloadedCandles);
             
             // Новостные фичи и анализ настроений
-            const newsFeatures = await this.getNewsFeatures(figi, candles[candles.length - 1].time);
+            const newsFeatures = await this.getNewsFeatures(figi, lastCandleTime);
             
             // Telegram настроения
-            const telegramFeatures = await this.getTelegramFeatures(figi, candles[candles.length - 1].time);
+            const telegramFeatures = await this.getTelegramFeatures(figi, lastCandleTime);
             
             // Сигналы аналитиков
-            const signalsFeatures = await this.getSignalsFeatures(figi, candles[candles.length - 1].time);
+            const signalsFeatures = await this.getSignalsFeatures(figi, lastCandleTime);
             
             // Макроэкономические фичи (11 фичей: 8 базовых + 3 сырьевых: нефть, газ, золото)
-            const macroFeatures = await this.getMacroFeatures(candles[candles.length - 1].time);
+            const macroFeatures = await this.getMacroFeatures(lastCandleTime);
             
             // Фундаментальные фичи (P/E, P/B, EV/EBITDA, ROE, Debt/EBITDA, Operating Margin, Net Margin)
             const fundamentalFeatures = figi 
-                ? await FundamentalDataService.getFundamentalFeatures(figi, candles[candles.length - 1].time)
+                ? await FundamentalDataService.getFundamentalFeatures(figi, lastCandleTime)
                 : new Array(7).fill(0);
             
-            // Опционные фичи (IV текущая, IV средняя за 30 дней, IV rank, флаг наличия данных)
-            // Возвращает 4 фичи, но используем только первые 3 (currentIV, avgIV30d, ivRank)
+            // Опционные фичи (IV текущая, IV средняя за 30 дней, IV rank, PCR текущий, PCR средний за 30 дней, Open Interest)
+            // Возвращает 6 фичей: [currentIV, avgIV30d, ivRank, currentPCR, avgPCR30d, normalizedOI]
             const optionsFeatures = figi 
-                ? await OptionsDataService.getOptionsFeatures(figi, candles[candles.length - 1].time)
-                : new Array(4).fill(0);
-            // Берем только первые 3 фичи (без флага hasOptionsData)
-            const optionsFeaturesForModel = optionsFeatures.slice(0, 3);
+                ? await OptionsDataService.getOptionsFeatures(figi, lastCandleTime)
+                : new Array(6).fill(0);
+            // Используем все 6 фичей
+            const optionsFeaturesForModel = optionsFeatures.slice(0, 6);
+            
+            // Дивидендные фичи (дивидендное покрытие, стабильность выплат)
+            // Возвращает 2 фичи: [dividendCoverage, dividendStability]
+            const dividendFeatures = figi
+                ? await DividendService.getDividendFeatures(figi, lastCandleTime)
+                : new Array(2).fill(0.2); // Средние значения по умолчанию
+            
+            // Отраслевые фичи (условно, только для соответствующих секторов)
+            // Возвращает 4 фичи: [sectorDriver1, sectorDriver2, sectorDriver3, sectorDriver4]
+            const sectorFeatures = figi
+                ? await this.getSectorFeatures(figi, lastCandleTime)
+                : new Array(4).fill(0); // Нули по умолчанию для инструментов без сектора
             
             // Объединяем все фичи
             features.push(...normalizedPrices);
@@ -250,10 +299,12 @@ class OptimizedDataService {
             features.push(...macroFeatures);
             features.push(...fundamentalFeatures);
             features.push(...optionsFeaturesForModel);
+            features.push(...dividendFeatures);
+            features.push(...sectorFeatures);
             
             // Логирование и исправление размеров фичей
-            // Полный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) + 15 (macro: 8 базовых + 3 сырьевых + 2 валютных + 2 индекса) + 7 (fundamental) + 3 (options) = 55
-            const expectedSize = 55;
+            // Полный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) + 15 (macro: 8 базовых + 3 сырьевых + 2 валютных + 2 индекса) + 7 (fundamental) + 6 (options: IV, avgIV, ivRank, PCR, avgPCR, OI) + 2 (dividend: coverage, stability) + 4 (sector: условно для отраслевых инструментов) = 64
+            const expectedSize = 64;
             if (features.length !== expectedSize) {
                 console.warn(`⚠️ Unexpected feature size: ${features.length}, expected ${expectedSize}`);
                 
@@ -271,12 +322,21 @@ class OptimizedDataService {
                 console.log(`✅ Fixed feature size to ${features.length}`);
             }
             
-            return features;
+            // Применяем clipping для всех фичей - ограничиваем значения в диапазоне -10 до 10
+            // Это предотвращает экстремальные значения, которые могут нарушить обучение
+            const clippedFeatures = features.map(f => {
+                if (typeof f !== 'number' || isNaN(f) || !isFinite(f)) {
+                    return 0;
+                }
+                return Math.max(-10, Math.min(10, f));
+            });
+            
+            return clippedFeatures;
         } catch (error) {
             console.error('Error creating feature vector:', error);
             // Возвращаем нулевой вектор при ошибке с правильным размером
-            // Полный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 + 15 + 7 + 3 = 55
-            return new Array(55).fill(0);
+            // Полный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 + 15 + 7 + 6 + 2 + 4 = 64
+            return new Array(64).fill(0);
         }
     }
 
@@ -515,25 +575,32 @@ class OptimizedDataService {
             const rsi = this.calculateRSI(prices);
             features.push(rsi);
             
-            // MACD line (1 фича) - только основная линия, убираем signal и histogram
-            const macd = this.calculateMACD(prices);
-            features.push(macd[0]); // Только MACD line
-            
             // Bollinger Bands position (1 фича) - позиция цены относительно BB (0-1)
             const bb = this.calculateBollingerBands(prices);
             const currentPrice = prices[prices.length - 1];
+            
+            // MACD line (1 фича) - только основная линия, убираем signal и histogram
+            const macd = this.calculateMACD(prices);
+            // MACD может быть большим, нормализуем его через tanh для ограничения диапазона
+            const macdValue = macd[0] || 0;
+            // Используем сигмоиду для нормализации MACD к диапазону -1 до 1
+            // Нормализуем относительно текущей цены для стабильности
+            const normalizedMacd = currentPrice > 0 ? Math.tanh(macdValue / currentPrice) * 0.1 : 0;
+            features.push(normalizedMacd);
             const bbPosition = bb[1] > 0 ? (currentPrice - bb[0]) / (bb[2] - bb[0]) : 0.5; // Нормализованная позиция
             features.push(Math.max(0, Math.min(1, bbPosition))); // Ограничиваем 0-1
             
-            // SMA20 (1 фича) - нормализованная относительно текущей цены
+            // SMA20 (1 фича) - нормализованная относительно текущей цены (ограничиваем диапазон)
             const sma20 = this.calculateSMA(prices, 20);
             const sma20Ratio = currentPrice > 0 ? sma20 / currentPrice : 1;
-            features.push(sma20Ratio);
+            // Ограничиваем отношение в диапазоне 0.5-2.0 (цена может быть от 0.5x до 2x от SMA)
+            features.push(Math.max(0.5, Math.min(2.0, sma20Ratio)) / 2.0); // Нормализуем к 0-1
             
-            // EMA12 (1 фича) - нормализованная относительно текущей цены
+            // EMA12 (1 фича) - нормализованная относительно текущей цены (ограничиваем диапазон)
             const ema12 = this.calculateEMA(prices, 12);
             const ema12Ratio = currentPrice > 0 ? ema12 / currentPrice : 1;
-            features.push(ema12Ratio);
+            // Ограничиваем отношение в диапазоне 0.5-2.0 (цена может быть от 0.5x до 2x от EMA)
+            features.push(Math.max(0.5, Math.min(2.0, ema12Ratio)) / 2.0); // Нормализуем к 0-1
             
             // Volume SMA (1 фича) - нормализованная относительно текущего объема
             const volumeSma = this.calculateSMA(volumes, 5);
@@ -879,7 +946,8 @@ class OptimizedDataService {
             });
             
             if (filteredNews.length === 0) {
-                return [0, 0]; // Нет новостей до указанного времени
+                // Возвращаем нейтральные значения вместо нулей (0 = нейтральный сентимент, 0.5 = средняя релевантность)
+                return [0, 0.5]; // Нет новостей до указанного времени - нейтральные значения
             }
             
             // Рассчитываем только самые важные фичи (упрощенный набор)
@@ -929,7 +997,8 @@ class OptimizedDataService {
             });
             
             if (sentiment.messageCount === 0) {
-                return [0, 0]; // Нет данных
+                // Возвращаем нейтральные значения вместо нулей (0 = нейтральный сентимент, 0.5 = средняя уверенность)
+                return [0, 0.5]; // Нет данных - нейтральные значения
             }
             
             // Рассчитываем только самые важные фичи (упрощенный набор)
@@ -1010,6 +1079,366 @@ class OptimizedDataService {
     }
 
     /**
+     * Получение отраслевых фичей (драйверы по секторам)
+     * Возвращает 4 фичи условно для соответствующих секторов
+     * @param {string} figi - FIGI инструмента
+     * @param {Date|string} timestamp - Временная метка для получения данных
+     * @returns {Promise<Array<number>>} - Массив из 4 фичей: [driver1, driver2, driver3, driver4]
+     */
+    async getSectorFeatures(figi, timestamp) {
+        try {
+            if (!figi) {
+                return [0, 0, 0, 0]; // Нет FIGI - возвращаем нули
+            }
+
+            // Получаем инструмент из кеша для определения сектора
+            const instrument = await CacheService.getInstrument(figi, true);
+            if (!instrument || !instrument.sector) {
+                return [0, 0, 0, 0]; // Нет сектора - возвращаем нули
+            }
+
+            const sector = instrument.sector.toLowerCase();
+            const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+            const { Op } = await import('sequelize');
+            const MacroIndicator = (await import('../models/MacroIndicator.js')).default;
+
+            // Преобразуем сектор к стандартному виду
+            let normalizedSector = 'other';
+            if (sector.includes('нефт') || sector.includes('газ') || sector.includes('oil') || sector.includes('gas') || sector.includes('energy')) {
+                normalizedSector = 'oil_gas';
+            } else if (sector.includes('металл') || sector.includes('сталь') || sector.includes('metal') || sector.includes('steel') || sector.includes('mining')) {
+                normalizedSector = 'metallurgy';
+            } else if (sector.includes('финанс') || sector.includes('банк') || sector.includes('finance') || sector.includes('bank')) {
+                normalizedSector = 'finance';
+            } else if (sector.includes('it') || sector.includes('технологи') || sector.includes('technology') || sector.includes('software')) {
+                normalizedSector = 'it';
+            }
+
+            // В зависимости от сектора, получаем соответствующие драйверы
+            switch (normalizedSector) {
+                case 'oil_gas': {
+                    // Нефтегаз: цена нефти, цена газа, изменение нефти, изменение газа
+                    const oilPrice = await MacroIndicator.findOne({
+                        where: {
+                            indicatorType: 'oil_price',
+                            country: 'RUS',
+                            source: 'moex_iss_oil',
+                            period: { [Op.lte]: date }
+                        },
+                        order: [['period', 'DESC']],
+                        limit: 1
+                    });
+
+                    const gasPrice = await MacroIndicator.findOne({
+                        where: {
+                            indicatorType: 'oil_price',
+                            country: 'RUS',
+                            source: 'moex_iss_gas',
+                            period: { [Op.lte]: date }
+                        },
+                        order: [['period', 'DESC']],
+                        limit: 1
+                    });
+
+                    const oilValue = oilPrice ? parseFloat(oilPrice.value) : null;
+                    const gasValue = gasPrice ? parseFloat(gasPrice.value) : null;
+
+                    // Получаем предыдущие значения для расчета изменений
+                    let oilPrevious = null;
+                    if (oilPrice) {
+                        const prevOil = await MacroIndicator.findOne({
+                            where: {
+                                indicatorType: 'oil_price',
+                                country: 'RUS',
+                                source: 'moex_iss_oil',
+                                period: { [Op.lt]: oilPrice.period }
+                            },
+                            order: [['period', 'DESC']],
+                            limit: 1
+                        });
+                        oilPrevious = prevOil ? parseFloat(prevOil.value) : null;
+                    }
+
+                    let gasPrevious = null;
+                    if (gasPrice) {
+                        const prevGas = await MacroIndicator.findOne({
+                            where: {
+                                indicatorType: 'oil_price',
+                                country: 'RUS',
+                                source: 'moex_iss_gas',
+                                period: { [Op.lt]: gasPrice.period }
+                            },
+                            order: [['period', 'DESC']],
+                            limit: 1
+                        });
+                        gasPrevious = prevGas ? parseFloat(prevGas.value) : null;
+                    }
+
+                    // Нормализация (0-1)
+                    const normalizedOil = oilValue !== null && oilValue > 0
+                        ? Math.min(1, Math.max(0, (oilValue - 50) / 100)) // 50-150 USD -> 0-1
+                        : 0.5;
+
+                    const normalizedGas = gasValue !== null && gasValue > 0
+                        ? Math.min(1, Math.max(0, (gasValue - 100) / 400)) // 100-500 RUB -> 0-1
+                        : 0.5;
+
+                    // Изменения (-1 до 1)
+                    const oilChange = (oilValue !== null && oilPrevious !== null && oilPrevious > 0)
+                        ? Math.min(1, Math.max(-1, ((oilValue - oilPrevious) / oilPrevious) * 5)) // -20% до +20% -> -1 до 1
+                        : 0;
+
+                    const gasChange = (gasValue !== null && gasPrevious !== null && gasPrevious > 0)
+                        ? Math.min(1, Math.max(-1, ((gasValue - gasPrevious) / gasPrevious) * 5))
+                        : 0;
+
+                    return [normalizedOil, normalizedGas, oilChange, gasChange];
+                }
+
+                case 'metallurgy': {
+                    // Металлургия: алюминий, никель, золото, изменение алюминия
+                    const aluminumPrice = await MacroIndicator.findOne({
+                        where: {
+                            indicatorType: 'oil_price',
+                            country: 'RUS',
+                            source: 'moex_iss_aluminum',
+                            period: { [Op.lte]: date }
+                        },
+                        order: [['period', 'DESC']],
+                        limit: 1
+                    });
+
+                    const nickelPrice = await MacroIndicator.findOne({
+                        where: {
+                            indicatorType: 'oil_price',
+                            country: 'RUS',
+                            source: 'moex_iss_nickel',
+                            period: { [Op.lte]: date }
+                        },
+                        order: [['period', 'DESC']],
+                        limit: 1
+                    });
+
+                    const goldPrice = await MacroIndicator.findOne({
+                        where: {
+                            indicatorType: 'oil_price',
+                            country: 'RUS',
+                            source: 'moex_iss_gold',
+                            period: { [Op.lte]: date }
+                        },
+                        order: [['period', 'DESC']],
+                        limit: 1
+                    });
+
+                    const aluminumValue = aluminumPrice ? parseFloat(aluminumPrice.value) : null;
+                    const nickelValue = nickelPrice ? parseFloat(nickelPrice.value) : null;
+                    const goldValue = goldPrice ? parseFloat(goldPrice.value) : null;
+
+                    // Получаем предыдущее значение алюминия для изменения
+                    let aluminumPrevious = null;
+                    if (aluminumPrice) {
+                        const prevAluminum = await MacroIndicator.findOne({
+                            where: {
+                                indicatorType: 'oil_price',
+                                country: 'RUS',
+                                source: 'moex_iss_aluminum',
+                                period: { [Op.lt]: aluminumPrice.period }
+                            },
+                            order: [['period', 'DESC']],
+                            limit: 1
+                        });
+                        aluminumPrevious = prevAluminum ? parseFloat(prevAluminum.value) : null;
+                    }
+
+                    // Нормализация (0-1)
+                    const normalizedAluminum = aluminumValue !== null && aluminumValue > 0
+                        ? Math.min(1, Math.max(0, (aluminumValue - 1500) / 2500)) // 1500-4000 USD/т -> 0-1 (примерные диапазоны)
+                        : 0.5;
+
+                    const normalizedNickel = nickelValue !== null && nickelValue > 0
+                        ? Math.min(1, Math.max(0, (nickelValue - 10000) / 30000)) // 10000-40000 USD/т -> 0-1
+                        : 0.5;
+
+                    const normalizedGold = goldValue !== null && goldValue > 0
+                        ? Math.min(1, Math.max(0, (goldValue - 1500) / 1000)) // 1500-2500 USD -> 0-1
+                        : 0.5;
+
+                    const aluminumChange = (aluminumValue !== null && aluminumPrevious !== null && aluminumPrevious > 0)
+                        ? Math.min(1, Math.max(-1, ((aluminumValue - aluminumPrevious) / aluminumPrevious) * 5))
+                        : 0;
+
+                    return [normalizedAluminum, normalizedNickel, normalizedGold, aluminumChange];
+                }
+
+                case 'finance': {
+                    // Финансы: ключевая ставка, изменение ставки, индекс IMOEX, изменение IMOEX
+                    const interestRate = await MacroIndicator.findOne({
+                        where: {
+                            indicatorType: 'interest_rate',
+                            country: 'RUS',
+                            period: { [Op.lte]: date }
+                        },
+                        order: [['period', 'DESC']],
+                        limit: 1
+                    });
+
+                    const imoexIndex = await MacroIndicator.findOne({
+                        where: {
+                            indicatorType: 'oil_price',
+                            country: 'RUS',
+                            source: 'tinkoff_imoex',
+                            period: { [Op.lte]: date }
+                        },
+                        order: [['period', 'DESC']],
+                        limit: 1
+                    });
+
+                    const rateValue = interestRate ? parseFloat(interestRate.value) : null;
+                    const imoexValue = imoexIndex ? parseFloat(imoexIndex.value) : null;
+
+                    // Получаем предыдущие значения
+                    let ratePrevious = null;
+                    if (interestRate?.metadata?.previousValue !== undefined && interestRate.metadata.previousValue !== null) {
+                        ratePrevious = parseFloat(interestRate.metadata.previousValue);
+                    } else if (interestRate) {
+                        const prevRate = await MacroIndicator.findOne({
+                            where: {
+                                indicatorType: 'interest_rate',
+                                country: 'RUS',
+                                period: { [Op.lt]: interestRate.period }
+                            },
+                            order: [['period', 'DESC']],
+                            limit: 1
+                        });
+                        ratePrevious = prevRate ? parseFloat(prevRate.value) : null;
+                    }
+
+                    let imoexPrevious = null;
+                    if (imoexIndex) {
+                        const prevImoex = await MacroIndicator.findOne({
+                            where: {
+                                indicatorType: 'oil_price',
+                                country: 'RUS',
+                                source: 'tinkoff_imoex',
+                                period: { [Op.lt]: imoexIndex.period }
+                            },
+                            order: [['period', 'DESC']],
+                            limit: 1
+                        });
+                        imoexPrevious = prevImoex ? parseFloat(prevImoex.value) : null;
+                    }
+
+                    // Нормализация (0-1)
+                    const normalizedRate = rateValue !== null
+                        ? Math.min(1, Math.max(0, rateValue / 25)) // 0-25% -> 0-1
+                        : 0.5;
+
+                    const normalizedImoex = imoexValue !== null && imoexValue > 0
+                        ? Math.min(1, Math.max(0, (imoexValue - 2000) / 3000)) // 2000-5000 -> 0-1
+                        : 0.5;
+
+                    // Изменения (-1 до 1)
+                    const rateChange = (rateValue !== null && ratePrevious !== null)
+                        ? Math.min(1, Math.max(-1, (rateValue - ratePrevious) / 2)) // -2% до +2% -> -1 до 1
+                        : 0;
+
+                    const imoexChange = (imoexValue !== null && imoexPrevious !== null && imoexPrevious > 0)
+                        ? Math.min(1, Math.max(-1, ((imoexValue - imoexPrevious) / imoexPrevious) * 10)) // -10% до +10% -> -1 до 1
+                        : 0;
+
+                    return [normalizedRate, rateChange, normalizedImoex, imoexChange];
+                }
+
+                case 'it': {
+                    // IT: индекс IMOEX, индекс RTS, изменение IMOEX, изменение RTS
+                    const imoexIndex = await MacroIndicator.findOne({
+                        where: {
+                            indicatorType: 'oil_price',
+                            country: 'RUS',
+                            source: 'tinkoff_imoex',
+                            period: { [Op.lte]: date }
+                        },
+                        order: [['period', 'DESC']],
+                        limit: 1
+                    });
+
+                    const rtsIndex = await MacroIndicator.findOne({
+                        where: {
+                            indicatorType: 'oil_price',
+                            country: 'RUS',
+                            source: 'tinkoff_rts',
+                            period: { [Op.lte]: date }
+                        },
+                        order: [['period', 'DESC']],
+                        limit: 1
+                    });
+
+                    const imoexValue = imoexIndex ? parseFloat(imoexIndex.value) : null;
+                    const rtsValue = rtsIndex ? parseFloat(rtsIndex.value) : null;
+
+                    // Получаем предыдущие значения
+                    let imoexPrevious = null;
+                    if (imoexIndex) {
+                        const prevImoex = await MacroIndicator.findOne({
+                            where: {
+                                indicatorType: 'oil_price',
+                                country: 'RUS',
+                                source: 'tinkoff_imoex',
+                                period: { [Op.lt]: imoexIndex.period }
+                            },
+                            order: [['period', 'DESC']],
+                            limit: 1
+                        });
+                        imoexPrevious = prevImoex ? parseFloat(prevImoex.value) : null;
+                    }
+
+                    let rtsPrevious = null;
+                    if (rtsIndex) {
+                        const prevRts = await MacroIndicator.findOne({
+                            where: {
+                                indicatorType: 'oil_price',
+                                country: 'RUS',
+                                source: 'tinkoff_rts',
+                                period: { [Op.lt]: rtsIndex.period }
+                            },
+                            order: [['period', 'DESC']],
+                            limit: 1
+                        });
+                        rtsPrevious = prevRts ? parseFloat(prevRts.value) : null;
+                    }
+
+                    // Нормализация (0-1)
+                    const normalizedImoex = imoexValue !== null && imoexValue > 0
+                        ? Math.min(1, Math.max(0, (imoexValue - 2000) / 3000)) // 2000-5000 -> 0-1
+                        : 0.5;
+
+                    const normalizedRts = rtsValue !== null && rtsValue > 0
+                        ? Math.min(1, Math.max(0, (rtsValue - 1000) / 2000)) // 1000-3000 -> 0-1
+                        : 0.5;
+
+                    // Изменения (-1 до 1)
+                    const imoexChange = (imoexValue !== null && imoexPrevious !== null && imoexPrevious > 0)
+                        ? Math.min(1, Math.max(-1, ((imoexValue - imoexPrevious) / imoexPrevious) * 10))
+                        : 0;
+
+                    const rtsChange = (rtsValue !== null && rtsPrevious !== null && rtsPrevious > 0)
+                        ? Math.min(1, Math.max(-1, ((rtsValue - rtsPrevious) / rtsPrevious) * 10))
+                        : 0;
+
+                    return [normalizedImoex, normalizedRts, imoexChange, rtsChange];
+                }
+
+                default:
+                    // Для других секторов возвращаем нули
+                    return [0, 0, 0, 0];
+            }
+        } catch (error) {
+            console.error(`❌ Ошибка получения отраслевых фичей для ${figi}:`, error);
+            return [0, 0, 0, 0]; // Возвращаем нули при ошибке
+        }
+    }
+
+    /**
      * Получение фичей сигналов аналитиков
      * ВАЖНО: Фильтруем сигналы только до переданного timestamp для предотвращения утечки данных
      * @param {string} figi - FIGI инструмента
@@ -1029,7 +1458,9 @@ class OptimizedDataService {
             const signals = await SignalCacheService.getSignalsByDate(figi, timestampDate);
             
             if (signals.length === 0) {
-                return [0, 0, 0, 0, 0]; // Нет сигналов - возвращаем 5 нулевых фичей
+                // Возвращаем нейтральные значения вместо нулей для лучшей работы модели
+                // [направление=0 (нейтральное), вероятность=0.5, количество=0, целевая цена=1 (текущая), время=0.5]
+                return [0, 0.5, 0, 1, 0.5]; // Нет сигналов - нейтральные значения
             }
 
             // Конвертируем цены из формата Tinkoff API
@@ -1095,7 +1526,8 @@ class OptimizedDataService {
             }
 
             if (validSignalsCount === 0) {
-                return [0, 0, 0, 0, 0];
+                // Возвращаем нейтральные значения вместо нулей
+                return [0, 0.5, 0, 1, 0.5];
             }
 
             // Нормализуем фичи
