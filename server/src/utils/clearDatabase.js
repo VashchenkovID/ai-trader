@@ -176,12 +176,84 @@ async function clearTestData() {
   }
 }
 
+/**
+ * Полностью удаляет все таблицы и ENUM типы из базы данных
+ * После этого можно запустить init-db для пересоздания структуры
+ */
+async function dropAllTablesAndTypes() {
+  try {
+    await sequelize.authenticate();
+    console.log('✅ Подключение к БД успешно\n');
+
+    console.log('🗑️  Начинаем полное удаление всех таблиц и типов...\n');
+    
+    // Отключаем проверку внешних ключей для безопасного удаления
+    await sequelize.query('SET session_replication_role = replica;');
+    
+    // Получаем список всех таблиц в схеме public
+    const [tables] = await sequelize.query(`
+      SELECT tablename 
+      FROM pg_tables 
+      WHERE schemaname = 'public'
+      ORDER BY tablename;
+    `);
+    
+    console.log(`📋 Найдено ${tables.length} таблиц для удаления\n`);
+    
+    // Удаляем все таблицы с CASCADE (удалит и зависимости)
+    for (const table of tables) {
+      const tableName = table.tablename;
+      try {
+        await sequelize.query(`DROP TABLE IF EXISTS "${tableName}" CASCADE;`);
+        console.log(`   ✅ Таблица ${tableName} удалена`);
+      } catch (error) {
+        console.warn(`   ⚠️ Ошибка при удалении таблицы ${tableName}:`, error.message);
+      }
+    }
+    
+    // Получаем список всех ENUM типов
+    const [enums] = await sequelize.query(`
+      SELECT typname 
+      FROM pg_type 
+      WHERE typtype = 'e' 
+      AND typnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+      ORDER BY typname;
+    `);
+    
+    console.log(`\n📋 Найдено ${enums.length} ENUM типов для удаления\n`);
+    
+    // Удаляем все ENUM типы
+    for (const enumType of enums) {
+      const enumName = enumType.typname;
+      try {
+        await sequelize.query(`DROP TYPE IF EXISTS "${enumName}" CASCADE;`);
+        console.log(`   ✅ ENUM тип ${enumName} удален`);
+      } catch (error) {
+        console.warn(`   ⚠️ Ошибка при удалении ENUM типа ${enumName}:`, error.message);
+      }
+    }
+    
+    // Включаем обратно проверку внешних ключей
+    await sequelize.query('SET session_replication_role = DEFAULT;');
+    
+    console.log('\n✅ Все таблицы и ENUM типы успешно удалены!');
+    console.log('💡 Теперь запустите: npm run init-db для пересоздания структуры БД\n');
+    
+    await sequelize.close();
+    process.exit(0);
+  } catch (err) {
+    console.error('❌ Ошибка удаления таблиц и типов:', err);
+    await sequelize.close();
+    process.exit(1);
+  }
+}
+
 async function clearDatabase() {
   try {
     await sequelize.authenticate();
     console.log('✅ Подключение к БД успешно\n');
 
-    console.log('🗑️  Начинаем очистку базы данных...\n');
+    console.log('🗑️  Начинаем очистку базы данных (только данные, структура сохраняется)...\n');
 
     // Очищаем таблицы в безопасном порядке (сначала зависимые, потом основные)
     
@@ -332,7 +404,11 @@ async function clearDatabase() {
 const args = process.argv.slice(2);
 if (args.includes('--test-only') || args.includes('-t')) {
   clearTestData();
+} else if (args.includes('--drop-all') || args.includes('-d')) {
+  // Полное удаление всех таблиц и типов
+  dropAllTablesAndTypes();
 } else {
+  // Обычная очистка данных (структура сохраняется)
   clearDatabase();
 }
 

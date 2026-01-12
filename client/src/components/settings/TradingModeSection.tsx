@@ -528,7 +528,6 @@ const TradingModeSection: React.FC<TradingModeSectionProps> = ({ className = '' 
             return (
               <Card key={mode.mode} className={`trading-mode-section-mode-card ${isCurrentMode ? 'trading-mode-section-mode-card-active' : ''}`}>
                 <div className="trading-mode-section-mode-header">
-                  <div className="trading-mode-section-mode-icon">{mode.icon}</div>
                   <div className="trading-mode-section-mode-info">
                     <h4>{mode.name}</h4>
                     <p>{mode.description}</p>

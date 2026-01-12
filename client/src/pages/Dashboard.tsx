@@ -5,10 +5,13 @@ import { ProgressBar } from '../components/ui/ProgressBar/ProgressBar';
 import { apiService } from '../services/apiService';
 import { useWebSocketData } from '../components/WebSocketDataProvider';
 import TradingSummaryCard from '../components/dashboard/TradingSummaryCard';
-import CachedSignalsCard from '../components/dashboard/CachedSignalsCard';
 import HeroMetricsCard from '../components/dashboard/HeroMetricsCard';
 import MacroDataPreview from '../components/dashboard/MacroDataPreview';
 import RebalancingStatusCard from '../components/dashboard/RebalancingStatusCard';
+import ActiveTradingRequestsCard from '../components/dashboard/ActiveTradingRequestsCard';
+import RecentTradesCard from '../components/dashboard/RecentTradesCard';
+import CriticalAlertsCard from '../components/dashboard/CriticalAlertsCard';
+import QuickActionsCard from '../components/dashboard/QuickActionsCard';
 import { Card } from '../components/ui/Card/Card';
 import { Badge as UIBadge } from '../components/ui/Badge/Badge';
 import './Dashboard.css';
@@ -374,17 +377,30 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
           </div>
         </div>
 
-      {/* Макроэкономические данные - строка над таблицей сигналов */}
+      {/* Вторая строка: Торговые заявки, последние сделки, быстрые действия */}
       <div className="grid dashboard-section">
-        <div className="col-12 animate-fade-in dashboard-animate-delay-6">
-          <MacroDataPreview />
+        <div className="col-12 md:col-6 lg:col-4 animate-fade-in dashboard-animate-delay-6">
+          <ActiveTradingRequestsCard />
+        </div>
+        <div className="col-12 md:col-6 lg:col-4 animate-fade-in dashboard-animate-delay-6">
+          <RecentTradesCard maxTrades={5} />
+        </div>
+        <div className="col-12 md:col-6 lg:col-4 animate-fade-in dashboard-animate-delay-6">
+          <QuickActionsCard />
         </div>
       </div>
 
-      {/* Торговые сигналы - отдельный блок внизу */}
+      {/* Критические алерты (показывается только если есть) */}
       <div className="grid dashboard-section">
-        <div className="col-12 animate-fade-in dashboard-animate-delay-7 dashboard-signals-container">
-          <CachedSignalsCard maxSignals={20} />
+        <div className="col-12 animate-fade-in dashboard-animate-delay-7">
+          <CriticalAlertsCard maxAlerts={3} />
+        </div>
+      </div>
+
+      {/* Макроэкономические данные */}
+      <div className="grid dashboard-section">
+        <div className="col-12 animate-fade-in dashboard-animate-delay-7">
+          <MacroDataPreview />
         </div>
       </div>
 

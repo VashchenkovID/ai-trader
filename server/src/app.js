@@ -52,13 +52,18 @@ app.use(maskSecretsInResponse);
 
 // Rate limiting middleware (применяется ко всем API запросам, кроме rate-limit endpoints)
 // Исключаем rate-limit endpoints из общего лимита, чтобы можно было мониторить даже после превышения
-app.use('/api', (req, res, next) => {
-    // Пропускаем rate-limit endpoints без ограничений
-    if (req.path.startsWith('/rate-limit')) {
-        return next();
-    }
-    return generalLimiter(req, res, next);
-});
+// Можно отключить через переменную окружения DISABLE_RATE_LIMIT=true для локальной разработки
+if (process.env.DISABLE_RATE_LIMIT !== 'true') {
+    app.use('/api', (req, res, next) => {
+        // Пропускаем rate-limit endpoints без ограничений
+        if (req.path.startsWith('/rate-limit')) {
+            return next();
+        }
+        return generalLimiter(req, res, next);
+    });
+} else {
+    console.log('⚠️ Rate limiting отключен (DISABLE_RATE_LIMIT=true)');
+}
 
 // Health check
 app.get('/health', (req, res) => {

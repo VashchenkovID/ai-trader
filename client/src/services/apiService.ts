@@ -2291,6 +2291,22 @@ export const apiService = {
   },
 
   /**
+   * Получить статистику торговых заявок
+   */
+  async getTradingRequestsStats(tradingMode?: string): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      if (tradingMode) params.append('tradingMode', tradingMode);
+      
+      const response = await api.get(`/api/trading-requests/stats?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting trading requests stats:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Создать торговую заявку из рекомендации
    */
   async createTradingRequest(recommendationFigi: string, options?: any, recommendationData?: any): Promise<any> {

@@ -35,6 +35,298 @@ import ModelPerformance from '../models/ModelPerformance.js';
 import DatabaseMigration from '../models/DatabaseMigration.js';
 import OptionsData from '../models/OptionsData.js';
 
+/**
+ * Преобразует тип данных Sequelize в SQL тип PostgreSQL
+ * @param {Object} attribute - Атрибут модели Sequelize
+ * @returns {string} SQL тип
+ */
+function getPostgresType(attribute) {
+    const type = attribute.type;
+    
+    if (!type || !type.constructor) {
+        return 'TEXT';
+    }
+    
+    const typeName = type.constructor.name;
+    
+    // Обработка различных типов Sequelize
+    if (typeName === 'STRING' || typeName === 'TEXT') {
+        const length = type.options?.length;
+        if (length) {
+            return `VARCHAR(${length})`;
+        }
+        return 'TEXT';
+    }
+    
+    if (typeName === 'INTEGER') {
+        return 'INTEGER';
+    }
+    
+    if (typeName === 'BIGINT') {
+        return 'BIGINT';
+    }
+    
+    if (typeName === 'DECIMAL' || typeName === 'DOUBLE' || typeName === 'FLOAT') {
+        const precision = type.options?.precision || 10;
+        const scale = type.options?.scale || 2;
+        return `DECIMAL(${precision}, ${scale})`;
+    }
+    
+    if (typeName === 'BOOLEAN') {
+        return 'BOOLEAN';
+    }
+    
+    if (typeName === 'DATE' || typeName === 'DATEONLY') {
+        return 'TIMESTAMP';
+    }
+    
+    if (typeName === 'JSON' || typeName === 'JSONB') {
+        return 'JSONB';
+    }
+    
+    if (typeName === 'ENUM') {
+        // Для ENUM возвращаем базовый тип, сам ENUM должен быть создан отдельно
+        return 'TEXT';
+    }
+    
+    if (typeName === 'UUID') {
+        return 'UUID';
+    }
+    
+    // По умолчанию TEXT
+    return 'TEXT';
+}
+
+/**
+ * Получает значение по умолчанию для столбца
+ * @param {Object} attribute - Атрибут модели Sequelize
+ * @returns {string|null} SQL значение по умолчанию
+ */
+function getDefaultValue(attribute) {
+    if (attribute.defaultValue === undefined || attribute.defaultValue === null) {
+        return null;
+    }
+    
+    // Если defaultValue - функция Sequelize
+    if (typeof attribute.defaultValue === 'function') {
+        const funcName = attribute.defaultValue.name || attribute.defaultValue.toString();
+        if (funcName.includes('NOW') || funcName.includes('now')) {
+            return 'NOW()';
+        }
+        return null;
+    }
+    
+    // Если defaultValue - строка
+    if (typeof attribute.defaultValue === 'string') {
+        return `'${attribute.defaultValue.replace(/'/g, "''")}'`;
+    }
+    
+    // Если defaultValue - число
+    if (typeof attribute.defaultValue === 'number') {
+        return attribute.defaultValue.toString();
+    }
+    
+    // Если defaultValue - boolean
+    if (typeof attribute.defaultValue === 'boolean') {
+        return attribute.defaultValue ? 'TRUE' : 'FALSE';
+    }
+    
+    return null;
+}
+
+/**
+ * Универсальная функция для безопасной синхронизации модели с автоматической проверкой столбцов
+ * @param {Object} Model - Модель Sequelize
+ * @param {string} modelName - Имя модели для логирования (опционально)
+ */
+async function safeSyncModel(Model, modelName = null) {
+    const name = modelName || Model.tableName || Model.name || 'Unknown';
+    try {
+        // Сначала проверяем и добавляем отсутствующие столбцы
+        await ensureModelColumns(Model);
+        // Затем синхронизируем модель
+        await Model.sync({ force: false });
+        console.log(`✅ Таблица ${name} создана/обновлена`);
+    } catch (syncError) {
+        // Игнорируем ошибки создания ENUM типов, если они уже существуют
+        if (syncError.name === 'SequelizeUniqueConstraintError' && 
+            syncError.original && syncError.original.code === '23505' &&
+            (syncError.message && syncError.message.includes('enum_') ||
+             syncError.original.detail && syncError.original.detail.includes('enum_'))) {
+            console.log(`✅ Таблица ${name} уже существует`);
+        } else {
+            console.error(`❌ Ошибка синхронизации таблицы ${name}:`, syncError.message);
+            // Не прерываем инициализацию при ошибке синхронизации
+        }
+    }
+}
+
+/**
+ * Автоматически проверяет и добавляет все отсутствующие столбцы модели в таблицу
+ * @param {Object} Model - Модель Sequelize
+ */
+async function ensureModelColumns(Model) {
+    try {
+        const tableName = Model.tableName || Model.name;
+        const attributes = Model.rawAttributes || {};
+        
+        // Проверяем, существует ли таблица
+        const [tableExists] = await sequelize.query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = $1
+            );
+        `, {
+            bind: [tableName]
+        });
+        
+        if (!tableExists[0].exists) {
+            // Таблица не существует, sync создаст её со всеми столбцами
+            return;
+        }
+        
+        // Получаем список существующих столбцов
+        const [existingColumns] = await sequelize.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = $1
+        `, {
+            bind: [tableName]
+        });
+        
+        const existingColumnNames = new Set(existingColumns.map(col => col.column_name));
+        
+        // Проверяем каждый атрибут модели
+        for (const [columnName, attribute] of Object.entries(attributes)) {
+            // Пропускаем служебные поля Sequelize
+            if (columnName === 'id' && attribute.primaryKey) {
+                continue; // id обычно уже есть
+            }
+            
+            // Пропускаем timestamps (createdAt, updatedAt) - они добавляются автоматически
+            if (columnName === 'createdAt' || columnName === 'updatedAt') {
+                continue;
+            }
+            
+            // Проверяем, существует ли столбец
+            if (!existingColumnNames.has(columnName)) {
+                try {
+                    const pgType = getPostgresType(attribute);
+                    const defaultValue = getDefaultValue(attribute);
+                    const allowNull = attribute.allowNull !== false;
+                    
+                    // Формируем SQL запрос для добавления столбца
+                    let alterQuery = `ALTER TABLE "${tableName}" ADD COLUMN "${columnName}" ${pgType}`;
+                    
+                    if (defaultValue) {
+                        alterQuery += ` DEFAULT ${defaultValue}`;
+                    }
+                    
+                    if (!allowNull && !defaultValue) {
+                        // Если NOT NULL без DEFAULT, устанавливаем значение по умолчанию в зависимости от типа
+                        if (pgType.includes('VARCHAR') || pgType === 'TEXT') {
+                            alterQuery += ` DEFAULT ''`;
+                        } else if (pgType === 'INTEGER' || pgType === 'BIGINT') {
+                            alterQuery += ` DEFAULT 0`;
+                        } else if (pgType === 'DECIMAL') {
+                            alterQuery += ` DEFAULT 0`;
+                        } else if (pgType === 'BOOLEAN') {
+                            alterQuery += ` DEFAULT FALSE`;
+                        } else if (pgType === 'TIMESTAMP') {
+                            alterQuery += ` DEFAULT NOW()`;
+                        }
+                        alterQuery += ` NOT NULL`;
+                    } else if (!allowNull) {
+                        alterQuery += ` NOT NULL`;
+                    }
+                    
+                    await sequelize.query(alterQuery);
+                    console.log(`   ✅ Столбец ${columnName} (${pgType}) добавлен в таблицу ${tableName}`);
+                } catch (error) {
+                    // Игнорируем ошибки, если столбец уже существует
+                    if (!error.message.includes('already exists') && 
+                        !error.message.includes('уже существует') &&
+                        !error.message.includes('duplicate')) {
+                        console.warn(`   ⚠️ Не удалось добавить столбец ${columnName} в ${tableName}:`, error.message);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        // Игнорируем ошибки, если таблицы нет
+        if (!error.message.includes('не существует') && 
+            !error.message.includes('does not exist')) {
+            console.warn(`   ⚠️ Предупреждение при проверке столбцов для ${Model.tableName || Model.name}:`, error.message);
+        }
+    }
+}
+
+/**
+ * Проверяет и добавляет отсутствующие столбцы в таблице перед синхронизацией (устаревший метод, используйте ensureModelColumns)
+ * @param {string} tableName - Имя таблицы
+ * @param {Array<{name: string, type: string, defaultValue?: string, allowNull?: boolean}>} columns - Массив столбцов для проверки
+ * @deprecated Используйте ensureModelColumns для автоматической проверки всех полей модели
+ */
+async function ensureColumnsExist(tableName, columns) {
+    try {
+        // Проверяем, существует ли таблица
+        const [tableExists] = await sequelize.query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = $1
+            );
+        `, {
+            bind: [tableName]
+        });
+        
+        if (!tableExists[0].exists) {
+            // Таблица не существует, sync создаст её со всеми столбцами
+            return;
+        }
+        
+        // Проверяем каждый столбец
+        for (const column of columns) {
+            const [columnExists] = await sequelize.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = $1 
+                    AND column_name = $2
+                );
+            `, {
+                bind: [tableName, column.name]
+            });
+            
+            if (!columnExists[0].exists) {
+                // Добавляем отсутствующий столбец
+                let alterQuery = `ALTER TABLE ${tableName} ADD COLUMN "${column.name}" ${column.type}`;
+                
+                if (column.defaultValue !== undefined) {
+                    alterQuery += ` DEFAULT ${column.defaultValue}`;
+                }
+                
+                if (column.allowNull === false) {
+                    alterQuery += ` NOT NULL`;
+                }
+                
+                await sequelize.query(alterQuery);
+                console.log(`   ✅ Столбец ${column.name} добавлен в таблицу ${tableName}`);
+            }
+        }
+    } catch (error) {
+        // Игнорируем ошибки, если столбец уже существует или таблицы нет
+        if (!error.message.includes('не существует') && 
+            !error.message.includes('does not exist') &&
+            !error.message.includes('already exists') &&
+            !error.message.includes('уже существует')) {
+            console.warn(`   ⚠️ Предупреждение при проверке столбцов для ${tableName}:`, error.message);
+        }
+    }
+}
+
 export async function initDatabase() {
     console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
 
@@ -62,6 +354,13 @@ export async function initDatabase() {
                 syncError.original && syncError.original.code === '23505' &&
                 syncError.original.detail && syncError.original.detail.includes('enum_')) {
                 console.log('✅ Все модели синхронизированы (некоторые ENUM типы уже существуют)');
+            } else if (syncError.name === 'SequelizeDatabaseError' && 
+                       syncError.original && 
+                       (syncError.original.code === '42703' || // столбец не существует
+                        syncError.message.includes('не существует') ||
+                        syncError.message.includes('does not exist'))) {
+                // Ошибка отсутствующего столбца - это нормально, столбцы будут добавлены при индивидуальной синхронизации
+                console.log('⚠️ Некоторые столбцы могут отсутствовать, они будут добавлены при синхронизации отдельных таблиц');
             } else {
                 // Пробрасываем другие ошибки
                 throw syncError;
@@ -92,14 +391,14 @@ export async function initDatabase() {
         
         // Создаем новые таблицы для кеширования
         console.log('📰 Создание таблиц кеширования новостей, настроений и торговых часов...');
-        await CachedNews.sync({ force: false });
-        await CachedTelegramSentiment.sync({ force: false });
-        await CachedTradingHours.sync({ force: false });
+        await safeSyncModel(CachedNews, 'CachedNews');
+        await safeSyncModel(CachedTelegramSentiment, 'CachedTelegramSentiment');
+        await safeSyncModel(CachedTradingHours, 'CachedTradingHours');
         console.log('✅ Таблицы кеширования созданы/обновлены');
         
         // Создаем таблицу торговых заявок
         console.log('🎯 Создание таблицы торговых заявок...');
-        await TradingRequest.sync({ force: false });
+        await safeSyncModel(TradingRequest, 'TradingRequest');
         console.log('✅ Таблица торговых заявок создана/обновлена');
         
         // Добавляем столбец entryOptimization, если его нет
@@ -118,24 +417,21 @@ export async function initDatabase() {
         
         // Создаем таблицу виртуального портфеля
         console.log('💼 Создание таблицы виртуального портфеля...');
-        await VirtualPortfolio.sync({ force: false });
-        console.log('✅ Таблица виртуального портфеля создана/обновлена');
+        await safeSyncModel(VirtualPortfolio);
         
         // Создаем таблицу реального портфеля
         console.log('💼 Создание таблицы реального портфеля...');
-        await RealPortfolio.sync({ force: false });
+        await safeSyncModel(RealPortfolio);
         console.log('✅ Таблица реального портфеля создана/обновлена');
         
         // Создаем таблицу кэшированных сигналов
         console.log('⚡ Создание таблицы кэшированных сигналов...');
-        await CachedSignal.sync({ force: false });
-        console.log('✅ Таблица кэшированных сигналов создана/обновлена');
+        await safeSyncModel(CachedSignal);
         
         // Создаем таблицу частичных закрытий позиций
         console.log('📊 Создание таблицы частичных закрытий позиций...');
         try {
-            await PositionExit.sync({ force: false });
-            console.log('✅ Таблица частичных закрытий позиций создана/обновлена');
+            await safeSyncModel(PositionExit);
         } catch (syncError) {
             // Игнорируем ошибки создания ENUM типов, если они уже существуют
             if (syncError.name === 'SequelizeUniqueConstraintError' && 
@@ -148,25 +444,22 @@ export async function initDatabase() {
             }
         }
         
-        await TriggeredSignal.sync({ force: false });
-        console.log('✅ Таблица сработавших сигналов создана/обновлена');
+        await safeSyncModel(TriggeredSignal);
         
         // Создаем таблицу состояния обучения
         console.log('📊 Создание таблицы состояния обучения...');
-        await TrainingState.sync({ force: false });
-        console.log('✅ Таблица состояния обучения создана/обновлена');
+        await safeSyncModel(TrainingState);
         
         // Создаем таблицы для стратегий торговли
         console.log('📈 Создание таблиц торговых стратегий...');
-        await TradingStrategy.sync({ force: false });
-        await PortfolioAllocation.sync({ force: false });
-        await PositionStrategy.sync({ force: false });
-        console.log('✅ Таблицы торговых стратегий созданы/обновлены');
+        await safeSyncModel(TradingStrategy);
+        await safeSyncModel(PortfolioAllocation);
+        await safeSyncModel(PositionStrategy);
         
         // Создаем таблицу результатов бэктестинга
         console.log('📊 Создание таблицы результатов бэктестинга...');
         try {
-            await BacktestResult.sync({ force: false });
+            await safeSyncModel(BacktestResult, 'BacktestResult');
             console.log('✅ Таблица результатов бэктестинга создана/обновлена');
         } catch (syncError) {
             // Игнорируем ошибки создания ENUM типов, если они уже существуют
@@ -240,7 +533,7 @@ export async function initDatabase() {
                 }
             }
             
-            await MacroIndicator.sync({ force: false });
+            await safeSyncModel(MacroIndicator, 'MacroIndicator');
             console.log('✅ Таблица макроиндикаторов создана/обновлена');
         } catch (syncError) {
             // Игнорируем ошибки создания ENUM типов, если они уже существуют
@@ -256,7 +549,7 @@ export async function initDatabase() {
         
         // Синхронизация таблицы истории ребалансировок портфеля
         try {
-            await PortfolioRebalancing.sync({ force: false });
+            await safeSyncModel(PortfolioRebalancing, 'PortfolioRebalancing');
             console.log('✅ Таблица истории ребалансировок портфеля создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы истории ребалансировок:', syncError);
@@ -266,7 +559,7 @@ export async function initDatabase() {
         // Создаем таблицу настроек уведомлений
         console.log('🔔 Создание таблицы настроек уведомлений...');
         try {
-            await TradingNotificationSettings.sync({ force: false });
+            await safeSyncModel(TradingNotificationSettings, 'TradingNotificationSettings');
             console.log('✅ Таблица настроек уведомлений создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы настроек уведомлений:', syncError);
@@ -276,7 +569,7 @@ export async function initDatabase() {
         // Создаем таблицу статистики инструментов
         console.log('📊 Создание таблицы статистики инструментов...');
         try {
-            await InstrumentStats.sync({ force: false });
+            await safeSyncModel(InstrumentStats, 'InstrumentStats');
             console.log('✅ Таблица статистики инструментов создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы статистики инструментов:', syncError);
@@ -285,7 +578,7 @@ export async function initDatabase() {
         // Создаем таблицу кеша корреляций
         console.log('🔗 Создание таблицы кеша корреляций...');
         try {
-            await CorrelationCache.sync({ force: false });
+            await safeSyncModel(CorrelationCache, 'CorrelationCache');
             console.log('✅ Таблица кеша корреляций создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы кеша корреляций:', syncError);
@@ -294,7 +587,7 @@ export async function initDatabase() {
         // Создаем таблицу анализа портфеля
         console.log('📈 Создание таблицы анализа портфеля...');
         try {
-            await PortfolioAnalysis.sync({ force: false });
+            await safeSyncModel(PortfolioAnalysis, 'PortfolioAnalysis');
             console.log('✅ Таблица анализа портфеля создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы анализа портфеля:', syncError);
@@ -303,7 +596,7 @@ export async function initDatabase() {
         // Создаем таблицу активов
         console.log('📊 Создание таблицы активов...');
         try {
-            await Asset.sync({ force: false });
+            await safeSyncModel(Asset, 'Asset');
             // Создаем GIN индекс для JSONB поиска по apiData, если его еще нет
             // Проверяем, существует ли столбец apiData перед созданием индекса
             const [columns] = await sequelize.query(`
@@ -338,7 +631,7 @@ export async function initDatabase() {
                     END IF;
                 END $$;
             `);
-            await FundamentalData.sync({ force: false });
+            await safeSyncModel(FundamentalData, 'FundamentalData');
             console.log('✅ Таблица фундаментальных данных создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы фундаментальных данных:', syncError);
@@ -358,7 +651,8 @@ export async function initDatabase() {
                 END $$;
             `);
             
-            await OptionsData.sync({ force: false });
+            // Автоматически проверяем и добавляем все отсутствующие столбцы модели
+            await safeSyncModel(OptionsData, 'OptionsData');
             console.log('✅ Таблица опционных данных создана/обновлена');
         } catch (syncError) {
             // Игнорируем ошибки создания ENUM типов, если они уже существуют
@@ -376,7 +670,7 @@ export async function initDatabase() {
         // Создаем таблицу трейлинг-стопов
         console.log('🛑 Создание таблицы трейлинг-стопов...');
         try {
-            await TrailingStop.sync({ force: false });
+            await safeSyncModel(TrailingStop, 'TrailingStop');
             console.log('✅ Таблица трейлинг-стопов создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы трейлинг-стопов:', syncError);

@@ -9,6 +9,8 @@
     "dev": "nodemon src/app.js",
     "init-db": "node src/utils/initDatabase.js",
     "clear-db": "node src/utils/clearDatabase.js",
+    "drop-db": "node src/utils/clearDatabase.js --drop-all",
+    "reset-db": "node src/utils/clearDatabase.js --drop-all && node src/utils/initDatabase.js",
     "migrate:instrument-type": "node migrations/create-portfolio-analysis-table.js",
     "migrate:instrument-stats": "node migrations/create-instrument-stats-table.js",
     "migrate:correlation-cache": "node migrations/create-correlation-cache-table.js",

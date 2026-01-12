@@ -481,6 +481,281 @@ const TradingRequestManager: React.FC = () => {
     return new Date(dateString).toLocaleString('ru-RU');
   };
 
+  // Определение колонок для таблицы всех заявок
+  const getTableColumns = (): DataTableColumn<TradingRequest>[] => [
+    {
+      key: 'ticker',
+      header: 'Тикер',
+      sortable: true,
+      accessor: (row) => row.ticker,
+      render: (_, row) => (
+        <div>
+          <div className="font-medium">{row.ticker}</div>
+          <div className="text-xs text-500">{row.name}</div>
+        </div>
+      ),
+      width: '150px'
+    },
+    {
+      key: 'tradeAction',
+      header: 'Действие',
+      sortable: true,
+      accessor: (row) => row.action,
+      render: (_, row) => (
+        <Badge variant={row.action === 'BUY' ? 'success' : 'error'} size="sm">
+          {translateRecommendation(row.action)}
+        </Badge>
+      ),
+      width: '100px'
+    },
+    {
+      key: 'quantity',
+      header: 'Количество',
+      sortable: true,
+      accessor: (row) => row.quantity,
+      width: '100px'
+    },
+    {
+      key: 'priceAtRequest',
+      header: 'Цена',
+      sortable: true,
+      accessor: (row) => row.priceAtRequest,
+      render: (_, row) => formatCurrency(row.priceAtRequest),
+      align: 'right',
+      width: '120px'
+    },
+    {
+      key: 'estimatedAmount',
+      header: 'Сумма',
+      sortable: true,
+      accessor: (row) => row.estimatedAmount,
+      render: (_, row) => formatCurrency(row.estimatedAmount),
+      align: 'right',
+      width: '120px'
+    },
+    {
+      key: 'status',
+      header: 'Статус',
+      sortable: true,
+      accessor: (row) => row.status,
+      render: (_, row) => getStatusBadge(row.status),
+      width: '120px'
+    },
+    {
+      key: 'confidence',
+      header: 'Уверенность',
+      sortable: true,
+      accessor: (row) => row.confidence,
+      render: (_, row) => `${(row.confidence * 100).toFixed(0)}%`,
+      align: 'right',
+      width: '100px'
+    },
+    {
+      key: 'tradingMode',
+      header: 'Режим',
+      sortable: true,
+      accessor: (row) => row.tradingMode,
+      render: (_, row) => getTradingModeBadge(row.tradingMode),
+      width: '100px'
+    },
+    {
+      key: 'createdAt',
+      header: 'Создано',
+      sortable: true,
+      accessor: (row) => row.createdAt,
+      render: (_, row) => formatDateTime(row.createdAt),
+      width: '150px'
+    },
+    {
+      key: 'action',
+      header: 'Действия',
+      sortable: false,
+      render: (_, row) => actionBodyTemplate(row),
+      width: '150px'
+    }
+  ];
+
+  // Определение колонок для таблицы ожидающих заявок
+  const getPendingTableColumns = (): DataTableColumn<TradingRequest>[] => [
+    {
+      key: 'ticker',
+      header: 'Тикер',
+      sortable: true,
+      accessor: (row) => row.ticker,
+      render: (_, row) => (
+        <div>
+          <div className="font-medium">{row.ticker}</div>
+          <div className="text-xs text-500">{row.name}</div>
+        </div>
+      ),
+      width: '150px'
+    },
+    {
+      key: 'tradeAction',
+      header: 'Действие',
+      sortable: true,
+      accessor: (row) => row.action,
+      render: (_, row) => (
+        <Badge variant={row.action === 'BUY' ? 'success' : 'error'} size="sm">
+          {translateRecommendation(row.action)}
+        </Badge>
+      ),
+      width: '100px'
+    },
+    {
+      key: 'quantity',
+      header: 'Количество',
+      sortable: true,
+      accessor: (row) => row.quantity,
+      width: '100px'
+    },
+    {
+      key: 'priceAtRequest',
+      header: 'Цена',
+      sortable: true,
+      accessor: (row) => row.priceAtRequest,
+      render: (_, row) => formatCurrency(row.priceAtRequest),
+      align: 'right',
+      width: '120px'
+    },
+    {
+      key: 'estimatedAmount',
+      header: 'Сумма',
+      sortable: true,
+      accessor: (row) => row.estimatedAmount,
+      render: (_, row) => formatCurrency(row.estimatedAmount),
+      align: 'right',
+      width: '120px'
+    },
+    {
+      key: 'confidence',
+      header: 'Уверенность',
+      sortable: true,
+      accessor: (row) => row.confidence,
+      render: (_, row) => `${(row.confidence * 100).toFixed(0)}%`,
+      align: 'right',
+      width: '100px'
+    },
+    {
+      key: 'priority',
+      header: 'Приоритет',
+      sortable: true,
+      accessor: (row) => row.priority,
+      render: (_, row) => getPriorityBadge(row.priority),
+      width: '100px'
+    },
+    {
+      key: 'riskLevel',
+      header: 'Риск',
+      sortable: true,
+      accessor: (row) => row.riskLevel,
+      render: (_, row) => getRiskBadge(row.riskLevel),
+      width: '100px'
+    },
+    {
+      key: 'createdAt',
+      header: 'Создано',
+      sortable: true,
+      accessor: (row) => row.createdAt,
+      render: (_, row) => formatDateTime(row.createdAt),
+      width: '150px'
+    },
+    {
+      key: 'action',
+      header: 'Действия',
+      sortable: false,
+      render: (_, row) => actionBodyTemplate(row),
+      width: '150px'
+    }
+  ];
+
+  // Определение колонок для таблицы одобренных заявок
+  const getApprovedTableColumns = (): DataTableColumn<TradingRequest>[] => [
+    {
+      key: 'ticker',
+      header: 'Тикер',
+      sortable: true,
+      accessor: (row) => row.ticker,
+      render: (_, row) => (
+        <div>
+          <div className="font-medium">{row.ticker}</div>
+          <div className="text-xs text-500">{row.name}</div>
+        </div>
+      ),
+      width: '150px'
+    },
+    {
+      key: 'tradeAction',
+      header: 'Действие',
+      sortable: true,
+      accessor: (row) => row.action,
+      render: (_, row) => (
+        <Badge variant={row.action === 'BUY' ? 'success' : 'error'} size="sm">
+          {translateRecommendation(row.action)}
+        </Badge>
+      ),
+      width: '100px'
+    },
+    {
+      key: 'quantity',
+      header: 'Количество',
+      sortable: true,
+      accessor: (row) => row.quantity,
+      width: '100px'
+    },
+    {
+      key: 'priceAtRequest',
+      header: 'Цена запроса',
+      sortable: true,
+      accessor: (row) => row.priceAtRequest,
+      render: (_, row) => formatCurrency(row.priceAtRequest),
+      align: 'right',
+      width: '120px'
+    },
+    {
+      key: 'actualPrice',
+      header: 'Факт. цена',
+      sortable: true,
+      accessor: (row) => row.actualPrice,
+      render: (_, row) => row.actualPrice ? formatCurrency(row.actualPrice) : '—',
+      align: 'right',
+      width: '120px'
+    },
+    {
+      key: 'estimatedAmount',
+      header: 'Сумма',
+      sortable: true,
+      accessor: (row) => row.estimatedAmount,
+      render: (_, row) => formatCurrency(row.estimatedAmount),
+      align: 'right',
+      width: '120px'
+    },
+    {
+      key: 'status',
+      header: 'Статус',
+      sortable: true,
+      accessor: (row) => row.status,
+      render: (_, row) => getStatusBadge(row.status),
+      width: '120px'
+    },
+    {
+      key: 'tradingMode',
+      header: 'Режим',
+      sortable: true,
+      accessor: (row) => row.tradingMode,
+      render: (_, row) => getTradingModeBadge(row.tradingMode),
+      width: '100px'
+    },
+    {
+      key: 'createdAt',
+      header: 'Создано',
+      sortable: true,
+      accessor: (row) => row.createdAt,
+      render: (_, row) => formatDateTime(row.createdAt),
+      width: '150px'
+    }
+  ];
+
   const loadCleanupStats = async () => {
     try {
       const tradingMode = selectedMode === 'all' ? undefined : selectedMode;

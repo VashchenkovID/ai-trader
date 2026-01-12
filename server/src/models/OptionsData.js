@@ -15,13 +15,18 @@ OptionsData.init({
     },
     figi: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true, // Может быть null, если не получен из API
         comment: 'FIGI опциона'
     },
     baseFigi: {
         type: DataTypes.STRING,
         allowNull: false,
         comment: 'FIGI базового актива (акция)'
+    },
+    baseTicker: {
+        type: DataTypes.STRING,
+        allowNull: true, // Может быть null, если тикер не найден
+        comment: 'Тикер базового актива (акция)'
     },
     ticker: {
         type: DataTypes.STRING,

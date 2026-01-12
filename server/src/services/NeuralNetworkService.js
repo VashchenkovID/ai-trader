@@ -3643,7 +3643,8 @@ class NeuralNetworkService {
                 }
                 
                 if (!loaded || !this.model) {
-                    console.log('⚠️ Обученные модели не найдены ни в файлах, ни в OptimizedTrainingService');
+                    // Модели не найдены - это нормально, если они еще не обучены
+                    // Не выводим предупреждение, чтобы не засорять логи
                 }
             } catch (err) {
                 console.warn('⚠️ Ошибка при поиске моделей:', err.message);

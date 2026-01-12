@@ -237,6 +237,7 @@ class OptionsDataService {
             }
 
             const underlyingPrice = instrument.lastPrice;
+            const baseTicker = instrument.ticker || null; // Получаем тикер базового актива
             
             // Рассчитываем историческую волатильность для fallback
             const historicalVolatility = await this.calculateHistoricalVolatility(baseFigi, 30);
@@ -327,6 +328,7 @@ class OptionsDataService {
                         defaults: {
                             figi: option.uid || option.figi || null,
                             baseFigi: baseFigi,
+                            baseTicker: baseTicker, // Тикер базового актива
                             ticker: option.ticker || null,
                             name: option.name || null,
                             optionType: optionType,
@@ -360,6 +362,7 @@ class OptionsDataService {
                         await savedOption.update({
                             currentPrice: optionPrice,
                             underlyingPrice: underlyingPrice,
+                            baseTicker: baseTicker, // Обновляем тикер базового актива
                             impliedVolatility: impliedVolatility,
                             timeToExpiration: timeToExpiration,
                             timestamp: currentDate,
@@ -379,6 +382,7 @@ class OptionsDataService {
                         await savedOption.update({
                             impliedVolatility: impliedVolatility,
                             underlyingPrice: underlyingPrice,
+                            baseTicker: baseTicker, // Обновляем тикер базового актива
                             metadata: updatedMetadata
                         });
                     }
@@ -530,12 +534,14 @@ class OptionsDataService {
             dateFrom.setDate(dateFrom.getDate() - 7);
 
             // Получаем опционы, отсортированные по близости к текущей цене
+            // Используем только поля, которые точно существуют в таблице
             const options = await OptionsData.findAll({
                 where: {
                     baseFigi: baseFigi,
                     timestamp: { [Op.gte]: dateFrom },
                     impliedVolatility: { [Op.ne]: null }
                 },
+                attributes: ['id', 'baseFigi', 'strikePrice', 'expirationDate', 'optionType', 'impliedVolatility', 'currentPrice', 'underlyingPrice', 'timestamp'], // Явно указываем поля
                 order: [
                     // Сортируем по близости страйка к текущей цене
                     sequelize.literal(`ABS("strikePrice"::numeric - ${currentPrice}) ASC`),
@@ -553,12 +559,25 @@ class OptionsDataService {
 
             return atmOptions;
         } catch (error) {
-            if (LoggerService.isInitialized) {
-                LoggerService.error('Error getting ATM options', {
-                    service: 'OptionsDataService',
-                    baseFigi,
-                    error: { message: error.message }
-                });
+            // Проверяем, является ли ошибка связанной с отсутствующим столбцом
+            if (error.message && error.message.includes('столбец') && error.message.includes('не существует')) {
+                // Столбец отсутствует - это нормально при первой инициализации
+                // Логируем только один раз, чтобы не засорять логи
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Options table column missing, will be created on next sync', {
+                        service: 'OptionsDataService',
+                        baseFigi,
+                        error: { message: error.message }
+                    });
+                }
+            } else {
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Error getting ATM options', {
+                        service: 'OptionsDataService',
+                        baseFigi,
+                        error: { message: error.message }
+                    });
+                }
             }
             return [];
         }

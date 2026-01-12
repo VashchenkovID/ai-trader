@@ -14,6 +14,9 @@ export * from './priceUpdateUtils.js';
 // Утилиты для обновления кеша
 export * from './cacheUpdateUtils.js';
 
+// Утилиты для обновления опционных данных
+export * from './optionsDataUpdateUtils.js';
+
 // Утилиты для работы с workers
 export * from './workerUtils.js';
 

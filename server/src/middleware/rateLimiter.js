@@ -11,9 +11,10 @@ import MonitoringService from '../services/MonitoringService.js';
 const requestCounts = new Map();
 
 // Конфигурация по умолчанию
+// Для одного пользователя лимиты увеличены
 const defaultConfig = {
     windowMs: 15 * 60 * 1000, // 15 минут
-    max: 100, // 100 запросов за окно
+    max: 1000, // 1000 запросов за окно (увеличено для одного пользователя)
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true, // Возвращать информацию о лимитах в заголовках
     legacyHeaders: false, // Отключить заголовки X-RateLimit-*
@@ -133,30 +134,30 @@ export function createRateLimiter(config = {}) {
 
 /**
  * Rate limiter для общих API endpoints
- * 100 запросов за 15 минут
+ * 1000 запросов за 15 минут (увеличено для одного пользователя)
  */
 export const generalLimiter = createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 минут
-    max: 100
+    max: 1000 // Увеличено с 100 до 1000 для одного пользователя
 });
 
 /**
  * Rate limiter для строгих endpoints (авторизация, создание данных)
- * 10 запросов за 15 минут
+ * 100 запросов за 15 минут (увеличено для одного пользователя)
  */
 export const strictLimiter = createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 минут
-    max: 10,
+    max: 100, // Увеличено с 10 до 100 для одного пользователя
     message: 'Too many requests to this endpoint. Please try again later.'
 });
 
 /**
  * Rate limiter для публичных endpoints (чтение данных)
- * 200 запросов за 15 минут
+ * 2000 запросов за 15 минут (увеличено для одного пользователя)
  */
 export const publicLimiter = createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 минут
-    max: 200
+    max: 2000 // Увеличено с 200 до 2000 для одного пользователя
 });
 
 /**
@@ -171,12 +172,12 @@ export const heavyOperationLimiter = createRateLimiter({
 
 /**
  * Rate limiter для batch-train-all (более мягкие ограничения)
- * 10 запросов за 30 минут (для тестирования и разработки)
- * В production можно уменьшить до 3-5 запросов
+ * 100 запросов за 30 минут (увеличено для одного пользователя)
+ * В production можно уменьшить до 10-20 запросов
  */
 export const batchTrainLimiter = createRateLimiter({
     windowMs: 30 * 60 * 1000, // 30 минут
-    max: process.env.NODE_ENV === 'production' ? 3 : 10, // 10 для разработки, 3 для production
+    max: process.env.NODE_ENV === 'production' ? 20 : 100, // 100 для разработки, 20 для production
     message: 'Too many batch training requests. Please wait before trying again. You can reset the limit via /api/rate-limit/reset'
 });
 

@@ -663,7 +663,7 @@ class SchedulerService {
             }
         );
         
-        // Задача 18: Обновление опционных данных
+        // Задача 18: Обновление опционных данных (через worker)
         // Расписание из настроек (по умолчанию: ежедневно в 01:00)
         const optionsDataUpdateSchedule = await SettingsService.getSetting('options_data_update_interval', '0 1 * * *');
         this.optionsDataUpdateTask = SchedulerUtils.createScheduledTask(
@@ -673,7 +673,7 @@ class SchedulerService {
             },
             {
                 taskName: 'options-data-update',
-                sendAlerts: true,
+                sendAlerts: false, // Уведомления отправляются внутри worker'а
                 alertType: 'info',
                 startTime: this.startTime,
                 minDelay: 23 * 60 * 60 * 1000 // 23 часа (обновляем раз в день)
@@ -4453,55 +4453,18 @@ class SchedulerService {
     }
 
     /**
-     * Обновление опционных данных
+     * Обновление опционных данных через worker
      */
     async performOptionsDataUpdate() {
-        try {
-            console.log('📊 Starting options data update...');
-            
-            const OptionsDataService = (await import('./OptionsDataService.js')).default;
-            
-            // Убеждаемся, что сервис инициализирован
-            if (!OptionsDataService.isInitialized) {
-                await OptionsDataService.initialize();
-            }
-            
-            // Выполняем массовое обновление опционов
-            const updateStats = await OptionsDataService.updateOptionsForAllInstruments({
-                delayMs: 2000, // 2 секунды между запросами
-                forceUpdate: false // Не принуждаем обновление существующих записей
-            });
-            
-            // Формируем отчет
-            const summary = `Обновление опционных данных завершено:
-• Обработано инструментов: ${updateStats.processed} / ${updateStats.total}
-• Сохранено опционов: ${updateStats.saved}
-• Ошибок: ${updateStats.errors}
-• Пропущено: ${updateStats.skipped}`;
-            
-            console.log(`✅ Options data update completed:\n${summary}`);
-            
-            // Отправляем уведомление в Telegram
-            await OptimizedTelegramService.sendAlert(
-                'OPTIONS_DATA_UPDATE',
-                summary,
-                updateStats.errors > 0 ? 'warning' : 'info'
-            );
-            
-            return {
-                success: true,
-                stats: updateStats,
-                summary
-            };
-        } catch (error) {
-            console.error('❌ Error in performOptionsDataUpdate:', error);
-            await OptimizedTelegramService.sendAlert(
-                'OPTIONS_DATA_UPDATE_ERROR',
-                `❌ Ошибка при обновлении опционных данных:\n${error.message}`,
-                'error'
-            );
-            throw error;
-        }
+        const context = {
+            getWebSocketService: () => this.getWebSocketService(),
+            workersSet: this.workers
+        };
+        
+        return await SchedulerUtils.performOptionsDataUpdate(context, {
+            delayMs: 2000, // 2 секунды между запросами
+            forceUpdate: false // Не принуждаем обновление существующих записей
+        });
     }
 
     /**

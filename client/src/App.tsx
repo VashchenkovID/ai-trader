@@ -14,7 +14,6 @@ import { useErrorHandler } from './hooks/useErrorHandler';
 // Pages
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
-import NeuralNetworks from './pages/NeuralNetworks';
 import TradingRequests from './pages/TradingRequests';
 import Recommendations from './pages/Recommendations';
 import Portfolio from './pages/Portfolio';
@@ -37,7 +36,6 @@ function App() {
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/settings" element={<Settings />} />
-                  <Route path="/neural-networks" element={<NeuralNetworks />} />
                   <Route path="/trading-requests" element={<TradingRequests />} />
                   <Route path="/recommendations" element={<Recommendations />} />
                   <Route path="/portfolio" element={<Portfolio />} />

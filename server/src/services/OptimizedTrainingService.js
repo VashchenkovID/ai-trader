@@ -1534,7 +1534,8 @@ class OptimizedTrainingService {
                 await fs.access(modelPath);
                 await fs.access(weightsPath);
             } catch {
-                console.warn(`⚠️ Model files not found for ${figi}`);
+                // Модель не найдена - это нормально, если она еще не обучена
+                // Не выводим предупреждение для каждого инструмента, чтобы не засорять логи
                 return null; // Модель не найдена
             }
 
