@@ -2,6 +2,7 @@ import * as tf from '@tensorflow/tfjs';
 import CacheService from './CacheService.js';
 import OptimizedAnalysisService from './OptimizedAnalysisService.js';
 import ModelManager from '../utils/ModelManager.js';
+import LoggerService from './LoggerService.js';
 import { getService } from './GlobalServiceManager.js';
 import ServiceManager from './ServiceManager.js';
 
@@ -51,15 +52,18 @@ class EnsembleService {
      */
     async initialize() {
         try {
-            console.log('🎭 Initializing Ensemble Service...');
-            
             // Загружаем модели синхронно при инициализации
             await this.loadModelsInBackground();
             
             this.isInitialized = true;
-            console.log('✅ Ensemble Service initialized');
         } catch (error) {
-            console.error('❌ Failed to initialize Ensemble Service:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to initialize Ensemble Service', {
+                    service: 'EnsembleService',
+                    operation: 'initialize',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }
@@ -69,7 +73,6 @@ class EnsembleService {
      */
     async loadModelsInBackground() {
         try {
-            console.log('🔄 Loading ensemble models in background...');
             
             // Сначала пытаемся загрузить существующие модели
             await this.loadModels();
@@ -77,7 +80,6 @@ class EnsembleService {
             // Если не все модели загружены, создаем недостающие
             for (const modelType of ['lstm', 'cnn', 'transformer']) {
                 if (!this.models[modelType]) {
-                    console.log(`🔨 Creating new ${modelType} model...`);
                     switch (modelType) {
                         case 'lstm':
                             this.models[modelType] = this.createLSTMModel();
@@ -92,20 +94,28 @@ class EnsembleService {
                     
                     // Сразу сохраняем созданную модель
                     if (this.models[modelType]) {
-                        console.log(`💾 Saving newly created ${modelType} model...`);
                         const success = await ModelManager.saveModel(this.models[modelType], `ensemble/${modelType}`);
-                        if (success) {
-                            console.log(`✅ ${modelType} model saved successfully`);
-                        } else {
-                            console.error(`❌ Failed to save ${modelType} model`);
+                        if (!success) {
+                            if (LoggerService.isInitialized) {
+                                LoggerService.error('Failed to save ensemble model', {
+                                    service: 'EnsembleService',
+                                    operation: 'loadModelsInBackground',
+                                    modelType,
+                                    error: { message: 'ModelManager.saveModel returned false' }
+                                });
+                            }
                         }
                     }
                 }
             }
-            
-            console.log('✅ Ensemble models loaded in background');
         } catch (error) {
-            console.warn('⚠️ Background ensemble model loading failed:', error.message);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Background ensemble model loading failed', {
+                    service: 'EnsembleService',
+                    operation: 'loadModelsInBackground',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
         }
     }
 
@@ -133,7 +143,6 @@ class EnsembleService {
         }
 
         // Если модели не загрузились за отведенное время, создаем их синхронно
-        console.warn('⚠️ Models not ready, creating synchronously...');
         for (const modelType of ['lstm', 'cnn', 'transformer']) {
             if (!this.models[modelType]) {
                 switch (modelType) {
@@ -163,8 +172,6 @@ class EnsembleService {
         
         // Transformer для долгосрочного анализа
         this.models.transformer = this.createTransformerModel();
-        
-        console.log('✅ All ensemble models created');
     }
 
     /**
@@ -360,16 +367,13 @@ class EnsembleService {
         try {
             // Глобальный лок для ансамбля
             if (this.isTraining) {
-                console.warn(`⚠️ Ensemble training already in progress, skipping new start for ${figi}`);
                 return { success: false, error: 'Ensemble training already in progress' };
             }
             // Per-FIGI лок
             if (this.trainingFigiLocks.has(figi)) {
-                console.warn(`⚠️ Ensemble training already running for ${figi}, skipping duplicate start`);
                 return { success: false, error: 'Ensemble training already running for this FIGI' };
             }
 
-            console.log(`🎭 Training ensemble for ${figi}...`);
             this.isTraining = true;
             this.trainingFigiLocks.add(figi);
             
@@ -388,7 +392,6 @@ class EnsembleService {
 
             // Получаем данные (skipUpdate = true - режим обучения, не делаем запросы к API)
             const candles = await CacheService.getCandles(figi, 'DAY', days, true);
-            console.log(`📊 Retrieved ${candles.length} candles for ${figi}`);
             
             // Адаптивная проверка данных
             // Минимальные требования для каждой модели:
@@ -408,24 +411,12 @@ class EnsembleService {
             const canTrainCNN = candles.length >= minForCNN;
             const canTrainTransformer = candles.length >= minForTransformer;
             
-            console.log(`📊 Available models: LSTM=${canTrainLSTM}, CNN=${canTrainCNN}, Transformer=${canTrainTransformer}`);
             
             if (!canTrainLSTM && !canTrainCNN && !canTrainTransformer) {
                 throw new Error(`Insufficient data: ${candles.length} candles (minimum ${minRequired} required)`);
             }
             
             // Проверяем, что данные реальные
-            if (candles.length > 0) {
-                const sampleCandle = candles[0];
-                console.log(`📈 Sample candle data:`, {
-                    time: sampleCandle.time,
-                    open: sampleCandle.open,
-                    close: sampleCandle.close,
-                    high: sampleCandle.high,
-                    low: sampleCandle.low,
-                    volume: sampleCandle.volume
-                });
-            }
 
             // Подготавливаем и обучаем только те модели, для которых достаточно данных
             const results = {};
@@ -456,15 +447,18 @@ class EnsembleService {
                         }
                         results.lstm = lstmResult;
                         completedModels++;
-                        console.log(`✅ LSTM model trained successfully`);
-                    } else {
-                        console.warn(`⚠️ LSTM: No training samples generated`);
                     }
                 } catch (error) {
-                    console.error(`❌ LSTM training failed:`, error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('LSTM training failed in ensemble', {
+                            service: 'EnsembleService',
+                            operation: 'trainEnsemble',
+                            figi,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                 }
             } else {
-                console.warn(`⚠️ Skipping LSTM training: insufficient data (${candles.length} < ${minRequired})`);
             }
             
             if (canTrainCNN) {
@@ -491,15 +485,18 @@ class EnsembleService {
                         }
                         results.cnn = cnnResult;
                         completedModels++;
-                        console.log(`✅ CNN model trained successfully`);
-                    } else {
-                        console.warn(`⚠️ CNN: No training samples generated`);
                     }
                 } catch (error) {
-                    console.error(`❌ CNN training failed:`, error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('CNN training failed in ensemble', {
+                            service: 'EnsembleService',
+                            operation: 'trainEnsemble',
+                            figi,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                 }
             } else {
-                console.warn(`⚠️ Skipping CNN training: insufficient data (${candles.length} < ${minForCNN})`);
             }
             
             if (canTrainTransformer) {
@@ -526,15 +523,18 @@ class EnsembleService {
                         }
                         results.transformer = transformerResult;
                         completedModels++;
-                        console.log(`✅ Transformer model trained successfully`);
-                    } else {
-                        console.warn(`⚠️ Transformer: No training samples generated`);
                     }
                 } catch (error) {
-                    console.error(`❌ Transformer training failed:`, error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Transformer training failed in ensemble', {
+                            service: 'EnsembleService',
+                            operation: 'trainEnsemble',
+                            figi,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                 }
             } else {
-                console.warn(`⚠️ Skipping Transformer training: insufficient data (${candles.length} < ${minForTransformer})`);
             }
             
             // Обновляем прогресс перед завершением
@@ -550,7 +550,6 @@ class EnsembleService {
             // Адаптивные веса на основе производительности
             await this.updateWeights();
 
-            console.log('✅ Ensemble training completed');
             
             // Завершаем обучение
             if (trainingStatusService) {
@@ -564,7 +563,14 @@ class EnsembleService {
             };
 
         } catch (error) {
-            console.error('❌ Ensemble training failed:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Ensemble training failed', {
+                    service: 'EnsembleService',
+                    operation: 'trainEnsemble',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             
             // Завершаем обучение с ошибкой
             if (trainingStatusService) {
@@ -584,7 +590,13 @@ class EnsembleService {
                     console.log('⚠️ Telegram service not initialized, skipping alert');
                 }
             } catch (telegramError) {
-                console.error('❌ Failed to send ensemble training error alert:', telegramError.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to send ensemble training error alert', {
+                        service: 'EnsembleService',
+                        operation: 'trainEnsemble',
+                        error: { message: telegramError.message }
+                    });
+                }
             }
             
             throw error;
@@ -790,8 +802,6 @@ class EnsembleService {
                     const accuracy = logs.acc || 0;
                     const valAccuracy = logs.val_acc || 0;
                     
-                    // Логируем прогресс каждой эпохи
-                    console.log(`📈 ${modelType} Epoch ${epoch + 1}/${epochs}: loss=${trainLoss.toFixed(4)}, val_loss=${valLoss.toFixed(4)}, acc=${accuracy.toFixed(4)}, val_acc=${valAccuracy.toFixed(4)}`);
                     
                     if (valLoss < bestValLoss) {
                         // Улучшение - сохраняем веса лучшей модели
@@ -841,14 +851,21 @@ class EnsembleService {
                                     
                                     console.log(`📉 ${modelType} Epoch ${epoch + 1}: Автоматическое уменьшение LR: ${oldLR.toFixed(6)} → ${currentLR.toFixed(6)} (плато ${reduceLRCount} эпох, уменьшение #${lrReductionCount})`);
                                 } catch (lrError) {
-                                    console.warn(`⚠️ ${modelType}: Не удалось изменить LR: ${lrError.message}`);
+                                    if (LoggerService.isInitialized) {
+                                        LoggerService.error('Failed to change learning rate', {
+                                            service: 'EnsembleService',
+                                            operation: 'trainModel',
+                                            modelType,
+                                            epoch: epoch + 1,
+                                            error: { message: lrError.message, stack: lrError.stack }
+                                        });
+                                    }
                                 }
                             }
                             
                             reduceLRCount = 0; // Сбрасываем счетчик после уменьшения LR
                         } else if (reduceLRCount >= reduceLRPatience && lrReductionCount >= maxLRReductions) {
                             // Достигнуто максимальное количество уменьшений LR
-                            console.log(`📉 ${modelType} Epoch ${epoch + 1}: Плато обнаружено, но LR уже уменьшен ${maxLRReductions} раз (текущий LR=${currentLR.toFixed(6)})`);
                             reduceLRCount = 0; // Сбрасываем счетчик
                         }
                     }
@@ -864,13 +881,19 @@ class EnsembleService {
         if (bestModelWeights && bestEpoch > 0) {
             try {
                 model.setWeights(bestModelWeights);
-                console.log(`✅ ${modelType}: Восстановлены веса лучшей модели (эпоха ${bestEpoch}, val_loss=${bestValLoss.toFixed(4)})`);
-                
                 // Очищаем клонированные веса
                 bestModelWeights.forEach(w => w.dispose());
                 bestModelWeights = null;
             } catch (error) {
-                console.warn(`⚠️ ${modelType}: Не удалось восстановить веса лучшей модели: ${error.message}`);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to restore best model weights', {
+                        service: 'EnsembleService',
+                        operation: 'trainModel',
+                        modelType,
+                        bestEpoch,
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
             }
         }
 
@@ -880,15 +903,6 @@ class EnsembleService {
         const finalLoss = bestValLoss !== Infinity ? bestValLoss : history.history.loss[history.history.loss.length - 1];
         
         const totalImprovement = initialLoss ? ((initialLoss - finalLoss) / initialLoss * 100).toFixed(2) : 'N/A';
-        console.log(`📊 ${modelType}: Обучение завершено. Лучшая модель на эпохе ${bestEpoch}, val_loss=${bestValLoss.toFixed(4)}, общее улучшение: ${totalImprovement}%`);
-        
-        // Логируем историю изменений LR, если были изменения
-        if (lrHistory.length > 0) {
-            console.log(`📈 ${modelType}: История изменений LR (${lrHistory.length} раз):`);
-            lrHistory.forEach((lrChange, idx) => {
-                console.log(`   ${idx + 1}. Эпоха ${lrChange.epoch}: ${lrChange.oldLR.toFixed(6)} → ${lrChange.newLR.toFixed(6)} (val_loss=${lrChange.valLoss.toFixed(4)})`);
-            });
-        }
         
         return {
             accuracy: finalAccuracy,
@@ -1186,7 +1200,8 @@ class EnsembleService {
 
             // Получаем последние данные
             // Запрашиваем больше данных (200 дней), чтобы получить максимум доступных свечей
-            let candles = await CacheService.getCandles(figi, 'DAY', 200);
+            // skipUpdate = true - используем только БД, без запросов к API
+            let candles = await CacheService.getCandles(figi, 'DAY', 200, true);
             
             // Минимальные требования для моделей:
             // LSTM: минимум 25 свечей (окно 24 + 1 для лейбла)
@@ -1197,42 +1212,18 @@ class EnsembleService {
             const minRequiredForTransformer = 85;
             const minRequired = Math.max(minRequiredForLSTM, minRequiredForCNN, minRequiredForTransformer);
             
-            // Если данных недостаточно, дозапрашиваем из API и сохраняем в БД
+            // Если данных недостаточно, пытаемся расширить период для получения большего количества данных из кеша
             if (candles.length < minRequired) {
-                console.log(`📥 Insufficient candles for ${figi}: ${candles.length} < ${minRequired}, fetching from API...`);
-                
-                try {
-                    // Пытаемся получить данные за максимальный период (730 дней = 2 года)
-                    const newCandles = await CacheService.cacheCandles(figi, 'DAY', 730);
-                    if (newCandles && newCandles.length > 0) {
-                        console.log(`✅ Fetched ${newCandles.length} new candles from API for ${figi}`);
-                        // Получаем обновленные данные из кеша
-                        candles = await CacheService.getCandles(figi, 'DAY', 730);
-                    } else {
-                        // Если не получили новые данные, пробуем меньший период
-                        console.log(`⚠️ No new candles from 730 days, trying 365 days...`);
-                        const newCandles365 = await CacheService.cacheCandles(figi, 'DAY', 365);
-                        if (newCandles365 && newCandles365.length > 0) {
-                            console.log(`✅ Fetched ${newCandles365.length} new candles from API for ${figi}`);
-                            candles = await CacheService.getCandles(figi, 'DAY', 365);
-                        }
+                // Пробуем разные периоды (skipUpdate = true для всех запросов - только БД)
+                const periods = [365, 730, 1080];
+                for (const period of periods) {
+                    const extendedCandles = await CacheService.getCandles(figi, 'DAY', period, true);
+                    if (extendedCandles.length > candles.length) {
+                        candles = extendedCandles;
                     }
-                } catch (fetchError) {
-                    console.warn(`⚠️ Failed to fetch candles from API for ${figi}:`, fetchError.message);
-                    // Продолжаем с имеющимися данными
+                    // Если получили достаточно данных, останавливаемся
+                    if (candles.length >= minRequired) break;
                 }
-            }
-            
-            // Если данных все еще мало, пытаемся расширить период для получения большего количества данных из кеша
-            if (candles.length < 50) {
-                console.warn(`⚠️ Few candles for ${figi}: ${candles.length}, trying extended period from cache...`);
-                candles = await CacheService.getCandles(figi, 'DAY', 365);
-            }
-            
-            // Если данных все еще мало, пытаемся максимальный период из кеша
-            if (candles.length < 50) {
-                console.warn(`⚠️ Still few candles for ${figi}: ${candles.length}, trying max period from cache...`);
-                candles = await CacheService.getCandles(figi, 'DAY', 730);
             }
             
             // Работаем с тем количеством данных, которое есть
@@ -1532,7 +1523,14 @@ class EnsembleService {
         // Проверяем, что features - это 2D массив (массив массивов)
         const is2DArray = Array.isArray(features[0]);
         if (!is2DArray) {
-            console.error(`❌ Features should be 2D array for ${modelType}, got 1D array`);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Features should be 2D array', {
+                    service: 'EnsembleService',
+                    operation: 'predict',
+                    modelType,
+                    error: { message: 'Features should be 2D array, got 1D array' }
+                });
+            }
             return 0.5;
         }
         
@@ -1556,7 +1554,6 @@ class EnsembleService {
                 });
             
             if (!hasTrainedWeights) {
-                console.warn(`⚠️ Model ${modelType} appears to be untrained (all weights near zero), using fallback`);
                 return 0.5; // Возвращаем нейтральное значение для необученной модели
             }
             
@@ -1601,8 +1598,8 @@ class EnsembleService {
      */
     async predictSimple(figi, portfolio = null) {
         try {
-            // Получаем данные
-            const candles = await CacheService.getCandles(figi, 'DAY', 60);
+            // Получаем данные (skipUpdate = true - используем только БД)
+            const candles = await CacheService.getCandles(figi, 'DAY', 60, true);
             if (candles.length < 20) {
                 return { score: 0, confidence: 0, reason: 'Insufficient data' };
             }
@@ -1838,7 +1835,6 @@ class EnsembleService {
                 availableModels.forEach(type => {
                     weights[type] = equalWeight;
                 });
-                console.log(`⚠️ No trained models, using equal weights:`, weights);
             } else {
                 console.warn(`⚠️ No models available for weighting`);
                 return;
@@ -1889,7 +1885,6 @@ class EnsembleService {
         }
         
         console.log('🔄 Updated ensemble weights:', this.weights);
-        console.log(`📊 Trained models: ${trainedModels.map(m => m.type).join(', ') || 'none'}`);
     }
 
     /**

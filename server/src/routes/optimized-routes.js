@@ -612,6 +612,7 @@ router.get('/recommendations', async (req, res) => {
         }
         
         // Преобразуем в массив и сортируем по дате анализа
+        const { formatModelsDates } = await import('../utils/dateFormatter.js');
         const recommendationsData = Array.from(recommendationsMap.values())
             .map(rec => {
                 const recData = rec.toJSON();
@@ -624,12 +625,15 @@ router.get('/recommendations', async (req, res) => {
                     };
                 }
                 return recData;
-            })
+            });
+        
+        // Форматируем даты
+        const formattedRecommendations = formatModelsDates(recommendationsData, ['analysisDate', 'validUntil', 'createdAt', 'updatedAt'])
             .sort((a, b) => new Date(b.analysisDate) - new Date(a.analysisDate));
         
         res.json({
             success: true,
-            data: recommendationsData
+            data: formattedRecommendations
         });
     } catch (error) {
         console.error('Ошибка получения рекомендаций:', error);

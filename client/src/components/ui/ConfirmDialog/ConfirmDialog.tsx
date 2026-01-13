@@ -57,7 +57,6 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             variant="ghost"
             size="md"
             onClick={onReject}
-            icon={rejectIcon}
             className={rejectClassName}
           >
             {rejectLabel}
@@ -66,7 +65,6 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             variant="primary"
             size="md"
             onClick={onAccept}
-            icon={acceptIcon}
             className={acceptClassName}
           >
             {acceptLabel}

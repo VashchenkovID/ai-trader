@@ -81,8 +81,8 @@ const StockDetail: React.FC = () => {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [signals, setSignals] = useState<SignalItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [pricePeriod, setPricePeriod] = useState<TimePeriod>('week');
-  const [volumePeriod, setVolumePeriod] = useState<TimePeriod>('week');
+  const [pricePeriod, setPricePeriod] = useState<TimePeriod>('month');
+  const [volumePeriod, setVolumePeriod] = useState<TimePeriod>('month');
   const [loadingNews, setLoadingNews] = useState(false);
   const [loadingSignals, setLoadingSignals] = useState(false);
   const [showSignalsModal, setShowSignalsModal] = useState(false);
@@ -296,13 +296,13 @@ const StockDetail: React.FC = () => {
   }, [figi]);
 
   useEffect(() => {
-    if (figi && stockDetail) {
+    if (figi) {
       loadPriceCandles(pricePeriod);
     }
   }, [figi, pricePeriod]);
 
   useEffect(() => {
-    if (figi && stockDetail) {
+    if (figi) {
       loadVolumeCandles(volumePeriod);
     }
   }, [figi, volumePeriod]);
@@ -495,6 +495,12 @@ const StockDetail: React.FC = () => {
         setSignals([]);
       }
       
+      // Загружаем графики после успешной загрузки основных данных
+      if (figi) {
+        loadPriceCandles(pricePeriod);
+        loadVolumeCandles(volumePeriod);
+      }
+      
     } catch (err: any) {
       console.error('Error loading stock data:', err);
       setError(err.response?.data?.message || err.message || 'Ошибка загрузки данных');
@@ -545,7 +551,21 @@ const StockDetail: React.FC = () => {
     
     try {
       const candlesData = await apiService.getStockCandles(figi, days, interval);
-      const candles = candlesData || [];
+      console.log(`📊 Loaded ${candlesData?.length || 0} price candles for ${figi}, period: ${period}`);
+      
+      // Фильтруем и валидируем данные перед установкой
+      const candles = (candlesData || []).filter((c: Candle) => {
+        if (!c || !c.time) return false;
+        const date = new Date(c.time);
+        return !isNaN(date.getTime()) && c.close !== undefined && c.close !== null;
+      });
+      
+      // Убеждаемся, что данные отсортированы по времени
+      candles.sort((a: Candle, b: Candle) => {
+        return new Date(a.time).getTime() - new Date(b.time).getTime();
+      });
+      
+      console.log(`✅ Filtered and sorted ${candles.length} valid price candles`);
       setPriceCandles(candles);
       
       // Кэшируем данные
@@ -554,6 +574,7 @@ const StockDetail: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Error loading price candles:', err);
+      setPriceCandles([]);
     }
   };
 
@@ -593,7 +614,21 @@ const StockDetail: React.FC = () => {
     
     try {
       const candlesData = await apiService.getStockCandles(figi, days, interval);
-      const candles = candlesData || [];
+      console.log(`📊 Loaded ${candlesData?.length || 0} volume candles for ${figi}, period: ${period}`);
+      
+      // Фильтруем и валидируем данные перед установкой
+      const candles = (candlesData || []).filter((c: Candle) => {
+        if (!c || !c.time) return false;
+        const date = new Date(c.time);
+        return !isNaN(date.getTime()) && c.volume !== undefined && c.volume !== null;
+      });
+      
+      // Убеждаемся, что данные отсортированы по времени
+      candles.sort((a: Candle, b: Candle) => {
+        return new Date(a.time).getTime() - new Date(b.time).getTime();
+      });
+      
+      console.log(`✅ Filtered and sorted ${candles.length} valid volume candles`);
       setVolumeCandles(candles);
       
       // Кэшируем данные
@@ -602,6 +637,7 @@ const StockDetail: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Error loading volume candles:', err);
+      setVolumeCandles([]);
     }
   };
 

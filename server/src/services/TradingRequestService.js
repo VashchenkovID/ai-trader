@@ -730,7 +730,8 @@ class TradingRequestService {
             })();
             
             // Возвращаем заявку с предупреждением о стратегии, если есть
-            const result = tradingRequest.toJSON ? tradingRequest.toJSON() : tradingRequest;
+            const { formatModelDates } = await import('../utils/dateFormatter.js');
+            const result = formatModelDates(tradingRequest, ['createdAt', 'updatedAt', 'executedAt', 'approvedAt', 'expiresAt']);
             if (strategyValidation && !strategyValidation.isValid) {
                 result.strategyWarning = {
                     message: strategyValidation.warningMessage,
@@ -815,7 +816,9 @@ class TradingRequestService {
             // Для real/micro режимов - пользователь сам выполняет сделку в брокерском приложении
             // Одобрение = пользователь подтвердил, что выполнил сделку согласно заявке
 
-            return request;
+            // Форматируем даты перед возвратом
+            const { formatModelDates } = await import('../utils/dateFormatter.js');
+            return formatModelDates(request, ['createdAt', 'updatedAt', 'executedAt', 'approvedAt', 'expiresAt']);
 
         } catch (error) {
             console.error('❌ Error approving trading request:', error);
@@ -857,7 +860,9 @@ class TradingRequestService {
 
             console.log(`❌ Trading request rejected: ${requestId} - ${reason}`);
             
-            return request;
+            // Форматируем даты перед возвратом
+            const { formatModelDates } = await import('../utils/dateFormatter.js');
+            return formatModelDates(request, ['createdAt', 'updatedAt', 'executedAt', 'approvedAt', 'expiresAt']);
 
         } catch (error) {
             console.error('❌ Error rejecting trading request:', error);
@@ -910,12 +915,7 @@ class TradingRequestService {
                 console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
             }
 
-            // Отправляем уведомление в Telegram (опционально)
-            try {
-                await this.sendTelegramNotification(request, 'EXECUTED');
-            } catch (telegramError) {
-                console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
-            }
+            // Уведомления в Telegram об исполненных заявках отключены
 
             // Интеграция с PyramidingService (если включен пирамидинг)
             if (request.action === 'BUY' && request.status === 'EXECUTED') {
@@ -954,7 +954,9 @@ class TradingRequestService {
 
             console.log(`✅ Trading request marked as executed: ${requestId} (User confirmed manual execution)`);
             
-            return request;
+            // Форматируем даты перед возвратом
+            const { formatModelDates } = await import('../utils/dateFormatter.js');
+            return formatModelDates(request, ['createdAt', 'updatedAt', 'executedAt', 'approvedAt', 'expiresAt']);
 
         } catch (error) {
             console.error('❌ Error marking trading request as executed:', error);
@@ -994,9 +996,10 @@ class TradingRequestService {
                 });
             }
             
-            // Получаем стратегии для заявок
+            // Получаем стратегии для заявок и форматируем даты
+            const { formatModelDates } = await import('../utils/dateFormatter.js');
             const requestsWithStrategies = await Promise.all(requests.map(async (req) => {
-                const reqData = req.toJSON();
+                const reqData = formatModelDates(req, ['createdAt', 'updatedAt', 'executedAt', 'approvedAt', 'expiresAt']);
                 
                 // Если есть strategyId, получаем стратегию напрямую
                 if (reqData.strategyId) {
@@ -1758,7 +1761,9 @@ class TradingRequestService {
 
             console.log(`🚫 Trading request cancelled: ${requestId}`);
             
-            return request;
+            // Форматируем даты перед возвратом
+            const { formatModelDates } = await import('../utils/dateFormatter.js');
+            return formatModelDates(request, ['createdAt', 'updatedAt', 'executedAt', 'approvedAt', 'expiresAt']);
 
         } catch (error) {
             console.error('❌ Error cancelling trading request:', error);

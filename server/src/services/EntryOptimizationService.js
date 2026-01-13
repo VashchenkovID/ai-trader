@@ -71,11 +71,11 @@ class EntryOptimizationService {
     async loadSettings() {
         try {
             // Загружаем настройки из Settings
-            const settings = await SettingsService.getSettingsByCategory('entry_optimization');
+            const settings = await SettingsService.getAllSettings('entry_optimization');
             
             if (settings && settings.length > 0) {
                 for (const setting of settings) {
-                    const key = setting.key;
+                    const key = setting.key.replace('entry_optimization.', '');
                     const value = setting.value;
                     
                     // Преобразуем значение в нужный тип
@@ -91,7 +91,13 @@ class EntryOptimizationService {
                 }
             }
         } catch (error) {
-            LoggerService.warn('⚠️ Failed to load entry optimization settings, using defaults:', error.message);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to load entry optimization settings', {
+                    service: 'EntryOptimizationService',
+                    operation: 'loadSettings',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
         }
     }
 

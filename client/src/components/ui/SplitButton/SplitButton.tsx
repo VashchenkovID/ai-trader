@@ -67,7 +67,6 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
           onClick={onClick}
           disabled={disabled}
           loading={loading}
-          icon={icon}
           className="split-button-main"
         >
           {label}
@@ -80,8 +79,9 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
               onClick={() => setIsOpen(!isOpen)}
               disabled={disabled}
               className="split-button-toggle"
-              icon="pi pi-chevron-down"
-            />
+            >
+              ▼
+            </Button>
             {isOpen && (
               <div className="split-button-menu">
                 {model.map((item, index) => (
@@ -91,7 +91,6 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
                     onClick={() => handleItemClick(item)}
                     disabled={item.disabled}
                   >
-                    {item.icon && <i className={`${item.icon} split-button-item-icon`}></i>}
                     <span>{item.label}</span>
                   </button>
                 ))}

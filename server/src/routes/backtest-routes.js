@@ -47,6 +47,8 @@ router.get('/results/:strategyId', async (req, res) => {
             }]
         });
 
+        const { formatModelDates } = await import('../utils/dateFormatter.js');
+        
         res.json({
             success: true,
             data: {
@@ -54,30 +56,33 @@ router.get('/results/:strategyId', async (req, res) => {
                     id: strategy.id,
                     name: strategy.name
                 },
-                results: results.map(result => ({
-                    id: result.id,
-                    backtestType: result.backtestType,
-                    startDate: result.startDate,
-                    endDate: result.endDate,
-                    initialCapital: result.initialCapital,
-                    finalCapital: result.finalCapital,
-                    totalReturn: result.totalReturn,
-                    totalProfit: result.finalCapital - result.initialCapital, // Вычисляем из капитала
-                    totalTrades: result.totalTrades,
-                    profitableTrades: result.profitableTrades,
-                    losingTrades: result.losingTrades,
-                    winRate: result.winRate,
-                    maxDrawdown: result.maxDrawdown,
-                    sharpeRatio: result.sharpeRatio,
-                    sortinoRatio: result.sortinoRatio,
-                    profitFactor: result.profitFactor,
-                    calmarRatio: result.calmarRatio,
-                    metrics: result.metrics,
-                    status: result.status,
-                    error: result.error,
-                    executionTime: result.executionTime,
-                    createdAt: result.createdAt
-                })),
+                results: results.map(result => {
+                    const formatted = formatModelDates(result, ['startDate', 'endDate', 'createdAt', 'updatedAt']);
+                    return {
+                        id: formatted.id || result.id,
+                        backtestType: formatted.backtestType || result.backtestType,
+                        startDate: formatted.startDate,
+                        endDate: formatted.endDate,
+                        initialCapital: formatted.initialCapital || result.initialCapital,
+                        finalCapital: formatted.finalCapital || result.finalCapital,
+                        totalReturn: formatted.totalReturn || result.totalReturn,
+                        totalProfit: (formatted.finalCapital || result.finalCapital) - (formatted.initialCapital || result.initialCapital),
+                        totalTrades: formatted.totalTrades || result.totalTrades,
+                        profitableTrades: formatted.profitableTrades || result.profitableTrades,
+                        losingTrades: formatted.losingTrades || result.losingTrades,
+                        winRate: formatted.winRate || result.winRate,
+                        maxDrawdown: formatted.maxDrawdown || result.maxDrawdown,
+                        sharpeRatio: formatted.sharpeRatio || result.sharpeRatio,
+                        sortinoRatio: formatted.sortinoRatio || result.sortinoRatio,
+                        profitFactor: formatted.profitFactor || result.profitFactor,
+                        calmarRatio: formatted.calmarRatio || result.calmarRatio,
+                        metrics: formatted.metrics || result.metrics,
+                        status: formatted.status || result.status,
+                        error: formatted.error || result.error,
+                        executionTime: formatted.executionTime || result.executionTime,
+                        createdAt: formatted.createdAt
+                    };
+                }),
                 count: results.length
             }
         });
@@ -360,35 +365,38 @@ router.get('/report/:strategyId', async (req, res) => {
             }
         }
 
+        const { formatModelDates } = await import('../utils/dateFormatter.js');
+        const formattedResult = formatModelDates(result, ['startDate', 'endDate', 'createdAt', 'updatedAt']);
+        
         res.json({
             success: true,
             data: {
                 result: {
-                    id: result.id,
-                    backtestType: result.backtestType,
-                    startDate: result.startDate,
-                    endDate: result.endDate,
-                    initialCapital: result.initialCapital,
-                    finalCapital: result.finalCapital,
-                    totalReturn: result.totalReturn,
-                    totalProfit: result.finalCapital - result.initialCapital, // Вычисляем из капитала
-                    totalTrades: result.totalTrades,
-                    profitableTrades: result.profitableTrades,
-                    losingTrades: result.losingTrades,
-                    winRate: result.winRate,
-                    maxDrawdown: result.maxDrawdown,
-                    sharpeRatio: result.sharpeRatio,
-                    sortinoRatio: result.sortinoRatio,
-                    profitFactor: result.profitFactor,
-                    calmarRatio: result.calmarRatio,
-                    metrics: result.metrics,
-                    equityCurve: result.equityCurve,
-                    monthlyReturns: result.monthlyReturns,
-                    trades: result.trades,
-                    alerts: result.alerts,
-                    status: result.status,
-                    executionTime: result.executionTime,
-                    createdAt: result.createdAt
+                    id: formattedResult.id || result.id,
+                    backtestType: formattedResult.backtestType || result.backtestType,
+                    startDate: formattedResult.startDate,
+                    endDate: formattedResult.endDate,
+                    initialCapital: formattedResult.initialCapital || result.initialCapital,
+                    finalCapital: formattedResult.finalCapital || result.finalCapital,
+                    totalReturn: formattedResult.totalReturn || result.totalReturn,
+                    totalProfit: (formattedResult.finalCapital || result.finalCapital) - (formattedResult.initialCapital || result.initialCapital),
+                    totalTrades: formattedResult.totalTrades || result.totalTrades,
+                    profitableTrades: formattedResult.profitableTrades || result.profitableTrades,
+                    losingTrades: formattedResult.losingTrades || result.losingTrades,
+                    winRate: formattedResult.winRate || result.winRate,
+                    maxDrawdown: formattedResult.maxDrawdown || result.maxDrawdown,
+                    sharpeRatio: formattedResult.sharpeRatio || result.sharpeRatio,
+                    sortinoRatio: formattedResult.sortinoRatio || result.sortinoRatio,
+                    profitFactor: formattedResult.profitFactor || result.profitFactor,
+                    calmarRatio: formattedResult.calmarRatio || result.calmarRatio,
+                    metrics: formattedResult.metrics || result.metrics,
+                    equityCurve: formattedResult.equityCurve || result.equityCurve,
+                    monthlyReturns: formattedResult.monthlyReturns || result.monthlyReturns,
+                    trades: formattedResult.trades || result.trades,
+                    alerts: formattedResult.alerts || result.alerts,
+                    status: formattedResult.status || result.status,
+                    executionTime: formattedResult.executionTime || result.executionTime,
+                    createdAt: formattedResult.createdAt
                 },
                 strategy: {
                     id: strategy.id,
@@ -443,25 +451,30 @@ router.get('/list', async (req, res) => {
             }]
         });
 
+        const { formatModelDates } = await import('../utils/dateFormatter.js');
+        
         res.json({
             success: true,
             data: {
-                results: rows.map(result => ({
-                    id: result.id,
-                    strategyId: result.strategyId,
-                    strategyName: result.strategy?.name || 'Unknown',
-                    backtestType: result.backtestType,
-                    startDate: result.startDate,
-                    endDate: result.endDate,
-                    totalReturn: result.totalReturn,
-                    totalProfit: result.finalCapital - result.initialCapital, // Вычисляем из капитала
-                    totalTrades: result.totalTrades,
-                    winRate: result.winRate,
-                    maxDrawdown: result.maxDrawdown,
-                    sharpeRatio: result.sharpeRatio,
-                    status: result.status,
-                    createdAt: result.createdAt
-                })),
+                results: rows.map(result => {
+                    const formatted = formatModelDates(result, ['startDate', 'endDate', 'createdAt', 'updatedAt']);
+                    return {
+                        id: formatted.id || result.id,
+                        strategyId: formatted.strategyId || result.strategyId,
+                        strategyName: result.strategy?.name || 'Unknown',
+                        backtestType: formatted.backtestType || result.backtestType,
+                        startDate: formatted.startDate,
+                        endDate: formatted.endDate,
+                        totalReturn: formatted.totalReturn || result.totalReturn,
+                        totalProfit: (formatted.finalCapital || result.finalCapital) - (formatted.initialCapital || result.initialCapital),
+                        totalTrades: formatted.totalTrades || result.totalTrades,
+                        winRate: formatted.winRate || result.winRate,
+                        maxDrawdown: formatted.maxDrawdown || result.maxDrawdown,
+                        sharpeRatio: formatted.sharpeRatio || result.sharpeRatio,
+                        status: formatted.status || result.status,
+                        createdAt: formatted.createdAt
+                    };
+                }),
                 pagination: {
                     total: count,
                     limit: parseInt(limit),

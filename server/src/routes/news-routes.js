@@ -15,9 +15,16 @@ router.get('/:figi', async (req, res) => {
         const days = parseInt(req.query.days) || 30;
         
         const news = await NewsAnalysisService.getNewsByFigi(figi, { limit, days });
+        const { formatModelsDates } = await import('../utils/dateFormatter.js');
+        
+        // Форматируем даты в новостях
+        const formattedNews = Array.isArray(news) 
+            ? formatModelsDates(news, ['publishedAt', 'createdAt', 'updatedAt'])
+            : news;
+        
         res.json({
             success: true,
-            data: news
+            data: formattedNews
         });
     } catch (error) {
         console.error('Ошибка получения новостей:', error);

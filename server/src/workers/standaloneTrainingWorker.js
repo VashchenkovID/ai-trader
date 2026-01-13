@@ -35,7 +35,6 @@ class StandaloneTrainingWorker {
     // Создание модели
     async createModel(inputShape, sequenceLength = 60) {
         try {
-            console.log(`🏗️ Standalone Worker: Creating model with input shape: ${inputShape}`);
             
             const model = tf.sequential();
 
@@ -57,9 +56,6 @@ class StandaloneTrainingWorker {
                 featuresPerTimestep = Math.ceil(inputShape / sequenceLength);
                 actualSequenceLength = Math.floor(inputShape / featuresPerTimestep);
             }
-            
-            console.log(`📊 Standalone Worker Reshape: inputShape=${inputShape}, sequenceLength=${sequenceLength}`);
-            console.log(`📊 Standalone Worker Reshape: featuresPerTimestep=${featuresPerTimestep}, actualSequenceLength=${actualSequenceLength}`);
             
             model.add(tf.layers.reshape({
                 targetShape: [actualSequenceLength, featuresPerTimestep],
@@ -140,10 +136,22 @@ class StandaloneTrainingWorker {
                 metrics: ['accuracy']
             });
 
-            console.log('✅ Standalone Worker: Model created and compiled successfully');
             return model;
         } catch (error) {
-            console.error('❌ Standalone Worker: Error creating model:', error);
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.error('Error creating model in standalone training worker', {
+                        service: 'StandaloneTrainingWorker',
+                        operation: 'createModel',
+                        inputShape,
+                        sequenceLength,
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
+            } catch {
+                // LoggerService недоступен в воркере, игнорируем
+            }
             throw error;
         }
     }
@@ -173,11 +181,6 @@ class StandaloneTrainingWorker {
         const finalFeatures = weightedFeatures.length > 0 ? weightedFeatures : features;
         const finalLabels = weightedLabels.length > 0 ? weightedLabels : labels;
         
-        // Логируем информацию о взвешивании
-        if (weightedFeatures.length > 0) {
-            console.log(`📊 Standalone Worker: Data weighting applied: ${features.length} → ${finalFeatures.length} samples (${((finalFeatures.length / features.length - 1) * 100).toFixed(1)}% increase)`);
-        }
-        
         return { finalFeatures, finalLabels };
     }
 
@@ -196,8 +199,6 @@ class StandaloneTrainingWorker {
         const valLabels = labels.slice(trainSize, trainSize + valSize);
         const testFeatures = features.slice(trainSize + valSize);
         const testLabels = labels.slice(trainSize + valSize);
-        
-        console.log(`📅 Time-based split: train=${trainSize} (${(trainRatio*100).toFixed(0)}%), val=${valSize} (${(valRatio*100).toFixed(0)}%), test=${testFeatures.length} (${((1-trainRatio-valRatio)*100).toFixed(0)}%)`);
         
         return {
             train: { features: trainFeatures, labels: trainLabels },
@@ -228,12 +229,6 @@ class StandaloneTrainingWorker {
         const sum = posWeight + negWeight;
         const normalizedPosWeight = (posWeight / sum) * 2;
         const normalizedNegWeight = (negWeight / sum) * 2;
-        
-        const imbalance = Math.abs(posCount - negCount) / total;
-        if (imbalance > 0.2) {
-            console.log(`⚖️ Обнаружен дисбаланс классов: ${(imbalance*100).toFixed(1)}% (pos=${posCount}, neg=${negCount})`);
-            console.log(`⚖️ Class weights: 0=${normalizedNegWeight.toFixed(3)}, 1=${normalizedPosWeight.toFixed(3)}`);
-        }
         
         return {
             0: normalizedNegWeight,
@@ -317,7 +312,18 @@ class StandaloneTrainingWorker {
                 confusionMatrix: { tp, fp, tn, fn }
             };
         } catch (error) {
-            console.error('Error calculating metrics:', error);
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.error('Error calculating metrics in standalone training worker', {
+                        service: 'StandaloneTrainingWorker',
+                        operation: 'calculateMetrics',
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
+            } catch {
+                // LoggerService недоступен в воркере, игнорируем
+            }
             return {
                 precision: 0,
                 recall: 0,
@@ -340,12 +346,6 @@ class StandaloneTrainingWorker {
             const featureSize = Array.isArray(features[0]) ? features[0].length : 0;
             const pos = labels.filter(v => v === 1).length;
             const neg = labels.length - pos;
-            const modelDesc = this.getModelTypeDescription(modelType);
-            console.log('🚀 Standalone Worker: Запуск обучения');
-            console.log(`   • Тип модели: ${modelType} — ${modelDesc}`);
-            console.log(`   • Объём данных: ${features.length} образцов, размер признакового вектора: ${featureSize}`);
-            console.log(`   • Параметры: эпох=${epochs}, batchSize=${batchSize}`);
-            console.log(`   • Баланс классов: положительных=${pos}, отрицательных=${neg}`);
 
             // Создаем модель
             const model = await this.createModel(features[0].length);
@@ -393,8 +393,6 @@ class StandaloneTrainingWorker {
                 const valLabelsArray = split.val.labels.map(label => [label]);
                 const valLabelsShape = [split.val.labels.length, 1];
                 valYs = tf.tensor2d(valLabelsArray, valLabelsShape);
-            } else {
-                console.warn('⚠️ Validation set is empty, training without validation');
             }
 
             // Настройки для early stopping и reduce LR on plateau (только если есть валидация)
@@ -472,7 +470,6 @@ class StandaloneTrainingWorker {
                             bestValLoss = valLoss;
                             patienceCount = 0;
                             reduceLRCount = 0;
-                            console.log(`✅ Epoch ${epoch + 1}: Улучшение val_loss = ${valLoss.toFixed(4)}, val_acc = ${(valAccuracy * 100).toFixed(2)}%, acc = ${(accuracy * 100).toFixed(2)}%`);
                         } else {
                             // Нет улучшения
                             patienceCount++;
@@ -502,23 +499,32 @@ class StandaloneTrainingWorker {
                                             reason: 'plateau_detected'
                                         });
                                         
-                                        console.log(`📉 Epoch ${epoch + 1}: Автоматическое уменьшение LR: ${oldLR.toFixed(6)} → ${currentLR.toFixed(6)} (плато ${reduceLRCount} эпох, уменьшение #${lrReductionCount})`);
                                     } catch (lrError) {
-                                        console.warn(`⚠️ Не удалось изменить LR: ${lrError.message}`);
+                                        try {
+                                            const LoggerService = (await import('../services/LoggerService.js')).default;
+                                            if (LoggerService && LoggerService.isInitialized) {
+                                                LoggerService.error('Failed to change learning rate in standalone training worker', {
+                                                    service: 'StandaloneTrainingWorker',
+                                                    operation: 'trainModel',
+                                                    epoch: epoch + 1,
+                                                    error: { message: lrError.message, stack: lrError.stack }
+                                                });
+                                            }
+                                        } catch {
+                                            // LoggerService недоступен в воркере, игнорируем
+                                        }
                                     }
                                 }
                                 
                                 reduceLRCount = 0; // Сбрасываем счетчик после уменьшения LR
                             } else if (reduceLRCount >= reduceLRPatience && lrReductionCount >= maxLRReductions) {
                                 // Достигнуто максимальное количество уменьшений LR
-                                console.log(`📉 Epoch ${epoch + 1}: Плато обнаружено, но LR уже уменьшен ${maxLRReductions} раз (текущий LR=${currentLR.toFixed(6)})`);
                                 reduceLRCount = 0; // Сбрасываем счетчик
                             }
                             
                             // Early stopping
                             if (patienceCount >= patience) {
                                 model.stopTraining = true; // Останавливаем обучение в TensorFlow.js
-                                console.log(`🛑 Epoch ${epoch + 1}: Early stopping (val_loss не улучшается ${patience} эпох, лучший val_loss = ${bestValLoss.toFixed(4)})`);
                             }
                         }
                     }
@@ -534,13 +540,8 @@ class StandaloneTrainingWorker {
             // Расчет метрик ROC-AUC и F1 на валидации
             const valMetrics = await this.calculateMetrics(model, split.val.features, split.val.labels);
             const testMetrics = await this.calculateMetrics(model, split.test.features, split.test.labels);
-            
-            console.log(`📊 Validation metrics: F1=${valMetrics.f1.toFixed(4)}, ROC-AUC=${valMetrics.auc.toFixed(4)}, Precision=${valMetrics.precision.toFixed(4)}, Recall=${valMetrics.recall.toFixed(4)}`);
-            console.log(`📊 Test metrics: F1=${testMetrics.f1.toFixed(4)}, ROC-AUC=${testMetrics.auc.toFixed(4)}, Precision=${testMetrics.precision.toFixed(4)}, Recall=${testMetrics.recall.toFixed(4)}`);
 
             model.dispose();
-
-            console.log('✅ Standalone Worker: Обучение завершено успешно');
             
             // Отправляем результат
             parentPort.postMessage({
@@ -572,8 +573,24 @@ class StandaloneTrainingWorker {
             return history;
 
         } catch (error) {
-            console.error('❌ Standalone Worker: Training failed:', error);
             this.isTraining = false;
+            
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.error('Training failed in standalone training worker', {
+                        service: 'StandaloneTrainingWorker',
+                        operation: 'trainModel',
+                        modelType,
+                        samplesCount: features.length,
+                        epochs,
+                        batchSize,
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
+            } catch {
+                // LoggerService недоступен в воркере, игнорируем
+            }
             
             // Отправляем алерт в Telegram об ошибке обучения
             try {
@@ -588,12 +605,20 @@ class StandaloneTrainingWorker {
                         `❌ <b>ОШИБКА ОБУЧЕНИЯ В STANDALONE ВОРКЕРЕ</b>\n\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
                         'error'
                     );
-                } else {
-                    // Если сервис не инициализирован, просто логируем
-                    console.warn('Telegram service not initialized, skipping alert');
                 }
             } catch (telegramError) {
-                console.warn('Failed to send standalone worker training error alert:', telegramError.message);
+                try {
+                    const LoggerService = (await import('../services/LoggerService.js')).default;
+                    if (LoggerService && LoggerService.isInitialized) {
+                        LoggerService.error('Failed to send standalone worker training error alert', {
+                            service: 'StandaloneTrainingWorker',
+                            operation: 'trainModel',
+                            error: { message: telegramError.message }
+                        });
+                    }
+                } catch {
+                    // LoggerService недоступен в воркере, игнорируем
+                }
             }
             
             parentPort.postMessage({
@@ -626,7 +651,7 @@ parentPort.on('message', async (message) => {
                 break;
                 
             default:
-                console.log('Unknown message type:', message.type);
+                // Unknown message type
         }
     } catch (error) {
         parentPort.postMessage({
@@ -637,8 +662,4 @@ parentPort.on('message', async (message) => {
 });
 
 // Обработка завершения процесса
-process.on('exit', () => {
-    console.log('🧠 Standalone Training Worker exiting');
-});
-
-console.log('🧠 Standalone Training Worker started');
+// Standalone Training Worker started

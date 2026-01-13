@@ -45,8 +45,6 @@ async function run() {
             
             for (const instrument of instruments) {
                 try {
-                    console.log(`🎯 Training ${instrument.figi || instrument.ticker}...`);
-                    
                     // Определяем тип обучения и выбираем соответствующий воркер
                     let workerPath, workerData;
                     
@@ -135,7 +133,6 @@ async function run() {
                         const { features, labels } = trainingData;
                         
                         if (!features || !labels || features.length === 0) {
-                            console.warn(`⚠️ No training data for ${figi || ticker}`);
                             results.push({
                                 figi: figi,
                                 ticker: ticker,
@@ -179,13 +176,24 @@ async function run() {
                         
                         results.push(result);
                         successCount++;
-                        console.log(`✅ Training completed for ${instrument.figi || instrument.ticker}`);
                         
                         worker.terminate();
                     }
                     
                 } catch (error) {
-                    console.error(`❌ Training failed for ${instrument.figi || instrument.ticker}:`, error.message);
+                    try {
+                        const LoggerService = (await import('../services/LoggerService.js')).default;
+                        if (LoggerService && LoggerService.isInitialized) {
+                            LoggerService.error('Training failed in optimized training worker', {
+                                service: 'OptimizedTrainingWorker',
+                                operation: 'run',
+                                figi: instrument.figi || instrument.ticker,
+                                error: { message: error.message, stack: error.stack }
+                            });
+                        }
+                    } catch {
+                        // LoggerService недоступен в воркере, игнорируем
+                    }
                     
                     // Отправляем алерт в Telegram об ошибке обучения
                     try {
@@ -196,7 +204,18 @@ async function run() {
                             'error'
                         );
                     } catch (telegramError) {
-                        console.warn('Failed to send worker training error alert:', telegramError.message);
+                        try {
+                            const LoggerService = (await import('../services/LoggerService.js')).default;
+                            if (LoggerService && LoggerService.isInitialized) {
+                                LoggerService.error('Failed to send worker training error alert', {
+                                    service: 'OptimizedTrainingWorker',
+                                    operation: 'run',
+                                    error: { message: telegramError.message }
+                                });
+                            }
+                        } catch {
+                            // LoggerService недоступен в воркере, игнорируем
+                        }
                     }
                     
                     results.push({
@@ -209,7 +228,6 @@ async function run() {
                 }
             }
             
-            console.log(`🎯 Batch training completed: ${successCount} success, ${failCount} failed`);
             
             parentPort.postMessage({ 
                 type: 'done', 
@@ -226,7 +244,18 @@ async function run() {
         }
         
     } catch (error) {
-        console.error('❌ Optimized training worker error:', error);
+        try {
+            const LoggerService = (await import('../services/LoggerService.js')).default;
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.error('Optimized training worker error', {
+                    service: 'OptimizedTrainingWorker',
+                    operation: 'run',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
+        } catch {
+            // LoggerService недоступен в воркере, игнорируем
+        }
         parentPort.postMessage({ type: 'error', data: { error: error.message } });
     }
 }

@@ -2,6 +2,7 @@ import OptimizedDataService from './OptimizedDataService.js';
 import CacheService from './CacheService.js';
 import TradingEngine from './TradingEngine.js';
 import ProfitabilityTracker from './ProfitabilityTracker.js';
+import LoggerService from './LoggerService.js';
 import {
     analyzeByDayOfWeek,
     analyzeByMonth
@@ -24,15 +25,18 @@ class OptimizedAnalysisService {
      */
     async initialize() {
         try {
-            console.log('📊 Initializing Optimized Analysis Service...');
-            
             await OptimizedDataService.initialize();
             await CacheService.initialize();
             
             this.isInitialized = true;
-            console.log('✅ Optimized Analysis Service initialized');
         } catch (error) {
-            console.error('❌ Failed to initialize Optimized Analysis Service:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to initialize Optimized Analysis Service', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'initialize',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }
@@ -89,7 +93,13 @@ class OptimizedAnalysisService {
             
             return indicators;
         } catch (error) {
-            console.error('Error calculating indicators:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error calculating indicators', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'getAllIndicators',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return {};
         }
     }
@@ -138,7 +148,13 @@ class OptimizedAnalysisService {
             
             return features;
         } catch (error) {
-            console.error('Error preparing features:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error preparing features', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'prepareFeatures',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return new Array(20).fill(0);
         }
     }
@@ -176,7 +192,13 @@ class OptimizedAnalysisService {
             
             return metrics;
         } catch (error) {
-            console.error('Error evaluating model:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error evaluating model', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'evaluateModel',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return {
                 accuracy: 0,
                 precision: 0,
@@ -199,10 +221,15 @@ class OptimizedAnalysisService {
                 ...evaluation,
                 timestamp: new Date().toISOString()
             });
-            
-            console.log(`✅ Evaluation results saved for ${figi}`);
         } catch (error) {
-            console.error('Error saving evaluation results:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error saving evaluation results', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'saveEvaluationResults',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
         }
     }
 
@@ -225,7 +252,13 @@ class OptimizedAnalysisService {
             
             return explanation;
         } catch (error) {
-            console.error('Error explaining prediction:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error explaining prediction', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'explainPrediction',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return {
                 prediction: prediction,
                 confidence: 0.5,
@@ -254,7 +287,13 @@ class OptimizedAnalysisService {
             
             return importance.slice(0, 10); // Топ-10 фичей
         } catch (error) {
-            console.error('Error analyzing feature importance:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error analyzing feature importance', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'analyzeFeatureImportance',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return [];
         }
     }
@@ -531,7 +570,13 @@ class OptimizedAnalysisService {
                 maxDrawdown: this.calculateMaxDrawdown(returns)
             };
         } catch (error) {
-            console.error('Error calculating financial metrics:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error calculating financial metrics', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'calculateFinancialMetrics',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return {};
         }
     }
@@ -757,7 +802,13 @@ class OptimizedAnalysisService {
                     stats = ProfitabilityTracker.getMonthlyStatsForPeriod(periodStartDate, periodEndDate);
                 }
             } catch (error) {
-                console.warn('⚠️ Не удалось получить статистику из ProfitabilityTracker:', error.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to get statistics from ProfitabilityTracker', {
+                        service: 'OptimizedAnalysisService',
+                        operation: 'analyzePerformance',
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
                 // Продолжаем без статистики
             }
 
@@ -823,7 +874,13 @@ class OptimizedAnalysisService {
             
             return result;
         } catch (error) {
-            console.error('❌ Ошибка анализа производительности по периодам:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error analyzing performance by periods', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'analyzePerformanceByPeriods',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return {
                 success: false,
                 message: `Ошибка анализа: ${error.message}`,

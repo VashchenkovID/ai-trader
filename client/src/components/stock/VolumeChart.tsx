@@ -32,25 +32,42 @@ export const VolumeChart: React.FC<VolumeChartProps> = ({
   ];
 
   const formatDateShort = (dateString: string) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
-    return new Date(date).toLocaleDateString('ru-RU', {
-      day: '2-digit',
-      month: 'short'
-    });
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    try {
+      return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: 'short'
+      });
+    } catch (e) {
+      return '';
+    }
   };
 
-  const chartData = useMemo(() => ({
-    labels: candles.map(c => formatDateShort(c.time)),
+  const chartData = useMemo(() => {
+    // Фильтруем невалидные даты
+    const validCandles = candles.filter(c => {
+      if (!c || !c.time) return false;
+      const date = new Date(c.time);
+      return !isNaN(date.getTime());
+    });
+    
+    return {
+    labels: validCandles.map(c => formatDateShort(c.time)),
     datasets: [
       {
         label: 'Объем торгов',
-        data: candles.map(c => c.volume),
+        data: validCandles.map(c => c.volume),
         backgroundColor: 'rgba(102, 187, 106, 0.5)',
         borderColor: '#66BB6A',
         borderWidth: 1
       }
     ]
-  }), [candles]);
+    };
+  }, [candles]);
 
   const chartOptions = useMemo(() => ({
     responsive: true,

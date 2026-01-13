@@ -45,13 +45,10 @@ class ExitOptimizationService {
 
     async initialize() {
         try {
-            LoggerService.info('🚪 Initializing Exit Optimization Service...');
-            
             // Загружаем настройки
             await this.loadSettings();
             
             this.isInitialized = true;
-            LoggerService.info('✅ Exit Optimization Service initialized');
         } catch (error) {
             LoggerService.error('❌ Failed to initialize Exit Optimization Service:', error);
             throw error;
@@ -63,11 +60,11 @@ class ExitOptimizationService {
      */
     async loadSettings() {
         try {
-            const settings = await SettingsService.getSettingsByCategory('exit_optimization');
+            const settings = await SettingsService.getAllSettings('exit_optimization');
             
             if (settings && settings.length > 0) {
                 for (const setting of settings) {
-                    const key = setting.key;
+                    const key = setting.key.replace('exit_optimization.', '');
                     const value = setting.value;
                     
                     if (key.includes('threshold') || key.includes('percent') || key.includes('days')) {
@@ -78,7 +75,13 @@ class ExitOptimizationService {
                 }
             }
         } catch (error) {
-            LoggerService.warn('⚠️ Failed to load exit optimization settings, using defaults:', error.message);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to load exit optimization settings', {
+                    service: 'ExitOptimizationService',
+                    operation: 'loadSettings',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
         }
     }
 
@@ -508,7 +511,6 @@ class ExitOptimizationService {
                 await SettingsService.updateSetting(`exit_optimization.${key}`, value);
             }
             
-            LoggerService.info('✅ Exit optimization settings updated');
             return true;
         } catch (error) {
             LoggerService.error('❌ Failed to update exit optimization settings:', error);

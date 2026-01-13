@@ -171,6 +171,7 @@ router.get('/stock/:figi', async (req, res) => {
         }
         
         // Формируем детальную информацию
+        const { formatDateToISO } = await import('../utils/dateFormatter.js');
         const stockDetail = {
             figi: instrument.figi,
             ticker: instrument.ticker,
@@ -181,7 +182,7 @@ router.get('/stock/:figi', async (req, res) => {
             lot: instrument.lot || 1,
             dividendYield: instrument.dividendYield || null,
             lastPrice: instrument.lastPrice || null,
-            lastPriceTime: instrument.lastPriceTime || null
+            lastPriceTime: formatDateToISO(instrument.lastPriceTime)
         };
         
         res.json({
@@ -211,14 +212,20 @@ router.get('/stock/:figi/candles', async (req, res) => {
         const candles = await CacheService.getCandles(figi, interval, days);
         
         // Преобразуем в формат для фронтенда
-        const formattedCandles = candles.map(candle => ({
-            time: candle.time,
-            open: candle.open || 0,
-            high: candle.high || 0,
-            low: candle.low || 0,
-            close: candle.close || 0,
-            volume: candle.volume || 0
-        }));
+        const { formatDateToISO } = await import('../utils/dateFormatter.js');
+        const formattedCandles = candles.map(candle => {
+            // Преобразуем Sequelize модель в обычный объект
+            const candleData = candle.toJSON ? candle.toJSON() : candle;
+            
+            return {
+                time: formatDateToISO(candleData.time),
+                open: candleData.open || 0,
+                high: candleData.high || 0,
+                low: candleData.low || 0,
+                close: candleData.close || 0,
+                volume: candleData.volume || 0
+            };
+        });
         
         res.json({
             success: true,
@@ -267,19 +274,23 @@ router.get('/stock/:figi/latest-recommendation', async (req, res) => {
         const isFresh = ageHours < maxAgeHours;
         
         if (isFresh) {
+            // Форматируем даты
+            const { formatModelDates } = await import('../utils/dateFormatter.js');
+            const formattedRec = formatModelDates(latestRec, ['analysisDate', 'validUntil', 'createdAt', 'updatedAt']);
+            
             // Возвращаем данные в формате, совместимом с IntegratedAIService
             res.json({
                 success: true,
                 data: {
-                    recommendation: latestRec.recommendation,
-                    score: latestRec.score,
-                    confidence: latestRec.confidence,
-                    explanation: latestRec.explanation,
-                    analysis: latestRec.analysis,
-                    agreement: latestRec.analysis?.agreement || 0,
-                    horizons: latestRec.analysis?.horizons || null,
-                    summary: latestRec.explanation?.summary || latestRec.explanation?.details?.summary || '',
-                    analysisDate: latestRec.analysisDate,
+                    recommendation: formattedRec.recommendation || latestRec.recommendation,
+                    score: formattedRec.score || latestRec.score,
+                    confidence: formattedRec.confidence || latestRec.confidence,
+                    explanation: formattedRec.explanation || latestRec.explanation,
+                    analysis: formattedRec.analysis || latestRec.analysis,
+                    agreement: formattedRec.analysis?.agreement || latestRec.analysis?.agreement || 0,
+                    horizons: formattedRec.analysis?.horizons || latestRec.analysis?.horizons || null,
+                    summary: formattedRec.explanation?.summary || latestRec.explanation?.summary || latestRec.explanation?.details?.summary || '',
+                    analysisDate: formattedRec.analysisDate,
                     isFromDatabase: true
                 },
                 isFresh: true,
@@ -320,7 +331,11 @@ router.get('/stock/:figi/predictions', async (req, res) => {
             limit: 100 // Последние 100 предсказаний
         });
         
-        const predictionHistory = recommendations.map(rec => ({
+        // Форматируем даты
+        const { formatModelsDates } = await import('../utils/dateFormatter.js');
+        const formattedRecs = formatModelsDates(recommendations, ['analysisDate', 'validUntil', 'createdAt', 'updatedAt']);
+        
+        const predictionHistory = formattedRecs.map(rec => ({
             id: rec.figi + '_' + rec.analysisDate,
             analysisDate: rec.analysisDate,
             recommendation: rec.recommendation,
@@ -387,6 +402,7 @@ router.get('/stock/:figi/signals', async (req, res) => {
         }
         
         // Преобразуем сигналы в формат для фронтенда
+        const { formatDateToISO } = await import('../utils/dateFormatter.js');
         const formattedSignals = signals.map(signal => {
             // Преобразуем цену из формата {units, nano} в число
             const formatPrice = (priceObj) => {
@@ -397,22 +413,27 @@ router.get('/stock/:figi/signals', async (req, res) => {
                 return units + nano;
             };
             
+            // Преобразуем Sequelize модель в обычный объект
+            const signalData = signal.toJSON ? signal.toJSON() : signal;
+            const createDt = formatDateToISO(signalData.createDt || signal.createDt);
+            const endDt = formatDateToISO(signalData.endDt || signal.endDt);
+            
             return {
-                signalId: signal.signalId,
-                strategyId: signal.strategyId,
-                strategyName: signal.strategyName,
-                instrumentUid: signal.instrumentUid,
-                figi: signal.figi,
-                createDt: signal.createDt,
-                endDt: signal.endDt,
-                direction: signal.direction,
-                initialPrice: formatPrice(signal.initialPrice),
-                targetPrice: formatPrice(signal.targetPrice),
-                stoploss: formatPrice(signal.stoploss),
-                probability: signal.probability,
-                name: signal.name,
-                info: signal.info,
-                isActive: new Date(signal.endDt) >= new Date()
+                signalId: signalData.signalId || signal.signalId,
+                strategyId: signalData.strategyId || signal.strategyId,
+                strategyName: signalData.strategyName || signal.strategyName,
+                instrumentUid: signalData.instrumentUid || signal.instrumentUid,
+                figi: signalData.figi || signal.figi,
+                createDt: createDt,
+                endDt: endDt,
+                direction: signalData.direction || signal.direction,
+                initialPrice: formatPrice(signalData.initialPrice || signal.initialPrice),
+                targetPrice: formatPrice(signalData.targetPrice || signal.targetPrice),
+                stoploss: formatPrice(signalData.stoploss || signal.stoploss),
+                probability: signalData.probability || signal.probability,
+                name: signalData.name || signal.name,
+                info: signalData.info || signal.info,
+                isActive: endDt ? new Date(endDt) >= new Date() : false
             };
         });
         

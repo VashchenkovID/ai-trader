@@ -17,20 +17,16 @@ async function run() {
         const isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
         
         if (!isServiceManagerGlobal && !ServiceManager.isInitialized) {
-            console.log('🔧 ServiceManager not initialized globally, initializing in worker...');
-            await ServiceManager.initialize();
+                await ServiceManager.initialize();
         } else if (isServiceManagerGlobal) {
-            console.log('ℹ️ ServiceManager already initialized globally, skipping full initialization in worker');
         }
         
         // Проверяем, не инициализирован ли EnsembleService глобально
         const isEnsembleGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('EnsembleService');
         
         if (!isEnsembleGlobal && !EnsembleService.isInitialized) {
-            console.log('🔧 EnsembleService not initialized globally, initializing in worker...');
-            await EnsembleService.initialize();
+                await EnsembleService.initialize();
         } else if (isEnsembleGlobal) {
-            console.log('ℹ️ EnsembleService already initialized globally, using existing instance');
             // Если сервис уже инициализирован глобально, просто используем его
             // (в воркере будет создан новый экземпляр, но без тяжелой инициализации)
             if (!EnsembleService.isInitialized) {
@@ -47,7 +43,18 @@ async function run() {
         const result = await EnsembleService.trainEnsemble(figi, options || {});
         parentPort.postMessage({ type: 'done', data: { success: true, result } });
     } catch (error) {
-        console.error('❌ Ensemble worker error:', error);
+        try {
+            const LoggerService = (await import('../services/LoggerService.js')).default;
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.error('Ensemble worker error', {
+                    service: 'EnsembleWorker',
+                    operation: 'run',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
+        } catch {
+            // LoggerService недоступен в воркере, игнорируем
+        }
         parentPort.postMessage({ type: 'error', data: { success: false, error: error.message } });
     }
 }

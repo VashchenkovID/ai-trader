@@ -43,19 +43,45 @@ export const PriceChart: React.FC<PriceChartProps> = ({
   };
 
   const formatDateShort = (dateString: string) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
-    return new Date(date).toLocaleDateString('ru-RU', {
-      day: '2-digit',
-      month: 'short'
-    });
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    try {
+      return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: 'short'
+      });
+    } catch (e) {
+      return '';
+    }
   };
 
-  const chartData = useMemo(() => ({
-    labels: candles.map(c => formatDateShort(c.time)),
+  const chartData = useMemo(() => {
+    // Фильтруем невалидные даты
+    const validCandles = candles.filter(c => {
+      if (!c || !c.time) return false;
+      const date = new Date(c.time);
+      return !isNaN(date.getTime()) && 
+             c.close !== undefined && c.close !== null &&
+             c.high !== undefined && c.high !== null &&
+             c.low !== undefined && c.low !== null;
+    });
+    
+    if (validCandles.length === 0) {
+      return {
+        labels: [],
+        datasets: []
+      };
+    }
+    
+    return {
+    labels: validCandles.map(c => formatDateShort(c.time)),
     datasets: [
       {
         label: 'Цена закрытия',
-        data: candles.map(c => c.close),
+        data: validCandles.map(c => c.close),
         borderColor: '#42A5F5',
         backgroundColor: 'rgba(66, 165, 245, 0.1)',
         tension: 0.4,
@@ -63,7 +89,7 @@ export const PriceChart: React.FC<PriceChartProps> = ({
       },
       {
         label: 'Максимум',
-        data: candles.map(c => c.high),
+        data: validCandles.map(c => c.high),
         borderColor: '#66BB6A',
         backgroundColor: 'transparent',
         tension: 0.4,
@@ -72,7 +98,7 @@ export const PriceChart: React.FC<PriceChartProps> = ({
       },
       {
         label: 'Минимум',
-        data: candles.map(c => c.low),
+        data: validCandles.map(c => c.low),
         borderColor: '#EF5350',
         backgroundColor: 'transparent',
         tension: 0.4,
@@ -80,7 +106,8 @@ export const PriceChart: React.FC<PriceChartProps> = ({
         pointRadius: 0
       }
     ]
-  }), [candles]);
+    };
+  }, [candles]);
 
   const chartOptions = useMemo(() => ({
     responsive: true,
@@ -100,7 +127,13 @@ export const PriceChart: React.FC<PriceChartProps> = ({
         filter: (tooltipItem: any) => tooltipItem.datasetIndex === 0,
         callbacks: {
           label: function(context: any) {
-            const candle = candles[context.dataIndex];
+            // Используем отфильтрованные данные для получения правильного индекса
+            const validCandles = candles.filter(c => {
+              if (!c || !c.time) return false;
+              const date = new Date(c.time);
+              return !isNaN(date.getTime());
+            });
+            const candle = validCandles[context.dataIndex];
             if (!candle) return '';
             return [
               `Открытие: ${formatCurrency(candle.open)}`,

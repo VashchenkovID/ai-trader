@@ -117,69 +117,104 @@ export const HorizonCard: React.FC<HorizonCardProps> = ({ horizon, type }) => {
         )}
 
         {/* Стратегии */}
-        {horizon.strategies && (
-          <div className="horizon-card-strategies">
-            <div className="horizon-card-strategies-title">
-              Рекомендации по стратегиям:
+        {horizon.strategies && (() => {
+          const strategies = [
+            { type: 'aggressive', data: horizon.strategies.aggressive, name: 'Агрессивная', variant: 'error' as const },
+            { type: 'moderate', data: horizon.strategies.moderate, name: 'Умеренная', variant: 'warning' as const },
+            { type: 'conservative', data: horizon.strategies.conservative, name: 'Консервативная', variant: 'success' as const }
+          ].filter(s => s.data);
+
+          if (strategies.length === 0) return null;
+
+          // Группируем стратегии по рекомендациям
+          const groupedByRecommendation = strategies.reduce((acc, strategy) => {
+            const rec = strategy.data?.recommendation || 'HOLD';
+            if (!acc[rec]) {
+              acc[rec] = [];
+            }
+            acc[rec].push(strategy);
+            return acc;
+          }, {} as Record<string, typeof strategies>);
+
+          const recommendationGroups = Object.entries(groupedByRecommendation);
+
+          // Если все стратегии дают одинаковую рекомендацию, показываем компактно
+          if (recommendationGroups.length === 1) {
+            const [recommendation, groupStrategies] = recommendationGroups[0];
+            const explanation = groupStrategies.find(s => s.data?.explanation)?.data?.explanation || 
+                              `Все стратегии рекомендуют ${translateRecommendation(recommendation).toLowerCase()}`;
+
+            return (
+              <div className="horizon-card-strategies">
+                <div className="horizon-card-strategies-title">
+                  Рекомендации по стратегиям:
+                </div>
+                <div className="horizon-card-strategies-unified">
+                  <div className="horizon-card-strategy-unified-header">
+                    <div className="horizon-card-strategy-badges">
+                      {groupStrategies.map((s, idx) => (
+                        <Badge key={idx} variant={s.variant} size="sm">
+                          {s.name}
+                        </Badge>
+                      ))}
+                    </div>
+                    <Badge 
+                      variant={getRecommendationVariant(recommendation)} 
+                      size="sm"
+                    >
+                      {translateRecommendation(recommendation)}
+                    </Badge>
+                  </div>
+                  <p className="horizon-card-strategy-explanation">
+                    {explanation}
+                  </p>
+                </div>
+              </div>
+            );
+          }
+
+          // Если стратегии дают разные рекомендации, группируем и показываем только различия
+          return (
+            <div className="horizon-card-strategies">
+              <div className="horizon-card-strategies-title">
+                Рекомендации по стратегиям:
+              </div>
+              <div className="horizon-card-strategies-list">
+                {recommendationGroups.map(([recommendation, groupStrategies], groupIdx) => {
+                  // Берем объяснение из первой стратегии в группе
+                  const explanation = groupStrategies.find(s => s.data?.explanation)?.data?.explanation || 
+                                    `${groupStrategies.length === 1 ? groupStrategies[0].name : 'Эти стратегии'} рекомендуют ${translateRecommendation(recommendation).toLowerCase()}`;
+
+                  return (
+                    <div 
+                      key={groupIdx} 
+                      className={`horizon-card-strategy horizon-card-strategy-grouped horizon-card-strategy-${getRecommendationVariant(recommendation)}`}
+                    >
+                      <div className="horizon-card-strategy-header">
+                        <div className="horizon-card-strategy-badges">
+                          {groupStrategies.map((s, idx) => (
+                            <Badge key={idx} variant={s.variant} size="sm">
+                              {s.name}
+                            </Badge>
+                          ))}
+                        </div>
+                        <Badge 
+                          variant={getRecommendationVariant(recommendation)} 
+                          size="sm"
+                        >
+                          {translateRecommendation(recommendation)}
+                        </Badge>
+                      </div>
+                      <p className="horizon-card-strategy-explanation">
+                        {explanation}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <div className="horizon-card-strategies-list">
-              {horizon.strategies.aggressive && (
-                <div className="horizon-card-strategy horizon-card-strategy-aggressive">
-                  <div className="horizon-card-strategy-header">
-                    <Badge variant="error" size="sm">Агрессивная</Badge>
-                    <Badge 
-                      variant={getRecommendationVariant(horizon.strategies.aggressive.recommendation)} 
-                      size="sm"
-                    >
-                      {translateRecommendation(horizon.strategies.aggressive.recommendation)}
-                    </Badge>
-                  </div>
-                  {horizon.strategies.aggressive.explanation && (
-                    <p className="horizon-card-strategy-explanation">
-                      {horizon.strategies.aggressive.explanation}
-                    </p>
-                  )}
-                </div>
-              )}
-              {horizon.strategies.moderate && (
-                <div className="horizon-card-strategy horizon-card-strategy-moderate">
-                  <div className="horizon-card-strategy-header">
-                    <Badge variant="warning" size="sm">Умеренная</Badge>
-                    <Badge 
-                      variant={getRecommendationVariant(horizon.strategies.moderate.recommendation)} 
-                      size="sm"
-                    >
-                      {translateRecommendation(horizon.strategies.moderate.recommendation)}
-                    </Badge>
-                  </div>
-                  {horizon.strategies.moderate.explanation && (
-                    <p className="horizon-card-strategy-explanation">
-                      {horizon.strategies.moderate.explanation}
-                    </p>
-                  )}
-                </div>
-              )}
-              {horizon.strategies.conservative && (
-                <div className="horizon-card-strategy horizon-card-strategy-conservative">
-                  <div className="horizon-card-strategy-header">
-                    <Badge variant="success" size="sm">Консервативная</Badge>
-                    <Badge 
-                      variant={getRecommendationVariant(horizon.strategies.conservative.recommendation)} 
-                      size="sm"
-                    >
-                      {translateRecommendation(horizon.strategies.conservative.recommendation)}
-                    </Badge>
-                  </div>
-                  {horizon.strategies.conservative.explanation && (
-                    <p className="horizon-card-strategy-explanation">
-                      {horizon.strategies.conservative.explanation}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </Card>
   );

@@ -9,6 +9,8 @@ import SignalCacheService from './SignalCacheService.js';
 import SignalValidationService from './SignalValidationService.js';
 import NewsAnalysisService from './NewsAnalysisService.js';
 import ModelWeightingService from './ModelWeightingService.js';
+import LoggerService from './LoggerService.js';
+import { getService } from './GlobalServiceManager.js';
 
 /**
  * Интегрированный сервис для управления всеми тремя нейросетями
@@ -40,48 +42,37 @@ class IntegratedAIService {
         try {
             // Проверяем, не инициализирован ли уже сервис
             if (this.isInitialized) {
-                console.log('ℹ️ Integrated AI Service already initialized, skipping');
                 return;
             }
-
-            console.log('🧠 Initializing Integrated AI Service...');
             
             // Проверяем, инициализированы ли уже сервисы через ServiceManager
             // Если нет - инициализируем их
             if (!NeuralNetworkService.isInitialized) {
                 await NeuralNetworkService.initialize();
                 this.activeNetworks.traditional = true;
-                console.log('✅ Traditional neural network initialized');
             } else {
                 this.activeNetworks.traditional = true;
-                console.log('✅ Traditional neural network already initialized');
             }
             
             if (!EnsembleService.isInitialized) {
                 await EnsembleService.initialize();
                 this.activeNetworks.ensemble = true;
-                console.log('✅ Ensemble service initialized');
             } else {
                 this.activeNetworks.ensemble = true;
-                console.log('✅ Ensemble service already initialized');
             }
             
             if (!MetaLearningService.isInitialized) {
                 await MetaLearningService.initialize();
                 this.activeNetworks.metaLearning = true;
-                console.log('✅ Meta-learning service initialized');
             } else {
                 this.activeNetworks.metaLearning = true;
-                console.log('✅ Meta-learning service already initialized');
             }
             
             if (!ReinforcementLearningService.isInitialized) {
                 await ReinforcementLearningService.initialize();
                 this.activeNetworks.reinforcementLearning = true;
-                console.log('✅ Reinforcement learning service initialized');
             } else {
                 this.activeNetworks.reinforcementLearning = true;
-                console.log('✅ Reinforcement learning service already initialized');
             }
             
             // Загружаем модели только если они еще не загружены
@@ -94,11 +85,14 @@ class IntegratedAIService {
             this.isInitialized = true;
             this.lastUpdate = new Date().toISOString();
             
-            console.log('✅ Integrated AI Service initialized');
-            console.log(`📊 Active networks: ${Object.keys(this.activeNetworks).filter(k => this.activeNetworks[k]).join(', ')}`);
-            
         } catch (error) {
-            console.error('❌ Failed to initialize Integrated AI Service:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to initialize Integrated AI Service', {
+                    service: 'IntegratedAIService',
+                    operation: 'initialize',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }
@@ -121,7 +115,14 @@ class IntegratedAIService {
                     dynamicWeights = await ModelWeightingService.getModelWeights(figi);
                 }
             } catch (weightError) {
-                console.warn('⚠️ Failed to get dynamic weights, using confidence-based weights:', weightError.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to get dynamic weights, using confidence-based weights', {
+                        service: 'IntegratedAIService',
+                        operation: 'getIntegratedRecommendation',
+                        figi,
+                        error: { message: weightError.message, stack: weightError.stack }
+                    });
+                }
             }
             
             const weights = {};
@@ -146,7 +147,14 @@ class IntegratedAIService {
                     // Используем динамический вес, если доступен, иначе confidence
                     weights.ensemble = dynamicWeights.ensemble || ensembleRec.confidence || 0.3;
                 } catch (error) {
-                    console.warn('⚠️ Ensemble recommendation failed:', error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Ensemble recommendation failed', {
+                            service: 'IntegratedAIService',
+                            operation: 'getIntegratedRecommendation',
+                            figi,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                     // При ошибке просто пропускаем ансамбль, используем другие источники
                 }
             }
@@ -165,7 +173,14 @@ class IntegratedAIService {
                     // Используем динамический вес, если доступен, иначе confidence
                     weights.traditional = dynamicWeights.traditional || traditionalRec.confidence;
                 } catch (error) {
-                    console.warn('⚠️ Traditional recommendation failed:', error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Traditional recommendation failed', {
+                            service: 'IntegratedAIService',
+                            operation: 'getIntegratedRecommendation',
+                            figi,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                 }
             }
 
@@ -184,7 +199,14 @@ class IntegratedAIService {
                     // Используем динамический вес, если доступен, иначе confidence
                     weights.reinforcement = dynamicWeights.reinforcementLearning || rlRec.confidence;
                 } catch (error) {
-                    console.warn('⚠️ RL recommendation failed:', error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('RL recommendation failed', {
+                            service: 'IntegratedAIService',
+                            operation: 'getIntegratedRecommendation',
+                            figi,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                 }
             }
 
@@ -204,7 +226,14 @@ class IntegratedAIService {
                         weights.meta = metaWeight;
                     }
                 } catch (error) {
-                    console.warn('⚠️ Meta-learning adaptation failed:', error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Meta-learning adaptation failed', {
+                            service: 'IntegratedAIService',
+                            operation: 'getIntegratedRecommendation',
+                            figi,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                 }
             }
 
@@ -267,7 +296,14 @@ class IntegratedAIService {
                     }
                 }
             } catch (error) {
-                console.warn('⚠️ Signals validation failed:', error.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Signals validation failed', {
+                        service: 'IntegratedAIService',
+                        operation: 'getIntegratedRecommendation',
+                        figi,
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
             }
 
             // 6. Получаем новости и рассчитываем рекомендацию на основе сентимента
@@ -329,7 +365,14 @@ class IntegratedAIService {
                     }
                 }
             } catch (error) {
-                console.warn('⚠️ News analysis failed:', error.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('News analysis failed', {
+                        service: 'IntegratedAIService',
+                        operation: 'getIntegratedRecommendation',
+                        figi,
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
             }
 
             // Вычисляем интегрированную рекомендацию
@@ -354,7 +397,14 @@ class IntegratedAIService {
                         }
                     }
                 } catch (agreementError) {
-                    console.warn('⚠️ Failed to update model agreement:', agreementError.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Failed to update model agreement', {
+                            service: 'IntegratedAIService',
+                            operation: 'getIntegratedRecommendation',
+                            figi,
+                            error: { message: agreementError.message, stack: agreementError.stack }
+                        });
+                    }
                 }
             }
             
@@ -406,12 +456,17 @@ class IntegratedAIService {
                 });
             }
 
-            console.log(`✅ Integrated recommendation generated: ${integratedRec.recommendation} (${integratedRec.confidence.toFixed(3)})`);
-            
             return integratedRec;
 
         } catch (error) {
-            console.error('❌ Integrated recommendation failed:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Integrated recommendation failed', {
+                    service: 'IntegratedAIService',
+                    operation: 'getIntegratedRecommendation',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             // Временный алерт в Telegram
             try {
                 const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
@@ -421,7 +476,13 @@ class IntegratedAIService {
                     timestamp: new Date().toISOString()
                 });
             } catch (telegramError) {
-                console.error('Failed to send Telegram alert:', telegramError);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to send Telegram alert', {
+                        service: 'IntegratedAIService',
+                        operation: 'getIntegratedRecommendation',
+                        error: { message: telegramError.message }
+                    });
+                }
             }
             return {
                 score: 0,
@@ -737,38 +798,60 @@ class IntegratedAIService {
         };
         
         const strategyName = strategyNames[strategyType] || strategyType;
-        const scorePercent = (score * 100).toFixed(1);
-        const confidencePercent = (confidence * 100).toFixed(0);
+        const scorePercent = Math.round(score * 100);
+        const confidencePercent = Math.round(confidence * 100);
         
         if (recommendation === 'BUY') {
-            return `${strategyName} стратегия рекомендует покупку: сигнал ${scorePercent}% (порог: ${(thresholds.buyScore * 100).toFixed(0)}%), уверенность ${confidencePercent}% (порог: ${(thresholds.buyConfidence * 100).toFixed(0)}%)`;
+            // Объяснение для BUY - почему стратегия рекомендует покупку
+            if (confidencePercent >= 80) {
+                return `Сигнал ${scorePercent}% и уверенность ${confidencePercent}% превышают пороги стратегии - сильная рекомендация на покупку`;
+            } else if (confidencePercent >= 60) {
+                return `Сигнал ${scorePercent}% и уверенность ${confidencePercent}% соответствуют требованиям стратегии - рекомендуется покупка`;
+            } else {
+                return `Сигнал ${scorePercent}% соответствует порогу, но уверенность ${confidencePercent}% ниже оптимальной - покупка с осторожностью`;
+            }
         } else if (recommendation === 'SELL') {
-            return `${strategyName} стратегия рекомендует продажу: сигнал ${scorePercent}% (порог: ${(thresholds.sellScore * 100).toFixed(0)}%), уверенность ${confidencePercent}% (порог: ${(thresholds.sellConfidence * 100).toFixed(0)}%)`;
+            // Объяснение для SELL - почему стратегия рекомендует продажу
+            if (confidencePercent >= 80) {
+                return `Сигнал ${scorePercent}% и уверенность ${confidencePercent}% указывают на необходимость продажи - сильная рекомендация`;
+            } else if (confidencePercent >= 60) {
+                return `Сигнал ${scorePercent}% и уверенность ${confidencePercent}% соответствуют требованиям стратегии - рекомендуется продажа`;
+            } else {
+                return `Сигнал ${scorePercent}% соответствует порогу, но уверенность ${confidencePercent}% ниже оптимальной - продажа с осторожностью`;
+            }
         } else {
-            // HOLD - объясняем почему не BUY и не SELL
+            // HOLD - объяснение почему стратегия не рекомендует активных действий
             // Проверяем условия для SELL (если они выполнены, но recommendation = HOLD из-за других факторов)
             const meetsSellConditions = score <= thresholds.sellScore && confidence >= thresholds.sellConfidence;
             // Проверяем условия для BUY (если они выполнены, но recommendation = HOLD из-за других факторов)
             const meetsBuyConditions = score >= thresholds.buyScore && confidence >= thresholds.buyConfidence;
             
             if (meetsSellConditions) {
-                // Условия для SELL выполнены, но recommendation = HOLD (возможно из-за других факторов)
-                // В этом случае все равно говорим о продаже, так как условия выполнены
-                return `${strategyName} стратегия рекомендует продажу: сигнал ${scorePercent}% (порог: ${(thresholds.sellScore * 100).toFixed(0)}%), уверенность ${confidencePercent}% (порог: ${(thresholds.sellConfidence * 100).toFixed(0)}%)`;
+                // Условия для SELL выполнены, но recommendation = HOLD
+                return `Сигнал ${scorePercent}% указывает на продажу, но общая оценка не подтверждает активных действий`;
             } else if (meetsBuyConditions) {
-                // Условия для BUY выполнены, но recommendation = HOLD (возможно из-за других факторов)
-                // В этом случае все равно говорим о покупке, так как условия выполнены
-                return `${strategyName} стратегия рекомендует покупку: сигнал ${scorePercent}% (порог: ${(thresholds.buyScore * 100).toFixed(0)}%), уверенность ${confidencePercent}% (порог: ${(thresholds.buyConfidence * 100).toFixed(0)}%)`;
+                // Условия для BUY выполнены, но recommendation = HOLD
+                return `Сигнал ${scorePercent}% указывает на покупку, но общая оценка не подтверждает активных действий`;
             } else {
                 // Условия для BUY не выполнены
                 if (score < thresholds.buyScore || confidence < thresholds.buyConfidence) {
-                    return `${strategyName} стратегия не рекомендует покупку: сигнал ${scorePercent}% или уверенность ${confidencePercent}% ниже порога (${(thresholds.buyScore * 100).toFixed(0)}%/${(thresholds.buyConfidence * 100).toFixed(0)}%)`;
+                    // Определяем, что именно не хватает
+                    const needsMoreScore = score < thresholds.buyScore;
+                    const needsMoreConfidence = confidence < thresholds.buyConfidence;
+                    
+                    if (needsMoreScore && needsMoreConfidence) {
+                        return `Сигнал ${scorePercent}% и уверенность ${confidencePercent}% ниже порогов стратегии (${Math.round(thresholds.buyScore * 100)}%/${Math.round(thresholds.buyConfidence * 100)}%) - недостаточно для активных действий`;
+                    } else if (needsMoreScore) {
+                        return `Сигнал ${scorePercent}% ниже порога ${Math.round(thresholds.buyScore * 100)}% - недостаточно для покупки`;
+                    } else {
+                        return `Уверенность ${confidencePercent}% ниже порога ${Math.round(thresholds.buyConfidence * 100)}% - недостаточно для покупки`;
+                    }
                 }
-                // Если условия для SELL не выполнены (score > sellScore или confidence < sellConfidence)
+                // Если условия для SELL не выполнены
                 if (score > thresholds.sellScore || confidence < thresholds.sellConfidence) {
-                    return `${strategyName} стратегия не рекомендует продажу: сигнал ${scorePercent}% или уверенность ${confidencePercent}% выше порога (${(thresholds.sellScore * 100).toFixed(0)}%/${(thresholds.sellConfidence * 100).toFixed(0)}%)`;
+                    return `Сигнал ${scorePercent}% не указывает на необходимость продажи - рекомендуется удержание`;
                 }
-                return `${strategyName} стратегия рекомендует удержание: показатели не достигают порогов для активных действий`;
+                return `Показатели находятся в нейтральной зоне - рекомендуется удержание позиции`;
             }
         }
     }
@@ -864,7 +947,14 @@ class IntegratedAIService {
                 macd
             };
         } catch (error) {
-            console.warn('⚠️ Failed to get market data:', error.message);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to get market data', {
+                    service: 'IntegratedAIService',
+                    operation: 'getMarketData',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return { volatility: 0, trend: 0, volume_ratio: 1, rsi: 50, macd: 0 };
         }
     }
@@ -934,21 +1024,46 @@ class IntegratedAIService {
      * Обучение всех активных сетей (полное)
      */
     async trainAllNetworks(figi, options = {}) {
+        const TrainingStatusService = getService('TrainingStatusService');
         try {
-            console.log(`🚀 Training all networks for ${figi}...`);
-            
             // Отправляем уведомление о старте полного обучения
             await OptimizedTelegramService.sendFullTrainingStart(figi, options);
+            
+            // Обновляем статус обучения для всех сетей
+            if (TrainingStatusService) {
+                TrainingStatusService.startTraining('neuralNetwork', 1);
+                TrainingStatusService.startTraining('ensemble', 1);
+                TrainingStatusService.startTraining('metaLearning', 1);
+                TrainingStatusService.startTraining('reinforcementLearning', 1);
+                
+                // Получаем ticker для отображения
+                try {
+                    const instrument = await CacheService.getInstrument(figi, true);
+                    const ticker = instrument?.ticker || figi.substring(0, 10);
+                    TrainingStatusService.updateProgress('neuralNetwork', 0, ticker);
+                    TrainingStatusService.updateProgress('ensemble', 0, ticker);
+                    TrainingStatusService.updateProgress('metaLearning', 0, ticker);
+                    TrainingStatusService.updateProgress('reinforcementLearning', 0, ticker);
+                } catch (e) {
+                    // Игнорируем ошибки получения инструмента
+                }
+            }
             
             const results = {};
 
             // Обучение ансамбля
             if (this.activeNetworks.ensemble) {
                 try {
-                    console.log('🎭 Training ensemble...');
                     results.ensemble = await EnsembleService.trainEnsemble(figi, options);
                 } catch (error) {
-                    console.warn('⚠️ Ensemble training failed:', error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Ensemble training failed', {
+                            service: 'IntegratedAIService',
+                            operation: 'trainAllNetworks',
+                            figi,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                     results.ensemble = { success: false, error: error.message };
                 }
             }
@@ -956,10 +1071,16 @@ class IntegratedAIService {
             // Обучение RL агента
             if (this.activeNetworks.reinforcementLearning) {
                 try {
-                    console.log('🤖 Training RL agent...');
                     results.reinforcement = await ReinforcementLearningService.train(figi, options);
                 } catch (error) {
-                    console.warn('⚠️ RL training failed:', error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('RL training failed', {
+                            service: 'IntegratedAIService',
+                            operation: 'trainAllNetworks',
+                            figi,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                     results.reinforcement = { success: false, error: error.message };
                 }
             }
@@ -967,10 +1088,16 @@ class IntegratedAIService {
             // Обучение традиционной нейросети
             if (this.activeNetworks.traditional) {
                 try {
-                    console.log('🧠 Training traditional network...');
                     results.traditional = await NeuralNetworkService.trainForInstrument(figi, options.days);
                 } catch (error) {
-                    console.warn('⚠️ Traditional training failed:', error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Traditional training failed', {
+                            service: 'IntegratedAIService',
+                            operation: 'trainAllNetworks',
+                            figi,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                     results.traditional = { success: false, error: error.message };
                 }
             }
@@ -978,11 +1105,33 @@ class IntegratedAIService {
             // Обновляем статистику производительности
             await this.updatePerformanceStats();
 
-            console.log('✅ All networks training completed');
+            // Завершаем обучение
+            if (TrainingStatusService) {
+                const allSuccess = Object.values(results).every(r => r?.success !== false);
+                TrainingStatusService.completeTraining('neuralNetwork', allSuccess);
+                TrainingStatusService.completeTraining('ensemble', allSuccess);
+                TrainingStatusService.completeTraining('metaLearning', allSuccess);
+                TrainingStatusService.completeTraining('reinforcementLearning', allSuccess);
+            }
+
             return results;
 
         } catch (error) {
-            console.error('❌ Training all networks failed:', error);
+            // Завершаем обучение с ошибкой
+            if (TrainingStatusService) {
+                TrainingStatusService.completeTraining('neuralNetwork', false);
+                TrainingStatusService.completeTraining('ensemble', false);
+                TrainingStatusService.completeTraining('metaLearning', false);
+                TrainingStatusService.completeTraining('reinforcementLearning', false);
+            }
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Training all networks failed', {
+                    service: 'IntegratedAIService',
+                    operation: 'trainAllNetworks',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }
@@ -992,17 +1141,21 @@ class IntegratedAIService {
      */
     async partialTraining(figi, options = {}) {
         try {
-            console.log(`🔄 Partial training for ${figi}...`);
-            
             const results = {};
 
             // Дообучение только традиционной нейросети (быстрее)
             if (this.activeNetworks.traditional) {
                 try {
-                    console.log('🧠 Partial training traditional network...');
                     results.traditional = await NeuralNetworkService.trainForInstrument(figi, options.days || 30);
                 } catch (error) {
-                    console.warn('⚠️ Traditional partial training failed:', error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Traditional partial training failed', {
+                            service: 'IntegratedAIService',
+                            operation: 'partialTraining',
+                            figi,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                     results.traditional = { success: false, error: error.message };
                 }
             }
@@ -1010,11 +1163,17 @@ class IntegratedAIService {
             // Обновляем статистику производительности
             await this.updatePerformanceStats();
 
-            console.log('✅ Partial training completed');
             return results;
 
         } catch (error) {
-            console.error('❌ Partial training failed:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Partial training failed', {
+                    service: 'IntegratedAIService',
+                    operation: 'partialTraining',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }
@@ -1026,16 +1185,21 @@ class IntegratedAIService {
      * @returns {Promise<Object>} Результаты обучения
      */
     async train(epochs = 10, batchSize = 32) {
+        const TrainingStatusService = getService('TrainingStatusService');
         try {
-            console.log(`🚀 Training all networks for all instruments (epochs: ${epochs}, batchSize: ${batchSize})...`);
-            
             // Получаем все инструменты из кеша
             const instruments = await CacheService.getAllInstruments();
             if (!instruments || instruments.length === 0) {
                 throw new Error('No instruments available for training');
             }
             
-            console.log(`📊 Found ${instruments.length} instruments for training`);
+            // Обновляем статус обучения для всех сетей
+            if (TrainingStatusService) {
+                TrainingStatusService.startTraining('neuralNetwork', instruments.length);
+                TrainingStatusService.startTraining('ensemble', instruments.length);
+                TrainingStatusService.startTraining('metaLearning', instruments.length);
+                TrainingStatusService.startTraining('reinforcementLearning', instruments.length);
+            }
             
             const results = {
                 total: instruments.length,
@@ -1045,10 +1209,9 @@ class IntegratedAIService {
             };
             
             // Обучаем каждый инструмент
-            for (const instrument of instruments) {
+            for (let index = 0; index < instruments.length; index++) {
+                const instrument = instruments[index];
                 try {
-                    console.log(`🎯 Training ${instrument.ticker} (${instrument.figi})...`);
-                    
                     const trainingResult = await this.trainAllNetworks(instrument.figi, {
                         epochs,
                         batchSize,
@@ -1062,7 +1225,14 @@ class IntegratedAIService {
                         result: trainingResult
                     };
                     
-                    console.log(`✅ Training completed for ${instrument.ticker}`);
+                    // Обновляем прогресс
+                    if (TrainingStatusService) {
+                        const progress = ((index + 1) / instruments.length) * 100;
+                        TrainingStatusService.updateProgress('neuralNetwork', progress, instrument.ticker);
+                        TrainingStatusService.updateProgress('ensemble', progress, instrument.ticker);
+                        TrainingStatusService.updateProgress('metaLearning', progress, instrument.ticker);
+                        TrainingStatusService.updateProgress('reinforcementLearning', progress, instrument.ticker);
+                    }
                 } catch (error) {
                     results.failed++;
                     results.details[instrument.figi] = {
@@ -1070,11 +1240,26 @@ class IntegratedAIService {
                         success: false,
                         error: error.message
                     };
-                    console.error(`❌ Training failed for ${instrument.ticker}:`, error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Training failed for instrument', {
+                            service: 'IntegratedAIService',
+                            operation: 'train',
+                            figi: instrument.figi,
+                            ticker: instrument.ticker,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                 }
             }
             
-            console.log(`✅ Training all networks completed: ${results.success} success, ${results.failed} failed`);
+            // Завершаем обучение
+            if (TrainingStatusService) {
+                TrainingStatusService.completeTraining('neuralNetwork', results.failed === 0);
+                TrainingStatusService.completeTraining('ensemble', results.failed === 0);
+                TrainingStatusService.completeTraining('metaLearning', results.failed === 0);
+                TrainingStatusService.completeTraining('reinforcementLearning', results.failed === 0);
+            }
+            
             return {
                 success: results.failed === 0,
                 total: results.total,
@@ -1084,7 +1269,20 @@ class IntegratedAIService {
             };
             
         } catch (error) {
-            console.error('❌ Training all networks failed:', error);
+            // Завершаем обучение с ошибкой
+            if (TrainingStatusService) {
+                TrainingStatusService.completeTraining('neuralNetwork', false);
+                TrainingStatusService.completeTraining('ensemble', false);
+                TrainingStatusService.completeTraining('metaLearning', false);
+                TrainingStatusService.completeTraining('reinforcementLearning', false);
+            }
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Training all networks failed', {
+                    service: 'IntegratedAIService',
+                    operation: 'train',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }
@@ -1132,7 +1330,13 @@ class IntegratedAIService {
             this.lastUpdate = new Date().toISOString();
 
         } catch (error) {
-            console.warn('⚠️ Failed to update performance stats:', error.message);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to update performance stats', {
+                    service: 'IntegratedAIService',
+                    operation: 'updatePerformanceStats',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
         }
     }
 
@@ -1170,7 +1374,6 @@ class IntegratedAIService {
     setNetworkStatus(network, active) {
         if (network in this.activeNetworks) {
             this.activeNetworks[network] = active;
-            console.log(`🔄 ${network} network ${active ? 'activated' : 'deactivated'}`);
         } else {
             throw new Error(`Unknown network: ${network}`);
         }
@@ -1191,7 +1394,6 @@ class IntegratedAIService {
         this.recommendations = this.recommendations.filter(rec => 
             new Date(rec.timestamp) > cutoff
         );
-        console.log(`🧹 Cleaned up old recommendations. Remaining: ${this.recommendations.length}`);
     }
 
     /**
@@ -1199,7 +1401,6 @@ class IntegratedAIService {
      */
     async saveAllModels() {
         try {
-            console.log('💾 Saving all models...');
             
             const results = {};
 
@@ -1223,11 +1424,16 @@ class IntegratedAIService {
                 results.traditional = 'saved';
             }
 
-            console.log('✅ All models saved');
             return results;
 
         } catch (error) {
-            console.error('❌ Failed to save models:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to save models', {
+                    service: 'IntegratedAIService',
+                    operation: 'saveAllModels',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }
@@ -1255,11 +1461,8 @@ class IntegratedAIService {
             }
 
             if (!needsLoading) {
-                console.log('ℹ️ All models already loaded, skipping reload');
                 return { skipped: true };
             }
-
-            console.log('📥 Loading missing models...');
 
             if (this.activeNetworks.ensemble && (!EnsembleService.models.lstm && !EnsembleService.models.cnn && !EnsembleService.models.transformer)) {
                 await EnsembleService.loadModels();
@@ -1281,11 +1484,16 @@ class IntegratedAIService {
                 results.traditional = 'loaded';
             }
 
-            console.log('✅ Missing models loaded');
             return results;
 
         } catch (error) {
-            console.error('❌ Failed to load models:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to load models', {
+                    service: 'IntegratedAIService',
+                    operation: 'loadAllModelsIfNeeded',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }
@@ -1295,7 +1503,6 @@ class IntegratedAIService {
      */
     async loadAllModels() {
         try {
-            console.log('📥 Loading all models...');
             
             const results = {};
 
@@ -1319,11 +1526,16 @@ class IntegratedAIService {
                 results.traditional = 'loaded';
             }
 
-            console.log('✅ All models loaded');
             return results;
 
         } catch (error) {
-            console.error('❌ Failed to load models:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to load models', {
+                    service: 'IntegratedAIService',
+                    operation: 'loadAllModels',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }

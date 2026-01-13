@@ -15,6 +15,8 @@ router.get('/', async (req, res) => {
             limit ? parseInt(limit) : 50,
             tradingMode || null
         );
+        
+        // Форматирование уже выполнено в getRequests через formatModelDates
         res.json({
             success: true,
             data: requests
@@ -35,9 +37,11 @@ router.get('/', async (req, res) => {
 router.get('/pending', async (req, res) => {
     try {
         const requests = await TradingRequestService.getPendingRequests();
+        const { formatModelsDates } = await import('../utils/dateFormatter.js');
+        
         res.json({
             success: true,
-            data: requests
+            data: formatModelsDates(requests, ['createdAt', 'updatedAt', 'executedAt', 'approvedAt', 'expiresAt'])
         });
     } catch (error) {
         console.error('Ошибка получения ожидающих запросов:', error);
@@ -55,9 +59,11 @@ router.get('/pending', async (req, res) => {
 router.get('/approved', async (req, res) => {
     try {
         const requests = await TradingRequestService.getApprovedRequests();
+        const { formatModelsDates } = await import('../utils/dateFormatter.js');
+        
         res.json({
             success: true,
-            data: requests
+            data: formatModelsDates(requests, ['createdAt', 'updatedAt', 'executedAt', 'approvedAt', 'expiresAt'])
         });
     } catch (error) {
         console.error('Ошибка получения одобренных запросов:', error);

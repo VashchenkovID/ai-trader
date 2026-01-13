@@ -6,6 +6,7 @@ import WebSocketService from './WebSocketService.js';
 import SettingsService from './SettingsService.js';
 import OptimizedTrainingService from './OptimizedTrainingService.js';
 import ModelManager from '../utils/ModelManager.js';
+import LoggerService from './LoggerService.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -172,19 +173,27 @@ class NeuralNetworkService {
                 metrics: ['accuracy']
             });
 
-            console.log('✅ Model created and compiled successfully');
             return model;
         } catch (error) {
-            console.error('❌ Error creating model:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error creating neural network model', {
+                    service: 'NeuralNetworkService',
+                    operation: 'createModel',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             // Временный алерт в Telegram
             try {
-                await OptimizedTelegramService.sendAlert('NEURAL_NETWORK_ERROR', {
-                    error: error.message,
-                    context: 'Model Creation',
-                    timestamp: new Date().toISOString()
-                });
+                const errorMessage = `Ошибка создания модели нейронной сети:\n\n❌ ${error.message || 'Неизвестная ошибка'}\n📋 Контекст: Model Creation`;
+                await OptimizedTelegramService.sendAlert('NEURAL_NETWORK_ERROR', errorMessage, 'error');
             } catch (telegramError) {
-                console.error('Failed to send Telegram alert:', telegramError);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to send Telegram alert', {
+                        service: 'NeuralNetworkService',
+                        operation: 'createModel',
+                        error: { message: telegramError.message }
+                    });
+                }
             }
             throw error;
         }
@@ -269,7 +278,6 @@ class NeuralNetworkService {
                 
                 // Проверяем, что модель была получена
                 if (!modelData) {
-                    console.warn(`⚠️ Модель для ${figi} не найдена, создаем новую модель...`);
                     // Создаем новую модель с базовыми параметрами
                     this.model = await this.createModel(100, 60); // базовые параметры
                     const weights = this.model.getWeights();
@@ -314,13 +322,11 @@ class NeuralNetworkService {
                     weights: { specs }
                 };
             } else {
-                console.warn('⚠️ Нет модели для сохранения');
                 return;
             }
 
             // Проверяем структуру modelData
             if (!modelData || !modelData.architecture) {
-                console.warn('⚠️ Некорректные данные модели, пропускаем сохранение');
                 return;
             }
 
@@ -336,20 +342,30 @@ class NeuralNetworkService {
                 
                 await fs.writeFile(figiWeightsFile, JSON.stringify(modelData.weights));
                 
-                console.log(`✅ Per-FIGI модель сохранена для ${figi} (архитектура и веса)`);
-                
                 // Также сохраняем через ModelManager для совместимости
                 try {
                     if (this.model) {
                         await ModelManager.saveModel(this.model, `neural/${figi}`);
                     }
                 } catch (modelManagerError) {
-                    console.warn(`⚠️ Failed to save model via ModelManager for ${figi}:`, modelManagerError.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Failed to save model via ModelManager', {
+                            service: 'NeuralNetworkService',
+                            operation: 'saveModel',
+                            figi,
+                            error: { message: modelManagerError.message, stack: modelManagerError.stack }
+                        });
+                    }
                 }
             } else {
                 // Сохраняем общую модель (для обратной совместимости)
                 if (!modelData || !modelData.architecture) {
-                    console.error('❌ Ошибка: modelData.architecture отсутствует при сохранении общей модели');
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('modelData.architecture отсутствует при сохранении общей модели', {
+                            service: 'NeuralNetworkService',
+                            operation: 'saveModel'
+                        });
+                    }
                     return;
                 }
                 
@@ -359,8 +375,6 @@ class NeuralNetworkService {
 
                 await fs.writeFile(this.weightsFile, JSON.stringify(modelData.weights, null, 2));
 
-                console.log('✅ Общая модель сохранена (архитектура и веса)');
-
                 // Дополнительно сохраняем через ModelManager в новом формате,
                 // чтобы последующие загрузки не падали на fallback и не логировали warning
                 try {
@@ -368,17 +382,26 @@ class NeuralNetworkService {
                         const pathModule = await import('path');
                         const modelName = pathModule.basename(this.modelFile, '.json');
                         await ModelManager.saveModel(this.model, `neural/${modelName}`);
-                        console.log(`✅ Общая модель также сохранена через ModelManager`);
-                    } else {
-                        console.warn('⚠️ this.model не установлена, пропускаем сохранение через ModelManager');
                     }
                 } catch (modelManagerError) {
-                    console.warn(`⚠️ Failed to save general neural model via ModelManager: ${modelManagerError.message}`);
-                    console.warn(`⚠️ Stack: ${modelManagerError.stack}`);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Failed to save general neural model via ModelManager', {
+                            service: 'NeuralNetworkService',
+                            operation: 'saveModel',
+                            error: { message: modelManagerError.message, stack: modelManagerError.stack }
+                        });
+                    }
                 }
             }
         } catch (error) {
-            console.error('❌ Ошибка сохранения модели:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error saving neural network model', {
+                    service: 'NeuralNetworkService',
+                    operation: 'saveModel',
+                    figi: figi || 'general',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
         }
     }
 
@@ -387,7 +410,6 @@ class NeuralNetworkService {
         try {
             // Проверяем, загружена ли уже модель (если не указан конкретный FIGI)
             if (!figi && this.model) {
-                console.log('ℹ️ Neural network model already loaded, skipping reload');
                 return true;
             }
 
@@ -397,7 +419,6 @@ class NeuralNetworkService {
                     const modelFromTraining = await OptimizedTrainingService.getModel(figi);
                     if (modelFromTraining) {
                         this.model = modelFromTraining;
-                        console.log(`✅ Model loaded from OptimizedTrainingService for ${figi}`);
                         
                         // Гарантируем компиляцию после загрузки
                         if (!this.model.optimizer) {
@@ -411,7 +432,14 @@ class NeuralNetworkService {
                         return true;
                     }
                 } catch (trainingServiceError) {
-                    console.warn(`⚠️ Failed to load model from OptimizedTrainingService: ${trainingServiceError.message}`);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Failed to load model from OptimizedTrainingService', {
+                            service: 'NeuralNetworkService',
+                            operation: 'loadModel',
+                            figi,
+                            error: { message: trainingServiceError.message, stack: trainingServiceError.stack }
+                        });
+                    }
                 }
             }
             
@@ -438,7 +466,6 @@ class NeuralNetworkService {
                             
                             if (model) {
                                 this.model = model;
-                                console.log(`✅ Per-FIGI neural model loaded successfully for ${figi} via ModelManager`);
                             } else {
                                 // Fallback к прямому чтению файлов
                                 try {
@@ -457,9 +484,15 @@ class NeuralNetworkService {
                                     const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
                                     this.model.setWeights(tensors);
                                     
-                                    console.log(`✅ Per-FIGI neural model loaded for ${figi} with legacy format`);
                                 } catch (legacyError) {
-                                    console.warn(`⚠️ Failed to load legacy per-FIGI model for ${figi}: ${legacyError.message}`);
+                                    if (LoggerService.isInitialized) {
+                                        LoggerService.error('Failed to load legacy per-FIGI model', {
+                                            service: 'NeuralNetworkService',
+                                            operation: 'loadModel',
+                                            figi,
+                                            error: { message: legacyError.message, stack: legacyError.stack }
+                                        });
+                                    }
                                     continue; // Пробуем следующий путь
                                 }
                             }
@@ -482,7 +515,6 @@ class NeuralNetworkService {
                 }
                 
                 // Если не нашли модель для конкретного FIGI, продолжаем поиск общей модели
-                console.warn(`⚠️ Per-FIGI model not found for ${figi}, trying general model...`);
             }
             
             // Попытка 2: Загрузить общую модель (fallback)
@@ -514,9 +546,7 @@ class NeuralNetworkService {
                             
                             if (model) {
                                 this.model = model;
-                                console.log('✅ General neural model loaded successfully with ModelManager');
                             } else {
-                                console.warn('⚠️ Failed to load neural model with ModelManager, trying legacy format...');
                                 
                                 // Fallback к старому формату
                                 const archRaw = await fs.readFile(modelFile, 'utf-8');
@@ -533,8 +563,6 @@ class NeuralNetworkService {
                                 
                                 const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
                                 this.model.setWeights(tensors);
-                                
-                                console.log('✅ General neural model loaded with legacy format');
                             }
                             
                             // Гарантируем компиляцию после загрузки
@@ -546,7 +574,6 @@ class NeuralNetworkService {
                                 });
                             }
                             
-                            console.log('✅ Модель загружена (архитектура и веса)');
                             this.modelCreatedAt = new Date().toISOString();
                             return true;
                         }
@@ -559,7 +586,14 @@ class NeuralNetworkService {
             
             return false;
         } catch (error) {
-            console.error('❌ Ошибка загрузки модели:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error loading neural network model', {
+                    service: 'NeuralNetworkService',
+                    operation: 'loadModel',
+                    figi: figi || 'general',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return false;
         }
     }
@@ -588,10 +622,16 @@ class NeuralNetworkService {
                 batchSize: 32
             });
 
-            console.log(`✅ Quick training completed for ${figi}`);
             return result;
         } catch (error) {
-            console.error(`❌ Quick training failed for ${figi}:`, error.message);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Quick training failed', {
+                    service: 'NeuralNetworkService',
+                    operation: 'trainQuick',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }
@@ -625,7 +665,6 @@ class NeuralNetworkService {
             // Адаптивные требования к данным
             const minRequired = Math.max(5, Math.min(30, Math.floor(closingPrices.length / 3)));
             if (closingPrices.length < minRequired) {
-                console.warn(`Training skipped: insufficient data for ${figi}. Have ${closingPrices.length} candles, need at least ${minRequired}.`);
                 if (!this.isBatchTraining) {
                     this.setStatus('off');
                 }
@@ -642,7 +681,6 @@ class NeuralNetworkService {
             );
 
             if (features.length === 0) {
-                console.warn(`⚠️ No training data prepared for ${figi}`);
                 if (!this.isBatchTraining) {
                     this.setStatus('off');
                 }
@@ -652,7 +690,6 @@ class NeuralNetworkService {
             // Проверяем консистентность размеров данных
             const featureSize = features[0]?.length;
             if (!featureSize) {
-                console.warn(`⚠️ Invalid feature data for ${figi}`);
                 if (!this.isBatchTraining) {
                     this.setStatus('off');
                 }
@@ -662,20 +699,17 @@ class NeuralNetworkService {
             // Проверяем, что все фичи имеют одинаковый размер
             const inconsistentFeatures = features.filter(f => f.length !== featureSize);
             if (inconsistentFeatures.length > 0) {
-                console.warn(`⚠️ Found ${inconsistentFeatures.length} inconsistent features for ${figi}, filtering them out`);
                 const consistentIndices = features.map((f, i) => f.length === featureSize ? i : -1).filter(i => i !== -1);
                 const filteredFeatures = consistentIndices.map(i => features[i]);
                 const filteredLabels = consistentIndices.map(i => labels[i]);
                 
                 if (filteredFeatures.length < 10) {
-                    console.warn(`⚠️ Too few consistent samples (${filteredFeatures.length}) for ${figi}`);
                     if (!this.isBatchTraining) {
                         this.setStatus('off');
                     }
                     return { history: { acc: [], loss: [] } };
                 }
                 
-                console.log(`✅ Using ${filteredFeatures.length} consistent samples for ${figi}`);
                 // Обновляем данные
                 features.splice(0, features.length, ...filteredFeatures);
                 labels.splice(0, labels.length, ...filteredLabels);
@@ -707,9 +741,15 @@ class NeuralNetworkService {
                                 });
                             }
                         } catch (error) {
-                            console.warn('Failed to broadcast training progress:', error.message);
+                            if (LoggerService.isInitialized) {
+                                LoggerService.error('Failed to broadcast training progress', {
+                                    service: 'NeuralNetworkService',
+                                    operation: 'trainForInstrument',
+                                    figi,
+                                    error: { message: error.message }
+                                });
+                            }
                         }
-                        console.log(`Epoch ${progress.epoch}/${progress.epochs}: loss = ${progress.loss}, accuracy = ${progress.accuracy}`);
                     }
                 });
             };
@@ -736,12 +776,6 @@ class NeuralNetworkService {
                 this.lastTrainingAccuracy = finalAcc;
                 this.lastTrainingLoss = finalLoss;
                 this.trainingHistory = history.history;
-                
-                if (finalAcc !== null) {
-                    console.log(`✅ Training completed for ${figi}. Final accuracy: ${finalAcc.toFixed(4)}, loss: ${finalLoss?.toFixed(4) || 'N/A'}`);
-                } else {
-                    console.log(`✅ Training completed for ${figi}.`);
-                }
             }
 
             // Получаем обученную модель из OptimizedTrainingService и сохраняем
@@ -757,16 +791,19 @@ class NeuralNetworkService {
                     // Сохраняем также как общую модель (если это единственное обучение или лучшая модель)
                     // Это важно для случаев, когда обучается только один инструмент
                     await this.saveModel(); // Сохраняет общую модель (без параметра figi)
-                    console.log(`✅ Общая модель также сохранена на основе ${figi}`);
                     
                     // Обновляем время создания модели
                     this.modelCreatedAt = new Date().toISOString();
-                    console.log(`✅ Model saved successfully for ${figi} (both per-FIGI and general)`);
-                } else {
-                    console.warn(`⚠️ Trained model not found for ${figi} after training`);
                 }
             } catch (saveError) {
-                console.error(`❌ Error saving model for ${figi}:`, saveError.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Error saving model after training', {
+                        service: 'NeuralNetworkService',
+                        operation: 'trainForInstrument',
+                        figi,
+                        error: { message: saveError.message, stack: saveError.stack }
+                    });
+                }
             }
 
             // Завершаем обучение
@@ -785,13 +822,27 @@ class NeuralNetworkService {
                     });
                 }
             } catch (error) {
-                console.warn('Failed to broadcast training complete:', error.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to broadcast training complete', {
+                        service: 'NeuralNetworkService',
+                        operation: 'trainForInstrument',
+                        figi,
+                        error: { message: error.message }
+                    });
+                }
             }
 
             return history;
 
         } catch (error) {
-            console.error('❌ Error training model:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error training neural network model', {
+                    service: 'NeuralNetworkService',
+                    operation: 'trainForInstrument',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             
             // Завершаем обучение с ошибкой
             const TrainingStatusService = getService('TrainingStatusService');
@@ -801,13 +852,16 @@ class NeuralNetworkService {
             
             // Временный алерт в Telegram
             try {
-                await OptimizedTelegramService.sendAlert('NEURAL_NETWORK_TRAINING_ERROR', {
-                    error: error.message,
-                    context: 'Model Training',
-                    timestamp: new Date().toISOString()
-                });
+                const errorMessage = `Ошибка обучения модели нейронной сети:\n\n❌ ${error.message || 'Неизвестная ошибка'}\n📋 Контекст: Model Training\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`;
+                await OptimizedTelegramService.sendAlert('NEURAL_NETWORK_TRAINING_ERROR', errorMessage, 'error');
             } catch (telegramError) {
-                console.error('Failed to send Telegram alert:', telegramError);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to send Telegram alert', {
+                        service: 'NeuralNetworkService',
+                        operation: 'trainForInstrument',
+                        error: { message: telegramError.message }
+                    });
+                }
             }
             if (!this.isBatchTraining) {
                 this.setStatus('off');
@@ -852,7 +906,14 @@ class NeuralNetworkService {
                         });
                     }
                 } catch (error) {
-                    console.warn('Failed to broadcast training progress:', error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Failed to broadcast training progress', {
+                            service: 'NeuralNetworkService',
+                            operation: 'trainAll',
+                            figi: instrument.figi,
+                            error: { message: error.message }
+                        });
+                    }
                 }
 
                 try {
@@ -877,7 +938,15 @@ class NeuralNetworkService {
                     // Очищаем ошибки для этого инструмента при успешном обучении
                     // Очистка ошибок обучения теперь не нужна в оптимизированном сервисе
                 } catch (error) {
-                    console.warn(`Train failed for ${instrument?.ticker}:`, error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Train failed for instrument', {
+                            service: 'NeuralNetworkService',
+                            operation: 'trainAll',
+                            figi: instrument.figi,
+                            ticker: instrument.ticker,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                     results.push({ figi: instrument.figi, ticker: instrument.ticker, ok: false, error: error.message });
                     
                     // Ошибки обучения теперь обрабатываются в IntegratedAIService
@@ -902,51 +971,51 @@ class NeuralNetworkService {
                     successfulResults.sort((a, b) => (b.accuracy || 0) - (a.accuracy || 0));
                     const bestResult = successfulResults[0];
                     
-                    console.log(`🏆 Лучшая модель: ${bestResult.ticker} (FIGI: ${bestResult.figi}) с accuracy: ${bestResult.accuracy?.toFixed(4) || 'N/A'}`);
-                    
                     // Загружаем лучшую модель
                     const bestModel = await OptimizedTrainingService.getModel(bestResult.figi);
                     if (bestModel) {
                         this.model = bestModel;
                         await this.saveModel(); // Сохраняет общую модель (без параметра figi)
-                        console.log(`✅ Общая модель сохранена на основе лучшей модели (${bestResult.ticker}, accuracy: ${bestResult.accuracy?.toFixed(4)})`);
                     } else {
-                        console.warn(`⚠️ Не удалось загрузить модель для ${bestResult.ticker}, пробуем использовать this.model...`);
                         if (this.model) {
                             await this.saveModel(); // Сохраняет общую модель (без параметра figi)
-                            console.log('✅ Общая модель сохранена (использована текущая this.model)');
-                        } else {
-                            console.warn('⚠️ this.model не установлена, не можем сохранить общую модель');
                         }
                     }
                 } else if (this.model) {
                     // Если нет метрик, но есть модель - используем её
-                    console.log('⚠️ Нет метрик для выбора лучшей модели, используем текущую this.model');
                     await this.saveModel(); // Сохраняет общую модель (без параметра figi)
-                    console.log('✅ Общая модель сохранена');
                 } else {
                     // Пробуем найти любую обученную модель
-                    console.log('⚠️ this.model не установлена, ищем любую обученную модель...');
                     const instruments = await CacheService.getAllInstruments(10);
                     for (const instrument of instruments) {
                         const modelFromTraining = await OptimizedTrainingService.getModel(instrument.figi);
                         if (modelFromTraining) {
                             this.model = modelFromTraining;
-                            console.log(`✅ Используем модель для ${instrument.ticker} как общую`);
                             await this.saveModel();
                             break;
                         }
                     }
                 }
             } catch (err) {
-                console.warn('⚠️ Ошибка при выборе и сохранении общей модели:', err.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Error selecting and saving general model', {
+                        service: 'NeuralNetworkService',
+                        operation: 'trainAll',
+                        error: { message: err.message, stack: err.stack }
+                    });
+                }
                 // Fallback: пробуем сохранить текущую модель
                 if (this.model) {
                     try {
                         await this.saveModel();
-                        console.log('✅ Общая модель сохранена (fallback)');
                     } catch (saveErr) {
-                        console.error('❌ Не удалось сохранить общую модель:', saveErr.message);
+                        if (LoggerService.isInitialized) {
+                            LoggerService.error('Failed to save general model (fallback)', {
+                                service: 'NeuralNetworkService',
+                                operation: 'trainAll',
+                                error: { message: saveErr.message, stack: saveErr.stack }
+                            });
+                        }
                     }
                 }
             }
@@ -955,7 +1024,13 @@ class NeuralNetworkService {
             try {
                 // Уведомления о обучении теперь отправляются через IntegratedAIService
             } catch (e) {
-                console.warn('Failed to send training summary:', e.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to send training summary', {
+                        service: 'NeuralNetworkService',
+                        operation: 'trainAll',
+                        error: { message: e.message }
+                    });
+                }
             }
 
             return { results };
@@ -968,8 +1043,8 @@ class NeuralNetworkService {
     // Предсказание для конкретной акции
     async predict(figi, dividendYield = 0) {
         try {
-            // Получаем последние данные
-            const candles = await CacheService.getCandles(figi, 'DAY', 100);
+            // Получаем последние данные (skipUpdate = true - используем только БД, без запросов к API)
+            const candles = await CacheService.getCandles(figi, 'DAY', 100, true);
             const closingPrices = candles.map(c => c.close);
 
             if (closingPrices.length < 60) {
@@ -991,7 +1066,14 @@ class NeuralNetworkService {
             // prepareTrainingData возвращает массив сэмплов, берем последний как наиболее свежий
             const { features } = await OptimizedDataService.prepareTrainingData(candles, 60, 5, figi);
             if (!features || features.length === 0) {
-                console.error(`❌ No features prepared for prediction (FIGI: ${figi})`);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('No features prepared for prediction', {
+                        service: 'NeuralNetworkService',
+                        operation: 'predict',
+                        figi,
+                        error: { message: 'No features prepared for prediction' }
+                    });
+                }
                 return { score: 0, confidence: 0, error: 'No features prepared for prediction' };
             }
             const featureVector = features[features.length - 1];
@@ -1009,7 +1091,14 @@ class NeuralNetworkService {
                     model = loadedModel;
                 }
             } catch (serviceError) {
-                console.warn(`⚠️ Failed to load per-FIGI model for prediction via OptimizedTrainingService: ${serviceError.message}`);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to load per-FIGI model for prediction', {
+                        service: 'NeuralNetworkService',
+                        operation: 'predict',
+                        figi,
+                        error: { message: serviceError.message, stack: serviceError.stack }
+                    });
+                }
             }
 
             // Если per-FIGI модель не найдена, пытаемся использовать общую модель
@@ -1021,21 +1110,41 @@ class NeuralNetworkService {
                 if (modelInputSize === null || modelInputSize === featureVector.length) {
                     model = this.model;
                 } else {
-                    console.warn(`⚠️ General model input size mismatch: expected ${modelInputSize}, got ${featureVector.length}`);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('General model input size mismatch', {
+                            service: 'NeuralNetworkService',
+                            operation: 'predict',
+                            figi,
+                            error: { message: `Expected ${modelInputSize}, got ${featureVector.length}` }
+                        });
+                    }
                     // Пытаемся создать временную модель с правильным размером для предсказания
                     try {
-                        console.log(`🔄 Creating temporary model with input size ${featureVector.length} for prediction`);
                         const tempModel = await this.createModel(featureVector.length, 60);
                         model = tempModel;
-                        console.log(`✅ Temporary model created for prediction (FIGI: ${figi})`);
                     } catch (tempModelError) {
-                        console.warn(`⚠️ Failed to create temporary model: ${tempModelError.message}`);
+                        if (LoggerService.isInitialized) {
+                            LoggerService.error('Failed to create temporary model', {
+                                service: 'NeuralNetworkService',
+                                operation: 'predict',
+                                figi,
+                                error: { message: tempModelError.message, stack: tempModelError.stack }
+                            });
+                        }
                     }
                 }
             }
 
             if (!model) {
-                console.error(`❌ No compatible model found for prediction (FIGI: ${figi}, features: ${featureVector.length}). Train model first.`);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('No compatible model found for prediction', {
+                        service: 'NeuralNetworkService',
+                        operation: 'predict',
+                        figi,
+                        featuresCount: featureVector.length,
+                        error: { message: 'Model not trained or incompatible' }
+                    });
+                }
                 return {
                     score: 0,
                     confidence: 0,
@@ -1047,11 +1156,27 @@ class NeuralNetworkService {
             if (model.inputs && model.inputs[0] && model.inputs[0].shape) {
                 const expectedShape = model.inputs[0].shape[1];
                 if (expectedShape !== featureVector.length) {
-                    console.error(`❌ Prediction input shape mismatch: expected ${expectedShape}, got ${featureVector.length}`);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Prediction input shape mismatch', {
+                            service: 'NeuralNetworkService',
+                            operation: 'predict',
+                            figi,
+                            expectedShape,
+                            actualShape: featureVector.length,
+                            error: { message: `Input shape mismatch: expected ${expectedShape}, got ${featureVector.length}` }
+                        });
+                    }
                     return { score: 0, confidence: 0, error: `Input shape mismatch: expected ${expectedShape}, got ${featureVector.length}` };
                 }
             } else {
-                console.error(`❌ Model inputs not properly initialized`);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Model inputs not properly initialized', {
+                        service: 'NeuralNetworkService',
+                        operation: 'predict',
+                        figi,
+                        error: { message: 'Model inputs not properly initialized' }
+                    });
+                }
                 return { score: 0, confidence: 0, error: `Model inputs not properly initialized` };
             }
 
@@ -1097,7 +1222,14 @@ class NeuralNetworkService {
             };
 
         } catch (error) {
-            console.error('Error making prediction:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error making prediction', {
+                    service: 'NeuralNetworkService',
+                    operation: 'predict',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return { score: 0, confidence: 0, error: error.message };
         }
     }
@@ -1895,8 +2027,6 @@ class NeuralNetworkService {
 
             // Пытаемся загрузить модель, если она не загружена
             if (!this.model) {
-                console.log('📥 Model not loaded, attempting to load...');
-                
                 // Пробуем загрузить общую модель
                 const loaded = await this.loadModel();
                 if (!loaded) {
@@ -1909,7 +2039,6 @@ class NeuralNetworkService {
                                 const modelFromTraining = await OptimizedTrainingService.getModel(instrument.figi);
                                 if (modelFromTraining) {
                                     this.model = modelFromTraining;
-                                    console.log(`✅ Loaded model from OptimizedTrainingService for ${instrument.figi}`);
                                     break;
                                 }
                             } catch (err) {
@@ -1917,7 +2046,13 @@ class NeuralNetworkService {
                             }
                         }
                     } catch (err) {
-                        console.warn('Could not load model from OptimizedTrainingService:', err.message);
+                        if (LoggerService.isInitialized) {
+                            LoggerService.error('Could not load model from OptimizedTrainingService', {
+                                service: 'NeuralNetworkService',
+                                operation: 'analyzePortfolio',
+                                error: { message: err.message, stack: err.stack }
+                            });
+                        }
                     }
                 }
                 
@@ -2312,17 +2447,17 @@ class NeuralNetworkService {
 
     // Вспомогательные методы
     async getCurrentPrice(figi) {
-        // Сначала пробуем взять цену из кеша инструментов
+        // Сначала пробуем взять цену из кеша инструментов (skipUpdate = true - используем только БД)
         try {
-            const instrument = await CacheService.getInstrument(figi);
+            const instrument = await CacheService.getInstrument(figi, true);
             if (instrument && typeof instrument.lastPrice === 'number' && instrument.lastPrice > 0) {
                 return instrument.lastPrice;
             }
         } catch (e) {}
 
-        // Фолбек к последней свече
+        // Фолбек к последней свече (skipUpdate = true - используем только БД)
         try {
-            const candles = await CacheService.getCandles(figi, 'DAY', 1);
+            const candles = await CacheService.getCandles(figi, 'DAY', 1, true);
             if (candles && candles.length > 0 && candles[candles.length - 1].close > 0) {
                 return candles[candles.length - 1].close;
             }
@@ -2403,8 +2538,8 @@ class NeuralNetworkService {
                 };
             }
 
-            // Получаем реальные данные из кеша для анализа
-            const candles = await CacheService.getCandles(figi, 'DAY', 100);
+            // Получаем реальные данные из кеша для анализа (skipUpdate = true - используем только БД)
+            const candles = await CacheService.getCandles(figi, 'DAY', 100, true);
             if (!candles || candles.length === 0) {
                 return {
                     figi: figi || 'all',
@@ -2571,7 +2706,13 @@ class NeuralNetworkService {
             try {
                 await this.performMarketAnalysis();
             } catch (error) {
-                console.error('Error in periodic analysis:', error);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Error in periodic analysis', {
+                        service: 'NeuralNetworkService',
+                        operation: 'startPeriodicAnalysis',
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
                 // Безопасная отправка ошибки через WebSocket
                 try {
                     const webSocketService = this.getWebSocketService();
@@ -2579,7 +2720,13 @@ class NeuralNetworkService {
                         webSocketService.broadcastError(error);
                     }
                 } catch (wsError) {
-                    console.warn('Failed to broadcast error via WebSocket:', wsError.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Failed to broadcast error via WebSocket', {
+                            service: 'NeuralNetworkService',
+                            operation: 'startPeriodicAnalysis',
+                            error: { message: wsError.message }
+                        });
+                    }
                 }
                 // Ошибки теперь обрабатываются в IntegratedAIService
             }
@@ -2598,7 +2745,6 @@ class NeuralNetworkService {
     // Анализ рынка и портфеля
     async performMarketAnalysis() {
         if (!this.isActive) {
-            console.log('❌ Market analysis skipped: neural network is not active');
             return;
         }
 
@@ -2608,35 +2754,31 @@ class NeuralNetworkService {
         const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
         
         if (!IntegratedAIService.isInitialized) {
-            console.log('🔄 IntegratedAIService not initialized, initializing before market analysis...');
             try {
                 await IntegratedAIService.initialize();
-                console.log('✅ IntegratedAIService initialized successfully');
             } catch (initError) {
-                console.error('❌ Failed to initialize IntegratedAIService:', initError);
-                console.log('⚠️ Market analysis will continue with fallback methods');
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to initialize IntegratedAIService', {
+                        service: 'NeuralNetworkService',
+                        operation: 'performMarketAnalysis',
+                        error: { message: initError.message, stack: initError.stack }
+                    });
+                }
             }
         }
 
         // Попытка загрузить модель, если она не загружена
         if (!this.model) {
-            console.log('📥 Model not loaded, attempting to load general model...');
             const loaded = await this.loadModel();
             if (!loaded) {
-                console.log('❌ Market analysis skipped: no trained model available');
-                console.log('💡 Tip: Train a model first using the TrainingDebug page or API');
                 // Уведомления о невозможности анализа теперь обрабатываются в IntegratedAIService
                 return;
-            } else {
-                console.log('✅ Model loaded successfully, proceeding with analysis');
             }
         }
 
         // Устанавливаем флаг анализа
         const SchedulerService = (await import('./SchedulerService.js')).default;
         SchedulerService.isAnalyzing = true;
-
-        console.log('🔍 Starting market analysis...');
 
         // Отправляем уведомление о старте анализа
         try {
@@ -2648,7 +2790,13 @@ class NeuralNetworkService {
                 );
             }
         } catch (telegramError) {
-            console.warn('Failed to send Telegram notification about analysis start:', telegramError.message);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to send Telegram notification about analysis start', {
+                    service: 'NeuralNetworkService',
+                    operation: 'performMarketAnalysis',
+                    error: { message: telegramError.message }
+                });
+            }
         }
 
         try {
@@ -2658,11 +2806,9 @@ class NeuralNetworkService {
             
             const currentMode = TradingModeManager.getCurrentMode();
             const mode = currentMode.mode || currentMode;
-            console.log(`📊 Current trading mode: ${mode}`);
             
             // Получаем портфель для текущего режима
             const portfolio = await TradingEngine.getPortfolioValue();
-            console.log(`📊 Portfolio mode: ${portfolio.mode || mode}`);
             
             // Преобразуем портфель в формат для анализа
             const CacheService = (await import('./CacheService.js')).default;
@@ -2675,7 +2821,6 @@ class NeuralNetworkService {
             
             if (Array.isArray(positions)) {
                 // Реальный портфель (массив объектов)
-                console.log(`📊 Real portfolio: ${positions.length} positions`);
                 for (const position of positions) {
                     if (position.quantity > 0 && position.figi) {
                         try {
@@ -2690,14 +2835,19 @@ class NeuralNetworkService {
                                 });
                             }
                         } catch (error) {
-                            console.warn(`Could not get instrument info for ${position.figi}:`, error.message);
+                            if (LoggerService.isInitialized) {
+                                LoggerService.error('Could not get instrument info for position', {
+                                    service: 'NeuralNetworkService',
+                                    operation: 'performMarketAnalysis',
+                                    figi: position.figi,
+                                    error: { message: error.message }
+                                });
+                            }
                         }
                     }
                 }
             } else if (typeof positions === 'object' && !Array.isArray(positions)) {
                 // Виртуальный портфель (объект {figi: quantity})
-                const positionsCount = Object.keys(positions).length;
-                console.log(`📊 Virtual portfolio: ${positionsCount} positions`);
                 for (const [figi, quantity] of Object.entries(positions)) {
                     if (quantity > 0) {
                         try {
@@ -2712,17 +2862,21 @@ class NeuralNetworkService {
                                 });
                             }
                         } catch (error) {
-                            console.warn(`Could not get instrument info for ${figi}:`, error.message);
+                            if (LoggerService.isInitialized) {
+                                LoggerService.error('Could not get instrument info for figi', {
+                                    service: 'NeuralNetworkService',
+                                    operation: 'performMarketAnalysis',
+                                    figi,
+                                    error: { message: error.message }
+                                });
+                            }
                         }
                     }
                 }
             }
             
-            console.log(`📊 Portfolio items for analysis: ${portfolioItems.length} (mode: ${mode})`);
-            
             // Если портфель пустой, пробуем получить из БД (для обратной совместимости)
             if (portfolioItems.length === 0) {
-                console.log('📊 Portfolio is empty, checking DB PortfolioItem table...');
                 const PortfolioItem = (await import('../models/PortfolioItem.js')).default;
                 const dbItems = await PortfolioItem.findAll();
                 
@@ -2734,7 +2888,6 @@ class NeuralNetworkService {
                         quantity: item.quantity,
                         averagePrice: item.averagePrice || 0
                     }));
-                    console.log(`📊 Found ${portfolioItems.length} items in DB PortfolioItem table`);
                 }
             }
 
@@ -2744,9 +2897,6 @@ class NeuralNetworkService {
 
             // Выполняем анализ через worker
             const analysis = await this.analyzePortfolioViaWorker(portfolioItems, totalBudget, 'full');
-
-            console.log(`📈 Buy recommendations: ${analysis.buyRecommendations?.length || 0}`);
-            console.log(`📉 Sell recommendations: ${analysis.sellRecommendations?.length || 0}`);
 
             // Шлём статус анализа (старт)
             try {
@@ -2762,7 +2912,13 @@ class NeuralNetworkService {
                     });
                 }
             } catch (wsError) {
-                console.warn('Failed to broadcast analysis status (start):', wsError.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to broadcast analysis status (start)', {
+                        service: 'NeuralNetworkService',
+                        operation: 'performMarketAnalysis',
+                        error: { message: wsError.message }
+                    });
+                }
             }
 
             // Сохраняем рекомендации в базу данных
@@ -2787,7 +2943,13 @@ class NeuralNetworkService {
                     await OptimizedTelegramService.sendAlert('MARKET_ANALYSIS_COMPLETE', message);
                 }
             } catch (telegramError) {
-                console.warn('Failed to send Telegram notification about analysis completion:', telegramError.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to send Telegram notification about analysis completion', {
+                        service: 'NeuralNetworkService',
+                        operation: 'performMarketAnalysis',
+                        error: { message: telegramError.message }
+                    });
+                }
             }
 
             // Отправляем только СИЛЬНЫЕ рекомендации в Telegram
@@ -2827,22 +2989,40 @@ class NeuralNetworkService {
                     });
                 }
             } catch (wsError) {
-                console.warn('Failed to broadcast market analysis via WebSocket:', wsError.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to broadcast market analysis via WebSocket', {
+                        service: 'NeuralNetworkService',
+                        operation: 'performMarketAnalysis',
+                        error: { message: wsError.message }
+                    });
+                }
             }
 
-            console.log(`✅ Market analysis completed. Telegram notifications sent: ${telegramSent}`);
-
         } catch (error) {
-            console.error('❌ Error performing market analysis:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error performing market analysis', {
+                    service: 'NeuralNetworkService',
+                    operation: 'performMarketAnalysis',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             // Временный алерт в Telegram
             try {
-                await OptimizedTelegramService.sendAlert('NEURAL_NETWORK_ANALYSIS_ERROR', {
-                    error: error.message,
-                    context: 'Market Analysis',
-                    timestamp: new Date().toISOString()
-                });
+                const errorMessage = `Ошибка анализа рынка нейронной сетью:\n\n` +
+                    `❌ ${error.message || 'Неизвестная ошибка'}\n` +
+                    `📋 Контекст: Market Analysis\n` +
+                    `⏰ Время: ${new Date().toLocaleString('ru-RU')}` +
+                    (error.stack ? `\n\n📝 Stack trace:\n${error.stack.split('\n').slice(0, 5).join('\n')}` : '');
+                
+                await OptimizedTelegramService.sendAlert('NEURAL_NETWORK_ANALYSIS_ERROR', errorMessage, 'error');
             } catch (telegramError) {
-                console.error('Failed to send Telegram alert:', telegramError);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to send Telegram alert', {
+                        service: 'NeuralNetworkService',
+                        operation: 'performMarketAnalysis',
+                        error: { message: telegramError.message }
+                    });
+                }
             }
             // Ошибки теперь обрабатываются в IntegratedAIService
             throw error;

@@ -6,6 +6,7 @@ import IntegratedAIService from './IntegratedAIService.js';
 import SettingsService from './SettingsService.js';
 import TradingHoursService from './TradingHoursService.js';
 import TradingHoursCacheService from './TradingHoursCacheService.js';
+import LoggerService from './LoggerService.js';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 import { getService } from './GlobalServiceManager.js';
@@ -65,6 +66,8 @@ class SchedulerService {
         this.currentFullCacheUpdateWorker = null; // Текущий worker полного обновления кеша
         this.pendingTriggeredSignals = []; // Накопленные сработавшие сигналы для отправки после анализа
         this.maxPendingSignals = 1000; // Максимальное количество накопленных сигналов (защита от утечки памяти)
+        this.lastPendingRequestNotification = new Map(); // Время последнего уведомления для каждой ожидающей заявки (ID заявки -> timestamp)
+        this.pendingNotificationCooldown = 60 * 60 * 1000; // 1 час в миллисекундах
     }
 
     /**
@@ -72,7 +75,6 @@ class SchedulerService {
      */
     setWebSocketService(webSocketService) {
         this.webSocketService = webSocketService;
-        console.log('🔌 WebSocketService set in SchedulerService');
     }
 
     /**
@@ -95,22 +97,25 @@ class SchedulerService {
 
     async initialize() {
         try {
-            console.log('🕐 Initializing Scheduler Service...');
             
             // Загружаем время последнего обновления кеша из настроек
             await this.loadLastCacheUpdateTime();
             
             await this.start();
             this.isInitialized = true;
-            console.log('✅ Scheduler Service initialized successfully');
         } catch (error) {
-            console.error('❌ Failed to initialize Scheduler Service:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Failed to initialize Scheduler Service', {
+                    service: 'SchedulerService',
+                    operation: 'initialize',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }
 
     async start() {
-        console.log('Starting scheduled tasks...');
         
         // Загружаем время последнего обновления кеша, если оно еще не загружено
         // Это гарантирует восстановление состояния после перезапуска сервиса
@@ -146,7 +151,6 @@ class SchedulerService {
         this.cacheTask = SchedulerUtils.createScheduledTask(
             cacheSchedule,
             async () => {
-                console.log('⏰ Scheduled cache update started...');
                 
                 // Проверяем, нужно ли обновлять кеш
                 if (!(await this.shouldUpdateCache())) {
@@ -171,7 +175,6 @@ class SchedulerService {
         this.priceUpdateTask = SchedulerUtils.createScheduledTask(
             priceUpdateSchedule,
             async () => {
-                console.log('💰 Scheduled price update started...');
                 await this.performPriceUpdate();
             },
             {
@@ -188,7 +191,6 @@ class SchedulerService {
         this.portfolioPricesUpdateTask = SchedulerUtils.createScheduledTask(
             portfolioPricesUpdateSchedule,
             async () => {
-                console.log('💰 Scheduled portfolio prices update started...');
                 await this.performPortfolioPricesUpdate();
             },
             {
@@ -209,9 +211,7 @@ class SchedulerService {
                     await PartialExitService.initialize();
                 }
                 const result = await PartialExitService.checkAndExecutePartialExits();
-                if (result.executed > 0) {
-                    console.log(`✅ Partial exit check completed: checked=${result.checked}, executed=${result.executed}, skipped=${result.skipped}`);
-                }
+                // Partial exit check completed
             },
             {
                 taskName: 'partial-exit-check',
@@ -1913,6 +1913,15 @@ class SchedulerService {
             const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
             const TradingRequest = (await import('../models/TradingRequest.js')).default;
             const WebSocketService = await this.getWebSocketService();
+            const now = Date.now();
+
+            // Периодическая очистка старых записей из Map (старше 24 часов) для предотвращения утечки памяти
+            const maxAge = 24 * 60 * 60 * 1000; // 24 часа
+            for (const [requestId, timestamp] of this.lastPendingRequestNotification.entries()) {
+                if (now - timestamp > maxAge) {
+                    this.lastPendingRequestNotification.delete(requestId);
+                }
+            }
 
             for (const requestData of readyToExecute) {
                 try {
@@ -1923,8 +1932,17 @@ class SchedulerService {
                     }
 
                     // Пропускаем уже исполненные, отклоненные или отмененные заявки
-                    if (['EXECUTED', 'REJECTED', 'CANCELLED'].includes(request.status)) {
+                    if (['EXECUTED', 'REJECTED', 'CANCELLED', 'EXPIRED'].includes(request.status)) {
+                        // Очищаем запись о последнем уведомлении для неактивных заявок
+                        this.lastPendingRequestNotification.delete(requestData.requestId);
                         console.log(`⏭️ Skipping request ${requestData.requestId} - status is ${request.status}`);
+                        continue;
+                    }
+
+                    // Проверяем, прошло ли достаточно времени с последнего уведомления (не чаще раза в час)
+                    const lastNotificationTime = this.lastPendingRequestNotification.get(requestData.requestId);
+                    if (lastNotificationTime && (now - lastNotificationTime) < this.pendingNotificationCooldown) {
+                        // Пропускаем уведомление, если не прошло достаточно времени
                         continue;
                     }
 
@@ -1948,6 +1966,9 @@ class SchedulerService {
                         message,
                         requestData.isPriceReached ? 'success' : 'info'
                     );
+
+                    // Сохраняем время последнего уведомления
+                    this.lastPendingRequestNotification.set(requestData.requestId, now);
 
                     // Отправляем уведомление через WebSocket
                     if (WebSocketService) {
@@ -2632,19 +2653,16 @@ class SchedulerService {
     async performPortfolioAnalysis() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
-            console.log('⚠️ Portfolio analysis skipped: full cache update is running');
             return;
         }
         
         // Проверяем, не идет ли уже анализ
         if (this.isAnalyzing) {
-            console.log('⚠️ Portfolio analysis already in progress, skipping duplicate start');
             return;
         }
 
         // Проверяем, активна ли нейросеть
         if (!NeuralNetworkService.isActive) {
-            console.log('⚠️ Neural network is not active, skipping portfolio analysis');
             return;
         }
 
@@ -2655,9 +2673,7 @@ class SchedulerService {
             const DatabaseConnectionManager = (await import('../utils/DatabaseConnectionManager.js')).default;
             const requesterId = `portfolio-analysis-${Date.now()}`;
             
-            console.log(`📊 Requesting database connection before portfolio analysis (${requesterId})...`);
             const connection = await DatabaseConnectionManager.acquireConnection(requesterId, 60000);
-            console.log(`✅ Database connection acquired (${connection.connectionId}), starting analysis...`);
             
             // Освобождаем подключение сразу после проверки, анализ получит свое через worker
             connection.release();
@@ -2668,9 +2684,14 @@ class SchedulerService {
             // Анализируем виртуальный портфель
             try {
                 await NeuralNetworkService.analyzePortfolioAndSave('virtual');
-                console.log('✅ Virtual portfolio analysis completed');
             } catch (error) {
-                console.error('❌ Error analyzing virtual portfolio:', error);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Error analyzing virtual portfolio', {
+                        service: 'SchedulerService',
+                        operation: 'performPortfolioAnalysis',
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
             }
 
             // Задержка перед анализом реального портфеля (если есть)
@@ -2692,30 +2713,44 @@ class SchedulerService {
                         
                         try {
                             const connection2 = await DatabaseConnectionManager.acquireConnection(requesterId2, 60000);
-                            console.log(`✅ Database connection acquired for real portfolio analysis (${connection2.connectionId})`);
                             connection2.release();
                         } catch (dbError) {
-                            console.error('❌ Database connection failed before real portfolio analysis:', dbError.message);
+                            if (LoggerService.isInitialized) {
+                                LoggerService.error('Database connection failed before real portfolio analysis', {
+                                    service: 'SchedulerService',
+                                    operation: 'performPortfolioAnalysis',
+                                    error: { message: dbError.message, stack: dbError.stack }
+                                });
+                            }
                             // DatabaseConnectionManager уже обработал retry с exponential backoff
                             throw dbError;
                         }
                         
                         await NeuralNetworkService.analyzePortfolioAndSave('real');
-                        console.log('✅ Real portfolio analysis completed');
                     }
                 }
             } catch (error) {
-                console.error('❌ Error analyzing real portfolio:', error);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Error analyzing real portfolio', {
+                        service: 'SchedulerService',
+                        operation: 'performPortfolioAnalysis',
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
             }
-
-            console.log('✅ Portfolio analysis completed for all portfolio types');
 
             // Отправляем накопленные сработавшие сигналы после завершения анализа
             if (this.pendingTriggeredSignals.length > 0) {
                 await this.sendPendingTriggeredSignals();
             }
         } catch (error) {
-            console.error('❌ Error performing portfolio analysis:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error performing portfolio analysis', {
+                    service: 'SchedulerService',
+                    operation: 'performPortfolioAnalysis',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         } finally {
             this.isAnalyzing = false;

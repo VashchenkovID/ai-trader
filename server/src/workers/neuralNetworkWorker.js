@@ -16,8 +16,6 @@ class NeuralNetworkWorker {
     // Создание модели
     async createModel(inputShape, sequenceLength = 60) {
         try {
-            console.log(`🏗️ Worker: Creating model with input shape: ${inputShape}`);
-            
             const model = tf.sequential();
 
             // Reshape input для LSTM
@@ -38,9 +36,6 @@ class NeuralNetworkWorker {
                 featuresPerTimestep = Math.ceil(inputShape / sequenceLength);
                 actualSequenceLength = Math.floor(inputShape / featuresPerTimestep);
             }
-            
-            console.log(`📊 Worker Reshape: inputShape=${inputShape}, sequenceLength=${sequenceLength}`);
-            console.log(`📊 Worker Reshape: featuresPerTimestep=${featuresPerTimestep}, actualSequenceLength=${actualSequenceLength}`);
             
             model.add(tf.layers.reshape({
                 targetShape: [actualSequenceLength, featuresPerTimestep],
@@ -121,10 +116,22 @@ class NeuralNetworkWorker {
                 metrics: ['accuracy']
             });
 
-            console.log('✅ Worker: Model created and compiled successfully');
             return model;
         } catch (error) {
-            console.error('❌ Worker: Error creating model:', error);
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.error('Error creating model in neural network worker', {
+                        service: 'NeuralNetworkWorker',
+                        operation: 'createModel',
+                        inputShape,
+                        sequenceLength,
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
+            } catch {
+                // LoggerService недоступен в воркере, игнорируем
+            }
             throw error;
         }
     }
@@ -137,7 +144,6 @@ class NeuralNetworkWorker {
             }
 
             this.isTraining = true;
-            console.log(`🚀 Worker: Starting training with ${features.length} samples`);
 
             // Создаем модель если её нет
             if (!this.model) {
@@ -174,8 +180,6 @@ class NeuralNetworkWorker {
             // Освобождаем память
             featureTensor.dispose();
             labelTensor.dispose();
-
-            console.log('✅ Worker: Training completed successfully');
             
             // Отправляем результат
             parentPort.postMessage({
@@ -195,8 +199,23 @@ class NeuralNetworkWorker {
             return history;
 
         } catch (error) {
-            console.error('❌ Worker: Training failed:', error);
             this.isTraining = false;
+            
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.error('Training failed in neural network worker', {
+                        service: 'NeuralNetworkWorker',
+                        operation: 'trainModel',
+                        samplesCount: features.length,
+                        epochs,
+                        batchSize,
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
+            } catch {
+                // LoggerService недоступен в воркере, игнорируем
+            }
             
             parentPort.postMessage({
                 type: 'training_error',
@@ -226,7 +245,18 @@ class NeuralNetworkWorker {
             
             return result[0];
         } catch (error) {
-            console.error('❌ Worker: Prediction failed:', error);
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.error('Prediction failed in neural network worker', {
+                        service: 'NeuralNetworkWorker',
+                        operation: 'predict',
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
+            } catch {
+                // LoggerService недоступен в воркере, игнорируем
+            }
             throw error;
         }
     }
@@ -255,7 +285,18 @@ class NeuralNetworkWorker {
                 weights: { specs }
             };
         } catch (error) {
-            console.error('❌ Worker: Error getting model for saving:', error);
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.error('Error getting model for saving in neural network worker', {
+                        service: 'NeuralNetworkWorker',
+                        operation: 'getModelForSaving',
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
+            } catch {
+                // LoggerService недоступен в воркере, игнорируем
+            }
             throw error;
         }
     }
@@ -306,7 +347,7 @@ parentPort.on('message', async (message) => {
                 break;
                 
             default:
-                console.log('Unknown message type:', message.type);
+                // Unknown message type
         }
     } catch (error) {
         parentPort.postMessage({
@@ -321,4 +362,4 @@ process.on('exit', () => {
     worker.dispose();
 });
 
-console.log('🧠 Neural Network Worker started');
+// Neural Network Worker started

@@ -352,18 +352,23 @@ class NewsAnalysisService {
                 limit
             });
 
-            return cachedNews.map(news => ({
-                title: news.title,
-                description: news.description,
-                url: news.url,
-                source: news.source,
-                publishedAt: news.publishedAt,
-                sentiment: news.sentiment,
-                relevance: news.relevance,
-                impact: news.impact,
-                keywords: news.keywords || [],
-                category: news.category
-            }));
+            const { formatDateToISO } = await import('../utils/dateFormatter.js');
+            
+            return cachedNews.map(news => {
+                const newsData = news.toJSON ? news.toJSON() : news;
+                return {
+                title: newsData.title || news.title,
+                description: newsData.description || news.description,
+                url: newsData.url || news.url,
+                source: newsData.source || news.source,
+                publishedAt: formatDateToISO(newsData.publishedAt || news.publishedAt),
+                sentiment: newsData.sentiment || news.sentiment,
+                relevance: newsData.relevance || news.relevance,
+                impact: newsData.impact || news.impact,
+                keywords: newsData.keywords || news.keywords || [],
+                category: newsData.category || news.category
+                };
+            });
 
         } catch (error) {
             console.error('❌ Ошибка получения кешированных новостей:', error);

@@ -353,7 +353,6 @@ const TradingRequestManager: React.FC = () => {
     confirmDialog({
       message: `Отменить заявку ${request.action} ${request.ticker}?`,
       header: 'Подтверждение отмены',
-      icon: 'pi pi-question-circle',
       accept: async () => {
         try {
           await apiService.cancelTradingRequest(request.id, 'Отменено пользователем');
@@ -404,7 +403,6 @@ const TradingRequestManager: React.FC = () => {
     confirmDialog({
       message: `Отклонить ${selectedRequests.length} заявок?`,
       header: 'Массовое отклонение',
-      icon: 'pi pi-exclamation-triangle',
       accept: async () => {
         try {
           const requestIds = selectedRequests.map(r => r.id);
@@ -434,17 +432,14 @@ const TradingRequestManager: React.FC = () => {
     if (rowData.status === 'PENDING') {
       actions.push({
         label: 'Одобрить',
-        icon: 'pi pi-check',
         command: () => handleApprove(rowData)
       });
       actions.push({
         label: 'Отклонить',
-        icon: 'pi pi-times',
         command: () => handleReject(rowData)
       });
       actions.push({
         label: 'Отменить',
-        icon: 'pi pi-ban',
         command: () => handleCancel(rowData)
       });
     } else if (rowData.status === 'APPROVED') {
@@ -452,7 +447,6 @@ const TradingRequestManager: React.FC = () => {
       // Кнопка "Исполнить" больше не нужна
       actions.push({
         label: 'Отменить',
-        icon: 'pi pi-ban',
         command: () => handleCancel(rowData)
       });
     }
@@ -462,7 +456,6 @@ const TradingRequestManager: React.FC = () => {
     return (
       <SplitButton
         label={actions[0].label}
-        icon={actions[0].icon}
         onClick={actions[0].command}
         model={actions.slice(1)}
         size="sm"
@@ -478,7 +471,22 @@ const TradingRequestManager: React.FC = () => {
   };
 
   const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString('ru-RU');
+    if (!dateString) return '—';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '—';
+      
+      // Формат: ДД.ММ.ГГГГ ЧЧ:ММ
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      
+      return `${day}.${month}.${year} ${hours}:${minutes}`;
+    } catch (error) {
+      return '—';
+    }
   };
 
   // Определение колонок для таблицы всех заявок
@@ -797,82 +805,80 @@ const TradingRequestManager: React.FC = () => {
     }
   };
 
-  const toolbarTemplate = () => {
+  const toolbarStart = () => {
     return (
-      <>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={loadData}
-            loading={loading}
-            icon="pi pi-refresh"
-          >
-            Обновить
-          </Button>
-          
-          <Select
-            value={selectedMode}
-            options={modeOptions}
-            onChange={(value) => setSelectedMode(value)}
-            placeholder="Выберите режим"
-            style={{ minWidth: '150px' }}
-          />
-
-          <Select
-            value={actionFilter}
-            options={[
-              { label: 'Все', value: 'all' },
-              { label: translateRecommendation('BUY'), value: 'BUY' },
-              { label: translateRecommendation('SELL'), value: 'SELL' }
-            ]}
-            onChange={(value) => setActionFilter(value as 'all' | 'BUY' | 'SELL')}
-            placeholder="Действие"
-            style={{ minWidth: '150px' }}
-          />
-          
-          <Button
-            variant="warning"
-            size="sm"
-            onClick={async () => {
-              await loadCleanupStats();
-              setShowCleanupDialog(true);
-            }}
-            icon="pi pi-trash"
-          >
-            Очистить завершенные
-          </Button>
-          
-          {selectedRequests.length > 0 && (
-            <>
-              <Button
-                variant="success"
-                size="sm"
-                onClick={handleBulkApprove}
-                icon="pi pi-check"
-              >
-                Одобрить ({selectedRequests.length})
-              </Button>
-              <Button
-                variant="error"
-                size="sm"
-                onClick={handleBulkReject}
-                icon="pi pi-times"
-              >
-                Отклонить ({selectedRequests.length})
-              </Button>
-            </>
-          )}
-        </div>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={loadData}
+          loading={loading}
+        >
+          Обновить
+        </Button>
         
-        {stats && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Badge variant="info" size="md">Всего: {stats.total}</Badge>
-            <Badge variant="warning" size="md">Ожидают: {stats.pending}</Badge>
-            <Badge variant="success" size="md">Исполнено: {stats.executed}</Badge>
-          </div>
+        <Select
+          value={selectedMode}
+          options={modeOptions}
+          onChange={(value) => setSelectedMode(value)}
+          placeholder="Выберите режим"
+          style={{ minWidth: '150px', maxWidth: '200px' }}
+        />
+
+        <Select
+          value={actionFilter}
+          options={[
+            { label: 'Все', value: 'all' },
+            { label: translateRecommendation('BUY'), value: 'BUY' },
+            { label: translateRecommendation('SELL'), value: 'SELL' }
+          ]}
+          onChange={(value) => setActionFilter(value as 'all' | 'BUY' | 'SELL')}
+          placeholder="Действие"
+          style={{ minWidth: '120px', maxWidth: '180px' }}
+        />
+        
+        <Button
+          variant="warning"
+          size="sm"
+          onClick={async () => {
+            await loadCleanupStats();
+            setShowCleanupDialog(true);
+          }}
+        >
+          Очистить завершенные
+        </Button>
+        
+        {selectedRequests.length > 0 && (
+          <>
+            <Button
+              variant="success"
+              size="sm"
+              onClick={handleBulkApprove}
+            >
+              Одобрить ({selectedRequests.length})
+            </Button>
+            <Button
+              variant="error"
+              size="sm"
+              onClick={handleBulkReject}
+            >
+              Отклонить ({selectedRequests.length})
+            </Button>
+          </>
         )}
-      </>
+      </div>
+    );
+  };
+
+  const toolbarEnd = () => {
+    if (!stats) return null;
+    
+    return (
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <Badge variant="info" size="md">Всего: {stats.total}</Badge>
+        <Badge variant="warning" size="md">Ожидают: {stats.pending}</Badge>
+        <Badge variant="success" size="md">Исполнено: {stats.executed}</Badge>
+      </div>
     );
   };
 
@@ -909,7 +915,7 @@ const TradingRequestManager: React.FC = () => {
       <Card variant="default" className="h-full" header="🎯 Торговые заявки">
         <TabView activeIndex={activeTab} onTabChange={(e) => setActiveTab(e.index)}>
           <TabPanel header="Все заявки">
-            <Toolbar start={toolbarTemplate()} className="mb-3" />
+            <Toolbar start={toolbarStart()} end={toolbarEnd()} className="mb-3" />
             
             {filteredRequests.length === 0 ? (
               <Alert variant="info" title="Нет торговых заявок" />
@@ -932,7 +938,7 @@ const TradingRequestManager: React.FC = () => {
           </TabPanel>
           
           <TabPanel header="Ожидающие">
-            <Toolbar start={toolbarTemplate()} className="mb-3" />
+            <Toolbar start={toolbarStart()} end={toolbarEnd()} className="mb-3" />
             
             {filteredRequests.length === 0 ? (
               <Alert variant="info" title="Нет ожидающих заявок" />
@@ -953,7 +959,7 @@ const TradingRequestManager: React.FC = () => {
           </TabPanel>
           
           <TabPanel header="Одобренные">
-            <Toolbar start={toolbarTemplate()} className="mb-3" />
+            <Toolbar start={toolbarStart()} end={toolbarEnd()} className="mb-3" />
             
             {filteredRequests.length === 0 ? (
               <Alert variant="info" title="Нет одобренных заявок" />
@@ -1006,7 +1012,6 @@ const TradingRequestManager: React.FC = () => {
                 variant="ghost"
                 size="md"
                 onClick={() => setShowApprovalDialog(false)}
-                icon="pi pi-times"
               >
                 Отмена
               </Button>
@@ -1014,7 +1019,6 @@ const TradingRequestManager: React.FC = () => {
                 variant="success"
                 size="md"
                 onClick={confirmApproval}
-                icon="pi pi-check"
               >
                 Одобрить
               </Button>
@@ -1057,7 +1061,6 @@ const TradingRequestManager: React.FC = () => {
                 variant="ghost"
                 size="md"
                 onClick={() => setShowRejectionDialog(false)}
-                icon="pi pi-times"
               >
                 Отмена
               </Button>
@@ -1065,7 +1068,6 @@ const TradingRequestManager: React.FC = () => {
                 variant="error"
                 size="md"
                 onClick={confirmRejection}
-                icon="pi pi-ban"
                 disabled={!rejectionReason.trim()}
               >
                 Отклонить
@@ -1142,7 +1144,6 @@ const TradingRequestManager: React.FC = () => {
                 setShowCleanupDialog(false);
                 setCleanupOlderThanDays(null);
               }}
-              icon="pi pi-times"
             >
               Отмена
             </Button>
@@ -1151,7 +1152,6 @@ const TradingRequestManager: React.FC = () => {
               size="md"
               onClick={handleCleanup}
               loading={cleaningUp}
-              icon="pi pi-trash"
             >
               Очистить
             </Button>

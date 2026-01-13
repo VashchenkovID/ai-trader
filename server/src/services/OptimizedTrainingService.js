@@ -3,6 +3,7 @@ import NeuralNetworkService from './NeuralNetworkService.js';
 import OptimizedDataService from './OptimizedDataService.js';
 import CacheService from './CacheService.js';
 import ModelManager from '../utils/ModelManager.js';
+import LoggerService from './LoggerService.js';
 import { getService } from './GlobalServiceManager.js';
 import ServiceManager from './ServiceManager.js';
 
@@ -30,8 +31,6 @@ class OptimizedTrainingService {
      */
     async stop() {
         try {
-            console.log('🛑 Stopping Optimized Training Service...');
-            
             // Завершаем все worker'ы
             this.workers.forEach(worker => {
                 if (worker && worker.terminate) {
@@ -49,10 +48,14 @@ class OptimizedTrainingService {
                 currentStage: null,
                 accuracy: 0
             };
-            
-            console.log('✅ Optimized Training Service stopped');
         } catch (error) {
-            console.error('❌ Error stopping Optimized Training Service:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error stopping Optimized Training Service', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'stop',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             throw error;
         }
     }
@@ -73,16 +76,13 @@ class OptimizedTrainingService {
         try {
             // Глобальный лок для типа модели (nn) — предотвращает параллельные запуски
             if (this.isTraining) {
-                console.warn(`⚠️ Training already in progress, skipping new start for ${figi}`);
                 return { success: false, figi, error: 'Training already in progress' };
             }
             // Per-FIGI лок — не позволяем запустить обучение для того же инструмента повторно
             if (this.trainingFigiLocks.has(figi)) {
-                console.warn(`⚠️ Training already running for ${figi}, skipping duplicate start`);
                 return { success: false, figi, error: 'Training already running for this FIGI' };
             }
 
-            console.log(`🚀 Training ${figi}...`);
             this.isTraining = true;
             this.trainingProgress.currentInstrument = figi;
             this.trainingFigiLocks.add(figi);
@@ -92,7 +92,6 @@ class OptimizedTrainingService {
             const instrument = await CacheService.getInstrument(figi, true);
             if (!instrument) {
                 const errorMsg = `Instrument ${figi} not found in cache. Please ensure the instrument is cached before training.`;
-                console.warn(`⚠️ ${errorMsg}`);
                 return {
                     success: false,
                     figi,
@@ -108,7 +107,6 @@ class OptimizedTrainingService {
             const minCandles = this.getMinimumCandlesRequired(candles.length);
             if (candles.length < minCandles) {
                 const errorMsg = `Insufficient data: ${candles.length} candles (minimum required: ${minCandles}). Instrument: ${instrument.name || figi}`;
-                console.warn(`⚠️ ${errorMsg}`);
                 
                 // Возвращаем информативный результат вместо исключения
                 return {
@@ -121,8 +119,6 @@ class OptimizedTrainingService {
                     instrumentName: instrument.name || figi
                 };
             }
-            
-            console.log(`📊 Training data: ${candles.length} candles for ${figi} (${instrument.name || figi})`);
 
             // 4. Подготавливаем фичи
             const { features, labels } = await this.prepareFeatures(candles, figi, useAdvancedFeatures);
@@ -143,7 +139,14 @@ class OptimizedTrainingService {
                 try {
                     trainingResult = await this.trainModelViaWorker(features, labels, epochs, batchSize, 'nn');
                 } catch (workerError) {
-                    console.warn(`⚠️ Worker training failed for ${figi}, falling back to local: ${workerError.message}`);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Worker training failed, falling back to local', {
+                            service: 'OptimizedTrainingService',
+                            operation: 'trainInstrument',
+                            figi,
+                            error: { message: workerError.message, stack: workerError.stack }
+                        });
+                    }
                     trainingResult = await this.trainModel(model, features, labels, epochs, batchSize);
                 }
             } else {
@@ -163,9 +166,15 @@ class OptimizedTrainingService {
             try {
                 const NeuralNetworkService = (await import('./NeuralNetworkService.js')).default;
                 NeuralNetworkService.model = model;
-                console.log(`✅ Model updated in NeuralNetworkService for ${figi}`);
             } catch (nnError) {
-                console.warn(`⚠️ Failed to update model in NeuralNetworkService: ${nnError.message}`);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to update model in NeuralNetworkService', {
+                        service: 'OptimizedTrainingService',
+                        operation: 'trainInstrument',
+                        figi,
+                        error: { message: nnError.message, stack: nnError.stack }
+                    });
+                }
             }
 
             // 6.1. Условительное сохранение лучшей модели по вал. accuracy
@@ -175,7 +184,6 @@ class OptimizedTrainingService {
                 const bestAcc = bestMeta?.bestAccuracy ?? -Infinity;
                 if (currentAccuracy > bestAcc) {
                     await this.saveBestModel(figi, model, currentAccuracy);
-                    console.log(`🏅 Saved BEST model for ${figi} (valAcc=${currentAccuracy.toFixed(4)})`);
                 }
             }
 
@@ -190,8 +198,6 @@ class OptimizedTrainingService {
                 await this.checkDegradationAndRestore(figi, model, currentMetrics);
             }
 
-            console.log(`✅ Training completed for ${figi}. Accuracy: ${trainingResult.finalAccuracy?.toFixed(3) || 'N/A'}`);
-
             return {
                 success: true,
                 figi,
@@ -203,7 +209,14 @@ class OptimizedTrainingService {
             };
 
         } catch (error) {
-            console.error(`❌ Training failed for ${figi}:`, error.message);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Training failed', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'trainInstrument',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             
             // Отправляем алерт в Telegram об ошибке обучения
             try {
@@ -214,7 +227,13 @@ class OptimizedTrainingService {
                     'error'
                 );
             } catch (telegramError) {
-                console.warn('Failed to send training error alert:', telegramError.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to send training error alert', {
+                        service: 'OptimizedTrainingService',
+                        operation: 'trainInstrument',
+                        error: { message: telegramError.message }
+                    });
+                }
             }
             
             return {
@@ -234,7 +253,11 @@ class OptimizedTrainingService {
      * Пакетное обучение для множества инструментов
      */
     async trainMultipleInstruments(instruments, options = {}) {
-        console.log(`🚀 Starting batch training for ${instruments.length} instruments...`);
+        // Обновляем статус обучения
+        const TrainingStatusService = getService('TrainingStatusService');
+        if (TrainingStatusService) {
+            TrainingStatusService.startTraining('neuralNetwork', instruments.length);
+        }
         
         this.trainingProgress.totalInstruments = instruments.length;
         this.trainingProgress.completedInstruments = 0;
@@ -242,16 +265,23 @@ class OptimizedTrainingService {
         const results = [];
         const errors = [];
 
-        for (const instrument of instruments) {
+        for (let index = 0; index < instruments.length; index++) {
+            const instrument = instruments[index];
             try {
                 // Обрабатываем как строки FIGI или как объекты
                 const figi = typeof instrument === 'string' ? instrument : instrument.figi;
                 const name = typeof instrument === 'string' ? figi : instrument.name;
                 
-                console.log(`🚀 Training ${name} (${figi})...`);
                 const result = await this.trainInstrument(figi, options);
                 results.push(result);
                 this.trainingProgress.completedInstruments++;
+                
+                // Обновляем прогресс в TrainingStatusService
+                if (TrainingStatusService) {
+                    const progress = ((index + 1) / instruments.length) * 100;
+                    const ticker = typeof instrument === 'string' ? figi.substring(0, 10) : (instrument.ticker || name);
+                    TrainingStatusService.updateProgress('neuralNetwork', progress, ticker);
+                }
                 
                 // Уведомляем о прогрессе
                 this.broadcastProgress(name, result.accuracy);
@@ -260,7 +290,15 @@ class OptimizedTrainingService {
                 const figi = typeof instrument === 'string' ? instrument : instrument.figi;
                 const name = typeof instrument === 'string' ? figi : instrument.name;
                 errors.push({ figi, name, error: error.message });
-                console.error(`❌ Failed training for ${name}:`, error.message);
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed training for instrument', {
+                        service: 'OptimizedTrainingService',
+                        operation: 'trainMultipleInstruments',
+                        figi,
+                        name,
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
             }
         }
 
@@ -274,7 +312,11 @@ class OptimizedTrainingService {
             errors
         };
 
-        console.log(`📊 Training Summary: ${summary.successful}/${summary.total} successful (${summary.successRate.toFixed(1)}%)`);
+        // Завершаем обучение в TrainingStatusService
+        if (TrainingStatusService) {
+            TrainingStatusService.completeTraining('neuralNetwork', errors.length === 0);
+        }
+
         return summary;
     }
 
@@ -287,7 +329,6 @@ class OptimizedTrainingService {
         
         // Если данных мало, пытаемся расширить окно (только из кеша)
         if (candles.length < 100) {
-            console.log(`📊 Insufficient data for ${figi}: ${candles.length} candles, trying to extend from cache...`);
             
             // Пробуем разные периоды (skipUpdate = true для всех запросов)
             const periods = [days * 2, days * 3, 365, 720, 1080];
@@ -296,7 +337,6 @@ class OptimizedTrainingService {
                 const extendedCandles = await CacheService.getCandles(figi, 'DAY', period, true);
                 if (extendedCandles.length > candles.length) {
                     candles = extendedCandles;
-                    console.log(`📈 Extended data for ${figi}: ${candles.length} candles (${period} days)`);
                 }
                 
                 // Если получили достаточно данных, останавливаемся
@@ -353,8 +393,6 @@ class OptimizedTrainingService {
             // Адаптивный lookback в зависимости от количества данных
             const adaptiveLookback = this.calculateAdaptiveLookback(candles.length);
             const predictionHorizon = Math.min(5, Math.floor(candles.length / 10)); // Адаптивный горизонт
-            
-            console.log(`📊 Adaptive parameters: lookback=${adaptiveLookback}, horizon=${predictionHorizon}`);
             
             // Базовые фичи через OptimizedDataService (уже включают все необходимые фичи)
             const { features, labels } = await OptimizedDataService.prepareTrainingData(
@@ -524,8 +562,6 @@ class OptimizedTrainingService {
         const valLabels = labels.slice(trainSize, trainSize + valSize);
         const testFeatures = features.slice(trainSize + valSize);
         const testLabels = labels.slice(trainSize + valSize);
-        
-        console.log(`📅 Time-based split: train=${trainSize} (${(trainRatio*100).toFixed(0)}%), val=${valSize} (${(valRatio*100).toFixed(0)}%), test=${testFeatures.length} (${((1-trainRatio-valRatio)*100).toFixed(0)}%)`);
         
         return {
             train: { features: trainFeatures, labels: trainLabels },
@@ -703,11 +739,6 @@ class OptimizedTrainingService {
         // Используем взвешенные данные для обучения
         const finalTrainFeatures = weightedFeatures.length > 0 ? weightedFeatures : split.train.features;
         const finalTrainLabels = weightedLabels.length > 0 ? weightedLabels : split.train.labels;
-        
-        // Логируем информацию о взвешивании
-        if (weightedFeatures.length > 0) {
-            console.log(`📊 Data weighting applied: ${split.train.features.length} → ${finalTrainFeatures.length} samples (${((finalTrainFeatures.length / split.train.features.length - 1) * 100).toFixed(1)}% increase)`);
-        }
         
         // Расчет class weights для балансировки классов
         // Примечание: TensorFlow.js не поддерживает sampleWeight в model.fit()
@@ -974,8 +1005,6 @@ class OptimizedTrainingService {
             
             // Сохраняем веса
             await fs.writeFile(weightsPath, JSON.stringify({ specs }, null, 2));
-            
-            console.log(`✅ Model saved for ${figi}: ${modelPath}, ${weightsPath}`);
             
             // Также сохраняем через ModelManager для совместимости
             try {
@@ -1453,7 +1482,6 @@ class OptimizedTrainingService {
      */
     async getAvailableInstruments() {
         try {
-            console.log('🔍 Getting available instruments for training...');
             const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
             const CachedCandle = (await import('../models/CachedCandle.js')).default;
             
@@ -1482,11 +1510,8 @@ class OptimizedTrainingService {
                         where: { figi: instrument.figi }
                     });
 
-                    console.log(`📈 ${instrument.ticker} (${instrument.name}): ${candleCount} candles`);
-
                     // Адаптивные требования к количеству свечей
                     const minCandles = this.getMinimumCandlesRequired(candleCount);
-                    console.log(`   Min required: ${minCandles}, Has: ${candleCount}`);
                     
                     if (candleCount >= minCandles) {
                         validInstruments.push({
@@ -1496,19 +1521,28 @@ class OptimizedTrainingService {
                             type: instrument.type,
                             candleCount
                         });
-                        console.log(`   ✅ Added to training list`);
-                    } else {
-                        console.log(`   ❌ Insufficient data`);
                     }
                 } catch (error) {
-                    console.warn(`Error checking ${instrument.name}:`, error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Error checking instrument for training', {
+                            service: 'OptimizedTrainingService',
+                            operation: 'getAvailableInstruments',
+                            instrumentName: instrument.name,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                 }
             }
 
-            console.log(`🎯 Valid instruments for training: ${validInstruments.length}`);
             return validInstruments.slice(0, 20);
         } catch (error) {
-            console.error('Error getting available instruments:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error getting available instruments', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'getAvailableInstruments',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return [];
         }
     }
@@ -1519,75 +1553,83 @@ class OptimizedTrainingService {
     async getModel(figi) {
         try {
             // Сначала проверяем, есть ли модель в памяти
-            if (this.currentModel && this.currentModel.figi === figi) {
-                console.log(`📥 Using in-memory model for ${figi}`);
+                    if (this.currentModel && this.currentModel.figi === figi) {
                 return this.currentModel.model;
             }
 
-            // Если нет в памяти, пытаемся загрузить из файлов
-            const modelPath = `./models/${figi}_model.json`;
-            const weightsPath = `./models/${figi}_weights.json`;
+            // Попытка 1: Загрузить через ModelManager (наиболее надежный способ)
+            try {
+                const ModelManager = (await import('../utils/ModelManager.js')).default;
+                const model = await ModelManager.loadModel(`neural/${figi}`);
+                if (model) {
+                    // Компилируем модель, если она не скомпилирована
+                    if (!model.optimizer) {
+                        model.compile({
+                            optimizer: tf.train.adam(0.001),
+                            loss: 'binaryCrossentropy',
+                            metrics: ['accuracy']
+                        });
+                    }
+                    return model;
+                }
+            } catch (modelManagerError) {
+                // Продолжаем попытки загрузки другими способами
+                console.log(`ℹ️ ModelManager load failed for ${figi}, trying direct file load: ${modelManagerError.message}`);
+            }
+
+            // Попытка 2: Загрузить напрямую из файлов используя tf.models.modelFromJSON
+            const fs = await import('fs/promises');
+            const path = await import('path');
+            const { fileURLToPath } = await import('url');
+            
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const modelsDir = path.join(__dirname, '../../models');
+            
+            const modelPath = path.join(modelsDir, `${figi}_model.json`);
+            const weightsPath = path.join(modelsDir, `${figi}_weights.json`);
             
             // Проверяем существование файлов
-            const fs = await import('fs/promises');
             try {
                 await fs.access(modelPath);
                 await fs.access(weightsPath);
             } catch {
                 // Модель не найдена - это нормально, если она еще не обучена
-                // Не выводим предупреждение для каждого инструмента, чтобы не засорять логи
-                return null; // Модель не найдена
+                return null;
             }
 
-            // Загружаем модель
-            const modelJson = await fs.readFile(modelPath, 'utf8');
-            const weightsJson = await fs.readFile(weightsPath, 'utf8');
+            // Загружаем модель используя стандартный метод TensorFlow.js
+            const archRaw = await fs.readFile(modelPath, 'utf8');
+            const arch = JSON.parse(archRaw);
             
-            // Парсим JSON данные
-            const modelTopology = JSON.parse(modelJson);
-            const weightData = JSON.parse(weightsJson);
+            // Используем tf.models.modelFromJSON для автоматической обработки структуры
+            const model = await tf.models.modelFromJSON(arch);
             
-            // Создаем модель из архитектуры
-            const model = tf.sequential();
+            // Загружаем веса
+            const weightsRaw = await fs.readFile(weightsPath, 'utf8');
+            const weightsData = JSON.parse(weightsRaw);
+            const specs = weightsData.specs || weightsData.weights || null;
             
-            // Восстанавливаем слои из архитектуры
-            for (const layerConfig of modelTopology.layers) {
-                if (layerConfig.class_name === 'LSTM') {
-                    model.add(tf.layers.lstm({
-                        units: layerConfig.config.units,
-                        returnSequences: layerConfig.config.return_sequences,
-                        inputShape: layerConfig.config.batch_input_shape ? layerConfig.config.batch_input_shape.slice(1) : undefined
-                    }));
-                } else if (layerConfig.class_name === 'Dense') {
-                    model.add(tf.layers.dense({
-                        units: layerConfig.config.units,
-                        activation: layerConfig.config.activation
-                    }));
-                } else if (layerConfig.class_name === 'Dropout') {
-                    model.add(tf.layers.dropout({
-                        rate: layerConfig.config.rate
-                    }));
-                }
+            if (specs && Array.isArray(specs) && specs.length > 0) {
+                const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
+                model.setWeights(tensors);
+            } else {
+                console.warn(`⚠️ Invalid weights format for ${figi}, model loaded without weights`);
             }
             
-            // Компилируем модель
-            model.compile({
-                optimizer: tf.train.adam(0.001),
-                loss: 'binaryCrossentropy',
-                metrics: ['accuracy']
-            });
-            
-            // Загружаем веса (формат { specs: [...] })
-            if (weightData && (Array.isArray(weightData) || Array.isArray(weightData.specs))) {
-                const specsArray = Array.isArray(weightData) ? weightData : weightData.specs;
-                const weights = specsArray.map(w => tf.tensor(w.data, w.shape, w.dtype));
-                model.setWeights(weights);
+            // Компилируем модель, если она не скомпилирована
+            if (!model.optimizer) {
+                model.compile({
+                    optimizer: tf.train.adam(0.001),
+                    loss: 'binaryCrossentropy',
+                    metrics: ['accuracy']
+                });
             }
 
-            console.log(`📥 Model loaded from files for ${figi}`);
             return model;
         } catch (error) {
-            console.error(`❌ Error loading model for ${figi}:`, error);
+            console.error(`❌ Error loading model for ${figi}:`, error.message);
+            // Не выводим полный stack trace для каждого инструмента без модели
             return null;
         }
     }
@@ -1623,18 +1665,16 @@ class OptimizedTrainingService {
      * Пакетное обучение всех нейросетей
      */
     async batchTrainAll(epochs = 50, batchSize = 16) {
+        const TrainingStatusService = getService('TrainingStatusService');
         try {
-            console.log('🚀 Starting batch training for ALL neural networks...');
-            
             // Получаем все инструменты из кеша
             const instruments = await CacheService.getAllInstruments();
             if (!instruments || instruments.length === 0) {
                 throw new Error('No instruments available for training');
             }
             
-            console.log(`📊 Found ${instruments.length} instruments for training`);
-            
             // Используем существующий метод trainMultipleInstruments
+            // (статус обучения обновляется внутри trainMultipleInstruments)
             const result = await this.trainMultipleInstruments(instruments, {
                 epochs,
                 batchSize,
@@ -1643,11 +1683,13 @@ class OptimizedTrainingService {
                 enableValidation: true
             });
             
-            console.log('✅ Batch training for all neural networks completed');
             return result;
             
         } catch (error) {
-            console.error('❌ Batch training for all neural networks failed:', error);
+            // Завершаем обучение с ошибкой
+            if (TrainingStatusService) {
+                TrainingStatusService.completeTraining('neuralNetwork', false);
+            }
             throw error;
         }
     }
