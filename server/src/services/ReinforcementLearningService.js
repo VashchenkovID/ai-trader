@@ -882,11 +882,8 @@ class ReinforcementLearningService {
         try {
             // Проверяем, загружена ли уже модель
             if (this.agent) {
-                console.log('ℹ️ RL model already loaded, skipping reload');
                 return;
             }
-
-            console.log('📥 Loading RL model with ModelManager...');
             
             // Пытаемся загрузить модель через ModelManager
             const model = await ModelManager.loadModel('rl_agent/rl_model');
@@ -901,7 +898,6 @@ class ReinforcementLearningService {
                         loss: 'meanSquaredError',
                         metrics: ['mae']
                     });
-                    console.log('⚙️ Compiled RL agent after loading');
                 }
                 
                 // Гарантируем наличие целевой сети и копируем в неё веса
@@ -909,13 +905,17 @@ class ReinforcementLearningService {
                     this.targetAgent = this.createDQN();
                 }
                 this.targetAgent.setWeights(this.agent.getWeights());
-                
-                console.log('✅ RL model loaded successfully');
-            } else {
-                console.warn('⚠️ Failed to load RL model, will create new one when needed');
             }
         } catch (error) {
-            console.warn('⚠️ Failed to load RL model:', error.message);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Failed to load RL model', {
+                service: 'ReinforcementLearningService',
+                operation: 'loadModel',
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
         }
     }
 

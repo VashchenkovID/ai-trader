@@ -28,11 +28,17 @@ class PartialExitService {
 
     async initialize() {
         try {
-            console.log('🎯 Initializing Partial Exit Service...');
             this.isInitialized = true;
-            console.log('✅ Partial Exit Service initialized');
         } catch (error) {
-            console.error('❌ Failed to initialize Partial Exit Service:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Failed to initialize Partial Exit Service', {
+                service: 'PartialExitService',
+                operation: 'initialize',
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
             throw error;
         }
     }

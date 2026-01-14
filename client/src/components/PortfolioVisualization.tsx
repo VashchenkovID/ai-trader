@@ -85,12 +85,13 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
     return basePositions.map((p) => {
       const data = map.get(p.figi);
       if (data) {
-        const { strategy, ...prediction } = data;
+        const { strategy: recStrategy, ...prediction } = data;
         return {
           ...p,
           prediction,
-          // Присваиваем стратегию только если её еще нет в позиции или если она из рекомендации
-          strategy: strategy || p.strategy
+          // Приоритет: стратегия из позиции (от бэкенда) важнее стратегии из рекомендации
+          // Стратегия из рекомендации используется только если у позиции её нет
+          strategy: p.strategy || recStrategy || undefined
         };
       }
       return p;
@@ -364,15 +365,19 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
         setStrategies(transformedStrategies);
 
         // Группируем позиции по стратегиям и фильтруем рекомендации по стратегиям
+        // Бэкенд уже правильно группирует позиции по FIGI + strategyId, поэтому просто используем стратегию из данных
         const positionsByStrategy: Record<number, Position[]> = {};
 
         // Группируем позиции по стратегиям (используем positionsWithPredictions, чтобы сохранить стратегию)
         positionsWithPredictions.forEach(pos => {
-          if (pos.strategy?.id) {
-            const strategyId = pos.strategy.id;
+          // Проверяем наличие стратегии в позиции
+          const strategyId = pos.strategy?.id;
+          if (strategyId) {
             if (!positionsByStrategy[strategyId]) {
               positionsByStrategy[strategyId] = [];
             }
+            // Бэкенд уже правильно сгруппировал позиции по FIGI + strategyId,
+            // поэтому просто добавляем позицию в соответствующую стратегию
             positionsByStrategy[strategyId].push(pos);
           }
         });

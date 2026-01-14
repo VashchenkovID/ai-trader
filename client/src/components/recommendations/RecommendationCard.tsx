@@ -20,30 +20,139 @@ interface Recommendation {
   sector?: string;
   analysisDate: string;
   isActive: boolean;
+  horizons?: {
+    shortTerm?: {
+      recommendation: 'BUY' | 'SELL' | 'HOLD';
+      score: number;
+      confidence: number;
+      name?: string;
+      description?: string;
+    };
+    mediumTerm?: {
+      recommendation: 'BUY' | 'SELL' | 'HOLD';
+      score: number;
+      confidence: number;
+      name?: string;
+      description?: string;
+    };
+    longTerm?: {
+      recommendation: 'BUY' | 'SELL' | 'HOLD';
+      score: number;
+      confidence: number;
+      name?: string;
+      description?: string;
+    };
+  };
   explanation?: {
     summary?: string;
+    horizons?: {
+      shortTerm?: {
+        recommendation: 'BUY' | 'SELL' | 'HOLD';
+        score: number;
+        confidence: number;
+        name?: string;
+        description?: string;
+      };
+      mediumTerm?: {
+        recommendation: 'BUY' | 'SELL' | 'HOLD';
+        score: number;
+        confidence: number;
+        name?: string;
+        description?: string;
+      };
+      longTerm?: {
+        recommendation: 'BUY' | 'SELL' | 'HOLD';
+        score: number;
+        confidence: number;
+        name?: string;
+        description?: string;
+      };
+    };
     details?: {
       ensemble?: {
         horizons?: {
           shortTerm?: {
+            recommendation?: 'BUY' | 'SELL' | 'HOLD';
+            score?: number;
+            confidence?: number;
             strategies?: {
-              aggressive?: { recommendation: string; explanation?: string };
-              moderate?: { recommendation: string; explanation?: string };
-              conservative?: { recommendation: string; explanation?: string };
+              aggressive?: { 
+                recommendation: string; 
+                explanation?: string;
+                score?: number;
+                confidence?: number;
+                strategyConfidence?: number;
+              };
+              moderate?: { 
+                recommendation: string; 
+                explanation?: string;
+                score?: number;
+                confidence?: number;
+                strategyConfidence?: number;
+              };
+              conservative?: { 
+                recommendation: string; 
+                explanation?: string;
+                score?: number;
+                confidence?: number;
+                strategyConfidence?: number;
+              };
             };
           };
           mediumTerm?: {
+            recommendation?: 'BUY' | 'SELL' | 'HOLD';
+            score?: number;
+            confidence?: number;
             strategies?: {
-              aggressive?: { recommendation: string; explanation?: string };
-              moderate?: { recommendation: string; explanation?: string };
-              conservative?: { recommendation: string; explanation?: string };
+              aggressive?: { 
+                recommendation: string; 
+                explanation?: string;
+                score?: number;
+                confidence?: number;
+                strategyConfidence?: number;
+              };
+              moderate?: { 
+                recommendation: string; 
+                explanation?: string;
+                score?: number;
+                confidence?: number;
+                strategyConfidence?: number;
+              };
+              conservative?: { 
+                recommendation: string; 
+                explanation?: string;
+                score?: number;
+                confidence?: number;
+                strategyConfidence?: number;
+              };
             };
           };
           longTerm?: {
+            recommendation?: 'BUY' | 'SELL' | 'HOLD';
+            score?: number;
+            confidence?: number;
             strategies?: {
-              aggressive?: { recommendation: string; explanation?: string };
-              moderate?: { recommendation: string; explanation?: string };
-              conservative?: { recommendation: string; explanation?: string };
+              aggressive?: { 
+                recommendation: string; 
+                explanation?: string;
+                score?: number;
+                confidence?: number;
+                strategyConfidence?: number;
+              };
+              moderate?: { 
+                recommendation: string; 
+                explanation?: string;
+                score?: number;
+                confidence?: number;
+                strategyConfidence?: number;
+              };
+              conservative?: { 
+                recommendation: string; 
+                explanation?: string;
+                score?: number;
+                confidence?: number;
+                strategyConfidence?: number;
+              };
             };
           };
         };
@@ -362,16 +471,150 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
           <p className="recommendation-card-explanation-text">{simpleExplanation}</p>
         </div>
 
-        {/* Рекомендуемая стратегия */}
-        <div className="recommendation-card-strategy">
-          <span className="recommendation-card-strategy-label">📊 Подходит для:</span>
-          <Badge 
-            variant={recommendedStrategy.type === 'aggressive' ? 'error' : recommendedStrategy.type === 'moderate' ? 'warning' : 'info'} 
-            size="sm"
-          >
-            {recommendedStrategy.name} стратегия
-          </Badge>
-        </div>
+        {/* Прогнозы по горизонтам */}
+        {(() => {
+          // Пробуем найти данные горизонтов в разных местах
+          let horizons = null;
+          
+          // Вариант 1: explanation.details.ensemble.horizons
+          if (recommendation.explanation?.details?.ensemble?.horizons) {
+            horizons = recommendation.explanation.details.ensemble.horizons;
+          }
+          // Вариант 2: explanation.horizons
+          else if (recommendation.explanation?.horizons) {
+            horizons = recommendation.explanation.horizons;
+          }
+          // Вариант 3: analysis.horizons (если есть)
+          else if ((recommendation as any).analysis?.horizons) {
+            horizons = (recommendation as any).analysis.horizons;
+          }
+          // Вариант 4: recommendation.horizons
+          else if (recommendation.horizons) {
+            horizons = recommendation.horizons;
+          }
+          
+          if (!horizons) return null;
+          
+          const horizonTypes = [
+            { key: 'shortTerm', name: 'Краткосрочный', icon: '📅' },
+            { key: 'mediumTerm', name: 'Среднесрочный', icon: '📆' },
+            { key: 'longTerm', name: 'Долгосрочный', icon: '📊' }
+          ];
+          
+          return (
+            <div className="recommendation-card-horizons">
+              <span className="recommendation-card-horizons-label">📈 Прогнозы по горизонтам:</span>
+              <div className="recommendation-card-horizons-list">
+                {horizonTypes.map(({ key, name, icon }) => {
+                  const horizon = horizons[key as 'shortTerm' | 'mediumTerm' | 'longTerm'];
+                  if (!horizon) return null;
+                  
+                  const recVariant = horizon.recommendation === 'BUY' ? 'success' : 
+                                    horizon.recommendation === 'SELL' ? 'error' : 'neutral';
+                  
+                  return (
+                    <div key={key} className="recommendation-card-horizon-item">
+                      <div className="recommendation-card-horizon-item-header">
+                        <span className="recommendation-card-horizon-icon">{icon}</span>
+                        <span className="recommendation-card-horizon-name">{name}</span>
+                        <Badge variant={recVariant} size="sm">
+                          {translateRecommendation(horizon.recommendation)}
+                        </Badge>
+                        <span className="recommendation-card-horizon-confidence">
+                          {Math.round((horizon.confidence || 0) * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Предсказания по стратегиям */}
+        {(() => {
+          // Пробуем найти данные стратегий в разных местах
+          let horizons = null;
+          
+          // Вариант 1: explanation.details.ensemble.horizons
+          if (recommendation.explanation?.details?.ensemble?.horizons) {
+            horizons = recommendation.explanation.details.ensemble.horizons;
+          }
+          // Вариант 2: explanation.horizons
+          else if (recommendation.explanation?.horizons) {
+            horizons = recommendation.explanation.horizons;
+          }
+          // Вариант 3: analysis.horizons (если есть)
+          else if ((recommendation as any).analysis?.horizons) {
+            horizons = (recommendation as any).analysis.horizons;
+          }
+          
+          if (!horizons) return null;
+          
+          // Берем среднесрочный горизонт как основной (или первый доступный)
+          const mainHorizon = horizons.mediumTerm || horizons.shortTerm || horizons.longTerm;
+          
+          if (!mainHorizon?.strategies) return null;
+          
+          const strategies = mainHorizon.strategies;
+          const strategyTypes = [
+            { key: 'conservative', name: 'Консервативная', variant: 'info' as const },
+            { key: 'moderate', name: 'Умеренная', variant: 'warning' as const },
+            { key: 'aggressive', name: 'Агрессивная', variant: 'error' as const }
+          ];
+          
+          return (
+            <div className="recommendation-card-strategies">
+              <span className="recommendation-card-strategies-label">📊 Предсказания по стратегиям:</span>
+              <div className="recommendation-card-strategies-list">
+                {strategyTypes.map(({ key, name, variant }) => {
+                  const strategy = strategies[key as 'conservative' | 'moderate' | 'aggressive'];
+                  if (!strategy || !strategy.recommendation) return null;
+                  
+                  const recVariant = strategy.recommendation === 'BUY' ? 'success' : 
+                                    strategy.recommendation === 'SELL' ? 'error' : 'neutral';
+                  
+                  const confidence = strategy.strategyConfidence ?? strategy.confidence ?? 0;
+                  
+                  return (
+                    <div key={key} className="recommendation-card-strategy-item">
+                      <div className="recommendation-card-strategy-item-header">
+                        <Badge variant={variant} size="sm">
+                          {name}
+                        </Badge>
+                        <Badge variant={recVariant} size="sm">
+                          {translateRecommendation(strategy.recommendation)}
+                        </Badge>
+                        <span className="recommendation-card-strategy-confidence">
+                          {Math.round(confidence * 100)}%
+                        </span>
+                      </div>
+                      {strategy.explanation && (
+                        <div className="recommendation-card-strategy-explanation">
+                          {strategy.explanation}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+        
+        {/* Рекомендуемая стратегия (fallback, если нет данных по стратегиям) */}
+        {!recommendation.explanation?.details?.ensemble?.horizons && (
+          <div className="recommendation-card-strategy">
+            <span className="recommendation-card-strategy-label">📊 Подходит для:</span>
+            <Badge 
+              variant={recommendedStrategy.type === 'aggressive' ? 'error' : recommendedStrategy.type === 'moderate' ? 'warning' : 'info'} 
+              size="sm"
+            >
+              {recommendedStrategy.name} стратегия
+            </Badge>
+          </div>
+        )}
 
         {/* Цена и потенциал */}
         <div className="recommendation-card-price-section">

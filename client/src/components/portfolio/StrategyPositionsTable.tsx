@@ -210,9 +210,7 @@ const StrategyPositionsTable: React.FC<StrategyPositionsTableProps> = ({
     },
   ], [navigate]);
 
-  if (positions.length === 0 && !loading) {
-    return null; // Не показываем таблицу, если нет позиций
-  }
+  // Всегда показываем таблицу, даже если позиций нет
 
   return (
     <Card 

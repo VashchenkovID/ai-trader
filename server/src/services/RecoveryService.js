@@ -82,8 +82,11 @@ class RecoveryService {
             await this.performHealthChecks();
         }, this.config.healthCheckInterval);
         
-        // Первая проверка сразу
-        this.performHealthChecks();
+        // Первая проверка с задержкой, чтобы дать время другим сервисам инициализироваться
+        // Задержка 5 секунд должна быть достаточной для инициализации всех сервисов
+        setTimeout(async () => {
+            await this.performHealthChecks();
+        }, 5000);
     }
     
     /**
@@ -349,11 +352,22 @@ class RecoveryService {
             for (const serviceName of criticalServices) {
                 try {
                     const service = ServiceManager.getServiceSafe(serviceName);
-                    if (!service || (service.isInitialized !== undefined && !service.isInitialized)) {
+                    if (!service) {
                         failedServices.push({
                             name: serviceName,
-                            error: 'Service not initialized'
+                            error: 'Service not found in ServiceManager'
                         });
+                    } else {
+                        // Проверяем isInitialized только если он определен
+                        // Если у сервиса нет метода initialize, то isInitialized может быть не определен
+                        // Это нормально для сервисов, которые не требуют инициализации
+                        if (service.isInitialized !== undefined && !service.isInitialized) {
+                            failedServices.push({
+                                name: serviceName,
+                                error: 'Service isInitialized is false'
+                            });
+                        }
+                        // Если сервис найден и isInitialized не определен или true - считаем его здоровым
                     }
                 } catch (error) {
                     failedServices.push({

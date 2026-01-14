@@ -328,12 +328,10 @@ async function ensureColumnsExist(tableName, columns) {
 }
 
 export async function initDatabase() {
-    console.log('🚀 ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ\n');
 
     try {
         // Подключение к базе данных
         await sequelize.authenticate();
-        console.log('✅ Подключение к БД успешно');
 
         // Инициализируем менеджер соединений, чтобы избежать повторных закрытий/переподключений во время инициализации
         try {
@@ -342,18 +340,14 @@ export async function initDatabase() {
             console.warn('⚠️ Не удалось инициализировать менеджер соединений:', e.message);
         }
 
-        // Синхронизация всех моделей
-        console.log('🔄 Синхронизация моделей...');
         try {
             await sequelize.sync({ force: false });
-            console.log('✅ Все модели синхронизированы');
         } catch (syncError) {
             // Игнорируем ошибки создания ENUM типов, если они уже существуют
             // Это нормально при повторной инициализации БД
             if (syncError.name === 'SequelizeUniqueConstraintError' && 
                 syncError.original && syncError.original.code === '23505' &&
                 syncError.original.detail && syncError.original.detail.includes('enum_')) {
-                console.log('✅ Все модели синхронизированы (некоторые ENUM типы уже существуют)');
             } else if (syncError.name === 'SequelizeDatabaseError' && 
                        syncError.original && 
                        (syncError.original.code === '42703' || // столбец не существует

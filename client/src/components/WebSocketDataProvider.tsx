@@ -256,6 +256,7 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
               portfolioValue: typeof stats.portfolioValue === 'number' ? stats.portfolioValue : 0,
               cash: typeof stats.cash === 'number' ? stats.cash : 0,
               totalPnL: typeof stats.totalPnL === 'number' ? stats.totalPnL : 0,
+              initialCapital: typeof stats.initialCapital === 'number' ? stats.initialCapital : 1000000,
               winRate: typeof stats.winRate === 'number' ? stats.winRate : 0,
               totalTrades: typeof stats.totalTrades === 'number' ? stats.totalTrades : 0,
               successfulTrades: typeof stats.successfulTrades === 'number' ? stats.successfulTrades : 0,

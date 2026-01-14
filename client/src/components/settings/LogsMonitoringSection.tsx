@@ -256,9 +256,34 @@ const LogsMonitoringSection: React.FC = () => {
     if (!status || status.error) {
       return { variant: 'error', label: 'Ошибка' };
     }
-    if (status.status === 'connected' || status.status === 'active' || status.status === 'ready') {
+    
+    // Проверяем поле status
+    const statusValue = status.status;
+    
+    if (statusValue === 'connected' || statusValue === 'active' || statusValue === 'ready') {
       return { variant: 'success', label: 'Работает' };
     }
+    
+    if (statusValue === 'training') {
+      return { variant: 'info', label: 'Обучается' };
+    }
+    
+    if (statusValue === 'inactive') {
+      // Проверяем, инициализирован ли сервис
+      if (status.isInitialized === false) {
+        return { variant: 'error', label: 'Не инициализирован' };
+      }
+      return { variant: 'warning', label: 'Неактивен' };
+    }
+    
+    // Fallback: проверяем isInitialized и isActive напрямую
+    if (status.isInitialized === true) {
+      if (status.isActive === true) {
+        return { variant: 'success', label: 'Работает' };
+      }
+      return { variant: 'warning', label: 'Неактивен' };
+    }
+    
     return { variant: 'warning', label: 'Неизвестно' };
   };
 
@@ -514,35 +539,50 @@ const LogsMonitoringSection: React.FC = () => {
                 <div className="logs-monitoring-status-item">
                   <div className="logs-monitoring-status-label">
                     <span>Нейросеть</span>
-                    <Badge {...getStatusBadge(systemStatus.neuralNetwork)} />
+                    {(() => {
+                      const { variant, label } = getStatusBadge(systemStatus.neuralNetwork);
+                      return <Badge variant={variant as any}>{label}</Badge>;
+                    })()}
                   </div>
                 </div>
                 
                 <div className="logs-monitoring-status-item">
                   <div className="logs-monitoring-status-label">
                     <span>WebSocket</span>
-                    <Badge {...getStatusBadge(systemStatus.websocket)} />
+                    {(() => {
+                      const { variant, label } = getStatusBadge(systemStatus.websocket);
+                      return <Badge variant={variant as any}>{label}</Badge>;
+                    })()}
                   </div>
                 </div>
                 
                 <div className="logs-monitoring-status-item">
                   <div className="logs-monitoring-status-label">
                     <span>Торговый движок</span>
-                    <Badge {...getStatusBadge(systemStatus.trading)} />
+                    {(() => {
+                      const { variant, label } = getStatusBadge(systemStatus.trading);
+                      return <Badge variant={variant as any}>{label}</Badge>;
+                    })()}
                   </div>
                 </div>
                 
                 <div className="logs-monitoring-status-item">
                   <div className="logs-monitoring-status-label">
                     <span>База данных</span>
-                    <Badge {...getStatusBadge(systemStatus.database)} />
+                    {(() => {
+                      const { variant, label } = getStatusBadge(systemStatus.database);
+                      return <Badge variant={variant as any}>{label}</Badge>;
+                    })()}
                   </div>
                 </div>
                 
                 <div className="logs-monitoring-status-item">
                   <div className="logs-monitoring-status-label">
                     <span>Ансамбль</span>
-                    <Badge {...getStatusBadge(systemStatus.ensemble)} />
+                    {(() => {
+                      const { variant, label } = getStatusBadge(systemStatus.ensemble);
+                      return <Badge variant={variant as any}>{label}</Badge>;
+                    })()}
                   </div>
                 </div>
                 

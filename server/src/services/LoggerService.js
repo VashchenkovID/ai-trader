@@ -23,8 +23,6 @@ class LoggerService {
      */
     initialize() {
         try {
-            console.log('🚀 Инициализация LoggerService...');
-            
             // Создаем директорию для логов если её нет
             const logDir = path.join(__dirname, '../../logs');
             if (!fs.existsSync(logDir)) {
@@ -88,44 +86,44 @@ class LoggerService {
                 })
             ];
             
-            // В режиме разработки также выводим в консоль
-            if (process.env.NODE_ENV !== 'production') {
-                transports.push(
-                    new winston.transports.Console({
-                        format: winston.format.combine(
-                            winston.format.colorize(),
-                            winston.format.printf((info) => {
-                                const { timestamp, level, message, ...meta } = info;
-                                let output = `${timestamp} [${level}] ${message}`;
-                                
-                                // Добавляем контекст если есть
-                                if (meta.requestId) {
-                                    output = `[${meta.requestId}] ${output}`;
+            // В консоль выводим только предупреждения и ошибки (warn, error)
+            // Информационные логи (info, debug) идут только в файлы
+            transports.push(
+                new winston.transports.Console({
+                    level: 'warn', // Только warn и error в консоль
+                    format: winston.format.combine(
+                        winston.format.colorize(),
+                        winston.format.printf((info) => {
+                            const { timestamp, level, message, ...meta } = info;
+                            let output = `${timestamp} [${level}] ${message}`;
+                            
+                            // Добавляем контекст если есть
+                            if (meta.requestId) {
+                                output = `[${meta.requestId}] ${output}`;
+                            }
+                            if (meta.service) {
+                                output = `[${meta.service}] ${output}`;
+                            }
+                            if (meta.userId) {
+                                output = `[user:${meta.userId}] ${output}`;
+                            }
+                            
+                            // Добавляем метаданные если есть
+                            if (Object.keys(meta).length > 0) {
+                                const relevantMeta = { ...meta };
+                                delete relevantMeta.requestId;
+                                delete relevantMeta.service;
+                                delete relevantMeta.userId;
+                                if (Object.keys(relevantMeta).length > 0) {
+                                    output += `\n${JSON.stringify(relevantMeta, null, 2)}`;
                                 }
-                                if (meta.service) {
-                                    output = `[${meta.service}] ${output}`;
-                                }
-                                if (meta.userId) {
-                                    output = `[user:${meta.userId}] ${output}`;
-                                }
-                                
-                                // Добавляем метаданные если есть
-                                if (Object.keys(meta).length > 0) {
-                                    const relevantMeta = { ...meta };
-                                    delete relevantMeta.requestId;
-                                    delete relevantMeta.service;
-                                    delete relevantMeta.userId;
-                                    if (Object.keys(relevantMeta).length > 0) {
-                                        output += `\n${JSON.stringify(relevantMeta, null, 2)}`;
-                                    }
-                                }
-                                
-                                return output;
-                            })
-                        )
-                    })
-                );
-            }
+                            }
+                            
+                            return output;
+                        })
+                    )
+                })
+            );
             
             // Создаем логгер
             this.logger = winston.createLogger({
@@ -160,9 +158,8 @@ class LoggerService {
             };
             
             this.isInitialized = true;
-            console.log('✅ LoggerService инициализирован');
             
-            // Логируем инициализацию
+            // Логируем инициализацию (только в файл, не в консоль)
             this.info('LoggerService initialized', {
                 service: 'LoggerService',
                 logLevel: this.logger.level,

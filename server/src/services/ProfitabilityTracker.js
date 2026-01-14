@@ -35,13 +35,11 @@ class ProfitabilityTracker {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация ProfitabilityTracker...');
             
             await this.loadTrackingSettings();
             await this.loadHistoricalData();
             
             this.isInitialized = true;
-            console.log('✅ ProfitabilityTracker инициализирован');
             
         } catch (error) {
             console.error('❌ Ошибка инициализации ProfitabilityTracker:', error);

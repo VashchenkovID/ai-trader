@@ -18,17 +18,13 @@ async function performPortfolioPricesUpdate() {
         const isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
         
         if (!isServiceManagerGlobal && !ServiceManager.isInitialized) {
-            console.log('🔧 [Portfolio Worker] ServiceManager not initialized globally, initializing in worker...');
             await ServiceManager.initialize();
-        } else if (isServiceManagerGlobal) {
-            console.log('ℹ️ [Portfolio Worker] ServiceManager already initialized globally, skipping full initialization');
         }
 
         const startTime = Date.now();
         let totalUpdated = 0;
         let totalFailed = 0;
 
-        console.log('💰 [Portfolio Worker] Starting portfolio prices update...');
 
         // Получаем портфель
         const portfolio = await TradingEngine.getPortfolioValue();
@@ -41,7 +37,6 @@ async function performPortfolioPricesUpdate() {
         });
 
         if (figis.length === 0) {
-            console.log('⚠️ [Portfolio Worker] No active positions found');
             parentPort.postMessage({
                 type: 'done',
                 data: {
@@ -55,7 +50,6 @@ async function performPortfolioPricesUpdate() {
             return;
         }
 
-        console.log(`💰 [Portfolio Worker] Updating prices for ${figis.length} portfolio positions...`);
 
         // Разбиваем на батчи по 50 инструментов (лимит API)
         const batchSize = 50;
@@ -65,7 +59,6 @@ async function performPortfolioPricesUpdate() {
             batches.push(figis.slice(i, i + batchSize));
         }
 
-        console.log(`💰 [Portfolio Worker] Processing ${batches.length} batches...`);
 
         // Обрабатываем каждый батч
         for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
@@ -129,7 +122,6 @@ async function performPortfolioPricesUpdate() {
         }
 
         const duration = Math.round((Date.now() - startTime) / 1000);
-        console.log(`✅ [Portfolio Worker] Portfolio prices update completed in ${duration}s. Updated: ${totalUpdated}, Failed: ${totalFailed}`);
 
         // Отправляем результат
         parentPort.postMessage({

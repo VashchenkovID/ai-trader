@@ -350,6 +350,19 @@ export const apiService = {
     }
   },
 
+  /**
+   * Обновление новостей (такой же запрос как в кроне)
+   */
+  async updateNews(): Promise<any> {
+    try {
+      const response = await api.post('/api/news/update-daily');
+      return response.data;
+    } catch (error) {
+      console.error('Error updating news:', error);
+      throw error;
+    }
+  },
+
 
   // ============================================================================
   // ТОРГОВЫЕ РОУТЫ

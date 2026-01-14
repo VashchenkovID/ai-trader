@@ -35,14 +35,11 @@ class MetaLearningService {
      */
     async initialize() {
         try {
-            console.log('🧠 Initializing Meta-Learning Service...');
-            
             // Сначала пытаемся загрузить существующую мета-модель
             await this.loadMetaModel();
             
             // Если модель не загружена, создаем новую
             if (!this.metaModel) {
-                console.log('Creating new meta-model...');
                 this.metaModel = this.createMetaModel();
             }
             
@@ -50,9 +47,16 @@ class MetaLearningService {
             await this.loadKnowledgeBase();
             
             this.isInitialized = true;
-            console.log('✅ Meta-Learning Service initialized');
         } catch (error) {
-            console.error('❌ Failed to initialize Meta-Learning Service:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Failed to initialize Meta-Learning Service', {
+                service: 'MetaLearningService',
+                operation: 'initialize',
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
             throw error;
         }
     }
@@ -726,11 +730,8 @@ class MetaLearningService {
         try {
             // Проверяем, загружена ли уже модель
             if (this.metaModel) {
-                console.log('ℹ️ Meta-model already loaded, skipping reload');
                 return;
             }
-
-            console.log('📥 Loading meta-model with ModelManager...');
             
             // Пытаемся загрузить модель через ModelManager
             const model = await ModelManager.loadModel('meta_model/meta_model');
@@ -744,13 +745,19 @@ class MetaLearningService {
                 });
                 
                 this.metaModel = model;
-                console.log('✅ Meta-model loaded successfully');
             } else {
-                console.warn('⚠️ Failed to load meta-model, creating new one');
                 this.metaModel = this.createMetaModel();
             }
         } catch (error) {
-            console.error('❌ Failed to load meta-model:', error.message);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Failed to load meta-model', {
+                service: 'MetaLearningService',
+                operation: 'loadMetaModel',
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
             this.metaModel = this.createMetaModel();
         }
     }

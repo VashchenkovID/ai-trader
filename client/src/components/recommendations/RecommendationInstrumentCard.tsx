@@ -383,6 +383,58 @@ export const RecommendationInstrumentCard: React.FC<RecommendationInstrumentCard
         </div>
       )}
 
+      {/* Предсказания по стратегиям (всегда видно) */}
+      {recommendation.explanation?.details?.ensemble?.horizons && (() => {
+        const horizons = recommendation.explanation.details.ensemble.horizons;
+        const mainHorizon = horizons.mediumTerm || horizons.shortTerm || horizons.longTerm;
+        
+        if (!mainHorizon?.strategies) return null;
+        
+        const strategies = mainHorizon.strategies;
+        const strategyTypes = [
+          { key: 'conservative', name: 'Консервативная', variant: 'info' as const },
+          { key: 'moderate', name: 'Умеренная', variant: 'warning' as const },
+          { key: 'aggressive', name: 'Агрессивная', variant: 'error' as const }
+        ];
+        
+        return (
+          <div className="recommendation-instrument-card-strategies">
+            <h4 className="recommendation-instrument-card-strategies-title">📊 Предсказания по стратегиям:</h4>
+            <div className="recommendation-instrument-card-strategies-list">
+              {strategyTypes.map(({ key, name, variant }) => {
+                const strategy = strategies[key as 'conservative' | 'moderate' | 'aggressive'];
+                if (!strategy || !strategy.recommendation) return null;
+                
+                const recVariant = strategy.recommendation === 'BUY' ? 'success' : 
+                                  strategy.recommendation === 'SELL' ? 'error' : 'neutral';
+                const confidence = strategy.strategyConfidence ?? strategy.confidence ?? 0;
+                
+                return (
+                  <div key={key} className="recommendation-instrument-card-strategy">
+                    <div className="recommendation-instrument-card-strategy-header">
+                      <Badge variant={variant} size="sm">
+                        {name}
+                      </Badge>
+                      <Badge variant={recVariant} size="sm">
+                        {translateRecommendation(strategy.recommendation)}
+                      </Badge>
+                      <span className="recommendation-instrument-card-strategy-confidence">
+                        {Math.round(confidence * 100)}%
+                      </span>
+                    </div>
+                    {strategy.explanation && (
+                      <div className="recommendation-instrument-card-strategy-explanation">
+                        {strategy.explanation}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Горизонты (развернуто) */}
       {isExpanded && recommendation.horizons && (
         <div className="recommendation-instrument-card-horizons">

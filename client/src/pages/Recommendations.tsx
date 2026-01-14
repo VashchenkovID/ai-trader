@@ -115,6 +115,7 @@ const Recommendations: React.FC = () => {
   const [filterStrategy, setFilterStrategy] = useState<number | null>(null);
   const [filterSector, setFilterSector] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
+  const [filterHorizon, setFilterHorizon] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('confidence');
   
@@ -488,6 +489,61 @@ const Recommendations: React.FC = () => {
       filtered = filtered.filter((rec) => rec.priority === filterPriority);
     }
 
+    // Фильтр по горизонту
+    if (filterHorizon !== 'all') {
+      filtered = filtered.filter((rec) => {
+        // Проверяем горизонты в разных местах (в порядке приоритета)
+        let horizons = null;
+        
+        // 1. Прямое поле horizons
+        if (rec.horizons && typeof rec.horizons === 'object') {
+          horizons = rec.horizons;
+        }
+        // 2. explanation.details.ensemble.horizons
+        else if (rec.explanation?.details?.ensemble?.horizons && typeof rec.explanation.details.ensemble.horizons === 'object') {
+          horizons = rec.explanation.details.ensemble.horizons;
+        }
+        // 3. explanation.horizons
+        else if (rec.explanation?.horizons && typeof rec.explanation.horizons === 'object') {
+          horizons = rec.explanation.horizons;
+        }
+        // 4. analysis.horizons
+        else if ((rec as any).analysis?.horizons && typeof (rec as any).analysis.horizons === 'object') {
+          horizons = (rec as any).analysis.horizons;
+        }
+        
+        if (!horizons) return false;
+        
+        // Проверяем наличие конкретного горизонта с данными
+        if (filterHorizon === 'shortTerm') {
+          const shortTerm = horizons.shortTerm;
+          return shortTerm !== null && shortTerm !== undefined && (
+            shortTerm.recommendation !== undefined ||
+            shortTerm.score !== undefined ||
+            shortTerm.confidence !== undefined ||
+            (shortTerm.strategies && Object.keys(shortTerm.strategies).length > 0)
+          );
+        } else if (filterHorizon === 'mediumTerm') {
+          const mediumTerm = horizons.mediumTerm;
+          return mediumTerm !== null && mediumTerm !== undefined && (
+            mediumTerm.recommendation !== undefined ||
+            mediumTerm.score !== undefined ||
+            mediumTerm.confidence !== undefined ||
+            (mediumTerm.strategies && Object.keys(mediumTerm.strategies).length > 0)
+          );
+        } else if (filterHorizon === 'longTerm') {
+          const longTerm = horizons.longTerm;
+          return longTerm !== null && longTerm !== undefined && (
+            longTerm.recommendation !== undefined ||
+            longTerm.score !== undefined ||
+            longTerm.confidence !== undefined ||
+            (longTerm.strategies && Object.keys(longTerm.strategies).length > 0)
+          );
+        }
+        return true;
+      });
+    }
+
     // Сортировка
     filtered.sort((a, b) => {
       switch (sortBy) {
@@ -523,7 +579,7 @@ const Recommendations: React.FC = () => {
     });
 
     return filtered;
-  }, [recommendations, searchTerm, filterType, filterConfidence, filterSector, filterPriority, sortBy]);
+  }, [recommendations, searchTerm, filterType, filterConfidence, filterSector, filterPriority, filterHorizon, sortBy]);
 
   // Вычисление сводки
   const summaryData = useMemo(() => {
@@ -664,6 +720,7 @@ const Recommendations: React.FC = () => {
     setFilterStrategy(null);
     setFilterSector('all');
     setFilterPriority('all');
+    setFilterHorizon('all');
     setSearchTerm('');
     setSortBy('confidence');
   };
@@ -699,6 +756,8 @@ const Recommendations: React.FC = () => {
             onFilterSectorChange={setFilterSector}
             filterPriority={filterPriority}
             onFilterPriorityChange={setFilterPriority}
+            filterHorizon={filterHorizon}
+            onFilterHorizonChange={setFilterHorizon}
             sortBy={sortBy}
             onSortByChange={setSortBy}
             strategies={strategies}

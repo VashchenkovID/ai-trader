@@ -228,7 +228,6 @@ export async function performTradingRequestsPricesUpdate(context) {
             }
         );
         
-        console.log(`✅ Trading requests prices update completed. Updated: ${result.totalUpdated || 0}`);
         
         return result;
     } catch (error) {

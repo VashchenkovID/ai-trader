@@ -12,13 +12,17 @@ interface CacheManagementCardProps {
   cacheUpdating: boolean;
   onRefresh: () => void;
   onFullRefresh: () => void;
+  newsUpdating?: boolean;
+  onUpdateNews?: () => void;
 }
 
 const CacheManagementCard: React.FC<CacheManagementCardProps> = ({
   cacheStatus,
   cacheUpdating,
   onRefresh,
-  onFullRefresh
+  onFullRefresh,
+  newsUpdating = false,
+  onUpdateNews
 }) => {
   const formatTime = (minutes: number | null) => {
     if (minutes === null) return '—';
@@ -76,11 +80,18 @@ const CacheManagementCard: React.FC<CacheManagementCardProps> = ({
           </div>
         )}
 
+        {newsUpdating && (
+          <div className="cache-management-progress">
+            <ProgressBar value={0} animated size="sm" />
+            <div className="cache-management-progress-text">Обновление новостей...</div>
+          </div>
+        )}
+
         <div className="cache-management-actions">
           <Button
             onClick={onRefresh}
             loading={cacheUpdating}
-            disabled={cacheUpdating}
+            disabled={cacheUpdating || newsUpdating}
             size="sm"
             icon={<i className="pi pi-refresh"></i>}
             fullWidth
@@ -90,7 +101,7 @@ const CacheManagementCard: React.FC<CacheManagementCardProps> = ({
           <Button
             onClick={onFullRefresh}
             loading={cacheUpdating}
-            disabled={cacheUpdating}
+            disabled={cacheUpdating || newsUpdating}
             size="sm"
             variant="danger"
             icon={<i className="pi pi-refresh"></i>}
@@ -98,6 +109,19 @@ const CacheManagementCard: React.FC<CacheManagementCardProps> = ({
           >
             Полное обновление
           </Button>
+          {onUpdateNews && (
+            <Button
+              onClick={onUpdateNews}
+              loading={newsUpdating}
+              disabled={cacheUpdating || newsUpdating}
+              size="sm"
+              variant="default"
+              icon={<i className="pi pi-refresh"></i>}
+              fullWidth
+            >
+              Обновить новости
+            </Button>
+          )}
         </div>
       </div>
     </Card>

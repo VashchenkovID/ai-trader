@@ -35,7 +35,6 @@ class PortfolioRebalancingService {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация PortfolioRebalancingService...');
             
             await this.loadSettings();
             
@@ -48,7 +47,6 @@ class PortfolioRebalancingService {
             }
             
             this.isInitialized = true;
-            console.log('✅ PortfolioRebalancingService инициализирован');
             
         } catch (error) {
             console.error('❌ Ошибка инициализации PortfolioRebalancingService:', error);

@@ -80,7 +80,6 @@ class CapitalAllocationStrategy {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация CapitalAllocationStrategy...');
             
             await this.loadAllocationSettings();
             await this.loadAllocationHistory();

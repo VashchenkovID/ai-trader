@@ -428,6 +428,76 @@ router.get('/summary', async (req, res) => {
             days
         );
 
+        // Если нет данных в ProfitabilityTracker, пытаемся получить данные из TradingEngine
+        let baseMetrics = {
+            totalReturn: analysis.metrics?.totalReturn || 0,
+            winRate: analysis.metrics?.winRate || 0,
+            sharpeRatio: analysis.metrics?.sharpeRatio || 0,
+            maxDrawdown: analysis.metrics?.maxDrawdown || 0,
+            averageDailyProfit: analysis.metrics?.averageDailyProfit || 0
+        };
+
+        // Если stats пустые или метрики нулевые, используем данные из TradingEngine
+        const hasEmptyStats = !analysis.stats || analysis.stats.length === 0;
+        const hasZeroMetrics = !baseMetrics.winRate && !baseMetrics.sharpeRatio;
+        
+        // Логируем для отладки
+        const LoggerService = (await import('../services/LoggerService.js')).default;
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.info('advanced-metrics/summary: проверка метрик', {
+                service: 'advanced-metrics-routes',
+                hasEmptyStats: hasEmptyStats,
+                hasZeroMetrics: hasZeroMetrics,
+                baseMetricsWinRate: baseMetrics.winRate,
+                baseMetricsSharpeRatio: baseMetrics.sharpeRatio,
+                analysisStatsLength: analysis.stats?.length || 0
+            });
+        }
+        
+        if (hasEmptyStats || hasZeroMetrics) {
+            const TradingEngine = (await import('../services/TradingEngine.js')).default;
+            const tradingStats = await TradingEngine.calculateTradingStats();
+            
+            // Используем winRate из TradingEngine (уже в диапазоне 0-1)
+            if (tradingStats.winRate !== undefined) {
+                baseMetrics.winRate = tradingStats.winRate;
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.info('advanced-metrics/summary: используем winRate из TradingEngine', {
+                        service: 'advanced-metrics-routes',
+                        winRate: tradingStats.winRate,
+                        totalTrades: tradingStats.totalTrades
+                    });
+                }
+            }
+            
+            // Для sharpeRatio нужны доходности, попробуем рассчитать из сделок
+            const trades = await TradingEngine.getTradeHistory(1000);
+            if (trades.length > 0) {
+                const returns = [];
+                const portfolio = await TradingEngine.getPortfolioValue();
+                const initialCapital = portfolio?.initialCapital || 1000000;
+                
+                // Собираем доходности только от закрытых сделок (с PnL)
+                for (const trade of trades) {
+                    if (trade.pnl !== undefined && trade.pnl !== null && initialCapital > 0) {
+                        // Рассчитываем доходность как процент от начального капитала
+                        const returnPercent = (trade.pnl / initialCapital) * 100;
+                        returns.push(returnPercent);
+                    }
+                }
+                
+                if (returns.length > 1) { // Нужно минимум 2 точки для расчета волатильности
+                    const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+                    const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+                    const volatility = Math.sqrt(variance);
+                    baseMetrics.sharpeRatio = volatility > 0 ? avgReturn / volatility : 0;
+                } else if (returns.length === 1) {
+                    // Если только одна сделка, sharpeRatio = 0 (недостаточно данных)
+                    baseMetrics.sharpeRatio = 0;
+                }
+            }
+        }
+
         // Получаем продвинутые метрики
         const advancedMetrics = ProfitabilityTracker.calculateAdvancedMetrics(
             analysis.stats || [],
@@ -449,13 +519,7 @@ router.get('/summary', async (req, res) => {
                 days: days,
                 startDate: analysis.startDate,
                 endDate: analysis.endDate,
-                baseMetrics: {
-                    totalReturn: analysis.metrics?.totalReturn || 0,
-                    winRate: analysis.metrics?.winRate || 0,
-                    sharpeRatio: analysis.metrics?.sharpeRatio || 0,
-                    maxDrawdown: analysis.metrics?.maxDrawdown || 0,
-                    averageDailyProfit: analysis.metrics?.averageDailyProfit || 0
-                },
+                baseMetrics: baseMetrics,
                 advancedMetrics: {
                     sortinoRatio: advancedMetrics.sortinoRatio || 0,
                     calmarRatio: advancedMetrics.calmarRatio || 0,

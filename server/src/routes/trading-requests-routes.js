@@ -92,6 +92,13 @@ router.post('/create', async (req, res) => {
             });
         }
         
+        // Если recommendationData передан и содержит recommendation, используем его как options.action (если action не указан явно)
+        if (recommendationData && recommendationData.recommendation && !options.action) {
+            if (recommendationData.recommendation === 'BUY' || recommendationData.recommendation === 'SELL') {
+                options.action = recommendationData.recommendation;
+            }
+        }
+        
         let result;
         
         // Если есть recommendationFigi, пытаемся найти в БД

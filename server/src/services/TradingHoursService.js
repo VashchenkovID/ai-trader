@@ -17,7 +17,6 @@ class TradingHoursService {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация TradingHoursService...');
             
             await this.loadSettings();
 
@@ -30,7 +29,6 @@ class TradingHoursService {
             }
             
             this.isInitialized = true;
-            console.log('✅ TradingHoursService инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации TradingHoursService:', error);
             throw error;

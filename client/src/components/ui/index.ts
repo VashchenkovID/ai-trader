@@ -64,3 +64,6 @@ export { default as ConfirmDialogComponent } from './ConfirmDialog/ConfirmDialog
 
 export { TabView, TabPanel, type TabViewProps, type TabPanelProps } from './TabView/TabView';
 export { default as TabViewComponent } from './TabView/TabView';
+
+export { Checkbox, type CheckboxProps, type CheckboxSize } from './Checkbox/Checkbox';
+export { default as CheckboxComponent } from './Checkbox/Checkbox';

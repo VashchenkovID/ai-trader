@@ -207,7 +207,6 @@ async function performTradingRequestsPricesUpdate() {
         }
 
         const duration = Math.round((Date.now() - startTime) / 1000);
-        console.log(`✅ [Trading Requests Worker] Trading requests prices update completed in ${duration}s. Updated: ${totalUpdated}, Failed: ${totalFailed}, Ready to execute: ${readyToExecute.length}`);
 
         // Отправляем результат
         parentPort.postMessage({

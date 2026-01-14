@@ -81,13 +81,11 @@ class MacroDataService {
         }
 
         try {
-            console.log('🚀 Инициализация MacroDataService...');
             
             // Загружаем настройки
             await this.loadSettings();
             
             this.isInitialized = true;
-            console.log('✅ MacroDataService инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации MacroDataService:', error);
             throw error;
@@ -116,12 +114,6 @@ class MacroDataService {
             if (sourcesConfig && typeof sourcesConfig === 'object') {
                 this.settings.sources = { ...this.settings.sources, ...sourcesConfig };
             }
-
-            console.log('📊 Настройки MacroDataService загружены:', {
-                updateInterval: this.settings.updateInterval,
-                cacheTtlHours: this.settings.cacheTtlHours,
-                sources: this.settings.sources
-            });
         } catch (error) {
             console.warn('⚠️ Ошибка загрузки настроек MacroDataService, используем значения по умолчанию:', error.message);
         }

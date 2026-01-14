@@ -19,20 +19,7 @@ class WebSocketService {
     initialize(server, path = '/') {
         // Защита от повторной инициализации
         if (this.wss) {
-            console.log('⚠️ WebSocket server already initialized, skipping...');
             return;
-        }
-        
-        console.log('🌐 Initializing WebSocket server...');
-        try {
-            const stack = new Error().stack;
-            if (stack) {
-                console.log('🔍 WebSocket initialization called from:', stack.split('\n')[2]?.trim() || 'unknown');
-            } else {
-                console.log('🔍 WebSocket initialization called from: unknown (no stack trace)');
-            }
-        } catch (error) {
-            console.log('🔍 WebSocket initialization called from: unknown (error getting stack trace)');
         }
         
         try {
@@ -51,7 +38,6 @@ class WebSocketService {
             // Проверяем, не является ли это внутренним подключением
             const remoteAddress = ws._socket?.remoteAddress;
             const localAddress = ws._socket?.localAddress;
-            console.log('🔍 Connection details:', { remoteAddress, localAddress });
             
             // Проверяем глобальный лимит подключений
             if (!checkConnectionLimit()) {
@@ -64,12 +50,10 @@ class WebSocketService {
             
             // Проверяем, не подключен ли уже этот клиент
             if (this.clients.has(ws)) {
-                console.log('⚠️ Duplicate WebSocket connection detected, closing');
                 ws.close(1000, 'Duplicate connection');
                 return;
             }
             
-            console.log(`🔌 New WebSocket client connected (total: ${this.clients.size + 1})`);
             this.clients.add(ws);
 
             // Отправляем текущий статус при подключении
@@ -91,7 +75,6 @@ class WebSocketService {
             });
 
             ws.on('close', (code, reason) => {
-                console.log(`WebSocket client disconnected (code: ${code}, reason: ${reason})`);
                 this.clients.delete(ws);
                 decrementConnectionCount();
             });
@@ -104,7 +87,6 @@ class WebSocketService {
             });
         });
 
-        console.log('WebSocket server initialized');
     }
 
     async handleMessage(ws, data) {
@@ -374,14 +356,49 @@ class WebSocketService {
             let ensembleStatus = {};
             if (EnsembleService) {
                 try {
-                    ensembleStatus = EnsembleService.getEnsembleStats();
+                    const stats = EnsembleService.getEnsembleStats();
+                    const isInitialized = EnsembleService.isInitialized || false;
+                    const isTraining = EnsembleService.isTraining || false;
+                    ensembleStatus = {
+                        ...stats,
+                        isInitialized,
+                        isTraining,
+                        status: isInitialized ? (isTraining ? 'training' : 'active') : 'inactive'
+                    };
                 } catch (error) {
                     console.warn('Error getting ensemble status:', error);
+                    const isInitialized = EnsembleService.isInitialized || false;
+                    const isTraining = EnsembleService.isTraining || false;
                     ensembleStatus = {
-                        isInitialized: EnsembleService.isInitialized || false,
-                        isTraining: EnsembleService.isTraining || false
+                        isInitialized,
+                        isTraining,
+                        status: isInitialized ? (isTraining ? 'training' : 'active') : 'inactive'
                     };
                 }
+            } else {
+                ensembleStatus = {
+                    isInitialized: false,
+                    isTraining: false,
+                    status: 'inactive'
+                };
+            }
+            
+            // Формируем статус торгового движка
+            let tradingStatus = {
+                status: 'inactive',
+                mode: 'paper',
+                isActive: false,
+                isInitialized: false
+            };
+            if (TradingEngine) {
+                const isInitialized = TradingEngine.isInitialized || false;
+                const isActive = TradingEngine.isActive || false;
+                tradingStatus = {
+                    status: isInitialized ? (isActive ? 'active' : 'inactive') : 'inactive',
+                    mode: TradingEngine.mode || 'paper',
+                    isActive,
+                    isInitialized
+                };
             }
             
             const systemStatus = {
@@ -391,11 +408,7 @@ class WebSocketService {
                     status: 'connected', 
                     lastQuery: new Date().toISOString() 
                 },
-                trading: { 
-                    status: TradingEngine?.isActive ? 'active' : 'inactive',
-                    mode: TradingEngine?.mode || 'paper',
-                    isActive: TradingEngine?.isActive || false
-                },
+                trading: tradingStatus,
                 ensemble: ensembleStatus
             };
             
@@ -420,19 +433,32 @@ class WebSocketService {
             // Отправляем торговую статистику
             if (TradingEngine) {
                 try {
-                    const portfolio = await TradingEngine.getVirtualPortfolioValue();
+                    const portfolio = await TradingEngine.getPortfolioValue();
                     const stats = await TradingEngine.calculateTradingStats();
                     const Recommendation = (await import('../models/Recommendation.js')).default;
                     // Получаем топ-3 рекомендации - по одной для каждой стратегии
                     const topBuys = await Recommendation.getTopRecommendationsByStrategies();
 
+                    // Рассчитываем totalPnL как разницу между текущей стоимостью и начальным капиталом
+                    // Это включает и реализованную, и нереализованную прибыль
+                    const initialCapital = portfolio?.initialCapital || 1000000;
+                    const totalValue = portfolio?.totalValue || 0;
+                    const totalPnL = totalValue - initialCapital;
+
+                    // Win Rate: stats.winRate уже в диапазоне 0-1, умножаем на 100 для процентов
+                    const winRateValue = stats.winRate || 0;
+                    const winRatePercent = winRateValue * 100;
+                    const totalTradesValue = stats.totalTrades || 0;
+                    const successfulTradesValue = Math.round(totalTradesValue * winRateValue);
+
                     const tradingStats = {
-                        portfolioValue: portfolio.totalValue,
-                        cash: portfolio.cash,
-                        totalPnL: stats.totalReturn || 0,
-                        winRate: (stats.winRate || 0) * 100,
-                        totalTrades: stats.totalTrades || 0,
-                        successfulTrades: Math.round((stats.totalTrades || 0) * (stats.winRate || 0)),
+                        portfolioValue: totalValue,
+                        cash: portfolio?.cash || 0,
+                        totalPnL: totalPnL,
+                        initialCapital: initialCapital,
+                        winRate: winRatePercent,
+                        totalTrades: totalTradesValue,
+                        successfulTrades: successfulTradesValue,
                         recommendations: topBuys.map(rec => ({
                             figi: rec.figi,
                             ticker: rec.ticker,
@@ -454,8 +480,6 @@ class WebSocketService {
                     console.warn('Could not get trading stats for initial send:', error.message);
                 }
             }
-
-            console.log('📡 Initial system status sent to new client');
         } catch (error) {
             console.error('❌ Error sending initial system status:', error);
         }
@@ -479,9 +503,7 @@ const MAX_CONNECTIONS = 5;
 export function getWebSocketService() {
     if (!globalWebSocketService) {
         globalWebSocketService = new WebSocketService();
-        console.log('🌐 Created global WebSocketService instance');
     } else {
-        console.log('🔄 Reusing existing WebSocketService instance');
     }
     return globalWebSocketService;
 }
@@ -497,7 +519,6 @@ export function checkConnectionLimit() {
 
 export function incrementConnectionCount() {
     connectionCount++;
-    console.log(`🔌 Connection count: ${connectionCount}/${MAX_CONNECTIONS}`);
 }
 
 export function decrementConnectionCount() {

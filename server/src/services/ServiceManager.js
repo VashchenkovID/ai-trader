@@ -21,8 +21,6 @@ class ServiceManager {
         if (this.isInitialized) {
             return;
         }
-
-        console.log('🚀 Initializing complete system...');
         
         try {
             // 1. Инициализируем базу данных (если передана)
@@ -43,11 +41,62 @@ class ServiceManager {
             await this.initializeService('FallbackService', () => import('./FallbackService.js'));
             await this.initializeService('RecoveryService', () => import('./RecoveryService.js'));
             await this.initializeService('BackupService', () => import('./BackupService.js'));
-            await this.initializeService('CacheService', () => import('./CacheService.js'));
+            
+            // CacheService - критический сервис
+            try {
+                await this.initializeService('CacheService', () => import('./CacheService.js'));
+            } catch (error) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Не удалось инициализировать CacheService', {
+                        service: 'ServiceManager',
+                        error: {
+                            message: error.message,
+                            stack: error.stack
+                        }
+                    });
+                } else {
+                    console.error('❌ Не удалось инициализировать CacheService:', error);
+                }
+                // Продолжаем инициализацию других сервисов
+            }
+            
             // WebSocketService инициализируется отдельно, так как требует сервер
             
-            await this.initializeService('SchedulerService', () => import('./SchedulerService.js'));
-            await this.initializeService('TradingEngine', () => import('./TradingEngine.js'));
+            // SchedulerService - критический сервис
+            try {
+                await this.initializeService('SchedulerService', () => import('./SchedulerService.js'));
+            } catch (error) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Не удалось инициализировать SchedulerService', {
+                        service: 'ServiceManager',
+                        error: {
+                            message: error.message,
+                            stack: error.stack
+                        }
+                    });
+                } else {
+                    console.error('❌ Не удалось инициализировать SchedulerService:', error);
+                }
+                // Продолжаем инициализацию других сервисов
+            }
+            
+            // TradingEngine - критический сервис
+            try {
+                await this.initializeService('TradingEngine', () => import('./TradingEngine.js'));
+            } catch (error) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Не удалось инициализировать TradingEngine', {
+                        service: 'ServiceManager',
+                        error: {
+                            message: error.message,
+                            stack: error.stack
+                        }
+                    });
+                } else {
+                    console.error('❌ Не удалось инициализировать TradingEngine:', error);
+                }
+                // Продолжаем инициализацию других сервисов
+            }
             await this.initializeService('NeuralNetworkService', () => import('./NeuralNetworkService.js'));
             await this.initializeService('EnsembleService', () => import('./EnsembleService.js'));
             await this.initializeService('ReinforcementLearningService', () => import('./ReinforcementLearningService.js'));
@@ -101,7 +150,6 @@ class ServiceManager {
 
             // 5. Инициализируем WebSocket с сервером (если передан)
             if (server) {
-                console.log('🌐 Initializing WebSocket service...');
                 const WebSocketService = (await import('./WebSocketService.js')).default;
                 const webSocketService = new WebSocketService();
                 webSocketService.initialize(server);
@@ -175,6 +223,14 @@ class ServiceManager {
 
         const initPromise = (async () => {
             try {
+                // Логируем начало инициализации
+                if (LoggerService.isInitialized) {
+                    LoggerService.info(`Инициализация сервиса ${serviceName}...`, {
+                        service: 'ServiceManager',
+                        serviceName
+                    });
+                }
+                
                 const ServiceModule = (await importFunction()).default;
                 
                 // Проверяем, является ли экспорт классом или экземпляром
@@ -206,11 +262,52 @@ class ServiceManager {
                     if (isGloballyInitialized && this.isWorker && typeof service.initializeLightweight === 'function') {
                         await service.initializeLightweight();
                     } else {
-                        await service.initialize();
+                        try {
+                            await service.initialize();
+                            // Проверяем, что сервис действительно инициализирован
+                            if (service.isInitialized !== undefined && !service.isInitialized) {
+                                const errorMsg = `Сервис ${serviceName} не установил isInitialized = true после инициализации`;
+                                if (LoggerService.isInitialized) {
+                                    LoggerService.error(errorMsg, {
+                                        service: 'ServiceManager',
+                                        serviceName
+                                    });
+                                } else {
+                                    console.error(`❌ ${errorMsg}`);
+                                }
+                                throw new Error(errorMsg);
+                            }
+                        } catch (initError) {
+                            // Логируем ошибку инициализации
+                            if (LoggerService.isInitialized) {
+                                LoggerService.error(`Ошибка инициализации ${serviceName}`, {
+                                    service: 'ServiceManager',
+                                    serviceName,
+                                    error: {
+                                        message: initError.message,
+                                        stack: initError.stack
+                                    }
+                                });
+                            } else {
+                                console.error(`❌ Ошибка инициализации ${serviceName}:`, initError);
+                            }
+                            // Не добавляем сервис в Map, если инициализация не удалась
+                            throw initError;
+                        }
                     }
                 }
                 
                 this.services.set(serviceName, service);
+                
+                // Логируем успешную инициализацию
+                if (LoggerService.isInitialized) {
+                    LoggerService.info(`Сервис ${serviceName} успешно инициализирован`, {
+                        service: 'ServiceManager',
+                        serviceName,
+                        hasInitialize: typeof service.initialize === 'function',
+                        isInitialized: service.isInitialized !== undefined ? service.isInitialized : 'N/A'
+                    });
+                }
                 
                 // Отмечаем сервис как инициализированный глобально (если не воркер или принудительно)
                 if (!this.isWorker || options.markAsGlobal) {

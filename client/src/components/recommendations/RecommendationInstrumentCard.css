@@ -240,6 +240,57 @@
   color: var(--color-text-secondary);
 }
 
+.recommendation-instrument-card-strategies {
+  padding: 16px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.recommendation-instrument-card-strategies-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 12px 0;
+}
+
+.recommendation-instrument-card-strategies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recommendation-instrument-card-strategy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--color-surface-elevated);
+  border-radius: 6px;
+  border-left: 3px solid var(--color-accent-primary);
+}
+
+.recommendation-instrument-card-strategy-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recommendation-instrument-card-strategy-confidence {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.recommendation-instrument-card-strategy-explanation {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  padding-top: 4px;
+}
+
 .recommendation-instrument-card-horizons {
   padding: 16px;
   background: var(--color-surface-default);

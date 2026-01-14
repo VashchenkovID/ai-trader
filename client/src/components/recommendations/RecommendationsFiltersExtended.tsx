@@ -18,6 +18,8 @@ interface RecommendationsFiltersExtendedProps {
   onFilterSectorChange: (value: string) => void;
   filterPriority: string;
   onFilterPriorityChange: (value: string) => void;
+  filterHorizon: string;
+  onFilterHorizonChange: (value: string) => void;
   sortBy: string;
   onSortByChange: (value: string) => void;
   strategies: Array<{ id: number; name: string; type: string }>;
@@ -40,6 +42,8 @@ export const RecommendationsFiltersExtended: React.FC<RecommendationsFiltersExte
   onFilterSectorChange,
   filterPriority,
   onFilterPriorityChange,
+  filterHorizon,
+  onFilterHorizonChange,
   sortBy,
   onSortByChange,
   strategies,
@@ -164,6 +168,22 @@ export const RecommendationsFiltersExtended: React.FC<RecommendationsFiltersExte
             value={filterPriority}
             onChange={(e) => onFilterPriorityChange(e.target.value as string)}
             options={filterPriorityOptions}
+            fullWidth
+          />
+        </div>
+
+        {/* Горизонт */}
+        <div className="recommendations-filters-extended-group">
+          <label className="recommendations-filters-extended-label">Горизонт прогноза</label>
+          <Select
+            value={filterHorizon}
+            onChange={(e) => onFilterHorizonChange(e.target.value as string)}
+            options={[
+              { label: 'Все горизонты', value: 'all' },
+              { label: '📅 Краткосрочный', value: 'shortTerm' },
+              { label: '📆 Среднесрочный', value: 'mediumTerm' },
+              { label: '📊 Долгосрочный', value: 'longTerm' },
+            ]}
             fullWidth
           />
         </div>

@@ -313,4 +313,85 @@ router.get('/figis-without-month-news', async (req, res) => {
     }
 });
 
+/**
+ * Ручное обновление новостей (такой же запрос как в кроне)
+ * POST /api/news/update-daily
+ */
+router.post('/update-daily', async (req, res) => {
+    try {
+        const SchedulerService = (await import('../services/SchedulerService.js')).default;
+        const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+        
+        // Отправляем ответ сразу, так как обновление будет выполняться в фоне
+        res.json({
+            success: true,
+            message: 'Обновление новостей запущено',
+            data: {
+                started: new Date().toISOString()
+            }
+        });
+
+        // Запускаем обновление в фоне
+        (async () => {
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                LoggerService.info('Manual news update started via API', {
+                    service: 'news-routes',
+                    operation: 'update-daily',
+                    timestamp: new Date().toISOString()
+                });
+                
+                const result = await SchedulerService.performDailyNewsUpdate();
+
+                LoggerService.info('Manual news update completed', {
+                    service: 'news-routes',
+                    operation: 'update-daily',
+                    result: {
+                        updated: result.updated,
+                        totalNews: result.totalNews,
+                        processed: result.processed
+                    }
+                });
+
+                // Отправляем результат через WebSocket
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'news_daily_update_completed',
+                        data: result
+                    });
+                }
+
+            } catch (error) {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                LoggerService.error('Error during manual news update', {
+                    service: 'news-routes',
+                    operation: 'update-daily',
+                    error: {
+                        message: error.message,
+                        stack: error.stack
+                    }
+                });
+                
+                const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+                if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
+                    WebSocketService.broadcast({
+                        type: 'news_daily_update_error',
+                        data: {
+                            error: error.message
+                        }
+                    });
+                }
+            }
+        })();
+
+    } catch (error) {
+        console.error('❌ Ошибка запуска обновления новостей:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка запуска обновления новостей',
+            error: error.message
+        });
+    }
+});
+
 export default router;

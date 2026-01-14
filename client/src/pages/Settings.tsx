@@ -83,6 +83,9 @@ const Settings: React.FC<SettingsProps> = ({ className = '' }) => {
   // Кеш
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [cacheUpdating, setCacheUpdating] = useState(false);
+  
+  // Новости
+  const [newsUpdating, setNewsUpdating] = useState(false);
 
   // Сервисы
   const [servicesStatus, setServicesStatus] = useState<ServicesStatus | null>(null);
@@ -308,6 +311,19 @@ const Settings: React.FC<SettingsProps> = ({ className = '' }) => {
     }
   }, []);
 
+  const handleUpdateNews = useCallback(async () => {
+    setNewsUpdating(true);
+    try {
+      await apiService.updateNews();
+      showToast('success', 'Обновление новостей запущено');
+    } catch (error) {
+      console.error('Error updating news:', error);
+      showToast('error', 'Ошибка обновления новостей');
+    } finally {
+      setNewsUpdating(false);
+    }
+  }, []);
+
   const handleInitializeService = useCallback(async (serviceName: string) => {
     setServiceInitializing(prev => ({ ...prev, [serviceName]: true }));
     try {
@@ -417,6 +433,8 @@ const Settings: React.FC<SettingsProps> = ({ className = '' }) => {
                 cacheUpdating={cacheUpdating}
                 onRefresh={handleRefreshCache}
                 onFullRefresh={handleFullRefreshCache}
+                newsUpdating={newsUpdating}
+                onUpdateNews={handleUpdateNews}
               />
             </div>
             <div className="settings-overview-item settings-animate-delay-4">

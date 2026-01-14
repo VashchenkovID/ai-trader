@@ -49,7 +49,6 @@ class PortfolioOptimizer {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация PortfolioOptimizer...');
             
             // Убеждаемся, что зависимые сервисы инициализированы
             if (!CorrelationService.isInitialized) {
@@ -64,7 +63,6 @@ class PortfolioOptimizer {
             await this.loadSettings();
             
             this.isInitialized = true;
-            console.log('✅ PortfolioOptimizer инициализирован');
             
         } catch (error) {
             console.error('❌ Ошибка инициализации PortfolioOptimizer:', error);

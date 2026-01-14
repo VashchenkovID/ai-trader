@@ -170,9 +170,7 @@ async function startServer() {
         await initializeServices();
         
         server.listen(PORT, () => {
-            console.log(`🚀 Server running on port ${PORT}`);
-            console.log(`📊 Dashboard: http://localhost:${PORT}`);
-            console.log(`🔧 API: http://localhost:${PORT}/api`);
+            // Сервер запущен, логирование не требуется
         });
         
     } catch (error) {

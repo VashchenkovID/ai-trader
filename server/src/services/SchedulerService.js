@@ -229,7 +229,6 @@ class SchedulerService {
         this.activeSignalsPricesUpdateTask = SchedulerUtils.createScheduledTask(
             activeSignalsPricesUpdateSchedule,
             async () => {
-                console.log('📊 Scheduled active signals prices update started...');
                 await this.performActiveSignalsPricesUpdate();
             },
             {
@@ -246,7 +245,6 @@ class SchedulerService {
         this.tradingRequestsPricesUpdateTask = SchedulerUtils.createScheduledTask(
             tradingRequestsPricesUpdateSchedule,
             async () => {
-                console.log('📋 Scheduled trading requests prices update started...');
                 await this.performTradingRequestsPricesUpdate();
             },
             {
@@ -318,7 +316,6 @@ class SchedulerService {
         this.tradingHoursCacheTask = SchedulerUtils.createScheduledTask(
             tradingHoursSchedule,
             async () => {
-                console.log('🕐 Scheduled trading hours cache update started...');
                 await TradingHoursCacheService.updateTradingHoursCache();
             },
             {
@@ -404,7 +401,6 @@ class SchedulerService {
         this.positionMonitoringTask = SchedulerUtils.createScheduledTask(
             '*/5 * * * *',
             async () => {
-                console.log('📊 Scheduled position monitoring started...');
                 const PositionMonitoringService = (await import('./PositionMonitoringService.js')).default;
                 if (!PositionMonitoringService.isInitialized) {
                     await PositionMonitoringService.initialize();
@@ -426,7 +422,6 @@ class SchedulerService {
         this.dailyReportTask = SchedulerUtils.createScheduledTask(
             dailyReportSchedule,
             async () => {
-                console.log('📊 Scheduled daily report generation started...');
                 const DailyReportService = (await import('./DailyReportService.js')).default;
                 if (!DailyReportService.isInitialized) {
                     await DailyReportService.initialize();
@@ -509,7 +504,6 @@ class SchedulerService {
         this.portfolioAnalysisTask = SchedulerUtils.createScheduledTask(
             '0 * * * *',
             async () => {
-                console.log('📊 Scheduled portfolio analysis started...');
                 await this.performPortfolioAnalysis();
             },
             {
@@ -911,14 +905,49 @@ class SchedulerService {
                 let ensembleStatus = {};
                 if (EnsembleService) {
                     try {
-                        ensembleStatus = EnsembleService.getEnsembleStats();
+                        const stats = EnsembleService.getEnsembleStats();
+                        const isInitialized = EnsembleService.isInitialized || false;
+                        const isTraining = EnsembleService.isTraining || false;
+                        ensembleStatus = {
+                            ...stats,
+                            isInitialized,
+                            isTraining,
+                            status: isInitialized ? (isTraining ? 'training' : 'active') : 'inactive'
+                        };
                     } catch (error) {
                         console.warn('Error getting ensemble status in scheduler:', error);
+                        const isInitialized = EnsembleService.isInitialized || false;
+                        const isTraining = EnsembleService.isTraining || false;
                         ensembleStatus = {
-                            isInitialized: EnsembleService.isInitialized || false,
-                            isTraining: EnsembleService.isTraining || false
+                            isInitialized,
+                            isTraining,
+                            status: isInitialized ? (isTraining ? 'training' : 'active') : 'inactive'
                         };
                     }
+                } else {
+                    ensembleStatus = {
+                        isInitialized: false,
+                        isTraining: false,
+                        status: 'inactive'
+                    };
+                }
+                
+                // Формируем статус торгового движка
+                let tradingStatus = {
+                    status: 'inactive',
+                    mode: 'paper',
+                    isActive: false,
+                    isInitialized: false
+                };
+                if (TradingEngine) {
+                    const isInitialized = TradingEngine.isInitialized || false;
+                    const isActive = TradingEngine.isActive || false;
+                    tradingStatus = {
+                        status: isInitialized ? (isActive ? 'active' : 'inactive') : 'inactive',
+                        mode: TradingEngine.mode || 'paper',
+                        isActive,
+                        isInitialized
+                    };
                 }
                 
                 const systemStatus = {
@@ -928,11 +957,7 @@ class SchedulerService {
                         status: 'connected', 
                         lastQuery: new Date().toISOString() 
                     },
-                    trading: { 
-                        status: TradingEngine?.isActive ? 'active' : 'inactive',
-                        mode: TradingEngine?.mode || 'paper',
-                        isActive: TradingEngine?.isActive || false
-                    },
+                    trading: tradingStatus,
                     ensemble: ensembleStatus
                 };
                 
@@ -988,21 +1013,46 @@ class SchedulerService {
                 }
                 
                 // Получаем реальную торговую статистику и состояние портфеля
-                const portfolio = await TradingEngine.getVirtualPortfolioValue();
+                const portfolio = await TradingEngine.getPortfolioValue();
                 const stats = await TradingEngine.calculateTradingStats();
 
                 // Получаем топ-3 активные BUY-рекомендации - по одной для каждой стратегии
                 const Recommendation = (await import('../models/Recommendation.js')).default;
                 const topBuys = await Recommendation.getTopRecommendationsByStrategies();
 
+                // Рассчитываем totalPnL как разницу между текущей стоимостью и начальным капиталом
+                // Это включает и реализованную, и нереализованную прибыль
+                const initialCapital = portfolio?.initialCapital || 1000000;
+                const totalValue = portfolio?.totalValue || 0;
+                const totalPnL = totalValue - initialCapital;
+
+                // Win Rate: stats.winRate уже в диапазоне 0-1, умножаем на 100 для процентов
+                const winRateValue = stats?.winRate || 0;
+                const winRatePercent = winRateValue * 100;
+                const totalTradesValue = stats?.totalTrades || 0;
+                const successfulTradesValue = Math.round(totalTradesValue * winRateValue);
+                
+                // Логируем для отладки
+                const LoggerService = (await import('./LoggerService.js')).default;
+                if (LoggerService && LoggerService.isInitialized && totalTradesValue > 0) {
+                    LoggerService.info('tradingStatsTask: статистика торговли', {
+                        service: 'SchedulerService',
+                        totalTrades: totalTradesValue,
+                        winRate: winRateValue,
+                        winRatePercent: winRatePercent,
+                        successfulTrades: successfulTradesValue,
+                        totalPnL: totalPnL
+                    });
+                }
+
                 const tradingStats = {
-                    portfolioValue: portfolio?.totalValue || 0,
+                    portfolioValue: totalValue,
                     cash: portfolio?.cash || 0,
-                    totalPnL: stats?.totalReturn || 0,
-                    initialCapital: portfolio?.initialCapital || 1000000, // Добавляем начальный капитал для расчета процента прибыли
-                    winRate: (stats?.winRate || 0) * 100,
-                    totalTrades: stats?.totalTrades || 0,
-                    successfulTrades: Math.round((stats?.totalTrades || 0) * (stats?.winRate || 0)),
+                    totalPnL: totalPnL,
+                    initialCapital: initialCapital,
+                    winRate: winRatePercent,
+                    totalTrades: totalTradesValue,
+                    successfulTrades: successfulTradesValue,
                     recommendations: (topBuys || []).map(rec => ({
                         figi: rec.figi || '',
                         ticker: rec.ticker || '',
@@ -1823,10 +1873,7 @@ class SchedulerService {
                                 currentPrice: triggered.currentPrice, // Обновляем текущую цену
                                 updatedAt: new Date()
                             });
-                            console.log(`🔄 Triggered signal updated: ${triggered.signalId} (${triggered.triggerType}) - count: ${existingSignal.triggerCount + 1}`);
-                        } else {
-                            console.log(`💾 Triggered signal saved to DB: ${triggered.signalId} (${triggered.triggerType})`);
-                        }
+                        } 
 
                         // Добавляем сигнал в очередь для отправки после анализа
                         // Используем актуальные данные из БД
@@ -1935,7 +1982,14 @@ class SchedulerService {
                     if (['EXECUTED', 'REJECTED', 'CANCELLED', 'EXPIRED'].includes(request.status)) {
                         // Очищаем запись о последнем уведомлении для неактивных заявок
                         this.lastPendingRequestNotification.delete(requestData.requestId);
-                        console.log(`⏭️ Skipping request ${requestData.requestId} - status is ${request.status}`);
+                        continue;
+                    }
+
+                    // Дополнительная проверка: убеждаемся, что заявка все еще в ожидающем статусе
+                    // Это важно, так как заявка может быть исполнена между проверками
+                    if (request.status !== 'PENDING' && request.status !== 'APPROVED') {
+                        // Очищаем запись о последнем уведомлении для неактивных заявок
+                        this.lastPendingRequestNotification.delete(requestData.requestId);
                         continue;
                     }
 
@@ -1960,7 +2014,7 @@ class SchedulerService {
                         `🎯 Уверенность: ${(requestData.confidence * 100).toFixed(0)}%\n` +
                         `📋 Статус: ${statusText}`;
 
-                    // Отправляем уведомление в Telegram
+                    // Отправляем уведомление в Telegram только для ожидающих заявок (PENDING или APPROVED)
                     await OptimizedTelegramService.sendAlert(
                         'Заявка готова к исполнению',
                         message,
@@ -3399,14 +3453,22 @@ class SchedulerService {
      * Ежедневная проверка и загрузка свежих новостей
      */
     async performDailyNewsUpdate() {
+        const LoggerService = (await import('./LoggerService.js')).default;
+        
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
-            console.log('📰 Daily news update skipped: full cache update is running');
+            LoggerService.info('Daily news update skipped: full cache update is running', {
+                service: 'SchedulerService',
+                operation: 'performDailyNewsUpdate'
+            });
             return;
         }
         
         try {
-            console.log('📰 Starting daily news update...');
+            LoggerService.info('Starting daily news update', {
+                service: 'SchedulerService',
+                operation: 'performDailyNewsUpdate'
+            });
             
             const NewsAnalysisService = (await import('./NewsAnalysisService.js')).default;
             
@@ -3419,11 +3481,29 @@ class SchedulerService {
             const lastDailyNewsUpdateIndex = await SettingsService.getSetting('daily_news_update_last_index', 0);
             const startIndex = parseInt(lastDailyNewsUpdateIndex) || 0;
             
+            LoggerService.info(`Starting news update with rotation: startIndex=${startIndex}, limit=30`, {
+                service: 'SchedulerService',
+                operation: 'performDailyNewsUpdate',
+                startIndex,
+                limit: 30
+            });
+            
             const result = await NewsAnalysisService.loadFreshNewsForAllInstruments({
                 limit: 30, // Ограничиваем количество инструментов
                 startIndex: startIndex, // Начинаем с сохраненного индекса (ротация)
                 onProgress: (progress) => {
-                    console.log(`📰 Прогресс загрузки: ${progress.current}/${progress.total} (${progress.ticker || progress.figi})`);
+                    LoggerService.info(`News update progress: ${progress.current}/${progress.total} - ${progress.ticker || progress.figi}`, {
+                        service: 'SchedulerService',
+                        operation: 'performDailyNewsUpdate',
+                        progress: {
+                            current: progress.current,
+                            total: progress.total,
+                            ticker: progress.ticker,
+                            figi: progress.figi,
+                            success: progress.success,
+                            count: progress.count
+                        }
+                    });
                 }
             });
             
@@ -3431,10 +3511,24 @@ class SchedulerService {
             if (result.total !== undefined) {
                 const nextIndex = (startIndex + 30) % result.total;
                 await SettingsService.setSetting('daily_news_update_last_index', nextIndex);
-                console.log(`📰 Daily news update rotation: next update will start from index ${nextIndex}`);
+                LoggerService.info(`News update rotation: next update will start from index ${nextIndex}`, {
+                    service: 'SchedulerService',
+                    operation: 'performDailyNewsUpdate',
+                    nextIndex,
+                    total: result.total
+                });
             }
 
-            console.log(`✅ Daily news update completed: ${result.updated} instruments updated, ${result.totalNews} news articles loaded`);
+            LoggerService.info(`Daily news update completed: ${result.updated} instruments updated, ${result.totalNews} news articles loaded`, {
+                service: 'SchedulerService',
+                operation: 'performDailyNewsUpdate',
+                result: {
+                    updated: result.updated,
+                    totalNews: result.totalNews,
+                    processed: result.processed,
+                    total: result.total
+                }
+            });
             
             // Отправляем уведомление через Telegram
             if (result.updated > 0) {
@@ -3451,7 +3545,14 @@ class SchedulerService {
             return result;
 
         } catch (error) {
-            console.error('❌ Error during daily news update:', error);
+            LoggerService.error('Error during daily news update', {
+                service: 'SchedulerService',
+                operation: 'performDailyNewsUpdate',
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
             throw error;
         }
     }

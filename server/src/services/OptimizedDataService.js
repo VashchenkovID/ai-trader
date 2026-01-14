@@ -24,8 +24,6 @@ class OptimizedDataService {
      */
     async initialize() {
         try {
-            console.log('📊 Initializing Optimized Data Service...');
-            
             // Инициализируем зависимости
             await CacheService.initialize();
             // Инициализируем MacroDataService для работы с макро-фичами
@@ -49,9 +47,16 @@ class OptimizedDataService {
             // await PortfolioSyncService.initialize(); // Временно отключено
             
             this.isInitialized = true;
-            console.log('✅ Optimized Data Service initialized');
         } catch (error) {
-            console.error('❌ Failed to initialize Optimized Data Service:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Failed to initialize Optimized Data Service', {
+                service: 'OptimizedDataService',
+                operation: 'initialize',
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
             throw error;
         }
     }

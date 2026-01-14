@@ -17,13 +17,11 @@ class TradingHoursCacheService {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация TradingHoursCacheService...');
             
             // Загружаем настройки кеша
             this.cacheTimeout = await Settings.getSetting('trading_hours_cache_timeout', 15) * 60 * 1000;
             
             this.isInitialized = true;
-            console.log('✅ TradingHoursCacheService инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации TradingHoursCacheService:', error);
             throw error;

@@ -45,12 +45,14 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
         if (summary.success && summary.data) {
           // Проверяем baseMetrics.sharpeRatio
           const sharpeValue = summary.data.baseMetrics?.sharpeRatio;
-          if (sharpeValue != null && sharpeValue !== 0 && !isNaN(sharpeValue)) {
+          if (sharpeValue != null && !isNaN(sharpeValue)) {
             setSharpeRatio(sharpeValue);
           } else {
-            console.warn('Sharpe Ratio is 0 or null, no trades data available');
-            setSharpeRatio(null);
+            // Если sharpeRatio равен 0 или null, все равно устанавливаем его (может быть 0 если нет волатильности)
+            setSharpeRatio(sharpeValue !== undefined ? sharpeValue : null);
           }
+        } else {
+          setSharpeRatio(null);
         }
       } catch (error) {
         console.error('Error loading Sharpe Ratio:', error);
@@ -58,6 +60,10 @@ const Dashboard: React.FC<DashboardProps> = ({ className = '' }) => {
       }
     };
     loadSharpeRatio();
+    
+    // Обновляем Sharpe Ratio каждые 5 минут
+    const interval = setInterval(loadSharpeRatio, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   // Определяем, учится ли любая из нейросетей

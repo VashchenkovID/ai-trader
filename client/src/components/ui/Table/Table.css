@@ -1,7 +1,8 @@
 /* Table Wrapper */
 .table-wrapper {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
+  overflow-y: visible;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border-default);
   background: var(--color-surface-default);
@@ -82,7 +83,6 @@
 
 .table-row-clickable:hover {
   background: var(--color-surface-hover);
-  transform: translateX(2px);
 }
 
 /* Hoverable Rows */
@@ -120,7 +120,6 @@
 .table-hoverable tbody tr:hover,
 .table-hoverable-row:hover {
   background: var(--color-surface-hover);
-  transform: translateX(2px);
 }
 
 /* Striped Rows */

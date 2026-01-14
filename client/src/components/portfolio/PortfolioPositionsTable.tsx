@@ -335,7 +335,13 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
 
       await apiService.createTradingRequest(
         selectedPosition.figi,
-        { quantity, autoApprove: true }, // Автоматически одобряем ручные продажи из портфеля
+        { 
+          quantity, 
+          autoApprove: true,
+          action: 'SELL', // Явно указываем действие - продажа
+          strategyId: selectedPosition.strategy?.id || selectedPosition.positionStrategy?.strategyId, // Передаем стратегию из позиции
+          forceEntry: true // Обход валидации входа для продажи из портфеля
+        }, // Автоматически одобряем ручные продажи из портфеля
         recommendationData
       );
 

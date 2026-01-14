@@ -88,6 +88,141 @@
   color: var(--color-text-secondary);
 }
 
+.recommendation-card-horizons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+}
+
+.recommendation-card-horizons-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 8px;
+}
+
+.recommendation-card-horizons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recommendation-card-horizon-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--color-surface-elevated);
+  border-radius: 6px;
+}
+
+.recommendation-card-horizon-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recommendation-card-horizon-icon {
+  font-size: 16px;
+}
+
+.recommendation-card-horizon-name {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  flex: 1;
+}
+
+.recommendation-card-horizon-confidence {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.recommendation-card-strategies {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--color-surface-default);
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.recommendation-card-strategies::-webkit-scrollbar {
+  width: 6px;
+}
+
+.recommendation-card-strategies::-webkit-scrollbar-track {
+  background: var(--color-surface-elevated);
+  border-radius: 3px;
+}
+
+.recommendation-card-strategies::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: 3px;
+}
+
+.recommendation-card-strategies::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+.recommendation-card-strategies-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 8px;
+  position: sticky;
+  top: 0;
+  background: var(--color-surface-default);
+  z-index: 1;
+  padding-bottom: 4px;
+}
+
+.recommendation-card-strategies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recommendation-card-strategy-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--color-surface-elevated);
+  border-radius: 6px;
+  border-left: 3px solid var(--color-accent-primary);
+}
+
+.recommendation-card-strategy-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recommendation-card-strategy-confidence {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.recommendation-card-strategy-explanation {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  padding-top: 4px;
+}
+
 .recommendation-card-price-section {
   display: flex;
   flex-direction: column;

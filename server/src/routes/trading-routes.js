@@ -30,7 +30,8 @@ router.get('/stats', async (req, res) => {
  */
 router.get('/trades', async (req, res) => {
     try {
-        const trades = await TradingEngine.getTradeHistory();
+        const limit = req.query.limit ? parseInt(req.query.limit) : 100;
+        const trades = await TradingEngine.getTradeHistory(limit);
         res.json({
             success: true,
             data: trades

@@ -14,13 +14,11 @@ class TradingModeManager {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация TradingModeManager...');
             
             // Загружаем текущий режим из настроек
             this.currentMode = await Settings.getSetting('trading_mode', 'paper');
             
             this.isInitialized = true;
-            console.log(`✅ TradingModeManager инициализирован. Текущий режим: ${this.currentMode}`);
         } catch (error) {
             console.error('❌ Ошибка инициализации TradingModeManager:', error);
             throw error;

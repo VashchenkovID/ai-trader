@@ -12,9 +12,7 @@ class SignalValidationService {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация SignalValidationService...');
             this.isInitialized = true;
-            console.log('✅ SignalValidationService инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации SignalValidationService:', error);
             throw error;

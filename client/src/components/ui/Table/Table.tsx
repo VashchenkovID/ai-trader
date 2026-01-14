@@ -184,7 +184,7 @@ export const Table = <T extends Record<string, any>>({
                     key={column.key}
                     className="table-cell"
                     style={{
-                      textAlign: column.align || 'left',
+                      textAlign: 'left',
                     }}
                   >
                     {renderCell(row, column)}

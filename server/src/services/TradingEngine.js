@@ -29,7 +29,6 @@ class TradingEngine {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация Trading Engine...');
             
             await this.modeManager.initialize();
             await RiskManagementService.initialize();
@@ -40,7 +39,6 @@ class TradingEngine {
             
             this.isInitialized = true;
             this.isActive = true; // Активируем после инициализации
-            console.log('✅ Trading Engine инициализирован и активирован');
             
         } catch (error) {
             console.error('❌ Ошибка инициализации Trading Engine:', error);
@@ -301,9 +299,21 @@ class TradingEngine {
         let pnl = -commission; // Для BUY - только комиссия покупки (убыток)
         if (action === 'SELL') {
             // Рассчитываем среднюю цену покупки из всех сделок BUY для этого инструмента
-            const buyTrades = this.virtualPortfolio.trades.filter(t => 
-                (t.symbol === symbol || t.figi === symbol) && t.action === 'BUY'
-            );
+            // Улучшенная логика сопоставления: проверяем и symbol, и figi
+            const tradeSymbol = symbol || (signal.figi || '');
+            const tradeFigi = signal.figi || symbol || '';
+            
+            const buyTrades = this.virtualPortfolio.trades.filter(t => {
+                if (t.action !== 'BUY') return false;
+                
+                const tSymbol = t.symbol || t.figi || '';
+                const tFigi = t.figi || t.symbol || '';
+                
+                // Проверяем совпадение по инструменту (symbol или figi)
+                return (tSymbol && (tSymbol === tradeSymbol || tSymbol === tradeFigi)) ||
+                       (tFigi && (tFigi === tradeSymbol || tFigi === tradeFigi));
+            });
+            
             if (buyTrades.length > 0) {
                 // Суммируем стоимость покупок (цена + комиссия)
                 const totalCost = buyTrades.reduce((sum, trade) => 
@@ -325,9 +335,20 @@ class TradingEngine {
         let resultPercent = null;
         if (action === 'SELL' && pnl !== undefined && pnl !== null) {
             // Находим среднюю цену покупки для расчета процента прибыли/убытка
-            const buyTrades = this.virtualPortfolio.trades.filter(t => 
-                (t.symbol === symbol || t.figi === symbol) && t.action === 'BUY'
-            );
+            // Используем ту же логику сопоставления, что и для расчета PnL
+            const tradeSymbol = symbol || (signal.figi || '');
+            const tradeFigi = signal.figi || symbol || '';
+            
+            const buyTrades = this.virtualPortfolio.trades.filter(t => {
+                if (t.action !== 'BUY') return false;
+                
+                const tSymbol = t.symbol || t.figi || '';
+                const tFigi = t.figi || t.symbol || '';
+                
+                return (tSymbol && (tSymbol === tradeSymbol || tSymbol === tradeFigi)) ||
+                       (tFigi && (tFigi === tradeSymbol || tFigi === tradeFigi));
+            });
+            
             if (buyTrades.length > 0) {
                 // Суммируем стоимость покупок с учетом комиссий
                 const totalCost = buyTrades.reduce((sum, t) => 
@@ -360,7 +381,8 @@ class TradingEngine {
             resultPercent, // Добавляем resultPercent в trade для использования в ProfitabilityTracker
             timestamp: new Date().toISOString(),
             confidence,
-            mode: 'paper'
+            mode: 'paper',
+            strategyId: signal.strategyId || null // Сохраняем strategyId из заявки
         };
         
         this.virtualPortfolio.trades.push(trade);
@@ -870,12 +892,30 @@ class TradingEngine {
     /**
      * Получение истории сделок
      */
-    getTradeHistory(limit = 100) {
+    async getTradeHistory(limit = 100) {
         const modeInfo = this.modeManager.getCurrentMode();
         const mode = modeInfo.mode || modeInfo; // Поддержка старого формата
         
         if (mode === 'paper') {
-            return this.virtualPortfolio.trades.slice(-limit);
+            // Если портфель не загружен, пытаемся загрузить из БД
+            if (!this.isInitialized || !this.virtualPortfolio || !this.virtualPortfolio.trades) {
+                try {
+                    await this.loadVirtualPortfolio();
+                } catch (error) {
+                    const LoggerService = (await import('./LoggerService.js')).default;
+                    if (LoggerService && LoggerService.isInitialized) {
+                        LoggerService.warn('getTradeHistory: не удалось загрузить портфель из БД', {
+                            service: 'TradingEngine',
+                            error: error.message
+                        });
+                    }
+                    return [];
+                }
+            }
+            
+            // Возвращаем сделки из виртуального портфеля
+            const trades = this.virtualPortfolio?.trades || [];
+            return Array.isArray(trades) ? trades.slice(-limit) : [];
         } else {
             // Для реальных режимов нужно получать данные из брокера
             return [];
@@ -886,7 +926,7 @@ class TradingEngine {
      * Расчет статистики торговли
      */
     async calculateTradingStats() {
-        const trades = this.getTradeHistory();
+        const trades = await this.getTradeHistory();
         const modeInfo = this.modeManager.getCurrentMode();
         const mode = modeInfo.mode || modeInfo; // Поддержка старого формата
         
@@ -905,41 +945,72 @@ class TradingEngine {
         let totalReturn = 0;
         let maxValue = 0;
         let maxDrawdown = 0;
+        let processedTrades = 0; // Считаем только сделки с PnL
 
+        // Фильтруем только закрытые сделки (SELL)
+        // Для Win Rate нужны только закрытые позиции, где можно определить прибыль/убыток
+        // НЕ считаем открытые позиции (BUY с нереализованным PnL)
+        const closedTrades = [];
+        
         for (const trade of trades) {
-            // Используем уже рассчитанный PnL из сделки (учитывает комиссии)
-            if (trade.pnl !== undefined) {
-                totalReturn += trade.pnl;
-                if (trade.pnl > 0) {
-                    profitableTrades++;
-                }
-            } else if (trade.action === 'SELL') {
-                // Fallback: если PnL не рассчитан, рассчитываем с учетом комиссии
-                const buyTrades = trades.filter(t => 
-                    (t.symbol === trade.symbol || t.figi === trade.symbol) && 
-                    t.action === 'BUY' && 
-                    new Date(t.timestamp) < new Date(trade.timestamp)
-                );
-                if (buyTrades.length > 0) {
-                    const totalCost = buyTrades.reduce((sum, t) => 
-                        sum + (t.price * t.quantity) + (t.commission || 0), 0
-                    );
-                    const totalQuantity = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
-                    const averageBuyPrice = totalQuantity > 0 ? totalCost / totalQuantity : trade.price;
-                    const profit = (trade.price - averageBuyPrice) * trade.quantity - (trade.commission || 0);
-                    totalReturn += profit;
-                    if (profit > 0) {
-                        profitableTrades++;
+            // Win Rate считаем только по SELL сделкам (закрытым позициям)
+            if (trade.action === 'SELL') {
+                let tradePnL = null;
+                
+                // Используем уже рассчитанный PnL из сделки (учитывает комиссии)
+                if (trade.pnl !== undefined && trade.pnl !== null) {
+                    tradePnL = trade.pnl;
+                } else {
+                    // Fallback: если PnL не рассчитан, рассчитываем с учетом комиссии
+                    // Улучшенная логика сопоставления: проверяем и symbol, и figi
+                    const tradeSymbol = trade.symbol || trade.figi || '';
+                    const tradeFigi = trade.figi || trade.symbol || '';
+                    
+                    const buyTrades = trades.filter(t => {
+                        if (t.action !== 'BUY') return false;
+                        
+                        // Проверяем совпадение по времени (BUY должен быть раньше SELL)
+                        const buyTime = t.timestamp ? new Date(t.timestamp).getTime() : 0;
+                        const sellTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0;
+                        if (buyTime >= sellTime) return false;
+                        
+                        // Проверяем совпадение по инструменту (symbol или figi)
+                        const tSymbol = t.symbol || t.figi || '';
+                        const tFigi = t.figi || t.symbol || '';
+                        
+                        return (tSymbol && (tSymbol === tradeSymbol || tSymbol === tradeFigi)) ||
+                               (tFigi && (tFigi === tradeSymbol || tFigi === tradeFigi));
+                    });
+                    
+                    if (buyTrades.length > 0) {
+                        const totalCost = buyTrades.reduce((sum, t) => 
+                            sum + (t.price * t.quantity) + (t.commission || 0), 0
+                        );
+                        const totalQuantity = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
+                        const averageBuyPrice = totalQuantity > 0 ? totalCost / totalQuantity : trade.price;
+                        tradePnL = (trade.price - averageBuyPrice) * trade.quantity - (trade.commission || 0);
                     }
                 }
+                
+                // Если PnL рассчитан, добавляем в статистику
+                if (tradePnL !== null && tradePnL !== undefined) {
+                    totalReturn += tradePnL;
+                    processedTrades++;
+                    if (tradePnL > 0) {
+                        profitableTrades++;
+                    }
+                    closedTrades.push({ ...trade, pnl: tradePnL });
+                }
             }
+            // Игнорируем BUY сделки для расчета Win Rate (это открытые позиции)
         }
 
-        const winRate = trades.length > 0 ? profitableTrades / trades.length : 0;
-        const averageTrade = trades.length > 0 ? totalReturn / trades.length : 0;
+        // Win Rate считаем только по закрытым сделкам (с PnL)
+        const winRate = processedTrades > 0 ? profitableTrades / processedTrades : 0;
+        const averageTrade = processedTrades > 0 ? totalReturn / processedTrades : 0;
 
         return {
-            totalTrades: trades.length,
+            totalTrades: processedTrades, // Возвращаем количество обработанных сделок
             winRate,
             totalReturn,
             maxDrawdown,

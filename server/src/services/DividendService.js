@@ -19,9 +19,7 @@ class DividendService {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация DividendService...');
             this.isInitialized = true;
-            console.log('✅ DividendService инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации DividendService:', error);
             throw error;

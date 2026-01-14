@@ -19,6 +19,7 @@
   --color-surface-default: #1A1A24;
   --color-surface-hover: #242430;
   --color-surface-active: #2A2A38;
+  --color-surface-elevated: #242430;
   --color-surface-glass: rgba(26, 26, 36, 0.8);
   
   /* Текст */

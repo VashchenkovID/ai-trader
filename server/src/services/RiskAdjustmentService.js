@@ -60,14 +60,12 @@ class RiskAdjustmentService {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация RiskAdjustmentService...');
             
             await this.loadAdjustmentSettings();
             await this.loadRiskHistory();
             await this.determineCurrentRiskLevel();
             
             this.isInitialized = true;
-            console.log('✅ RiskAdjustmentService инициализирован');
             
         } catch (error) {
             console.error('❌ Ошибка инициализации RiskAdjustmentService:', error);

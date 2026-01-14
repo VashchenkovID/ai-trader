@@ -30,12 +30,10 @@ class PerformanceAnalyzer {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация PerformanceAnalyzer...');
             
             await this.loadAnalysisSettings();
             
             this.isInitialized = true;
-            console.log('✅ PerformanceAnalyzer инициализирован');
             
         } catch (error) {
             console.error('❌ Ошибка инициализации PerformanceAnalyzer:', error);

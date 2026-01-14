@@ -2,6 +2,7 @@ import React, { useState, useMemo, ReactNode, useCallback } from 'react';
 import { Table, TableColumn, SortDirection } from './Table';
 import { Button } from '../Button/Button';
 import { Skeleton } from '../Skeleton/Skeleton';
+import { Checkbox } from '../Checkbox/Checkbox';
 import './DataTable.css';
 
 export interface DataTableColumn<T = any> extends TableColumn<T> {
@@ -182,22 +183,24 @@ export const DataTable = <T extends Record<string, any>>({
       result.push({
         key: '__selection__',
         header: (
-          <input
-            type="checkbox"
-            checked={isAllSelected}
-            onChange={(e) => handleSelectAll(e.target.checked)}
-            onClick={(e) => e.stopPropagation()}
-          />
+          <div onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={isAllSelected}
+              onChange={(e) => handleSelectAll(e.target.checked)}
+              size="sm"
+            />
+          </div>
         ),
         render: (_value: any, row: T) => (
-          <input
-            type="checkbox"
-            checked={isRowSelected(row)}
-            onChange={(e) => {
-              e.stopPropagation();
-              handleSelectionChange(row, e.target.checked);
-            }}
-          />
+          <div onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={isRowSelected(row)}
+              onChange={(e) => {
+                handleSelectionChange(row, e.target.checked);
+              }}
+              size="sm"
+            />
+          </div>
         ),
         width: '3rem',
         align: 'center',

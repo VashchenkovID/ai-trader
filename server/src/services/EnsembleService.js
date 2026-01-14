@@ -661,7 +661,6 @@ class EnsembleService {
         
         // Инициализируем сервис, если не инициализирован
         if (!this.isInitialized) {
-            console.log('🔧 Initializing Ensemble Service...');
             await this.initialize();
         }
         
@@ -2273,17 +2272,13 @@ class EnsembleService {
             // Проверяем, загружены ли уже модели
             const allLoaded = this.models.lstm && this.models.cnn && this.models.transformer;
             if (allLoaded) {
-                console.log('ℹ️ Ensemble models already loaded, skipping reload');
                 return;
             }
-
-            console.log('📥 Loading ensemble models with new ModelManager...');
             
             // Загружаем каждую модель ансамбля через ModelManager
             for (const modelType of ['lstm', 'cnn', 'transformer']) {
                 // Пропускаем, если модель уже загружена
                 if (this.models[modelType]) {
-                    console.log(`ℹ️ ${modelType} model already loaded, skipping`);
                     continue;
                 }
 
@@ -2300,9 +2295,7 @@ class EnsembleService {
                         });
                         
                         this.models[modelType] = model;
-                        console.log(`✅ ${modelType} model loaded successfully`);
                     } else {
-                        console.warn(`⚠️ Failed to load ${modelType} model, creating new one`);
                         // Создаем новую модель если не удалось загрузить
                         switch (modelType) {
                             case 'lstm':
@@ -2317,7 +2310,15 @@ class EnsembleService {
                         }
                     }
                 } catch (modelError) {
-                    console.warn(`⚠️ Error loading ${modelType} model:`, modelError.message);
+                    const LoggerService = (await import('./LoggerService.js')).default;
+                    LoggerService.error(`Failed to load ${modelType} model`, {
+                        service: 'EnsembleService',
+                        operation: 'loadModels',
+                        error: {
+                            message: modelError.message,
+                            stack: modelError.stack
+                        }
+                    });
                     // Создаем новую модель при ошибке
                     switch (modelType) {
                         case 'lstm':

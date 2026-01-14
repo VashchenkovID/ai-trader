@@ -413,11 +413,6 @@ class DatabaseConnectionManager {
 
         this.checkInterval = setInterval(() => {
             const poolStatus = this.getPoolStatus();
-            const stats = this.getStatus();
-            
-            if (poolStatus.waiting > 0 || poolStatus.available <= 2) {
-                console.log(`📊 Pool status: ${poolStatus.size}/${poolStatus.max} connections, ${poolStatus.waiting} waiting, ${poolStatus.available} available`);
-            }
             
             // Автоматически обрабатываем очередь, если есть свободные подключения
             if (poolStatus.available > 0 && this.connectionQueue.length > 0) {

@@ -37,13 +37,11 @@ class Stage3Validator {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация Stage3Validator...');
             
             await this.loadValidationSettings();
             await this.loadValidationHistory();
             
             this.isInitialized = true;
-            console.log('✅ Stage3Validator инициализирован');
             
         } catch (error) {
             console.error('❌ Ошибка инициализации Stage3Validator:', error);

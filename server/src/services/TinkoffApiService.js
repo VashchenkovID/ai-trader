@@ -1010,13 +1010,8 @@ class TinkoffApiService {
             for (const body of possibleBodies) {
                 try {
                     const fullBody = { ...body, ...requestBody };
-                    console.log(`🔍 Получаем сигналы через ${path} для ${Object.keys(body)[0]}: ${figi}`, 
-                        options.from ? `с ${options.from.toISOString()}` : '', 
-                        options.to ? `по ${options.to.toISOString()}` : '');
                     
                     const response = await this.makeRequest(path, fullBody);
-
-                    console.log(`✅ Успешно получены сигналы: ${response.signals?.length || 0} сигналов`);
                     
                     return {
                         success: true,

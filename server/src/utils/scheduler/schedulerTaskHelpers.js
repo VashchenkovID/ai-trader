@@ -62,7 +62,6 @@ export function wrapTaskWithErrorHandling(taskHandler, taskName, options = {}) {
 export function createTaskWithSkipCheck(taskHandler, startTime, minDelay = 60 * 1000) {
     return async (...args) => {
         if (shouldSkipFirstRun(startTime, minDelay)) {
-            console.log(`⏭️ Skipping first run of task (too soon after startup)`);
             return;
         }
         await taskHandler(...args);

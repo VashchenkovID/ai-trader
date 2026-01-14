@@ -28,14 +28,12 @@ class CapitalScalingService {
      */
     async initialize() {
         try {
-            console.log('🚀 Инициализация CapitalScalingService...');
             
             await this.loadScalingSettings();
             await this.loadPerformanceHistory();
             await this.determineCurrentCapitalLevel();
             
             this.isInitialized = true;
-            console.log('✅ CapitalScalingService инициализирован');
             
         } catch (error) {
             console.error('❌ Ошибка инициализации CapitalScalingService:', error);

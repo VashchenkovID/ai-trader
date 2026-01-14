@@ -12,6 +12,7 @@ import { Alert } from '../components/ui/Alert/Alert';
 import { Toolbar } from '../components/ui/Toolbar/Toolbar';
 import { SplitButton } from '../components/ui/SplitButton/SplitButton';
 import { Select } from '../components/ui/Select/Select';
+import { Checkbox } from '../components/ui/Checkbox/Checkbox';
 import { DataTable, DataTableColumn } from '../components/ui/Table/DataTable';
 import { apiService } from '../services/apiService';
 import { translateRecommendation } from '../utils/recommendationTranslator';
@@ -66,6 +67,10 @@ const TradingRequestManager: React.FC = () => {
 
   // Фильтр по направлению сделки (BUY/SELL)
   const [actionFilter, setActionFilter] = useState<'all' | 'BUY' | 'SELL'>('all');
+  
+  // Дополнительные фильтры
+  const [showHighConfidenceOnly, setShowHighConfidenceOnly] = useState(false);
+  const [showUrgentOnly, setShowUrgentOnly] = useState(false);
 
   const modeOptions = [
     { label: 'Все режимы', value: 'all' },
@@ -556,7 +561,7 @@ const TradingRequestManager: React.FC = () => {
       accessor: (row) => row.confidence,
       render: (_, row) => `${(row.confidence * 100).toFixed(0)}%`,
       align: 'right',
-      width: '100px'
+      width: '80px'
     },
     {
       key: 'tradingMode',
@@ -642,7 +647,7 @@ const TradingRequestManager: React.FC = () => {
       accessor: (row) => row.confidence,
       render: (_, row) => `${(row.confidence * 100).toFixed(0)}%`,
       align: 'right',
-      width: '100px'
+      width: '80px'
     },
     {
       key: 'priority',
@@ -837,6 +842,20 @@ const TradingRequestManager: React.FC = () => {
           style={{ minWidth: '120px', maxWidth: '180px' }}
         />
         
+        <Checkbox
+          label="Высокая уверенность (≥70%)"
+          checked={showHighConfidenceOnly}
+          onChange={(e) => setShowHighConfidenceOnly(e.target.checked)}
+          size="sm"
+        />
+        
+        <Checkbox
+          label="Только срочные"
+          checked={showUrgentOnly}
+          onChange={(e) => setShowUrgentOnly(e.target.checked)}
+          size="sm"
+        />
+        
         <Button
           variant="warning"
           size="sm"
@@ -901,10 +920,24 @@ const TradingRequestManager: React.FC = () => {
     );
   }
 
-  // Применяем фильтр по действию перед рендером
+  // Применяем фильтры перед рендером
   const filteredRequests = requests.filter((r) => {
-    if (actionFilter === 'all') return true;
-    return r.action === actionFilter;
+    // Фильтр по действию
+    if (actionFilter !== 'all' && r.action !== actionFilter) {
+      return false;
+    }
+    
+    // Фильтр по высокой уверенности (>= 70%)
+    if (showHighConfidenceOnly && r.confidence < 0.7) {
+      return false;
+    }
+    
+    // Фильтр по срочности
+    if (showUrgentOnly && r.priority !== 'URGENT') {
+      return false;
+    }
+    
+    return true;
   });
 
   return (

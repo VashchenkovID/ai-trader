@@ -1483,27 +1483,83 @@ class NewsAnalysisService {
                 await NewsApiService.initialize();
             }
 
+            const LoggerService = (await import('./LoggerService.js')).default;
+            
             // Получаем все акции в рублях
             const instruments = await CacheService.getAllInstruments();
+            LoggerService.info(`Retrieved ${instruments.length} total instruments from CacheService`, {
+                service: 'NewsAnalysisService',
+                operation: 'loadFreshNewsForAllInstruments',
+                totalInstruments: instruments.length
+            });
+            
+            // Детальная статистика по фильтрам
+            const withRUB = instruments.filter(inst => inst.currency === 'RUB' || inst.currency === 'rub');
+            const withShareType = instruments.filter(inst => inst.instrumentType === 'share' || !inst.instrumentType);
+            const withTicker = instruments.filter(inst => inst.ticker);
+            const withName = instruments.filter(inst => inst.name);
+            
+            LoggerService.info('Instrument filtering statistics', {
+                service: 'NewsAnalysisService',
+                operation: 'loadFreshNewsForAllInstruments',
+                statistics: {
+                    total: instruments.length,
+                    withRUB: withRUB.length,
+                    withShareType: withShareType.length,
+                    withTicker: withTicker.length,
+                    withName: withName.length
+                }
+            });
+            
             let shares = instruments.filter(inst => 
-                inst.currency === 'RUB' && 
+                (inst.currency === 'RUB' || inst.currency === 'rub') && 
                 (inst.instrumentType === 'share' || !inst.instrumentType) &&
                 inst.ticker && inst.name
             );
             
             const totalShares = shares.length;
             
+            LoggerService.info(`Filtered to ${totalShares} shares matching all criteria`, {
+                service: 'NewsAnalysisService',
+                operation: 'loadFreshNewsForAllInstruments',
+                totalShares,
+                criteria: {
+                    currency: 'RUB or rub',
+                    instrumentType: 'share or null',
+                    hasTicker: true,
+                    hasName: true
+                }
+            });
+            
             // Применяем ротацию: начинаем с startIndex
             if (startIndex > 0 && startIndex < shares.length) {
                 shares = [...shares.slice(startIndex), ...shares.slice(0, startIndex)];
+                LoggerService.info(`Applied rotation: startIndex=${startIndex}, shares after rotation=${shares.length}`, {
+                    service: 'NewsAnalysisService',
+                    operation: 'loadFreshNewsForAllInstruments',
+                    startIndex,
+                    sharesAfterRotation: shares.length
+                });
             }
             
             // Ограничиваем количество инструментов, если указан limit
             if (limit && limit > 0) {
                 shares = shares.slice(0, limit);
-                console.log(`📊 Загрузка актуальных новостей для ${shares.length} акций (ротация: начиная с индекса ${startIndex}, всего ${totalShares} акций, ограничено до ${limit} для соблюдения лимита API)...`);
+                LoggerService.info(`Loading fresh news for ${shares.length} instruments (rotation: startIndex=${startIndex}, total=${totalShares}, limited to ${limit} for API limit)`, {
+                    service: 'NewsAnalysisService',
+                    operation: 'loadFreshNewsForAllInstruments',
+                    startIndex,
+                    limit,
+                    totalShares,
+                    sharesToProcess: shares.length
+                });
             } else {
-                console.log(`📊 Загрузка актуальных новостей для ${shares.length} акций (ротация: начиная с индекса ${startIndex})...`);
+                LoggerService.info(`Loading fresh news for ${shares.length} instruments (rotation: startIndex=${startIndex})`, {
+                    service: 'NewsAnalysisService',
+                    operation: 'loadFreshNewsForAllInstruments',
+                    startIndex,
+                    sharesToProcess: shares.length
+                });
             }
 
             // Период - последние сутки
@@ -1521,18 +1577,19 @@ class NewsAnalysisService {
                 const instrument = shares[i];
                 
                 try {
-                    console.log(`📡 [${i + 1}/${shares.length}] Загрузка новостей для ${instrument.ticker} (${instrument.name})...`);
-                    
-                    // Логируем данные инструмента из CacheService (как в тестовом методе)
-                    console.log(`📋 Данные инструмента из CacheService для loadFreshNewsForAllInstruments:`);
-                    console.log(`   ticker: ${instrument.ticker} (тип: ${typeof instrument.ticker})`);
-                    console.log(`   name: ${instrument.name} (тип: ${typeof instrument.name})`);
-                    console.log(`   sector: ${instrument.sector || 'null'} (тип: ${typeof instrument.sector})`);
-                    console.log(`   apiData: ${instrument.apiData ? (typeof instrument.apiData === 'object' ? `object с ключами: ${Object.keys(instrument.apiData).join(', ')}` : typeof instrument.apiData) : 'null'}`);
-                    if (instrument.apiData && typeof instrument.apiData === 'object') {
-                        console.log(`   apiData содержимое:`, JSON.stringify(instrument.apiData, null, 2).substring(0, 500));
-                    }
-                    console.log(`   apiData?.aliases: ${instrument.apiData?.aliases ? (Array.isArray(instrument.apiData.aliases) ? `массив [${instrument.apiData.aliases.length}]` : typeof instrument.apiData.aliases) : 'null'}`);
+                    LoggerService.info(`Loading news for ${instrument.ticker} (${instrument.name}) - ${i + 1}/${shares.length}`, {
+                        service: 'NewsAnalysisService',
+                        operation: 'loadFreshNewsForAllInstruments',
+                        progress: {
+                            current: i + 1,
+                            total: shares.length
+                        },
+                        instrument: {
+                            ticker: instrument.ticker,
+                            name: instrument.name,
+                            figi: instrument.figi
+                        }
+                    });
 
                     // Используем те же данные, что и в тестовом методе fetchNewsFromNewsApiByTicker
                     const news = await this.fetchNewsByCompanyNameAndPeriod(
@@ -1554,6 +1611,25 @@ class NewsAnalysisService {
                         await this.cacheNews(instrument.figi, news);
                         totalNews += news.length;
                         updated++;
+                        
+                        LoggerService.info(`News loaded and cached for ${instrument.ticker}: ${news.length} articles`, {
+                            service: 'NewsAnalysisService',
+                            operation: 'loadFreshNewsForAllInstruments',
+                            instrument: {
+                                ticker: instrument.ticker,
+                                figi: instrument.figi
+                            },
+                            newsCount: news.length
+                        });
+                    } else {
+                        LoggerService.info(`No news found for ${instrument.ticker}`, {
+                            service: 'NewsAnalysisService',
+                            operation: 'loadFreshNewsForAllInstruments',
+                            instrument: {
+                                ticker: instrument.ticker,
+                                figi: instrument.figi
+                            }
+                        });
                     }
 
                     if (onProgress) {
@@ -1573,7 +1649,18 @@ class NewsAnalysisService {
                     }
 
                 } catch (error) {
-                    console.error(`❌ Ошибка загрузки новостей для ${instrument.ticker}:`, error.message);
+                    LoggerService.error(`Error loading news for ${instrument.ticker}`, {
+                        service: 'NewsAnalysisService',
+                        operation: 'loadFreshNewsForAllInstruments',
+                        instrument: {
+                            ticker: instrument.ticker,
+                            figi: instrument.figi
+                        },
+                        error: {
+                            message: error.message,
+                            stack: error.stack
+                        }
+                    });
                     
                     // Если это ошибка лимита, останавливаемся
                     if (error.message && (error.message.includes('rate limit') || error.message.includes('limit'))) {
@@ -1593,7 +1680,7 @@ class NewsAnalysisService {
                 }
             }
 
-            return {
+            const result = {
                 success: true,
                 message: `Загружено новостей для ${updated} из ${shares.length} инструментов`,
                 updated,
@@ -1601,9 +1688,24 @@ class NewsAnalysisService {
                 processed: shares.length, // Количество обработанных в этом запуске
                 totalNews
             };
+            
+            LoggerService.info(`Fresh news loading completed: ${updated} instruments updated, ${totalNews} news articles loaded`, {
+                service: 'NewsAnalysisService',
+                operation: 'loadFreshNewsForAllInstruments',
+                result
+            });
+            
+            return result;
 
         } catch (error) {
-            console.error('❌ Ошибка загрузки свежих новостей:', error);
+            LoggerService.error('Error loading fresh news', {
+                service: 'NewsAnalysisService',
+                operation: 'loadFreshNewsForAllInstruments',
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
             throw error;
         }
     }

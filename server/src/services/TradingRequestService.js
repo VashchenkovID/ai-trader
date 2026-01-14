@@ -26,8 +26,6 @@ class TradingRequestService {
 
     async initialize() {
         try {
-            console.log('🎯 Initializing Trading Request Service...');
-            
             // Загружаем настройки
             this.autoExecutionEnabled = await SettingsService.getSetting('auto_execution_enabled', false);
             
@@ -37,9 +35,16 @@ class TradingRequestService {
             }, 5 * 60 * 1000);
             
             this.isInitialized = true;
-            console.log('✅ Trading Request Service initialized');
         } catch (error) {
-            console.error('❌ Failed to initialize Trading Request Service:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Failed to initialize Trading Request Service', {
+                service: 'TradingRequestService',
+                operation: 'initialize',
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
             throw error;
         }
     }
@@ -80,6 +85,12 @@ class TradingRequestService {
                 throw new Error(`Invalid price for ${recommendation.figi}: ${currentPrice}. Cannot create trading request. Please provide a valid price.`);
             }
             
+            // Определяем action заранее для использования в EntryOptimizationService
+            // Приоритет у явно указанного options.action
+            const determinedAction = options.action && (options.action === 'BUY' || options.action === 'SELL') 
+                ? options.action 
+                : (recommendation.recommendation === 'HOLD' ? 'BUY' : recommendation.recommendation);
+            
             // Анализ входа через EntryOptimizationService (если включен)
             let entryAnalysis = null;
             let optimizedPrice = currentPrice;
@@ -90,7 +101,7 @@ class TradingRequestService {
                 if (EntryOptimizationService && EntryOptimizationService.isInitialized) {
                     const signal = {
                         figi: recommendation.figi,
-                        action: recommendation.recommendation === 'HOLD' ? 'BUY' : recommendation.recommendation,
+                        action: determinedAction, // Используем определенный action
                         price: currentPrice,
                         confidence: recommendation.confidence,
                         score: recommendation.score
@@ -302,8 +313,8 @@ class TradingRequestService {
             
             const takeProfit = options.takeProfit || recommendation.takeProfit || (strategy ? currentPrice * (1 + strategy.takeProfitPercent / 100) : null);
             
-            // Определяем action: для HOLD рекомендаций создаем BUY заявку (пользователь хочет купить, несмотря на HOLD)
-            const action = recommendation.recommendation === 'HOLD' ? 'BUY' : recommendation.recommendation;
+            // Используем уже определенный action (определен выше для EntryOptimizationService)
+            const action = determinedAction;
             
             // Используем оптимизированную цену и уверенность
             const finalPrice = optimizedPrice;
@@ -552,8 +563,14 @@ class TradingRequestService {
             // Получаем текущий режим торговли
             const currentMode = TradingModeManager.getCurrentMode().mode;
             
-            // Валидация для режима торговли (для SELL операций валидация пропускается)
-            await this.validateTradingMode(currentMode, recommendationData);
+            // Валидация для режима торговли
+            // Для SELL операций или при forceEntry валидация пропускается
+            const determinedActionForValidation = options.action && (options.action === 'BUY' || options.action === 'SELL') 
+                ? options.action 
+                : (recommendationData.recommendation === 'HOLD' ? 'BUY' : recommendationData.recommendation);
+            if (determinedActionForValidation !== 'SELL' && !options.forceEntry) {
+                await this.validateTradingMode(currentMode, recommendationData);
+            }
             
             // Получаем текущую цену
             let currentPrice = await this.getCurrentPrice(recommendationData.figi);
@@ -644,8 +661,39 @@ class TradingRequestService {
                 }
             }
             
-            // Определяем action: для HOLD рекомендаций создаем BUY заявку (пользователь хочет купить, несмотря на HOLD)
-            const action = recommendationData.recommendation === 'HOLD' ? 'BUY' : recommendationData.recommendation;
+            // Если стратегия не указана явно, определяем автоматически
+            if (!strategy) {
+                try {
+                    // Создаем объект рекомендации для StrategyAllocationService
+                    const Recommendation = (await import('../models/Recommendation.js')).default;
+                    let recommendation = null;
+                    
+                    // Пытаемся найти рекомендацию в БД по FIGI
+                    if (recommendationData.figi) {
+                        recommendation = await Recommendation.findOne({
+                            where: { figi: recommendationData.figi },
+                            order: [['analysisDate', 'DESC']]
+                        });
+                    }
+                    
+                    // Если рекомендация найдена, используем её для определения стратегии
+                    if (recommendation) {
+                        strategy = await StrategyAllocationService.getStrategyForRecommendation(recommendation);
+                    } else {
+                        // Если рекомендации нет в БД, используем recommendationData напрямую
+                        // StrategyAllocationService может работать с объектом рекомендации
+                        strategy = await StrategyAllocationService.getStrategyForRecommendation(recommendationData);
+                    }
+                } catch (strategyError) {
+                    console.warn('⚠️ Could not determine strategy for recommendation:', strategyError.message);
+                }
+            }
+            
+            // Определяем action: приоритет у явно указанного options.action, иначе используем recommendationData
+            // Для HOLD рекомендаций создаем BUY заявку (пользователь хочет купить, несмотря на HOLD)
+            const action = options.action && (options.action === 'BUY' || options.action === 'SELL') 
+                ? options.action 
+                : (recommendationData.recommendation === 'HOLD' ? 'BUY' : recommendationData.recommendation);
             
             // Формируем reasoning с информацией о валидации стратегии
             let reasoning = this.generateReasoning(recommendationData);
@@ -674,6 +722,33 @@ class TradingRequestService {
                 maxLoss: options.maxLoss,
                 userComment: options.comment
             });
+            
+            // Создаем запись PositionStrategy, если стратегия определена
+            if (strategy) {
+                try {
+                    const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
+                    await PositionStrategy.create({
+                        positionId: tradingRequest.id,
+                        strategyId: strategy.id,
+                        entryReason: {
+                            confidence: recommendationData.confidence || 0.5,
+                            score: recommendationData.score || 0.5,
+                            signalsMatch: false,
+                            aiRecommendation: recommendationData.recommendation || action
+                        },
+                        targetTimeframe: strategy.timeframe === 'short' ? 7 : strategy.timeframe === 'medium' ? 30 : 90,
+                        entryDate: new Date(),
+                        expectedExitDate: strategy.timeframe === 'short' 
+                            ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                            : strategy.timeframe === 'medium'
+                            ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                            : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+                    });
+                } catch (positionError) {
+                    console.warn('⚠️ Could not create PositionStrategy:', positionError.message);
+                    // Не блокируем создание заявки, если не удалось создать PositionStrategy
+                }
+            }
 
             // Уведомляем через WebSocket (если доступен)
             try {
@@ -1406,6 +1481,11 @@ class TradingRequestService {
             };
             
             // Обновляем виртуальный портфель через TradingEngine
+            // Передаем strategyId в signal для сохранения в сделке
+            if (request.strategyId) {
+                signal.strategyId = request.strategyId;
+            }
+            
             // Используем executePaperOrder напрямую, так как мы уже в paper mode
             const result = await TradingEngine.executePaperOrder(signal);
             
