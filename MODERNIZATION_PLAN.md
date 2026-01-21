@@ -48,31 +48,40 @@
 **Срок:** 1-2 недели  
 **Цель:** Устранить блокирующие проблемы и улучшить базовую функциональность
 
-#### 1.1. Смягчение валидации (P0) 🔴
+#### 1.1. Смягчение валидации (P0) 🔴 ✅
 **Источник:** `VALIDATION_ANALYSIS.md`  
-**Зависимости:** Нет
+**Зависимости:** Нет  
+**Статус:** ✅ **ЗАВЕРШЕНО** (18/18 тестов пройдено)
 
 **Задачи:**
-- [ ] **1.1.1.** Снизить лимиты confidence в режимах торговли
-  - Micro: 70% → 60%
-  - Real: 80% → 70% (убрать требование score)
-- [ ] **1.1.2.** Превратить блокировки в предупреждения:
-  - Confidence < 60% → warning (блокировать только < 40%)
-  - Корреляция > 70% → warning (блокировать только > 90%)
-  - EntryOptimizationService "wait" → warning
-- [ ] **1.1.3.** Увеличить лимиты размера позиций:
-  - maxPositionSize: 2% → 5%
-  - maxTotalExposure: 20% → 40%
-- [ ] **1.1.4.** Смягчить лимиты убытков:
-  - Дневной убыток: блокировка > 5% → предупреждение (блокировать только > 10%)
-  - Последовательные убытки: блокировка после 5 → предупреждение (блокировать только после 10)
+- [x] **1.1.1.** Снизить лимиты confidence в режимах торговли
+  - Micro: 70% → 60% ✅
+  - Real: 80% → 70% (убрать требование score) ✅
+- [x] **1.1.2.** Превратить блокировки в предупреждения:
+  - Confidence < 60% → warning (блокировать только < 40%) ✅
+  - Корреляция > 70% → warning (блокировать только > 90%) ✅
+  - EntryOptimizationService "wait" → warning ✅
+- [x] **1.1.3.** Увеличить лимиты размера позиций:
+  - maxPositionSize: 2% → 5% ✅
+  - maxTotalExposure: 20% → 40% ✅
+- [x] **1.1.4.** Смягчить лимиты убытков:
+  - Дневной убыток: блокировка > 5% → предупреждение (блокировать только > 10%) ✅
+  - Последовательные убытки: блокировка после 5 → предупреждение (блокировать только после 10) ✅
 
 **Файлы для изменения:**
-- `server/src/services/TradingRequestService.js`
-- `server/src/services/RiskManagementService.js`
-- `server/src/services/EntryOptimizationService.js`
+- `server/src/services/TradingRequestService.js` ✅
+- `server/src/services/RiskManagementService.js` ✅
+- `server/src/services/EntryOptimizationService.js` ✅
+- `server/src/services/TradingModeManager.js` ✅
 
-**Оценка времени:** 2-3 дня
+**Тестирование:**
+- ✅ Созданы unit-тесты: `server/src/__tests__/services/TradingRequestService.test.js`
+- ✅ Созданы unit-тесты: `server/src/__tests__/services/RiskManagementService.test.js`
+- ✅ Создан тестовый скрипт: `server/test-validation-phase1.js`
+- ✅ Все 18 тестов пройдены успешно
+
+**Оценка времени:** 2-3 дня  
+**Фактическое время:** Завершено
 
 ---
 

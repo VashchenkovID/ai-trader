@@ -14,13 +14,14 @@ class RiskManagementService {
         this.isInitialized = false;
         
         // Основные лимиты риска
+        // Обновлено в Фазе 1, задача 1.1.3 и 1.1.4
         this.limits = {
-            maxPositionSize: 0.02,        // 2% от капитала на одну позицию
-            maxTotalExposure: 0.20,       // 20% от капитала в акциях
+            maxPositionSize: 0.05,        // 5% от капитала на одну позицию (увеличено с 2%)
+            maxTotalExposure: 0.40,       // 40% от капитала в акциях (увеличено с 20%)
             maxDrawdown: 0.15,            // 15% максимальная просадка
-            maxConsecutiveLosses: 5,      // 5 убыточных сделок подряд
-            maxDailyLoss: 0.05,           // 5% максимальный дневной убыток
-            minConfidence: 0.6,           // 60% минимальная уверенность для сделки
+            maxConsecutiveLosses: 10,     // 10 убыточных сделок подряд (увеличено с 5)
+            maxDailyLoss: 0.10,           // 10% максимальный дневной убыток (увеличено с 5%)
+            minConfidence: 0.6,           // 60% минимальная уверенность для сделки (блокировка только < 40%)
             maxVolatility: 0.30           // 30% максимальная волатильность инструмента
         };
         
@@ -104,9 +105,12 @@ class RiskManagementService {
             }
 
             // 2. Проверка минимальной уверенности
-            if (signal.confidence < this.limits.minConfidence) {
+            // Обновлено в Фазе 1, задача 1.1.2: < 60% → warning, < 40% → блокировка
+            if (signal.confidence < 0.4) {
                 validation.isValid = false;
-                validation.errors.push(`Уверенность ${(signal.confidence * 100).toFixed(1)}% ниже минимума ${(this.limits.minConfidence * 100)}%`);
+                validation.errors.push(`Уверенность ${(signal.confidence * 100).toFixed(1)}% слишком низкая (минимум 40%)`);
+            } else if (signal.confidence < this.limits.minConfidence) {
+                validation.warnings.push(`Уверенность ${(signal.confidence * 100).toFixed(1)}% ниже рекомендуемого минимума ${(this.limits.minConfidence * 100)}%`);
             }
 
             // 3. Проверка максимальной просадки
@@ -116,15 +120,22 @@ class RiskManagementService {
             }
 
             // 4. Проверка последовательных убытков
+            // Обновлено в Фазе 1, задача 1.1.4: после 5 → warning, после 10 → блокировка
             if (this.stats.consecutiveLosses >= this.limits.maxConsecutiveLosses) {
                 validation.isValid = false;
-                validation.errors.push(`Слишком много убыточных сделок подряд: ${this.stats.consecutiveLosses}`);
+                validation.errors.push(`Слишком много убыточных сделок подряд: ${this.stats.consecutiveLosses} (максимум ${this.limits.maxConsecutiveLosses})`);
+            } else if (this.stats.consecutiveLosses >= 5) {
+                validation.warnings.push(`Много убыточных сделок подряд: ${this.stats.consecutiveLosses} (рекомендуется остановиться после ${this.limits.maxConsecutiveLosses})`);
             }
 
             // 5. Проверка дневного убытка
-            if (this.stats.dailyPnL < -this.limits.maxDailyLoss * portfolio.totalValue) {
+            // Обновлено в Фазе 1, задача 1.1.4: > 5% → warning, > 10% → блокировка
+            const dailyLossPercent = portfolio.totalValue > 0 ? Math.abs(this.stats.dailyPnL) / portfolio.totalValue : 0;
+            if (dailyLossPercent >= this.limits.maxDailyLoss) {
                 validation.isValid = false;
-                validation.errors.push(`Дневной убыток ${this.stats.dailyPnL.toFixed(2)}₽ превышает лимит`);
+                validation.errors.push(`Дневной убыток ${(dailyLossPercent * 100).toFixed(1)}% (${this.stats.dailyPnL.toFixed(2)}₽) превышает лимит ${(this.limits.maxDailyLoss * 100)}%`);
+            } else if (dailyLossPercent >= 0.05) {
+                validation.warnings.push(`Дневной убыток ${(dailyLossPercent * 100).toFixed(1)}% (${this.stats.dailyPnL.toFixed(2)}₽) близок к лимиту ${(this.limits.maxDailyLoss * 100)}%`);
             }
 
             // 6. Расчет размера позиции
@@ -149,15 +160,27 @@ class RiskManagementService {
             }
 
             // 9. Проверка корреляции с существующими позициями
+            // Обновлено в Фазе 1, задача 1.1.2: > 70% → warning, > 90% → блокировка
             const correlationRisk = await this.checkCorrelationRisk(signal, portfolio);
             
             if (correlationRisk.recommendation === 'BLOCK') {
-                validation.isValid = false;
-                validation.errors.push(
-                    `Высокая корреляция портфеля (${(correlationRisk.portfolioCorrelation * 100).toFixed(1)}%). ` +
-                    `Максимально допустимая корреляция: ${(correlationRisk.portfolioThreshold * 100).toFixed(0)}%. ` +
-                    `Высококоррелированные позиции: ${correlationRisk.correlatedPositions.slice(0, 3).join(', ')}${correlationRisk.correlatedPositions.length > 3 ? '...' : ''}`
-                );
+                // Блокируем только при очень высокой корреляции (> 90%)
+                const portfolioCorrPercent = correlationRisk.portfolioCorrelation * 100;
+                if (portfolioCorrPercent >= 90) {
+                    validation.isValid = false;
+                    validation.errors.push(
+                        `Очень высокая корреляция портфеля (${portfolioCorrPercent.toFixed(1)}%). ` +
+                        `Максимально допустимая корреляция: 90%. ` +
+                        `Высококоррелированные позиции: ${correlationRisk.correlatedPositions.slice(0, 3).join(', ')}${correlationRisk.correlatedPositions.length > 3 ? '...' : ''}`
+                    );
+                } else {
+                    // При корреляции 70-90% только предупреждаем
+                    validation.warnings.push(
+                        `Высокая корреляция портфеля (${portfolioCorrPercent.toFixed(1)}%). ` +
+                        `Рекомендуется диверсификация. ` +
+                        `Высококоррелированные позиции: ${correlationRisk.correlatedPositions.slice(0, 3).join(', ')}${correlationRisk.correlatedPositions.length > 3 ? '...' : ''}`
+                    );
+                }
             } else if (correlationRisk.recommendation === 'WARNING') {
                 const highCorrPositions = correlationRisk.correlationDetails
                     .filter(d => d.risk === 'HIGH')
@@ -541,10 +564,14 @@ class RiskManagementService {
             }
             
             // Определяем рекомендацию
+            // Обновлено в Фазе 1, задача 1.1.2: > 70% → warning, > 90% → блокировка
             let recommendation = 'OK';
-            if (portfolioCorrelation >= portfolioCorrelationThreshold) {
+            const blockThreshold = 0.9; // Блокируем только при > 90%
+            const warningThreshold = 0.7; // Предупреждаем при > 70%
+            
+            if (portfolioCorrelation >= blockThreshold) {
                 recommendation = 'BLOCK';
-            } else if (correlatedPositions.length > 2 || portfolioCorrelation >= portfolioCorrelationThreshold * 0.9) {
+            } else if (correlatedPositions.length > 2 || portfolioCorrelation >= warningThreshold) {
                 recommendation = 'WARNING';
             }
             

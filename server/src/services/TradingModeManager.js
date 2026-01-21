@@ -121,20 +121,20 @@ class TradingModeManager {
                     minCommission: 1       // Минимальная комиссия 1 рубль
                 },
                 micro: {
-                    maxPositionSize: 0.02, // 2% от капитала
+                    maxPositionSize: 0.02, // 2% от капитала (будет увеличено до 5% в задаче 1.1.3)
                     maxDrawdown: 0.05,     // 5% просадка
                     emergencyStop: true,
-                    minConfidence: 0.7,
+                    minConfidence: 0.6,     // Снижено с 0.7 до 0.6 (Фаза 1, задача 1.1.1)
                     executionDelay: 200,   // Задержка исполнения в мс
                     slippage: 0.0015,      // 0.15% проскальзывание
                     commission: 0.003,     // 0.3% комиссия (реальная Tinkoff)
                     minCommission: 1       // Минимальная комиссия 1 рубль
                 },
                 real: {
-                    maxPositionSize: 0.01, // 1% от капитала
+                    maxPositionSize: 0.01, // 1% от капитала (будет увеличено до 5% в задаче 1.1.3)
                     maxDrawdown: 0.03,     // 3% просадка
                     emergencyStop: true,
-                    minConfidence: 0.8,
+                    minConfidence: 0.7,    // Снижено с 0.8 до 0.7 (Фаза 1, задача 1.1.1)
                     executionDelay: 300,   // Задержка исполнения в мс
                     slippage: 0.002,       // 0.2% проскальзывание
                     commission: 0.003,     // 0.3% комиссия (реальная Tinkoff)

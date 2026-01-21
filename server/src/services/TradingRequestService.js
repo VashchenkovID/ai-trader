@@ -66,8 +66,9 @@ class TradingRequestService {
             // Получаем текущий режим торговли
             const currentMode = TradingModeManager.getCurrentMode().mode;
             
-            // Валидация для режима торговли
-            await this.validateTradingMode(currentMode, recommendation);
+            // Валидация для режима торговли (собираем предупреждения)
+            const modeValidation = await this.validateTradingMode(currentMode, recommendation);
+            const validationWarnings = modeValidation?.warnings || [];
 
             // Получаем текущую цену
             let currentPrice = await this.getCurrentPrice(recommendation.figi);
@@ -115,8 +116,9 @@ class TradingRequestService {
                             optimizedPrice = entryAnalysis.recommendedPrice;
                             orderType = 'limit';
                         } else if (entryAnalysis.recommendation === 'wait' && !options.forceEntry) {
-                            // Если рекомендуется подождать, выбрасываем ошибку (если не forceEntry)
-                            throw new Error(`Вход не рекомендуется: ${entryAnalysis.reason}. ${entryAnalysis.indicators ? Object.values(entryAnalysis.indicators).map(i => i.reason).filter(Boolean).join('; ') : ''}`);
+                            // Если рекомендуется подождать, добавляем предупреждение вместо блокировки (Фаза 1, задача 1.1.2)
+                            validationWarnings.push(`Вход не рекомендуется: ${entryAnalysis.reason}. ${entryAnalysis.indicators ? Object.values(entryAnalysis.indicators).map(i => i.reason).filter(Boolean).join('; ') : ''}`);
+                            // Не блокируем создание заявки, только предупреждаем
                         }
                     }
                 }
@@ -563,13 +565,15 @@ class TradingRequestService {
             // Получаем текущий режим торговли
             const currentMode = TradingModeManager.getCurrentMode().mode;
             
-            // Валидация для режима торговли
+            // Валидация для режима торговли (собираем предупреждения)
             // Для SELL операций или при forceEntry валидация пропускается
             const determinedActionForValidation = options.action && (options.action === 'BUY' || options.action === 'SELL') 
                 ? options.action 
                 : (recommendationData.recommendation === 'HOLD' ? 'BUY' : recommendationData.recommendation);
+            let validationWarnings = [];
             if (determinedActionForValidation !== 'SELL' && !options.forceEntry) {
-                await this.validateTradingMode(currentMode, recommendationData);
+                const modeValidation = await this.validateTradingMode(currentMode, recommendationData);
+                validationWarnings = modeValidation?.warnings || [];
             }
             
             // Получаем текущую цену
@@ -1564,6 +1568,8 @@ class TradingRequestService {
 
     /**
      * Валидация режима торговли
+     * Возвращает объект с warnings вместо выбрасывания ошибок для некритических случаев
+     * (Фаза 1, задача 1.1.1 и 1.1.2)
      */
     async validateTradingMode(mode, recommendation) {
         try {
@@ -1575,9 +1581,15 @@ class TradingRequestService {
             
             if (isSell) {
                 console.log(`✅ SELL операция: пропускаем валидацию уверенности (пользовательское решение)`);
-                return; // Пропускаем валидацию для продаж
+                return { isValid: true, warnings: [] }; // Пропускаем валидацию для продаж
             }
             
+            // Результат валидации с предупреждениями
+            const validationResult = {
+                isValid: true,
+                warnings: []
+            };
+
             switch (mode) {
                 case 'paper':
                     // Paper режим - минимальные ограничения только для покупок
@@ -1588,24 +1600,33 @@ class TradingRequestService {
                     
                 case 'micro':
                     // Micro режим - средние ограничения только для покупок
-                    if (recommendation.confidence < modeSettings.minConfidence) {
-                        throw new Error(`Micro режим: требуется уверенность минимум ${(modeSettings.minConfidence * 100).toFixed(0)}%`);
+                    // Снижено с 70% до 60% (Фаза 1, задача 1.1.1)
+                    // < 60% → warning, < 40% → блокировка (Фаза 1, задача 1.1.2)
+                    if (recommendation.confidence < 0.4) {
+                        throw new Error(`Micro режим: уверенность ${(recommendation.confidence * 100).toFixed(0)}% слишком низкая (минимум 40%)`);
+                    } else if (recommendation.confidence < modeSettings.settings.minConfidence) {
+                        validationResult.warnings.push(`Micro режим: уверенность ${(recommendation.confidence * 100).toFixed(0)}% ниже рекомендуемого минимума ${(modeSettings.settings.minConfidence * 100).toFixed(0)}%`);
                     }
                     break;
                     
                 case 'real':
                     // Real режим - строгие ограничения только для покупок
-                    if (recommendation.confidence < modeSettings.minConfidence) {
-                        throw new Error(`Real режим: требуется уверенность минимум ${(modeSettings.minConfidence * 100).toFixed(0)}%`);
+                    // Снижено с 80% до 70%, убрано требование score (Фаза 1, задача 1.1.1)
+                    // < 70% → warning, < 40% → блокировка (Фаза 1, задача 1.1.2)
+                    if (recommendation.confidence < 0.4) {
+                        throw new Error(`Real режим: уверенность ${(recommendation.confidence * 100).toFixed(0)}% слишком низкая (минимум 40%)`);
+                    } else if (recommendation.confidence < modeSettings.settings.minConfidence) {
+                        validationResult.warnings.push(`Real режим: уверенность ${(recommendation.confidence * 100).toFixed(0)}% ниже рекомендуемого минимума ${(modeSettings.settings.minConfidence * 100).toFixed(0)}%`);
                     }
-                    if (recommendation.score < 0.7) {
-                        throw new Error('Real режим: требуется оценка минимум 70%');
-                    }
+                    // Убрано требование score >= 0.7 для Real режима (Фаза 1, задача 1.1.1)
                     break;
                     
                 default:
                     throw new Error(`Неизвестный режим торговли: ${mode}`);
             }
+
+            // Возвращаем результат валидации
+            return validationResult;
             
         } catch (error) {
             console.error('❌ Trading mode validation failed:', error);
