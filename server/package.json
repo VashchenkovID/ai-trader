@@ -39,7 +39,11 @@
     "test:validation": "node test-validation-phase1.js",
     "test:validation-phase1": "node test-validation-phase1.js",
     "test:portfolio-sync": "node test-portfolio-sync-phase1.js",
-    "test:portfolio-sync-phase1": "node test-portfolio-sync-phase1.js"
+    "test:portfolio-sync-phase1": "node test-portfolio-sync-phase1.js",
+    "test:strategy-logic": "node test-strategy-logic-phase1.js",
+    "test:strategy-logic-phase1": "node test-strategy-logic-phase1.js",
+    "test:feedback-system": "node test-feedback-system-phase2.js",
+    "test:feedback-system-phase2": "node test-feedback-system-phase2.js"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.15.0",

@@ -144,6 +144,8 @@ class ServiceManager {
             await this.initializeService('SecretManagementService', () => import('./SecretManagementService.js'));
             await this.initializeService('PyramidingService', () => import('./PyramidingService.js'));
             await this.initializeService('ModelWeightingService', () => import('./ModelWeightingService.js'));
+            await this.initializeService('FeedbackService', () => import('./FeedbackService.js'));
+            await this.initializeService('AdaptiveThresholdService', () => import('./AdaptiveThresholdService.js'));
             await this.initializeService('DiversificationService', () => import('./DiversificationService.js'));
             await this.initializeService('MigrationService', () => import('./MigrationService.js'));
             await this.initializeService('DataCleanupService', () => import('./DataCleanupService.js'));

@@ -996,6 +996,50 @@ class TradingRequestService {
 
             // Уведомления в Telegram об исполненных заявках отключены
 
+            // Интеграция с FeedbackService для записи результатов (Фаза 2, задача 2.1.1)
+            try {
+                const FeedbackService = (await import('./FeedbackService.js')).default;
+                if (FeedbackService && FeedbackService.isInitialized) {
+                    // Рассчитываем PnL (для BUY - пока не закрыта позиция, PnL = 0)
+                    // Для SELL - рассчитываем PnL на основе цены покупки
+                    let actualPnL = 0;
+                    if (request.action === 'SELL') {
+                        // Для SELL нужно найти соответствующую BUY заявку
+                        const buyRequest = await TradingRequest.findOne({
+                            where: {
+                                figi: request.figi,
+                                action: 'BUY',
+                                status: 'EXECUTED',
+                                executedAt: { [Op.lt]: request.executedAt }
+                            },
+                            order: [['executedAt', 'DESC']]
+                        });
+                        
+                        if (buyRequest && buyRequest.actualPrice) {
+                            const buyPrice = buyRequest.actualPrice;
+                            const sellPrice = finalPrice;
+                            actualPnL = ((sellPrice - buyPrice) / buyPrice) * 100; // В процентах
+                        }
+                    }
+                    
+                    // Записываем результат только если есть PnL (для SELL) или для будущего использования
+                    if (request.action === 'SELL' && actualPnL !== 0) {
+                        await FeedbackService.recordTradeResult(
+                            request.recommendationId,
+                            finalPrice,
+                            actualPnL,
+                            {
+                                tradingRequestId: request.id,
+                                figi: request.figi
+                            }
+                        );
+                    }
+                }
+            } catch (feedbackError) {
+                // Не блокируем выполнение, если FeedbackService недоступен
+                console.warn('⚠️ Could not record trade result in FeedbackService:', feedbackError.message);
+            }
+
             // Интеграция с PyramidingService (если включен пирамидинг)
             if (request.action === 'BUY' && request.status === 'EXECUTED') {
                 try {

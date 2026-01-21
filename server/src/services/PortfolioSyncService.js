@@ -475,12 +475,49 @@ class PortfolioSyncService {
                 // Позиция закрыта полностью
                 positionStrategy.exitDate = exitDate;
                 
-                // Рассчитываем resultPercent (если есть данные о цене)
-                // TODO: Реализовать расчет прибыли/убытка
-                // positionStrategy.resultPercent = calculateProfitPercent(...);
+                // Рассчитываем resultPercent (Фаза 2, задача 2.1.1)
+                let resultPercent = null;
+                try {
+                    const buyRequest = await TradingRequest.findOne({
+                        where: {
+                            positionId: positionStrategy.positionId,
+                            action: 'BUY',
+                            status: 'EXECUTED'
+                        },
+                        order: [['executedAt', 'ASC']]
+                    });
+                    
+                    if (buyRequest && buyRequest.actualPrice && tradingRequest.actualPrice) {
+                        const buyPrice = buyRequest.actualPrice;
+                        const sellPrice = tradingRequest.actualPrice;
+                        resultPercent = ((sellPrice - buyPrice) / buyPrice) * 100;
+                        positionStrategy.resultPercent = resultPercent;
+                        
+                        // Записываем результат в FeedbackService (Фаза 2, задача 2.1.1)
+                        try {
+                            const FeedbackService = (await import('./FeedbackService.js')).default;
+                            if (FeedbackService && FeedbackService.isInitialized) {
+                                await FeedbackService.recordTradeResult(
+                                    tradingRequest.recommendationId,
+                                    sellPrice,
+                                    resultPercent,
+                                    {
+                                        tradingRequestId: tradingRequest.id,
+                                        positionStrategyId: positionStrategy.id,
+                                        figi: tradingRequest.figi
+                                    }
+                                );
+                            }
+                        } catch (feedbackError) {
+                            console.warn('⚠️ Could not record trade result in FeedbackService:', feedbackError.message);
+                        }
+                    }
+                } catch (calcError) {
+                    console.warn('⚠️ Could not calculate resultPercent:', calcError.message);
+                }
                 
                 await positionStrategy.save();
-                console.log(`✅ PositionStrategy закрыт для ${tradingRequest.ticker} (${tradingRequest.figi})`);
+                console.log(`✅ PositionStrategy закрыт для ${tradingRequest.ticker} (${tradingRequest.figi})${resultPercent !== null ? `, результат: ${resultPercent.toFixed(2)}%` : ''}`);
             } else {
                 // Частичная продажа - обновляем метаданные
                 // Позиция остается активной (exitDate не устанавливаем)

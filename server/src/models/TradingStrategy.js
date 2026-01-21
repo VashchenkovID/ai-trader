@@ -143,31 +143,83 @@ const TradingStrategy = sequelize.define('TradingStrategy', {
 });
 
 // Метод для получения стратегии по типу рекомендации
+// Исправлено в Фазе 1, задача 1.3.1: устранены пропуски в диапазонах, добавлен fallback
 TradingStrategy.getStrategyForRecommendation = async function(recommendation) {
-    const { confidence, score } = recommendation;
+    const { confidence = 0, score = 0 } = recommendation;
     
-    // Определяем подходящую стратегию на основе confidence и score
-    if (confidence > 0.8 && score > 0.75) {
-        // Агрессивная стратегия для высоких показателей
-        return await this.findOne({
-            where: { type: 'aggressive', isActive: true },
-            order: [['priority', 'DESC']]
-        });
-    } else if (confidence >= 0.6 && confidence <= 0.8 && score >= 0.6 && score <= 0.75) {
-        // Умеренная стратегия для средних показателей
-        return await this.findOne({
-            where: { type: 'moderate', isActive: true },
-            order: [['priority', 'DESC']]
-        });
-    } else if (confidence >= 0.5 && confidence < 0.6 && score >= 0.5 && score < 0.6) {
-        // Консервативная стратегия для низких показателей
-        return await this.findOne({
-            where: { type: 'conservative', isActive: true },
-            order: [['priority', 'DESC']]
-        });
+    // Валидация входных данных
+    if (typeof confidence !== 'number' || !isFinite(confidence) || confidence < 0 || confidence > 1) {
+        console.warn(`⚠️ Invalid confidence value: ${confidence}, using 0`);
+        confidence = 0;
+    }
+    if (typeof score !== 'number' || !isFinite(score) || score < 0 || score > 1) {
+        console.warn(`⚠️ Invalid score value: ${score}, using 0`);
+        score = 0;
     }
     
-    // Если не подходит ни одна стратегия, возвращаем null
+    // Получаем все активные стратегии, отсортированные по приоритету
+    const allStrategies = await this.findAll({
+        where: { isActive: true },
+        order: [['priority', 'DESC']]
+    });
+    
+    if (allStrategies.length === 0) {
+        console.warn('⚠️ No active strategies found');
+        return null;
+    }
+    
+    // Сначала пытаемся найти точное соответствие по minConfidence и minScore
+    // Проверяем стратегии в порядке приоритета: aggressive -> moderate -> conservative
+    const strategyTypes = ['aggressive', 'moderate', 'conservative'];
+    
+    for (const strategyType of strategyTypes) {
+        const strategy = allStrategies.find(s => s.type === strategyType);
+        if (strategy && confidence >= strategy.minConfidence && score >= strategy.minScore) {
+            return strategy;
+        }
+    }
+    
+    // Если точного соответствия нет, используем fallback на ближайшую стратегию
+    // Выбираем стратегию с минимальным "расстоянием" от требований
+    let bestStrategy = null;
+    let minDistance = Infinity;
+    
+    for (const strategy of allStrategies) {
+        // Рассчитываем "расстояние" как сумму недостающих confidence и score
+        const confidenceDeficit = Math.max(0, strategy.minConfidence - confidence);
+        const scoreDeficit = Math.max(0, strategy.minScore - score);
+        const distance = confidenceDeficit + scoreDeficit;
+        
+        // Если стратегия полностью подходит (distance = 0), возвращаем её сразу
+        if (distance === 0) {
+            return strategy;
+        }
+        
+        // Иначе ищем стратегию с минимальным дефицитом
+        if (distance < minDistance) {
+            minDistance = distance;
+            bestStrategy = strategy;
+        }
+    }
+    
+    // Если нашли стратегию с минимальным дефицитом, возвращаем её
+    // Это позволяет выбрать ближайшую подходящую стратегию даже если требования не полностью выполнены
+    if (bestStrategy) {
+        const confidenceDeficit = Math.max(0, bestStrategy.minConfidence - confidence);
+        const scoreDeficit = Math.max(0, bestStrategy.minScore - score);
+        
+        if (confidenceDeficit > 0 || scoreDeficit > 0) {
+            console.warn(
+                `⚠️ Using fallback strategy "${bestStrategy.name}" with deficits: ` +
+                `confidence -${(confidenceDeficit * 100).toFixed(1)}%, score -${(scoreDeficit * 100).toFixed(1)}%`
+            );
+        }
+        
+        return bestStrategy;
+    }
+    
+    // Если ничего не найдено, возвращаем null
+    console.warn(`⚠️ No suitable strategy found for confidence=${confidence}, score=${score}`);
     return null;
 };
 
@@ -217,8 +269,8 @@ TradingStrategy.initializeDefaultStrategies = async function() {
             budgetAllocation: 25,
             minConfidence: 0.8,
             minScore: 0.75,
-            stopLossPercent: 3,
-            takeProfitPercent: 6,
+            stopLossPercent: 4, // Обновлено в Фазе 1, задача 1.3.2: было 3% → стало 4%
+            takeProfitPercent: 8, // Обновлено в Фазе 1, задача 1.3.2: было 6% → стало 8% (Risk/Reward = 1:2)
             atrMultiplier: 2.7, // Агрессивный множитель ATR
             maxPositions: null,
             isActive: true,

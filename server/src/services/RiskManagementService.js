@@ -212,6 +212,16 @@ class RiskManagementService {
      * @param {string} direction - Направление сделки: 'BUY' или 'SELL'
      * @returns {Promise<number>} - Цена стоп-лосса
      */
+    /**
+     * Расчет динамического стоп-лосса на основе ATR (Average True Range)
+     * Обновлено в Фазе 1, задача 1.3.3: улучшена обработка отсутствия ATR, добавлена проверка разумности
+     * 
+     * @param {string} figi - FIGI инструмента
+     * @param {number} currentPrice - Текущая цена инструмента
+     * @param {Object} strategy - Объект стратегии с полями atrMultiplier и stopLossPercent
+     * @param {string} direction - Направление сделки: 'BUY' или 'SELL'
+     * @returns {Promise<number>} Цена стоп-лосса
+     */
     async calculateDynamicStopLoss(figi, currentPrice, strategy = null, direction = 'BUY') {
         try {
             // Валидация входных данных
@@ -227,6 +237,34 @@ class RiskManagementService {
                 throw new Error(`Invalid direction: ${direction}. Must be 'BUY' or 'SELL'.`);
             }
             
+            // Получаем волатильность инструмента для корректировки параметров
+            let instrumentVolatility = null;
+            try {
+                const stats = await InstrumentStats.findOne({ where: { figi } });
+                if (stats && stats.volatility && isFinite(stats.volatility) && stats.volatility > 0) {
+                    instrumentVolatility = stats.volatility;
+                }
+            } catch (volError) {
+                // Игнорируем ошибки получения волатильности
+                console.debug(`⚠️ Could not get volatility for ${figi}:`, volError.message);
+            }
+            
+            // Базовый процент стоп-лосса из стратегии или по умолчанию
+            let baseStopLossPercent = strategy?.stopLossPercent || 5.0;
+            
+            // Корректируем базовый процент на основе волатильности (Фаза 1, задача 1.3.2)
+            if (instrumentVolatility !== null) {
+                // Высокая волатильность (> 20%) - увеличиваем стоп-лосс на 50%
+                if (instrumentVolatility > 0.20) {
+                    baseStopLossPercent *= 1.5;
+                }
+                // Средняя волатильность (10-20%) - без изменений
+                // Низкая волатильность (< 10%) - уменьшаем стоп-лосс на 20%
+                else if (instrumentVolatility < 0.10) {
+                    baseStopLossPercent *= 0.8;
+                }
+            }
+            
             // Валидация стратегии и atrMultiplier
             if (strategy && strategy.atrMultiplier !== null && strategy.atrMultiplier !== undefined) {
                 if (!isFinite(strategy.atrMultiplier) || strategy.atrMultiplier <= 0 || strategy.atrMultiplier > 10) {
@@ -237,12 +275,8 @@ class RiskManagementService {
             
             // Если стратегия не передана или atrMultiplier не задан, используем фиксированный процент
             if (!strategy || strategy.atrMultiplier === null || strategy.atrMultiplier === undefined) {
-                const stopLossPercent = strategy?.stopLossPercent || 5.0;
-                if (direction === 'BUY') {
-                    return currentPrice * (1 - stopLossPercent / 100);
-                } else {
-                    return currentPrice * (1 + stopLossPercent / 100);
-                }
+                const stopLoss = this._calculateFixedStopLoss(currentPrice, baseStopLossPercent, direction);
+                return this._validateStopLossReasonableness(stopLoss, currentPrice, direction, baseStopLossPercent);
             }
 
             // Получаем свечи для расчета ATR (нужно минимум 15 свечей для периода 14)
@@ -252,23 +286,15 @@ class RiskManagementService {
             } catch (cacheError) {
                 console.warn(`⚠️ Ошибка получения свечей для ${figi}:`, cacheError.message);
                 // Используем фиксированный процент при ошибке получения данных
-                const stopLossPercent = strategy?.stopLossPercent || 5.0;
-                if (direction === 'BUY') {
-                    return currentPrice * (1 - stopLossPercent / 100);
-                } else {
-                    return currentPrice * (1 + stopLossPercent / 100);
-                }
+                const stopLoss = this._calculateFixedStopLoss(currentPrice, baseStopLossPercent, direction);
+                return this._validateStopLossReasonableness(stopLoss, currentPrice, direction, baseStopLossPercent);
             }
             
             if (!candles || candles.length < 15) {
                 // Если данных недостаточно, используем фиксированный процент
                 console.warn(`⚠️ Недостаточно свечей для расчета ATR для ${figi}: ${candles?.length || 0} (требуется минимум 15)`);
-                const stopLossPercent = strategy?.stopLossPercent || 5.0;
-                if (direction === 'BUY') {
-                    return currentPrice * (1 - stopLossPercent / 100);
-                } else {
-                    return currentPrice * (1 + stopLossPercent / 100);
-                }
+                const stopLoss = this._calculateFixedStopLoss(currentPrice, baseStopLossPercent, direction);
+                return this._validateStopLossReasonableness(stopLoss, currentPrice, direction, baseStopLossPercent);
             }
 
             // Рассчитываем ATR
@@ -277,12 +303,8 @@ class RiskManagementService {
             // Валидация ATR: должен быть положительным числом
             if (!atr || !isFinite(atr) || atr <= 0) {
                 console.warn(`⚠️ Некорректный ATR для ${figi}: ${atr}, используем фиксированный процент`);
-                const stopLossPercent = strategy?.stopLossPercent || 5.0;
-                if (direction === 'BUY') {
-                    return currentPrice * (1 - stopLossPercent / 100);
-                } else {
-                    return currentPrice * (1 + stopLossPercent / 100);
-                }
+                const stopLoss = this._calculateFixedStopLoss(currentPrice, baseStopLossPercent, direction);
+                return this._validateStopLossReasonableness(stopLoss, currentPrice, direction, baseStopLossPercent);
             }
 
             // Рассчитываем динамический стоп-лосс
@@ -293,33 +315,78 @@ class RiskManagementService {
             
             if (direction === 'BUY') {
                 stopLoss = currentPrice - (atr * atrMultiplier);
-                // Защита: стоп-лосс не должен быть больше текущей цены
-                stopLoss = Math.min(stopLoss, currentPrice * 0.95); // Минимум -5%
             } else {
                 stopLoss = currentPrice + (atr * atrMultiplier);
-                // Защита: стоп-лосс не должен быть меньше текущей цены
-                stopLoss = Math.max(stopLoss, currentPrice * 1.05); // Минимум +5%
             }
 
-            // Проверяем, что стоп-лосс не слишком близко к цене (минимум 1% от цены)
-            const minDistance = currentPrice * 0.01;
-            if (direction === 'BUY' && (currentPrice - stopLoss) < minDistance) {
-                stopLoss = currentPrice - minDistance;
-            } else if (direction === 'SELL' && (stopLoss - currentPrice) < minDistance) {
-                stopLoss = currentPrice + minDistance;
-            }
-
-            return stopLoss;
+            // Проверяем разумность стоп-лосса (Фаза 1, задача 1.3.3)
+            return this._validateStopLossReasonableness(stopLoss, currentPrice, direction, baseStopLossPercent, atr, atrMultiplier);
         } catch (error) {
             console.error(`❌ Ошибка расчета динамического стоп-лосса для ${figi}:`, error.message);
             // Fallback к фиксированному проценту при ошибке
-            const stopLossPercent = strategy?.stopLossPercent || 5.0;
-            if (direction === 'BUY') {
-                return currentPrice * (1 - stopLossPercent / 100);
-            } else {
-                return currentPrice * (1 + stopLossPercent / 100);
-            }
+            const baseStopLossPercent = strategy?.stopLossPercent || 5.0;
+            const stopLoss = this._calculateFixedStopLoss(currentPrice, baseStopLossPercent, direction);
+            return this._validateStopLossReasonableness(stopLoss, currentPrice, direction, baseStopLossPercent);
         }
+    }
+    
+    /**
+     * Вспомогательный метод для расчета фиксированного стоп-лосса
+     * @private
+     */
+    _calculateFixedStopLoss(currentPrice, stopLossPercent, direction) {
+        if (direction === 'BUY') {
+            return currentPrice * (1 - stopLossPercent / 100);
+        } else {
+            return currentPrice * (1 + stopLossPercent / 100);
+        }
+    }
+    
+    /**
+     * Проверка разумности стоп-лосса (Фаза 1, задача 1.3.3)
+     * Стоп-лосс должен быть в диапазоне от 1% до 20% от текущей цены
+     * @private
+     */
+    _validateStopLossReasonableness(stopLoss, currentPrice, direction, baseStopLossPercent, atr = null, atrMultiplier = null) {
+        const MIN_STOP_LOSS_PERCENT = 1.0;  // Минимум 1% от цены
+        const MAX_STOP_LOSS_PERCENT = 20.0;  // Максимум 20% от цены
+        
+        let stopLossPercent;
+        if (direction === 'BUY') {
+            stopLossPercent = ((currentPrice - stopLoss) / currentPrice) * 100;
+        } else {
+            stopLossPercent = ((stopLoss - currentPrice) / currentPrice) * 100;
+        }
+        
+        // Если стоп-лосс слишком близко к цене (< 1%)
+        if (stopLossPercent < MIN_STOP_LOSS_PERCENT) {
+            console.warn(
+                `⚠️ Stop loss ${stopLossPercent.toFixed(2)}% слишком близко к цене для ${direction}, ` +
+                `устанавливаем минимум ${MIN_STOP_LOSS_PERCENT}%`
+            );
+            if (direction === 'BUY') {
+                stopLoss = currentPrice * (1 - MIN_STOP_LOSS_PERCENT / 100);
+            } else {
+                stopLoss = currentPrice * (1 + MIN_STOP_LOSS_PERCENT / 100);
+            }
+            stopLossPercent = MIN_STOP_LOSS_PERCENT;
+        }
+        
+        // Если стоп-лосс слишком далеко от цены (> 20%)
+        if (stopLossPercent > MAX_STOP_LOSS_PERCENT) {
+            console.warn(
+                `⚠️ Stop loss ${stopLossPercent.toFixed(2)}% слишком далеко от цены для ${direction}, ` +
+                `устанавливаем максимум ${MAX_STOP_LOSS_PERCENT}%`
+            );
+            if (direction === 'BUY') {
+                stopLoss = currentPrice * (1 - MAX_STOP_LOSS_PERCENT / 100);
+            } else {
+                stopLoss = currentPrice * (1 + MAX_STOP_LOSS_PERCENT / 100);
+            }
+            stopLossPercent = MAX_STOP_LOSS_PERCENT;
+        }
+        
+        return stopLoss;
     }
 
     /**

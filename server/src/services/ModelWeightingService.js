@@ -195,7 +195,16 @@ class ModelWeightingService {
                 return defaultWeight;
             }
             
-            // Проверяем минимальные пороги
+            // Сначала проверяем количество сделок
+            // Если сделок недостаточно, не проверяем пороги и не деактивируем модель
+            if (avgPerformance.totalTrades < this.settings.minTradesForEvaluation) {
+                // Недостаточно данных для оценки - используем дефолтный вес
+                const defaultWeight = 1.0 / 7;
+                this.cachedWeights[modelType] = defaultWeight;
+                return defaultWeight;
+            }
+            
+            // Только если сделок достаточно, проверяем минимальные пороги
             if (avgPerformance.accuracy < this.settings.minAccuracy ||
                 avgPerformance.f1Score < this.settings.minF1Score ||
                 avgPerformance.winRate < this.settings.minWinRate) {
@@ -203,14 +212,6 @@ class ModelWeightingService {
                 this.cachedWeights[modelType] = 0;
                 await this.deactivateModel(modelType, 'Below minimum thresholds');
                 return 0;
-            }
-            
-            // Проверяем количество сделок
-            if (avgPerformance.totalTrades < this.settings.minTradesForEvaluation) {
-                // Недостаточно данных для оценки
-                const defaultWeight = 1.0 / 7;
-                this.cachedWeights[modelType] = defaultWeight;
-                return defaultWeight;
             }
             
             // Рассчитываем вес на основе факторов

@@ -9,6 +9,7 @@ import SignalCacheService from './SignalCacheService.js';
 import SignalValidationService from './SignalValidationService.js';
 import NewsAnalysisService from './NewsAnalysisService.js';
 import ModelWeightingService from './ModelWeightingService.js';
+import AdaptiveThresholdService from './AdaptiveThresholdService.js';
 import LoggerService from './LoggerService.js';
 import { getService } from './GlobalServiceManager.js';
 
@@ -78,6 +79,11 @@ class IntegratedAIService {
             // Загружаем модели только если они еще не загружены
             // (модели уже загружены при инициализации отдельных сервисов)
             await this.loadAllModelsIfNeeded();
+            
+            // Инициализируем AdaptiveThresholdService (Фаза 2, задача 2.1.3)
+            if (!AdaptiveThresholdService.isInitialized) {
+                await AdaptiveThresholdService.initialize();
+            }
             
             // НЕ сохраняем модели при инициализации - это делается только после обучения
             // await this.saveAllModels();
@@ -376,7 +382,7 @@ class IntegratedAIService {
             }
 
             // Вычисляем интегрированную рекомендацию
-            const integratedRec = this.calculateIntegratedRecommendation(recommendations, weights);
+            const integratedRec = await this.calculateIntegratedRecommendation(recommendations, weights, figi);
             
             // Обновляем согласованность моделей для ModelWeightingService
             if (ModelWeightingService && ModelWeightingService.isInitialized && recommendations.length > 1) {
@@ -509,8 +515,9 @@ class IntegratedAIService {
 
     /**
      * Вычисление интегрированной рекомендации
+     * Обновлено в Фазе 2, задача 2.1.3: добавлена поддержка адаптивных порогов
      */
-    calculateIntegratedRecommendation(recommendations, weights) {
+    async calculateIntegratedRecommendation(recommendations, weights, figi = null) {
         if (recommendations.length === 0) {
             return {
                 score: 0,
@@ -574,22 +581,47 @@ class IntegratedAIService {
         }
 
         // Определяем финальную рекомендацию с учетом И score И confidence
-        // Используем пороги из moderate стратегии как базовые (более консервативные)
-        const baseThresholds = {
-            buyScore: 0.65,
-            buyConfidence: 0.6,
-            sellScore: 0.35,
-            sellConfidence: 0.6
-        };
+        // Используем адаптивные пороги на основе рыночных условий (Фаза 2, задача 2.1.3)
+        let thresholds;
+        try {
+            if (AdaptiveThresholdService && AdaptiveThresholdService.isInitialized) {
+                thresholds = await AdaptiveThresholdService.getAdaptiveThresholds(figi);
+            } else {
+                // Fallback на базовые пороги, если AdaptiveThresholdService не инициализирован
+                thresholds = {
+                    buyScore: 0.65,
+                    buyConfidence: 0.6,
+                    sellScore: 0.35,
+                    sellConfidence: 0.6,
+                    marketMode: 'normal'
+                };
+            }
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('Failed to get adaptive thresholds, using base thresholds', {
+                    service: 'IntegratedAIService',
+                    figi,
+                    error: { message: error.message }
+                });
+            }
+            // Fallback на базовые пороги
+            thresholds = {
+                buyScore: 0.65,
+                buyConfidence: 0.6,
+                sellScore: 0.35,
+                sellConfidence: 0.6,
+                marketMode: 'normal'
+            };
+        }
         
         let recommendation = 'HOLD';
         
         // BUY: нужен высокий score И высокая confidence
-        if (weightedScore >= baseThresholds.buyScore && totalConfidence >= baseThresholds.buyConfidence) {
+        if (weightedScore >= thresholds.buyScore && totalConfidence >= thresholds.buyConfidence) {
             recommendation = 'BUY';
         } 
         // SELL: нужен низкий score И высокая confidence (чтобы быть уверенным в продаже)
-        else if (weightedScore <= baseThresholds.sellScore && totalConfidence >= baseThresholds.sellConfidence) {
+        else if (weightedScore <= thresholds.sellScore && totalConfidence >= thresholds.sellConfidence) {
             recommendation = 'SELL';
         }
         // Если confidence низкая, даже при экстремальных score, лучше HOLD
@@ -643,7 +675,15 @@ class IntegratedAIService {
             horizons: horizons,
             agreement: agreement, // Согласованность горизонтов внутри ensemble
             sourceAgreement: sourceAgreement, // Согласованность между источниками
-            summary: finalSummary
+            summary: finalSummary,
+            // Добавляем информацию о рыночном режиме и порогах (Фаза 2, задача 2.1.3)
+            marketMode: thresholds.marketMode,
+            thresholds: {
+                buyScore: thresholds.buyScore,
+                buyConfidence: thresholds.buyConfidence,
+                sellScore: thresholds.sellScore,
+                sellConfidence: thresholds.sellConfidence
+            }
         };
     }
 
