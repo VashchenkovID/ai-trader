@@ -410,6 +410,61 @@ export const apiService = {
   },
 
   /**
+   * Синхронизировать портфель со стратегиями (Фаза 1, задача 1.2)
+   */
+  async syncPortfolioWithStrategies(options?: { maxLookbackHours?: number; silent?: boolean; createMissingPositions?: boolean }): Promise<any> {
+    try {
+      const response = await api.post('/api/portfolio/sync', options || {});
+      return response.data;
+    } catch (error) {
+      console.error('Error syncing portfolio with strategies:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить статус последней синхронизации портфеля
+   */
+  async getPortfolioSyncStatus(): Promise<any> {
+    try {
+      const response = await api.get('/api/portfolio/sync/status');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching portfolio sync status:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Получить несоответствия портфеля (позиции без стратегии, заявки без позиций)
+   */
+  async getPortfolioMismatches(): Promise<any> {
+    try {
+      const response = await api.get('/api/portfolio/mismatches');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching portfolio mismatches:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Назначить стратегию позиции вручную
+   */
+  async assignStrategyToPosition(figi: string, strategyId: number, requestId?: string): Promise<any> {
+    try {
+      const response = await api.post(`/api/portfolio/positions/${figi}/assign-strategy`, {
+        strategyId,
+        requestId
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error assigning strategy to position:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Получить статистику торговли
    */
   async getTradingStats(): Promise<TradingStats> {

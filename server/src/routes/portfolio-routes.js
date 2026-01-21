@@ -615,4 +615,172 @@ router.post('/real/sync', async (req, res) => {
     }
 });
 
+/**
+ * Синхронизация портфеля со стратегиями (Фаза 1, задача 1.2)
+ * POST /api/portfolio/sync
+ * Body: { maxLookbackHours?: number, silent?: boolean, createMissingPositions?: boolean }
+ */
+router.post('/sync', async (req, res) => {
+    try {
+        const PortfolioSyncService = (await import('../services/PortfolioSyncService.js')).default;
+        
+        const { maxLookbackHours, silent, createMissingPositions } = req.body;
+        
+        const result = await PortfolioSyncService.syncRealPortfolioWithStrategies({
+            maxLookbackHours: maxLookbackHours || 48,
+            silent: silent || false,
+            createMissingPositions: createMissingPositions || false
+        });
+        
+        res.json({
+            success: result.success,
+            message: `Синхронизировано позиций: ${result.matched}, создано стратегий: ${result.created}, обновлено: ${result.updated}`,
+            data: result
+        });
+    } catch (error) {
+        console.error('Ошибка синхронизации портфеля со стратегиями:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка синхронизации портфеля со стратегиями',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Получить статус последней синхронизации
+ * GET /api/portfolio/sync/status
+ */
+router.get('/sync/status', async (req, res) => {
+    try {
+        const PortfolioSyncService = (await import('../services/PortfolioSyncService.js')).default;
+        
+        const status = PortfolioSyncService.getLastSyncStatus();
+        
+        res.json({
+            success: true,
+            data: status
+        });
+    } catch (error) {
+        console.error('Ошибка получения статуса синхронизации:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения статуса синхронизации',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Получить список несоответствий (позиции без стратегии, заявки без позиций)
+ * GET /api/portfolio/mismatches
+ */
+router.get('/mismatches', async (req, res) => {
+    try {
+        const PortfolioSyncService = (await import('../services/PortfolioSyncService.js')).default;
+        
+        const mismatches = await PortfolioSyncService.getMismatches();
+        
+        res.json({
+            success: true,
+            data: mismatches
+        });
+    } catch (error) {
+        console.error('Ошибка получения несоответствий:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения несоответствий',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Назначить стратегию позиции вручную
+ * POST /api/portfolio/positions/:figi/assign-strategy
+ * Body: { strategyId: number, requestId?: string }
+ */
+router.post('/positions/:figi/assign-strategy', async (req, res) => {
+    try {
+        const PortfolioSyncService = (await import('../services/PortfolioSyncService.js')).default;
+        const TradingRequest = (await import('../models/TradingRequest.js')).default;
+        const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
+        
+        const { figi } = req.params;
+        const { strategyId, requestId } = req.body;
+        
+        if (!strategyId) {
+            return res.status(400).json({
+                success: false,
+                message: 'strategyId обязателен'
+            });
+        }
+        
+        // Если указан requestId, используем его
+        let tradingRequest = null;
+        if (requestId) {
+            tradingRequest = await TradingRequest.findByPk(requestId);
+            if (!tradingRequest) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Заявка не найдена'
+                });
+            }
+        } else {
+            // Ищем последнюю одобренную заявку для этого FIGI
+            tradingRequest = await TradingRequest.findOne({
+                where: {
+                    figi,
+                    status: {
+                        [Op.in]: ['APPROVED', 'EXECUTED']
+                    }
+                },
+                order: [['approvedAt', 'DESC'], ['createdAt', 'DESC']]
+            });
+        }
+        
+        if (!tradingRequest) {
+            return res.status(404).json({
+                success: false,
+                message: 'Не найдена одобренная заявка для этого инструмента'
+            });
+        }
+        
+        // Проверяем, нет ли уже PositionStrategy
+        const existing = await PositionStrategy.findOne({
+            where: { positionId: tradingRequest.id }
+        });
+        
+        if (existing) {
+            return res.status(400).json({
+                success: false,
+                message: 'PositionStrategy уже существует для этой заявки'
+            });
+        }
+        
+        // Создаем PositionStrategy
+        const TradingEngine = (await import('../services/TradingEngine.js')).default;
+        const portfolio = await TradingEngine.getRealPortfolioValue();
+        const currentQuantity = portfolio?.positions?.[figi] || 0;
+        
+        const positionStrategy = await PortfolioSyncService.createPositionStrategyFromRequest(
+            tradingRequest,
+            currentQuantity
+        );
+        
+        res.json({
+            success: true,
+            message: 'Стратегия назначена позиции',
+            data: positionStrategy
+        });
+    } catch (error) {
+        console.error('Ошибка назначения стратегии:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка назначения стратегии',
+            error: error.message
+        });
+    }
+});
+
 export default router;

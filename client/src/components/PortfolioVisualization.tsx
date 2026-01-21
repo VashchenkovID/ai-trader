@@ -11,6 +11,7 @@ import PortfolioCharts from './portfolio/PortfolioCharts';
 import PortfolioAnalytics from './portfolio/PortfolioAnalytics';
 import PortfolioAnalysisResults, { SellRecommendation } from './portfolio/PortfolioAnalysisResults';
 import StrategyPositionsTable from './portfolio/StrategyPositionsTable';
+import PortfolioSync from './portfolio/PortfolioSync';
 
 interface PortfolioVisualizationProps {
   className?: string;
@@ -622,6 +623,11 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
           analyzing={analyzing}
           onSellSuccess={loadPortfolioData}
         />
+      </div>
+
+      {/* Синхронизация портфеля со стратегиями */}
+      <div className="portfolio-visualization-section">
+        <PortfolioSync />
       </div>
 
       {/* Таблицы по стратегиям */}

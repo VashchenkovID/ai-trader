@@ -85,39 +85,59 @@
 
 ---
 
-#### 1.2. Синхронизация портфеля (P0) 🔴
+#### 1.2. Синхронизация портфеля (P0) 🔴 ✅
 **Источник:** `PORTFOLIO_SYNC_ANALYSIS.md`  
-**Зависимости:** Нет
+**Зависимости:** Нет  
+**Статус:** ✅ **ЗАВЕРШЕНО**
 
 **Задачи:**
-- [ ] **1.2.1.** Создать `PortfolioSyncService.js` с методами:
-  - `syncRealPortfolioWithStrategies()` - основная функция синхронизации
-  - `matchPositionsWithApprovedRequests()` - сопоставление позиций с заявками
-  - `findChangedPositions()` - обнаружение изменений позиций
-  - `createPositionStrategyFromRequest()` - создание связи позиции со стратегией
-  - `updatePositionStrategyForSell()` - обновление при продаже
-- [ ] **1.2.2.** Реализовать API endpoints:
-  - `POST /api/portfolio/sync` - запуск синхронизации
-  - `GET /api/portfolio/sync/status` - статус синхронизации
-  - `GET /api/portfolio/mismatches` - несоответствия
-  - `POST /api/portfolio/positions/:figi/assign-strategy` - ручное назначение стратегии
-- [ ] **1.2.3.** Реализовать Frontend компоненты:
-  - Кнопка синхронизации
-  - Уведомления о синхронизации
-  - Отображение несоответствий
-  - Ручное назначение стратегий
-- [ ] **1.2.4.** Обработать edge cases:
-  - Частичное исполнение
-  - Множественные заявки на один FIGI
-  - Несовпадения позиций и заявок
-  - Продажа без стратегии
+- [x] **1.2.1.** Создать `PortfolioSyncService.js` с методами:
+  - `syncRealPortfolioWithStrategies()` - основная функция синхронизации ✅
+  - `matchPositionsWithApprovedRequests()` - сопоставление позиций с заявками ✅
+  - `findChangedPositions()` - обнаружение изменений позиций ✅
+  - `createPositionStrategyFromRequest()` - создание связи позиции со стратегией ✅
+  - `updatePositionStrategyForSell()` - обновление при продаже ✅
+- [x] **1.2.2.** Реализовать API endpoints:
+  - `POST /api/portfolio/sync` - запуск синхронизации ✅
+  - `GET /api/portfolio/sync/status` - статус синхронизации ✅
+  - `GET /api/portfolio/mismatches` - несоответствия ✅
+  - `POST /api/portfolio/positions/:figi/assign-strategy` - ручное назначение стратегии ✅
+- [x] **1.2.3.** Реализовать Frontend компоненты:
+  - Кнопка синхронизации ✅
+  - Уведомления о синхронизации ✅
+  - Отображение несоответствий ✅
+  - Ручное назначение стратегий ✅
+- [x] **1.2.4.** Обработать edge cases:
+  - Частичное исполнение ✅
+  - Множественные заявки на один FIGI ✅
+  - Несовпадения позиций и заявок ✅
+  - Продажа без стратегии ✅
 
 **Файлы для создания/изменения:**
-- `server/src/services/PortfolioSyncService.js` (новый)
-- `server/src/routes/portfolioRoutes.js` (обновить)
-- `client/src/components/PortfolioSync/` (новые компоненты)
+- `server/src/services/PortfolioSyncService.js` ✅ (создан)
+- `server/src/routes/portfolio-routes.js` ✅ (обновлен)
+- `client/src/components/portfolio/PortfolioSync.tsx` ✅ (создан)
+- `client/src/components/portfolio/PortfolioSync.css` ✅ (создан)
+- `client/src/services/apiService.ts` ✅ (обновлен)
+- `client/src/components/PortfolioVisualization.tsx` ✅ (обновлен)
 
-**Оценка времени:** 3-5 дней
+**Тестирование:**
+- ✅ Создан тестовый скрипт: `server/test-portfolio-sync-phase1.js`
+- ✅ Тесты для методов синхронизации
+- ✅ Тесты для edge cases
+- ✅ Интеграция с Frontend компонентом
+- ✅ **Все 10 тестов пройдены успешно** (0 провалов)
+
+**Результаты тестирования:**
+- ✅ `findChangedPositions` - находит новые, увеличенные, закрытые, уменьшенные позиции
+- ✅ `getRecentApprovedRequests` - возвращает одобренные заявки
+- ✅ `getLastSyncStatus` - возвращает статус синхронизации
+- ✅ `syncRealPortfolioWithStrategies` - выполняется без ошибок
+- ✅ `getMismatches` - возвращает несоответствия
+- ✅ Edge cases - обработка пустых портфелей и множественных изменений
+
+**Оценка времени:** 3-5 дней  
+**Фактическое время:** Завершено
 
 ---
 
