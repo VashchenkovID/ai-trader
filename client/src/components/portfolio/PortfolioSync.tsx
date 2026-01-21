@@ -42,6 +42,7 @@ interface Mismatches {
 
 const PortfolioSync: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
+  const [syncingRealPortfolio, setSyncingRealPortfolio] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [mismatches, setMismatches] = useState<Mismatches | null>(null);
@@ -81,6 +82,42 @@ const PortfolioSync: React.FC = () => {
     }
   };
 
+  const handleSyncRealPortfolio = async () => {
+    try {
+      setSyncingRealPortfolio(true);
+      
+      toast.current?.show({
+        severity: 'info',
+        summary: 'Обновление портфеля',
+        detail: 'Загрузка данных из Tinkoff API...',
+        life: 2000
+      });
+
+      const response = await apiService.syncRealPortfolio();
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Портфель обновлен',
+        detail: 'Данные из Tinkoff API успешно загружены',
+        life: 3000
+      });
+
+      // После обновления реального портфеля можно запустить синхронизацию со стратегиями
+      // Но не делаем это автоматически, чтобы пользователь мог контролировать процесс
+
+    } catch (error: any) {
+      console.error('Error syncing real portfolio:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Ошибка обновления портфеля',
+        detail: error.response?.data?.message || error.message || 'Не удалось обновить портфель из Tinkoff API',
+        life: 5000
+      });
+    } finally {
+      setSyncingRealPortfolio(false);
+    }
+  };
+
   const handleSync = async () => {
     try {
       setSyncing(true);
@@ -89,7 +126,7 @@ const PortfolioSync: React.FC = () => {
       toast.current?.show({
         severity: 'info',
         summary: 'Синхронизация',
-        detail: 'Запуск синхронизации портфеля...',
+        detail: 'Запуск синхронизации портфеля со стратегиями...',
         life: 2000
       });
 
@@ -154,44 +191,70 @@ const PortfolioSync: React.FC = () => {
     <div className="portfolio-sync">
       <Toast ref={toast} />
       
-      <Card className="portfolio-sync-card">
+      <Card variant="default" className="portfolio-sync-card">
         <div className="portfolio-sync-header">
-          <h2>Синхронизация портфеля со стратегиями</h2>
+          <h2 className="portfolio-sync-title">🔄 Синхронизация портфеля со стратегиями</h2>
           <p className="portfolio-sync-description">
             Сопоставляет позиции из реального портфеля с одобренными торговыми заявками
             и создает связи между позициями и стратегиями.
           </p>
         </div>
 
-        <div className="portfolio-sync-controls">
-          <div className="sync-input-group">
-            <label htmlFor="lookback-hours">
-              Период поиска заявок (часов):
-            </label>
-            <input
-              id="lookback-hours"
-              type="number"
-              min="1"
-              max="168"
-              value={maxLookbackHours}
-              onChange={(e) => setMaxLookbackHours(parseInt(e.target.value) || 48)}
-              disabled={syncing}
-            />
+        <div className="portfolio-sync-actions">
+          <div className="portfolio-sync-action-group">
+            <div className="portfolio-sync-action-label">Обновление данных</div>
+            <Button
+              onClick={handleSyncRealPortfolio}
+              disabled={syncingRealPortfolio}
+              loading={syncingRealPortfolio}
+              variant="secondary"
+              icon={<span>📥</span>}
+            >
+              {syncingRealPortfolio ? 'Обновление...' : 'Обновить реальный портфель'}
+            </Button>
+            <p className="portfolio-sync-action-hint">
+              Загружает актуальные данные из Tinkoff API
+            </p>
           </div>
-          
-          <Button
-            onClick={handleSync}
-            disabled={syncing}
-            loading={syncing}
-            variant="primary"
-          >
-            {syncing ? 'Синхронизация...' : 'Синхронизировать портфель'}
-          </Button>
+
+          <div className="portfolio-sync-action-group">
+            <div className="portfolio-sync-action-label">Синхронизация со стратегиями</div>
+            <div className="portfolio-sync-controls">
+              <div className="sync-input-group">
+                <label htmlFor="lookback-hours" className="sync-input-label">
+                  Период поиска заявок (часов):
+                </label>
+                <input
+                  id="lookback-hours"
+                  type="number"
+                  min="1"
+                  max="168"
+                  value={maxLookbackHours}
+                  onChange={(e) => setMaxLookbackHours(parseInt(e.target.value) || 48)}
+                  disabled={syncing}
+                  className="sync-input"
+                />
+              </div>
+              
+              <Button
+                onClick={handleSync}
+                disabled={syncing}
+                loading={syncing}
+                variant="primary"
+                icon={<span>🔄</span>}
+              >
+                {syncing ? 'Синхронизация...' : 'Синхронизировать со стратегиями'}
+              </Button>
+            </div>
+            <p className="portfolio-sync-action-hint">
+              Сопоставляет позиции с одобренными заявками и создает связи со стратегиями
+            </p>
+          </div>
         </div>
 
         {syncStatus && (
           <div className="sync-status-section">
-            <h3>Статус последней синхронизации</h3>
+            <h3 className="sync-section-title">📊 Статус последней синхронизации</h3>
             <div className="sync-status-info">
               <div className="status-item">
                 <span className="status-label">Последняя синхронизация:</span>
@@ -199,11 +262,11 @@ const PortfolioSync: React.FC = () => {
               </div>
               <div className="status-item">
                 <span className="status-label">Сопоставлено позиций:</span>
-                <Badge variant="success">{syncStatus.positionsMatched}</Badge>
+                <Badge variant="success" size="sm">{syncStatus.positionsMatched}</Badge>
               </div>
               <div className="status-item">
                 <span className="status-label">Несоответствий:</span>
-                <Badge variant={syncStatus.positionsUnmatched > 0 ? 'warning' : 'success'}>
+                <Badge variant={syncStatus.positionsUnmatched > 0 ? 'warning' : 'success'} size="sm">
                   {syncStatus.positionsUnmatched}
                 </Badge>
               </div>
@@ -213,7 +276,7 @@ const PortfolioSync: React.FC = () => {
 
         {syncResult && (
           <div className="sync-result-section">
-            <h3>Результаты синхронизации</h3>
+            <h3 className="sync-section-title">📈 Результаты синхронизации</h3>
             
             {syncResult.success ? (
               <Alert variant="success" className="sync-result-alert">
@@ -296,11 +359,13 @@ const PortfolioSync: React.FC = () => {
         {mismatches && (
           <div className="mismatches-section">
             <div className="mismatches-header">
-              <h3>Текущие несоответствия</h3>
+              <h3 className="sync-section-title">⚠️ Текущие несоответствия</h3>
               <Button
                 onClick={loadMismatches}
                 disabled={loadingMismatches}
                 variant="secondary"
+                size="sm"
+                icon={<span>🔄</span>}
               >
                 {loadingMismatches ? 'Загрузка...' : 'Обновить'}
               </Button>
