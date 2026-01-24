@@ -317,6 +317,17 @@ class CacheService {
                 }
                 if (insertedCount > 0) {
                     console.log(`✅ Inserted ${insertedCount} new candles for ${figi} (skipped ${toInsert.length - insertedCount} duplicates)`);
+                    
+                    // Фаза 3, задача 3.1.2: Инвалидация кеша индикаторов при обновлении данных
+                    try {
+                        const OptimizedAnalysisService = (await import('./OptimizedAnalysisService.js')).default;
+                        if (OptimizedAnalysisService && OptimizedAnalysisService.invalidateIndicatorsCache) {
+                            OptimizedAnalysisService.invalidateIndicatorsCache(figi, interval);
+                        }
+                    } catch (invalidateError) {
+                        // Игнорируем ошибки инвалидации кеша - это не критично
+                        console.debug(`Debug: Could not invalidate cache for ${figi}:`, invalidateError.message);
+                    }
                 } else if (toInsert.length > 0) {
                     console.log(`ℹ️ All ${toInsert.length} candles for ${figi} already exist in cache`);
                 }
@@ -489,6 +500,21 @@ class CacheService {
                 const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
                 if (toInsert.length > 0) {
                     await CachedCandle.bulkCreate(toInsert);
+                    
+                    // Фаза 3, задача 3.1.2: Инвалидация кеша индикаторов при обновлении данных
+                    // Инвалидируем кеш для всех обновленных инструментов
+                    const uniqueFigis = new Set(toInsert.map(c => c.figi));
+                    for (const figi of uniqueFigis) {
+                        try {
+                            const OptimizedAnalysisService = (await import('./OptimizedAnalysisService.js')).default;
+                            if (OptimizedAnalysisService && OptimizedAnalysisService.invalidateIndicatorsCache) {
+                                OptimizedAnalysisService.invalidateIndicatorsCache(figi, interval);
+                            }
+                        } catch (invalidateError) {
+                            // Игнорируем ошибки инвалидации кеша
+                            console.debug(`Debug: Could not invalidate cache for ${figi}:`, invalidateError.message);
+                        }
+                    }
                 }
 
                 return toInsert;

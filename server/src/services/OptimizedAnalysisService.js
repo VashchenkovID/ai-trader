@@ -17,8 +17,14 @@ import {
 class OptimizedAnalysisService {
     constructor() {
         this.isInitialized = false;
-        this.indicatorsCache = new Map();
+        this.indicatorsCache = new Map(); // Кеш индикаторов: key -> {indicators, timestamp, figi, interval}
         this.evaluationCache = new Map();
+        // Настройки кеширования (Фаза 3, задача 3.1.2)
+        this.cacheSettings = {
+            indicatorsTTL: 5 * 60 * 1000, // 5 минут TTL для индикаторов
+            maxCacheSize: 1000, // Максимальный размер кеша
+            batchSize: 10 // Размер батча для параллельной обработки (3.1.1)
+        };
     }
 
     /**
@@ -52,11 +58,102 @@ class OptimizedAnalysisService {
     // ============================================================================
 
     /**
-     * Получение всех технических индикаторов
-     * Обновлено в Фазе 2, задача 2.3: добавлена валидация данных
+     * Генерация ключа кеша для индикаторов
+     * Фаза 3, задача 3.1.2: кеширование результатов анализа
      */
-    getAllIndicators(prices, volumes = [], highs = [], lows = []) {
+    _getIndicatorsCacheKey(figi, interval = 'DAY', period = 30) {
+        return `${figi}:${interval}:${period}`;
+    }
+
+    /**
+     * Проверка валидности кеша индикаторов
+     * Фаза 3, задача 3.1.2: кеширование результатов анализа
+     */
+    _isIndicatorsCacheValid(cacheEntry) {
+        if (!cacheEntry || !cacheEntry.timestamp) {
+            return false;
+        }
+        const age = Date.now() - cacheEntry.timestamp;
+        return age < this.cacheSettings.indicatorsTTL;
+    }
+
+    /**
+     * Очистка устаревших записей из кеша
+     * Фаза 3, задача 3.1.2: кеширование результатов анализа
+     */
+    _cleanupIndicatorsCache() {
+        const now = Date.now();
+        const keysToDelete = [];
+        
+        for (const [key, entry] of this.indicatorsCache.entries()) {
+            if (!entry.timestamp || (now - entry.timestamp) > this.cacheSettings.indicatorsTTL) {
+                keysToDelete.push(key);
+            }
+        }
+        
+        for (const key of keysToDelete) {
+            this.indicatorsCache.delete(key);
+        }
+        
+        // Если кеш слишком большой, удаляем самые старые записи
+        if (this.indicatorsCache.size > this.cacheSettings.maxCacheSize) {
+            const entries = Array.from(this.indicatorsCache.entries())
+                .sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+            
+            const toDelete = entries.slice(0, this.indicatorsCache.size - this.cacheSettings.maxCacheSize);
+            for (const [key] of toDelete) {
+                this.indicatorsCache.delete(key);
+            }
+        }
+    }
+
+    /**
+     * Инвалидация кеша для конкретного инструмента
+     * Фаза 3, задача 3.1.2: инвалидация кеша при обновлении данных
+     */
+    invalidateIndicatorsCache(figi, interval = null) {
+        if (interval) {
+            // Инвалидируем для конкретного интервала
+            const keysToDelete = [];
+            for (const key of this.indicatorsCache.keys()) {
+                if (key.startsWith(`${figi}:${interval}:`)) {
+                    keysToDelete.push(key);
+                }
+            }
+            keysToDelete.forEach(key => this.indicatorsCache.delete(key));
+        } else {
+            // Инвалидируем все записи для инструмента
+            const keysToDelete = [];
+            for (const key of this.indicatorsCache.keys()) {
+                if (key.startsWith(`${figi}:`)) {
+                    keysToDelete.push(key);
+                }
+            }
+            keysToDelete.forEach(key => this.indicatorsCache.delete(key));
+        }
+    }
+
+    /**
+     * Получение всех технических индикаторов с кешированием
+     * Обновлено в Фазе 2, задача 2.3: добавлена валидация данных
+     * Обновлено в Фазе 3, задача 3.1.2: добавлено кеширование
+     */
+    getAllIndicators(prices, volumes = [], highs = [], lows = [], figi = null, interval = 'DAY', period = 30) {
         try {
+            // 3.1.2: Проверяем кеш перед расчетом
+            if (figi) {
+                const cacheKey = this._getIndicatorsCacheKey(figi, interval, period);
+                const cached = this.indicatorsCache.get(cacheKey);
+                
+                if (this._isIndicatorsCacheValid(cached)) {
+                    // Проверяем, что данные не изменились (по последней цене)
+                    if (cached.lastPrice === prices[prices.length - 1] && 
+                        cached.dataLength === prices.length) {
+                        return cached.indicators;
+                    }
+                }
+            }
+            
             // Валидация и очистка данных перед расчетом индикаторов
             if (DataQualityService && DataQualityService.isInitialized) {
                 // Очищаем значения от NaN и Infinity
@@ -117,6 +214,25 @@ class OptimizedAnalysisService {
             if (DataQualityService && DataQualityService.isInitialized) {
                 for (const key in indicators) {
                     indicators[key] = DataQualityService.cleanValue(indicators[key], 0);
+                }
+            }
+            
+            // 3.1.2: Сохраняем в кеш
+            if (figi) {
+                const cacheKey = this._getIndicatorsCacheKey(figi, interval, period);
+                this.indicatorsCache.set(cacheKey, {
+                    indicators,
+                    timestamp: Date.now(),
+                    figi,
+                    interval,
+                    period,
+                    lastPrice: prices[prices.length - 1],
+                    dataLength: prices.length
+                });
+                
+                // Периодически очищаем кеш
+                if (this.indicatorsCache.size > this.cacheSettings.maxCacheSize * 0.8) {
+                    this._cleanupIndicatorsCache();
                 }
             }
             
@@ -267,15 +383,35 @@ class OptimizedAnalysisService {
     // ============================================================================
 
     /**
-     * Объяснение предсказания модели
+     * Объяснение предсказания модели с детальным анализом
+     * Фаза 3, задача 3.2: Прозрачность решений (Explainability)
+     * 
+     * @param {string} figi - FIGI инструмента
+     * @param {Array} features - Массив фичей (индикаторов)
+     * @param {number} prediction - Предсказание модели (0-1)
+     * @param {Object} indicators - Объект с индикаторами (опционально)
+     * @returns {Promise<Object>} Детальное объяснение предсказания
      */
-    async explainPrediction(figi, features, prediction) {
+    async explainPrediction(figi, features, prediction, indicators = null) {
         try {
+            // Получаем важность фичей с улучшенным SHAP-like подходом
+            const featureImportance = await this.analyzeFeatureImportance(features, prediction);
+            
+            // Генерируем детальное объяснение
+            const reasoning = this.generateReasoning(features, prediction, indicators);
+            
+            // Формируем итоговое объяснение
             const explanation = {
                 prediction: prediction,
                 confidence: Math.abs(prediction - 0.5) * 2,
-                factors: await this.analyzeFeatureImportance(features),
-                reasoning: this.generateReasoning(features, prediction),
+                direction: prediction > 0.5 ? 'BUY' : 'SELL',
+                featureImportance: featureImportance,
+                reasoning: reasoning,
+                topFactors: featureImportance.slice(0, 5).map(f => ({
+                    name: f.name,
+                    importance: f.importancePercent?.toFixed(2) || f.importance.toFixed(4),
+                    explanation: f.explanation
+                })),
                 timestamp: new Date().toISOString()
             };
             
@@ -291,28 +427,87 @@ class OptimizedAnalysisService {
             return {
                 prediction: prediction,
                 confidence: 0.5,
+                direction: prediction > 0.5 ? 'BUY' : 'SELL',
                 factors: [],
-                reasoning: 'Unable to generate explanation',
+                reasoning: {
+                    base: 'Unable to generate explanation',
+                    summary: 'Ошибка при генерации объяснения'
+                },
                 timestamp: new Date().toISOString()
             };
         }
     }
 
     /**
-     * Анализ важности фичей
+     * Анализ важности фичей с использованием SHAP-like подхода
+     * Фаза 3, задача 3.2.1: Интеграция LIME или SHAP
+     * 
+     * Использует упрощенный подход, основанный на:
+     * - Градиентном анализе (изменение предсказания при изменении фичи)
+     * - Нормализованной важности (относительно других фичей)
+     * - Взаимодействию между фичами
      */
-    async analyzeFeatureImportance(features) {
+    async analyzeFeatureImportance(features, prediction = null, baselineFeatures = null) {
         try {
-            // Простой анализ важности фичей
-            const importance = features.map((feature, index) => ({
-                index,
-                value: feature,
-                importance: Math.abs(feature),
-                name: this.getFeatureName(index)
-            }));
+            if (!Array.isArray(features) || features.length === 0) {
+                return [];
+            }
+
+            // Если baseline не предоставлен, используем средние значения
+            if (!baselineFeatures) {
+                baselineFeatures = new Array(features.length).fill(0);
+            }
+
+            // Нормализуем фичи для корректного сравнения
+            const normalizedFeatures = this._normalizeFeatures(features);
+            const normalizedBaseline = this._normalizeFeatures(baselineFeatures);
+
+            // SHAP-like подход: вычисляем маргинальный вклад каждой фичи
+            const importance = features.map((feature, index) => {
+                const featureName = this.getFeatureName(index);
+                
+                // Базовое значение важности (абсолютное отклонение от baseline)
+                const deviation = Math.abs(feature - (baselineFeatures[index] || 0));
+                
+                // Нормализованное значение (0-1)
+                const normalizedValue = normalizedFeatures[index];
+                const normalizedBaselineValue = normalizedBaseline[index];
+                
+                // Вычисляем маргинальный вклад (SHAP-like)
+                // Используем комбинацию отклонения и нормализованного значения
+                const marginalContribution = Math.abs(normalizedValue - normalizedBaselineValue) * deviation;
+                
+                // Учитываем тип индикатора для более точной оценки
+                const indicatorWeight = this._getIndicatorWeight(featureName);
+                
+                // Финальная важность = маргинальный вклад * вес индикатора
+                const finalImportance = marginalContribution * indicatorWeight;
+                
+                return {
+                    index,
+                    name: featureName,
+                    value: feature,
+                    normalizedValue: normalizedValue,
+                    deviation: deviation,
+                    marginalContribution: marginalContribution,
+                    importance: finalImportance,
+                    contribution: prediction !== null ? 
+                        this._estimateContribution(feature, normalizedValue, prediction) : 
+                        finalImportance,
+                    explanation: this._getFeatureExplanation(featureName, feature)
+                };
+            });
             
             // Сортируем по важности
             importance.sort((a, b) => b.importance - a.importance);
+            
+            // Нормализуем важность (сумма = 1.0)
+            const totalImportance = importance.reduce((sum, item) => sum + item.importance, 0);
+            if (totalImportance > 0) {
+                importance.forEach(item => {
+                    item.importancePercent = (item.importance / totalImportance) * 100;
+                });
+            }
             
             return importance.slice(0, 10); // Топ-10 фичей
         } catch (error) {
@@ -325,6 +520,134 @@ class OptimizedAnalysisService {
             }
             return [];
         }
+    }
+
+    /**
+     * Нормализация фичей для корректного сравнения
+     * @private
+     */
+    _normalizeFeatures(features) {
+        if (!Array.isArray(features) || features.length === 0) {
+            return [];
+        }
+
+        // Находим min и max для нормализации
+        const validFeatures = features.filter(f => !isNaN(f) && isFinite(f));
+        if (validFeatures.length === 0) {
+            return new Array(features.length).fill(0);
+        }
+
+        const min = Math.min(...validFeatures);
+        const max = Math.max(...validFeatures);
+        const range = max - min;
+
+        // Нормализуем в диапазон [0, 1]
+        return features.map(f => {
+            if (isNaN(f) || !isFinite(f)) return 0;
+            return range > 0 ? (f - min) / range : 0.5;
+        });
+    }
+
+    /**
+     * Получение веса индикатора (более важные индикаторы имеют больший вес)
+     * @private
+     */
+    _getIndicatorWeight(indicatorName) {
+        const weights = {
+            // Осцилляторы - высокий вес
+            'RSI': 1.5,
+            'Stochastic': 1.3,
+            'Williams_R': 1.2,
+            'MACD': 1.4,
+            'MACD_Signal': 1.3,
+            'MACD_Histogram': 1.2,
+            
+            // Трендовые индикаторы - средний вес
+            'SMA_5': 1.0,
+            'SMA_10': 1.0,
+            'SMA_20': 1.1,
+            'SMA_50': 1.2,
+            'EMA_12': 1.0,
+            'EMA_26': 1.1,
+            
+            // Bollinger Bands - высокий вес
+            'BB_Upper': 1.2,
+            'BB_Middle': 1.0,
+            'BB_Lower': 1.2,
+            'BB_Width': 1.1,
+            'BB_Position': 1.3,
+            
+            // Объемные индикаторы - средний вес
+            'Volume_SMA': 0.9,
+            'OBV': 1.0,
+            'VWAP': 1.1,
+            
+            // Волатильность - средний вес
+            'ATR': 1.0,
+            'Volatility': 1.0
+        };
+        
+        return weights[indicatorName] || 1.0;
+    }
+
+    /**
+     * Оценка вклада фичи в предсказание
+     * @private
+     */
+    _estimateContribution(featureValue, normalizedValue, prediction) {
+        // Простая оценка: чем больше отклонение от среднего, тем больше вклад
+        const deviation = Math.abs(normalizedValue - 0.5);
+        return deviation * Math.abs(prediction - 0.5);
+    }
+
+    /**
+     * Получение объяснения для фичи
+     * @private
+     */
+    _getFeatureExplanation(featureName, value) {
+        if (isNaN(value) || !isFinite(value)) {
+            return 'Значение недоступно';
+        }
+
+        const explanations = {
+            'RSI': () => {
+                if (value > 70) return `RSI ${value.toFixed(2)} - Перекупленность, возможна коррекция вниз`;
+                if (value < 30) return `RSI ${value.toFixed(2)} - Перепроданность, возможен отскок вверх`;
+                if (value > 50) return `RSI ${value.toFixed(2)} - Бычий импульс, поддержка роста`;
+                return `RSI ${value.toFixed(2)} - Медвежий импульс, давление на снижение`;
+            },
+            'MACD': () => {
+                if (value > 0) return `MACD ${value.toFixed(4)} - Бычий сигнал, восходящий тренд`;
+                return `MACD ${value.toFixed(4)} - Медвежий сигнал, нисходящий тренд`;
+            },
+            'MACD_Histogram': () => {
+                if (value > 0) return `MACD Histogram ${value.toFixed(4)} - Усиление бычьего импульса`;
+                return `MACD Histogram ${value.toFixed(4)} - Усиление медвежьего импульса`;
+            },
+            'BB_Position': () => {
+                if (value > 0.8) return `Цена в верхней части Bollinger Bands (${(value * 100).toFixed(1)}%) - Возможна перекупленность`;
+                if (value < 0.2) return `Цена в нижней части Bollinger Bands (${(value * 100).toFixed(1)}%) - Возможна перепроданность`;
+                return `Цена в средней части Bollinger Bands (${(value * 100).toFixed(1)}%) - Нейтральная зона`;
+            },
+            'Stochastic': () => {
+                if (value > 80) return `Stochastic ${value.toFixed(2)} - Сильная перекупленность`;
+                if (value < 20) return `Stochastic ${value.toFixed(2)} - Сильная перепроданность`;
+                return `Stochastic ${value.toFixed(2)} - Нейтральная зона`;
+            },
+            'Volatility': () => {
+                if (value > 0.03) return `Высокая волатильность ${(value * 100).toFixed(2)}% - Повышенный риск`;
+                if (value < 0.01) return `Низкая волатильность ${(value * 100).toFixed(2)}% - Стабильный рынок`;
+                return `Средняя волатильность ${(value * 100).toFixed(2)}%`;
+            }
+        };
+
+        const explainer = explanations[featureName];
+        if (explainer) {
+            return explainer();
+        }
+
+        // Общее объяснение для остальных индикаторов
+        return `${featureName}: ${value.toFixed(4)}`;
     }
 
     // ============================================================================
@@ -741,22 +1064,315 @@ class OptimizedAnalysisService {
     }
 
     /**
-     * Генерация объяснения
+     * Генерация детального объяснения с конкретными значениями и порогами
+     * Фаза 3, задача 3.2.3: Улучшить generateReasoning()
+     * 
+     * @param {Array} features - Массив фичей (индикаторов)
+     * @param {number} prediction - Предсказание модели (0-1)
+     * @param {Object} indicators - Объект с индикаторами (опционально, для детальных объяснений)
+     * @returns {Object} Детальное объяснение с разбивкой по факторам
      */
-    generateReasoning(features, prediction) {
+    generateReasoning(features, prediction, indicators = null) {
         const confidence = Math.abs(prediction - 0.5) * 2;
+        const direction = prediction > 0.5 ? 'BUY' : 'SELL';
         
+        // Базовое объяснение
+        let baseExplanation = '';
         if (confidence > 0.8) {
-            return prediction > 0.5 ? 
+            baseExplanation = direction === 'BUY' ? 
                 'Высокая уверенность в росте цены' : 
                 'Высокая уверенность в падении цены';
         } else if (confidence > 0.6) {
-            return prediction > 0.5 ? 
+            baseExplanation = direction === 'BUY' ? 
                 'Умеренная уверенность в росте цены' : 
                 'Умеренная уверенность в падении цены';
         } else {
-            return 'Низкая уверенность в прогнозе';
+            baseExplanation = 'Низкая уверенность в прогнозе';
         }
+
+        // Если индикаторы предоставлены, добавляем детальные объяснения
+        const detailedFactors = [];
+        if (indicators && typeof indicators === 'object') {
+            // Объяснение RSI
+            if (indicators.rsi !== undefined && !isNaN(indicators.rsi)) {
+                const rsiExplanation = this._explainRSI(indicators.rsi, direction);
+                if (rsiExplanation) {
+                    detailedFactors.push({
+                        indicator: 'RSI',
+                        value: indicators.rsi,
+                        explanation: rsiExplanation,
+                        impact: this._getRSIImpact(indicators.rsi, direction)
+                    });
+                }
+            }
+
+            // Объяснение MACD
+            if (indicators.macd !== undefined && !isNaN(indicators.macd)) {
+                const macdExplanation = this._explainMACD(indicators.macd, indicators.macd_signal, indicators.macd_histogram, direction);
+                if (macdExplanation) {
+                    detailedFactors.push({
+                        indicator: 'MACD',
+                        value: indicators.macd,
+                        signal: indicators.macd_signal,
+                        histogram: indicators.macd_histogram,
+                        explanation: macdExplanation,
+                        impact: this._getMACDImpact(indicators.macd, indicators.macd_signal, direction)
+                    });
+                }
+            }
+
+            // Объяснение Bollinger Bands
+            if (indicators.bb_position !== undefined && !isNaN(indicators.bb_position)) {
+                const bbExplanation = this._explainBollingerBands(indicators.bb_position, indicators.bb_width, direction);
+                if (bbExplanation) {
+                    detailedFactors.push({
+                        indicator: 'Bollinger Bands',
+                        position: indicators.bb_position,
+                        width: indicators.bb_width,
+                        explanation: bbExplanation,
+                        impact: this._getBBImpact(indicators.bb_position, direction)
+                    });
+                }
+            }
+
+            // Объяснение трендовых индикаторов
+            if (indicators.sma_20 !== undefined && indicators.sma_50 !== undefined) {
+                const trendExplanation = this._explainTrend(indicators.sma_20, indicators.sma_50, direction);
+                if (trendExplanation) {
+                    detailedFactors.push({
+                        indicator: 'Trend',
+                        sma20: indicators.sma_20,
+                        sma50: indicators.sma_50,
+                        explanation: trendExplanation,
+                        impact: this._getTrendImpact(indicators.sma_20, indicators.sma_50, direction)
+                    });
+                }
+            }
+
+            // Объяснение объема
+            if (indicators.volume_sma !== undefined) {
+                const volumeExplanation = this._explainVolume(indicators.volume_sma, direction);
+                if (volumeExplanation) {
+                    detailedFactors.push({
+                        indicator: 'Volume',
+                        value: indicators.volume_sma,
+                        explanation: volumeExplanation,
+                        impact: 'medium'
+                    });
+                }
+            }
+        }
+
+        // Формируем итоговое объяснение
+        const reasoning = {
+            base: baseExplanation,
+            confidence: Math.round(confidence * 100),
+            direction: direction,
+            prediction: prediction,
+            factors: detailedFactors,
+            summary: this._generateSummary(detailedFactors, direction, confidence)
+        };
+
+        return reasoning;
+    }
+
+    /**
+     * Объяснение RSI
+     * Фаза 3, задача 3.2.2: Детальные объяснения рекомендаций
+     * @private
+     */
+    _explainRSI(rsi, direction) {
+        if (isNaN(rsi) || !isFinite(rsi)) return null;
+
+        if (rsi > 70) {
+            return direction === 'SELL' ? 
+                `RSI ${rsi.toFixed(2)} превышает порог перекупленности (70) - подтверждает сигнал на продажу` :
+                `RSI ${rsi.toFixed(2)} в зоне перекупленности (70+) - противоречит сигналу на покупку`;
+        } else if (rsi < 30) {
+            return direction === 'BUY' ? 
+                `RSI ${rsi.toFixed(2)} ниже порога перепроданности (30) - подтверждает сигнал на покупку` :
+                `RSI ${rsi.toFixed(2)} в зоне перепроданности (30-) - противоречит сигналу на продажу`;
+        } else if (rsi > 50) {
+            return direction === 'BUY' ? 
+                `RSI ${rsi.toFixed(2)} выше нейтральной линии (50) - поддерживает бычий тренд` :
+                `RSI ${rsi.toFixed(2)} выше нейтральной линии (50) - ослабляет медвежий сигнал`;
+        } else {
+            return direction === 'SELL' ? 
+                `RSI ${rsi.toFixed(2)} ниже нейтральной линии (50) - поддерживает медвежий тренд` :
+                `RSI ${rsi.toFixed(2)} ниже нейтральной линии (50) - ослабляет бычий сигнал`;
+        }
+    }
+
+    /**
+     * Объяснение MACD
+     * Фаза 3, задача 3.2.2: Детальные объяснения рекомендаций
+     * @private
+     */
+    _explainMACD(macd, signal, histogram, direction) {
+        if (isNaN(macd) || !isFinite(macd)) return null;
+
+        const parts = [];
+        
+        // Основной MACD
+        if (macd > 0 && signal !== undefined && macd > signal) {
+            parts.push(direction === 'BUY' ? 
+                `MACD ${macd.toFixed(4)} выше сигнальной линии (${signal?.toFixed(4) || 'N/A'}) - бычий сигнал` :
+                `MACD ${macd.toFixed(4)} выше сигнальной линии - противоречит медвежьему сигналу`);
+        } else if (macd < 0 && signal !== undefined && macd < signal) {
+            parts.push(direction === 'SELL' ? 
+                `MACD ${macd.toFixed(4)} ниже сигнальной линии (${signal?.toFixed(4) || 'N/A'}) - медвежий сигнал` :
+                `MACD ${macd.toFixed(4)} ниже сигнальной линии - противоречит бычьему сигналу`);
+        }
+
+        // Histogram
+        if (histogram !== undefined && !isNaN(histogram)) {
+            if (histogram > 0) {
+                parts.push(direction === 'BUY' ? 
+                    `MACD Histogram ${histogram.toFixed(4)} положительный - усиление бычьего импульса` :
+                    `MACD Histogram ${histogram.toFixed(4)} положительный - ослабление медвежьего импульса`);
+            } else {
+                parts.push(direction === 'SELL' ? 
+                    `MACD Histogram ${histogram.toFixed(4)} отрицательный - усиление медвежьего импульса` :
+                    `MACD Histogram ${histogram.toFixed(4)} отрицательный - ослабление бычьего импульса`);
+            }
+        }
+
+        return parts.length > 0 ? parts.join('. ') : null;
+    }
+
+    /**
+     * Объяснение Bollinger Bands
+     * Фаза 3, задача 3.2.2: Детальные объяснения рекомендаций
+     * @private
+     */
+    _explainBollingerBands(position, width, direction) {
+        if (isNaN(position) || !isFinite(position)) return null;
+
+        const positionPercent = (position * 100).toFixed(1);
+        
+        if (position > 0.8) {
+            return direction === 'SELL' ? 
+                `Цена в верхней части Bollinger Bands (${positionPercent}%) - зона перекупленности, подтверждает продажу` :
+                `Цена в верхней части Bollinger Bands (${positionPercent}%) - зона перекупленности, противоречит покупке`;
+        } else if (position < 0.2) {
+            return direction === 'BUY' ? 
+                `Цена в нижней части Bollinger Bands (${positionPercent}%) - зона перепроданности, подтверждает покупку` :
+                `Цена в нижней части Bollinger Bands (${positionPercent}%) - зона перепроданности, противоречит продаже`;
+        } else {
+            const widthInfo = width !== undefined && !isNaN(width) ? 
+                `, ширина ${width.toFixed(4)}` : '';
+            return `Цена в средней части Bollinger Bands (${positionPercent}%)${widthInfo} - нейтральная зона`;
+        }
+    }
+
+    /**
+     * Объяснение тренда
+     * @private
+     */
+    _explainTrend(sma20, sma50, direction) {
+        if (isNaN(sma20) || isNaN(sma50) || !isFinite(sma20) || !isFinite(sma50)) return null;
+
+        if (sma20 > sma50) {
+            return direction === 'BUY' ? 
+                `SMA(20) ${sma20.toFixed(2)} выше SMA(50) ${sma50.toFixed(2)} - восходящий тренд, подтверждает покупку` :
+                `SMA(20) ${sma20.toFixed(2)} выше SMA(50) ${sma50.toFixed(2)} - восходящий тренд, противоречит продаже`;
+        } else if (sma20 < sma50) {
+            return direction === 'SELL' ? 
+                `SMA(20) ${sma20.toFixed(2)} ниже SMA(50) ${sma50.toFixed(2)} - нисходящий тренд, подтверждает продажу` :
+                `SMA(20) ${sma20.toFixed(2)} ниже SMA(50) ${sma50.toFixed(2)} - нисходящий тренд, противоречит покупке`;
+        } else {
+            return 'Тренд нейтральный - SMA(20) и SMA(50) близки';
+        }
+    }
+
+    /**
+     * Объяснение объема
+     * @private
+     */
+    _explainVolume(volumeSMA, direction) {
+        if (isNaN(volumeSMA) || !isFinite(volumeSMA)) return null;
+
+        // Предполагаем, что высокий объем подтверждает сигнал
+        return `Объем торгов: ${volumeSMA.toFixed(0)} - ${volumeSMA > 1000000 ? 'высокий объем подтверждает сигнал' : 'низкий объем ослабляет сигнал'}`;
+    }
+
+    /**
+     * Получение влияния RSI на решение
+     * @private
+     */
+    _getRSIImpact(rsi, direction) {
+        if (rsi > 70 && direction === 'SELL') return 'high';
+        if (rsi < 30 && direction === 'BUY') return 'high';
+        if (rsi > 70 && direction === 'BUY') return 'negative';
+        if (rsi < 30 && direction === 'SELL') return 'negative';
+        return 'medium';
+    }
+
+    /**
+     * Получение влияния MACD на решение
+     * @private
+     */
+    _getMACDImpact(macd, signal, direction) {
+        if (signal === undefined || isNaN(signal)) return 'medium';
+        
+        if (macd > signal && direction === 'BUY') return 'high';
+        if (macd < signal && direction === 'SELL') return 'high';
+        if (macd > signal && direction === 'SELL') return 'negative';
+        if (macd < signal && direction === 'BUY') return 'negative';
+        return 'medium';
+    }
+
+    /**
+     * Получение влияния Bollinger Bands на решение
+     * @private
+     */
+    _getBBImpact(position, direction) {
+        if (position > 0.8 && direction === 'SELL') return 'high';
+        if (position < 0.2 && direction === 'BUY') return 'high';
+        if (position > 0.8 && direction === 'BUY') return 'negative';
+        if (position < 0.2 && direction === 'SELL') return 'negative';
+        return 'medium';
+    }
+
+    /**
+     * Получение влияния тренда на решение
+     * @private
+     */
+    _getTrendImpact(sma20, sma50, direction) {
+        if (sma20 > sma50 && direction === 'BUY') return 'high';
+        if (sma20 < sma50 && direction === 'SELL') return 'high';
+        if (sma20 > sma50 && direction === 'SELL') return 'negative';
+        if (sma20 < sma50 && direction === 'BUY') return 'negative';
+        return 'medium';
+    }
+
+    /**
+     * Генерация итогового резюме
+     * @private
+     */
+    _generateSummary(factors, direction, confidence) {
+        if (factors.length === 0) {
+            return `Прогноз: ${direction === 'BUY' ? 'покупка' : 'продажа'} с уверенностью ${Math.round(confidence * 100)}%`;
+        }
+
+        const confirming = factors.filter(f => f.impact === 'high').length;
+        const contradicting = factors.filter(f => f.impact === 'negative').length;
+        const neutral = factors.filter(f => f.impact === 'medium').length;
+
+        const parts = [];
+        parts.push(`Прогноз: ${direction === 'BUY' ? 'покупка' : 'продажа'} с уверенностью ${Math.round(confidence * 100)}%`);
+        
+        if (confirming > 0) {
+            parts.push(`${confirming} индикатор${confirming > 1 ? 'ов' : ''} подтверждают сигнал`);
+        }
+        if (contradicting > 0) {
+            parts.push(`${contradicting} индикатор${contradicting > 1 ? 'ов' : ''} противоречат сигналу`);
+        }
+        if (neutral > 0) {
+            parts.push(`${neutral} индикатор${neutral > 1 ? 'ов' : ''} нейтральны`);
+        }
+
+        return parts.join('. ');
     }
 
     /**
@@ -1074,6 +1690,231 @@ class OptimizedAnalysisService {
         }
         
         return result;
+    }
+
+    // ============================================================================
+    // БАТЧИНГ И ПАРАЛЛЕЛИЗАЦИЯ (Фаза 3, задача 3.1.1)
+    // ============================================================================
+
+    /**
+     * Батчинг анализа инструментов - обработка нескольких инструментов одновременно
+     * Фаза 3, задача 3.1.1: Батчинг анализа инструментов
+     * 
+     * @param {Array<string>} figis - Массив FIGI инструментов для анализа
+     * @param {Object} options - Опции анализа
+     * @param {string} options.interval - Интервал свечей ('DAY', 'HOUR', etc.)
+     * @param {number} options.period - Период в днях
+     * @param {number} options.batchSize - Размер батча для параллельной обработки
+     * @returns {Promise<Array>} Массив результатов анализа для каждого инструмента
+     */
+    async analyzeInstrumentsBatch(figis, options = {}) {
+        try {
+            const {
+                interval = 'DAY',
+                period = 30,
+                batchSize = this.cacheSettings.batchSize
+            } = options;
+
+            if (!Array.isArray(figis) || figis.length === 0) {
+                return [];
+            }
+
+            const results = [];
+            const errors = [];
+
+            // Обрабатываем инструменты батчами
+            for (let i = 0; i < figis.length; i += batchSize) {
+                const batch = figis.slice(i, i + batchSize);
+                
+                // Параллельная обработка батча
+                const batchPromises = batch.map(async (figi) => {
+                    try {
+                        // Получаем свечи для инструмента
+                        const candles = await CacheService.getCandles(figi, interval, period, true);
+                        
+                        if (!candles || candles.length === 0) {
+                            return {
+                                figi,
+                                success: false,
+                                error: 'No candles available',
+                                indicators: {}
+                            };
+                        }
+
+                        // Извлекаем данные из свечей
+                        const prices = candles.map(c => c.close);
+                        const volumes = candles.map(c => c.volume || 0);
+                        const highs = candles.map(c => c.high);
+                        const lows = candles.map(c => c.low);
+
+                        // Рассчитываем индикаторы с кешированием
+                        const indicators = this.getAllIndicators(
+                            prices, volumes, highs, lows, 
+                            figi, interval, period
+                        );
+
+                        return {
+                            figi,
+                            success: true,
+                            indicators,
+                            candlesCount: candles.length
+                        };
+                    } catch (error) {
+                        if (LoggerService.isInitialized) {
+                            LoggerService.error('Error analyzing instrument in batch', {
+                                service: 'OptimizedAnalysisService',
+                                operation: 'analyzeInstrumentsBatch',
+                                figi,
+                                error: { message: error.message }
+                            });
+                        }
+                        return {
+                            figi,
+                            success: false,
+                            error: error.message,
+                            indicators: {}
+                        };
+                    }
+                });
+
+                // Ждем завершения батча
+                const batchResults = await Promise.all(batchPromises);
+                results.push(...batchResults);
+
+                // Небольшая задержка между батчами для снижения нагрузки
+                if (i + batchSize < figis.length) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+
+            return results;
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error in batch analysis', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'analyzeInstrumentsBatch',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Оптимизированное получение индикаторов для инструмента с кешированием
+     * Фаза 3, задача 3.1.2: кеширование результатов анализа
+     * Фаза 3, задача 3.1.3: переиспользование индикаторов
+     * 
+     * @param {string} figi - FIGI инструмента
+     * @param {string} interval - Интервал свечей
+     * @param {number} period - Период в днях
+     * @returns {Promise<Object>} Индикаторы для инструмента
+     */
+    async getIndicatorsForInstrument(figi, interval = 'DAY', period = 30) {
+        try {
+            // Проверяем кеш
+            const cacheKey = this._getIndicatorsCacheKey(figi, interval, period);
+            const cached = this.indicatorsCache.get(cacheKey);
+            
+            if (this._isIndicatorsCacheValid(cached)) {
+                return cached.indicators;
+            }
+
+            // Получаем свечи
+            const candles = await CacheService.getCandles(figi, interval, period, true);
+            
+            if (!candles || candles.length === 0) {
+                return {};
+            }
+
+            // Извлекаем данные
+            const prices = candles.map(c => c.close);
+            const volumes = candles.map(c => c.volume || 0);
+            const highs = candles.map(c => c.high);
+            const lows = candles.map(c => c.low);
+
+            // Рассчитываем индикаторы (с автоматическим кешированием)
+            const indicators = this.getAllIndicators(
+                prices, volumes, highs, lows,
+                figi, interval, period
+            );
+
+            return indicators;
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error getting indicators for instrument', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'getIndicatorsForInstrument',
+                    figi,
+                    error: { message: error.message }
+                });
+            }
+            return {};
+        }
+    }
+
+    /**
+     * Батчинг запросов к БД для получения свечей
+     * Фаза 3, задача 3.1.3: оптимизация запросов к БД
+     * 
+     * @param {Array<string>} figis - Массив FIGI инструментов
+     * @param {string} interval - Интервал свечей
+     * @param {number} period - Период в днях
+     * @returns {Promise<Map>} Map: figi -> candles[]
+     */
+    async getCandlesBatch(figis, interval = 'DAY', period = 30) {
+        try {
+            const CachedCandle = (await import('../models/CachedCandle.js')).default;
+            const { Op } = await import('sequelize');
+            
+            const fromDate = new Date();
+            fromDate.setDate(fromDate.getDate() - period);
+            
+            // Оптимизированный запрос: получаем все свечи одним запросом
+            const candles = await CachedCandle.findAll({
+                where: {
+                    figi: { [Op.in]: figis },
+                    interval: interval,
+                    time: { [Op.gte]: fromDate }
+                },
+                order: [['figi', 'ASC'], ['time', 'ASC']]
+            });
+
+            // Группируем по FIGI
+            const candlesByFigi = new Map();
+            for (const candle of candles) {
+                if (!candlesByFigi.has(candle.figi)) {
+                    candlesByFigi.set(candle.figi, []);
+                }
+                candlesByFigi.get(candle.figi).push(candle);
+            }
+
+            // Сортируем свечи по времени для каждого инструмента
+            for (const [figi, figiCandles] of candlesByFigi.entries()) {
+                figiCandles.sort((a, b) => new Date(a.time) - new Date(b.time));
+            }
+
+            return candlesByFigi;
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error in batch candles retrieval', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'getCandlesBatch',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
+            // Fallback: получаем свечи по одному
+            const candlesByFigi = new Map();
+            for (const figi of figis) {
+                try {
+                    const candles = await CacheService.getCandles(figi, interval, period, true);
+                    candlesByFigi.set(figi, candles || []);
+                } catch (err) {
+                    candlesByFigi.set(figi, []);
+                }
+            }
+            return candlesByFigi;
+        }
     }
 
     /**

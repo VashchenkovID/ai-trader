@@ -13,6 +13,7 @@ import AdaptiveThresholdService from './AdaptiveThresholdService.js';
 import StackingService from './StackingService.js';
 import LoggerService from './LoggerService.js';
 import { getService } from './GlobalServiceManager.js';
+import MarketRegimeService from './MarketRegimeService.js';
 
 /**
  * Интегрированный сервис для управления всеми тремя нейросетями
@@ -84,6 +85,11 @@ class IntegratedAIService {
             // Инициализируем AdaptiveThresholdService (Фаза 2, задача 2.1.3)
             if (!AdaptiveThresholdService.isInitialized) {
                 await AdaptiveThresholdService.initialize();
+            }
+            
+            // Инициализируем MarketRegimeService (Фаза 3, задача 3.3)
+            if (!MarketRegimeService.isInitialized) {
+                await MarketRegimeService.initialize();
             }
             
             // Инициализируем StackingService (Фаза 2, задача 2.2.1)
@@ -325,42 +331,92 @@ class IntegratedAIService {
             }
 
             // 6. Получаем новости и рассчитываем рекомендацию на основе сентимента
+            // Фаза 3, задача 3.4: Расширенный анализ новостей
             let newsRecommendation = null;
             try {
-                // Получаем новости за последние 7 дней
-                const news = await NewsAnalysisService.getCachedNews(figi, 7, 20);
+                // Получаем расширенные новости с классификацией и временным затуханием
+                const enhancedNews = await NewsAnalysisService.getEnhancedNews(figi, 7, 20, {
+                    applyTimeDecay: true,
+                    halfLifeDays: 7,
+                    prioritizeByImportance: true
+                });
                 
-                if (news && news.length > 0) {
-                    // Рассчитываем средний сентимент и релевантность
-                    const sentiments = news.map(n => n.sentiment || 0).filter(s => s !== 0);
-                    const relevances = news.map(n => n.relevance || 0).filter(r => r > 0);
+                if (enhancedNews && enhancedNews.length > 0) {
+                    // Используем скорректированные значения с учетом затухания
+                    const adjustedSentiments = enhancedNews
+                        .map(n => n.adjustedSentiment || 0)
+                        .filter(s => s !== 0);
+                    const adjustedRelevances = enhancedNews
+                        .map(n => n.adjustedRelevance || 0)
+                        .filter(r => r > 0);
                     
-                    if (sentiments.length > 0) {
-                        const avgSentiment = sentiments.reduce((sum, s) => sum + s, 0) / sentiments.length;
-                        const avgRelevance = relevances.length > 0 
-                            ? relevances.reduce((sum, r) => sum + r, 0) / relevances.length 
+                    if (adjustedSentiments.length > 0) {
+                        // Взвешенное среднее с учетом приоритета событий
+                        let weightedSentiment = 0;
+                        let totalWeight = 0;
+                        let highPriorityCount = 0;
+                        let criticalCount = 0;
+                        
+                        enhancedNews.forEach(article => {
+                            const priority = article.eventClassification?.priority || 0.5;
+                            const timeDecay = article.timeDecayFactor || 1;
+                            const sentiment = article.adjustedSentiment || article.sentiment || 0;
+                            const relevance = article.adjustedRelevance || article.relevance || 0.5;
+                            
+                            // Вес = приоритет * затухание * релевантность
+                            const weight = priority * timeDecay * relevance;
+                            
+                            weightedSentiment += sentiment * weight;
+                            totalWeight += weight;
+                            
+                            if (article.eventClassification?.isHighPriority) {
+                                highPriorityCount++;
+                            }
+                            if (article.eventClassification?.isCritical) {
+                                criticalCount++;
+                            }
+                        });
+                        
+                        const avgSentiment = totalWeight > 0 ? weightedSentiment / totalWeight : 0;
+                        const avgRelevance = adjustedRelevances.length > 0 
+                            ? adjustedRelevances.reduce((sum, r) => sum + r, 0) / adjustedRelevances.length 
                             : 0.5;
                         
                         // Конвертируем сентимент (-1 до 1) в score (0 до 1)
-                        // Положительный сентимент -> BUY (0.5 - 1.0)
-                        // Отрицательный сентимент -> SELL (0.0 - 0.5)
                         let newsScore = 0.5; // HOLD по умолчанию
                         let newsRecommendationType = 'HOLD';
                         
                         if (avgSentiment > 0.1) {
-                            // Положительный сентимент
                             newsScore = 0.5 + (avgSentiment * 0.5); // 0.5 - 1.0
                             newsRecommendationType = 'BUY';
                         } else if (avgSentiment < -0.1) {
-                            // Отрицательный сентимент
                             newsScore = 0.5 + (avgSentiment * 0.5); // 0.0 - 0.5
                             newsRecommendationType = 'SELL';
                         }
                         
-                        // Уверенность зависит от количества новостей и их релевантности
+                        // Уверенность зависит от количества новостей, релевантности и важности событий
+                        const importanceBoost = Math.min(0.2, (highPriorityCount * 0.05) + (criticalCount * 0.1));
                         const newsConfidence = Math.min(0.9, 
-                            Math.max(0.3, avgRelevance * Math.min(1, news.length / 10))
+                            Math.max(0.3, avgRelevance * Math.min(1, enhancedNews.length / 10) + importanceBoost)
                         );
+                        
+                        // Получаем feature importance для новостей
+                        const newsFeatureImportance = await NewsAnalysisService.analyzeNewsFeatureImportance(figi, 30);
+                        
+                        // Группируем новости по категориям
+                        const newsByCategory = {};
+                        enhancedNews.forEach(article => {
+                            const category = article.eventClassification?.category || 'general';
+                            if (!newsByCategory[category]) {
+                                newsByCategory[category] = [];
+                            }
+                            newsByCategory[category].push({
+                                title: article.title,
+                                sentiment: article.sentiment,
+                                priority: article.eventClassification?.priority,
+                                timeDecay: article.timeDecayFactor
+                            });
+                        });
                         
                         newsRecommendation = {
                             source: 'news',
@@ -368,18 +424,24 @@ class IntegratedAIService {
                             confidence: newsConfidence,
                             recommendation: newsRecommendationType,
                             details: {
-                                newsCount: news.length,
+                                newsCount: enhancedNews.length,
                                 avgSentiment: avgSentiment,
                                 avgRelevance: avgRelevance,
-                                positiveNews: sentiments.filter(s => s > 0).length,
-                                negativeNews: sentiments.filter(s => s < 0).length,
-                                neutralNews: sentiments.filter(s => s === 0).length
+                                positiveNews: adjustedSentiments.filter(s => s > 0).length,
+                                negativeNews: adjustedSentiments.filter(s => s < 0).length,
+                                neutralNews: enhancedNews.filter(n => (n.adjustedSentiment || n.sentiment || 0) === 0).length,
+                                highPriorityNews: highPriorityCount,
+                                criticalNews: criticalCount,
+                                newsByCategory: newsByCategory,
+                                // Фаза 3, задача 3.4.3: Feature importance
+                                featureImportance: newsFeatureImportance.featureImportance,
+                                topCategories: newsFeatureImportance.topCategories || []
                             }
                         };
                         
                         recommendations.push(newsRecommendation);
-                        // Вес новостей зависит от релевантности и количества
-                        weights.news = newsConfidence * Math.min(1, news.length / 15);
+                        // Вес новостей зависит от релевантности, количества и важности событий
+                        weights.news = newsConfidence * Math.min(1, enhancedNews.length / 15) * (1 + importanceBoost);
                     }
                 }
             } catch (error) {
@@ -663,12 +725,25 @@ class IntegratedAIService {
 
         // Определяем финальную рекомендацию с учетом И score И confidence
         // Используем адаптивные пороги на основе рыночных условий (Фаза 2, задача 2.1.3)
+        // Фаза 3, задача 3.3: Используем MarketRegimeService для более детального анализа
         let thresholds;
+        let regimeInfo = null;
         try {
-            if (AdaptiveThresholdService && AdaptiveThresholdService.isInitialized) {
+            // Приоритет: MarketRegimeService (более детальный анализ)
+            if (MarketRegimeService && MarketRegimeService.isInitialized) {
+                regimeInfo = await MarketRegimeService.detectRegime(figi);
+                thresholds = MarketRegimeService.getAdaptiveThresholds(regimeInfo.regime);
+                thresholds.marketMode = regimeInfo.regime;
+                thresholds.regimeInfo = regimeInfo;
+            } 
+            // Fallback: AdaptiveThresholdService
+            else if (AdaptiveThresholdService && AdaptiveThresholdService.isInitialized) {
+                const marketMode = await AdaptiveThresholdService.detectMarketMode(figi);
                 thresholds = await AdaptiveThresholdService.getAdaptiveThresholds(figi);
-            } else {
-                // Fallback на базовые пороги, если AdaptiveThresholdService не инициализирован
+                thresholds.marketMode = marketMode;
+            } 
+            // Fallback на базовые пороги
+            else {
                 thresholds = {
                     buyScore: 0.65,
                     buyConfidence: 0.6,
@@ -761,13 +836,17 @@ class IntegratedAIService {
             sourceAgreement: sourceAgreement, // Согласованность между источниками
             summary: finalSummary,
             // Добавляем информацию о рыночном режиме и порогах (Фаза 2, задача 2.1.3)
+            // Фаза 3, задача 3.3: Расширенная информация о режиме
             marketMode: thresholds.marketMode,
+            regimeInfo: regimeInfo, // Детальная информация о режиме (если доступна)
             thresholds: {
                 buyScore: adjustedThresholds.buyScore,
                 buyConfidence: adjustedThresholds.buyConfidence,
                 sellScore: adjustedThresholds.sellScore,
                 sellConfidence: adjustedThresholds.sellConfidence
             },
+            // Информация о рекомендуемых стратегиях для режима (Фаза 3, задача 3.3.2)
+            regimeStrategies: regimeInfo?.strategies || null,
             // Информация о методе объединения (Фаза 2, задача 2.2)
             combinationMethod: stackingResult?.method || 'weighted_average',
             consensusMode: consensusMode,

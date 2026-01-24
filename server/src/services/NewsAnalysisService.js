@@ -1774,6 +1774,333 @@ class NewsAnalysisService {
         
         return Math.min(1, impact);
     }
+
+    /**
+     * Фаза 3, задача 3.4.1: Классификация важности событий
+     * Определяет тип события и его приоритет
+     * 
+     * @param {Object} article - Новость
+     * @returns {Object} Классификация события с типом и приоритетом
+     */
+    classifyEventImportance(article) {
+        const text = (article.title + ' ' + (article.description || '')).toLowerCase();
+        
+        // Ключевые слова для разных типов событий
+        const eventPatterns = {
+            earnings: {
+                keywords: [
+                    'отчет', 'результаты', 'квартал', 'полугодие', 'год',
+                    'выручка', 'прибыль', 'убыток', 'earnings', 'revenue',
+                    'EBITDA', 'чистая прибыль', 'операционная прибыль'
+                ],
+                priority: 0.9, // Высокий приоритет
+                category: 'earnings'
+            },
+            mergers: {
+                keywords: [
+                    'слияние', 'поглощение', 'merger', 'acquisition',
+                    'покупка', 'продажа актива', 'сделка', 'транзакция',
+                    'M&A', 'takeover', 'выкуп'
+                ],
+                priority: 0.85,
+                category: 'mergers'
+            },
+            macro: {
+                keywords: [
+                    'ЦБ', 'центробанк', 'ключевая ставка', 'инфляция',
+                    'ВВП', 'GDP', 'безработица', 'экономика', 'макро',
+                    'санкции', 'эмбарго', 'торговые войны', 'валютный курс',
+                    'нефть', 'газ', 'сырье', 'commodities'
+                ],
+                priority: 0.8,
+                category: 'macro'
+            },
+            dividends: {
+                keywords: [
+                    'дивиденды', 'дивиденд', 'dividend', 'выплата',
+                    'дивидендная политика', 'дивидендный календарь'
+                ],
+                priority: 0.75,
+                category: 'dividends'
+            },
+            guidance: {
+                keywords: [
+                    'прогноз', 'forecast', 'outlook', 'ожидания',
+                    'guidance', 'целевые показатели', 'планы'
+                ],
+                priority: 0.7,
+                category: 'guidance'
+            },
+            regulatory: {
+                keywords: [
+                    'регулятор', 'лицензия', 'разрешение', 'запрет',
+                    'надзор', 'комиссия', 'регулирование'
+                ],
+                priority: 0.65,
+                category: 'regulatory'
+            }
+        };
+
+        let maxPriority = 0.5; // Базовый приоритет
+        let detectedCategory = 'general';
+        let matchedPatterns = [];
+
+        // Проверяем каждый тип события
+        for (const [eventType, pattern] of Object.entries(eventPatterns)) {
+            const matches = pattern.keywords.filter(keyword => text.includes(keyword));
+            if (matches.length > 0) {
+                matchedPatterns.push({
+                    type: eventType,
+                    category: pattern.category,
+                    matches: matches.length,
+                    priority: pattern.priority
+                });
+                
+                // Используем максимальный приоритет из всех совпадений
+                if (pattern.priority > maxPriority) {
+                    maxPriority = pattern.priority;
+                    detectedCategory = pattern.category;
+                }
+            }
+        }
+
+        // Увеличиваем приоритет при множественных совпадениях
+        if (matchedPatterns.length > 1) {
+            maxPriority = Math.min(1.0, maxPriority + 0.1);
+        }
+
+        return {
+            category: detectedCategory,
+            priority: maxPriority,
+            matchedPatterns: matchedPatterns.map(p => ({
+                type: p.type,
+                category: p.category,
+                matches: p.matches
+            })),
+            isHighPriority: maxPriority >= 0.8,
+            isCritical: maxPriority >= 0.9
+        };
+    }
+
+    /**
+     * Фаза 3, задача 3.4.2: Временное затухание влияния новостей
+     * Применяет экспоненциальное затухание к влиянию новости в зависимости от её возраста
+     * 
+     * @param {Object} article - Новость с полем publishedAt
+     * @param {Date} referenceDate - Дата отсчета (по умолчанию текущая дата)
+     * @param {number} halfLifeDays - Период полураспада в днях (по умолчанию 7 дней)
+     * @returns {number} Коэффициент затухания от 0 до 1
+     */
+    calculateTimeDecay(article, referenceDate = new Date(), halfLifeDays = 7) {
+        if (!article.publishedAt) {
+            return 0; // Если нет даты публикации, влияние = 0
+        }
+
+        const publishedDate = new Date(article.publishedAt);
+        const ageInDays = (referenceDate - publishedDate) / (1000 * 60 * 60 * 24);
+
+        if (ageInDays < 0) {
+            return 1; // Будущие новости (не должны быть, но на всякий случай)
+        }
+
+        if (ageInDays === 0) {
+            return 1; // Свежие новости (сегодня)
+        }
+
+        // Экспоненциальное затухание: decay = e^(-λ * t)
+        // где λ = ln(2) / halfLife (чтобы через halfLife дней значение было 0.5)
+        const lambda = Math.log(2) / halfLifeDays;
+        const decay = Math.exp(-lambda * ageInDays);
+
+        return Math.max(0, Math.min(1, decay));
+    }
+
+    /**
+     * Применяет временное затухание к массиву новостей
+     * 
+     * @param {Array} news - Массив новостей
+     * @param {Date} referenceDate - Дата отсчета
+     * @param {number} halfLifeDays - Период полураспада в днях
+     * @returns {Array} Новости с добавленным полем timeDecayFactor
+     */
+    applyTimeDecayToNews(news, referenceDate = new Date(), halfLifeDays = 7) {
+        return news.map(article => ({
+            ...article,
+            timeDecayFactor: this.calculateTimeDecay(article, referenceDate, halfLifeDays),
+            adjustedSentiment: (article.sentiment || 0) * this.calculateTimeDecay(article, referenceDate, halfLifeDays),
+            adjustedRelevance: (article.relevance || 0.5) * this.calculateTimeDecay(article, referenceDate, halfLifeDays)
+        }));
+    }
+
+    /**
+     * Фаза 3, задача 3.4.3: Связь новостей с рекомендациями
+     * Анализирует историческое влияние новостей на цену и рассчитывает feature importance
+     * 
+     * @param {string} figi - FIGI инструмента
+     * @param {number} days - Количество дней для анализа
+     * @returns {Promise<Object>} Анализ влияния новостей с feature importance
+     */
+    async analyzeNewsFeatureImportance(figi, days = 30) {
+        try {
+            const news = await this.getCachedNews(figi, days, 100);
+            
+            if (!news || news.length === 0) {
+                return {
+                    featureImportance: {},
+                    historicalImpact: {},
+                    averageImpact: 0,
+                    newsCount: 0
+                };
+            }
+
+            // Применяем временное затухание
+            const decayedNews = this.applyTimeDecayToNews(news);
+            
+            // Классифицируем события
+            const classifiedNews = decayedNews.map(article => ({
+                ...article,
+                eventClassification: this.classifyEventImportance(article)
+            }));
+
+            // Рассчитываем feature importance для разных категорий
+            const featureImportance = {};
+            const categoryStats = {};
+
+            classifiedNews.forEach(article => {
+                const category = article.eventClassification.category;
+                const priority = article.eventClassification.priority;
+                const timeDecay = article.timeDecayFactor || 1;
+                const sentiment = article.sentiment || 0;
+                const relevance = article.relevance || 0.5;
+
+                // Важность = приоритет * затухание * релевантность * |sentiment|
+                const importance = priority * timeDecay * relevance * Math.abs(sentiment);
+
+                if (!categoryStats[category]) {
+                    categoryStats[category] = {
+                        count: 0,
+                        totalImportance: 0,
+                        totalSentiment: 0,
+                        totalRelevance: 0
+                    };
+                }
+
+                categoryStats[category].count++;
+                categoryStats[category].totalImportance += importance;
+                categoryStats[category].totalSentiment += sentiment * timeDecay;
+                categoryStats[category].totalRelevance += relevance * timeDecay;
+            });
+
+            // Нормализуем feature importance
+            const totalImportance = Object.values(categoryStats).reduce(
+                (sum, stats) => sum + stats.totalImportance, 0
+            );
+
+            for (const [category, stats] of Object.entries(categoryStats)) {
+                const avgImportance = totalImportance > 0 
+                    ? stats.totalImportance / totalImportance 
+                    : 0;
+                const avgSentiment = stats.count > 0 
+                    ? stats.totalSentiment / stats.count 
+                    : 0;
+                const avgRelevance = stats.count > 0 
+                    ? stats.totalRelevance / stats.count 
+                    : 0;
+
+                featureImportance[category] = {
+                    importance: avgImportance,
+                    count: stats.count,
+                    averageSentiment: avgSentiment,
+                    averageRelevance: avgRelevance,
+                    weightedImpact: avgImportance * Math.abs(avgSentiment)
+                };
+            }
+
+            // Рассчитываем общее историческое влияние
+            const historicalImpact = {
+                totalNews: classifiedNews.length,
+                highPriorityNews: classifiedNews.filter(n => n.eventClassification.isHighPriority).length,
+                criticalNews: classifiedNews.filter(n => n.eventClassification.isCritical).length,
+                averageSentiment: classifiedNews.reduce((sum, n) => sum + (n.adjustedSentiment || 0), 0) / classifiedNews.length,
+                averageRelevance: classifiedNews.reduce((sum, n) => sum + (n.adjustedRelevance || 0), 0) / classifiedNews.length,
+                categories: Object.keys(categoryStats)
+            };
+
+            const averageImpact = totalImportance > 0 
+                ? totalImportance / classifiedNews.length 
+                : 0;
+
+            return {
+                featureImportance,
+                historicalImpact,
+                averageImpact,
+                newsCount: classifiedNews.length,
+                topCategories: Object.entries(featureImportance)
+                    .sort((a, b) => b[1].importance - a[1].importance)
+                    .slice(0, 5)
+                    .map(([category, data]) => ({ category, ...data }))
+            };
+        } catch (error) {
+            console.error('❌ Ошибка анализа feature importance новостей:', error);
+            return {
+                featureImportance: {},
+                historicalImpact: {},
+                averageImpact: 0,
+                newsCount: 0,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Получение новостей с применением классификации и временного затухания
+     * 
+     * @param {string} figi - FIGI инструмента
+     * @param {number} days - Количество дней
+     * @param {number} limit - Лимит новостей
+     * @param {Object} options - Дополнительные опции
+     * @returns {Promise<Array>} Обработанные новости
+     */
+    async getEnhancedNews(figi, days = 7, limit = 20, options = {}) {
+        try {
+            const { applyTimeDecay = true, halfLifeDays = 7, prioritizeByImportance = true } = options;
+            
+            let news = await this.getCachedNews(figi, days, limit * 2); // Берем больше для фильтрации
+            
+            if (!news || news.length === 0) {
+                return [];
+            }
+
+            // Применяем временное затухание
+            if (applyTimeDecay) {
+                news = this.applyTimeDecayToNews(news, new Date(), halfLifeDays);
+            }
+
+            // Классифицируем события
+            news = news.map(article => ({
+                ...article,
+                eventClassification: this.classifyEventImportance(article)
+            }));
+
+            // Сортируем по важности (приоритет * затухание * релевантность)
+            if (prioritizeByImportance) {
+                news.sort((a, b) => {
+                    const importanceA = (a.eventClassification.priority || 0.5) * 
+                                      (a.timeDecayFactor || 1) * 
+                                      (a.relevance || 0.5);
+                    const importanceB = (b.eventClassification.priority || 0.5) * 
+                                      (b.timeDecayFactor || 1) * 
+                                      (b.relevance || 0.5);
+                    return importanceB - importanceA;
+                });
+            }
+
+            return news.slice(0, limit);
+        } catch (error) {
+            console.error('❌ Ошибка получения расширенных новостей:', error);
+            return [];
+        }
+    }
 }
 
 export default new NewsAnalysisService();
