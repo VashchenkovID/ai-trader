@@ -6,6 +6,9 @@ import ProfitabilityTracker from './ProfitabilityTracker.js';
 import CapitalScalingService from './CapitalScalingService.js';
 import RiskAdjustmentService from './RiskAdjustmentService.js';
 import NeuralNetworkService from './NeuralNetworkService.js';
+import SectorClassifier from '../utils/sectorClassifier.js';
+import CorrelationService from './CorrelationService.js';
+import CachedInstrument from '../models/CachedInstrument.js';
 
 /**
  * Сервис для комплексного анализа производительности системы
@@ -1048,6 +1051,293 @@ class PerformanceAnalyzer {
     clearCache() {
         this.analysisCache.clear();
         console.log('🧹 Кеш анализа производительности очищен');
+    }
+
+    /**
+     * Фаза 4.3.1: Анализ производительности по секторам
+     * @param {number} days - Период анализа в днях
+     * @returns {Promise<Object>} Анализ по секторам
+     */
+    async analyzeSectorPerformance(days = 30) {
+        try {
+            const endDate = new Date();
+            const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
+
+            // Получаем историю сделок
+            const trades = await TradingEngine.getTradeHistory(10000);
+            const periodTrades = trades.filter(trade => {
+                const tradeDate = new Date(trade.timestamp || trade.date || trade.createdAt);
+                return tradeDate >= startDate && tradeDate <= endDate;
+            });
+
+            // Группируем сделки по FIGI
+            const tradesByFigi = {};
+            periodTrades.forEach(trade => {
+                const figi = trade.figi || trade.symbol;
+                if (!figi) return;
+                
+                if (!tradesByFigi[figi]) {
+                    tradesByFigi[figi] = [];
+                }
+                tradesByFigi[figi].push(trade);
+            });
+
+            // Получаем сектора для всех FIGI
+            const figis = Object.keys(tradesByFigi);
+            const SectorClassifier = (await import('../utils/sectorClassifier.js')).default;
+            const sectorGroups = await SectorClassifier.groupBySector(figis);
+
+            // Анализируем каждый сектор
+            const sectorAnalysis = {};
+            const totalPortfolioValue = await this.getTotalPortfolioValue();
+
+            for (const [sector, sectorFigis] of Object.entries(sectorGroups)) {
+                const sectorTrades = [];
+                let sectorProfit = 0;
+                let sectorTradesCount = 0;
+                let sectorWins = 0;
+                const sectorReturns = [];
+
+                for (const figi of sectorFigis) {
+                    const trades = tradesByFigi[figi] || [];
+                    sectorTrades.push(...trades);
+                    
+                    trades.forEach(trade => {
+                        const pnl = trade.pnl || trade.profit || 0;
+                        sectorProfit += pnl;
+                        sectorTradesCount++;
+                        if (pnl > 0) sectorWins++;
+                        
+                        // Рассчитываем доходность
+                        const price = trade.price || trade.executedPrice || 0;
+                        if (price > 0) {
+                            sectorReturns.push(pnl / price);
+                        }
+                    });
+                }
+
+                // Рассчитываем метрики сектора
+                const winRate = sectorTradesCount > 0 ? sectorWins / sectorTradesCount : 0;
+                const avgReturn = sectorReturns.length > 0 
+                    ? sectorReturns.reduce((sum, r) => sum + r, 0) / sectorReturns.length 
+                    : 0;
+                
+                // Волатильность (стандартное отклонение доходностей)
+                const volatility = this.calculateVolatility(sectorReturns);
+                
+                // Sharpe Ratio (упрощенный, без безрисковой ставки)
+                const sharpeRatio = volatility > 0 ? avgReturn / volatility : 0;
+
+                // Доля портфеля в секторе
+                const sectorValue = await this.getSectorPortfolioValue(sectorFigis);
+                const portfolioWeight = totalPortfolioValue > 0 
+                    ? sectorValue / totalPortfolioValue 
+                    : 0;
+
+                sectorAnalysis[sector] = {
+                    sector,
+                    instruments: sectorFigis.length,
+                    trades: sectorTradesCount,
+                    profit: sectorProfit,
+                    winRate,
+                    avgReturn,
+                    volatility,
+                    sharpeRatio,
+                    portfolioWeight,
+                    recommendations: this.generateSectorRecommendations(sector, {
+                        profit: sectorProfit,
+                        winRate,
+                        sharpeRatio,
+                        portfolioWeight
+                    })
+                };
+            }
+
+            // Анализ корреляций внутри секторов
+            const CorrelationService = (await import('./CorrelationService.js')).default;
+            const sectorCorrelations = await this.analyzeSectorCorrelations(sectorGroups, CorrelationService);
+
+            // Рекомендации по диверсификации
+            const diversificationRecommendations = this.generateDiversificationRecommendations(
+                sectorAnalysis,
+                sectorCorrelations
+            );
+
+            return {
+                period: { startDate, endDate, days },
+                sectors: sectorAnalysis,
+                correlations: sectorCorrelations,
+                diversification: diversificationRecommendations,
+                summary: {
+                    totalSectors: Object.keys(sectorAnalysis).length,
+                    totalInstruments: figis.length,
+                    totalTrades: periodTrades.length
+                }
+            };
+        } catch (error) {
+            console.error('❌ Ошибка анализа по секторам:', error);
+            return { error: error.message };
+        }
+    }
+
+    /**
+     * Анализ корреляций внутри секторов
+     * @private
+     */
+    async analyzeSectorCorrelations(sectorGroups, CorrelationService) {
+        const correlations = {};
+
+        for (const [sector, figis] of Object.entries(sectorGroups)) {
+            if (figis.length < 2) {
+                correlations[sector] = { message: 'Недостаточно инструментов для анализа корреляций' };
+                continue;
+            }
+
+            const sectorCorrelations = {};
+            let correlationCount = 0;
+            let highCorrelationCount = 0;
+            let avgCorrelation = 0;
+
+            for (let i = 0; i < figis.length; i++) {
+                for (let j = i + 1; j < figis.length; j++) {
+                    try {
+                        const correlation = await CorrelationService.calculateCorrelation(figis[i], figis[j], 30);
+                        const pairKey = `${figis[i]}_${figis[j]}`;
+                        sectorCorrelations[pairKey] = correlation;
+                        
+                        correlationCount++;
+                        avgCorrelation += Math.abs(correlation);
+                        
+                        if (Math.abs(correlation) > 0.7) {
+                            highCorrelationCount++;
+                        }
+                    } catch (error) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+
+            correlations[sector] = {
+                instruments: figis.length,
+                correlationPairs: correlationCount,
+                highCorrelationPairs: highCorrelationCount,
+                avgCorrelation: correlationCount > 0 ? avgCorrelation / correlationCount : 0,
+                correlations: sectorCorrelations,
+                riskLevel: highCorrelationCount > correlationCount * 0.5 ? 'high' : 'low'
+            };
+        }
+
+        return correlations;
+    }
+
+    /**
+     * Генерация рекомендаций для сектора
+     * @private
+     */
+    generateSectorRecommendations(sector, metrics) {
+        const recommendations = [];
+
+        if (metrics.portfolioWeight > 0.4) {
+            recommendations.push({
+                type: 'overexposure',
+                priority: 'high',
+                message: `Переинвестирование в сектор ${sector}: ${(metrics.portfolioWeight * 100).toFixed(1)}% портфеля`,
+                action: 'reduce_exposure'
+            });
+        }
+
+        if (metrics.portfolioWeight < 0.05 && metrics.sharpeRatio > 1.0 && metrics.winRate > 0.6) {
+            recommendations.push({
+                type: 'underexposure',
+                priority: 'medium',
+                message: `Недоинвестирование в сектор ${sector} с хорошими показателями`,
+                action: 'increase_exposure'
+            });
+        }
+
+        if (metrics.sharpeRatio < 0.5 && metrics.winRate < 0.5) {
+            recommendations.push({
+                type: 'poor_performance',
+                priority: 'high',
+                message: `Низкая производительность сектора ${sector}`,
+                action: 'review_strategy'
+            });
+        }
+
+        return recommendations;
+    }
+
+    /**
+     * Генерация рекомендаций по диверсификации
+     * @private
+     */
+    generateDiversificationRecommendations(sectorAnalysis, sectorCorrelations) {
+        const recommendations = [];
+
+        const sectorWeights = Object.values(sectorAnalysis).map(s => s.portfolioWeight);
+        const maxWeight = Math.max(...sectorWeights, 0);
+        
+        if (maxWeight > 0.4) {
+            const topSector = Object.values(sectorAnalysis).find(s => s.portfolioWeight === maxWeight);
+            recommendations.push({
+                type: 'concentration',
+                priority: 'high',
+                message: `Высокая концентрация в секторе ${topSector?.sector || 'unknown'}: ${(maxWeight * 100).toFixed(1)}%`,
+                action: 'diversify_portfolio'
+            });
+        }
+
+        for (const [sector, corrData] of Object.entries(sectorCorrelations)) {
+            if (corrData.riskLevel === 'high') {
+                recommendations.push({
+                    type: 'high_correlation',
+                    priority: 'medium',
+                    message: `Высокая корреляция внутри сектора ${sector}`,
+                    action: 'reduce_correlation_risk'
+                });
+            }
+        }
+
+        return recommendations;
+    }
+
+    /**
+     * Получение общей стоимости портфеля
+     * @private
+     */
+    async getTotalPortfolioValue() {
+        try {
+            const portfolio = await TradingEngine.getPortfolioValue();
+            return portfolio?.totalValue || portfolio?.cash || 1000000;
+        } catch (error) {
+            return 1000000;
+        }
+    }
+
+    /**
+     * Получение стоимости позиций сектора
+     * @private
+     */
+    async getSectorPortfolioValue(figis) {
+        try {
+            const portfolio = await TradingEngine.getPortfolioValue();
+            const positions = portfolio?.positions || {};
+            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+            
+            let sectorValue = 0;
+            for (const figi of figis) {
+                const quantity = positions[figi] || 0;
+                if (quantity > 0) {
+                    const instrument = await CachedInstrument.findOne({ where: { figi } });
+                    const price = instrument?.lastPrice || 0;
+                    sectorValue += quantity * price;
+                }
+            }
+            
+            return sectorValue;
+        } catch (error) {
+            return 0;
+        }
     }
 }
 
