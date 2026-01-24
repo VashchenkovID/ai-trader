@@ -270,7 +270,7 @@
 
 ---
 
-#### 2.2. Улучшенное объединение рекомендаций (P1) 🟡
+#### 2.2. Улучшенное объединение рекомендаций (P1) 🟡 ✅
 **Источник:** `ANALYSIS_SYSTEM_ANALYSIS.md`  
 **Зависимости:** 2.1 (обратная связь)
 
@@ -320,25 +320,50 @@
 
 ---
 
-#### 2.3. Валидация данных (P1) 🟡
+#### 2.3. Валидация данных (P1) 🟡 ✅
 **Источник:** `ANALYSIS_SYSTEM_ANALYSIS.md`  
 **Зависимости:** Нет
 
 **Задачи:**
-- [ ] **2.3.1.** Создать `DataQualityService.js`:
+- [x] **2.3.1.** Создать `DataQualityService.js`:
   - `validateCandles()` - проверка качества свечей
   - `detectOutliers()` - детекция выбросов
   - `fillGaps()` - заполнение пропусков
   - `normalizeData()` - нормализация для разных источников
-- [ ] **2.3.2.** Интегрировать с `OptimizedAnalysisService`:
+- [x] **2.3.2.** Интегрировать с `OptimizedAnalysisService`:
   - Проверка данных перед расчетом индикаторов
   - Обработка edge cases (NaN, Infinity, деление на ноль)
 
 **Файлы для создания/изменения:**
-- `server/src/services/DataQualityService.js` (новый)
-- `server/src/services/OptimizedAnalysisService.js` (обновить)
+- `server/src/services/DataQualityService.js` (новый) ✅
+- `server/src/services/OptimizedAnalysisService.js` (обновить) ✅
 
 **Оценка времени:** 3-4 дня
+
+**Статус:** ✅ **ВЫПОЛНЕНО**
+
+**Реализовано:**
+1. **DataQualityService** - новый сервис для валидации данных:
+   - `validateCandles()` - проверка на NaN, Infinity, логические несоответствия
+   - `detectOutliers()` - детекция выбросов методами IQR и Z-score
+   - `fillGaps()` - заполнение пропусков (linear, forward, backward, mean)
+   - `normalizeData()` - нормализация (minmax, zscore, robust)
+   - `safeDivide()` - безопасное деление с обработкой edge cases
+   - `cleanValue()` - очистка значений от NaN/Infinity
+   - `processCandles()` - полная обработка массива свечей
+
+2. **Интеграция с OptimizedAnalysisService**:
+   - Валидация данных перед расчетом индикаторов в `getAllIndicators()`
+   - Обработка edge cases в методах расчета:
+     - `calculateSMA()` - безопасное деление
+     - `calculateRSI()` - обработка NaN/Infinity
+     - `calculateBollingerBands()` - защита от деления на ноль
+     - `calculateVolatility()` - фильтрация невалидных значений
+   - Автоматическая очистка результатов от NaN/Infinity
+
+**Тесты:**
+- `server/src/__tests__/services/DataQualityService.test.js` - unit-тесты
+- `server/test-data-quality.js` - интеграционный тест
 
 ---
 

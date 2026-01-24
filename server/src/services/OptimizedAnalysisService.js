@@ -2,6 +2,7 @@ import OptimizedDataService from './OptimizedDataService.js';
 import CacheService from './CacheService.js';
 import TradingEngine from './TradingEngine.js';
 import ProfitabilityTracker from './ProfitabilityTracker.js';
+import DataQualityService from './DataQualityService.js';
 import LoggerService from './LoggerService.js';
 import {
     analyzeByDayOfWeek,
@@ -28,6 +29,11 @@ class OptimizedAnalysisService {
             await OptimizedDataService.initialize();
             await CacheService.initialize();
             
+            // Инициализируем DataQualityService (Фаза 2, задача 2.3)
+            if (!DataQualityService.isInitialized) {
+                await DataQualityService.initialize();
+            }
+            
             this.isInitialized = true;
         } catch (error) {
             if (LoggerService.isInitialized) {
@@ -47,9 +53,25 @@ class OptimizedAnalysisService {
 
     /**
      * Получение всех технических индикаторов
+     * Обновлено в Фазе 2, задача 2.3: добавлена валидация данных
      */
     getAllIndicators(prices, volumes = [], highs = [], lows = []) {
         try {
+            // Валидация и очистка данных перед расчетом индикаторов
+            if (DataQualityService && DataQualityService.isInitialized) {
+                // Очищаем значения от NaN и Infinity
+                prices = prices.map(p => DataQualityService.cleanValue(p, 0));
+                volumes = volumes.map(v => DataQualityService.cleanValue(v, 0));
+                highs = highs.map(h => DataQualityService.cleanValue(h, 0));
+                lows = lows.map(l => DataQualityService.cleanValue(l, 0));
+                
+                // Заполняем пропуски
+                prices = DataQualityService.fillGaps(prices, 'linear');
+                volumes = DataQualityService.fillGaps(volumes, 'forward');
+                highs = DataQualityService.fillGaps(highs, 'linear');
+                lows = DataQualityService.fillGaps(lows, 'linear');
+            }
+            
             const indicators = {};
             
             // Трендовые индикаторы
@@ -90,6 +112,13 @@ class OptimizedAnalysisService {
             // Волатильность
             indicators.atr = this.calculateATR(highs, lows, prices);
             indicators.volatility = this.calculateVolatility(prices);
+            
+            // Очищаем результаты от NaN и Infinity
+            if (DataQualityService && DataQualityService.isInitialized) {
+                for (const key in indicators) {
+                    indicators[key] = DataQualityService.cleanValue(indicators[key], 0);
+                }
+            }
             
             return indicators;
         } catch (error) {
@@ -304,10 +333,22 @@ class OptimizedAnalysisService {
 
     /**
      * Расчет SMA
+     * Обновлено в Фазе 2, задача 2.3: обработка edge cases
      */
     calculateSMA(data, period) {
-        if (data.length < period) return data[data.length - 1] || 0;
-        return data.slice(-period).reduce((sum, value) => sum + value, 0) / period;
+        if (!Array.isArray(data) || data.length === 0) return 0;
+        if (data.length < period) {
+            const lastValue = data[data.length - 1];
+            return DataQualityService.cleanValue(lastValue, 0);
+        }
+        
+        const slice = data.slice(-period);
+        const sum = slice.reduce((sum, value) => {
+            const cleanVal = DataQualityService.cleanValue(value, 0);
+            return sum + cleanVal;
+        }, 0);
+        
+        return DataQualityService.safeDivide(sum, period, 0);
     }
 
     /**
@@ -329,26 +370,32 @@ class OptimizedAnalysisService {
 
     /**
      * Расчет RSI
+     * Обновлено в Фазе 2, задача 2.3: обработка edge cases
      */
     calculateRSI(prices, period = 14) {
-        if (prices.length < period + 1) return 0.5;
+        if (!Array.isArray(prices) || prices.length < period + 1) return 0.5;
         
         let gains = 0;
         let losses = 0;
         
         for (let i = 1; i <= period; i++) {
-            const change = prices[i] - prices[i - 1];
+            const prevPrice = DataQualityService.cleanValue(prices[i - 1], 0);
+            const currPrice = DataQualityService.cleanValue(prices[i], 0);
+            const change = currPrice - prevPrice;
+            
             if (change > 0) gains += change;
             else losses -= change;
         }
         
-        const avgGain = gains / period;
-        const avgLoss = losses / period;
+        const avgGain = DataQualityService.safeDivide(gains, period, 0);
+        const avgLoss = DataQualityService.safeDivide(losses, period, 0);
         
         if (avgLoss === 0) return 1;
         
-        const rs = avgGain / avgLoss;
-        return 1 - (1 / (1 + rs));
+        const rs = DataQualityService.safeDivide(avgGain, avgLoss, 0);
+        const rsi = 1 - DataQualityService.safeDivide(1, 1 + rs, 0.5);
+        
+        return DataQualityService.cleanValue(rsi, 0.5);
     }
 
     /**
@@ -400,20 +447,41 @@ class OptimizedAnalysisService {
 
     /**
      * Расчет Bollinger Bands
+     * Обновлено в Фазе 2, задача 2.3: обработка edge cases
      */
     calculateBollingerBands(prices, period = 20) {
-        if (prices.length < period) return { upper: 0, middle: 0, lower: 0, width: 0, position: 0.5 };
+        if (!Array.isArray(prices) || prices.length < period) {
+            return { upper: 0, middle: 0, lower: 0, width: 0, position: 0.5 };
+        }
         
         const sma = this.calculateSMA(prices, period);
-        const variance = prices.slice(-period).reduce((sum, price) => sum + Math.pow(price - sma, 2), 0) / period;
-        const stdDev = Math.sqrt(variance);
+        const cleanSMA = DataQualityService.cleanValue(sma, 0);
         
-        const upper = sma + 2 * stdDev;
-        const lower = sma - 2 * stdDev;
-        const width = (upper - lower) / sma;
-        const position = (prices[prices.length - 1] - lower) / (upper - lower);
+        const slice = prices.slice(-period);
+        const variance = slice.reduce((sum, price) => {
+            const cleanPrice = DataQualityService.cleanValue(price, cleanSMA);
+            return sum + Math.pow(cleanPrice - cleanSMA, 2);
+        }, 0) / period;
         
-        return { upper, middle: sma, lower, width, position };
+        const stdDev = Math.sqrt(DataQualityService.cleanValue(variance, 0));
+        
+        const upper = cleanSMA + 2 * stdDev;
+        const lower = cleanSMA - 2 * stdDev;
+        const width = DataQualityService.safeDivide(upper - lower, cleanSMA, 0);
+        const currentPrice = DataQualityService.cleanValue(prices[prices.length - 1], cleanSMA);
+        const position = DataQualityService.safeDivide(
+            currentPrice - lower,
+            upper - lower,
+            0.5
+        );
+        
+        return {
+            upper: DataQualityService.cleanValue(upper, 0),
+            middle: cleanSMA,
+            lower: DataQualityService.cleanValue(lower, 0),
+            width: DataQualityService.cleanValue(width, 0),
+            position: DataQualityService.cleanValue(position, 0.5)
+        };
     }
 
     /**
@@ -473,19 +541,27 @@ class OptimizedAnalysisService {
 
     /**
      * Расчет волатильности
+     * Обновлено в Фазе 2, задача 2.3: обработка edge cases
      */
     calculateVolatility(prices, period = 20) {
-        if (prices.length < period) return 0;
+        if (!Array.isArray(prices) || prices.length < period) return 0;
         
         const returns = [];
         for (let i = 1; i < period; i++) {
-            returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
+            const prevPrice = DataQualityService.cleanValue(prices[i - 1], 0);
+            const currPrice = DataQualityService.cleanValue(prices[i], 0);
+            const ret = DataQualityService.safeDivide(currPrice - prevPrice, prevPrice, 0);
+            if (isFinite(ret)) {
+                returns.push(ret);
+            }
         }
+        
+        if (returns.length === 0) return 0;
         
         const mean = returns.reduce((sum, ret) => sum + ret, 0) / returns.length;
         const variance = returns.reduce((sum, ret) => sum + Math.pow(ret - mean, 2), 0) / returns.length;
         
-        return Math.sqrt(variance);
+        return DataQualityService.cleanValue(Math.sqrt(variance), 0);
     }
 
     /**
