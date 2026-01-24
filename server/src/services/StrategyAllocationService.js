@@ -3,6 +3,9 @@ import PortfolioAllocation from '../models/PortfolioAllocation.js';
 import PositionStrategy from '../models/PositionStrategy.js';
 import SettingsService from './SettingsService.js';
 import ProfitabilityTracker from './ProfitabilityTracker.js';
+import InstrumentStats from '../models/InstrumentStats.js';
+import CorrelationService from './CorrelationService.js';
+import AdaptiveThresholdService from './AdaptiveThresholdService.js';
 import { Op } from 'sequelize';
 
 /**
@@ -133,8 +136,9 @@ class StrategyAllocationService {
 
     /**
      * Рассчитать размер позиции для стратегии
+     * Улучшено в Фазе 2, задача 2.5.3: учет confidence, волатильности и корреляции
      */
-    async calculatePositionSize(strategyId, recommendation, totalBudget) {
+    async calculatePositionSize(strategyId, recommendation, totalBudget, options = {}) {
         try {
             const strategy = await TradingStrategy.findByPk(strategyId);
             if (!strategy) {
@@ -163,21 +167,145 @@ class StrategyAllocationService {
                 return { quantity: 0, amount: 0, reason: 'Max positions reached' };
             }
 
-            // Корректируем размер в зависимости от confidence
+            // 2.5.3: Улучшенный расчет с учетом confidence, волатильности и корреляции
             let multiplier = 1.0;
-            if (recommendation.confidence > 0.8) {
-                multiplier = 1.2; // Увеличиваем размер для высокой уверенности
-            } else if (recommendation.confidence < 0.6) {
-                multiplier = 0.8; // Уменьшаем размер для низкой уверенности
+            const adjustments = {
+                confidence: 1.0,
+                volatility: 1.0,
+                correlation: 1.0
+            };
+
+            // 1. Корректировка на основе confidence
+            if (recommendation.confidence !== undefined && recommendation.confidence !== null) {
+                // Линейная интерполяция: confidence 0.5 -> multiplier 0.7, confidence 1.0 -> multiplier 1.3
+                adjustments.confidence = 0.7 + (recommendation.confidence - 0.5) * 1.2; // 0.5 -> 0.7, 1.0 -> 1.3
+                adjustments.confidence = Math.max(0.5, Math.min(1.5, adjustments.confidence)); // Ограничиваем диапазон
             }
+
+            // 2. Корректировка на основе волатильности инструмента (2.5.2, 2.5.3)
+            let instrumentVolatility = options.volatility;
+            let marketMode = options.marketMode || 'normal';
+            
+            // Если волатильность не передана, пытаемся получить из InstrumentStats
+            if (instrumentVolatility === undefined && recommendation.figi) {
+                try {
+                    const instrumentStats = await InstrumentStats.findOne({ 
+                        where: { figi: recommendation.figi } 
+                    });
+                    if (instrumentStats && instrumentStats.volatility) {
+                        instrumentVolatility = parseFloat(instrumentStats.volatility);
+                    }
+                } catch (error) {
+                    console.debug(`⚠️ Could not get volatility for ${recommendation.figi}:`, error.message);
+                }
+            }
+            
+            // Если рыночный режим не передан, пытаемся определить через AdaptiveThresholdService
+            if (marketMode === 'normal' && recommendation.figi && AdaptiveThresholdService && AdaptiveThresholdService.isInitialized) {
+                try {
+                    marketMode = await AdaptiveThresholdService.detectMarketMode(recommendation.figi);
+                } catch (error) {
+                    console.debug(`⚠️ Could not detect market mode for ${recommendation.figi}:`, error.message);
+                }
+            }
+            
+            // Используем адаптивные параметры стратегии (2.5.2)
+            const adaptiveParams = TradingStrategy.getAdaptiveParams(instrumentVolatility, marketMode);
+            adjustments.volatility = adaptiveParams.positionSizeMultiplier;
+
+            // 3. Корректировка на основе корреляции с существующими позициями (2.5.3)
+            let maxCorrelation = options.correlation;
+            
+            // Если корреляция не передана, рассчитываем максимальную корреляцию с существующими позициями
+            if (maxCorrelation === undefined && recommendation.figi && CorrelationService && CorrelationService.isInitialized) {
+                try {
+                    // Получаем активные позиции стратегии
+                    const PositionStrategyModel = (await import('../models/PositionStrategy.js')).default;
+                    const TradingRequest = (await import('../models/TradingRequest.js')).default;
+                    
+                    const activePositions = await PositionStrategyModel.findAll({
+                        where: { 
+                            strategyId,
+                            exitDate: null
+                        },
+                        include: [{
+                            model: TradingRequest,
+                            as: 'position',
+                            required: false
+                        }]
+                    });
+                    
+                    if (activePositions.length > 0) {
+                        const correlations = [];
+                        for (const position of activePositions) {
+                            const positionFigi = position.position?.figi || position.figi;
+                            if (positionFigi && positionFigi !== recommendation.figi) {
+                                try {
+                                    const correlation = await CorrelationService.calculateCorrelation(
+                                        recommendation.figi,
+                                        positionFigi,
+                                        30
+                                    );
+                                    if (isFinite(correlation)) {
+                                        correlations.push(Math.abs(correlation));
+                                    }
+                                } catch (error) {
+                                    // Игнорируем ошибки расчета корреляции для отдельных позиций
+                                }
+                            }
+                        }
+                        
+                        // Используем максимальную корреляцию
+                        if (correlations.length > 0) {
+                            maxCorrelation = Math.max(...correlations);
+                        }
+                    }
+                } catch (error) {
+                    console.debug(`⚠️ Could not calculate correlation for ${recommendation.figi}:`, error.message);
+                }
+            }
+            
+            if (maxCorrelation !== undefined && maxCorrelation !== null) {
+                const correlation = parseFloat(maxCorrelation);
+                if (isFinite(correlation) && Math.abs(correlation) > 0) {
+                    const absCorrelation = Math.abs(correlation);
+                    // Высокая корреляция (> 0.7) - снижаем размер позиции для диверсификации
+                    if (absCorrelation > 0.7) {
+                        adjustments.correlation = 0.7; // Снижаем на 30%
+                    } else if (absCorrelation > 0.5) {
+                        adjustments.correlation = 0.85; // Снижаем на 15%
+                    } else {
+                        adjustments.correlation = 1.0; // Низкая корреляция - без изменений
+                    }
+                }
+            }
+
+            // Комбинируем все корректировки
+            multiplier = adjustments.confidence * adjustments.volatility * adjustments.correlation;
+            
+            // Ограничиваем итоговый множитель разумными пределами
+            multiplier = Math.max(0.3, Math.min(1.5, multiplier));
 
             const finalAmount = Math.min(baseAmount * multiplier, availableBudget);
             
             return {
                 amount: finalAmount,
-                multiplier,
+                multiplier: multiplier.toFixed(3),
+                adjustments,
                 availableBudget,
-                activePositions
+                activePositions,
+                baseAmount,
+                adaptiveParams: adaptiveParams || null,
+                marketMode: marketMode || 'normal',
+                volatility: instrumentVolatility || null,
+                maxCorrelation: maxCorrelation || null,
+                details: {
+                    confidenceAdjustment: adjustments.confidence.toFixed(3),
+                    volatilityAdjustment: adjustments.volatility.toFixed(3),
+                    correlationAdjustment: adjustments.correlation.toFixed(3),
+                    marketMode: marketMode || 'normal',
+                    volatility: instrumentVolatility ? (instrumentVolatility * 100).toFixed(2) + '%' : 'N/A'
+                }
             };
         } catch (error) {
             console.error('❌ Error calculating position size:', error);
@@ -286,11 +414,40 @@ class StrategyAllocationService {
 
     /**
      * Перебалансировка стратегий (автоматическая)
+     * Улучшено в Фазе 2, задача 2.5.1: учет Sharpe Ratio, win rate, max drawdown
      */
-    async rebalanceStrategies() {
+    async rebalanceStrategies(options = {}) {
         try {
+            const usePerformanceBased = options.usePerformanceBased !== false; // По умолчанию включено
+            const days = options.days || 30;
+            const minSharpeRatio = options.minSharpeRatio || 0;
+            
             console.log('🔄 Starting strategy rebalancing...');
             
+            let performanceBasedSucceeded = false;
+            
+            // Если включена перебалансировка на основе производительности (2.5.1)
+            if (usePerformanceBased) {
+                try {
+                    const performanceResult = await this.rebalanceBudgetByPerformance(days, minSharpeRatio);
+                    if (performanceResult.success && performanceResult.changes.length > 0) {
+                        console.log('✅ Performance-based rebalancing completed');
+                        performanceBasedSucceeded = true;
+                        return {
+                            ...performanceResult,
+                            method: 'performance-based'
+                        };
+                    } else if (performanceResult.success) {
+                        console.log('✅ No significant changes needed for performance-based rebalancing');
+                        // Продолжаем с обычной перебалансировкой
+                    }
+                } catch (perfError) {
+                    console.warn('⚠️ Performance-based rebalancing failed, falling back to standard rebalancing:', perfError.message);
+                    // Продолжаем с обычной перебалансировкой
+                }
+            }
+            
+            // Стандартная перебалансировка (fallback или если usePerformanceBased = false)
             // Получаем все активные стратегии
             const strategies = await TradingStrategy.findAll({
                 where: { isActive: true },
@@ -311,9 +468,6 @@ class StrategyAllocationService {
             // Доступный бюджет = общий бюджет - использованный
             const availableBudget = totalBudget - totalUsedBudget;
 
-            // Анализируем эффективность стратегий (упрощенная версия)
-            // В будущем здесь будет анализ Sharpe Ratio, Win Rate и т.д.
-            
             // Перераспределяем доступный бюджет согласно процентам, сохраняя использованный бюджет
             for (const strategy of strategies) {
                 const allocation = await PortfolioAllocation.getOrCreateAllocation(strategy.id);
@@ -333,6 +487,11 @@ class StrategyAllocationService {
             }
 
             console.log('✅ Strategy rebalancing completed');
+            return {
+                success: true,
+                method: performanceBasedSucceeded ? 'performance-based' : 'standard',
+                changes: []
+            };
         } catch (error) {
             console.error('❌ Error rebalancing strategies:', error);
             throw error;
@@ -865,6 +1024,61 @@ class StrategyAllocationService {
 
         } catch (error) {
             console.error('❌ Error rebalancing budget by performance:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Получить адаптивную стратегию с параметрами, скорректированными на основе волатильности и рыночного режима
+     * Фаза 2, задача 2.5.2: Адаптивные параметры стратегий
+     * 
+     * @param {number} strategyId - ID стратегии
+     * @param {string} figi - FIGI инструмента (опционально, для определения рыночного режима)
+     * @param {number} volatility - Волатильность инструмента (опционально)
+     * @param {string} marketMode - Рыночный режим (опционально)
+     * @returns {Promise<Object>} Адаптивная стратегия с примененными параметрами
+     */
+    async getAdaptiveStrategy(strategyId, figi = null, volatility = null, marketMode = null) {
+        try {
+            const strategy = await TradingStrategy.findByPk(strategyId);
+            if (!strategy) {
+                throw new Error(`Strategy ${strategyId} not found`);
+            }
+
+            // Получаем волатильность, если не передана
+            if (volatility === null && figi) {
+                try {
+                    const instrumentStats = await InstrumentStats.findOne({ 
+                        where: { figi } 
+                    });
+                    if (instrumentStats && instrumentStats.volatility) {
+                        volatility = parseFloat(instrumentStats.volatility);
+                    }
+                } catch (error) {
+                    console.debug(`⚠️ Could not get volatility for ${figi}:`, error.message);
+                }
+            }
+
+            // Определяем рыночный режим, если не передан
+            if (marketMode === null && figi && AdaptiveThresholdService && AdaptiveThresholdService.isInitialized) {
+                try {
+                    marketMode = await AdaptiveThresholdService.detectMarketMode(figi);
+                } catch (error) {
+                    console.debug(`⚠️ Could not detect market mode for ${figi}:`, error.message);
+                    marketMode = 'normal';
+                }
+            }
+
+            // Применяем адаптивные параметры
+            const adaptedStrategy = TradingStrategy.applyAdaptiveParams(
+                strategy, 
+                volatility || 0.15, 
+                marketMode || 'normal'
+            );
+
+            return adaptedStrategy;
+        } catch (error) {
+            console.error(`❌ Error getting adaptive strategy ${strategyId}:`, error);
             throw error;
         }
     }

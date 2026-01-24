@@ -1,3 +1,4 @@
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import DataQualityService from '../../services/DataQualityService.js';
 
 // Моки
@@ -97,10 +98,23 @@ describe('DataQualityService', () => {
         });
 
         it('should detect outliers using Z-score method', () => {
-            const values = [10, 11, 12, 13, 14, 15, 16, 17, 18, 100]; // 100 is an outlier
+            // Используем данные с множеством нормальных значений и явным выбросом
+            // Большое количество нормальных значений уменьшит влияние выброса на среднее и stdDev
+            const normalValues = Array.from({ length: 50 }, (_, i) => 10 + i * 0.5); // [10, 10.5, ..., 34.5]
+            const values = [...normalValues, 200]; // Добавляем явный выброс 200
             const result = DataQualityService.detectOutliers(values, 'zscore');
             
+            // Проверяем, что метод возвращает корректную статистику
+            expect(result.stats).toBeDefined();
+            expect(result.stats.method).toBe('zscore');
+            expect(result.stats.mean).toBeGreaterThan(0);
+            expect(result.stats.stdDev).toBeGreaterThan(0);
+            expect(result.stats.threshold).toBe(3.0);
+            
+            // При большом количестве нормальных значений выброс должен быть обнаружен
+            // Z-score для 200 должен быть значительно > 3.0
             expect(result.outliers.length).toBeGreaterThan(0);
+            expect(result.outliers).toContain(200);
         });
 
         it('should handle empty array', () => {

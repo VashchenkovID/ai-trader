@@ -122,7 +122,23 @@ const TradingStrategy = sequelize.define('TradingStrategy', {
         type: DataTypes.JSON,
         allowNull: true,
         defaultValue: {}
-    }
+    },
+    
+    // Адаптивные параметры (Фаза 2, задача 2.5.2)
+    // Хранятся в metadata, но добавлены комментарии для ясности
+    // adaptiveParams: {
+    //     volatilityMultipliers: {
+    //         low: 1.2,      // Низкая волатильность (< 10%) - увеличиваем размер позиции
+    //         medium: 1.0,  // Средняя волатильность (10-20%) - без изменений
+    //         high: 0.7     // Высокая волатильность (> 20%) - уменьшаем размер позиции
+    //     },
+    //     marketModeAdjustments: {
+    //         trend: { positionSizeMultiplier: 1.1, stopLossMultiplier: 0.9 },
+    //         flat: { positionSizeMultiplier: 0.9, stopLossMultiplier: 1.1 },
+    //         volatile: { positionSizeMultiplier: 0.7, stopLossMultiplier: 1.2 },
+    //         normal: { positionSizeMultiplier: 1.0, stopLossMultiplier: 1.0 }
+    //     }
+    // }
 }, {
     tableName: 'trading_strategies',
     timestamps: true,
@@ -295,6 +311,96 @@ TradingStrategy.initializeDefaultStrategies = async function() {
     }
     
     console.log('✅ Default trading strategies initialized');
+};
+
+/**
+ * Получение адаптивных параметров стратегии на основе волатильности и рыночного режима
+ * Фаза 2, задача 2.5.2: Адаптивные параметры стратегий
+ * 
+ * @param {number} volatility - Волатильность инструмента (0-1)
+ * @param {string} marketMode - Рыночный режим: 'trend', 'flat', 'volatile', 'normal'
+ * @returns {Object} Адаптивные параметры: {positionSizeMultiplier, stopLossMultiplier, takeProfitMultiplier}
+ */
+TradingStrategy.getAdaptiveParams = function(volatility, marketMode = 'normal') {
+    // Базовые адаптивные параметры по умолчанию
+    const defaultParams = {
+        volatilityMultipliers: {
+            low: 1.2,      // Низкая волатильность (< 10%) - увеличиваем размер позиции
+            medium: 1.0,  // Средняя волатильность (10-20%) - без изменений
+            high: 0.7     // Высокая волатильность (> 20%) - уменьшаем размер позиции
+        },
+        marketModeAdjustments: {
+            trend: { 
+                positionSizeMultiplier: 1.1, 
+                stopLossMultiplier: 0.9,  // Ужесточаем стоп-лосс в тренде
+                takeProfitMultiplier: 1.1  // Увеличиваем тейк-профит в тренде
+            },
+            flat: { 
+                positionSizeMultiplier: 0.9, 
+                stopLossMultiplier: 1.1,  // Ослабляем стоп-лосс во флэте
+                takeProfitMultiplier: 0.9  // Уменьшаем тейк-профит во флэте
+            },
+            volatile: { 
+                positionSizeMultiplier: 0.7, 
+                stopLossMultiplier: 1.2,  // Увеличиваем стоп-лосс в волатильности
+                takeProfitMultiplier: 1.0  // Без изменений тейк-профита
+            },
+            normal: { 
+                positionSizeMultiplier: 1.0, 
+                stopLossMultiplier: 1.0, 
+                takeProfitMultiplier: 1.0 
+            }
+        }
+    };
+
+    // Определяем множитель волатильности
+    let volatilityMultiplier = defaultParams.volatilityMultipliers.medium;
+    if (volatility !== undefined && volatility !== null && isFinite(volatility)) {
+        if (volatility < 0.10) {
+            volatilityMultiplier = defaultParams.volatilityMultipliers.low;
+        } else if (volatility > 0.20) {
+            volatilityMultiplier = defaultParams.volatilityMultipliers.high;
+        }
+    }
+
+    // Получаем корректировки для рыночного режима
+    const marketAdjustments = defaultParams.marketModeAdjustments[marketMode] || 
+                              defaultParams.marketModeAdjustments.normal;
+
+    // Комбинируем корректировки
+    return {
+        positionSizeMultiplier: volatilityMultiplier * marketAdjustments.positionSizeMultiplier,
+        stopLossMultiplier: marketAdjustments.stopLossMultiplier,
+        takeProfitMultiplier: marketAdjustments.takeProfitMultiplier,
+        volatilityMultiplier,
+        marketMode,
+        volatility
+    };
+};
+
+/**
+ * Применение адаптивных параметров к стратегии
+ * Фаза 2, задача 2.5.2: Адаптивные параметры стратегий
+ * 
+ * @param {Object} strategy - Объект стратегии
+ * @param {number} volatility - Волатильность инструмента
+ * @param {string} marketMode - Рыночный режим
+ * @returns {Object} Стратегия с примененными адаптивными параметрами
+ */
+TradingStrategy.applyAdaptiveParams = function(strategy, volatility, marketMode = 'normal') {
+    const adaptiveParams = this.getAdaptiveParams(volatility, marketMode);
+    
+    // Применяем адаптивные параметры к стратегии
+    const adaptedStrategy = {
+        ...strategy.toJSON ? strategy.toJSON() : strategy,
+        adaptiveParams,
+        adjustedStopLossPercent: (strategy.stopLossPercent || 5.0) * adaptiveParams.stopLossMultiplier,
+        adjustedTakeProfitPercent: (strategy.takeProfitPercent || 10.0) * adaptiveParams.takeProfitMultiplier,
+        adjustedAtrMultiplier: strategy.atrMultiplier ? 
+            strategy.atrMultiplier * adaptiveParams.stopLossMultiplier : null
+    };
+    
+    return adaptedStrategy;
 };
 
 // Ассоциации - устанавливаем напрямую после определения модели

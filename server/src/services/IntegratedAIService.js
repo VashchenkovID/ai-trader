@@ -91,6 +91,12 @@ class IntegratedAIService {
                 await StackingService.initialize();
             }
             
+            // Инициализируем ModelMonitoringService (Фаза 2, задача 2.4.3)
+            const ModelMonitoringService = (await import('./ModelMonitoringService.js')).default;
+            if (!ModelMonitoringService.isInitialized) {
+                await ModelMonitoringService.initialize();
+            }
+            
             // НЕ сохраняем модели при инициализации - это делается только после обучения
             // await this.saveAllModels();
             
@@ -1341,6 +1347,23 @@ class IntegratedAIService {
 
             // Обновляем статистику производительности
             await this.updatePerformanceStats();
+
+            // Проверяем дрейф моделей после обучения (Фаза 2, задача 2.4.3)
+            try {
+                const ModelMonitoringService = (await import('./ModelMonitoringService.js')).default;
+                if (ModelMonitoringService && ModelMonitoringService.isInitialized) {
+                    const driftResults = await ModelMonitoringService.checkAllModels();
+                    results.driftCheck = driftResults;
+                }
+            } catch (monitoringError) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Failed to check model drift after training', {
+                        service: 'IntegratedAIService',
+                        operation: 'trainAllNetworks',
+                        error: { message: monitoringError.message }
+                    });
+                }
+            }
 
             // Завершаем обучение
             if (TrainingStatusService) {

@@ -1,3 +1,4 @@
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import IntegratedAIService from '../../services/IntegratedAIService.js';
 
 // Моки

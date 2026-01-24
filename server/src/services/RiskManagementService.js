@@ -139,12 +139,15 @@ class RiskManagementService {
             }
 
             // 6. Расчет размера позиции
-            const positionSize = await this.calculatePositionSize(signal, portfolio, currentPrices);
-            if (positionSize > this.limits.maxPositionSize * portfolio.totalValue) {
-                validation.warnings.push(`Размер позиции ${positionSize.toFixed(2)}₽ превышает рекомендуемый лимит`);
+            const price = currentPrices[signal.symbol] || signal.price;
+            const requestedPositionSize = (signal.quantity || 0) * price;
+            const maxPositionSize = this.limits.maxPositionSize * portfolio.totalValue;
+            
+            if (requestedPositionSize > maxPositionSize) {
+                validation.warnings.push(`Размер позиции ${requestedPositionSize.toFixed(2)}₽ превышает рекомендуемый лимит ${maxPositionSize.toFixed(2)}₽`);
                 validation.adjustedSignal = {
                     ...signal,
-                    quantity: Math.floor(this.limits.maxPositionSize * portfolio.totalValue / (currentPrices[signal.symbol] || signal.price))
+                    quantity: Math.floor(maxPositionSize / price)
                 };
             }
 

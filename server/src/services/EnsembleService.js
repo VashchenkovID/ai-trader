@@ -550,6 +550,22 @@ class EnsembleService {
             // Адаптивные веса на основе производительности
             await this.updateWeights();
 
+            // Обновление базовых метрик в ModelMonitoringService после обучения (Фаза 2, задача 2.4.3)
+            try {
+                const ModelMonitoringService = (await import('./ModelMonitoringService.js')).default;
+                if (ModelMonitoringService && ModelMonitoringService.isInitialized) {
+                    await ModelMonitoringService.updateBaseline('ensemble', figi);
+                }
+            } catch (monitoringError) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Failed to update baseline in ModelMonitoringService', {
+                        service: 'EnsembleService',
+                        operation: 'trainEnsemble',
+                        figi,
+                        error: { message: monitoringError.message }
+                    });
+                }
+            }
             
             // Завершаем обучение
             if (trainingStatusService) {
@@ -559,7 +575,8 @@ class EnsembleService {
             return {
                 success: true,
                 performance: this.performance,
-                weights: this.weights
+                weights: this.weights,
+                results // Добавляем результаты обучения с test metrics
             };
 
         } catch (error) {
@@ -650,14 +667,31 @@ class EnsembleService {
 
     /**
      * Обучение отдельной модели
+     * Обновлено в Фазе 2, задача 2.4.1: добавлен train/validation/test split
      */
     async trainModel(modelType, data, epochs, batchSize, trainingStatusService = null, totalModels = 1, modelIndex = 0, figi = null) {
-        const { features, labels } = data;
+        let { features, labels } = data;
         
         // Проверяем наличие данных
         if (!features || !labels || features.length === 0 || labels.length === 0) {
             throw new Error(`No training data provided for ${modelType}`);
         }
+
+        // Разделение на train/validation/test (Фаза 2, задача 2.4.1)
+        const { timeBasedSplit } = await import('../utils/dataSplitUtils.js');
+        const dataSplit = timeBasedSplit(features, labels, {
+            trainRatio: 0.7,
+            validationRatio: 0.15,
+            testRatio: 0.15
+        });
+        
+        // Используем train для обучения, validation для валидации во время обучения
+        features = dataSplit.train.features;
+        labels = dataSplit.train.labels;
+        const validationFeatures = dataSplit.validation.features;
+        const validationLabels = dataSplit.validation.labels;
+        const testFeatures = dataSplit.test.features;
+        const testLabels = dataSplit.test.labels;
         
         // Инициализируем сервис, если не инициализирован
         if (!this.isInitialized) {
@@ -771,11 +805,15 @@ class EnsembleService {
             }
         }
 
+        // Создаем тензоры для validation set (Фаза 2, задача 2.4.1)
+        const valXs = tf.tensor3d(validationFeatures);
+        const valYs = tf.tensor2d(validationLabels, [validationLabels.length, 1]);
+
         const history = await model.fit(xs, ys, {
             epochs,
             batchSize,
             // sampleWeight не поддерживается в TensorFlow.js - используем взвешивание через дублирование данных
-            validationSplit: 0.2,
+            validationData: [valXs, valYs], // Используем явный validation set вместо validationSplit
             verbose: 0,
             callbacks: {
                 onEpochEnd: async (epoch, logs) => {
@@ -875,6 +913,37 @@ class EnsembleService {
         // Очистка памяти
         xs.dispose();
         ys.dispose();
+        valXs.dispose();
+        valYs.dispose();
+
+        // Финальная оценка на test set (Фаза 2, задача 2.4.1)
+        let testMetrics = null;
+        if (testFeatures.length > 0 && testLabels.length > 0) {
+            try {
+                const testXs = tf.tensor3d(testFeatures);
+                const testYs = tf.tensor2d(testLabels, [testLabels.length, 1]);
+                const testPredictions = model.predict(testXs);
+                const testPredValues = await testPredictions.data();
+                testPredictions.dispose();
+                
+                const testCorrect = testPredValues.reduce((acc, pred, i) => {
+                    return acc + (Math.round(pred) === testLabels[i] ? 1 : 0);
+                }, 0);
+                
+                testMetrics = {
+                    accuracy: testCorrect / testLabels.length,
+                    correct: testCorrect,
+                    total: testLabels.length
+                };
+                
+                testXs.dispose();
+                testYs.dispose();
+            } catch (testError) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn(`Failed to evaluate on test set for ${modelType}:`, testError.message);
+                }
+            }
+        }
 
         // Восстанавливаем веса лучшей модели
         if (bestModelWeights && bestEpoch > 0) {
@@ -912,9 +981,13 @@ class EnsembleService {
             precision: finalAccuracy, // Упрощенная метрика
             recall: finalAccuracy,    // Упрощенная метрика
             f1Score: finalAccuracy, // Упрощенная метрика
+            testMetrics: testMetrics || null, // Test metrics (Фаза 2, задача 2.4.1)
             lrHistory: lrHistory, // История изменений LR
             finalLR: currentLR, // Финальный learning rate
-            lrReductions: lrReductionCount // Количество уменьшений LR
+            lrReductions: lrReductionCount, // Количество уменьшений LR
+            trainSize: features.length,
+            validationSize: validationFeatures.length,
+            testSize: testFeatures.length
         };
     }
 

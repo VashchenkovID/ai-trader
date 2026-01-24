@@ -126,18 +126,49 @@ class OptimizedTrainingService {
                 throw new Error('No features prepared');
             }
 
-            // 3. Пытаемся загрузить существующую модель (тёплый старт), иначе создаем новую
-            const inputSize = features[0].length;
+            // 4.1. Разделение на train/validation/test (Фаза 2, задача 2.4.1)
+            const { trainValidationTestSplit, timeBasedSplit } = await import('../utils/dataSplitUtils.js');
+            const useTimeBasedSplit = options.timeBasedSplit !== false; // По умолчанию true для временных рядов
+            
+            let dataSplit;
+            if (useTimeBasedSplit) {
+                dataSplit = timeBasedSplit(features, labels, {
+                    trainRatio: options.trainRatio || 0.7,
+                    validationRatio: options.validationRatio || 0.15,
+                    testRatio: options.testRatio || 0.15
+                });
+            } else {
+                dataSplit = trainValidationTestSplit(features, labels, {
+                    trainRatio: options.trainRatio || 0.7,
+                    validationRatio: options.validationRatio || 0.15,
+                    testRatio: options.testRatio || 0.15,
+                    shuffle: options.shuffle !== false
+                });
+            }
+            
+            // Используем train для обучения, validation для валидации во время обучения, test для финальной оценки
+            const trainFeatures = dataSplit.train.features;
+            const trainLabels = dataSplit.train.labels;
+            const validationFeatures = dataSplit.validation.features;
+            const validationLabels = dataSplit.validation.labels;
+            const testFeatures = dataSplit.test.features;
+            const testLabels = dataSplit.test.labels;
+
+            // 5. Пытаемся загрузить существующую модель (тёплый старт), иначе создаем новую
+            const inputSize = trainFeatures[0].length;
             let model = await this.loadModel(figi, inputSize);
             if (!model) {
                 model = await this.createOptimizedModel(inputSize);
             }
 
-            // 4. Обучение: пробуем через воркер, при ошибке — локально
+            // 6. Обучение на train set с валидацией на validation set
             let trainingResult;
             if (useWorker) {
                 try {
-                    trainingResult = await this.trainModelViaWorker(features, labels, epochs, batchSize, 'nn');
+                    // Для воркера объединяем train и validation (воркер сам разделит через validationSplit)
+                    const combinedFeatures = [...trainFeatures, ...validationFeatures];
+                    const combinedLabels = [...trainLabels, ...validationLabels];
+                    trainingResult = await this.trainModelViaWorker(combinedFeatures, combinedLabels, epochs, batchSize, 'nn');
                 } catch (workerError) {
                     if (LoggerService.isInitialized) {
                         LoggerService.error('Worker training failed, falling back to local', {
@@ -147,17 +178,31 @@ class OptimizedTrainingService {
                             error: { message: workerError.message, stack: workerError.stack }
                         });
                     }
-                    trainingResult = await this.trainModel(model, features, labels, epochs, batchSize);
+                    // Локальное обучение с явным validation set
+                    trainingResult = await this.trainModel(model, [...trainFeatures, ...validationFeatures], [...trainLabels, ...validationLabels], epochs, batchSize);
                 }
             } else {
-                trainingResult = await this.trainModel(model, features, labels, epochs, batchSize);
+                // Локальное обучение - используем train + validation вместе (trainModel сам разделит через validationData)
+                // Но для правильной валидации на validation set, создаем отдельные тензоры
+                trainingResult = await this.trainModelWithExplicitValidation(
+                    model, 
+                    trainFeatures, 
+                    trainLabels, 
+                    validationFeatures, 
+                    validationLabels, 
+                    epochs, 
+                    batchSize
+                );
             }
 
-            // 5. Валидация (опционально)
-            let validationResult = null;
-            if (enableValidation) {
-                validationResult = await this.validateModel(model, features, labels);
+            // 7. Финальная оценка на test set
+            let testResult = null;
+            if (enableValidation && testFeatures.length > 0) {
+                testResult = await this.validateModel(model, testFeatures, testLabels);
             }
+            
+            // Для обратной совместимости используем testResult как validationResult
+            const validationResult = testResult;
 
             // 6. Сохраняем модель
             await this.saveModel(figi, model);
@@ -198,14 +243,36 @@ class OptimizedTrainingService {
                 await this.checkDegradationAndRestore(figi, model, currentMetrics);
             }
 
+            // 8. Обновление базовых метрик в ModelMonitoringService после обучения (Фаза 2, задача 2.4.3)
+            try {
+                const ModelMonitoringService = (await import('./ModelMonitoringService.js')).default;
+                if (ModelMonitoringService && ModelMonitoringService.isInitialized) {
+                    await ModelMonitoringService.updateBaseline('traditional', figi);
+                }
+            } catch (monitoringError) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Failed to update baseline in ModelMonitoringService', {
+                        service: 'OptimizedTrainingService',
+                        operation: 'trainInstrument',
+                        figi,
+                        error: { message: monitoringError.message }
+                    });
+                }
+            }
+
             return {
                 success: true,
                 figi,
                 trainingResult,
-                validationResult,
+                validationResult: validationResult || testResult,
+                testResult, // Добавляем отдельно test результат
                 model,
                 featuresCount: features.length,
-                accuracy: trainingResult.finalAccuracy || 0
+                trainSize: trainFeatures.length,
+                validationSize: validationFeatures.length,
+                testSize: testFeatures.length,
+                accuracy: trainingResult.finalAccuracy || 0,
+                testAccuracy: testResult?.accuracy || null
             };
 
         } catch (error) {
@@ -939,36 +1006,174 @@ class OptimizedTrainingService {
     }
 
     /**
+     * Обучение модели с явным validation set (Фаза 2, задача 2.4.1)
+     */
+    async trainModelWithExplicitValidation(model, trainFeatures, trainLabels, validationFeatures, validationLabels, epochs, batchSize) {
+        // Создаем тензоры для обучения
+        const xs = tf.tensor2d(trainFeatures);
+        const ys = tf.tensor2d(trainLabels.map(l => [l]));
+        
+        // Создаем тензоры для валидации
+        const valXs = tf.tensor2d(validationFeatures);
+        const valYs = tf.tensor2d(validationLabels.map(l => [l]));
+        
+        let bestValLoss = Infinity;
+        let bestEpoch = 0;
+        
+        const history = await model.fit(xs, ys, {
+            epochs,
+            batchSize,
+            validationData: [valXs, valYs],
+            verbose: 0,
+            callbacks: {
+                onEpochEnd: (epoch, logs) => {
+                    const valLoss = logs.val_loss || logs.loss;
+                    if (valLoss < bestValLoss) {
+                        bestValLoss = valLoss;
+                        bestEpoch = epoch;
+                    }
+                }
+            }
+        });
+        
+        // Освобождаем память
+        xs.dispose();
+        ys.dispose();
+        valXs.dispose();
+        valYs.dispose();
+        
+        return {
+            history: history.history,
+            finalAccuracy: history.history.acc[history.history.acc.length - 1],
+            finalLoss: history.history.loss[history.history.loss.length - 1],
+            bestValLoss,
+            bestEpoch
+        };
+    }
+
+    /**
+     * Выполнение кросс-валидации (Фаза 2, задача 2.4.2)
+     */
+    async performCrossValidation(figi, options = {}) {
+        const {
+            days = 180,
+            k = 5,
+            epochs = 50,
+            batchSize = 16,
+            useAdvancedFeatures = true,
+            stratified = false
+        } = options;
+
+        try {
+            // Получаем данные
+            const candles = await this.getTrainingData(figi, days);
+            const { features, labels } = await this.prepareFeatures(candles, figi, useAdvancedFeatures);
+            
+            if (features.length === 0) {
+                throw new Error('No features prepared');
+            }
+
+            // Импортируем утилиты кросс-валидации
+            const { performCrossValidation } = await import('../utils/crossValidationUtils.js');
+            
+            // Функция обучения для одного фолда
+            const trainFunction = async (trainFeat, trainLab, testFeat, testLab) => {
+                const inputSize = trainFeat[0].length;
+                const model = await this.createOptimizedModel(inputSize);
+                
+                const xs = tf.tensor2d(trainFeat);
+                const ys = tf.tensor2d(trainLab.map(l => [l]));
+                const testXs = tf.tensor2d(testFeat);
+                const testYs = tf.tensor2d(testLab.map(l => [l]));
+                
+                const history = await model.fit(xs, ys, {
+                    epochs,
+                    batchSize,
+                    validationData: [testXs, testYs],
+                    verbose: 0
+                });
+                
+                // Вычисляем метрики на test set
+                const predictions = model.predict(testXs);
+                const predValues = await predictions.data();
+                predictions.dispose();
+                
+                const correct = predValues.reduce((acc, pred, i) => {
+                    return acc + (Math.round(pred) === testLab[i] ? 1 : 0);
+                }, 0);
+                
+                const accuracy = correct / testLab.length;
+                
+                // Освобождаем память
+                xs.dispose();
+                ys.dispose();
+                testXs.dispose();
+                testYs.dispose();
+                model.dispose();
+                
+                return {
+                    accuracy,
+                    loss: history.history.loss[history.history.loss.length - 1],
+                    valLoss: history.history.val_loss[history.history.val_loss.length - 1] || history.history.loss[history.history.loss.length - 1]
+                };
+            };
+            
+            // Выполняем кросс-валидацию
+            const cvResult = await performCrossValidation(features, labels, trainFunction, {
+                k,
+                shuffle: true,
+                stratified
+            });
+            
+            return {
+                success: true,
+                figi,
+                crossValidation: cvResult
+            };
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Cross-validation failed', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'performCrossValidation',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
+            return {
+                success: false,
+                figi,
+                error: error.message
+            };
+        }
+    }
+
+    /**
      * Валидация модели
      */
     async validateModel(model, features, labels) {
-        const splitIndex = Math.floor(features.length * 0.8);
-        const valFeatures = features.slice(splitIndex);
-        const valLabels = labels.slice(splitIndex);
-
-        if (valFeatures.length === 0) return null;
+        if (features.length === 0) return null;
 
         // Убеждаемся, что valFeatures - массив массивов, и указываем форму явно
-        const valFeaturesShape = [valFeatures.length, valFeatures[0]?.length || 0];
-        const valXs = tf.tensor2d(valFeatures, valFeaturesShape);
-        const valLabelsArray = valLabels.map(label => [label]);
+        const valFeaturesShape = [features.length, features[0]?.length || 0];
+        const valXs = tf.tensor2d(features, valFeaturesShape);
+        const valLabelsArray = labels.map(label => [label]);
         const valYs = tf.tensor2d(valLabelsArray, [valLabelsArray.length, 1]);
 
         const predictions = model.predict(valXs);
         const predictedValues = await predictions.data();
         predictions.dispose();
 
-        const actualValues = valLabels;
+        const actualValues = labels;
         const correct = predictedValues.reduce((acc, pred, i) => {
             return acc + (Math.round(pred) === actualValues[i] ? 1 : 0);
         }, 0);
 
-        const accuracy = correct / valFeatures.length;
+        const accuracy = correct / features.length;
 
         valXs.dispose();
         valYs.dispose();
 
-        return { accuracy, correct, total: valFeatures.length };
+        return { accuracy, correct, total: features.length };
     }
 
     /**

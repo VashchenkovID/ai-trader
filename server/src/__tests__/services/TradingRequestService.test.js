@@ -3,129 +3,9 @@
  * Фаза 1, задача 1.1: Смягчение валидации
  */
 
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import TradingRequestService from '../../services/TradingRequestService.js';
 import TradingModeManager from '../../services/TradingModeManager.js';
-
-// Простой тестовый фреймворк для ES modules
-const testResults = [];
-let currentTest = null;
-
-function describe(suiteName, fn) {
-    console.log(`\n📦 ${suiteName}`);
-    fn();
-}
-
-function it(testName, fn) {
-    currentTest = { name: testName, passed: false, error: null };
-    try {
-        const result = fn();
-        if (result instanceof Promise) {
-            return result.then(() => {
-                currentTest.passed = true;
-                testResults.push(currentTest);
-                console.log(`  ✅ ${testName}`);
-            }).catch((error) => {
-                currentTest.passed = false;
-                currentTest.error = error.message;
-                testResults.push(currentTest);
-                console.log(`  ❌ ${testName}: ${error.message}`);
-            });
-        } else {
-            currentTest.passed = true;
-            testResults.push(currentTest);
-            console.log(`  ✅ ${testName}`);
-        }
-    } catch (error) {
-        currentTest.passed = false;
-        currentTest.error = error.message;
-        testResults.push(currentTest);
-        console.log(`  ❌ ${testName}: ${error.message}`);
-    }
-}
-
-function expect(value) {
-    return {
-        toBe(expected) {
-            if (value !== expected) {
-                throw new Error(`Expected ${value} to be ${expected}`);
-            }
-        },
-        toHaveLength(expected) {
-            if (value.length !== expected) {
-                throw new Error(`Expected length ${value.length} to be ${expected}`);
-            }
-        },
-        toContain(expected) {
-            if (typeof value === 'string' && !value.includes(expected)) {
-                throw new Error(`Expected "${value}" to contain "${expected}"`);
-            }
-            if (Array.isArray(value) && !value.some(item => String(item).includes(expected))) {
-                throw new Error(`Expected array to contain "${expected}"`);
-            }
-        },
-        toBeGreaterThan(expected) {
-            if (value <= expected) {
-                throw new Error(`Expected ${value} to be greater than ${expected}`);
-            }
-        },
-        rejects: {
-            toThrow(expectedMessage) {
-                return value.catch((error) => {
-                    if (expectedMessage && !error.message.includes(expectedMessage)) {
-                        throw new Error(`Expected error message to contain "${expectedMessage}", got "${error.message}"`);
-                    }
-                    return Promise.resolve();
-                });
-            }
-        }
-    };
-}
-
-function beforeEach(fn) {
-    // Простая реализация - выполняется перед каждым тестом
-    if (typeof fn === 'function') {
-        const result = fn();
-        if (result instanceof Promise) {
-            return result;
-        }
-    }
-}
-
-function afterEach(fn) {
-    // Простая реализация - выполняется после каждого теста
-    if (typeof fn === 'function') {
-        const result = fn();
-        if (result instanceof Promise) {
-            return result;
-        }
-    }
-}
-
-const jest = {
-    clearAllMocks: () => {},
-    fn: () => {
-        const mockFn = (...args) => {
-            mockFn.mock.calls.push(args);
-            return mockFn.mock.results[mockFn.mock.results.length - 1]?.value;
-        };
-        mockFn.mock = {
-            calls: [],
-            results: [],
-            returnValue: undefined,
-            resolvedValue: undefined,
-            rejectedValue: undefined
-        };
-        mockFn.mockResolvedValue = (value) => {
-            mockFn.mock.resolvedValue = value;
-            return (...args) => Promise.resolve(value);
-        };
-        mockFn.mockRejectedValue = (value) => {
-            mockFn.mock.rejectedValue = value;
-            return (...args) => Promise.reject(value);
-        };
-        return mockFn;
-    }
-};
 
 describe('TradingRequestService - Фаза 1, задача 1.1: Смягчение валидации', () => {
     
@@ -230,6 +110,9 @@ describe('TradingRequestService - Фаза 1, задача 1.1: Смягчени
         });
 
         it('должен возвращать warning при confidence 65% в Real режиме (между 40% и 70%)', async () => {
+            // Устанавливаем режим на 'real' перед тестом
+            TradingModeManager.currentMode = 'real';
+            
             const recommendation = {
                 figi: 'test-figi',
                 recommendation: 'BUY',
@@ -262,16 +145,24 @@ describe('TradingRequestService - Фаза 1, задача 1.1: Смягчени
     describe('Граничные значения', () => {
         
         it('должен проходить валидацию с confidence ровно 60% в Micro режиме', async () => {
+            // Устанавливаем режим на 'micro' перед тестом, чтобы getModeSettings вернул правильные настройки
+            const originalMode = TradingModeManager.currentMode;
+            TradingModeManager.currentMode = 'micro';
+            
             const recommendation = {
                 figi: 'test-figi',
                 recommendation: 'BUY',
-                confidence: 0.60,
+                confidence: 0.60, // Ровно 60%, что равно minConfidence для micro
                 score: 0.7
             };
 
             const result = await TradingRequestService.validateTradingMode('micro', recommendation);
             
+            // Восстанавливаем оригинальный режим
+            TradingModeManager.currentMode = originalMode;
+            
             expect(result.isValid).toBe(true);
+            // При confidence = minConfidence (0.6) warning не должно быть, так как проверка строгая <
             expect(result.warnings).toHaveLength(0);
         });
 

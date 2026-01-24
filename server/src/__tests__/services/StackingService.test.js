@@ -1,3 +1,4 @@
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import StackingService from '../../services/StackingService.js';
 import Recommendation from '../../models/Recommendation.js';
 import * as tf from '@tensorflow/tfjs';
