@@ -210,6 +210,40 @@ class OptimizedAnalysisService {
             indicators.atr = this.calculateATR(highs, lows, prices);
             indicators.volatility = this.calculateVolatility(prices);
             
+            // Фаза 4, задача 4.1: Расширение набора индикаторов
+            // Ichimoku Cloud (требует минимум 52 свечи)
+            if (prices.length >= 52 && highs.length >= 52 && lows.length >= 52) {
+                const ichimoku = this.calculateIchimokuCloud(highs, lows, prices);
+                indicators.ichimoku_tenkan = ichimoku.tenkan;
+                indicators.ichimoku_kijun = ichimoku.kijun;
+                indicators.ichimoku_senkou_a = ichimoku.senkouA;
+                indicators.ichimoku_senkou_b = ichimoku.senkouB;
+                indicators.ichimoku_chikou = ichimoku.chikou;
+                indicators.ichimoku_cloud_top = ichimoku.cloudTop;
+                indicators.ichimoku_cloud_bottom = ichimoku.cloudBottom;
+                indicators.ichimoku_cloud_color = ichimoku.cloudColor; // 'bullish' или 'bearish'
+                indicators.ichimoku_signal = ichimoku.signal; // 'buy', 'sell', 'hold'
+            }
+            
+            // Fibonacci Retracements
+            if (prices.length >= 20 && highs.length >= 20 && lows.length >= 20) {
+                const fib = this.calculateFibonacciRetracements(highs, lows, prices);
+                indicators.fib_levels = fib.levels;
+                indicators.fib_current_level = fib.currentLevel;
+                indicators.fib_support = fib.support;
+                indicators.fib_resistance = fib.resistance;
+            }
+            
+            // Market Profile (требует объем)
+            if (volumes.length > 0 && prices.length >= 20 && highs.length >= 20 && lows.length >= 20) {
+                const marketProfile = this.calculateMarketProfile(highs, lows, prices, volumes);
+                indicators.market_profile_poc = marketProfile.poc;
+                indicators.market_profile_value_area_high = marketProfile.valueAreaHigh;
+                indicators.market_profile_value_area_low = marketProfile.valueAreaLow;
+                indicators.market_profile_profile_type = marketProfile.profileType; // 'normal', 'trend', 'non_trend'
+                indicators.market_profile_balance = marketProfile.balance; // 'balanced' или 'imbalanced'
+            }
+            
             // Очищаем результаты от NaN и Infinity
             if (DataQualityService && DataQualityService.isInitialized) {
                 for (const key in indicators) {
@@ -885,6 +919,383 @@ class OptimizedAnalysisService {
         const variance = returns.reduce((sum, ret) => sum + Math.pow(ret - mean, 2), 0) / returns.length;
         
         return DataQualityService.cleanValue(Math.sqrt(variance), 0);
+    }
+
+    /**
+     * Фаза 4, задача 4.1.1: Расчет Ichimoku Cloud
+     * 
+     * @param {Array<number>} highs - Массив максимальных цен
+     * @param {Array<number>} lows - Массив минимальных цен
+     * @param {Array<number>} closes - Массив цен закрытия
+     * @returns {Object} Компоненты Ichimoku Cloud
+     */
+    calculateIchimokuCloud(highs, lows, closes) {
+        try {
+            if (!Array.isArray(highs) || !Array.isArray(lows) || !Array.isArray(closes)) {
+                return this._getDefaultIchimoku();
+            }
+            
+            if (highs.length < 52 || lows.length < 52 || closes.length < 52) {
+                return this._getDefaultIchimoku();
+            }
+
+            const tenkanPeriod = 9;
+            const kijunPeriod = 26;
+            const senkouBPeriod = 52;
+            const chikouOffset = 26;
+
+            // Tenkan-sen (Conversion Line): (highest high + lowest low) / 2 за 9 периодов
+            const tenkanHighs = highs.slice(-tenkanPeriod);
+            const tenkanLows = lows.slice(-tenkanPeriod);
+            const tenkan = (Math.max(...tenkanHighs) + Math.min(...tenkanLows)) / 2;
+
+            // Kijun-sen (Base Line): (highest high + lowest low) / 2 за 26 периодов
+            const kijunHighs = highs.slice(-kijunPeriod);
+            const kijunLows = lows.slice(-kijunPeriod);
+            const kijun = (Math.max(...kijunHighs) + Math.min(...kijunLows)) / 2;
+
+            // Senkou Span A (Leading Span A): (Tenkan + Kijun) / 2, сдвинуто на 26 периодов вперед
+            const senkouA = (tenkan + kijun) / 2;
+
+            // Senkou Span B (Leading Span B): (highest high + lowest low) / 2 за 52 периода, сдвинуто на 26 периодов вперед
+            const senkouBHighs = highs.slice(-senkouBPeriod);
+            const senkouBLows = lows.slice(-senkouBPeriod);
+            const senkouB = (Math.max(...senkouBHighs) + Math.min(...senkouBLows)) / 2;
+
+            // Chikou Span (Lagging Span): цена закрытия, сдвинутая на 26 периодов назад
+            const chikou = closes.length >= chikouOffset ? closes[closes.length - chikouOffset] : closes[closes.length - 1];
+
+            // Облако (Kumo): область между Senkou Span A и B
+            const cloudTop = Math.max(senkouA, senkouB);
+            const cloudBottom = Math.min(senkouA, senkouB);
+            const cloudColor = senkouA > senkouB ? 'bullish' : 'bearish';
+            const cloudThickness = cloudTop - cloudBottom;
+
+            // Текущая цена относительно облака
+            const currentPrice = closes[closes.length - 1];
+            let signal = 'hold';
+            
+            if (currentPrice > cloudTop) {
+                signal = 'buy'; // Цена выше облака - бычий сигнал
+            } else if (currentPrice < cloudBottom) {
+                signal = 'sell'; // Цена ниже облака - медвежий сигнал
+            } else {
+                // Цена внутри облака
+                if (cloudColor === 'bullish' && currentPrice > senkouA) {
+                    signal = 'buy';
+                } else if (cloudColor === 'bearish' && currentPrice < senkouA) {
+                    signal = 'sell';
+                }
+            }
+
+            // Дополнительные сигналы: пересечение линий
+            if (tenkan > kijun && closes[closes.length - 2] <= closes[closes.length - 1]) {
+                signal = 'buy'; // Tenkan пересекает Kijun снизу вверх
+            } else if (tenkan < kijun && closes[closes.length - 2] >= closes[closes.length - 1]) {
+                signal = 'sell'; // Tenkan пересекает Kijun сверху вниз
+            }
+
+            return {
+                tenkan: DataQualityService.cleanValue(tenkan, 0),
+                kijun: DataQualityService.cleanValue(kijun, 0),
+                senkouA: DataQualityService.cleanValue(senkouA, 0),
+                senkouB: DataQualityService.cleanValue(senkouB, 0),
+                chikou: DataQualityService.cleanValue(chikou, 0),
+                cloudTop: DataQualityService.cleanValue(cloudTop, 0),
+                cloudBottom: DataQualityService.cleanValue(cloudBottom, 0),
+                cloudThickness: DataQualityService.cleanValue(cloudThickness, 0),
+                cloudColor: cloudColor,
+                signal: signal
+            };
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error calculating Ichimoku Cloud', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'calculateIchimokuCloud',
+                    error: { message: error.message }
+                });
+            }
+            return this._getDefaultIchimoku();
+        }
+    }
+
+    /**
+     * Значения по умолчанию для Ichimoku Cloud
+     * @private
+     */
+    _getDefaultIchimoku() {
+        return {
+            tenkan: 0,
+            kijun: 0,
+            senkouA: 0,
+            senkouB: 0,
+            chikou: 0,
+            cloudTop: 0,
+            cloudBottom: 0,
+            cloudThickness: 0,
+            cloudColor: 'neutral',
+            signal: 'hold'
+        };
+    }
+
+    /**
+     * Фаза 4, задача 4.1.2: Расчет Fibonacci Retracements
+     * 
+     * @param {Array<number>} highs - Массив максимальных цен
+     * @param {Array<number>} lows - Массив минимальных цен
+     * @param {Array<number>} closes - Массив цен закрытия
+     * @param {number} lookbackPeriod - Период для поиска экстремумов (по умолчанию 20)
+     * @returns {Object} Уровни Fibonacci и текущая позиция
+     */
+    calculateFibonacciRetracements(highs, lows, closes, lookbackPeriod = 20) {
+        try {
+            if (!Array.isArray(highs) || !Array.isArray(lows) || !Array.isArray(closes)) {
+                return this._getDefaultFibonacci();
+            }
+
+            if (highs.length < lookbackPeriod || lows.length < lookbackPeriod) {
+                return this._getDefaultFibonacci();
+            }
+
+            // Находим локальные максимумы и минимумы за период
+            const periodHighs = highs.slice(-lookbackPeriod);
+            const periodLows = lows.slice(-lookbackPeriod);
+            
+            const highestHigh = Math.max(...periodHighs);
+            const lowestLow = Math.min(...periodLows);
+            const range = highestHigh - lowestLow;
+
+            if (range === 0) {
+                return this._getDefaultFibonacci();
+            }
+
+            // Стандартные уровни Fibonacci
+            const fibLevels = {
+                0: highestHigh,
+                23.6: highestHigh - (range * 0.236),
+                38.2: highestHigh - (range * 0.382),
+                50: highestHigh - (range * 0.5),
+                61.8: highestHigh - (range * 0.618),
+                78.6: highestHigh - (range * 0.786),
+                100: lowestLow
+            };
+
+            // Определяем текущую позицию цены относительно уровней
+            const currentPrice = closes[closes.length - 1];
+            let currentLevel = null;
+            let support = null;
+            let resistance = null;
+
+            const sortedLevels = Object.entries(fibLevels)
+                .map(([level, price]) => ({ level: parseFloat(level), price }))
+                .sort((a, b) => b.price - a.price);
+
+            // Находим ближайшие уровни поддержки и сопротивления
+            for (let i = 0; i < sortedLevels.length; i++) {
+                const level = sortedLevels[i];
+                
+                if (currentPrice >= level.price) {
+                    currentLevel = level.level;
+                    resistance = level.price;
+                    support = i < sortedLevels.length - 1 ? sortedLevels[i + 1].price : lowestLow;
+                    break;
+                }
+            }
+
+            // Если цена ниже всех уровней
+            if (currentLevel === null) {
+                currentLevel = 100;
+                support = lowestLow;
+                resistance = sortedLevels[sortedLevels.length - 1].price;
+            }
+
+            return {
+                levels: fibLevels,
+                currentLevel: currentLevel,
+                currentPrice: currentPrice,
+                support: DataQualityService.cleanValue(support, 0),
+                resistance: DataQualityService.cleanValue(resistance, 0),
+                highestHigh: highestHigh,
+                lowestLow: lowestLow,
+                range: range
+            };
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error calculating Fibonacci Retracements', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'calculateFibonacciRetracements',
+                    error: { message: error.message }
+                });
+            }
+            return this._getDefaultFibonacci();
+        }
+    }
+
+    /**
+     * Значения по умолчанию для Fibonacci Retracements
+     * @private
+     */
+    _getDefaultFibonacci() {
+        return {
+            levels: {},
+            currentLevel: null,
+            currentPrice: 0,
+            support: 0,
+            resistance: 0,
+            highestHigh: 0,
+            lowestLow: 0,
+            range: 0
+        };
+    }
+
+    /**
+     * Фаза 4, задача 4.1.3: Расчет Market Profile
+     * 
+     * @param {Array<number>} highs - Массив максимальных цен
+     * @param {Array<number>} lows - Массив минимальных цен
+     * @param {Array<number>} closes - Массив цен закрытия
+     * @param {Array<number>} volumes - Массив объемов
+     * @param {number} priceLevels - Количество ценовых уровней (по умолчанию 30)
+     * @returns {Object} Market Profile данные
+     */
+    calculateMarketProfile(highs, lows, closes, volumes, priceLevels = 30) {
+        try {
+            if (!Array.isArray(highs) || !Array.isArray(lows) || !Array.isArray(volumes)) {
+                return this._getDefaultMarketProfile();
+            }
+
+            // Market Profile требует объемы, поэтому если volumes пустой или все значения 0, возвращаем значения по умолчанию
+            if (highs.length === 0 || volumes.length === 0 || volumes.every(v => !v || v === 0)) {
+                return this._getDefaultMarketProfile();
+            }
+
+            // Определяем диапазон цен
+            const highestHigh = Math.max(...highs);
+            const lowestLow = Math.min(...lows);
+            const priceRange = highestHigh - lowestLow;
+
+            if (priceRange === 0) {
+                return this._getDefaultMarketProfile();
+            }
+
+            // Создаем ценовые уровни (buckets)
+            const levelSize = priceRange / priceLevels;
+            const profile = new Map(); // priceLevel -> { volume, tpoCount }
+
+            // Распределяем объем по ценовым уровням
+            for (let i = 0; i < highs.length; i++) {
+                const high = highs[i];
+                const low = lows[i];
+                const volume = volumes[i] || 0;
+                const typicalPrice = (high + low + closes[i]) / 3;
+
+                // Определяем, к какому уровню относится типичная цена
+                const levelIndex = Math.floor((typicalPrice - lowestLow) / levelSize);
+                const levelPrice = lowestLow + (levelIndex * levelSize);
+
+                if (!profile.has(levelPrice)) {
+                    profile.set(levelPrice, { volume: 0, tpoCount: 0 });
+                }
+
+                const levelData = profile.get(levelPrice);
+                levelData.volume += volume;
+                levelData.tpoCount += 1; // Упрощенный TPO (Time Price Opportunity)
+            }
+
+            // Находим POC (Point of Control) - уровень с максимальным объемом
+            let poc = lowestLow;
+            let maxVolume = 0;
+            for (const [price, data] of profile.entries()) {
+                if (data.volume > maxVolume) {
+                    maxVolume = data.volume;
+                    poc = price;
+                }
+            }
+
+            // Вычисляем Value Area (VA) - 70% объема
+            const sortedProfile = Array.from(profile.entries())
+                .sort((a, b) => b[1].volume - a[1].volume);
+
+            const totalVolume = Array.from(profile.values())
+                .reduce((sum, data) => sum + data.volume, 0);
+
+            const valueAreaVolume = totalVolume * 0.7;
+            let accumulatedVolume = 0;
+            let valueAreaHigh = poc;
+            let valueAreaLow = poc;
+
+            for (const [price, data] of sortedProfile) {
+                accumulatedVolume += data.volume;
+                if (price > valueAreaHigh) valueAreaHigh = price;
+                if (price < valueAreaLow) valueAreaLow = price;
+                if (accumulatedVolume >= valueAreaVolume) {
+                    break;
+                }
+            }
+
+            // Определяем тип профиля рынка
+            const currentPrice = closes[closes.length - 1];
+            const pricePosition = (currentPrice - lowestLow) / priceRange;
+            
+            let profileType = 'normal';
+            if (pricePosition > 0.7 || pricePosition < 0.3) {
+                profileType = 'trend'; // Трендовый день
+            } else if (valueAreaHigh - valueAreaLow < priceRange * 0.2) {
+                profileType = 'non_trend'; // Неактивный день
+            }
+
+            // Определяем баланс рынка
+            const upperVolume = Array.from(profile.entries())
+                .filter(([price]) => price > poc)
+                .reduce((sum, [, data]) => sum + data.volume, 0);
+            
+            const lowerVolume = Array.from(profile.entries())
+                .filter(([price]) => price < poc)
+                .reduce((sum, [, data]) => sum + data.volume, 0);
+
+            const balance = Math.abs(upperVolume - lowerVolume) / totalVolume < 0.2 ? 'balanced' : 'imbalanced';
+
+            return {
+                poc: DataQualityService.cleanValue(poc, 0),
+                valueAreaHigh: DataQualityService.cleanValue(valueAreaHigh, 0),
+                valueAreaLow: DataQualityService.cleanValue(valueAreaLow, 0),
+                valueAreaRange: DataQualityService.cleanValue(valueAreaHigh - valueAreaLow, 0),
+                profileType: profileType,
+                balance: balance,
+                totalVolume: totalVolume,
+                currentPrice: currentPrice,
+                highestHigh: highestHigh,
+                lowestLow: lowestLow
+            };
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error calculating Market Profile', {
+                    service: 'OptimizedAnalysisService',
+                    operation: 'calculateMarketProfile',
+                    error: { message: error.message }
+                });
+            }
+            return this._getDefaultMarketProfile();
+        }
+    }
+
+    /**
+     * Значения по умолчанию для Market Profile
+     * @private
+     */
+    _getDefaultMarketProfile() {
+        return {
+            poc: 0,
+            valueAreaHigh: 0,
+            valueAreaLow: 0,
+            valueAreaRange: 0,
+            profileType: 'normal',
+            balance: 'balanced',
+            totalVolume: 0,
+            currentPrice: 0,
+            highestHigh: 0,
+            lowestLow: 0
+        };
     }
 
     /**

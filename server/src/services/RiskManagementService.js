@@ -139,8 +139,19 @@ class RiskManagementService {
             }
 
             // 6. Расчет размера позиции
+            // Фаза 4, задача 4.2.2: Учитываем оптимальный размер ордера из EntryOptimizationService
             const price = currentPrices[signal.symbol] || signal.price;
-            const requestedPositionSize = (signal.quantity || 0) * price;
+            let requestedQuantity = signal.quantity || 0;
+            
+            // Если есть оптимизированный размер из EntryOptimizationService, используем его
+            if (signal.sizeOptimization && signal.sizeOptimization.optimalSize) {
+                requestedQuantity = signal.sizeOptimization.optimalSize;
+                validation.warnings.push(
+                    `Размер ордера оптимизирован EntryOptimizationService: ${signal.originalQuantity || signal.quantity} → ${requestedQuantity}`
+                );
+            }
+            
+            const requestedPositionSize = requestedQuantity * price;
             const maxPositionSize = this.limits.maxPositionSize * portfolio.totalValue;
             
             if (requestedPositionSize > maxPositionSize) {
@@ -148,6 +159,12 @@ class RiskManagementService {
                 validation.adjustedSignal = {
                     ...signal,
                     quantity: Math.floor(maxPositionSize / price)
+                };
+            } else if (signal.sizeOptimization && signal.sizeOptimization.optimalSize) {
+                // Обновляем сигнал с оптимизированным размером
+                validation.adjustedSignal = {
+                    ...signal,
+                    quantity: requestedQuantity
                 };
             }
 

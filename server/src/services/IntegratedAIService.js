@@ -14,6 +14,7 @@ import StackingService from './StackingService.js';
 import LoggerService from './LoggerService.js';
 import { getService } from './GlobalServiceManager.js';
 import MarketRegimeService from './MarketRegimeService.js';
+import MultiTimeframeService from './MultiTimeframeService.js';
 
 /**
  * Интегрированный сервис для управления всеми тремя нейросетями
@@ -455,6 +456,54 @@ class IntegratedAIService {
                 }
             }
 
+            // Фаза 4, задача 4.1.4: Мультитаймфреймовый анализ
+            let multiTimeframeAnalysis = null;
+            try {
+                if (MultiTimeframeService && MultiTimeframeService.isInitialized) {
+                    multiTimeframeAnalysis = await MultiTimeframeService.analyzeMultiTimeframe(figi, ['H1', 'D1', 'W1'], 30);
+                    
+                    // Добавляем рекомендацию от мультитаймфреймового анализа
+                    if (multiTimeframeAnalysis && multiTimeframeAnalysis.weightedSignal) {
+                        const mtfSignal = multiTimeframeAnalysis.weightedSignal;
+                        const mtfScore = mtfSignal.direction === 'BUY' ? 0.5 + (mtfSignal.confidence / 200) :
+                                       mtfSignal.direction === 'SELL' ? 0.5 - (mtfSignal.confidence / 200) : 0.5;
+                        
+                        recommendations.push({
+                            source: 'multi_timeframe',
+                            score: mtfScore,
+                            confidence: mtfSignal.confidence / 100, // Конвертируем из процентов
+                            recommendation: mtfSignal.direction,
+                            details: {
+                                consistency: multiTimeframeAnalysis.consistency,
+                                priorityTimeframe: multiTimeframeAnalysis.priorityTimeframe,
+                                signalsByTimeframe: Object.fromEntries(
+                                    Object.entries(multiTimeframeAnalysis.timeframes).map(([tf, data]) => [
+                                        tf,
+                                        data.signal ? {
+                                            direction: data.signal.direction,
+                                            confidence: data.signal.confidence
+                                        } : null
+                                    ])
+                                )
+                            }
+                        });
+                        
+                        // Вес мультитаймфреймового анализа зависит от согласованности
+                        const consistencyScore = multiTimeframeAnalysis.consistency?.score || 0;
+                        weights.multiTimeframe = consistencyScore * 0.3; // Максимальный вес 0.3
+                    }
+                }
+            } catch (error) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Multi-timeframe analysis failed', {
+                        service: 'IntegratedAIService',
+                        operation: 'getIntegratedRecommendation',
+                        figi,
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
+            }
+
             // Вычисляем интегрированную рекомендацию
             // Используем режим консенсуса из настроек (по умолчанию 'moderate')
             const consensusMode = 'moderate'; // Можно получать из настроек пользователя
@@ -512,6 +561,27 @@ class IntegratedAIService {
                     neutralNews: newsRecommendation.details.neutralNews,
                     recommendation: newsRecommendation.recommendation,
                     confidence: newsRecommendation.confidence
+                };
+            }
+            
+            // Фаза 4, задача 4.1.4: Добавляем информацию о мультитаймфреймовом анализе
+            if (multiTimeframeAnalysis && multiTimeframeAnalysis.consistency) {
+                integratedRec.multiTimeframeAnalysis = {
+                    consistency: multiTimeframeAnalysis.consistency.agreement,
+                    consistencyScore: multiTimeframeAnalysis.consistency.score,
+                    priorityTimeframe: multiTimeframeAnalysis.priorityTimeframe,
+                    weightedSignal: multiTimeframeAnalysis.weightedSignal,
+                    signalsByTimeframe: Object.fromEntries(
+                        Object.entries(multiTimeframeAnalysis.timeframes)
+                            .filter(([tf, data]) => data && !data.error)
+                            .map(([tf, data]) => [
+                                tf,
+                                {
+                                    direction: data.signal?.direction || 'HOLD',
+                                    confidence: data.signal?.confidence || 0
+                                }
+                            ])
+                    )
                 };
             }
             

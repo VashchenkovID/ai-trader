@@ -4,6 +4,7 @@ import WebSocketService from './WebSocketService.js';
 import RiskManagementService from './RiskManagementService.js';
 import CacheService from './CacheService.js';
 import VirtualPortfolio from '../models/VirtualPortfolio.js';
+import EntryOptimizationService from './EntryOptimizationService.js';
 
 /**
  * Единый торговый движок для всех режимов торговли
@@ -170,10 +171,80 @@ class TradingEngine {
                 throw new Error(`Ордер отклонен: ${validation.errors.join(', ')}`);
             }
 
-            // 3. Использование скорректированного сигнала если есть
-            const finalSignal = validation.adjustedSignal || signal;
+            // 3. Фаза 4, задача 4.2: Оптимизация входа
+            let optimizedSignal = validation.adjustedSignal || signal;
             
-            // 4. Исполнение ордера
+            try {
+                // 3.1. Предсказание оптимального времени входа
+                const entryPrediction = await EntryOptimizationService.predictOptimalEntryTime(
+                    signal.symbol,
+                    { lookbackPeriod: 30, predictionHorizon: 60 }
+                );
+
+                // Если модель рекомендует избегать входа, добавляем предупреждение
+                if (entryPrediction.success && entryPrediction.optimalTime === 'avoid') {
+                    console.warn('⚠️ EntryOptimizationService рекомендует избегать входа сейчас:', {
+                        probability: entryPrediction.probability,
+                        confidence: entryPrediction.confidence
+                    });
+                    // Не блокируем, но добавляем информацию в сигнал
+                    optimizedSignal = {
+                        ...optimizedSignal,
+                        entryOptimization: {
+                            recommendation: 'avoid',
+                            probability: entryPrediction.probability,
+                            confidence: entryPrediction.confidence
+                        }
+                    };
+                }
+
+                // 3.2. Расчет оптимального размера ордера
+                const optimalSize = await EntryOptimizationService.calculateOptimalOrderSize(
+                    signal.symbol,
+                    optimizedSignal.quantity || signal.quantity || 1,
+                    {
+                        maxSizePercent: 0.05,
+                        volatilityAdjustment: true,
+                        timeOfDayAdjustment: true
+                    }
+                );
+
+                // Обновляем размер ордера, если он был оптимизирован
+                if (optimalSize.optimalSize && optimalSize.optimalSize !== optimizedSignal.quantity) {
+                    optimizedSignal = {
+                        ...optimizedSignal,
+                        quantity: optimalSize.optimalSize,
+                        originalQuantity: optimizedSignal.quantity,
+                        sizeOptimization: optimalSize
+                    };
+                }
+
+                // 3.3. Рекомендация типа ордера на основе spread'а
+                const orderTypeRecommendation = await EntryOptimizationService.recommendOrderType(
+                    signal.symbol,
+                    optimizedSignal,
+                    {
+                        urgency: signal.urgency || false
+                    }
+                );
+
+                // Добавляем рекомендацию по типу ордера
+                optimizedSignal = {
+                    ...optimizedSignal,
+                    orderType: orderTypeRecommendation.orderType,
+                    recommendedPrice: orderTypeRecommendation.recommendedPrice,
+                    orderTypeRecommendation: orderTypeRecommendation
+                };
+
+            } catch (optimizationError) {
+                console.warn('⚠️ Ошибка оптимизации входа, продолжаем с исходным сигналом:', optimizationError.message);
+                // Продолжаем с исходным сигналом при ошибке оптимизации
+            }
+
+            // 4. Использование скорректированного сигнала
+            const finalSignal = optimizedSignal;
+            
+            // 5. Исполнение ордера
             let result;
             
             switch (mode) {
@@ -190,12 +261,12 @@ class TradingEngine {
                     throw new Error(`Неизвестный режим торговли: ${mode}`);
             }
 
-            // 4. Обновление статистики риск-менеджмента
+            // 6. Обновление статистики риск-менеджмента
             if (result.trade) {
                 await RiskManagementService.updateStats(result.trade);
             }
 
-            // 5. Уведомление о исполнении
+            // 7. Уведомление о исполнении
             await this.notifyOrderExecution(finalSignal, result);
             
             return result;
@@ -260,15 +331,20 @@ class TradingEngine {
         const settings = modeSettings.settings || modeSettings; // Поддержка старого формата
         const { symbol, action, quantity, price, confidence } = signal;
         
+        // Фаза 4, задача 4.2.3: Используем рекомендованный тип ордера и цену
+        const orderType = signal.orderType || 'MARKET';
+        const recommendedPrice = signal.recommendedPrice || price;
+        
         // Имитация задержки исполнения
         await this.delay(settings.executionDelay);
         
         // Имитация проскальзывания (более реалистичная модель)
-        const slippagePercent = settings.slippage || 0.001; // 0.1% по умолчанию
+        // Для LIMIT ордеров проскальзывание меньше
+        const slippagePercent = (orderType === 'LIMIT' ? 0.0005 : settings.slippage || 0.001); // 0.05% для LIMIT, 0.1% для MARKET
         // Проскальзывание зависит от объема и волатильности (более реалистично)
         const volumeFactor = Math.min(quantity / 1000, 1); // Нормализация объема
-        const slippage = price * slippagePercent * volumeFactor * (action === 'BUY' ? 1 : -1);
-        const executionPrice = price + slippage;
+        const slippage = recommendedPrice * slippagePercent * volumeFactor * (action === 'BUY' ? 1 : -1);
+        const executionPrice = recommendedPrice + slippage;
         
         // Расчет комиссии (как у Tinkoff: 0.3% с минимумом 1 рубль)
         const dealAmount = executionPrice * quantity;
@@ -441,13 +517,17 @@ class TradingEngine {
                 throw new Error('Торговля недоступна в данный момент');
             }
 
+            // Фаза 4, задача 4.2.3: Используем рекомендованный тип ордера и цену
+            const orderType = signal.orderType || 'LIMIT';
+            const recommendedPrice = signal.recommendedPrice || price;
+            
             // Реальное исполнение через Tinkoff API
             const orderResult = await this.broker.placeOrder({
                 symbol,
                 action,
                 quantity: limitedQuantity,
-                price,
-                orderType: 'LIMIT'
+                price: recommendedPrice,
+                orderType: orderType
             });
 
             // Рассчитываем комиссию
@@ -495,13 +575,17 @@ class TradingEngine {
                 throw new Error('Торговля недоступна в данный момент');
             }
 
+            // Фаза 4, задача 4.2.3: Используем рекомендованный тип ордера и цену
+            const orderType = signal.orderType || 'LIMIT';
+            const recommendedPrice = signal.recommendedPrice || price;
+            
             // Реальное исполнение через Tinkoff API
             const orderResult = await this.broker.placeOrder({
                 symbol,
                 action,
                 quantity,
-                price,
-                orderType: 'LIMIT'
+                price: recommendedPrice,
+                orderType: orderType
             });
 
             // Рассчитываем комиссию
