@@ -275,21 +275,48 @@
 **Зависимости:** 2.1 (обратная связь)
 
 **Задачи:**
-- [ ] **2.2.1.** Реализовать Stacking вместо взвешенного среднего:
+- [x] **2.2.1.** Реализовать Stacking вместо взвешенного среднего:
   - Мета-модель поверх базовых моделей
   - Обучение на исторических результатах
-- [ ] **2.2.2.** Учет корреляции между моделями:
+- [x] **2.2.2.** Учет корреляции между моделями:
   - Расчет корреляции предсказаний
   - Снижение уверенности при высокой корреляции
-- [ ] **2.2.3.** Консенсусный механизм:
+- [x] **2.2.3.** Консенсусный механизм:
   - Режимы объединения (консервативный, агрессивный)
   - Обработка противоречивых сигналов
 
 **Файлы для изменения:**
-- `server/src/services/IntegratedAIService.js`
-- `server/src/services/ModelWeightingService.js`
+- `server/src/services/IntegratedAIService.js` ✅
+- `server/src/services/ModelWeightingService.js` ✅
+- `server/src/services/StackingService.js` ✅ (новый файл)
 
 **Оценка времени:** 4-5 дней
+
+**Статус:** ✅ **ВЫПОЛНЕНО**
+
+**Реализовано:**
+1. **StackingService** - новый сервис для мета-обучения:
+   - Создание и обучение мета-модели на исторических данных
+   - Автоматическое переобучение раз в неделю
+   - Fallback на взвешенное среднее, если модель не обучена
+
+2. **Расчет корреляции** в ModelWeightingService:
+   - Метод `calculateCorrelation()` - матрица корреляций между моделями
+   - Метод `adjustConfidenceForCorrelation()` - корректировка уверенности
+   - Снижение уверенности при высокой корреляции (>0.7)
+   - Повышение уверенности при низкой корреляции (<0.3)
+
+3. **Консенсусный механизм** в IntegratedAIService:
+   - Метод `applyConsensusMechanism()` - обработка противоречивых сигналов
+   - Три режима: conservative, moderate, aggressive
+   - Метод `adjustThresholdsForConsensusMode()` - адаптация порогов
+   - Интеграция с Stacking и корреляцией
+
+**Тесты:**
+- `server/src/__tests__/services/StackingService.test.js`
+- `server/src/__tests__/services/ModelWeightingService.test.js`
+- `server/src/__tests__/services/IntegratedAIService.test.js`
+- `server/test-stacking-modernization.js` - интеграционный тест
 
 ---
 

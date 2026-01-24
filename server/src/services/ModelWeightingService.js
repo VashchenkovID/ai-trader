@@ -346,6 +346,140 @@ class ModelWeightingService {
     }
 
     /**
+     * Расчет корреляции между предсказаниями моделей
+     * @param {Array} predictions - Массив предсказаний от разных моделей [{source, score, confidence}, ...]
+     * @returns {Object} - Матрица корреляций {source1: {source2: correlation, ...}, ...}
+     */
+    calculateCorrelation(predictions) {
+        if (!predictions || predictions.length < 2) {
+            return {};
+        }
+        
+        const correlationMatrix = {};
+        
+        // Извлекаем scores для каждой модели
+        const scoresBySource = {};
+        predictions.forEach(pred => {
+            const source = pred.source || 'unknown';
+            if (!scoresBySource[source]) {
+                scoresBySource[source] = [];
+            }
+            scoresBySource[source].push(pred.score || 0.5);
+        });
+        
+        // Рассчитываем корреляцию между каждой парой моделей
+        const sources = Object.keys(scoresBySource);
+        
+        for (let i = 0; i < sources.length; i++) {
+            const source1 = sources[i];
+            if (!correlationMatrix[source1]) {
+                correlationMatrix[source1] = {};
+            }
+            
+            for (let j = 0; j < sources.length; j++) {
+                const source2 = sources[j];
+                
+                if (source1 === source2) {
+                    correlationMatrix[source1][source2] = 1.0; // Корреляция с собой = 1
+                } else {
+                    const scores1 = scoresBySource[source1];
+                    const scores2 = scoresBySource[source2];
+                    
+                    // Выравниваем длины (берем минимум)
+                    const minLength = Math.min(scores1.length, scores2.length);
+                    const alignedScores1 = scores1.slice(0, minLength);
+                    const alignedScores2 = scores2.slice(0, minLength);
+                    
+                    // Рассчитываем корреляцию Пирсона
+                    const correlation = this.calculatePearsonCorrelation(alignedScores1, alignedScores2);
+                    correlationMatrix[source1][source2] = correlation;
+                }
+            }
+        }
+        
+        return correlationMatrix;
+    }
+
+    /**
+     * Расчет корреляции Пирсона
+     * @param {Array} x - Первый массив значений
+     * @param {Array} y - Второй массив значений
+     * @returns {number} - Корреляция (-1 до 1)
+     */
+    calculatePearsonCorrelation(x, y) {
+        if (x.length !== y.length || x.length === 0) {
+            return 0;
+        }
+        
+        const n = x.length;
+        const sumX = x.reduce((sum, val) => sum + val, 0);
+        const sumY = y.reduce((sum, val) => sum + val, 0);
+        const sumXY = x.reduce((sum, val, i) => sum + val * y[i], 0);
+        const sumX2 = x.reduce((sum, val) => sum + val * val, 0);
+        const sumY2 = y.reduce((sum, val) => sum + val * val, 0);
+        
+        const numerator = n * sumXY - sumX * sumY;
+        const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+        
+        if (denominator === 0) {
+            return 0;
+        }
+        
+        return numerator / denominator;
+    }
+
+    /**
+     * Корректировка уверенности с учетом корреляции между моделями
+     * Высокая корреляция означает, что модели дают похожие предсказания,
+     * что снижает общую уверенность (меньше разнообразия)
+     * @param {Array} predictions - Предсказания от разных моделей
+     * @param {number} baseConfidence - Базовая уверенность
+     * @returns {number} - Скорректированная уверенность
+     */
+    adjustConfidenceForCorrelation(predictions, baseConfidence) {
+        if (!predictions || predictions.length < 2) {
+            return baseConfidence;
+        }
+        
+        // Рассчитываем среднюю корреляцию между всеми парами моделей
+        const correlationMatrix = this.calculateCorrelation(predictions);
+        const sources = Object.keys(correlationMatrix);
+        
+        if (sources.length < 2) {
+            return baseConfidence;
+        }
+        
+        let totalCorrelation = 0;
+        let pairCount = 0;
+        
+        for (let i = 0; i < sources.length; i++) {
+            for (let j = i + 1; j < sources.length; j++) {
+                const source1 = sources[i];
+                const source2 = sources[j];
+                const correlation = correlationMatrix[source1][source2] || 0;
+                totalCorrelation += Math.abs(correlation); // Используем абсолютное значение
+                pairCount++;
+            }
+        }
+        
+        const avgCorrelation = pairCount > 0 ? totalCorrelation / pairCount : 0;
+        
+        // Высокая корреляция (> 0.7) снижает уверенность
+        // Низкая корреляция (< 0.3) повышает уверенность (разнообразие мнений)
+        let adjustmentFactor = 1.0;
+        
+        if (avgCorrelation > 0.7) {
+            // Высокая корреляция - снижаем уверенность на 20-40%
+            adjustmentFactor = 1.0 - (avgCorrelation - 0.7) * 1.33; // От 1.0 до 0.6
+        } else if (avgCorrelation < 0.3) {
+            // Низкая корреляция - повышаем уверенность на 10-20%
+            adjustmentFactor = 1.0 + (0.3 - avgCorrelation) * 0.67; // От 1.0 до 1.2
+        }
+        
+        return Math.max(0, Math.min(1, baseConfidence * adjustmentFactor));
+    }
+
+    /**
      * Обновление согласованности для модели
      * @param {string} modelType - Тип модели
      * @param {Array} otherRecommendations - Рекомендации от других моделей

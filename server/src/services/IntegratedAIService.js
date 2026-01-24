@@ -10,6 +10,7 @@ import SignalValidationService from './SignalValidationService.js';
 import NewsAnalysisService from './NewsAnalysisService.js';
 import ModelWeightingService from './ModelWeightingService.js';
 import AdaptiveThresholdService from './AdaptiveThresholdService.js';
+import StackingService from './StackingService.js';
 import LoggerService from './LoggerService.js';
 import { getService } from './GlobalServiceManager.js';
 
@@ -83,6 +84,11 @@ class IntegratedAIService {
             // Инициализируем AdaptiveThresholdService (Фаза 2, задача 2.1.3)
             if (!AdaptiveThresholdService.isInitialized) {
                 await AdaptiveThresholdService.initialize();
+            }
+            
+            // Инициализируем StackingService (Фаза 2, задача 2.2.1)
+            if (!StackingService.isInitialized) {
+                await StackingService.initialize();
             }
             
             // НЕ сохраняем модели при инициализации - это делается только после обучения
@@ -382,7 +388,9 @@ class IntegratedAIService {
             }
 
             // Вычисляем интегрированную рекомендацию
-            const integratedRec = await this.calculateIntegratedRecommendation(recommendations, weights, figi);
+            // Используем режим консенсуса из настроек (по умолчанию 'moderate')
+            const consensusMode = 'moderate'; // Можно получать из настроек пользователя
+            const integratedRec = await this.calculateIntegratedRecommendation(recommendations, weights, figi, consensusMode);
             
             // Обновляем согласованность моделей для ModelWeightingService
             if (ModelWeightingService && ModelWeightingService.isInitialized && recommendations.length > 1) {
@@ -516,8 +524,13 @@ class IntegratedAIService {
     /**
      * Вычисление интегрированной рекомендации
      * Обновлено в Фазе 2, задача 2.1.3: добавлена поддержка адаптивных порогов
+     * Обновлено в Фазе 2, задача 2.2: добавлен Stacking и консенсусный механизм
+     * @param {Array} recommendations - Рекомендации от базовых моделей
+     * @param {Object} weights - Веса моделей
+     * @param {string} figi - FIGI инструмента
+     * @param {string} consensusMode - Режим консенсуса: 'conservative', 'moderate', 'aggressive'
      */
-    async calculateIntegratedRecommendation(recommendations, weights, figi = null) {
+    async calculateIntegratedRecommendation(recommendations, weights, figi = null, consensusMode = 'moderate') {
         if (recommendations.length === 0) {
             return {
                 score: 0,
@@ -535,11 +548,6 @@ class IntegratedAIService {
             normalizedWeights[source] = totalWeight > 0 ? weight / totalWeight : 1 / recommendations.length;
         }
 
-        // Вычисляем взвешенный score
-        let weightedScore = 0;
-        let totalConfidence = 0;
-        const sourceDetails = {};
-
         // Собираем информацию о горизонтах из ансамбля
         let horizons = null;
         let agreement = null;
@@ -547,18 +555,18 @@ class IntegratedAIService {
 
         // Собираем рекомендации от всех источников для расчета согласованности
         const sourceRecommendations = [];
+        const sourceDetails = {};
 
         for (const rec of recommendations) {
             const weight = normalizedWeights[rec.source] || 0;
-            weightedScore += rec.score * weight;
-            totalConfidence += rec.confidence * weight;
             
             // Сохраняем рекомендацию источника для расчета согласованности
             sourceRecommendations.push({
                 source: rec.source,
                 recommendation: rec.recommendation,
                 weight: weight,
-                confidence: rec.confidence
+                confidence: rec.confidence,
+                score: rec.score
             });
             
             // Если это ансамбль, извлекаем информацию о горизонтах
@@ -579,6 +587,73 @@ class IntegratedAIService {
                 horizons: rec.horizons || null
             };
         }
+
+        // 2.2.1: Используем Stacking вместо простого взвешенного среднего
+        let finalScore = 0;
+        let finalConfidence = 0;
+        let stackingResult = null;
+        
+        try {
+            if (StackingService && StackingService.isInitialized) {
+                // Проверяем, нужно ли переобучить модель
+                if (StackingService.shouldRetrain()) {
+                    LoggerService.info('🔄 Retraining stacking model...');
+                    await StackingService.trainMetaModel(figi);
+                }
+                
+                // Используем Stacking для объединения предсказаний
+                stackingResult = await StackingService.predict(recommendations);
+                finalScore = stackingResult.score;
+                finalConfidence = stackingResult.confidence;
+            } else {
+                // Fallback на взвешенное среднее, если Stacking недоступен
+                let weightedScore = 0;
+                let totalConfidence = 0;
+                for (const rec of recommendations) {
+                    const weight = normalizedWeights[rec.source] || 0;
+                    weightedScore += rec.score * weight;
+                    totalConfidence += rec.confidence * weight;
+                }
+                finalScore = weightedScore;
+                finalConfidence = totalConfidence;
+            }
+        } catch (error) {
+            LoggerService.warn('⚠️ Stacking failed, using weighted average:', error.message);
+            // Fallback на взвешенное среднее
+            let weightedScore = 0;
+            let totalConfidence = 0;
+            for (const rec of recommendations) {
+                const weight = normalizedWeights[rec.source] || 0;
+                weightedScore += rec.score * weight;
+                totalConfidence += rec.confidence * weight;
+            }
+            finalScore = weightedScore;
+            finalConfidence = totalConfidence;
+        }
+
+        // 2.2.2: Учет корреляции между моделями
+        let correlationAdjustedConfidence = finalConfidence;
+        try {
+            if (ModelWeightingService && ModelWeightingService.isInitialized) {
+                correlationAdjustedConfidence = ModelWeightingService.adjustConfidenceForCorrelation(
+                    recommendations,
+                    finalConfidence
+                );
+            }
+        } catch (error) {
+            LoggerService.warn('⚠️ Correlation adjustment failed:', error.message);
+        }
+
+        // 2.2.3: Консенсусный механизм для обработки противоречивых сигналов
+        const consensusResult = this.applyConsensusMechanism(
+            sourceRecommendations,
+            finalScore,
+            correlationAdjustedConfidence,
+            consensusMode
+        );
+        
+        finalScore = consensusResult.score;
+        correlationAdjustedConfidence = consensusResult.confidence;
 
         // Определяем финальную рекомендацию с учетом И score И confidence
         // Используем адаптивные пороги на основе рыночных условий (Фаза 2, задача 2.1.3)
@@ -614,14 +689,17 @@ class IntegratedAIService {
             };
         }
         
+        // Адаптируем пороги в зависимости от режима консенсуса
+        const adjustedThresholds = this.adjustThresholdsForConsensusMode(thresholds, consensusMode);
+        
         let recommendation = 'HOLD';
         
         // BUY: нужен высокий score И высокая confidence
-        if (weightedScore >= thresholds.buyScore && totalConfidence >= thresholds.buyConfidence) {
+        if (finalScore >= adjustedThresholds.buyScore && correlationAdjustedConfidence >= adjustedThresholds.buyConfidence) {
             recommendation = 'BUY';
         } 
         // SELL: нужен низкий score И высокая confidence (чтобы быть уверенным в продаже)
-        else if (weightedScore <= thresholds.sellScore && totalConfidence >= thresholds.sellConfidence) {
+        else if (finalScore <= adjustedThresholds.sellScore && correlationAdjustedConfidence >= adjustedThresholds.sellConfidence) {
             recommendation = 'SELL';
         }
         // Если confidence низкая, даже при экстремальных score, лучше HOLD
@@ -651,7 +729,7 @@ class IntegratedAIService {
 
         // Корректируем итоговую confidence с учетом согласованности источников
         // Если источники расходятся, снижаем confidence
-        const adjustedConfidence = totalConfidence * sourceAgreement;
+        const adjustedConfidence = correlationAdjustedConfidence * sourceAgreement;
 
         // Генерируем рекомендации по стратегиям для каждого горизонта
         if (horizons) {
@@ -665,7 +743,7 @@ class IntegratedAIService {
         }
 
         return {
-            score: weightedScore,
+            score: finalScore,
             confidence: adjustedConfidence, // Используем скорректированную confidence
             recommendation,
             sources: recommendations.length,
@@ -679,12 +757,131 @@ class IntegratedAIService {
             // Добавляем информацию о рыночном режиме и порогах (Фаза 2, задача 2.1.3)
             marketMode: thresholds.marketMode,
             thresholds: {
-                buyScore: thresholds.buyScore,
-                buyConfidence: thresholds.buyConfidence,
-                sellScore: thresholds.sellScore,
-                sellConfidence: thresholds.sellConfidence
-            }
+                buyScore: adjustedThresholds.buyScore,
+                buyConfidence: adjustedThresholds.buyConfidence,
+                sellScore: adjustedThresholds.sellScore,
+                sellConfidence: adjustedThresholds.sellConfidence
+            },
+            // Информация о методе объединения (Фаза 2, задача 2.2)
+            combinationMethod: stackingResult?.method || 'weighted_average',
+            consensusMode: consensusMode,
+            correlationAdjusted: true
         };
+    }
+
+    /**
+     * Консенсусный механизм для обработки противоречивых сигналов
+     * @param {Array} sourceRecommendations - Рекомендации от источников
+     * @param {number} baseScore - Базовый score
+     * @param {number} baseConfidence - Базовая confidence
+     * @param {string} mode - Режим: 'conservative', 'moderate', 'aggressive'
+     * @returns {Object} - {score, confidence}
+     */
+    applyConsensusMechanism(sourceRecommendations, baseScore, baseConfidence, mode = 'moderate') {
+        if (sourceRecommendations.length === 0) {
+            return { score: baseScore, confidence: baseConfidence };
+        }
+
+        // Подсчитываем распределение рекомендаций
+        const buyCount = sourceRecommendations.filter(r => r.recommendation === 'BUY').length;
+        const sellCount = sourceRecommendations.filter(r => r.recommendation === 'SELL').length;
+        const holdCount = sourceRecommendations.filter(r => r.recommendation === 'HOLD').length;
+        
+        const totalCount = sourceRecommendations.length;
+        const buyRatio = buyCount / totalCount;
+        const sellRatio = sellCount / totalCount;
+        const holdRatio = holdCount / totalCount;
+        
+        // Определяем доминирующую рекомендацию
+        const maxRatio = Math.max(buyRatio, sellRatio, holdRatio);
+        const isContradictory = maxRatio < 0.5; // Нет явного большинства
+        
+        let adjustedScore = baseScore;
+        let adjustedConfidence = baseConfidence;
+        
+        if (isContradictory) {
+            // Противоречивые сигналы - обрабатываем в зависимости от режима
+            switch (mode) {
+                case 'conservative':
+                    // Консервативный: при противоречиях снижаем уверенность и склоняемся к HOLD
+                    adjustedConfidence *= 0.7; // Снижаем уверенность на 30%
+                    adjustedScore = 0.5; // Смещаем к нейтральному значению
+                    break;
+                    
+                case 'aggressive':
+                    // Агрессивный: при противоречиях выбираем более сильный сигнал
+                    if (buyRatio > sellRatio) {
+                        adjustedScore = Math.min(1, baseScore + 0.1); // Усиливаем BUY
+                    } else if (sellRatio > buyRatio) {
+                        adjustedScore = Math.max(0, baseScore - 0.1); // Усиливаем SELL
+                    }
+                    adjustedConfidence *= 0.85; // Небольшое снижение уверенности
+                    break;
+                    
+                case 'moderate':
+                default:
+                    // Умеренный: компромисс между консервативным и агрессивным
+                    adjustedConfidence *= 0.8; // Снижаем уверенность на 20%
+                    // Небольшая коррекция score в сторону доминирующего сигнала
+                    if (buyRatio > sellRatio && buyRatio > holdRatio) {
+                        adjustedScore = baseScore + (baseScore - 0.5) * 0.2;
+                    } else if (sellRatio > buyRatio && sellRatio > holdRatio) {
+                        adjustedScore = baseScore - (0.5 - baseScore) * 0.2;
+                    }
+                    break;
+            }
+        } else {
+            // Есть явное большинство - усиливаем сигнал
+            if (buyRatio > 0.6) {
+                // Большинство за BUY
+                adjustedScore = Math.min(1, baseScore + 0.05);
+                adjustedConfidence = Math.min(1, baseConfidence * 1.1);
+            } else if (sellRatio > 0.6) {
+                // Большинство за SELL
+                adjustedScore = Math.max(0, baseScore - 0.05);
+                adjustedConfidence = Math.min(1, baseConfidence * 1.1);
+            }
+        }
+        
+        return {
+            score: Math.max(0, Math.min(1, adjustedScore)),
+            confidence: Math.max(0, Math.min(1, adjustedConfidence))
+        };
+    }
+
+    /**
+     * Адаптация порогов в зависимости от режима консенсуса
+     * @param {Object} baseThresholds - Базовые пороги
+     * @param {string} mode - Режим: 'conservative', 'moderate', 'aggressive'
+     * @returns {Object} - Скорректированные пороги
+     */
+    adjustThresholdsForConsensusMode(baseThresholds, mode = 'moderate') {
+        const adjusted = { ...baseThresholds };
+        
+        switch (mode) {
+            case 'conservative':
+                // Консервативный: более строгие пороги
+                adjusted.buyScore = baseThresholds.buyScore + 0.1; // 0.75 вместо 0.65
+                adjusted.buyConfidence = baseThresholds.buyConfidence + 0.1; // 0.7 вместо 0.6
+                adjusted.sellScore = baseThresholds.sellScore - 0.1; // 0.25 вместо 0.35
+                adjusted.sellConfidence = baseThresholds.sellConfidence + 0.1; // 0.7 вместо 0.6
+                break;
+                
+            case 'aggressive':
+                // Агрессивный: более мягкие пороги
+                adjusted.buyScore = baseThresholds.buyScore - 0.1; // 0.55 вместо 0.65
+                adjusted.buyConfidence = baseThresholds.buyConfidence - 0.1; // 0.5 вместо 0.6
+                adjusted.sellScore = baseThresholds.sellScore + 0.1; // 0.45 вместо 0.35
+                adjusted.sellConfidence = baseThresholds.sellConfidence - 0.1; // 0.5 вместо 0.6
+                break;
+                
+            case 'moderate':
+            default:
+                // Умеренный: базовые пороги без изменений
+                break;
+        }
+        
+        return adjusted;
     }
 
     /**
