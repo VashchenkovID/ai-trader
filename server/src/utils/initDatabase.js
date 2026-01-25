@@ -34,6 +34,8 @@ import PositionPyramid from '../models/PositionPyramid.js';
 import ModelPerformance from '../models/ModelPerformance.js';
 import DatabaseMigration from '../models/DatabaseMigration.js';
 import OptionsData from '../models/OptionsData.js';
+import User from '../models/User.js';
+import bcrypt from 'bcrypt';
 
 /**
  * Преобразует тип данных Sequelize в SQL тип PostgreSQL
@@ -748,6 +750,9 @@ export async function initDatabase() {
         // Также инициализируем настройки по умолчанию из Settings (включая макро-данные и формулу Келли)
         await Settings.initializeDefaults();
         console.log('✅ Настройки инициализированы (включая формулу Келли: включена по умолчанию)');
+
+        // Инициализируем пользователя
+        await initializeUser();
 
         // Показываем статистику
         await showDatabaseStats();
@@ -2545,6 +2550,73 @@ async function initializeRecommendedSettings() {
 
     } catch (error) {
         console.error('❌ Ошибка инициализации настроек:', error);
+        throw error;
+    }
+}
+
+/**
+ * Инициализация пользователя
+ */
+async function initializeUser() {
+    try {
+        console.log('\n👤 ИНИЦИАЛИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ:');
+        
+        // Проверяем наличие пароля в переменных окружения
+        const userPassword = process.env.USER_PASSWORD;
+        
+        if (!userPassword) {
+            console.warn('   ⚠️ USER_PASSWORD не установлен в .env файле');
+            console.warn('   ⚠️ Пользователь не будет создан');
+            return;
+        }
+        
+        console.log('   📝 Пароль из .env найден, длина:', userPassword.length);
+        
+        // Проверяем, существует ли уже пользователь
+        const existingUser = await User.findOne({ where: { username: 'admin' } });
+        
+        if (existingUser) {
+            console.log('   ✅ Пользователь уже существует (id:', existingUser.id + ')');
+            
+            // Проверяем, совпадает ли текущий пароль с паролем из .env
+            const isPasswordMatch = await bcrypt.compare(userPassword, existingUser.passwordHash);
+            
+            if (!isPasswordMatch) {
+                console.log('   🔄 Пароль изменился, обновляю хэш пароля...');
+                // Обновляем пароль, если он изменился
+                const saltRounds = 10;
+                const newPasswordHash = await bcrypt.hash(userPassword, saltRounds);
+                await existingUser.update({ passwordHash: newPasswordHash });
+                console.log('   ✅ Пароль обновлен');
+            } else {
+                console.log('   ✅ Пароль совпадает, обновление не требуется');
+            }
+            
+            // Убеждаемся, что пользователь активен
+            if (!existingUser.isActive) {
+                await existingUser.update({ isActive: true });
+                console.log('   ✅ Пользователь активирован');
+            }
+            
+            return;
+        }
+        
+        // Хешируем пароль
+        const saltRounds = 10;
+        const passwordHash = await bcrypt.hash(userPassword, saltRounds);
+        
+        // Создаем пользователя
+        const user = await User.create({
+            username: 'admin',
+            fullName: 'Иван Дмитриевич',
+            passwordHash: passwordHash,
+            isActive: true
+        });
+        
+        console.log(`   ✅ Пользователь создан: ${user.fullName} (${user.username}, id: ${user.id})`);
+        
+    } catch (error) {
+        console.error('❌ Ошибка инициализации пользователя:', error);
         throw error;
     }
 }

@@ -17,14 +17,14 @@ body {
 /* Layout стили */
 .app {
   min-height: 100vh;
-  /* Темный фон из дизайн-системы */
-  background-color: var(--color-bg-primary, #0A0A0F);
+  /* Темный фон из дизайн-системы - будет переопределен в global.css */
+  background-color: transparent;
 }
 
 .main-content {
   padding: 1rem;
-  /* Темный фон из дизайн-системы */
-  background-color: var(--color-bg-primary, #0A0A0F);
+  /* Темный фон из дизайн-системы - будет переопределен в global.css */
+  background-color: transparent;
 }
 
 /* Dashboard стили */

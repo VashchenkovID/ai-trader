@@ -1,8 +1,10 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { PrimeReactProvider } from 'primereact/api';
 
 // Components
 import Navigation from './components/Navigation';
+import Login from './components/auth/Login';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 
 // Contexts
 import { WebSocketDataProvider } from './components/WebSocketDataProvider';
@@ -31,22 +33,33 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <WebSocketDataProvider>
           <BrowserRouter>
-            <div className="app flex h-screen">
-              <Navigation />
-              <main className="main-content flex-1 overflow-auto">
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/trading-requests" element={<TradingRequests />} />
-                  <Route path="/recommendations" element={<Recommendations />} />
-                  <Route path="/portfolio" element={<Portfolio />} />
-                  <Route path="/training-debug" element={<TrainingDebug />} />
-                  <Route path="/design-system-test" element={<DesignSystemTest />} />
-                  <Route path="/performance" element={<Performance />} />
-                  <Route path="/stock/:figi" element={<StockDetail />} />
-                </Routes>
-              </main>
-            </div>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/*"
+                element={
+                  <ProtectedRoute>
+                    <div className="app flex h-screen">
+                      <Navigation />
+                      <main className="main-content flex-1 overflow-auto">
+                        <Routes>
+                          <Route path="/" element={<Dashboard />} />
+                          <Route path="/settings" element={<Settings />} />
+                          <Route path="/trading-requests" element={<TradingRequests />} />
+                          <Route path="/recommendations" element={<Recommendations />} />
+                          <Route path="/portfolio" element={<Portfolio />} />
+                          <Route path="/training-debug" element={<TrainingDebug />} />
+                          <Route path="/design-system-test" element={<DesignSystemTest />} />
+                          <Route path="/performance" element={<Performance />} />
+                          <Route path="/stock/:figi" element={<StockDetail />} />
+                          <Route path="*" element={<Navigate to="/" replace />} />
+                        </Routes>
+                      </main>
+                    </div>
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
           </BrowserRouter>
         </WebSocketDataProvider>
       </ThemeProvider>

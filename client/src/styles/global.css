@@ -107,16 +107,37 @@ html {
 body {
   font-family: var(--font-family-primary);
   background-color: var(--color-bg-primary);
+  /* Фоновое изображение кирпичной стены */
+  background-image: url('/images/brick-wall.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
   color: var(--color-text-primary);
   line-height: 1.5;
   overflow-x: hidden;
+  position: relative;
+}
+
+/* Затемнение фона для лучшей читаемости текста */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 10, 15, 0.8);
+  z-index: -1;
+  pointer-events: none;
 }
 
 /* Темный фон для всего приложения */
 .app {
   min-height: 100vh;
-  background-color: var(--color-bg-primary);
+  background-color: transparent;
   color: var(--color-text-primary);
+  position: relative;
 }
 
 .main-content {
@@ -127,8 +148,9 @@ body {
 
 /* Переопределяем светлый фон из index.css */
 #root {
-  background-color: var(--color-bg-primary);
+  background-color: transparent;
   min-height: 100vh;
+  position: relative;
 }
 
 /* Утилиты для чисел (моноширинный шрифт) */

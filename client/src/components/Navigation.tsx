@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRef } from 'react';
 import { Toast } from 'primereact/toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
+import { authService } from '../services/authService';
 import { Button } from './ui/Button/Button';
 import WebSocketStatus from './WebSocketStatus';
 import NotificationPanel from './NotificationPanel';
@@ -14,6 +15,7 @@ interface NavigationProps {
 
 const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
   const [systemStatus, setSystemStatus] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
   const toast = useRef<Toast>(null);
 
   // Загрузка статуса системы
@@ -32,6 +34,24 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
     const interval = setInterval(loadSystemStatus, 30000); // Обновляем каждые 30 секунд
     return () => clearInterval(interval);
   }, []);
+
+  // Загрузка информации о пользователе
+  useEffect(() => {
+    const currentUser = authService.getUser();
+    setUser(currentUser);
+  }, []);
+
+  // Обработка выхода
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Всё равно перенаправляем на логин
+      navigate('/login');
+    }
+  };
 
 
   const location = useLocation();
@@ -98,6 +118,26 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
             <span className="navigation-menu-item-label">{item.label}</span>
           </button>
         ))}
+      </div>
+
+      {/* Информация о пользователе и выход */}
+      <div className="navigation-footer">
+        {user && (
+          <div className="navigation-user-info">
+            <div className="navigation-user-name">{user.fullName}</div>
+            <div className="navigation-user-username">@{user.username}</div>
+          </div>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<i className="pi pi-sign-out"></i>}
+          onClick={handleLogout}
+          className="navigation-logout-button"
+          title="Выйти"
+        >
+          Выйти
+        </Button>
       </div>
     </div>
   );

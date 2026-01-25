@@ -17,7 +17,10 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
-    "test:backup": "node test-backup.js"
+    "test:backup": "node test-backup.js",
+    "test:auth": "node test-auth.js",
+    "switch:real": "node switch-to-real-mode.js",
+    "check:user": "node check-user.js"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.15.0",
@@ -42,7 +45,9 @@
     "validator": "^13.11.0",
     "winston": "^3.17.0",
     "ws": "^8.14.2",
-    "yauzl": "^3.2.0"
+    "yauzl": "^3.2.0",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "@babel/core": "^7.23.0",

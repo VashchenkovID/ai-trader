@@ -1,100 +1,44 @@
 import axios from 'axios';
+import Cookies from 'js-cookie';
 
 const API_BASE_URL = (window as any).env?.REACT_APP_API_URL || 'http://localhost:3001';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
+  withCredentials: true,
 });
 
-// Advanced Metrics API methods
-async getAdvancedMetrics(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
-    try {
-      const response = await api.get('/api/advanced-metrics', {
-        params: { period, days }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching advanced metrics:', error);
-      return { success: false, data: null };
+// Интерцептор для добавления токена в заголовки
+api.interceptors.request.use(
+  (config) => {
+    const token = Cookies.get('auth_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
+    return config;
   },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
-  async getSortinoRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30, riskFreeRate?: number) {
-    try {
-      const response = await api.get('/api/advanced-metrics/sortino-ratio', {
-        params: { period, days, ...(riskFreeRate && { riskFreeRate }) }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching Sortino Ratio:', error);
-      return { success: false, data: null };
+// Интерцептор для обработки ошибок авторизации
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      Cookies.remove('auth_token');
+      Cookies.remove('user');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
-  },
+    return Promise.reject(error);
+  }
+);
 
-  async getCalmarRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
-    try {
-      const response = await api.get('/api/advanced-metrics/calmar-ratio', {
-        params: { period, days }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching Calmar Ratio:', error);
-      return { success: false, data: null };
-    }
-  },
-
-  async getInformationRatio(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
-    try {
-      const response = await api.get('/api/advanced-metrics/information-ratio', {
-        params: { period, days }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching Information Ratio:', error);
-      return { success: false, data: null };
-    }
-  },
-
-  async getMAEMFE(limit: number = 100) {
-    try {
-      const response = await api.get('/api/advanced-metrics/mae-mfe', {
-        params: { limit }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching MAE/MFE:', error);
-      return { success: false, data: null };
-    }
-  },
-
-  async getPeriodAnalysis(
-    period: 'daily' | 'weekly' | 'monthly' = 'daily',
-    startDate?: string,
-    endDate?: string
-  ) {
-    try {
-      const response = await api.get('/api/advanced-metrics/period-analysis', {
-        params: { period, ...(startDate && { startDate }), ...(endDate && { endDate }) }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching period analysis:', error);
-      return { success: false, data: null };
-    }
-  },
-
-  async getAdvancedMetricsSummary(period: 'daily' | 'weekly' | 'monthly' = 'daily', days: number = 30) {
-    try {
-      const response = await api.get('/api/advanced-metrics/summary', {
-        params: { period, days }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching advanced metrics summary:', error);
-      return { success: false, data: null };
-    }
-  },
+// Advanced Metrics API methods - эти методы уже включены в apiService ниже
 
 export const apiService = {
   async getSystemStatus() {

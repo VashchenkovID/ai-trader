@@ -5,13 +5,23 @@ import SecretManagementService from '../services/SecretManagementService.js';
  * Автоматически маскирует секреты перед отправкой ответа клиенту
  */
 export const maskSecretsInResponse = async (req, res, next) => {
+    // Исключаем маршруты авторизации из маскирования токенов
+    // Токены должны передаваться клиенту без маскирования
+    const isAuthRoute = req.path.startsWith('/api/auth/');
+    
     // Сохраняем оригинальный метод res.json
     const originalJson = res.json.bind(res);
     
     // Переопределяем res.json для маскирования секретов
     res.json = function(data) {
         try {
-            // Маскируем секреты в данных ответа
+            // Для маршрутов авторизации не маскируем токены
+            if (isAuthRoute) {
+                // Пропускаем маскирование для маршрутов авторизации
+                return originalJson(data);
+            }
+            
+            // Маскируем секреты в данных ответа для остальных маршрутов
             if (SecretManagementService.isInitialized) {
                 const sanitized = SecretManagementService.sanitizeApiResponse(data);
                 return originalJson(sanitized);
