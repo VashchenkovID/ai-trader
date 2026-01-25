@@ -1,6 +1,6 @@
 import React, {FC} from "react";
 import {Route, Routes} from "react-router-dom";
-import Dashboard from '../pages/Dashboard'
+import Dashboard from '../pages/Dashboard/Dashboard.tsx'
 import EnhancedDashboardPage from '../pages/EnhancedDashboardPage'
 import NewDashboard from '../pages/NewDashboard'
 import Portfolio from '../pages/Portfolio'
@@ -11,6 +11,7 @@ import Strategies from '../pages/Strategies'
 import ServerMonitoring from '../pages/ServerMonitoring'
 import TradingHours from '../pages/TradingHours'
 import MetricsMonitoring from '../pages/MetricsMonitoring'
+import Performance from '../pages/Performance'
 
 const AppRouter: FC = () => {
 
@@ -29,6 +30,7 @@ const AppRouter: FC = () => {
                 <Route path="/server-monitoring" element={<ServerMonitoring/>}/>
                 <Route path="/trading-hours" element={<TradingHours/>}/>
                 <Route path="/metrics-monitoring" element={<MetricsMonitoring/>}/>
+                <Route path="/performance" element={<Performance/>}/>
                 <Route path="*" element={<>Нет роута</>}/>
             </Routes>
 

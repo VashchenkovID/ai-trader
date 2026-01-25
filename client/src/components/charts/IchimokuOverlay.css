@@ -1,0 +1,64 @@
+.ichimoku-overlay {
+  position: relative;
+  width: 100%;
+}
+
+.ichimoku-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
+  background: var(--color-surface-default);
+  border-radius: var(--radius-base);
+  margin-top: var(--spacing-2);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.legend-line {
+  width: 30px;
+  height: 2px;
+  border-top: 2px solid;
+}
+
+.legend-cloud {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+}
+
+.legend-signal {
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.signal-buy {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--color-accent-success);
+}
+
+.signal-sell {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--color-accent-error);
+}
+
+.signal-hold {
+  background: rgba(156, 163, 175, 0.2);
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 768px) {
+  .ichimoku-legend {
+    flex-direction: column;
+    gap: var(--spacing-2);
+  }
+}
+

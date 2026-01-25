@@ -26,9 +26,9 @@ class ReportExportService {
 
     async initialize() {
         if (this.isInitialized) return;
-        LoggerService.log('📄 Initializing ReportExportService...');
+        LoggerService.info('📄 Initializing ReportExportService...');
         this.isInitialized = true;
-        LoggerService.log('✅ ReportExportService initialized');
+        LoggerService.info('✅ ReportExportService initialized');
     }
 
     /**

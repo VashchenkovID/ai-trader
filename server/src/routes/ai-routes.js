@@ -3,6 +3,7 @@ import IntegratedAIService from '../services/IntegratedAIService.js';
 import ServiceManager from '../services/ServiceManager.js';
 import OptimizedTelegramService from '../services/OptimizedTelegramService.js';
 import SignalValidationService from '../services/SignalValidationService.js';
+import MultiTimeframeService from '../services/MultiTimeframeService.js';
 
 const router = express.Router();
 
@@ -652,6 +653,39 @@ router.post('/analyze-single-instrument', async (req, res) => {
             message: 'Error analyzing single instrument',
             error: error.message,
             stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
+
+/**
+ * GET /api/ai/:figi/multi-timeframe
+ * Мультитаймфреймовый анализ инструмента
+ */
+router.get('/:figi/multi-timeframe', async (req, res) => {
+    try {
+        const { figi } = req.params;
+        const timeframes = req.query.timeframes ? req.query.timeframes.split(',') : ['H1', 'D1', 'W1'];
+        const period = parseInt(req.query.period) || 30;
+
+        if (!figi) {
+            return res.status(400).json({
+                success: false,
+                message: 'FIGI is required'
+            });
+        }
+
+        const result = await MultiTimeframeService.analyzeMultiTimeframe(figi, timeframes, period);
+        
+        res.json({
+            success: true,
+            data: result
+        });
+    } catch (error) {
+        console.error('Error getting multi-timeframe analysis:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error getting multi-timeframe analysis',
+            error: error.message
         });
     }
 });

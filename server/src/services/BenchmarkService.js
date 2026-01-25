@@ -36,9 +36,9 @@ class BenchmarkService {
 
     async initialize() {
         if (this.isInitialized) return;
-        LoggerService.log('📊 Initializing BenchmarkService...');
+        LoggerService.info('📊 Initializing BenchmarkService...');
         this.isInitialized = true;
-        LoggerService.log('✅ BenchmarkService initialized');
+        LoggerService.info('✅ BenchmarkService initialized');
     }
 
     /**
@@ -75,6 +75,13 @@ class BenchmarkService {
                 if (candles && candles.length > 0) {
                     const prices = candles.map(c => c.close);
                     const returns = this.calculateReturns(prices);
+                    const dates = candles.map(c => {
+                        // Извлекаем дату из свечи
+                        if (c.time) return c.time;
+                        if (c.date) return c.date;
+                        if (c.timestamp) return new Date(c.timestamp).toISOString();
+                        return null;
+                    }).filter(Boolean);
                     
                     const result = {
                         benchmark: benchmarkId,
@@ -82,6 +89,8 @@ class BenchmarkService {
                         period: { days },
                         prices: prices,
                         returns: returns,
+                        dates: dates,
+                        candles: candles, // Сохраняем candles для доступа к датам
                         totalReturn: this.calculateTotalReturn(prices),
                         volatility: this.calculateVolatility(returns),
                         sharpeRatio: this.calculateSharpeRatio(returns)
@@ -132,33 +141,68 @@ class BenchmarkService {
                 return dateA - dateB;
             });
 
-            // Рассчитываем доходность портфеля
-            const portfolioReturns = await this.calculatePortfolioReturns(periodTrades);
+            // Рассчитываем доходность портфеля с датами
+            const portfolioData = await this.calculatePortfolioReturnsWithDates(periodTrades);
+            const portfolioReturns = portfolioData.returns;
+            const portfolioDates = portfolioData.dates;
             const portfolioTotalReturn = await this.calculateTotalReturnFromTrades(periodTrades);
             const portfolioVolatility = this.calculateVolatility(portfolioReturns);
             const portfolioSharpeRatio = this.calculateSharpeRatio(portfolioReturns);
 
+            // Получаем даты для бенчмарка
+            let benchmarkDates = benchmarkData.dates || [];
+            let benchmarkReturns = benchmarkData.returns || [];
+            
+            // Если даты не были получены, генерируем их на основе периода
+            if (!benchmarkDates || benchmarkDates.length === 0) {
+                const daysCount = benchmarkReturns.length || days;
+                benchmarkDates = Array.from({ length: daysCount }, (_, i) => {
+                    const date = new Date(startDate);
+                    date.setDate(date.getDate() + i);
+                    return date.toISOString();
+                });
+            }
+
             // Рассчитываем метрики сравнения
             const alpha = portfolioTotalReturn - benchmarkData.totalReturn;
-            const beta = this.calculateBeta(portfolioReturns, benchmarkData.returns);
-            const trackingError = this.calculateTrackingError(portfolioReturns, benchmarkData.returns);
+            const beta = this.calculateBeta(portfolioReturns, benchmarkReturns);
+            const trackingError = this.calculateTrackingError(portfolioReturns, benchmarkReturns);
 
             // Рассчитываем информационный коэффициент (IC)
             const informationRatio = trackingError > 0 ? alpha / trackingError : 0;
 
             const result = {
-                period: { startDate, endDate, days },
+                period: { 
+                    startDate: startDate.toISOString(), 
+                    endDate: endDate.toISOString(), 
+                    days 
+                },
                 benchmark: {
                     id: benchmarkId,
                     name: benchmarkData.name,
                     totalReturn: benchmarkData.totalReturn,
                     volatility: benchmarkData.volatility,
-                    sharpeRatio: benchmarkData.sharpeRatio
+                    sharpeRatio: benchmarkData.sharpeRatio,
+                    returns: benchmarkReturns,
+                    dates: benchmarkDates
                 },
                 portfolio: {
                     totalReturn: portfolioTotalReturn,
                     volatility: portfolioVolatility,
-                    sharpeRatio: portfolioSharpeRatio
+                    sharpeRatio: portfolioSharpeRatio,
+                    returns: portfolioReturns,
+                    dates: portfolioDates
+                },
+                metrics: {
+                    alpha: alpha,
+                    beta: beta,
+                    trackingError: trackingError,
+                    portfolioReturn: portfolioTotalReturn,
+                    benchmarkReturn: benchmarkData.totalReturn,
+                    portfolioVolatility: portfolioVolatility,
+                    benchmarkVolatility: benchmarkData.volatility,
+                    portfolioSharpe: portfolioSharpeRatio,
+                    benchmarkSharpe: benchmarkData.sharpeRatio
                 },
                 comparison: {
                     alpha: alpha,
@@ -234,6 +278,11 @@ class BenchmarkService {
      * @private
      */
     async calculatePortfolioReturns(trades) {
+        const result = await this.calculatePortfolioReturnsWithDates(trades);
+        return result.returns;
+    }
+
+    async calculatePortfolioReturnsWithDates(trades) {
         // Группируем по дням
         const dailyPnL = {};
         trades.forEach(trade => {
@@ -252,16 +301,18 @@ class BenchmarkService {
         // Рассчитываем доходности
         const sortedDays = Object.keys(dailyPnL).sort();
         const returns = [];
+        const dates = [];
         let cumulativeValue = initialValue;
 
         sortedDays.forEach(day => {
             const dailyPnLValue = dailyPnL[day];
             const returnValue = cumulativeValue > 0 ? dailyPnLValue / cumulativeValue : 0;
             returns.push(returnValue);
+            dates.push(day + 'T00:00:00.000Z'); // ISO формат для даты
             cumulativeValue += dailyPnLValue;
         });
 
-        return returns;
+        return { returns, dates };
     }
 
     /**
@@ -357,6 +408,8 @@ class BenchmarkService {
         const basePrice = 1000;
         const prices = [basePrice];
         const volatility = 0.02; // 2% дневная волатильность
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
 
         for (let i = 1; i < days; i++) {
             const randomChange = (Math.random() - 0.5) * 2 * volatility;
@@ -364,6 +417,13 @@ class BenchmarkService {
         }
 
         const returns = this.calculateReturns(prices);
+        
+        // Генерируем даты
+        const dates = Array.from({ length: days }, (_, i) => {
+            const date = new Date(startDate);
+            date.setDate(date.getDate() + i);
+            return date.toISOString();
+        });
 
         return {
             benchmark: benchmark.symbol,
@@ -371,6 +431,7 @@ class BenchmarkService {
             period: { days },
             prices: prices,
             returns: returns,
+            dates: dates,
             totalReturn: this.calculateTotalReturn(prices),
             volatility: this.calculateVolatility(returns),
             sharpeRatio: this.calculateSharpeRatio(returns),

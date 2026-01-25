@@ -1,0 +1,113 @@
+.fibonacci-overlay {
+  width: 100%;
+  padding: var(--spacing-4);
+  background: var(--color-surface-default);
+  border-radius: var(--radius-base);
+}
+
+.fibonacci-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+  padding-bottom: var(--spacing-4);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.fibonacci-range,
+.fibonacci-current,
+.fibonacci-support,
+.fibonacci-resistance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.range-label,
+.current-label,
+.support-label,
+.resistance-label {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.range-value,
+.current-value,
+.support-value,
+.resistance-value {
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  font-weight: 600;
+  font-family: var(--font-family-mono);
+}
+
+.fibonacci-levels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.fibonacci-level {
+  position: relative;
+  padding: var(--spacing-2);
+  background: var(--color-surface-elevated);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-border-default);
+  transition: var(--transition-default);
+}
+
+.fibonacci-level:hover {
+  background: var(--color-surface-hover);
+}
+
+.fibonacci-level-current {
+  border-left-color: var(--color-accent-primary);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.fibonacci-level-support {
+  border-left-color: var(--color-accent-success);
+}
+
+.fibonacci-level-resistance {
+  border-left-color: var(--color-accent-error);
+}
+
+.level-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: currentColor;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.level-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.level-percentage {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.level-price {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+}
+
+@media (max-width: 768px) {
+  .fibonacci-info {
+    flex-direction: column;
+    gap: var(--spacing-3);
+  }
+}
+

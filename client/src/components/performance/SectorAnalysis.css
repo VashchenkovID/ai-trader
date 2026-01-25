@@ -1,0 +1,230 @@
+.sector-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+}
+
+.sector-analysis-card,
+.sector-recommendations-card,
+.diversification-card {
+  padding: var(--spacing-6);
+}
+
+.sector-analysis-header {
+  margin-bottom: var(--spacing-4);
+}
+
+.sector-analysis-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.sector-analysis-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.sector-analysis-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.sector-analysis-table thead {
+  background: var(--color-surface-default);
+  border-bottom: 2px solid var(--color-border-default);
+}
+
+.sector-analysis-table th {
+  padding: var(--spacing-3);
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sector-analysis-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: var(--transition-colors);
+}
+
+.sector-analysis-table th.sortable:hover {
+  color: var(--color-accent-primary);
+}
+
+.sector-analysis-table td {
+  padding: var(--spacing-3);
+  border-bottom: 1px solid var(--color-border-default);
+  color: var(--color-text-primary);
+}
+
+.sector-analysis-table tbody tr {
+  transition: var(--transition-default);
+}
+
+.sector-analysis-table tbody tr:hover {
+  background: var(--color-surface-hover);
+}
+
+.sector-name {
+  font-weight: 500;
+}
+
+.sector-badge {
+  display: inline-block;
+  padding: var(--spacing-1) var(--spacing-2);
+  background: var(--color-surface-elevated);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+}
+
+.sector-analysis-skeleton {
+  padding: var(--spacing-4);
+}
+
+/* Рекомендации */
+.recommendations-title,
+.diversification-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-4) 0;
+}
+
+.recommendations-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.recommendation-item {
+  display: flex;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
+  background: var(--color-surface-default);
+  border-radius: var(--radius-base);
+  border-left: 3px solid;
+  transition: var(--transition-default);
+}
+
+.recommendation-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.recommendation-overexposure {
+  border-left-color: var(--color-accent-warning);
+}
+
+.recommendation-underexposure {
+  border-left-color: var(--color-accent-info);
+}
+
+.recommendation-poor_performance {
+  border-left-color: var(--color-accent-error);
+}
+
+.recommendation-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.recommendation-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.recommendation-message {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.recommendation-details {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-family: var(--font-family-mono);
+}
+
+/* Диверсификация */
+.diversification-info {
+  margin-bottom: var(--spacing-4);
+  padding-bottom: var(--spacing-4);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.diversification-metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metric-label {
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.metric-value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-family: var(--font-family-mono);
+}
+
+.diversification-recommendations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.diversification-item {
+  padding: var(--spacing-3);
+  background: var(--color-surface-default);
+  border-radius: var(--radius-base);
+}
+
+.diversification-message {
+  margin: 0 0 var(--spacing-2) 0;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.diversification-sectors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+}
+
+.sector-tag {
+  display: inline-block;
+  padding: var(--spacing-1) var(--spacing-2);
+  background: var(--color-surface-elevated);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 768px) {
+  .sector-analysis-table {
+    font-size: 0.75rem;
+  }
+
+  .sector-analysis-table th,
+  .sector-analysis-table td {
+    padding: var(--spacing-2);
+  }
+
+  .recommendation-item {
+    flex-direction: column;
+  }
+}
+

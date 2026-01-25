@@ -5,7 +5,7 @@ import { useWebSocketData } from '../components/WebSocketDataProvider';
 import { TabView, TabPanel } from '../components/ui/TabView/TabView';
 import { Card } from '../components/ui/Card/Card';
 import { Skeleton } from '../components/ui/Skeleton/Skeleton';
-import HeroMetricsCard from '../components/dashboard/HeroMetricsCard';
+import HeroMetricsCard from '../components/dashboard/HeroMetricsCard/HeroMetricsCard.tsx';
 import AdvancedMetrics from '../components/AdvancedMetrics';
 import './MetricsMonitoring.css';
 

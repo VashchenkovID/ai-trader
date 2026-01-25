@@ -1,0 +1,105 @@
+/* RecentTradesCard Styles */
+
+.recent-trades-card {
+  position: relative;
+}
+
+.recent-trades-card .trades-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.recent-trades-card .skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.recent-trades-card .skeleton-item {
+  padding: var(--spacing-2);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-hover);
+}
+
+.recent-trades-card .skeleton-content {
+  width: 100%;
+  height: 3rem;
+}
+
+.recent-trades-card .error-container,
+.recent-trades-card .empty-container {
+  text-align: center;
+  padding: var(--spacing-3);
+}
+
+.recent-trades-card .error-message,
+.recent-trades-card .empty-message {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-2);
+}
+
+.recent-trade-item {
+  padding: var(--spacing-2);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border-default);
+  transition: all 0.2s ease;
+}
+
+.recent-trade-item:hover {
+  background: var(--color-surface-active) !important;
+  border-color: var(--color-border-active) !important;
+  transform: translateY(-1px);
+}
+
+.recent-trade-item .trade-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-1);
+}
+
+.recent-trade-item .trade-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.recent-trade-item .trade-ticker {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.recent-trade-item .trade-name {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-trade-item .trade-profit {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.recent-trade-item .trade-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.recent-trade-item .trade-details {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.recent-trade-item .trade-total {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-1);
+}
+

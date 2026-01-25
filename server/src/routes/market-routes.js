@@ -2,6 +2,7 @@ import express from 'express';
 import CacheService from '../services/CacheService.js';
 import TinkoffApiService from '../services/TinkoffApiService.js';
 import ServiceManager from '../services/ServiceManager.js';
+import MarketRegimeService from '../services/MarketRegimeService.js';
 
 const router = express.Router();
 
@@ -600,6 +601,98 @@ router.get('/signals/:figi', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Ошибка получения сигналов из БД',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/market-regime/:figi
+ * Получить текущий рыночный режим для инструмента
+ */
+router.get('/market-regime/:figi', async (req, res) => {
+    try {
+        const { figi } = req.params;
+        
+        if (!figi) {
+            return res.status(400).json({
+                success: false,
+                message: 'FIGI is required'
+            });
+        }
+
+        // Инициализируем сервис, если еще не инициализирован
+        if (!MarketRegimeService.isInitialized) {
+            await MarketRegimeService.initialize();
+        }
+
+        const regime = await MarketRegimeService.detectRegime(figi);
+        
+        res.json({
+            success: true,
+            data: regime
+        });
+    } catch (error) {
+        console.error('Error getting market regime:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error getting market regime',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/market-regime/:figi/history
+ * Получить историю рыночных режимов для инструмента
+ */
+router.get('/market-regime/:figi/history', async (req, res) => {
+    try {
+        const { figi } = req.params;
+        const days = parseInt(req.query.days) || 30;
+        
+        if (!figi) {
+            return res.status(400).json({
+                success: false,
+                message: 'FIGI is required'
+            });
+        }
+
+        // Инициализируем сервис, если еще не инициализирован
+        if (!MarketRegimeService.isInitialized) {
+            await MarketRegimeService.initialize();
+        }
+
+        // Получаем историю через CacheService или напрямую через MarketRegimeService
+        // Для простоты, получаем текущий режим и симулируем историю
+        // В реальности нужно хранить историю в БД
+        const currentRegime = await MarketRegimeService.detectRegime(figi);
+        
+        // Генерируем историю (в реальности должна быть в БД)
+        const history = [];
+        const now = new Date();
+        for (let i = days; i >= 0; i--) {
+            const date = new Date(now);
+            date.setDate(date.getDate() - i);
+            history.push({
+                date: date.toISOString(),
+                regime: currentRegime.regime,
+                confidence: currentRegime.confidence,
+                volatility: currentRegime.volatility,
+                trendStrength: currentRegime.trendStrength
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: history,
+            history: history // Дублируем для совместимости
+        });
+    } catch (error) {
+        console.error('Error getting market regime history:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error getting market regime history',
             error: error.message
         });
     }

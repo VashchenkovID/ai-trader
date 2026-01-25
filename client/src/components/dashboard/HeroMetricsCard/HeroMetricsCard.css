@@ -1,0 +1,189 @@
+/* HeroMetricsCard Styles */
+.hero-metric-wrapper {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.125) 0%, rgba(16, 185, 129, 0.125) 100%) !important;
+}
+.hero-metrics-card {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Layout */
+.hero-metrics-card .metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--spacing-2);
+}
+
+.hero-metrics-card .metric-col {
+  grid-column: span 12;
+}
+
+@media (min-width: 768px) {
+  .hero-metrics-card .metric-col {
+    grid-column: span 6;
+  }
+}
+
+@media (min-width: 1024px) {
+  .hero-metrics-card .metric-col {
+    grid-column: span 3;
+  }
+}
+
+.hero-metrics-card .metric-col-wrapper {
+  position: relative;
+  padding: var(--spacing-2);
+}
+
+/* Градиентные фоны позади карточек */
+.hero-metrics-card .metric-col-wrapper.hero-metric-animate-delay-1 {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.5) 0%, rgba(37, 99, 235, 0.5) 50%, rgba(29, 78, 216, 0.5) 100%);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-2);
+}
+
+.hero-metrics-card .metric-col-wrapper.hero-metric-animate-delay-2 {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.5) 0%, rgba(5, 150, 105, 0.5) 50%, rgba(4, 120, 87, 0.5) 100%);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-2);
+}
+
+.hero-metrics-card .metric-col-wrapper.hero-metric-animate-delay-3 {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.5) 0%, rgba(8, 145, 178, 0.5) 50%, rgba(14, 116, 144, 0.5) 100%);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-2);
+}
+
+.hero-metrics-card .metric-col-wrapper.hero-metric-animate-delay-4 {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.5) 0%, rgba(139, 92, 246, 0.5) 50%, rgba(124, 58, 237, 0.5) 100%);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-2);
+}
+
+/* Для отрицательного PnL - яркий красно-фиолетовый градиент */
+.hero-metrics-card .metric-col-wrapper.hero-metric-animate-delay-2.pnl-negative {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.5) 0%, rgba(220, 38, 38, 0.5) 50%, rgba(185, 28, 28, 0.5) 100%);
+}
+
+/* Skeleton container */
+.hero-metrics-card .skeleton-container {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--spacing-2);
+}
+
+.hero-metrics-card .skeleton-col {
+  grid-column: span 12;
+}
+
+@media (min-width: 768px) {
+  .hero-metrics-card .skeleton-col {
+    grid-column: span 6;
+  }
+}
+
+@media (min-width: 1024px) {
+  .hero-metrics-card .skeleton-col {
+    grid-column: span 3;
+  }
+}
+
+.hero-metrics-card .skeleton-wrapper {
+  text-align: center;
+  padding: var(--spacing-3);
+}
+
+/* Glassmorphism карточки поверх градиентного фона - как в примере */
+.hero-metric-item {
+  position: relative;
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-lg);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  z-index: 1;
+  height: 100%;
+}
+
+.metric-item-content {
+  text-align: center;
+  padding: var(--spacing-3);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-metric-item:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.hero-metric-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+.hero-metric-content .text-xs {
+  font-size: 0.75rem;
+}
+
+.hero-metric-content .mb-2 {
+  margin-bottom: var(--spacing-2);
+}
+
+.hero-metric-content .mb-1 {
+  margin-bottom: var(--spacing-1);
+}
+
+.hero-metric-content .text-sm {
+  font-size: 0.875rem;
+}
+
+.hero-metric-content .font-semibold {
+  font-weight: 600;
+}
+
+/* Progress Bar Container */
+.hero-metric-progress-container {
+  width: 100%;
+  max-width: 200px;
+}
+
+/* Skeleton Loading Styles */
+.hero-metric-skeleton-large {
+  width: 60%;
+  height: 3rem;
+  margin: 0 auto var(--spacing-2);
+}
+
+.hero-metric-skeleton-small {
+  width: 80%;
+  margin: 0 auto;
+}
+
+/* Animation Delays */
+.hero-metric-animate-delay-1 {
+  animation-delay: 0.1s;
+  animation-fill-mode: both;
+}
+
+.hero-metric-animate-delay-2 {
+  animation-delay: 0.2s;
+  animation-fill-mode: both;
+}
+
+.hero-metric-animate-delay-3 {
+  animation-delay: 0.3s;
+  animation-fill-mode: both;
+}
+
+.hero-metric-animate-delay-4 {
+  animation-delay: 0.4s;
+  animation-fill-mode: both;
+}

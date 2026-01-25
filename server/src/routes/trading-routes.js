@@ -2,6 +2,7 @@ import express from 'express';
 import TradingEngine from '../services/TradingEngine.js';
 import ServiceManager from '../services/ServiceManager.js';
 import OptimizedTelegramService from '../services/OptimizedTelegramService.js';
+import EntryOptimizationService from '../services/EntryOptimizationService.js';
 
 const router = express.Router();
 
@@ -195,6 +196,122 @@ router.post('/deactivate', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Ошибка деактивации торгового движка',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/trading/entry-optimization/:figi
+ * Получить рекомендации по оптимизации входа
+ */
+router.get('/entry-optimization/:figi', async (req, res) => {
+    try {
+        const { figi } = req.params;
+        
+        if (!figi) {
+            return res.status(400).json({
+                success: false,
+                message: 'FIGI is required'
+            });
+        }
+
+        // Инициализируем сервис, если еще не инициализирован
+        if (!EntryOptimizationService.isInitialized) {
+            await EntryOptimizationService.initialize();
+        }
+
+        // Получаем рекомендации
+        const entryPrediction = await EntryOptimizationService.predictOptimalEntryTime(figi);
+        const orderSize = await EntryOptimizationService.calculateOptimalOrderSize(figi);
+        const orderType = await EntryOptimizationService.recommendOrderType(figi);
+        
+        // Получаем данные о spread'е
+        const currentSpread = await EntryOptimizationService.getCurrentSpread(figi);
+        const historicalSpread = await EntryOptimizationService.getHistoricalSpread(figi, 30);
+        
+        // Рассчитываем статистику spread'а
+        const spreadValues = historicalSpread.map(s => s.spread);
+        const mean = spreadValues.reduce((a, b) => a + b, 0) / spreadValues.length;
+        const sorted = [...spreadValues].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        const percentile25 = sorted[Math.floor(sorted.length * 0.25)];
+        const percentile75 = sorted[Math.floor(sorted.length * 0.75)];
+
+        // Определяем статус spread'а
+        let spreadStatus = 'medium';
+        if (currentSpread < percentile25) {
+            spreadStatus = 'low';
+        } else if (currentSpread > percentile75) {
+            spreadStatus = 'high';
+        }
+
+        const data = {
+            entryPrediction,
+            orderSize,
+            orderType,
+            spread: {
+                current: currentSpread,
+                historical: {
+                    mean,
+                    median,
+                    percentile25,
+                    percentile75
+                },
+                status: spreadStatus
+            }
+        };
+        
+        res.json({
+            success: true,
+            data: data
+        });
+    } catch (error) {
+        console.error('Error getting entry optimization:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error getting entry optimization',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/trading/entry-optimization/:figi/spread
+ * Получить анализ spread'а для инструмента
+ */
+router.get('/entry-optimization/:figi/spread', async (req, res) => {
+    try {
+        const { figi } = req.params;
+        const days = parseInt(req.query.days) || 30;
+        
+        if (!figi) {
+            return res.status(400).json({
+                success: false,
+                message: 'FIGI is required'
+            });
+        }
+
+        // Инициализируем сервис, если еще не инициализирован
+        if (!EntryOptimizationService.isInitialized) {
+            await EntryOptimizationService.initialize();
+        }
+
+        const currentSpread = await EntryOptimizationService.getCurrentSpread(figi);
+        const historicalSpread = await EntryOptimizationService.getHistoricalSpread(figi, days);
+        
+        res.json({
+            success: true,
+            data: {
+                current: currentSpread,
+                historical: historicalSpread
+            }
+        });
+    } catch (error) {
+        console.error('Error getting spread analysis:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error getting spread analysis',
             error: error.message
         });
     }

@@ -9,6 +9,7 @@ import NeuralNetworkService from './NeuralNetworkService.js';
 import SectorClassifier from '../utils/sectorClassifier.js';
 import CorrelationService from './CorrelationService.js';
 import CachedInstrument from '../models/CachedInstrument.js';
+import { Op } from 'sequelize';
 
 /**
  * Сервис для комплексного анализа производительности системы
@@ -197,7 +198,7 @@ class PerformanceAnalyzer {
                 where: {
                     status: 'completed',
                     endTime: {
-                        [require('sequelize').Op.between]: [startDate, endDate]
+                        [Op.between]: [startDate, endDate]
                     }
                 }
             });
@@ -689,7 +690,7 @@ class PerformanceAnalyzer {
             const predictions = await Recommendation.findAll({
                 where: {
                     createdAt: {
-                        [require('sequelize').Op.gte]: startDate
+                        [Op.gte]: startDate
                     }
                 },
                 order: [['createdAt', 'DESC']],
@@ -796,8 +797,13 @@ class PerformanceAnalyzer {
     async getTradingData(days) {
         try {
             // Получаем данные из TradingEngine
-            const TradingEngine = (await import('./TradingEngine.js')).default;
-            const trades = TradingEngine.getTradeHistory(days);
+            const trades = await TradingEngine.getTradeHistory(days);
+            
+            // Проверяем, что trades - массив
+            if (!Array.isArray(trades)) {
+                console.warn('⚠️ getTradeHistory вернул не массив:', typeof trades);
+                return [];
+            }
             
             return trades.map(trade => ({
                 symbol: trade.symbol,

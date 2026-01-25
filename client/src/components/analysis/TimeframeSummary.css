@@ -1,0 +1,114 @@
+.timeframe-summary {
+  padding: var(--spacing-6);
+}
+
+.summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-4);
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
+}
+
+.summary-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.summary-table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-4);
+}
+
+.table-header,
+.table-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2);
+}
+
+.table-header {
+  background: var(--color-surface-default);
+  border-radius: var(--radius-base);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+}
+
+.table-row {
+  background: var(--color-surface-elevated);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-default);
+}
+
+.table-row:hover {
+  background: var(--color-surface-hover);
+}
+
+.table-cell {
+  display: flex;
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+}
+
+.confidence-value,
+.weight-value {
+  font-family: var(--font-family-mono);
+  font-weight: 600;
+}
+
+.summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-4);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--color-border-default);
+}
+
+.metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metric-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-mono);
+}
+
+@media (max-width: 768px) {
+  .table-header,
+  .table-row {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-2);
+  }
+
+  .table-cell {
+    justify-content: space-between;
+  }
+
+  .table-cell::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+}
+

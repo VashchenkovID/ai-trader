@@ -15,9 +15,9 @@ class PerformanceVisualizationService {
 
     async initialize() {
         if (this.isInitialized) return;
-        LoggerService.log('📊 Initializing PerformanceVisualizationService...');
+        LoggerService.info('📊 Initializing PerformanceVisualizationService...');
         this.isInitialized = true;
-        LoggerService.log('✅ PerformanceVisualizationService initialized');
+        LoggerService.info('✅ PerformanceVisualizationService initialized');
     }
 
     /**

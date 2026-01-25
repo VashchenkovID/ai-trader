@@ -1,0 +1,20 @@
+/* QuickActionsCard Styles */
+
+.quick-actions-card {
+  position: relative;
+}
+
+.quick-actions-card .actions-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--spacing-2);
+}
+
+.quick-actions-card .action-col {
+  grid-column: span 6;
+}
+
+.quick-action-button {
+  width: 100%;
+}
+
