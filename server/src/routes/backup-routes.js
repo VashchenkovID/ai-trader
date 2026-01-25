@@ -15,10 +15,10 @@ const __dirname = path.dirname(__filename);
 const upload = multer({
     dest: path.join(__dirname, '../../backups/uploads'),
     limits: {
-        fileSize: 50 * 1024 * 1024 // 50MB
+        fileSize: 5 * 1024 * 1024 * 1024 // 5GB для ZIP архивов (бэкапы БД и моделей могут быть большими)
     },
     fileFilter: (req, file, cb) => {
-        const allowedTypes = ['.json', '.csv'];
+        const allowedTypes = ['.json', '.csv', '.zip'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (allowedTypes.includes(ext)) {
             cb(null, true);
@@ -348,6 +348,94 @@ router.post('/import/portfolio',
             success: true,
             data: result
         });
+    })
+);
+
+/**
+ * GET /api/backup/:id/download
+ * Скачивание бэкапа в виде ZIP архива
+ */
+router.get('/:id/download',
+    validateParams({
+        id: validationRules.string({ required: true, minLength: 1 })
+    }),
+    asyncHandler(async (req, res) => {
+        const { id } = req.params;
+        
+        try {
+            const archiveInfo = await BackupService.downloadBackup(id);
+            
+            // Отправляем файл
+            res.download(archiveInfo.path, archiveInfo.file, (err) => {
+                if (err) {
+                    console.error('❌ Ошибка отправки файла:', err);
+                    if (!res.headersSent) {
+                        res.status(500).json({
+                            success: false,
+                            error: 'Ошибка отправки файла'
+                        });
+                    }
+                }
+            });
+        } catch (error) {
+            if (error.message.includes('not found')) {
+                throw new NotFoundError('Backup');
+            }
+            throw error;
+        }
+    })
+);
+
+/**
+ * POST /api/backup/upload
+ * Загрузка бэкапа из ZIP архива
+ */
+router.post('/upload',
+    upload.single('file'),
+    validateBody({
+        restore: validationRules.boolean({ required: false }),
+        components: validationRules.array({ required: false })
+    }),
+    asyncHandler(async (req, res) => {
+        if (!req.file) {
+            throw new ValidationError('File is required', [
+                { field: 'file', message: 'File must be uploaded' }
+            ]);
+        }
+        
+        // Проверяем, что файл - это ZIP
+        if (!req.file.originalname.endsWith('.zip')) {
+            throw new ValidationError('Invalid file type', [
+                { field: 'file', message: 'File must be a ZIP archive' }
+            ]);
+        }
+        
+        const { restore = true, components = ['database', 'settings', 'models'] } = req.body;
+        
+        // Валидация компонентов
+        const validComponents = ['database', 'settings', 'models'];
+        const invalidComponents = Array.isArray(components) 
+            ? components.filter(c => !validComponents.includes(c))
+            : [];
+        if (invalidComponents.length > 0) {
+            throw new ValidationError('Invalid components', [
+                { field: 'components', message: `Invalid components: ${invalidComponents.join(', ')}. Valid: ${validComponents.join(', ')}` }
+            ]);
+        }
+        
+        try {
+            const result = await BackupService.uploadBackup(req.file.path, {
+                restore,
+                components: Array.isArray(components) ? components : validComponents
+            });
+            
+            res.json({
+                success: true,
+                data: result
+            });
+        } catch (error) {
+            throw error;
+        }
     })
 );
 

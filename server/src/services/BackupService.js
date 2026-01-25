@@ -1600,6 +1600,297 @@ class BackupService {
             throw error;
         }
     }
+    
+    /**
+     * Скачивание бэкапа (создание ZIP архива)
+     * @param {string} backupId - ID бэкапа
+     * @returns {Promise<Object>} Информация о созданном архиве
+     */
+    async downloadBackup(backupId) {
+        try {
+            const backupInfo = await this.getBackupInfo(backupId);
+            const backupPath = backupInfo.path;
+            
+            // Проверяем, что бэкап существует
+            const stat = await fs.stat(backupPath);
+            if (!stat.isDirectory() && !stat.isFile()) {
+                throw new Error(`Backup ${backupId} is not a valid file or directory`);
+            }
+            
+            // Создаем ZIP архив
+            const archiverModule = await import('archiver');
+            const archiver = archiverModule.default;
+            const fsModule = await import('fs');
+            const { createWriteStream } = fsModule;
+            
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const zipFileName = `backup_${backupId}_${timestamp}.zip`;
+            const zipPath = path.join(this.exportDir, zipFileName);
+            
+            await fs.mkdir(this.exportDir, { recursive: true });
+            
+            // Вычисляем оригинальный размер заранее
+            const originalSize = stat.isDirectory() ? await this.getDirectorySize(backupPath) : stat.size;
+            
+            return new Promise((resolve, reject) => {
+                const output = createWriteStream(zipPath);
+                const archive = archiver('zip', {
+                    zlib: { level: 9 } // Максимальное сжатие
+                });
+                
+                output.on('close', async () => {
+                    try {
+                        const stats = await fs.stat(zipPath);
+                        const compressionRatio = originalSize > 0 
+                            ? (((originalSize - stats.size) / originalSize) * 100).toFixed(2)
+                            : '0.00';
+                        
+                        resolve({
+                            success: true,
+                            file: zipFileName,
+                            path: zipPath,
+                            size: stats.size,
+                            originalSize,
+                            compressionRatio: `${compressionRatio}%`,
+                            timestamp: new Date().toISOString(),
+                            backupId
+                        });
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+                
+                archive.on('error', (err) => {
+                    reject(err);
+                });
+                
+                archive.pipe(output);
+                
+                if (stat.isDirectory()) {
+                    // Добавляем всю директорию в архив
+                    archive.directory(backupPath, false);
+                } else {
+                    // Добавляем файл в архив
+                    archive.file(backupPath, { name: path.basename(backupPath) });
+                }
+                
+                archive.finalize();
+            });
+        } catch (error) {
+            LoggerService.error('Ошибка создания архива бэкапа', {
+                service: 'BackupService',
+                operation: 'downloadBackup',
+                backupId,
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
+            throw error;
+        }
+    }
+    
+    /**
+     * Загрузка бэкапа из ZIP архива
+     * @param {string} zipFilePath - Путь к ZIP файлу
+     * @param {Object} options - Опции восстановления
+     * @returns {Promise<Object>} Результат загрузки и восстановления
+     */
+    async uploadBackup(zipFilePath, options = {}) {
+        const { extractTo = null, restore = true, components = ['database', 'settings', 'models'] } = options;
+        
+        try {
+            // Проверяем, что файл существует
+            await fs.access(zipFilePath);
+            
+            // Создаем временную директорию для распаковки
+            const extractDir = extractTo || path.join(this.backupDir, 'uploads', `extracted_${Date.now()}`);
+            await fs.mkdir(extractDir, { recursive: true });
+            
+            // Распаковываем ZIP архив
+            const yauzl = (await import('yauzl')).default;
+            
+            // Сохраняем extractDir в переменную для использования в замыкании
+            const extractDirectory = extractDir;
+            
+            return new Promise((resolve, reject) => {
+                yauzl.open(zipFilePath, { lazyEntries: true }, async (err, zipfile) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    
+                    const extractedFiles = [];
+                    
+                    zipfile.readEntry();
+                    
+                    zipfile.on('entry', (entry) => {
+                        if (/\/$/.test(entry.fileName)) {
+                            // Директория - создаем её
+                            const dirPath = path.join(extractDirectory, entry.fileName);
+                            fs.mkdir(dirPath, { recursive: true }).then(() => {
+                                zipfile.readEntry();
+                            }).catch(reject);
+                        } else {
+                            // Файл - извлекаем
+                            zipfile.openReadStream(entry, (err, readStream) => {
+                                if (err) {
+                                    reject(err);
+                                    return;
+                                }
+                                
+                                const filePath = path.join(extractDirectory, entry.fileName);
+                                
+                                // Создаем директорию для файла
+                                fs.mkdir(path.dirname(filePath), { recursive: true }).then(() => {
+                                    // Импортируем fs синхронно для создания потока записи
+                                    import('fs').then(fsModule => {
+                                        const writeStream = fsModule.createWriteStream(filePath);
+                                        readStream.pipe(writeStream);
+                                        
+                                        writeStream.on('close', () => {
+                                            extractedFiles.push(filePath);
+                                            zipfile.readEntry();
+                                        });
+                                        
+                                        writeStream.on('error', reject);
+                                    }).catch(reject);
+                                }).catch(reject);
+                            });
+                        }
+                    });
+                    
+                    zipfile.on('end', async () => {
+                        try {
+                            // Ищем metadata.json для определения типа бэкапа
+                            const metadataPath = path.join(extractDirectory, 'metadata.json');
+                            let backupInfo = null;
+                            
+                            try {
+                                const metadataContent = await fs.readFile(metadataPath, 'utf-8');
+                                backupInfo = JSON.parse(metadataContent);
+                            } catch {
+                                // Если нет metadata.json, ищем файлы бэкапа
+                                const files = await fs.readdir(extractDirectory);
+                                const dbBackup = files.find(f => f.startsWith('db_') && f.endsWith('.json'));
+                                const settingsBackup = files.find(f => f.startsWith('settings_') && f.endsWith('.json'));
+                                
+                                if (dbBackup || settingsBackup) {
+                                    backupInfo = {
+                                        id: `uploaded_${Date.now()}`,
+                                        type: 'uploaded',
+                                        timestamp: new Date().toISOString(),
+                                        components: {}
+                                    };
+                                    
+                                    if (dbBackup) {
+                                        backupInfo.components.database = {
+                                            path: path.join(extractDirectory, dbBackup),
+                                            file: dbBackup
+                                        };
+                                    }
+                                    
+                                    if (settingsBackup) {
+                                        backupInfo.components.settings = {
+                                            path: path.join(extractDirectory, settingsBackup),
+                                            file: settingsBackup
+                                        };
+                                    }
+                                }
+                            }
+                            
+                            const result = {
+                                success: true,
+                                extractedDir: extractDirectory,
+                                extractedFiles: extractedFiles.length,
+                                backupInfo,
+                                timestamp: new Date().toISOString()
+                            };
+                            
+                            // Если нужно восстановить бэкап
+                            if (restore && backupInfo) {
+                                try {
+                                    const restoreResult = await this.restoreBackupFromPath(extractDirectory, backupInfo, { components });
+                                    result.restore = restoreResult;
+                                } catch (restoreError) {
+                                    result.restore = {
+                                        success: false,
+                                        error: restoreError.message
+                                    };
+                                }
+                            }
+                            
+                            resolve(result);
+                        } catch (error) {
+                            reject(error);
+                        }
+                    });
+                    
+                    zipfile.on('error', reject);
+                });
+            });
+        } catch (error) {
+            LoggerService.error('Ошибка загрузки бэкапа', {
+                service: 'BackupService',
+                operation: 'uploadBackup',
+                zipFilePath,
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
+            throw error;
+        }
+    }
+    
+    /**
+     * Восстановление бэкапа из распакованной директории
+     * @param {string} extractDir - Директория с распакованными файлами
+     * @param {Object} backupInfo - Информация о бэкапе
+     * @param {Object} options - Опции восстановления
+     * @returns {Promise<Object>} Результат восстановления
+     */
+    async restoreBackupFromPath(extractDir, backupInfo, options = {}) {
+        const { components = ['database', 'settings', 'models'] } = options;
+        
+        const results = {
+            timestamp: new Date().toISOString(),
+            components: {}
+        };
+        
+        // Восстановление компонентов
+        if (components.includes('database') && backupInfo.components?.database) {
+            try {
+                const dbPath = backupInfo.components.database.path || path.join(extractDir, backupInfo.components.database.file);
+                await this.restoreDatabase(dbPath);
+                results.components.database = { success: true };
+            } catch (error) {
+                results.components.database = { success: false, error: error.message };
+            }
+        }
+        
+        if (components.includes('settings') && backupInfo.components?.settings) {
+            try {
+                const settingsPath = backupInfo.components.settings.path || path.join(extractDir, backupInfo.components.settings.file);
+                await this.restoreSettings(settingsPath);
+                results.components.settings = { success: true };
+            } catch (error) {
+                results.components.settings = { success: false, error: error.message };
+            }
+        }
+        
+        if (components.includes('models') && backupInfo.components?.models) {
+            try {
+                const modelsPath = backupInfo.components.models.path || path.join(extractDir, backupInfo.components.models.directory);
+                await this.restoreModels(modelsPath);
+                results.components.models = { success: true };
+            } catch (error) {
+                results.components.models = { success: false, error: error.message };
+            }
+        }
+        
+        return results;
+    }
 }
 
 export default new BackupService();
