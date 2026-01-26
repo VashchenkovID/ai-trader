@@ -249,3 +249,4 @@ const netCashFlow = await CashFlow.getNetCashFlow('real');
 3. Добавить экспорт отчетов по PnL
 4. Добавить графики изменения PnL во времени
 
+

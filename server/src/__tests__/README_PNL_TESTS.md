@@ -81,3 +81,4 @@ const totalDeposits = await CashFlow.getTotalDeposits('real');
 expect(totalDeposits).toBe(500000);
 ```
 
+
