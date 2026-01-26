@@ -6,6 +6,7 @@ import { authenticate } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { validateBody, validationRules } from '../middleware/validation.js';
 import { ValidationError } from '../utils/errors/AppError.js';
+import { getJWTSecret } from '../utils/envValidator.js';
 
 const router = express.Router();
 
@@ -49,7 +50,7 @@ router.post('/login',
         await user.update({ lastLogin: new Date() });
         
         // Создаем JWT токен
-        const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+        const JWT_SECRET = getJWTSecret();
         const token = jwt.sign(
             { userId: user.id, username: user.username },
             JWT_SECRET,
@@ -105,10 +106,8 @@ router.post('/verify',
         }
         
         try {
-            const decoded = jwt.verify(
-                token,
-                process.env.JWT_SECRET || 'your-secret-key-change-in-production'
-            );
+            const JWT_SECRET = getJWTSecret();
+            const decoded = jwt.verify(token, JWT_SECRET);
             
             const user = await User.findByPk(decoded.userId, {
                 attributes: ['id', 'username', 'fullName', 'lastLogin', 'createdAt']

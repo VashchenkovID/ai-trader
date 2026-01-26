@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import path from 'path';
@@ -31,6 +32,18 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Validate required environment variables before starting
+try {
+    const { validateRequiredEnvVars, validateProductionEnv } = await import('./utils/envValidator.js');
+    validateRequiredEnvVars();
+    validateProductionEnv();
+    console.log('✅ Environment variables validated');
+} catch (error) {
+    console.error('❌ Environment validation failed:', error.message);
+    console.error('Please check your .env file and ensure all required variables are set.');
+    process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -38,8 +51,27 @@ const PORT = process.env.PORT || 3001;
 app.set('trust proxy', true);
 
 // CORS configuration
+const getCorsOrigin = () => {
+    const frontendUrl = process.env.FRONTEND_URL;
+    
+    if (!frontendUrl) {
+        if (process.env.NODE_ENV === 'production') {
+            console.warn('⚠️ FRONTEND_URL is not set in production. CORS may not work correctly.');
+            return false; // В продакшене без FRONTEND_URL отключаем CORS для безопасности
+        }
+        return 'http://localhost:3000'; // Разработка
+    }
+    
+    // Поддержка нескольких доменов через запятую
+    if (frontendUrl.includes(',')) {
+        return frontendUrl.split(',').map(url => url.trim());
+    }
+    
+    return frontendUrl;
+};
+
 const corsOptions = {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: getCorsOrigin(),
     credentials: true, // Разрешаем отправку куки
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
@@ -48,6 +80,13 @@ const corsOptions = {
 };
 
 // Middleware
+// Security headers (helmet)
+app.use(helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false, // Отключаем в dev для удобства разработки
+    crossOriginEmbedderPolicy: false, // Для работы с внешними API
+    crossOriginResourcePolicy: { policy: "cross-origin" } // Для работы с внешними ресурсами
+}));
+
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
