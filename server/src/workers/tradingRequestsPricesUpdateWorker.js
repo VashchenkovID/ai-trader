@@ -159,7 +159,10 @@ async function performTradingRequestsPricesUpdate() {
                             // Проверяем, приближается ли цена к цене заявки (в пределах 2%)
                             const isPriceApproaching = priceDiffPercent <= 2.0 && priceDiffPercent > 1.0;
 
-                            if (isPriceReached || isPriceApproaching) {
+                            // Дополнительная проверка: убеждаемся, что заявка все еще в ожидающем статусе
+                            // Это важно, так как статус может измениться между проверками
+                            if ((isPriceReached || isPriceApproaching) && 
+                                (effectiveStatus === 'PENDING' || effectiveStatus === 'APPROVED')) {
                                 readyToExecute.push({
                                     requestId: request.id,
                                     figi: request.figi,

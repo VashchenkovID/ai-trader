@@ -3093,6 +3093,13 @@ class NeuralNetworkService {
                 
                 const figi = instrumentData.figi;
                 
+                // Пропускаем инструменты, требующие квалифицированного инвестора
+                // Это важно для рекомендаций, но НЕ для обучения (обучение использует все данные)
+                if (instrumentData.isAccessible === false) {
+                    console.log(`⚠️ Skipping recommendation for ${instrumentData.ticker || figi}: requires qualified investor`);
+                    continue;
+                }
+                
                 // Правильно извлекаем confidence и score из prediction
                 // ВАЖНО: score и confidence должны быть разными значениями!
                 const score = typeof rec.prediction?.score === 'number' && !isNaN(rec.prediction.score) 

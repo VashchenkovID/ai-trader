@@ -4,59 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="eabbd32b-9e15-4bc9-856b-cea21edbae60" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/cacheService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/macroDataService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/migrationService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/monitoringService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/neuralNetworkService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/newsService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/recommendationService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/riskManagementService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/settingsService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/stockService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/systemService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/telegramService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/tradingService.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/client/src/services/services/validationService.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/MODERNIZATION_PLAN.md" beforeDir="false" afterPath="$PROJECT_DIR$/MODERNIZATION_PLAN.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/App.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/common/AppRouter.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/common/AppRouter.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/Navigation.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/Navigation.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/ActiveTradingRequestsCard.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/ActiveTradingRequestsCard/ActiveTradingRequestsCard.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/ActiveTradingRequestsCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/ActiveTradingRequestsCard/ActiveTradingRequestsCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/AdvancedMetricsPreview.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/AdvancedMetricsPreview/AdvancedMetricsPreview.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/CacheStatusCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/CacheStatusCard/CacheStatusCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/CachedSignalsCard.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/CachedSignalsCard/CachedSignalsCard.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/CachedSignalsCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/CachedSignalsCard/CachedSignalsCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/CriticalAlertsCard.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/CriticalAlertsCard/CriticalAlertsCard.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/CriticalAlertsCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/CriticalAlertsCard/CriticalAlertsCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/HeroMetricsCard.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/HeroMetricsCard/HeroMetricsCard.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/HeroMetricsCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/HeroMetricsCard/HeroMetricsCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/MacroDataPreview.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/MacroDataPreview/MacroDataPreview.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/MacroDataPreview.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/MacroDataPreview/MacroDataPreview.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/NeuralNetworksControlCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/NeuralNetworksControlCard/NeuralNetworksControlCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/QuickActionsCard.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/NeuralNetworksControlCard/QuickActionsCard.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/QuickActionsCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/QuickActionsCard/QuickActionsCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/QuickLinksAndSystemCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/QuickLinksAndSystemCard/QuickLinksAndSystemCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/RebalancingStatusCard.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/RebalancingStatusCard/RebalancingStatusCard.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/RebalancingStatusCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/RebalancingStatusCard/RebalancingStatusCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/RecentTradesCard.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/RecentTradesCard/RecentTradesCard.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/RecentTradesCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/RecentTradesCard/RecentTradesCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/TradingSummaryCard.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/TradingSummaryCard/TradingSummaryCard.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/TradingSummaryCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/TradingSummaryCard/TradingSummaryCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/Dashboard.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Dashboard/Dashboard.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/Dashboard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Dashboard/Dashboard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/MetricsMonitoring.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/MetricsMonitoring.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/services/apiService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/services/apiService.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/server/src/routes/ai-routes.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/routes/ai-routes.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/server/src/routes/market-routes.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/routes/market-routes.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/server/src/routes/trading-routes.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/routes/trading-routes.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/server/src/services/BenchmarkService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/BenchmarkService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/server/src/services/PerformanceVisualizationService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/PerformanceVisualizationService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/server/src/services/ReportExportService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/ReportExportService.js" afterDir="false" />
-    </list>
+    <list default="true" id="eabbd32b-9e15-4bc9-856b-cea21edbae60" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -84,26 +32,26 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
-    "git-widget-placeholder": "main",
-    "javascript.nodejs.core.library.configured.version": "22.15.0",
-    "javascript.nodejs.core.library.typings.version": "22.15.35",
-    "last_opened_file_path": "C:/Users/Фронтендер3000/projects/ai-trader",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "settings.javascript.prettier",
-    "ts.external.directory.path": "C:\\Users\\Фронтендер3000\\projects\\ai-trader\\client\\node_modules\\typescript\\lib",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;javascript.nodejs.core.library.configured.version&quot;: &quot;22.15.0&quot;,
+    &quot;javascript.nodejs.core.library.typings.version&quot;: &quot;22.15.35&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/Фронтендер3000/projects/ai-trader&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;settings.javascript.prettier&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;C:\\Users\\Фронтендер3000\\projects\\ai-trader\\client\\node_modules\\typescript\\lib&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\Vashh\WebstormProjects\IvashkaTradeHelper\client\src" />
@@ -135,6 +83,7 @@
       <workItem from="1758916110073" duration="27000" />
       <workItem from="1759129106335" duration="19000" />
       <workItem from="1769270863612" duration="3024000" />
+      <workItem from="1769410006620" duration="6000" />
     </task>
     <servers />
   </component>

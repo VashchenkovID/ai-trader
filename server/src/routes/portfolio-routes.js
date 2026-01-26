@@ -5,6 +5,7 @@ import ServiceManager from '../services/ServiceManager.js';
 import TinkoffApiService from '../services/TinkoffApiService.js';
 import CacheService from '../services/CacheService.js';
 import LoggerService from '../services/LoggerService.js';
+import PnLCalculationService from '../services/PnLCalculationService.js';
 
 const router = express.Router();
 
@@ -22,10 +23,28 @@ router.get('/', async (req, res) => {
         const totalValue = portfolio?.totalValue || (cash + positionsValue);
         const rawPositions = portfolio?.positions || {};
         
-        // Рассчитываем PnL
-        const initialCapital = portfolio?.initialCapital || 1000000;
-        const totalPnL = totalValue - initialCapital;
-        const totalPnLPercent = initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
+        // Рассчитываем PnL используя новый сервис (для виртуального портфеля тоже)
+        let pnlData = null;
+        try {
+            pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+                tradingMode: portfolio?.mode || 'paper',
+                includeTrades: true,
+                includePositions: true
+            });
+        } catch (error) {
+            LoggerService.error('Error calculating PnL', {
+                service: 'portfolio-routes',
+                operation: 'getPortfolio',
+                error: { message: error.message }
+            });
+            // Возвращаем нулевые значения в новой структуре
+            pnlData = {
+                total: { pnl: 0, percent: 0 },
+                realized: { total: 0, percent: 0 },
+                unrealized: { total: 0 },
+                summary: { winRate: 0, totalTrades: 0 }
+            };
+        }
         
         res.json({
             success: true,
@@ -34,11 +53,18 @@ router.get('/', async (req, res) => {
                 positions: rawPositions,
                 positionsValue,
                 totalValue,
-                totalPnL,
-                totalPnLPercent,
+                pnl: {
+                    total: pnlData.total.pnl,
+                    totalPercent: pnlData.total.percent,
+                    realized: pnlData.realized.total,
+                    realizedPercent: pnlData.realized.percent,
+                    unrealized: pnlData.unrealized.total,
+                    winRate: pnlData.summary?.winRate || 0,
+                    totalTrades: pnlData.summary?.totalTrades || 0
+                },
                 trades: portfolio?.trades || [],
                 mode: portfolio?.mode || 'paper',
-                initialCapital
+                initialCapital: portfolio?.initialCapital || 1000000
             },
             timestamp: new Date().toISOString()
         });
@@ -88,12 +114,31 @@ router.get('/real', async (req, res) => {
         }
         
         const cash = portfolio?.cash || 0;
+        // totalValue = cash + positionsValue (общая сумма портфеля)
         const totalValue = portfolio?.totalValue || (cash + positionsValue);
         
-        // Рассчитываем PnL (если есть начальный капитал)
-        const initialCapital = portfolio?.initialCapital || 0;
-        const totalPnL = initialCapital > 0 ? totalValue - initialCapital : 0;
-        const totalPnLPercent = initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
+        // Рассчитываем PnL используя новый сервис (на основе сделок)
+        let pnlData = null;
+        try {
+            pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+                tradingMode: 'real',
+                includeTrades: true,
+                includePositions: true
+            });
+        } catch (error) {
+            LoggerService.error('Error calculating PnL', {
+                service: 'portfolio-routes',
+                operation: 'getRealPortfolio',
+                error: { message: error.message }
+            });
+            // Возвращаем нулевые значения в новой структуре
+            pnlData = {
+                total: { pnl: 0, percent: 0 },
+                realized: { total: 0, percent: 0 },
+                unrealized: { total: 0 },
+                summary: { winRate: 0, totalTrades: 0 }
+            };
+        }
         
         res.json({
             success: true,
@@ -102,11 +147,18 @@ router.get('/real', async (req, res) => {
                 positions: rawPositions,
                 positionsValue,
                 totalValue,
-                totalPnL,
-                totalPnLPercent,
+                pnl: {
+                    total: pnlData.total.pnl,
+                    totalPercent: pnlData.total.percent,
+                    realized: pnlData.realized.total,
+                    realizedPercent: pnlData.realized.percent,
+                    unrealized: pnlData.unrealized.total,
+                    winRate: pnlData.summary?.winRate || 0,
+                    totalTrades: pnlData.summary?.totalTrades || 0
+                },
                 trades: portfolio?.trades || [],
                 mode: 'real',
-                initialCapital
+                initialCapital: portfolio?.initialCapital || 0
             },
             timestamp: new Date().toISOString()
         });
@@ -610,6 +662,185 @@ router.post('/real/sync', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Ошибка синхронизации реального портфеля',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Управление вводами/выводами средств (CashFlow)
+ * POST /api/portfolio/cash-flow
+ * Body: { type: 'DEPOSIT'|'WITHDRAWAL', amount: number, date?: Date, description?: string, portfolioType?: 'virtual'|'real' }
+ */
+router.post('/cash-flow', async (req, res) => {
+    try {
+        const CashFlow = (await import('../models/CashFlow.js')).default;
+        const { type, amount, date, description, portfolioType = 'real' } = req.body;
+
+        // Валидация
+        if (!type || !['DEPOSIT', 'WITHDRAWAL'].includes(type)) {
+            return res.status(400).json({
+                success: false,
+                message: 'type должен быть DEPOSIT или WITHDRAWAL'
+            });
+        }
+
+        if (!amount || amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'amount должен быть положительным числом'
+            });
+        }
+
+        // Создаем запись о вводе/выводе
+        const cashFlow = await CashFlow.create({
+            type,
+            amount: parseFloat(amount),
+            date: date ? new Date(date) : new Date(),
+            description: description || null,
+            portfolioType
+        });
+
+        res.json({
+            success: true,
+            message: `${type === 'DEPOSIT' ? 'Ввод' : 'Вывод'} средств зарегистрирован`,
+            data: cashFlow
+        });
+    } catch (error) {
+        console.error('Ошибка регистрации ввода/вывода средств:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка регистрации ввода/вывода средств',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Получение истории вводов/выводов средств
+ * GET /api/portfolio/cash-flow
+ * Query: { portfolioType?: 'virtual'|'real', startDate?: Date, endDate?: Date, limit?: number }
+ */
+router.get('/cash-flow', async (req, res) => {
+    try {
+        const CashFlow = (await import('../models/CashFlow.js')).default;
+        const { portfolioType = 'real', startDate, endDate, limit = 100 } = req.query;
+
+        const start = startDate ? new Date(startDate) : null;
+        const end = endDate ? new Date(endDate) : null;
+
+        const history = await CashFlow.getHistory(portfolioType, start, end, parseInt(limit));
+
+        // Получаем статистику
+        const totalDeposits = await CashFlow.getTotalDeposits(portfolioType, start, end);
+        const totalWithdrawals = await CashFlow.getTotalWithdrawals(portfolioType, start, end);
+        const netCashFlow = await CashFlow.getNetCashFlow(portfolioType, start, end);
+
+        res.json({
+            success: true,
+            data: {
+                history,
+                statistics: {
+                    totalDeposits,
+                    totalWithdrawals,
+                    netCashFlow,
+                    count: history.length
+                }
+            },
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Ошибка получения истории вводов/выводов:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения истории вводов/выводов',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Удаление записи о вводе/выводе средств
+ * DELETE /api/portfolio/cash-flow/:id
+ */
+router.delete('/cash-flow/:id', async (req, res) => {
+    try {
+        const CashFlow = (await import('../models/CashFlow.js')).default;
+        const { id } = req.params;
+
+        const cashFlow = await CashFlow.findByPk(id);
+        
+        if (!cashFlow) {
+            return res.status(404).json({
+                success: false,
+                message: 'Запись не найдена'
+            });
+        }
+
+        await cashFlow.destroy();
+
+        res.json({
+            success: true,
+            message: 'Запись удалена'
+        });
+    } catch (error) {
+        console.error('Ошибка удаления записи:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка удаления записи',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Детальный расчет PnL
+ * GET /api/portfolio/pnl/detailed
+ * Query: { tradingMode?: 'paper'|'micro'|'real', startDate?: Date, endDate?: Date }
+ */
+router.get('/pnl/detailed', async (req, res) => {
+    try {
+        const { tradingMode = 'real', startDate, endDate } = req.query;
+        
+        // Получаем портфель в зависимости от режима
+        let portfolio = null;
+        if (tradingMode === 'real') {
+            portfolio = await TradingEngine.getRealPortfolioValue();
+        } else {
+            portfolio = await TradingEngine.getPortfolioValue();
+        }
+        
+        if (!portfolio) {
+            return res.json({
+                success: true,
+                data: null,
+                message: 'Портфель недоступен'
+            });
+        }
+        
+        // Парсим даты если переданы
+        const start = startDate ? new Date(startDate) : null;
+        const end = endDate ? new Date(endDate) : null;
+        
+        // Рассчитываем детальный PnL
+        const pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+            tradingMode,
+            startDate: start,
+            endDate: end,
+            includeTrades: true,
+            includePositions: true
+        });
+        
+        res.json({
+            success: true,
+            data: pnlData,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Ошибка получения детального PnL:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения детального PnL',
             error: error.message
         });
     }

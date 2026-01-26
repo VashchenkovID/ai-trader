@@ -331,6 +331,13 @@ async function saveSingleRecommendationToDatabase(figi, prediction) {
         // Преобразуем Sequelize модель в обычный объект для надежного доступа к полям
         const instrumentData = instrument.toJSON ? instrument.toJSON() : instrument;
         
+        // Пропускаем инструменты, требующие квалифицированного инвестора
+        // Это важно для рекомендаций, но НЕ для обучения (обучение использует все данные)
+        if (instrumentData.isAccessible === false) {
+            console.log(`⚠️ Skipping recommendation for ${instrumentData.ticker || figi}: requires qualified investor`);
+            return;
+        }
+        
         const score = typeof prediction?.score === 'number' && !isNaN(prediction.score) 
             ? Math.max(0, Math.min(1, prediction.score))
             : 0;

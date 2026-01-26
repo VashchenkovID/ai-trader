@@ -97,6 +97,10 @@ class ServiceManager {
                 }
                 // Продолжаем инициализацию других сервисов
             }
+            
+            // PnLCalculationService - сервис для расчета прибыли/убытка
+            await this.initializeService('PnLCalculationService', () => import('./PnLCalculationService.js'));
+            
             await this.initializeService('NeuralNetworkService', () => import('./NeuralNetworkService.js'));
             await this.initializeService('EnsembleService', () => import('./EnsembleService.js'));
             await this.initializeService('ReinforcementLearningService', () => import('./ReinforcementLearningService.js'));

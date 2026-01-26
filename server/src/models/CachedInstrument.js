@@ -70,6 +70,12 @@ CachedInstrument.init({
         allowNull: true,
         comment: 'Тип инструмента (share, bond, etf, currency, future, option)'
     },
+    isAccessible: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+        comment: 'Доступен ли инструмент для торговли без статуса квалифицированного инвестора. false = требуется квалифицированный инвестор'
+    },
 }, {
     sequelize,
     modelName: 'CachedInstrument',
@@ -95,6 +101,10 @@ CachedInstrument.init({
         {
             name: 'idx_cached_instruments_sector',
             fields: ['sector']
+        },
+        {
+            name: 'idx_cached_instruments_is_accessible',
+            fields: ['isAccessible']
         }
     ]
 });

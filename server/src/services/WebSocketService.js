@@ -439,22 +439,46 @@ class WebSocketService {
                     // Получаем топ-3 рекомендации - по одной для каждой стратегии
                     const topBuys = await Recommendation.getTopRecommendationsByStrategies();
 
-                    // Рассчитываем totalPnL как разницу между текущей стоимостью и начальным капиталом
-                    // Это включает и реализованную, и нереализованную прибыль
-                    const initialCapital = portfolio?.initialCapital || 1000000;
-                    const totalValue = portfolio?.totalValue || 0;
-                    const totalPnL = totalValue - initialCapital;
+                    // Используем новый расчет PnL на основе сделок
+                    const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+                    let pnlData = null;
+                    try {
+                        pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+                            tradingMode: portfolio?.mode || 'real',
+                            includeTrades: true,
+                            includePositions: true
+                        });
+                    } catch (error) {
+                        LoggerService.error('Error calculating PnL in WebSocketService', {
+                            service: 'WebSocketService',
+                            operation: 'sendInitialSystemStatus',
+                            error: { message: error.message }
+                        });
+                        // Возвращаем нулевые значения в новой структуре
+                        pnlData = {
+                            total: { pnl: 0, percent: 0 },
+                            realized: { total: 0, percent: 0 },
+                            unrealized: { total: 0 },
+                            summary: { winRate: 0, totalTrades: 0 }
+                        };
+                    }
 
-                    // Win Rate: stats.winRate уже в диапазоне 0-1, умножаем на 100 для процентов
-                    const winRateValue = stats.winRate || 0;
-                    const winRatePercent = winRateValue * 100;
-                    const totalTradesValue = stats.totalTrades || 0;
-                    const successfulTradesValue = Math.round(totalTradesValue * winRateValue);
+                    const totalValue = portfolio?.totalValue || 0;
+                    const initialCapital = portfolio?.initialCapital || 1000000;
+                    const winRatePercent = pnlData.summary?.winRate || 0;
+                    const totalTradesValue = pnlData.summary?.totalTrades || 0;
+                    const successfulTradesValue = Math.round(totalTradesValue * (winRatePercent / 100));
 
                     const tradingStats = {
                         portfolioValue: totalValue,
                         cash: portfolio?.cash || 0,
-                        totalPnL: totalPnL,
+                        pnl: {
+                            total: pnlData.total.pnl,
+                            totalPercent: pnlData.total.percent,
+                            realized: pnlData.realized.total,
+                            realizedPercent: pnlData.realized.percent,
+                            unrealized: pnlData.unrealized?.total || 0
+                        },
                         initialCapital: initialCapital,
                         winRate: winRatePercent,
                         totalTrades: totalTradesValue,

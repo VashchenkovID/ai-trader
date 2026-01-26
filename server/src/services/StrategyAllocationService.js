@@ -50,8 +50,33 @@ class StrategyAllocationService {
             });
 
             // Получаем общий бюджет портфеля
-            const portfolioSettings = await SettingsService.getPortfolioSettings();
-            const totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
+            // Для реального портфеля используем totalValue (cash + positionsValue)
+            // Для виртуального портфеля используем настройку из портфеля
+            let totalBudget = 1000000; // Значение по умолчанию
+            
+            try {
+                const TradingModeManager = (await import('./TradingModeManager.js')).default;
+                const TradingEngine = (await import('./TradingEngine.js')).default;
+                const currentMode = TradingModeManager.getCurrentMode();
+                const mode = currentMode?.mode || currentMode;
+                
+                if (mode === 'real' || mode === 'micro') {
+                    // Для реального портфеля используем totalValue (общая сумма портфеля)
+                    const portfolio = await TradingEngine.getRealPortfolioValue();
+                    if (portfolio && portfolio.totalValue > 0) {
+                        totalBudget = portfolio.totalValue;
+                        console.log(`💰 Using real portfolio totalValue for allocations: ${totalBudget.toLocaleString('ru-RU')} RUB`);
+                    }
+                } else {
+                    // Для виртуального портфеля используем настройку из портфеля
+                    const portfolioSettings = await SettingsService.getPortfolioSettings();
+                    totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
+                }
+            } catch (error) {
+                console.warn('⚠️ Error getting portfolio value, using default budget:', error.message);
+                const portfolioSettings = await SettingsService.getPortfolioSettings();
+                totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
+            }
 
             for (const strategy of strategies) {
                 const allocation = await PortfolioAllocation.getOrCreateAllocation(strategy.id);
@@ -60,7 +85,7 @@ class StrategyAllocationService {
                 if (parseFloat(allocation.allocatedAmount) === 0) {
                     const allocatedAmount = (totalBudget * strategy.budgetAllocation) / 100;
                     await PortfolioAllocation.updateAllocation(strategy.id, allocatedAmount);
-                    console.log(`💰 Initialized allocation for ${strategy.name}: ${allocatedAmount.toFixed(2)} RUB (${strategy.budgetAllocation}%)`);
+                    console.log(`💰 Initialized allocation for ${strategy.name}: ${allocatedAmount.toFixed(2)} RUB (${strategy.budgetAllocation}% of ${totalBudget.toLocaleString('ru-RU')} RUB)`);
                 }
             }
         } catch (error) {

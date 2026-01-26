@@ -1020,17 +1020,36 @@ class SchedulerService {
                 const Recommendation = (await import('../models/Recommendation.js')).default;
                 const topBuys = await Recommendation.getTopRecommendationsByStrategies();
 
-                // Рассчитываем totalPnL как разницу между текущей стоимостью и начальным капиталом
-                // Это включает и реализованную, и нереализованную прибыль
-                const initialCapital = portfolio?.initialCapital || 1000000;
-                const totalValue = portfolio?.totalValue || 0;
-                const totalPnL = totalValue - initialCapital;
+                // Используем новый расчет PnL на основе сделок
+                const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+                let pnlData = null;
+                try {
+                    pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+                        tradingMode: portfolio?.mode || 'paper',
+                        includeTrades: true,
+                        includePositions: true,
+                        includeCashFlow: true
+                    });
+                } catch (error) {
+                    LoggerService.error('Error calculating PnL in SchedulerService', {
+                        service: 'SchedulerService',
+                        operation: 'tradingStatsTask',
+                        error: { message: error.message }
+                    });
+                    // Возвращаем нулевые значения в новой структуре
+                    pnlData = {
+                        total: { pnl: 0, percent: 0 },
+                        realized: { total: 0, percent: 0 },
+                        unrealized: { total: 0 },
+                        summary: { winRate: 0, totalTrades: 0 }
+                    };
+                }
 
-                // Win Rate: stats.winRate уже в диапазоне 0-1, умножаем на 100 для процентов
-                const winRateValue = stats?.winRate || 0;
-                const winRatePercent = winRateValue * 100;
-                const totalTradesValue = stats?.totalTrades || 0;
-                const successfulTradesValue = Math.round(totalTradesValue * winRateValue);
+                const totalValue = portfolio?.totalValue || 0;
+                const initialCapital = portfolio?.initialCapital || 1000000;
+                const winRatePercent = pnlData.summary?.winRate || 0;
+                const totalTradesValue = pnlData.summary?.totalTrades || 0;
+                const successfulTradesValue = Math.round(totalTradesValue * (winRatePercent / 100));
                 
                 // Логируем для отладки
                 const LoggerService = (await import('./LoggerService.js')).default;
@@ -1038,17 +1057,29 @@ class SchedulerService {
                     LoggerService.info('tradingStatsTask: статистика торговли', {
                         service: 'SchedulerService',
                         totalTrades: totalTradesValue,
-                        winRate: winRateValue,
+                        winRate: winRatePercent / 100,
                         winRatePercent: winRatePercent,
                         successfulTrades: successfulTradesValue,
-                        totalPnL: totalPnL
+                        pnl: {
+                            total: pnlData.total.pnl,
+                            totalPercent: pnlData.total.percent,
+                            realized: pnlData.realized.total,
+                            realizedPercent: pnlData.realized.percent,
+                            unrealized: pnlData.unrealized?.total || 0
+                        }
                     });
                 }
 
                 const tradingStats = {
                     portfolioValue: totalValue,
                     cash: portfolio?.cash || 0,
-                    totalPnL: totalPnL,
+                    pnl: {
+                        total: pnlData.total.pnl,
+                        totalPercent: pnlData.total.percent,
+                        realized: pnlData.realized.total,
+                        realizedPercent: pnlData.realized.percent,
+                        unrealized: pnlData.unrealized?.total || 0
+                    },
                     initialCapital: initialCapital,
                     winRate: winRatePercent,
                     totalTrades: totalTradesValue,
@@ -2000,6 +2031,27 @@ class SchedulerService {
                         continue;
                     }
 
+                    // КРИТИЧЕСКАЯ ПРОВЕРКА: Перезагружаем заявку из БД непосредственно перед отправкой уведомления
+                    // Это необходимо, так как заявка может быть выполнена между проверками
+                    await request.reload();
+                    const currentStatus = request.status;
+                    
+                    // Если заявка уже выполнена, отклонена или отменена, пропускаем уведомление
+                    if (['EXECUTED', 'REJECTED', 'CANCELLED', 'EXPIRED'].includes(currentStatus)) {
+                        console.log(`⚠️ Skipping notification for request ${requestData.requestId}: status is ${currentStatus}`);
+                        // Очищаем запись о последнем уведомлении для неактивных заявок
+                        this.lastPendingRequestNotification.delete(requestData.requestId);
+                        continue;
+                    }
+                    
+                    // Дополнительная проверка: убеждаемся, что заявка все еще в ожидающем статусе
+                    if (currentStatus !== 'PENDING' && currentStatus !== 'APPROVED') {
+                        console.log(`⚠️ Skipping notification for request ${requestData.requestId}: unexpected status ${currentStatus}`);
+                        // Очищаем запись о последнем уведомлении для неактивных заявок
+                        this.lastPendingRequestNotification.delete(requestData.requestId);
+                        continue;
+                    }
+
                     // Формируем сообщение
                     const actionText = requestData.action === 'BUY' ? 'ПОКУПКА' : 'ПРОДАЖА';
                     const statusText = requestData.isPriceReached ? '✅ Цена достигнута - готово к исполнению' : '⚠️ Цена приближается - готово к исполнению';
@@ -2015,6 +2067,7 @@ class SchedulerService {
                         `📋 Статус: ${statusText}`;
 
                     // Отправляем уведомление в Telegram только для ожидающих заявок (PENDING или APPROVED)
+                    // Статус уже проверен выше, поэтому здесь заявка гарантированно не выполнена
                     await OptimizedTelegramService.sendAlert(
                         'Заявка готова к исполнению',
                         message,
@@ -3816,6 +3869,7 @@ class SchedulerService {
             console.log(`   Active: ${activeInstruments}`);
             
             // Получаем список активных инструментов (более гибкий запрос)
+            // Для рекомендаций используем только доступные инструменты (не требующие квалифицированного инвестора)
             const instruments = await CachedInstrument.findAll({
                 where: {
                     [Op.and]: [
@@ -3833,10 +3887,13 @@ class SchedulerService {
                                 { isActive: true },
                                 { isActive: null } // Если поле не установлено, считаем активным
                             ]
+                        },
+                        {
+                            isAccessible: true // Только доступные инструменты (не требуют квалифицированного инвестора)
                         }
                     ]
                 },
-                attributes: ['figi', 'ticker', 'name', 'currency', 'instrumentType', 'isActive'],
+                attributes: ['figi', 'ticker', 'name', 'currency', 'instrumentType', 'isActive', 'isAccessible'],
                 limit: 100 // Ограничиваем количество для производительности
             });
 
@@ -4093,21 +4150,25 @@ class SchedulerService {
             }
             
             // Сохраняем в БД
+            // totalValue = cash + positionsValue (общая сумма портфеля)
+            const finalTotalValue = cash + calculatedPositionsValue;
             await RealPortfolio.savePortfolio({
                 cash,
                 positions: rawPositions, // Уже объект {figi: quantity}
                 trades: portfolioData.trades || [],
-                totalValue: cash + calculatedPositionsValue,
+                totalValue: finalTotalValue,
                 positionsValue: calculatedPositionsValue,
+                // initialCapital будет установлен автоматически в savePortfolio, если он не задан
                 initialCapital: portfolioData.initialCapital || null
             });
             
-            console.log(`✅ Real portfolio synced: totalValue=${totalValue.toLocaleString('ru-RU')} RUB, cash=${cash.toLocaleString('ru-RU')} RUB, positions=${Object.keys(rawPositions).length}`);
+            console.log(`✅ Real portfolio synced: totalValue=${finalTotalValue.toLocaleString('ru-RU')} RUB, cash=${cash.toLocaleString('ru-RU')} RUB, positions=${Object.keys(rawPositions).length}`);
             
-            // Обновляем распределение стратегий на основе актуального totalValue
+            // Обновляем распределение стратегий на основе актуального totalValue (cash + positionsValue)
+            // Это позволяет правильно распределять бюджет по стратегиям от общей суммы портфеля
             try {
                 const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
-                await StrategyAllocationService.updateAllocationsFromPortfolioValue(totalValue);
+                await StrategyAllocationService.updateAllocationsFromPortfolioValue(finalTotalValue);
             } catch (error) {
                 console.warn('⚠️ Failed to update strategy allocations:', error.message);
             }

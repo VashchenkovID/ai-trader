@@ -129,18 +129,22 @@ RealPortfolio.savePortfolio = async function(portfolioData) {
         if (!portfolio) {
             // Создаем новый портфель с ID=1
             console.log('📊 Создание нового реального портфеля в БД...');
+            const totalValue = portfolioData.totalValue || 0;
+            // При первом создании портфеля initialCapital устанавливается равным totalValue
+            // Это позволяет правильно рассчитывать PnL от общей суммы портфеля
+            const initialCapital = portfolioData.initialCapital || (totalValue > 0 ? totalValue : null);
             portfolio = await this.create({
                 id: 1, // Явно указываем ID=1
                 cash: portfolioData.cash || 0,
                 positions: portfolioData.positions || {},
                 trades: portfolioData.trades || [],
-                totalValue: portfolioData.totalValue || 0,
+                totalValue: totalValue,
                 positionsValue: portfolioData.positionsValue || 0,
-                initialCapital: portfolioData.initialCapital || null,
+                initialCapital: initialCapital,
                 version: 1,
                 lastUpdated: new Date()
             });
-            console.log(`✅ Новый реальный портфель создан в БД: ID=${portfolio.id}, totalValue=${portfolio.totalValue}`);
+            console.log(`✅ Новый реальный портфель создан в БД: ID=${portfolio.id}, totalValue=${portfolio.totalValue}, initialCapital=${portfolio.initialCapital}`);
         } else {
             // Обновляем существующий портфель
             console.log(`📊 Обновление реального портфеля в БД: ID=${portfolio.id}`);
@@ -163,13 +167,26 @@ RealPortfolio.savePortfolio = async function(portfolioData) {
                 });
             }
             
+            // При обновлении портфеля, если initialCapital не установлен, устанавливаем его равным текущему totalValue
+            // Это позволяет правильно рассчитывать PnL от общей суммы портфеля
+            const totalValue = portfolioData.totalValue || 0;
+            let initialCapital = portfolioData.initialCapital;
+            if (!initialCapital && !portfolio.initialCapital && totalValue > 0) {
+                // Если initialCapital не был установлен ранее, устанавливаем его равным текущему totalValue
+                initialCapital = totalValue;
+                console.log(`   💰 Установка initialCapital = totalValue: ${initialCapital} RUB`);
+            } else {
+                // Сохраняем существующий initialCapital, если он уже был установлен
+                initialCapital = initialCapital || portfolio.initialCapital;
+            }
+            
             await portfolio.update({
                 cash: portfolioData.cash || 0,
                 positions: portfolioData.positions || {},
                 trades: portfolioData.trades || [],
-                totalValue: portfolioData.totalValue || 0,
+                totalValue: totalValue,
                 positionsValue: portfolioData.positionsValue || 0,
-                initialCapital: portfolioData.initialCapital || portfolio.initialCapital,
+                initialCapital: initialCapital,
                 lastUpdated: new Date()
             });
             

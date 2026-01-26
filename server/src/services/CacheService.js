@@ -104,17 +104,10 @@ class CacheService {
                         continue;
                     }
 
-                    // Убрали строгую фильтрацию по валюте - фильтрация уже выполнена в getStocks()
-                    // Сохраняем все инструменты, которые прошли фильтрацию в API
-
-                    // Пропускаем запрос дивидендов для всех инструментов, чтобы избежать rate limiting
-                    // Дивиденды можно запрашивать отдельно по требованию
                     let dividendYield = null;
 
                     const priceEntry = priceMap[instrument.figi];
-
-                    // Определяем тип инструмента из API данных
-                    // instrumentKind может быть: 'INSTRUMENT_TYPE_SHARE', 'INSTRUMENT_TYPE_BOND', и т.д.
+                    
                     let instrumentType = 'share'; // По умолчанию для getStocks()
                     if (instrument.instrumentKind) {
                         // Преобразуем 'INSTRUMENT_TYPE_SHARE' -> 'share'
@@ -129,6 +122,25 @@ class CacheService {
                         instrumentType = instrument.instrumentType.toLowerCase();
                     }
                     
+                    let isAccessible = true; // По умолчанию доступен
+                    
+                    // Если apiTradeAvailableFlag = false, инструмент недоступен через API
+                    if (instrument.apiTradeAvailableFlag === false) {
+                        isAccessible = false;
+                        console.log(`  ⚠️ ${instrument.ticker}: apiTradeAvailableFlag = false`);
+                    }
+                    
+                    // Если buyAvailableFlag = false, инструмент недоступен для покупки
+                    if (instrument.buyAvailableFlag === false) {
+                        isAccessible = false;
+                        console.log(`  ⚠️ ${instrument.ticker}: buyAvailableFlag = false`);
+                    }
+                    
+                    if (instrument.forQualInvestorFlag === true || instrument.forQualifiedInvestorFlag === true) {
+                        isAccessible = false;
+                        console.log(`  ⚠️ ${instrument.ticker}: requires qualified investor (forQualInvestorFlag = true)`);
+                    }
+                    
                     await CachedInstrument.upsert({
                         figi: instrument.figi,
                         ticker: instrument.ticker,
@@ -141,6 +153,7 @@ class CacheService {
                         lastPriceTime: priceEntry?.time ?? null,
                         dividendYield: dividendYield,
                         instrumentType: instrumentType,
+                        isAccessible: isAccessible,
                         apiData: instrument,
                         lastUpdated: new Date()
                     });
@@ -210,6 +223,9 @@ class CacheService {
     }
 
     // Получение всех инструментов из кеша
+    // ВАЖНО: Этот метод используется для обучения, поэтому возвращает ВСЕ инструменты
+    // (включая те, что требуют квалифицированного инвестора)
+    // Для рекомендаций используйте getAccessibleInstruments()
     async getAllInstruments(limit = null) {
         try {
             const whereClause = {
@@ -237,6 +253,39 @@ class CacheService {
             return instruments;
         } catch (error) {
             console.error('Error getting all instruments:', error);
+            // Возвращаем пустой массив вместо выброса ошибки
+            return [];
+        }
+    }
+
+    // Получение только доступных инструментов (без требования квалифицированного инвестора)
+    // Используется для рекомендаций, но НЕ для обучения
+    // Обучение должно использовать getAllInstruments() для работы со всеми данными
+    async getAccessibleInstruments(limit = null) {
+        try {
+            const whereClause = {
+                [Op.or]: [
+                    { currency: 'RUB' },
+                    { currency: 'rub' },
+                    { currency: null } // Для старых записей без валюты
+                ],
+                isAccessible: true // Только доступные инструменты (не требуют квалифицированного инвестора)
+            };
+            
+            const queryOptions = {
+                where: whereClause,
+                order: [['ticker', 'ASC']]
+            };
+            
+            // Добавляем лимит только если он явно указан
+            if (limit !== null && limit > 0) {
+                queryOptions.limit = limit;
+            }
+            
+            const instruments = await CachedInstrument.findAll(queryOptions);
+            return instruments;
+        } catch (error) {
+            console.error('Error getting accessible instruments:', error);
             // Возвращаем пустой массив вместо выброса ошибки
             return [];
         }

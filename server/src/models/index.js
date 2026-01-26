@@ -41,3 +41,6 @@ export { default as MacroIndicator } from './MacroIndicator.js';
 export { default as PortfolioRebalancing } from './PortfolioRebalancing.js';
 export { default as FundamentalData } from './FundamentalData.js';
 export { default as Asset } from './Asset.js';
+export { default as RealPortfolio } from './RealPortfolio.js';
+export { default as VirtualPortfolio } from './VirtualPortfolio.js';
+export { default as CashFlow } from './CashFlow.js';

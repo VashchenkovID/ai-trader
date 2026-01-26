@@ -303,6 +303,31 @@ export async function recalculatePortfolioValue(context) {
         // Отправляем обновление через WebSocket
         const WebSocketService = await getWebSocketService();
         if (WebSocketService) {
+            // Используем новый расчет PnL
+            const PnLCalculationService = (await import('../../services/PnLCalculationService.js')).default;
+            let pnlData = null;
+            try {
+                pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+                    tradingMode: portfolio?.mode || 'paper',
+                    includeTrades: true,
+                    includePositions: true,
+                    includeCashFlow: true
+                });
+            } catch (error) {
+                const LoggerService = (await import('../../services/LoggerService.js')).default;
+                LoggerService.error('Error calculating PnL in priceUpdateUtils', {
+                    service: 'priceUpdateUtils',
+                    operation: 'recalculatePortfolioValue',
+                    error: { message: error.message }
+                });
+                // Возвращаем нулевые значения в новой структуре
+                pnlData = {
+                    total: { pnl: 0, percent: 0 },
+                    realized: { total: 0, percent: 0 },
+                    unrealized: { total: 0 }
+                };
+            }
+
             WebSocketService.broadcast({
                 type: 'portfolio_value_updated',
                 data: {
@@ -310,8 +335,13 @@ export async function recalculatePortfolioValue(context) {
                     positionsValue,
                     totalValue,
                     initialCapital: portfolio.initialCapital || 1000000,
-                    pnl: totalValue - (portfolio.initialCapital || 1000000),
-                    pnlPercent: portfolio.initialCapital ? ((totalValue - portfolio.initialCapital) / portfolio.initialCapital) * 100 : 0,
+                    pnl: {
+                        total: pnlData.total.pnl,
+                        totalPercent: pnlData.total.percent,
+                        realized: pnlData.realized.total,
+                        realizedPercent: pnlData.realized.percent,
+                        unrealized: pnlData.unrealized?.total || 0
+                    },
                     timestamp: new Date().toISOString()
                 }
             });
