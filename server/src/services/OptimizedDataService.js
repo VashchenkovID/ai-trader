@@ -1,5 +1,4 @@
 import CacheService from './CacheService.js';
-import TinkoffApiService from './TinkoffApiService.js';
 import DividendService from './DividendService.js';
 import MacroDataService from './MacroDataService.js';
 import FundamentalDataService from './FundamentalDataService.js';
@@ -78,9 +77,7 @@ class OptimizedDataService {
                 if (candles && candles.length >= 10) {
                     const adaptiveLookback = Math.max(5, Math.floor(candles.length / 2));
                     const adaptiveHorizon = Math.max(1, Math.floor(candles.length / 10));
-                    
-                    console.log(`📊 Adaptive training: ${candles.length} candles, lookback=${adaptiveLookback}, horizon=${adaptiveHorizon}`);
-                    
+
                     // Рекурсивно вызываем с адаптивными параметрами
                     return await this.prepareTrainingData(candles, adaptiveLookback, adaptiveHorizon, figi);
                 } else {
@@ -88,8 +85,6 @@ class OptimizedDataService {
                     return { features: [], labels: [] };
                 }
             }
-            
-            console.log(`📊 Starting prepareTrainingData: ${candles.length} candles, lookback=${lookbackPeriod}, horizon=${predictionHorizon}`);
 
             // Загружаем все свечи один раз для использования в getMarketFeatures
             // Это предотвращает множественные запросы к кешу
@@ -121,9 +116,6 @@ class OptimizedDataService {
                     try {
                         // Логируем прогресс
                         processedSamples++;
-                        if (processedSamples % logInterval === 0 || processedSamples === 1) {
-                            console.log(`📊 Preparing training data: ${processedSamples}/${totalSamples} samples (${Math.round(processedSamples / totalSamples * 100)}%)`);
-                        }
                         
                         // Подготавливаем фичи, передавая предзагруженные свечи
                         const featureVector = await this.createFeatureVector(window, figi, allCandles);
@@ -158,8 +150,7 @@ class OptimizedDataService {
             }
 
             const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
-            console.log(`✅ Prepared ${features.length} training samples in ${elapsedTime}s`);
-            
+
             return { features, labels };
         } catch (error) {
             console.error('❌ Error preparing training data:', error);
@@ -323,8 +314,6 @@ class OptimizedDataService {
                     // Обрезаем лишние
                     features.splice(expectedSize);
                 }
-                
-                console.log(`✅ Fixed feature size to ${features.length}`);
             }
             
             // Применяем clipping для всех фичей - ограничиваем значения в диапазоне -10 до 10
@@ -459,18 +448,12 @@ class OptimizedDataService {
      */
     async updateInstrumentData(figi) {
         try {
-            console.log(`🔄 Updating data for ${figi}...`);
-            
             // Обновляем свечи
             await CacheService.updateCandles(figi);
             
             // Обновляем дивиденды
             await DividendService.updateDividends(figi);
-            
-            // Обновляем информацию об инструменте
-            // await CompanySyncService.syncInstrument(figi); // Временно отключено
-            
-            console.log(`✅ Data updated for ${figi}`);
+
         } catch (error) {
             console.error(`❌ Error updating data for ${figi}:`, error);
             throw error;
@@ -482,8 +465,6 @@ class OptimizedDataService {
      */
     async updateAllData() {
         try {
-            console.log('🔄 Updating all data...');
-            
             const instruments = await CacheService.getAllInstruments();
             const results = [];
             
@@ -495,8 +476,6 @@ class OptimizedDataService {
                     results.push({ figi: instrument.figi, success: false, error: error.message });
                 }
             }
-            
-            console.log(`✅ Data update completed. ${results.filter(r => r.success).length}/${results.length} successful`);
             return results;
         } catch (error) {
             console.error('❌ Error updating all data:', error);

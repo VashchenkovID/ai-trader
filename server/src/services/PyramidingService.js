@@ -1,9 +1,7 @@
 import PositionPyramid from '../models/PositionPyramid.js';
-import TradingRequest from '../models/TradingRequest.js';
 import Recommendation from '../models/Recommendation.js';
 import SettingsService from './SettingsService.js';
 import LoggerService from './LoggerService.js';
-import { Op } from 'sequelize';
 
 /**
  * Сервис для управления пирамидингом позиций

@@ -4,7 +4,6 @@ import Settings from '../models/Settings.js';
 import CacheService from './CacheService.js';
 import CachedInstrument from '../models/CachedInstrument.js';
 import {
-    parseCbrXml,
     parseCbrKeyRateXml,
     parseCbrKeyRateHtml,
     parseCbrCurrencyJson,
@@ -13,7 +12,6 @@ import {
     parseMoexCommodityJson,
     normalizeIndicator as normalizeIndicatorUtil,
     validateIndicator as validateIndicatorUtil,
-    calculateChange
 } from '../utils/macroDataParsers.js';
 
 /**
@@ -573,7 +571,6 @@ class MacroDataService {
     clearCache() {
         this.dataCache.clear();
         this.cacheTimestamps.clear();
-        console.log('✅ Кеш MacroDataService очищен');
     }
 
     /**
@@ -584,7 +581,6 @@ class MacroDataService {
      */
     async fetchCbrData(startDate = null, endDate = null) {
         if (!this.settings.sources.cbr) {
-            console.log('ℹ️ Источник ЦБ РФ отключен в настройках');
             return [];
         }
 
@@ -616,8 +612,7 @@ class MacroDataService {
                 };
                 
                 const apiUrl = `https://www.cbr.ru/DailyInfoWebServ/DailyInfo.asmx/KeyRate?fromDate=${formatDateForApi(start)}&toDate=${formatDateForApi(end)}`;
-                console.log(`📡 Запрос к API ЦБ РФ (ключевая ставка): ${apiUrl}`);
-                
+
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 15000);
                 
@@ -635,11 +630,9 @@ class MacroDataService {
 
                     if (apiResponse.ok) {
                         const xmlText = await apiResponse.text();
-                        console.log(`📄 Получен XML от API ЦБ РФ, длина: ${xmlText.length} символов`);
-                        
+
                         if (xmlText.length > 100) {
                             records = parseCbrKeyRateXml(xmlText);
-                            console.log(`📊 Распарсено ${records.length} записей из API ЦБ РФ`);
                         }
                     }
                 } catch (apiError) {
@@ -658,8 +651,7 @@ class MacroDataService {
                     
                     // Используем параметры запроса для фильтрации по датам
                     const htmlUrl = `https://cbr.ru/hd_base/KeyRate/?UniDbQuery.Posted=True&UniDbQuery.From=${formatDateForUrl(start)}&UniDbQuery.To=${formatDateForUrl(end)}`;
-                    console.log(`📡 Парсинг HTML страницы ЦБ РФ: ${htmlUrl}`);
-                    
+
                     const htmlController = new AbortController();
                     const htmlTimeoutId = setTimeout(() => htmlController.abort(), 15000);
                     
@@ -676,10 +668,8 @@ class MacroDataService {
 
                     if (htmlResponse.ok) {
                         const htmlText = await htmlResponse.text();
-                        console.log(`📄 Получен HTML от ЦБ РФ, длина: ${htmlText.length} символов`);
-                        
+
                         records = parseCbrKeyRateHtml(htmlText, start, end);
-                        console.log(`📊 Распарсено ${records.length} записей из HTML ЦБ РФ`);
                     } else {
                         const errorText = await htmlResponse.text().catch(() => 'Не удалось прочитать ответ');
                         console.warn(`⚠️ ЦБ РФ вернул статус ${htmlResponse.status}: ${errorText.substring(0, 200)}`);
@@ -725,8 +715,7 @@ class MacroDataService {
             // 2. Курсы валют (USD/RUB, EUR/RUB)
             try {
                 const currencyUrl = 'https://www.cbr-xml-daily.ru/daily_json.js';
-                console.log(`📡 Запрос курсов валют от ЦБ РФ: ${currencyUrl}`);
-                
+
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 15000);
                 
@@ -743,8 +732,7 @@ class MacroDataService {
 
                 if (currencyResponse.ok) {
                     const currencyJson = await currencyResponse.json();
-                    console.log(`📄 Получен JSON от ЦБ РФ для курсов валют`);
-                    
+
                     const currencyRecords = parseCbrCurrencyJson(currencyJson);
                     
                     // Получаем предыдущие значения для каждой валюты
@@ -795,7 +783,6 @@ class MacroDataService {
                         }
                     }
                     
-                    console.log(`✅ Обработано ${currencyRecords.length} курсов валют от ЦБ РФ`);
                 } else {
                     const errorText = await currencyResponse.text().catch(() => 'Не удалось прочитать ответ');
                     console.warn(`⚠️ ЦБ РФ (валюты) вернул статус ${currencyResponse.status}: ${errorText.substring(0, 200)}`);
@@ -820,7 +807,6 @@ class MacroDataService {
                 console.warn('⚠️ Ошибка получения инфляции от ЦБ РФ:', error.message);
             }
 
-            console.log(`✅ Получено ${indicators.length} индикаторов от ЦБ РФ`);
             return indicators;
         } catch (error) {
             console.error('❌ Ошибка получения данных от ЦБ РФ:', error);
@@ -836,7 +822,6 @@ class MacroDataService {
      */
     async fetchRosstatData(startDate = null, endDate = null) {
         if (!this.settings.sources.rosstat) {
-            console.log('ℹ️ Источник Росстата отключен в настройках');
             return [];
         }
 
@@ -876,8 +861,7 @@ class MacroDataService {
 
             for (const source of rosstatSources) {
                 try {
-                    console.log(`📡 Парсинг HTML страницы Investing.com (${source.name}): ${source.url}`);
-                    
+
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 20000);
                     
@@ -902,12 +886,10 @@ class MacroDataService {
                     }
 
                     const htmlText = await response.text();
-                    console.log(`📄 Получен HTML от Investing.com (${source.name}), длина: ${htmlText.length} символов`);
-                    
+
                     // Используем указанный парсер или парсер по умолчанию
                     const parser = source.parser || parseInvestingRosstatHtml;
                     const records = parser(htmlText, start, end);
-                    console.log(`📊 Распарсено записей от Investing.com (${source.name}): ${records.length}`);
 
                     if (records.length > 0) {
                         // Получаем предыдущее значение для расчета изменения (если не было в metadata)
@@ -946,7 +928,6 @@ class MacroDataService {
                 }
             }
 
-            console.log(`✅ Получено ${indicators.length} индикаторов от Росстата (через Investing.com)`);
             return indicators;
         } catch (error) {
             console.error('❌ Ошибка получения данных от Росстата:', error);
@@ -962,7 +943,6 @@ class MacroDataService {
      */
     async fetchMoexData(startDate = null, endDate = null) {
         if (!this.settings.sources.moex) {
-            console.log('ℹ️ Источник Мосбиржи отключен в настройках');
             return [];
         }
 
@@ -975,8 +955,7 @@ class MacroDataService {
             // Investing.com HTML парсинг для индекса волатильности (RVI)
             try {
                 const rviUrl = `https://ru.investing.com/indices/russian-vix`;
-                console.log(`📡 Парсинг HTML страницы Investing.com: ${rviUrl}`);
-                
+
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 20000);
                 
@@ -1001,10 +980,8 @@ class MacroDataService {
                 }
 
                 const htmlText = await response.text();
-                console.log(`📄 Получен HTML от Investing.com, длина: ${htmlText.length} символов`);
-                
+
                 const records = parseTradingViewRviHtml(htmlText, start, end);
-                console.log(`📊 Распарсено записей от Investing.com: ${records.length}`);
 
                 if (records.length > 0) {
                     // Получаем предыдущее значение для расчета изменения
@@ -1042,7 +1019,6 @@ class MacroDataService {
                 }
             }
 
-            console.log(`✅ Получено ${indicators.length} индикаторов от Investing.com`);
             return indicators;
         } catch (error) {
             console.error('❌ Ошибка получения данных от Мосбиржи:', error);
@@ -1077,8 +1053,7 @@ class MacroDataService {
             
             // Получаем список всех активных фьючерсов на FORTS
             const url = 'https://iss.moex.com/iss/engines/futures/markets/forts/securities.json?iss.meta=off';
-            console.log(`📡 Запрос списка активных фьючерсов от MOEX ISS API: ${url}`);
-            
+
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000);
             
@@ -1167,11 +1142,9 @@ class MacroDataService {
                 
                 if (activeFuture) {
                     futuresMap[type] = activeFuture.secid;
-                    console.log(`✅ Найден активный фьючерс для ${type}: ${activeFuture.secid}`);
                 }
             }
 
-            console.log(`📊 Найдено ${Object.keys(futuresMap).length} активных фьючерсов на сырье`);
             return futuresMap;
         } catch (error) {
             if (error.name === 'AbortError') {
@@ -1192,7 +1165,6 @@ class MacroDataService {
      */
     async fetchMoexCommodityData(startDate = null, endDate = null) {
         if (!this.settings.sources.moex) {
-            console.log('ℹ️ Источник Мосбиржи отключен в настройках');
             return [];
         }
 
@@ -1228,7 +1200,6 @@ class MacroDataService {
                     if (!config) continue;
 
                     const url = `https://iss.moex.com/iss/history/engines/futures/markets/forts/securities/${secid}.json?from=${startDateStr}&till=${endDateStr}&iss.meta=off`;
-                    console.log(`📡 Запрос исторических данных для ${commodityType} (${secid}): ${url}`);
 
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -1256,7 +1227,6 @@ class MacroDataService {
                     const records = parseMoexCommodityJson(jsonData, commodityType, config.baseCode);
                     
                     if (records.length === 0) {
-                        console.log(`ℹ️ Нет данных для ${commodityType} (${secid})`);
                         continue;
                     }
 
@@ -1317,14 +1287,12 @@ class MacroDataService {
                         }
                     }
 
-                    console.log(`✅ Обработано ${records.length} записей для ${commodityType} (${secid})`);
                 } catch (error) {
                     console.warn(`⚠️ Ошибка получения данных для ${commodityType}:`, error.message);
                     console.error('Детали ошибки:', error);
                 }
             }
 
-            console.log(`✅ Получено ${indicators.length} индикаторов цен на сырье от MOEX ISS API`);
             return indicators;
         } catch (error) {
             console.error('❌ Ошибка получения данных о ценах на сырье от MOEX ISS API:', error);
@@ -1350,7 +1318,6 @@ class MacroDataService {
 
             const TinkoffApiService = (await import('./TinkoffApiService.js')).default;
 
-            console.log('🔄 Начало загрузки рыночных индексов...');
 
             // Для каждого индекса
             for (const [indexKey, config] of Object.entries(this.marketIndices)) {
@@ -1363,16 +1330,13 @@ class MacroDataService {
                     });
 
                     if (instrument && instrument.figi) {
-                        console.log(`✅ Индекс ${config.ticker} уже есть в БД (FIGI: ${instrument.figi})`);
-                        
+
                         // Обновляем тип на 'index', если нужно
                         if (instrument.instrumentType !== 'index') {
                             await instrument.update({ instrumentType: 'index' });
-                            console.log(`   Обновлен тип на 'index'`);
                         }
                     } else {
                         // Ищем через Tinkoff API
-                        console.log(`🔍 Поиск индекса ${config.ticker} через Tinkoff API...`);
                         const apiInstrument = await TinkoffApiService.findInstrument(config.ticker);
 
                         if (!apiInstrument || !apiInstrument.figi) {
@@ -1406,15 +1370,12 @@ class MacroDataService {
                         }
 
                         instrument = cachedInstrument;
-                        console.log(`✅ Индекс ${config.ticker} сохранен в БД (FIGI: ${apiInstrument.figi})`);
                         stats.loaded++;
                     }
 
                     // Загружаем свечи (последние 365 дней для истории)
-                    console.log(`📊 Загрузка свечей для индекса ${config.ticker} (FIGI: ${instrument.figi})...`);
                     try {
                         await CacheService.updateCandles(instrument.figi, 'DAY', 365);
-                        console.log(`✅ Свечи для ${config.ticker} загружены`);
                     } catch (candleError) {
                         console.warn(`⚠️ Ошибка загрузки свечей для ${config.ticker}:`, candleError.message);
                         stats.errors.push(`${config.ticker}: ошибка загрузки свечей - ${candleError.message}`);
@@ -1426,7 +1387,6 @@ class MacroDataService {
                 }
             }
 
-            console.log(`✅ Загрузка индексов завершена. Загружено: ${stats.loaded}, Ошибок: ${stats.errors.length}`);
             return stats;
 
         } catch (error) {
@@ -1536,14 +1496,12 @@ class MacroDataService {
                         }
                     }
 
-                    console.log(`✅ Обработано ${filteredCandles.length} записей для индекса ${config.ticker}`);
                 } catch (error) {
                     console.warn(`⚠️ Ошибка получения данных для индекса ${config.ticker}:`, error.message);
                     console.error('Детали ошибки:', error);
                 }
             }
 
-            console.log(`✅ Получено ${indicators.length} индикаторов рыночных индексов от Tinkoff API`);
             return indicators;
         } catch (error) {
             console.error('❌ Ошибка получения данных рыночных индексов:', error);
@@ -1568,7 +1526,6 @@ class MacroDataService {
         };
 
         try {
-            console.log('🔄 Начало обновления макроэкономических данных...');
 
             // 1. ЦБ РФ
             if (this.settings.sources.cbr) {
@@ -1653,7 +1610,6 @@ class MacroDataService {
             this.updateStats.total = stats.total;
             this.lastUpdate = new Date();
 
-            console.log('✅ Обновление макроэкономических данных завершено:', stats);
             return stats;
         } catch (error) {
             console.error('❌ Критическая ошибка обновления данных:', error);

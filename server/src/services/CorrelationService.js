@@ -2,7 +2,6 @@ import CacheService from './CacheService.js';
 import CorrelationCache from '../models/CorrelationCache.js';
 import Settings from '../models/Settings.js';
 import { Op } from 'sequelize';
-import sequelize from '../config/database.js';
 
 /**
  * Сервис для расчета и управления корреляциями между инструментами
@@ -24,8 +23,7 @@ class CorrelationService {
      */
     async initialize() {
         try {
-            console.log('🔗 Инициализация CorrelationService...');
-            
+
             // Загружаем настройки
             await this.loadSettings();
             
@@ -33,7 +31,6 @@ class CorrelationService {
             await CorrelationCache.cleanExpired();
             
             this.isInitialized = true;
-            console.log('✅ CorrelationService инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации CorrelationService:', error);
             throw error;
@@ -469,7 +466,6 @@ class CorrelationService {
         let cached = 0;
         let errors = 0;
 
-        console.log(`🔄 Предварительный расчет корреляций для ${figis.length} инструментов...`);
 
         // Рассчитываем корреляции для всех пар
         const promises = [];
@@ -508,7 +504,6 @@ class CorrelationService {
 
         await Promise.all(promises);
 
-        console.log(`✅ Предварительный расчет завершен: рассчитано ${calculated}, из кеша ${cached}, ошибок ${errors}`);
 
         return {
             calculated,

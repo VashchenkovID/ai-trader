@@ -94,13 +94,19 @@ const StrategyAllocationCards: React.FC<StrategyAllocationCardsProps> = ({
           const allocation = strategy.allocation;
           if (!allocation) return null;
 
+          // Для виртуального портфеля используем allocatedAmount из бэкенда напрямую
           const allocatedAmount = allocation.allocatedAmount || 0;
-          const usedAmount = allocation.realUsedAmount !== undefined 
-            ? allocation.realUsedAmount 
-            : allocation.usedAmount || 0;
-          const availableAmount = allocation.availableAmount || 0;
+          
+          // Используем realUsedAmount если он есть (реальное использование из заявок),
+          // иначе usedAmount (из БД). realUsedAmount более актуален для виртуального портфеля
+          const usedAmount = allocation.realUsedAmount !== undefined && allocation.realUsedAmount !== null
+            ? allocation.realUsedAmount
+            : (allocation.usedAmount || 0);
+          const availableAmount = allocatedAmount - usedAmount;
+          
+          // Рассчитываем процент использования с точностью до 2 знаков
           const usedPercent = allocatedAmount > 0 
-            ? (usedAmount / allocatedAmount) * 100 
+            ? Math.round((usedAmount / allocatedAmount) * 10000) / 100  // Округляем до 2 знаков
             : 0;
           const positionsCount = allocation.positionsCount || 0;
 

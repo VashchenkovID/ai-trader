@@ -1,6 +1,5 @@
 import DatabaseMigration from '../models/DatabaseMigration.js';
 import sequelize from '../config/database.js';
-import { QueryTypes } from 'sequelize';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

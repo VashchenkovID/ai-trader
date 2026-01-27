@@ -163,6 +163,29 @@ async function performTradingRequestsPricesUpdate() {
                             // Это важно, так как статус может измениться между проверками
                             if ((isPriceReached || isPriceApproaching) && 
                                 (effectiveStatus === 'PENDING' || effectiveStatus === 'APPROVED')) {
+                                
+                                // КРИТИЧЕСКАЯ ПРОВЕРКА: Перезагружаем статус из БД непосредственно перед добавлением
+                                // Это необходимо, так как заявка может быть исполнена между проверками
+                                const freshRequest = await TradingRequest.findByPk(request.id, {
+                                    attributes: ['id', 'status']
+                                });
+                                
+                                if (!freshRequest) {
+                                    continue; // Заявка удалена
+                                }
+                                
+                                const finalStatus = freshRequest.status;
+                                
+                                // Если заявка уже выполнена, отклонена или отменена, НЕ добавляем в readyToExecute
+                                if (['EXECUTED', 'REJECTED', 'CANCELLED', 'EXPIRED'].includes(finalStatus)) {
+                                    continue;
+                                }
+                                
+                                // Убеждаемся, что заявка все еще в ожидающем статусе
+                                if (finalStatus !== 'PENDING' && finalStatus !== 'APPROVED') {
+                                    continue;
+                                }
+                                
                                 readyToExecute.push({
                                     requestId: request.id,
                                     figi: request.figi,
@@ -176,7 +199,7 @@ async function performTradingRequestsPricesUpdate() {
                                     isPriceReached,
                                     isPriceApproaching,
                                     quantity: request.quantity,
-                                    status: effectiveStatus, // Используем актуальный статус из Map
+                                    status: finalStatus, // Используем финальный статус из БД
                                     confidence: request.confidence
                                 });
                             }

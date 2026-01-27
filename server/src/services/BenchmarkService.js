@@ -1,4 +1,3 @@
-import PerformanceAnalyzer from './PerformanceAnalyzer.js';
 import TradingEngine from './TradingEngine.js';
 import CacheService from './CacheService.js';
 import LoggerService from './LoggerService.js';

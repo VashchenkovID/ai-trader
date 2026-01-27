@@ -23,20 +23,19 @@ const formatNumber = (value: number | null | undefined, decimals: number = 2) =>
   if (value === null || value === undefined || isNaN(value)) return '—';
   return value.toFixed(decimals);
 };
+const periodOptions = [
+  { value: 'day', label: 'День' },
+  { value: 'week', label: 'Неделя' },
+  { value: 'month', label: 'Месяц' },
+  { value: 'quarter', label: 'Квартал' },
+  { value: 'year', label: 'Год' },
+];
 
 export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({ className = '' }) => {
   const [period, setPeriod] = useState<ChartPeriod>('month');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-
-  const periodOptions = [
-    { value: 'day', label: 'День' },
-    { value: 'week', label: 'Неделя' },
-    { value: 'month', label: 'Месяц' },
-    { value: 'quarter', label: 'Квартал' },
-    { value: 'year', label: 'Год' },
-  ];
 
   useEffect(() => {
     loadDashboardData();

@@ -1,7 +1,5 @@
-import { performance } from 'perf_hooks';
 import os from 'os';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
-import ServiceManager from './ServiceManager.js';
 import LoggerService from './LoggerService.js';
 
 /**

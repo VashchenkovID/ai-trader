@@ -24,7 +24,6 @@ class WebSocketService {
         
         try {
             this.wss = new WebSocketServer({ server, path });
-            console.log('✅ WebSocket server created successfully');
         } catch (error) {
             console.error('❌ Failed to create WebSocket server:', error);
             return;
@@ -41,7 +40,6 @@ class WebSocketService {
             
             // Проверяем глобальный лимит подключений
             if (!checkConnectionLimit()) {
-                console.log(`⚠️ Global connection limit reached, closing connection`);
                 ws.close(1000, 'Connection limit reached');
                 return;
             }
@@ -109,7 +107,6 @@ class WebSocketService {
                     });
                     break;
                 default:
-                    console.log('Unknown WebSocket message type:', data.type);
             }
         } catch (error) {
             console.error('Error handling WebSocket message:', error);
@@ -535,7 +532,6 @@ export function getWebSocketService() {
 // Глобальная защита от множественных подключений
 export function checkConnectionLimit() {
     if (connectionCount >= MAX_CONNECTIONS) {
-        console.log(`⚠️ Connection limit reached (${connectionCount}/${MAX_CONNECTIONS}), blocking new connections`);
         return false;
     }
     return true;
@@ -547,7 +543,6 @@ export function incrementConnectionCount() {
 
 export function decrementConnectionCount() {
     connectionCount = Math.max(0, connectionCount - 1);
-    console.log(`🔌 Connection count: ${connectionCount}/${MAX_CONNECTIONS}`);
 }
 
 export default WebSocketService;

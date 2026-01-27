@@ -1,10 +1,6 @@
 import Company from '../models/Company.js';
-import TradingRequest from '../models/TradingRequest.js';
-import PositionStrategy from '../models/PositionStrategy.js';
 import SettingsService from './SettingsService.js';
 import LoggerService from './LoggerService.js';
-import TinkoffApiService from './TinkoffApiService.js';
-import { Op } from 'sequelize';
 
 /**
  * Сервис для контроля диверсификации портфеля

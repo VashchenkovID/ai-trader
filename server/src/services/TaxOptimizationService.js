@@ -1,7 +1,5 @@
-import TradingRequest from '../models/TradingRequest.js';
 import SettingsService from './SettingsService.js';
 import LoggerService from './LoggerService.js';
-import { Op } from 'sequelize';
 
 /**
  * Сервис для оптимизации комиссий и налогов

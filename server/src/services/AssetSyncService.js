@@ -18,20 +18,12 @@ class AssetSyncService {
         }
 
         try {
-            if (LoggerService.isInitialized) {
-                LoggerService.info('Initializing AssetSyncService', { service: 'AssetSyncService' });
-            }
-            
             this.isInitialized = true;
-            
-            if (LoggerService.isInitialized) {
-                LoggerService.info('AssetSyncService initialized', { service: 'AssetSyncService' });
-            }
         } catch (error) {
             if (LoggerService.isInitialized) {
                 LoggerService.error('Failed to initialize AssetSyncService', {
                     service: 'AssetSyncService',
-                    error: { message: error.message, stack: error.stack }
+                    error: {message: error.message, stack: error.stack}
                 });
             }
             throw error;
@@ -50,21 +42,15 @@ class AssetSyncService {
                 },
                 attributes: ['figi']
             });
-            
+
             const figiSet = new Set(instruments.map(inst => inst.figi).filter(Boolean));
-            
-            if (LoggerService.isInitialized) {
-                LoggerService.info(`Found ${figiSet.size} active instruments in database`, {
-                    service: 'AssetSyncService'
-                });
-            }
-            
+
             return figiSet;
         } catch (error) {
             if (LoggerService.isInitialized) {
                 LoggerService.error('Error getting our instruments FIGI', {
                     service: 'AssetSyncService',
-                    error: { message: error.message }
+                    error: {message: error.message}
                 });
             }
             return new Set();
@@ -79,20 +65,16 @@ class AssetSyncService {
      */
     async syncRussianShares(forceUpdate = false) {
         try {
-            if (LoggerService.isInitialized) {
-                LoggerService.info('Starting sync of Russian shares', { service: 'AssetSyncService' });
-            }
-
             // Получаем список наших FIGI из БД
             const ourFigiSet = await this.getOurInstrumentsFigi();
-            
+
             if (ourFigiSet.size === 0) {
                 if (LoggerService.isInitialized) {
                     LoggerService.warn('No active instruments found in database. Sync will be skipped.', {
                         service: 'AssetSyncService'
                     });
                 }
-                return { synced: 0, created: 0, updated: 0, errors: 0, filtered: 0 };
+                return {synced: 0, created: 0, updated: 0, errors: 0, filtered: 0};
             }
 
             // Получаем все российские акции
@@ -103,9 +85,9 @@ class AssetSyncService {
 
             if (!assets || assets.length === 0) {
                 if (LoggerService.isInitialized) {
-                    LoggerService.warn('No assets received from API', { service: 'AssetSyncService' });
+                    LoggerService.warn('No assets received from API', {service: 'AssetSyncService'});
                 }
-                return { synced: 0, created: 0, updated: 0, errors: 0, filtered: 0 };
+                return {synced: 0, created: 0, updated: 0, errors: 0, filtered: 0};
             }
 
             let created = 0;
@@ -118,31 +100,25 @@ class AssetSyncService {
                 // Проверяем, есть ли в активе инструменты с FIGI из нашей БД
                 // Структура: asset.instruments - массив объектов с полем figi
                 const instruments = asset.instruments || [];
-                
+
                 if (!Array.isArray(instruments) || instruments.length === 0) {
                     filtered++;
                     return false;
                 }
-                
+
                 // Проверяем, есть ли хотя бы один инструмент с FIGI из нашей БД
                 const hasOurInstrument = instruments.some(instrument => {
                     const figi = instrument?.figi || instrument?.FIGI;
                     return figi && ourFigiSet.has(figi);
                 });
-                
+
                 if (!hasOurInstrument) {
                     filtered++;
                     return false;
                 }
-                
+
                 return true;
             });
-
-            if (LoggerService.isInitialized) {
-                LoggerService.info(`Filtered assets: ${filteredAssets.length} out of ${assets.length} (filtered out: ${filtered})`, {
-                    service: 'AssetSyncService'
-                });
-            }
 
             // Собираем UID отфильтрованных активов для очистки старых
             const validAssetUids = new Set(filteredAssets.map(a => a.uid).filter(Boolean));
@@ -150,7 +126,7 @@ class AssetSyncService {
             // Удаляем активы, которые не соответствуют нашим инструментам
             // Проверяем все активы в БД и удаляем те, у которых нет инструментов из нашей БД
             let cleanedCount = 0;
-            
+
             // Получаем все активы из БД для проверки
             const allAssetsInDb = await Asset.findAll({
                 attributes: ['uid', 'apiData']
@@ -177,7 +153,7 @@ class AssetSyncService {
                     assetsToDelete.push(dbAsset.uid);
                     continue;
                 }
-                
+
                 // Проверяем, есть ли хотя бы один инструмент с FIGI из нашей БД
                 const hasOurInstrument = instruments.some(instrument => {
                     const figi = instrument?.figi || instrument?.FIGI;
@@ -200,13 +176,6 @@ class AssetSyncService {
                     }
                 });
             }
-
-            if (LoggerService.isInitialized && cleanedCount > 0) {
-                LoggerService.info(`Cleaned up ${cleanedCount} outdated assets`, {
-                    service: 'AssetSyncService'
-                });
-            }
-
             // Сохраняем каждый отфильтрованный актив
             for (const assetData of filteredAssets) {
                 try {
@@ -215,7 +184,7 @@ class AssetSyncService {
                     }
 
                     const [asset, createdFlag] = await Asset.findOrCreate({
-                        where: { uid: assetData.uid },
+                        where: {uid: assetData.uid},
                         defaults: {
                             uid: assetData.uid,
                             name: assetData.name || null,
@@ -227,7 +196,7 @@ class AssetSyncService {
                         created++;
                     } else {
                         // Обновляем существующий актив, если forceUpdate или данные изменились
-                        if (forceUpdate || !asset.updatedAt || 
+                        if (forceUpdate || !asset.updatedAt ||
                             (new Date() - new Date(asset.updatedAt)) > 7 * 24 * 60 * 60 * 1000) { // Обновляем раз в неделю
                             await asset.update({
                                 name: assetData.name || asset.name,
@@ -242,7 +211,7 @@ class AssetSyncService {
                         LoggerService.error('Error syncing asset', {
                             service: 'AssetSyncService',
                             uid: assetData.uid,
-                            error: { message: error.message }
+                            error: {message: error.message}
                         });
                     }
                 }
@@ -256,20 +225,12 @@ class AssetSyncService {
                 filtered,
                 cleaned: cleanedCount || 0
             };
-
-            if (LoggerService.isInitialized) {
-                LoggerService.info('Sync completed', {
-                    service: 'AssetSyncService',
-                    ...result
-                });
-            }
-
             return result;
         } catch (error) {
             if (LoggerService.isInitialized) {
                 LoggerService.error('Error syncing Russian shares', {
                     service: 'AssetSyncService',
-                    error: { message: error.message, stack: error.stack }
+                    error: {message: error.message, stack: error.stack}
                 });
             }
             throw error;
@@ -307,17 +268,17 @@ class AssetSyncService {
                     )
                 LIMIT 1;
             `, {
-                replacements: { figi },
+                replacements: {figi},
                 type: Asset.sequelize.QueryTypes.SELECT
             });
 
-            return result.length > 0 && result[0].asset_uid ? result[0].asset_uid : null;
+            return result?.length > 0 && result?.[0]?.asset_uid ? result?.[0]?.asset_uid : null;
         } catch (error) {
             if (LoggerService.isInitialized) {
                 LoggerService.error('Error getting asset UID by FIGI', {
                     service: 'AssetSyncService',
                     figi,
-                    error: { message: error.message }
+                    error: {message: error.message}
                 });
             }
             return null;
@@ -331,12 +292,12 @@ class AssetSyncService {
     async getStats() {
         try {
             const total = await Asset.count();
-            
+
             // Подсчитываем типы инструментов из apiData
             const assets = await Asset.findAll({
                 attributes: ['apiData']
             });
-            
+
             const byType = {};
             assets.forEach(asset => {
                 if (asset.apiData?.instrumentType) {
@@ -355,10 +316,10 @@ class AssetSyncService {
             if (LoggerService.isInitialized) {
                 LoggerService.error('Error getting asset stats', {
                     service: 'AssetSyncService',
-                    error: { message: error.message }
+                    error: {message: error.message}
                 });
             }
-            return { total: 0, byType: {} };
+            return {total: 0, byType: {}};
         }
     }
 }

@@ -55,14 +55,6 @@ class NewsApiService {
                 apiKey: this.apiKey
             };
 
-            // Логируем параметры запроса (без API ключа для безопасности)
-            const paramsForLog = { ...params };
-            console.log('📡 NewsAPI.org запрос:', {
-                endpoint: `${this.baseUrl}${endpoint}`,
-                method: 'GET',
-                params: paramsForLog
-            });
-
             const queryString = new URLSearchParams(requestParams).toString();
             const url = `${this.baseUrl}${endpoint}?${queryString}`;
             const response = await fetch(url, {
@@ -222,11 +214,6 @@ class NewsApiService {
                 pageSize: params.pageSize,
                 figi: options.figi
             });
-
-            // Проверяем, откуда пришли данные (API или кеш)
-            if (response._fromCache) {
-                console.log(`📦 Использованы кешированные новости (возраст: ${Math.round(response._cacheAge / 1000 / 60)} минут)`);
-            }
 
             // NewsAPI возвращает данные в формате:
             // { status: 'ok', totalResults: 123, articles: [...] }

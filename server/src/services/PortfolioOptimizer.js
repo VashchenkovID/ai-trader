@@ -1,6 +1,5 @@
 import CorrelationService from './CorrelationService.js';
 import CacheService from './CacheService.js';
-import CachedCandle from '../models/CachedCandle.js';
 import Settings from '../models/Settings.js';
 
 /**
@@ -534,7 +533,6 @@ class PortfolioOptimizer {
         this.covarianceMatrixCache.clear();
         this.correlationMatrixCache.clear();
         this.expectedReturnsCache.clear();
-        console.log('✅ Кеш PortfolioOptimizer очищен');
     }
 
     /**

@@ -1,7 +1,6 @@
 import Settings from '../models/Settings.js';
 import MigrationStatus from '../models/MigrationStatus.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
-import RiskManagementService from './RiskManagementService.js';
 import TradingEngine from './TradingEngine.js';
 import sequelize from '../config/database.js';
 
@@ -99,7 +98,6 @@ class CapitalScalingService {
             });
 
             this.capitalLevels = levelsConfig;
-            console.log(`📊 Загружено ${Object.keys(this.capitalLevels).length} уровней капитала`);
 
         } catch (error) {
             console.error('❌ Ошибка загрузки уровней капитала:', error);
@@ -135,7 +133,6 @@ class CapitalScalingService {
             // Проверяем, существует ли таблица migration_status
             const tableExists = await this.checkTableExists('migration_status');
             if (!tableExists) {
-                console.log('⚠️ Таблица migration_status не существует, пропускаем загрузку истории');
                 return;
             }
 
@@ -197,7 +194,6 @@ class CapitalScalingService {
                 }
             }
 
-            console.log(`📊 Текущий уровень капитала: ${this.currentCapitalLevel} (${currentCapital.toLocaleString()} руб.)`);
         } catch (error) {
             console.error('❌ Ошибка определения уровня капитала:', error);
             this.currentCapitalLevel = 'micro';

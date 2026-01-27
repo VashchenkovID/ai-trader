@@ -1333,10 +1333,8 @@ class NewsAnalysisService {
             const { onProgress, maxRequestsPerDay = 100 } = options;
 
             // Получаем список FIGI без новостей за месяц
-            console.log('📊 Поиск инструментов без новостей за месяц...');
             const figisWithoutNews = await this.getFigisWithoutMonthNews();
             
-            console.log(`📈 Найдено ${figisWithoutNews.length} инструментов без новостей за месяц`);
 
             if (figisWithoutNews.length === 0) {
                 return {

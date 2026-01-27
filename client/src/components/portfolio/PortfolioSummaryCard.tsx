@@ -36,6 +36,7 @@ interface PortfolioSummaryCardProps {
   isConnected?: boolean;
   className?: string;
   strategies?: StrategyAllocation[];
+  strategyPositions?: Record<number, any[]>; // Позиции по стратегиям для пересчета использованных средств
 }
 
 const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
@@ -43,7 +44,8 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
   loading = false,
   isConnected = false,
   className = '',
-  strategies = []
+  strategies = [],
+  strategyPositions = {}
 }) => {
   const formatCurrency = (amount: number, currency: string = 'RUB') => {
     return new Intl.NumberFormat('ru-RU', {
@@ -167,22 +169,6 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
           </div>
         </div>
         
-        <div className="portfolio-summary-metric portfolio-summary-metric-day-change">
-          <div className="portfolio-summary-metric-content">
-            <div className={`portfolio-summary-metric-value ${
-              portfolio.dayChange >= 0 ? 'portfolio-summary-metric-success' : 'portfolio-summary-metric-error'
-            }`}>
-              {formatCurrency(portfolio.dayChange)}
-            </div>
-            <div className="portfolio-summary-metric-label">Изменение за день</div>
-            <div className={`portfolio-summary-metric-subtext ${
-              portfolio.dayChangePercent >= 0 ? 'portfolio-summary-metric-success' : 'portfolio-summary-metric-error'
-            }`}>
-              {formatPercent(portfolio.dayChangePercent)}
-            </div>
-          </div>
-        </div>
-        
         <div className="portfolio-summary-metric portfolio-summary-metric-positions">
           <div className="portfolio-summary-metric-content">
             <div className="portfolio-summary-metric-value portfolio-summary-metric-info">
@@ -209,20 +195,38 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
                 return null;
               }
 
-              // Пересчитываем выделенный бюджет на основе текущей стоимости портфеля
-              const budgetAllocationPercent = strategy.budgetAllocation || 0;
-              const allocatedAmount = portfolio.totalValue > 0
-                ? (portfolio.totalValue * budgetAllocationPercent) / 100
-                : (allocation.allocatedAmount || 0);
+              // Для виртуального портфеля используем allocatedAmount из бэкенда напрямую
+              // (он уже правильно рассчитан на основе totalValue портфеля)
+              const allocatedAmount = allocation.allocatedAmount || 0;
               
-              const usedAmount = allocation.realUsedAmount !== undefined 
-                ? allocation.realUsedAmount 
-                : allocation.usedAmount || 0;
+              // Используем реальные данные из позиций для расчета использованных средств и количества позиций
+              const strategyPositionsList = strategyPositions[strategy.id] || [];
+              const positionsCount = strategyPositionsList.length;
+              
+              // Рассчитываем использованные средства как сумму marketValue всех позиций стратегии
+              // Если marketValue нет, используем averagePrice * quantity
+              let usedAmount = 0;
+              if (strategyPositionsList.length > 0) {
+                usedAmount = strategyPositionsList.reduce((sum, pos) => {
+                  // Используем marketValue если есть, иначе рассчитываем как averagePrice * quantity
+                  const positionValue = pos.marketValue !== undefined && pos.marketValue !== null
+                    ? pos.marketValue
+                    : ((pos.averagePrice || 0) * (pos.quantity || 0));
+                  return sum + (positionValue || 0);
+                }, 0);
+              } else {
+                // Если позиций нет, используем данные из allocation
+                usedAmount = allocation.realUsedAmount !== undefined && allocation.realUsedAmount !== null
+                  ? allocation.realUsedAmount
+                  : (allocation.usedAmount || 0);
+              }
+              
               const availableAmount = allocatedAmount - usedAmount;
+              
+              // Рассчитываем процент использования с точностью до 2 знаков
               const usedPercent = allocatedAmount > 0 
-                ? (usedAmount / allocatedAmount) * 100 
+                ? Math.round((usedAmount / allocatedAmount) * 10000) / 100  // Округляем до 2 знаков
                 : 0;
-              const positionsCount = allocation.positionsCount || 0;
 
               const getStrategyVariant = (type: string): 'info' | 'warning' | 'error' | 'neutral' => {
                 switch (type) {

@@ -1,10 +1,7 @@
-import CacheService from './CacheService.js';
 import Recommendation from '../models/Recommendation.js';
 import PositionStrategy from '../models/PositionStrategy.js';
-import TradingRequest from '../models/TradingRequest.js';
 import SettingsService from './SettingsService.js';
 import LoggerService from './LoggerService.js';
-import { Op } from 'sequelize';
 
 /**
  * Сервис для оптимизации выходов из позиций

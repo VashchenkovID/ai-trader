@@ -1,6 +1,6 @@
 import winston from 'winston';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import {fileURLToPath} from 'url';
 import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,7 +17,7 @@ class LoggerService {
         this.requestIdGenerator = null;
         this.contextStore = new Map(); // Хранилище контекста для каждого запроса
     }
-    
+
     /**
      * Инициализация сервиса
      */
@@ -26,18 +26,18 @@ class LoggerService {
             // Создаем директорию для логов если её нет
             const logDir = path.join(__dirname, '../../logs');
             if (!fs.existsSync(logDir)) {
-                fs.mkdirSync(logDir, { recursive: true });
+                fs.mkdirSync(logDir, {recursive: true});
             }
-            
+
             // Настраиваем формат логов
             const logFormat = winston.format.combine(
-                winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
-                winston.format.errors({ stack: true }),
+                winston.format.timestamp({format: 'YYYY-MM-DD HH:mm:ss.SSS'}),
+                winston.format.errors({stack: true}),
                 winston.format.splat(),
                 winston.format.json(),
                 winston.format.printf((info) => {
-                    const { timestamp, level, message, ...meta } = info;
-                    
+                    const {timestamp, level, message, ...meta} = info;
+
                     // Формируем базовый объект лога
                     const logEntry = {
                         timestamp,
@@ -45,7 +45,7 @@ class LoggerService {
                         message,
                         ...meta
                     };
-                    
+
                     // В production возвращаем JSON, в development - читаемый формат
                     if (process.env.NODE_ENV === 'production') {
                         return JSON.stringify(logEntry);
@@ -62,7 +62,7 @@ class LoggerService {
                     }
                 })
             );
-            
+
             // Создаем транспорты с ротацией по размеру
             const transports = [
                 // Все логи с ротацией по размеру
@@ -74,7 +74,7 @@ class LoggerService {
                     level: 'info',
                     tailable: true // Старые файлы переименовываются в combined.log.1, combined.log.2 и т.д.
                 }),
-                
+
                 // Ошибки с ротацией по размеру
                 new winston.transports.File({
                     filename: path.join(logDir, 'error.log'),
@@ -85,7 +85,7 @@ class LoggerService {
                     tailable: true
                 })
             ];
-            
+
             // В консоль выводим только предупреждения и ошибки (warn, error)
             // Информационные логи (info, debug) идут только в файлы
             transports.push(
@@ -94,9 +94,9 @@ class LoggerService {
                     format: winston.format.combine(
                         winston.format.colorize(),
                         winston.format.printf((info) => {
-                            const { timestamp, level, message, ...meta } = info;
+                            const {timestamp, level, message, ...meta} = info;
                             let output = `${timestamp} [${level}] ${message}`;
-                            
+
                             // Добавляем контекст если есть
                             if (meta.requestId) {
                                 output = `[${meta.requestId}] ${output}`;
@@ -107,10 +107,10 @@ class LoggerService {
                             if (meta.userId) {
                                 output = `[user:${meta.userId}] ${output}`;
                             }
-                            
+
                             // Добавляем метаданные если есть
                             if (Object.keys(meta).length > 0) {
-                                const relevantMeta = { ...meta };
+                                const relevantMeta = {...meta};
                                 delete relevantMeta.requestId;
                                 delete relevantMeta.service;
                                 delete relevantMeta.userId;
@@ -118,18 +118,18 @@ class LoggerService {
                                     output += `\n${JSON.stringify(relevantMeta, null, 2)}`;
                                 }
                             }
-                            
+
                             return output;
                         })
                     )
                 })
             );
-            
+
             // Создаем логгер
             this.logger = winston.createLogger({
                 level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
                 format: logFormat,
-                defaultMeta: { 
+                defaultMeta: {
                     service: 'ai-trader',
                     environment: process.env.NODE_ENV || 'development'
                 },
@@ -151,14 +151,14 @@ class LoggerService {
                     })
                 ]
             });
-            
+
             // Генератор requestId
             this.requestIdGenerator = () => {
                 return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             };
-            
+
             this.isInitialized = true;
-            
+
             // Логируем инициализацию (только в файл, не в консоль)
             this.info('LoggerService initialized', {
                 service: 'LoggerService',
@@ -170,7 +170,7 @@ class LoggerService {
             throw error;
         }
     }
-    
+
     /**
      * Создание дочернего логгера с контекстом
      */
@@ -185,46 +185,45 @@ class LoggerService {
                 verbose: (...args) => console.log(...args)
             };
         }
-        
+
         return {
-            error: (message, meta = {}) => this.error(message, { ...context, ...meta }),
-            warn: (message, meta = {}) => this.warn(message, { ...context, ...meta }),
-            info: (message, meta = {}) => this.info(message, { ...context, ...meta }),
-            debug: (message, meta = {}) => this.debug(message, { ...context, ...meta }),
-            verbose: (message, meta = {}) => this.verbose(message, { ...context, ...meta })
+            error: (message, meta = {}) => this.error(message, {...context, ...meta}),
+            warn: (message, meta = {}) => this.warn(message, {...context, ...meta}),
+            info: (message, meta = {}) => this.info(message, {...context, ...meta}),
+            debug: (message, meta = {}) => this.debug(message, {...context, ...meta}),
+            verbose: (message, meta = {}) => this.verbose(message, {...context, ...meta})
         };
     }
-    
+
     /**
      * Установка контекста для текущего запроса
      */
     setContext(requestId, context = {}) {
         this.contextStore.set(requestId, context);
     }
-    
+
     /**
      * Получение контекста для текущего запроса
      */
     getContext(requestId) {
         return this.contextStore.get(requestId) || {};
     }
-    
+
     /**
      * Очистка контекста после завершения запроса
      */
     clearContext(requestId) {
         this.contextStore.delete(requestId);
     }
-    
+
     /**
      * Логирование с автоматическим добавлением контекста и маскированием секретов
      */
     async _log(level, message, meta = {}) {
         if (!this.isInitialized) {
             // Fallback на console если сервис не инициализирован
-            const consoleMethod = level === 'error' ? console.error : 
-                                 level === 'warn' ? console.warn : console.log;
-            
+            const consoleMethod = level === 'error' ? console.error : undefined
+
             // Маскируем секреты даже в fallback режиме
             try {
                 const SecretManagementService = (await import('./SecretManagementService.js')).default;
@@ -235,17 +234,18 @@ class LoggerService {
             } catch (error) {
                 // Игнорируем ошибки при маскировании в fallback режиме
             }
-            
-            consoleMethod(`[${level.toUpperCase()}] ${message}`, meta);
+            if (!!consoleMethod) {
+                consoleMethod(`[${level.toUpperCase()}] ${message}`, meta);
+            }
             return;
         }
-        
+
         // Добавляем контекст из requestId если есть
         if (meta.requestId) {
             const context = this.getContext(meta.requestId);
-            meta = { ...context, ...meta };
+            meta = {...context, ...meta};
         }
-        
+
         // Маскируем секреты перед логированием
         try {
             const SecretManagementService = (await import('./SecretManagementService.js')).default;
@@ -260,10 +260,10 @@ class LoggerService {
                 console.warn('⚠️ SecretManagementService не доступен для маскирования секретов');
             }
         }
-        
+
         this.logger.log(level, message, meta);
     }
-    
+
     /**
      * Логирование ошибки
      */
@@ -272,7 +272,7 @@ class LoggerService {
             console.error('Ошибка при логировании:', err);
         });
     }
-    
+
     /**
      * Логирование предупреждения
      */
@@ -281,7 +281,7 @@ class LoggerService {
             console.error('Ошибка при логировании:', err);
         });
     }
-    
+
     /**
      * Логирование информации
      */
@@ -290,7 +290,7 @@ class LoggerService {
             console.error('Ошибка при логировании:', err);
         });
     }
-    
+
     /**
      * Логирование отладки
      */
@@ -299,7 +299,7 @@ class LoggerService {
             console.error('Ошибка при логировании:', err);
         });
     }
-    
+
     /**
      * Логирование подробной информации
      */
@@ -308,28 +308,28 @@ class LoggerService {
             console.error('Ошибка при логировании:', err);
         });
     }
-    
+
     /**
      * Логирование HTTP запроса
      */
     logRequest(req, res, duration = null) {
         if (!this.isInitialized) return;
-        
+
         const requestId = req.requestId || 'unknown';
         const method = req.method;
         const path = req.path || req.url;
         const statusCode = res.statusCode;
         const ip = req.ip || req.connection?.remoteAddress || 'unknown';
         const userAgent = req.get('user-agent') || 'unknown';
-        
-        const level = statusCode >= 500 ? 'error' : 
-                     statusCode >= 400 ? 'warn' : 'info';
-        
+
+        const level = statusCode >= 500 ? 'error' :
+            statusCode >= 400 ? 'warn' : 'info';
+
         // Используем замаскированные данные если они доступны (через middleware secretMasking)
         const body = req._maskedBody !== undefined ? req._maskedBody : req.body;
         const query = req._maskedQuery !== undefined ? req._maskedQuery : req.query;
         const params = req._maskedParams !== undefined ? req._maskedParams : req.params;
-        
+
         const meta = {
             requestId,
             method,
@@ -339,7 +339,7 @@ class LoggerService {
             userAgent,
             duration: duration ? `${duration.toFixed(2)}ms` : null
         };
-        
+
         // Добавляем замаскированные данные в метаданные только если они есть
         if (body && Object.keys(body).length > 0) {
             meta.body = body;
@@ -350,25 +350,25 @@ class LoggerService {
         if (params && Object.keys(params).length > 0) {
             meta.params = params;
         }
-        
+
         // Добавляем userId если есть
         if (req.user?.id) {
             meta.userId = req.user.id;
         }
-        
+
         this._log(level, `${method} ${path} ${statusCode}`, meta);
     }
-    
+
     /**
      * Логирование ошибки запроса
      */
     logRequestError(error, req) {
         if (!this.isInitialized) return;
-        
+
         const requestId = req.requestId || 'unknown';
         const method = req.method;
         const path = req.path || req.url;
-        
+
         this.error(`Request error: ${method} ${path}`, {
             requestId,
             method,
@@ -378,20 +378,20 @@ class LoggerService {
                 stack: error.stack,
                 name: error.name
             },
-            ...(req.user?.id && { userId: req.user.id })
+            ...(req.user?.id && {userId: req.user.id})
         });
     }
-    
+
     /**
      * Логирование медленного запроса
      */
     logSlowRequest(req, duration) {
         if (!this.isInitialized) return;
-        
+
         const requestId = req.requestId || 'unknown';
         const method = req.method;
         const path = req.path || req.url;
-        
+
         this.warn(`Slow request: ${method} ${path}`, {
             requestId,
             method,
@@ -400,27 +400,27 @@ class LoggerService {
             threshold: '1000ms'
         });
     }
-    
+
     /**
      * Логирование операции с БД
      */
     logDatabase(operation, meta = {}) {
         if (!this.isInitialized) return;
-        
+
         this.debug(`Database: ${operation}`, {
             service: 'Database',
             ...meta
         });
     }
-    
+
     /**
      * Логирование операции с внешним API
      */
     logApiCall(service, endpoint, method, duration = null, meta = {}) {
         if (!this.isInitialized) return;
-        
+
         const level = duration && duration > 5000 ? 'warn' : 'info';
-        
+
         this._log(level, `API call: ${service} ${method} ${endpoint}`, {
             service: 'ExternalAPI',
             apiService: service,
@@ -430,7 +430,7 @@ class LoggerService {
             ...meta
         });
     }
-    
+
     /**
      * Логирование критической ошибки
      */
@@ -441,7 +441,7 @@ class LoggerService {
             severity: 'critical'
         });
     }
-    
+
     /**
      * Получение статистики логирования
      */

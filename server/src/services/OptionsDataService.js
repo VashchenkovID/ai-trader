@@ -1,8 +1,6 @@
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 import OptionsData from '../models/OptionsData.js';
-import Asset from '../models/Asset.js';
-import CachedInstrument from '../models/CachedInstrument.js';
 import CacheService from './CacheService.js';
 import TinkoffApiService from './TinkoffApiService.js';
 import LoggerService from './LoggerService.js';

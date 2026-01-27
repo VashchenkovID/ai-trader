@@ -34,8 +34,7 @@ class TelegramService {
         const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 30000); // Exponential backoff, max 30s
 
         try {
-            console.log(`Attempting to initialize Telegram bot (attempt ${retryCount + 1}/${maxRetries + 1})...`);
-            
+
             this.bot = new TelegramBot(token, { 
                 polling: {
                     interval: 30000, // 30 seconds polling interval
@@ -52,12 +51,10 @@ class TelegramService {
             this.setupHandlers();
             this.setupErrorHandlers();
             
-            console.log('✅ Telegram bot initialized successfully');
         } catch (error) {
             console.error(`❌ Error initializing Telegram bot (attempt ${retryCount + 1}):`, error.message);
             
             if (retryCount < maxRetries) {
-                console.log(`🔄 Retrying in ${retryDelay / 1000} seconds...`);
                 setTimeout(() => {
                     this.initializeWithRetry(token, chatId, retryCount + 1);
                 }, retryDelay);
@@ -81,16 +78,13 @@ class TelegramService {
                 error.message.includes('ETIMEDOUT')) {
                 
                 this.networkErrors++;
-                console.log(`🔄 Network error detected (${this.networkErrors}/${this.maxNetworkErrors})`);
-                
+
                 if (this.networkErrors >= this.maxNetworkErrors) {
-                    console.log('❌ Too many network errors, temporarily disabling Telegram');
                     this.temporarilyDisabled = true;
                     this.isInitialized = false;
                     
                     // Попробуем переподключиться через 30 минут
                     setTimeout(() => {
-                        console.log('🔄 Attempting to re-enable Telegram after cooldown...');
                         this.temporarilyDisabled = false;
                         this.networkErrors = 0;
                         this.initialize();
@@ -113,11 +107,9 @@ class TelegramService {
         if (!this.bot || !this.isInitialized) return;
 
         try {
-            console.log('🔄 Restarting Telegram polling...');
             this.bot.stopPolling();
             setTimeout(() => {
                 this.bot.startPolling();
-                console.log('✅ Telegram polling restarted');
             }, 2000);
         } catch (error) {
             console.error('❌ Error restarting Telegram polling:', error.message);
@@ -127,7 +119,6 @@ class TelegramService {
     // Безопасная отправка сообщений с retry
     async safeSendMessage(chatId, message, options = {}, retryCount = 0) {
         if (!this.isInitialized || !this.bot || this.temporarilyDisabled) {
-            console.log('Telegram temporarily disabled or not initialized, skipping message');
             return false;
         }
 
@@ -143,7 +134,6 @@ class TelegramService {
             console.error(`Error sending Telegram message (attempt ${retryCount + 1}):`, error.message);
             
             if (retryCount < maxRetries && this.isInitialized && !this.temporarilyDisabled) {
-                console.log(`Retrying Telegram message in ${retryDelay}ms...`);
                 setTimeout(() => {
                     this.safeSendMessage(chatId, message, options, retryCount + 1);
                 }, retryDelay);
@@ -568,7 +558,6 @@ ${status.hasModel ? '📊 Модель загружена' : '📭 Модель 
     // Отправка уведомления о старте приложения
     async sendStartupNotification() {
         if (!this.isInitialized) {
-            console.log('Telegram bot not initialized, skipping startup notification');
             return;
         }
 
@@ -585,7 +574,6 @@ ${status.hasModel ? '📊 Модель загружена' : '📭 Модель 
                 `⏰ Следующее обновление данных: через 6 часов`,
                 { parse_mode: 'HTML' }
             );
-            console.log('Startup notification sent to Telegram');
         } catch (error) {
             console.error('Error sending startup notification:', error);
         }

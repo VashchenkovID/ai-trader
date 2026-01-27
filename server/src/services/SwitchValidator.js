@@ -43,9 +43,7 @@ class SwitchValidator {
      */
     async initialize() {
         try {
-            console.log('✅ Инициализация SwitchValidator...');
             this.isInitialized = true;
-            console.log('✅ SwitchValidator инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации SwitchValidator:', error);
             throw error;
@@ -463,7 +461,6 @@ class SwitchValidator {
     async saveValidationHistory() {
         try {
             // В реальной системе здесь было бы сохранение в БД
-            console.log('💾 История валидаций сохранена');
         } catch (error) {
             console.error('❌ Ошибка сохранения истории валидаций:', error);
         }

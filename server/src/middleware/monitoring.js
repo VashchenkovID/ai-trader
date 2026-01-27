@@ -56,9 +56,6 @@ export const errorMonitoring = (err, req, res, next) => {
         errors: (MonitoringService.metrics.application.errors || 0) + 1
     });
     
-    // Логируем ошибку
-    console.error(`❌ Request error: ${req.method} ${req.path}`, err);
-    
     // Отправляем алерт для критических ошибок
     if (err.status >= 500) {
         MonitoringService.createAlert('application', 'high', 
@@ -118,15 +115,10 @@ export const databaseMonitoring = (sequelize) => {
             
             return result;
         } catch (error) {
-            const duration = performance.now() - startTime;
-            
             // Обновляем счетчик ошибок БД
             MonitoringService.updateDatabaseMetrics({
                 errors: (MonitoringService.metrics.database.errors || 0) + 1
             });
-            
-            // Логируем ошибки БД
-            console.error(`❌ Database error (${duration.toFixed(2)}ms):`, error.message);
             
             // Отправляем алерт для критических ошибок БД
             if (error.name === 'SequelizeConnectionError') {
@@ -160,7 +152,7 @@ export const neuralNetworkMonitoring = (neuralNetworkService) => {
             
             // Логируем медленное обучение
             if (duration > 30000) { // > 30 секунд
-                console.warn(`🐌 Slow neural network training (${(duration / 1000).toFixed(2)}s)`);
+                LoggerService.warn(`🐌 Slow neural network training (${(duration / 1000).toFixed(2)}s)`);
             }
             
             return result;
@@ -188,7 +180,7 @@ export const neuralNetworkMonitoring = (neuralNetworkService) => {
             
             // Логируем медленный анализ
             if (duration > 10000) { // > 10 секунд
-                console.warn(`🐌 Slow portfolio analysis (${(duration / 1000).toFixed(2)}s)`);
+                LoggerService.warn(`🐌 Slow portfolio analysis (${(duration / 1000).toFixed(2)}s)`);
             }
             
             return result;
@@ -221,14 +213,9 @@ export const cacheMonitoring = (cacheService) => {
             const result = originalGet.call(this, key);
             const duration = performance.now() - startTime;
             
-            // Логируем медленные операции кеша
-            if (duration > 100) { // > 100ms
-                console.warn(`🐌 Slow cache get (${duration.toFixed(2)}ms): ${key}`);
-            }
-            
             return result;
         } catch (error) {
-            console.error(`❌ Cache get error: ${error.message}`);
+            LoggerService.error(`❌ Cache get error: ${error.message}`);
             throw error;
         }
     };
@@ -239,15 +226,11 @@ export const cacheMonitoring = (cacheService) => {
         try {
             const result = originalSet.call(this, key, value, ttl);
             const duration = performance.now() - startTime;
-            
-            // Логируем медленные операции кеша
-            if (duration > 100) { // > 100ms
-                console.warn(`🐌 Slow cache set (${duration.toFixed(2)}ms): ${key}`);
-            }
+
             
             return result;
         } catch (error) {
-            console.error(`❌ Cache set error: ${error.message}`);
+            LoggerService.error(`❌ Cache set error: ${error.message}`);
             throw error;
         }
     };
@@ -266,14 +249,9 @@ export const schedulerMonitoring = (schedulerService) => {
             const result = await originalPerformCacheUpdate.call(this);
             const duration = performance.now() - startTime;
             
-            // Логируем медленное обновление кеша
-            if (duration > 60000) { // > 1 минуты
-                console.warn(`🐌 Slow cache update (${(duration / 1000).toFixed(2)}s)`);
-            }
-            
             return result;
         } catch (error) {
-            console.error(`❌ Cache update error: ${error.message}`);
+            LoggerService.error(`❌ Cache update error: ${error.message}`);
             MonitoringService.createAlert('scheduler', 'high', 
                 `Cache update error: ${error.message}`);
             throw error;
@@ -287,14 +265,9 @@ export const schedulerMonitoring = (schedulerService) => {
             const result = await originalPerformScheduledTraining.call(this);
             const duration = performance.now() - startTime;
             
-            // Логируем медленное обучение
-            if (duration > 300000) { // > 5 минут
-                console.warn(`🐌 Slow scheduled training (${(duration / 1000 / 60).toFixed(2)}min)`);
-            }
-            
             return result;
         } catch (error) {
-            console.error(`❌ Scheduled training error: ${error.message}`);
+            LoggerService.error(`❌ Scheduled training error: ${error.message}`);
             MonitoringService.createAlert('scheduler', 'high', 
                 `Scheduled training error: ${error.message}`);
             throw error;

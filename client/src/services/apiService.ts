@@ -100,8 +100,22 @@ export interface HealthStatus {
 export interface Portfolio {
     cash: number;
     positions: Record<string, any>;
+    positionsValue?: number;
     totalValue: number;
     trades: any[];
+    mode?: string;
+    initialCapital?: number;
+    pnl?: {
+        total: number;
+        totalPercent: number;
+        realized: number;
+        realizedPercent: number;
+        unrealized: number;
+        winRate: number;
+        totalTrades: number;
+    };
+    totalPnL?: number; // Для обратной совместимости
+    totalPnLPercent?: number; // Для обратной совместимости
 }
 
 export interface TradingStats {

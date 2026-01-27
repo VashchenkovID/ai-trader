@@ -108,12 +108,10 @@ class TradingHoursCacheService {
                 await this.initialize();
             }
 
-            console.log('🔄 Updating trading hours cache...');
-            
+
             // Очищаем устаревший кеш
             await this.cleanExpiredCache();
             
-            console.log('✅ Trading hours cache update completed');
         } catch (error) {
             console.error('❌ Error updating trading hours cache:', error);
             throw error;
@@ -144,7 +142,6 @@ class TradingHoursCacheService {
                 }
             });
 
-            console.log(`Очищено ${deleted} устаревших записей торговых часов`);
             return deleted;
         } catch (error) {
             console.error('Ошибка очистки кеша торговых часов:', error);

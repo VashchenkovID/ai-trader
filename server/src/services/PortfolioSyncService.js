@@ -23,15 +23,13 @@ class PortfolioSyncService {
      */
     async initialize() {
         try {
-            console.log('🔄 Инициализация PortfolioSyncService...');
-            
+
             // Убеждаемся, что TradingEngine инициализирован
             if (!TradingEngine.isInitialized) {
                 await TradingEngine.initialize();
             }
             
             this.isInitialized = true;
-            console.log('✅ PortfolioSyncService инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации PortfolioSyncService:', error);
             throw error;
@@ -73,11 +71,10 @@ class PortfolioSyncService {
         };
 
         try {
-            console.log(`🔄 Начало синхронизации портфеля (lookback: ${maxLookbackHours} часов)...`);
 
             // Шаг 1: Сохранить снимок портфеля "до" синхронизации
             const portfolioBefore = await RealPortfolio.getCurrent();
-            const positionsBefore = portfolioBefore?.positions || {};
+            let positionsBefore = portfolioBefore?.positions || {};
             
             if (typeof positionsBefore === 'string') {
                 try {
@@ -94,22 +91,9 @@ class PortfolioSyncService {
 
             // Шаг 3: Найти изменения позиций
             const changes = this.findChangedPositions(positionsBefore, positionsAfter);
-            
-            if (!silent) {
-                console.log(`📊 Изменения позиций:`, {
-                    new: changes.new.length,
-                    increased: changes.increased.length,
-                    decreased: changes.decreased.length,
-                    closed: changes.closed.length
-                });
-            }
 
             // Шаг 4: Получить недавно одобренные заявки
             const approvedRequests = await this.getRecentApprovedRequests(maxLookbackHours);
-
-            if (!silent) {
-                console.log(`📋 Найдено одобренных заявок: ${approvedRequests.length}`);
-            }
 
             // Шаг 5: Сопоставить позиции с заявками
             const matchResult = await this.matchPositionsWithApprovedRequests(
@@ -139,15 +123,6 @@ class PortfolioSyncService {
 
             this.lastSyncResult = result;
 
-            if (!silent) {
-                console.log(`✅ Синхронизация завершена за ${duration}ms`);
-                console.log(`📊 Результаты:`, {
-                    matched: result.matched,
-                    created: result.created,
-                    updated: result.updated,
-                    unmatched: result.unmatchedBuys.length + result.unmatchedSells.length + result.unmatchedClosed.length
-                });
-            }
 
             return result;
 
@@ -425,7 +400,6 @@ class PortfolioSyncService {
             });
 
             if (existing) {
-                console.log(`⚠️ PositionStrategy уже существует для заявки ${tradingRequest.id}`);
                 return existing;
             }
 
@@ -445,8 +419,7 @@ class PortfolioSyncService {
                 // actualQuantity может отличаться от requestedQuantity
             });
 
-            console.log(`✅ Создан PositionStrategy для ${tradingRequest.ticker} (${tradingRequest.figi})`);
-            
+
             return positionStrategy;
         } catch (error) {
             console.error('❌ Ошибка создания PositionStrategy:', error);
@@ -517,7 +490,6 @@ class PortfolioSyncService {
                 }
                 
                 await positionStrategy.save();
-                console.log(`✅ PositionStrategy закрыт для ${tradingRequest.ticker} (${tradingRequest.figi})${resultPercent !== null ? `, результат: ${resultPercent.toFixed(2)}%` : ''}`);
             } else {
                 // Частичная продажа - обновляем метаданные
                 // Позиция остается активной (exitDate не устанавливаем)
@@ -532,7 +504,6 @@ class PortfolioSyncService {
                 positionStrategy.entryReason = entryReason;
                 
                 await positionStrategy.save();
-                console.log(`✅ PositionStrategy обновлен (частичная продажа) для ${tradingRequest.ticker}`);
             }
 
             return positionStrategy;

@@ -37,10 +37,8 @@ try {
     const { validateRequiredEnvVars, validateProductionEnv } = await import('./utils/envValidator.js');
     validateRequiredEnvVars();
     validateProductionEnv();
-    console.log('✅ Environment variables validated');
 } catch (error) {
     console.error('❌ Environment validation failed:', error.message);
-    console.error('Please check your .env file and ensure all required variables are set.');
     process.exit(1);
 }
 
@@ -59,7 +57,7 @@ const getCorsOrigin = () => {
             console.warn('⚠️ FRONTEND_URL is not set in production. CORS may not work correctly.');
             return false; // В продакшене без FRONTEND_URL отключаем CORS для безопасности
         }
-        return 'http://localhost:3000'; // Разработка
+        return 'http://localhost:3000';
     }
     
     // Поддержка нескольких доменов через запятую
@@ -100,8 +98,6 @@ app.use(maskSecretsInRequest);
 app.use(maskSecretsInResponse);
 
 // Rate limiting middleware (применяется ко всем API запросам, кроме rate-limit endpoints)
-// Исключаем rate-limit endpoints из общего лимита, чтобы можно было мониторить даже после превышения
-// Можно отключить через переменную окружения DISABLE_RATE_LIMIT=true для локальной разработки
 if (process.env.DISABLE_RATE_LIMIT !== 'true') {
     app.use('/api', (req, res, next) => {
         // Пропускаем rate-limit endpoints без ограничений
@@ -175,8 +171,6 @@ async function initializeServices() {
                 // Отмечаем Telegram сервис как глобально инициализированный
                 const ServiceInitializationTracker = (await import('./utils/ServiceInitializationTracker.js')).default;
                 await ServiceInitializationTracker.markServiceInitialized('OptimizedTelegramService');
-            } else {
-                console.log('⚠️ Optimized Telegram service already initialized, skipping...');
             }
             
             // Отправляем уведомление о старте сервера
@@ -237,23 +231,19 @@ async function startServer() {
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-    console.log('🛑 SIGTERM received, shutting down gracefully...');
     await gracefulShutdown('SIGTERM');
 });
 
 process.on('SIGINT', async () => {
-    console.log('🛑 SIGINT received, shutting down gracefully...');
     await gracefulShutdown('SIGINT');
 });
 
 // Обработка других сигналов завершения
 process.on('SIGQUIT', async () => {
-    console.log('🛑 SIGQUIT received, shutting down gracefully...');
     await gracefulShutdown('SIGQUIT');
 });
 
 process.on('SIGHUP', async () => {
-    console.log('🛑 SIGHUP received, shutting down gracefully...');
     await gracefulShutdown('SIGHUP');
 });
 
@@ -281,11 +271,7 @@ async function gracefulShutdown(signal) {
             }
         }
         
-        // Останавливаем все сервисы через ServiceManager
         await ServiceManager.stop();
-        
-        // Принудительно завершаем все cron задачи
-        console.log('🛑 Force stopping all cron tasks...');
         try {
             const cron = await import('node-cron');
             // Останавливаем все активные cron задачи
@@ -307,9 +293,6 @@ async function gracefulShutdown(signal) {
                 }
             });
         }
-        
-        // Ждем немного, чтобы cron задачи успели завершиться
-        console.log('⏳ Waiting for cron tasks to finish...');
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         await sequelize.close();

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Toast } from 'primereact/toast';
-import { apiService, PerformanceMetrics } from '../services/apiService';
-import { useWebSocketData } from '../components/WebSocketDataProvider';
-import { TabView, TabPanel } from '../components/ui/TabView/TabView';
-import { Card } from '../components/ui/Card/Card';
-import { Skeleton } from '../components/ui/Skeleton/Skeleton';
-import HeroMetricsCard from '../components/dashboard/HeroMetricsCard/HeroMetricsCard.tsx';
-import AdvancedMetrics from '../components/AdvancedMetrics';
+import { apiService, PerformanceMetrics } from '../../services/apiService.ts';
+import { useWebSocketData } from '../../components/WebSocketDataProvider.tsx';
+import { TabView, TabPanel } from '../../components/ui/TabView/TabView.tsx';
+import { Card } from '../../components/ui/Card/Card.tsx';
+import { Skeleton } from '../../components/ui/Skeleton/Skeleton.tsx';
+import HeroMetricsCard from '../../components/dashboard/HeroMetricsCard/HeroMetricsCard.tsx';
+import AdvancedMetrics from '../../components/AdvancedMetrics.tsx';
 import './MetricsMonitoring.css';
 
 interface MetricsMonitoringProps {
@@ -20,6 +20,28 @@ interface MetricCardData {
   trend?: 'up' | 'down' | 'neutral';
   description?: string;
 }
+// Форматирование метрик для карточек
+const formatMetricCard = (title: string, value: any, unit: string = ''): MetricCardData => {
+  let formattedValue: string | number = value;
+  let change: number | undefined;
+  const trend: 'up' | 'down' | 'neutral' = 'neutral';
+
+  if (typeof value === 'number') {
+    if (value >= 1000) {
+      formattedValue = (value / 1000).toFixed(2) + 'K';
+    } else {
+      formattedValue = value.toFixed(2);
+    }
+  }
+
+  return {
+    title,
+    value: `${formattedValue}${unit ? ' ' + unit : ''}`,
+    change,
+    trend,
+    description: ''
+  };
+};
 
 const MetricsMonitoring: React.FC<MetricsMonitoringProps> = ({ className = '' }) => {
   const { systemStatus, systemResources, tradingStats, isConnected } = useWebSocketData();
@@ -45,11 +67,8 @@ const MetricsMonitoring: React.FC<MetricsMonitoringProps> = ({ className = '' })
   const loadAllData = async () => {
     setLoading(true);
     try {
-      await Promise.all([
-        loadPerformanceMetrics()
-      ]);
+      await loadPerformanceMetrics()
     } catch (error) {
-      console.error('Error loading metrics data:', error);
       showToast('error', 'Ошибка загрузки данных');
     } finally {
       setLoading(false);
@@ -71,31 +90,8 @@ const MetricsMonitoring: React.FC<MetricsMonitoringProps> = ({ className = '' })
 
   const showToast = (severity: 'success' | 'info' | 'warn' | 'error', message: string) => {
     if (toast.current) {
-      toast.current.show({ severity, summary: message, life: 3000 });
+      toast.current?.show({ severity, summary: message, life: 3000 });
     }
-  };
-
-  // Форматирование метрик для карточек
-  const formatMetricCard = (title: string, value: any, unit: string = ''): MetricCardData => {
-    let formattedValue: string | number = value;
-    let change: number | undefined;
-    const trend: 'up' | 'down' | 'neutral' = 'neutral';
-
-    if (typeof value === 'number') {
-      if (value >= 1000) {
-        formattedValue = (value / 1000).toFixed(2) + 'K';
-      } else {
-        formattedValue = value.toFixed(2);
-      }
-    }
-
-    return {
-      title,
-      value: `${formattedValue}${unit ? ' ' + unit : ''}`,
-      change,
-      trend,
-      description: ''
-    };
   };
 
   // Метрики системы

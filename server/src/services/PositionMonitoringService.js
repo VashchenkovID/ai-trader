@@ -3,7 +3,6 @@ import ExitOptimizationService from './ExitOptimizationService.js';
 import SettingsService from './SettingsService.js';
 import LoggerService from './LoggerService.js';
 import ServiceManager from './ServiceManager.js';
-import { Op } from 'sequelize';
 
 /**
  * Сервис для мониторинга открытых позиций

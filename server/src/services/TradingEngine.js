@@ -54,12 +54,10 @@ class TradingEngine {
         try {
             // Проверяем, есть ли уже позиции
             if (Object.keys(this.virtualPortfolio.positions).length > 0) {
-                console.log('📊 Демо-портфель уже инициализирован');
                 return;
             }
 
-            console.log('📊 Инициализация демо-портфеля...');
-            
+
             // Добавляем тестовые позиции
             const demoPositions = {
                 'BBG004730N88': 100,  // SBER
@@ -120,10 +118,6 @@ class TradingEngine {
             // Обновляем наличные
             this.virtualPortfolio.cash = Math.max(0, this.virtualPortfolio.cash - totalSpent);
             
-            console.log('✅ Демо-портфель инициализирован с тестовыми позициями');
-            console.log(`💰 Наличные: ${this.virtualPortfolio.cash.toLocaleString('ru-RU')} ₽`);
-            console.log(`📊 Позиций: ${Object.keys(demoPositions).length}`);
-            
             // Сохраняем демо-портфель в БД
             await this.saveVirtualPortfolio();
             
@@ -146,7 +140,6 @@ class TradingEngine {
 
         const modeInfo = this.modeManager.getCurrentMode();
         const mode = modeInfo.mode || modeInfo; // Поддержка старого формата
-        console.log(`📊 Исполнение ордера в режиме ${mode.toUpperCase()}:`, signal);
 
         try {
             // 1. Получаем актуальный портфель в зависимости от режима
@@ -505,10 +498,6 @@ class TradingEngine {
         // Ограничение размера позиции для микро-торговли
         const maxQuantity = Math.floor(capital * settings.maxPositionSize / price);
         const limitedQuantity = Math.min(quantity, maxQuantity);
-        
-        if (limitedQuantity < quantity) {
-            console.log(`⚠️ Ограничение размера позиции: ${quantity} → ${limitedQuantity}`);
-        }
 
         try {
             // Проверяем доступность торговли
@@ -637,7 +626,6 @@ class TradingEngine {
      */
     async loadVirtualPortfolio() {
         try {
-            console.log('📊 Загрузка виртуального портфеля из БД...');
             const savedPortfolio = await VirtualPortfolio.getCurrent();
             
             if (savedPortfolio) {
@@ -683,15 +671,6 @@ class TradingEngine {
                 };
                 
                 const positionsCount = Object.keys(this.virtualPortfolio.positions).length;
-                console.log(`✅ Виртуальный портфель загружен из БД:`);
-                console.log(`   💰 Наличные: ${this.virtualPortfolio.cash.toLocaleString('ru-RU')} ₽`);
-                console.log(`   📈 Позиций: ${positionsCount}`);
-                if (positionsCount > 0) {
-                    console.log(`   📋 Позиции:`, Object.entries(this.virtualPortfolio.positions).map(([figi, qty]) => `${figi}: ${qty}`).join(', '));
-                }
-                console.log(`   💼 Общая стоимость: ${this.virtualPortfolio.totalValue.toLocaleString('ru-RU')} ₽`);
-                console.log(`   📊 Сделок в истории: ${this.virtualPortfolio.trades.length}`);
-                
                 // Пересчитываем totalValue на основе текущих цен (но не перезаписываем сохраненное значение)
                 // Это нужно для актуальности данных
                 try {
@@ -713,14 +692,12 @@ class TradingEngine {
                     // Обновляем totalValue только если удалось получить цены
                     if (positionsValue > 0) {
                         this.virtualPortfolio.totalValue = this.virtualPortfolio.cash + positionsValue;
-                        console.log(`   🔄 Общая стоимость пересчитана: ${this.virtualPortfolio.totalValue.toLocaleString('ru-RU')} ₽`);
                     }
                 } catch (priceError) {
                     console.warn('⚠️ Не удалось пересчитать стоимость позиций, используем сохраненное значение:', priceError.message);
                 }
             } else {
                 // Если портфеля нет в БД, создаем новый
-                console.log('📊 Виртуальный портфель не найден в БД, создаем новый с начальным капиталом');
                 this.virtualPortfolio = {
                     cash: 1000000,
                     positions: {},
@@ -729,7 +706,6 @@ class TradingEngine {
                     initialCapital: 1000000
                 };
                 await this.saveVirtualPortfolio();
-                console.log('✅ Новый виртуальный портфель создан и сохранен в БД');
             }
         } catch (error) {
             console.error('❌ Ошибка загрузки виртуального портфеля из БД:', error);
@@ -779,16 +755,6 @@ class TradingEngine {
             const tradesToSave = Array.isArray(this.virtualPortfolio.trades)
                 ? this.virtualPortfolio.trades
                 : [];
-            
-            console.log(`💾 Сохранение виртуального портфеля в БД:`);
-            console.log(`   💰 Наличные: ${this.virtualPortfolio.cash.toLocaleString('ru-RU')} ₽`);
-            console.log(`   📈 Позиций: ${Object.keys(positionsToSave).length}`);
-            if (Object.keys(positionsToSave).length > 0) {
-                console.log(`   📋 Позиции:`, Object.entries(positionsToSave).map(([figi, qty]) => `${figi}: ${qty}`).join(', '));
-            }
-            console.log(`   💼 Общая стоимость: ${this.virtualPortfolio.totalValue.toLocaleString('ru-RU')} ₽`);
-            console.log(`   📊 Сделок в истории: ${tradesToSave.length}`);
-            
             await VirtualPortfolio.savePortfolio({
                 cash: this.virtualPortfolio.cash,
                 positions: positionsToSave,
@@ -796,9 +762,6 @@ class TradingEngine {
                 totalValue: this.virtualPortfolio.totalValue,
                 initialCapital: this.virtualPortfolio.initialCapital || 1000000
             });
-            
-            console.log(`✅ Виртуальный портфель успешно сохранен в БД`);
-            
         } catch (error) {
             console.error('❌ Ошибка сохранения виртуального портфеля в БД:', error);
             console.error('   Детали ошибки:', error.stack);
@@ -856,8 +819,6 @@ class TradingEngine {
             if (portfolio.positions && Array.isArray(portfolio.positions)) {
                 // Если positions - массив объектов из Tinkoff API
                 // transformPortfolioData уже преобразовал quantity в число
-                console.log(`📊 Processing ${portfolio.positions.length} positions from array`);
-                
                 for (const position of portfolio.positions) {
                     if (!position.figi) {
                         console.warn('⚠️ Position without figi:', position);
@@ -887,12 +848,9 @@ class TradingEngine {
                             // Если это валюта (наличка), добавляем к cash
                             // Для валюты quantity уже является суммой в рублях
                             cashFromPositions += quantity;
-                            console.log(`  💰 Currency position ${position.figi || position.ticker}: ${quantity} RUB (added to cash)`);
                         } else {
                             // Обычная позиция (акция, облигация и т.д.)
                             positions[position.figi] = quantity;
-                            console.log(`  ✅ ${position.figi}: ${quantity} units`);
-                            
                             // Рассчитываем стоимость позиции
                             // currentPrice может быть объектом {value, currency} или числом
                             let currentPrice = 0;
@@ -904,25 +862,15 @@ class TradingEngine {
                             
                             if (currentPrice > 0) {
                                 positionsValue += currentPrice * quantity;
-                                console.log(`    💰 Price: ${currentPrice}, Value: ${currentPrice * quantity}`);
-                            } else {
-                                console.warn(`  ⚠️ No price for ${position.figi}, will calculate from cache`);
                             }
                         }
                     } else {
                         console.warn(`  ⚠️ Position ${position.figi} has zero or invalid quantity:`, position.quantity);
                     }
                 }
-                
-                // Добавляем cash из валютных позиций
-                if (cashFromPositions > 0) {
-                    console.log(`💰 Total cash from currency positions: ${cashFromPositions} RUB`);
-                }
             } else if (portfolio.positions && typeof portfolio.positions === 'object' && !Array.isArray(portfolio.positions)) {
                 // Если positions уже объект
                 positions = portfolio.positions;
-                console.log(`📊 Using positions as object: ${Object.keys(positions).length} positions`);
-                
                 // Рассчитываем positionsValue из всех позиций
                 if (positionsValue === 0 && Object.keys(positions).length > 0) {
                     try {
@@ -933,15 +881,11 @@ class TradingEngine {
                                     const currentPrice = instrument?.lastPrice || 0;
                                     if (currentPrice > 0) {
                                         positionsValue += currentPrice * quantity;
-                                        console.log(`  💰 ${figi}: ${quantity} * ${currentPrice} = ${currentPrice * quantity} RUB`);
                                     }
                                 } catch (error) {
                                     console.warn(`  ⚠️ Error getting price for ${figi}:`, error.message);
                                 }
                             }
-                        }
-                        if (positionsValue > 0) {
-                            console.log(`📊 Calculated positionsValue from positions object: ${positionsValue} RUB`);
                         }
                     } catch (error) {
                         console.warn('⚠️ Error calculating positionsValue from positions object:', error.message);
@@ -962,14 +906,12 @@ class TradingEngine {
                     cashFromCurrencies = typeof cashValue === 'number' 
                         ? cashValue 
                         : (typeof cashValue === 'string' ? parseFloat(cashValue) || 0 : (cashValue?.units || 0));
-                    console.log(`💰 Cash from totalAmountCurrencies: ${cashFromCurrencies} RUB`);
                 }
             }
             
             // Если cash не найден в totalAmountCurrencies, пробуем portfolio.cash
             if (cashFromCurrencies === null && portfolio.cash !== undefined) {
                 cashFromCurrencies = typeof portfolio.cash === 'string' ? parseFloat(portfolio.cash) || 0 : portfolio.cash;
-                console.log(`💰 Cash from portfolio.cash: ${cashFromCurrencies} RUB`);
             }
             
             // Добавляем cash из валютных позиций к основному cash
@@ -977,11 +919,9 @@ class TradingEngine {
             if (typeof cashFromPositions !== 'undefined' && cashFromPositions > 0) {
                 if (cashFromCurrencies !== null) {
                     cashFromCurrencies += cashFromPositions;
-                    console.log(`💰 Added cash from currency positions: total cash = ${cashFromCurrencies} RUB`);
                 } else {
                     // Если cash не был найден в других местах, используем cash из позиций
                     cashFromCurrencies = cashFromPositions;
-                    console.log(`💰 Using cash from currency positions: ${cashFromCurrencies} RUB`);
                 }
             }
             
@@ -992,7 +932,6 @@ class TradingEngine {
                 totalPortfolio = typeof totalPortfolioValue === 'string' 
                     ? parseFloat(totalPortfolioValue) || 0 
                     : (typeof totalPortfolioValue === 'number' ? totalPortfolioValue : 0);
-                console.log(`📊 totalAmountPortfolio from API: ${totalPortfolio} RUB`);
             }
             
             // Определяем cash и positionsValue
@@ -1002,16 +941,11 @@ class TradingEngine {
                 // Если positionsValue не рассчитан, вычисляем из totalPortfolio
                 if (positionsValue === 0 && totalPortfolio !== null) {
                     positionsValue = Math.max(0, totalPortfolio - cash);
-                    console.log(`📊 Calculated positionsValue from totalAmountPortfolio (${totalPortfolio} - ${cash}): ${positionsValue} RUB`);
                 }
             } else if (totalPortfolio !== null) {
                 // Если cash не найден, но есть totalPortfolio, вычисляем cash как разницу
                 // totalPortfolio = cash + positionsValue
                 cash = Math.max(0, totalPortfolio - positionsValue);
-                console.log(`💰 Calculated cash from totalAmountPortfolio (${totalPortfolio} - ${positionsValue}): ${cash} RUB`);
-            } else {
-                // Если ничего не найдено, cash = 0 (все средства в позициях)
-                console.log(`💰 Cash not found, assuming 0 (all funds in positions)`);
             }
             
             // Убеждаемся, что positionsValue рассчитан из всех позиций
@@ -1036,7 +970,6 @@ class TradingEngine {
                         }
                     }
                     if (recalculatedPositionsValue > 0) {
-                        console.log(`📊 Recalculated positionsValue from cache: ${positionsValue} → ${recalculatedPositionsValue} RUB`);
                         positionsValue = recalculatedPositionsValue;
                     }
                 } catch (error) {
@@ -1046,9 +979,7 @@ class TradingEngine {
             
             // Финальный расчет totalValue как сумма cash и всех позиций
             const finalTotalValue = cash + positionsValue;
-            
-            console.log(`✅ Converted portfolio: ${Object.keys(positions).length} positions, cash=${cash}, positionsValue=${positionsValue}, totalValue=${finalTotalValue}`);
-            
+
             return {
                 cash,
                 positions,
@@ -1207,8 +1138,6 @@ class TradingEngine {
 
         // WebSocket уведомление
         WebSocketService.broadcast(message);
-        
-        console.log(`📊 Ордер исполнен: ${signal.symbol} ${signal.action} ${signal.quantity} @ ${result.trade.price}`);
     }
 
     /**
@@ -1240,15 +1169,10 @@ class TradingEngine {
             // Для micro и real требуется явная активация через activate()
             if (newMode === 'paper') {
                 this.isActive = true;
-                console.log(`✅ TradingEngine автоматически активирован для режима ${newMode}`);
             } else {
                 // Для micro и real деактивируем до явной активации
                 this.isActive = false;
-                console.log(`⏸️ TradingEngine деактивирован. Требуется явная активация для режима ${newMode}`);
             }
-            
-            console.log(`🔄 TradingEngine: режим изменен с ${previousMode} на ${newMode}`);
-            
             return {
                 ...result,
                 isActive: this.isActive,
@@ -1291,8 +1215,7 @@ class TradingEngine {
             }
             
             this.isActive = true;
-            console.log(`✅ Trading Engine активирован в режиме ${mode}`);
-            
+
             return {
                 success: true,
                 isActive: true,
@@ -1311,8 +1234,7 @@ class TradingEngine {
     async deactivate() {
         try {
             this.isActive = false;
-            console.log('⏸️ Trading Engine деактивирован');
-            
+
             return {
                 success: true,
                 isActive: false,
@@ -1353,8 +1275,7 @@ class TradingEngine {
 
     async stop() {
         try {
-            console.log('🛑 Stopping Trading Engine...');
-            
+
             // Останавливаем все активные процессы
             this.isRunning = false;
             
@@ -1363,9 +1284,7 @@ class TradingEngine {
                 clearInterval(this.tradingTimer);
                 this.tradingTimer = null;
             }
-            
-            console.log('✅ Trading Engine stopped successfully');
-            
+
         } catch (error) {
             console.error('❌ Error stopping Trading Engine:', error);
             throw error;

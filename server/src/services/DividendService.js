@@ -1,7 +1,5 @@
-import { Op } from 'sequelize';
 import TinkoffApiService from './TinkoffApiService.js';
 import CachedInstrument from '../models/CachedInstrument.js';
-import FundamentalData from '../models/FundamentalData.js';
 import FundamentalDataService from './FundamentalDataService.js';
 import LoggerService from './LoggerService.js';
 

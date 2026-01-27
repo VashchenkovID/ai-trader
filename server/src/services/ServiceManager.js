@@ -407,8 +407,6 @@ class ServiceManager {
      * Остановка всех сервисов
      */
     async stop() {
-        console.log('🛑 Stopping ServiceManager...');
-        
         const stopPromises = [];
         
         for (const [serviceName, service] of this.services) {

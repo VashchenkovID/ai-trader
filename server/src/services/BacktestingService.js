@@ -1,14 +1,13 @@
 import TradingStrategy from '../models/TradingStrategy.js';
 import BacktestResult from '../models/BacktestResult.js';
 import CachedCandle from '../models/CachedCandle.js';
-import CachedSignal from '../models/CachedSignal.js';
 import CachedInstrument from '../models/CachedInstrument.js';
 import Recommendation from '../models/Recommendation.js';
 import CacheService from './CacheService.js';
 import SignalCacheService from './SignalCacheService.js';
 import RiskManagementService from './RiskManagementService.js';
-import OptimizedDataService from './OptimizedDataService.js';
-import { Op } from 'sequelize';
+import {Op} from 'sequelize';
+import LoggerService from "./LoggerService.js";
 
 /**
  * Сервис для бэктестинга торговых стратегий
@@ -30,9 +29,10 @@ class BacktestingService {
 
         try {
             this.isInitialized = true;
-            console.log('✅ BacktestingService initialized');
         } catch (error) {
-            console.error('❌ Failed to initialize BacktestingService:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('❌ Failed to initialize BacktestingService:', {error});
+            }
             throw error;
         }
     }
@@ -64,14 +64,13 @@ class BacktestingService {
         try {
             // Получаем информацию об инструменте для ticker
             const instrument = await CachedInstrument.findOne({
-                where: { figi: figi },
+                where: {figi: figi},
                 attributes: ['ticker', 'name']
             });
             const ticker = instrument?.ticker || figi;
             const instrumentName = instrument?.name || figi;
 
             // Получаем исторические свечи за период напрямую из БД
-            const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
             const periodCandles = await CachedCandle.findAll({
                 where: {
                     figi: figi,
@@ -86,7 +85,7 @@ class BacktestingService {
             if (periodCandles.length === 0) {
                 return {
                     trades: [],
-                    equityCurve: [{ date: startDate, value: initialCapital }],
+                    equityCurve: [{date: startDate, value: initialCapital}],
                     finalCapital: initialCapital,
                     totalTrades: 0
                 };
@@ -111,7 +110,7 @@ class BacktestingService {
             });
 
             const trades = [];
-            const equityCurve = [{ date: startDate, value: initialCapital }];
+            const equityCurve = [{date: startDate, value: initialCapital}];
             let availableCapital = initialCapital; // Доступный капитал (без открытых позиций)
             let currentPosition = null; // { figi, entryDate, entryPrice, quantity, stopLoss, targetPrice, signalId, positionCost }
 
@@ -182,18 +181,20 @@ class BacktestingService {
                                 exitCommission = commissionInfo.amount || 0;
                             }
                         } catch (error) {
-                            console.warn('⚠️ Could not calculate exit commission in backtesting:', error.message);
+                            if (LoggerService.isInitialized) {
+                                LoggerService.warn('⚠️ Could not calculate exit commission in backtesting:', {error: error.message});
+                            }
                         }
-                        
+
                         const entryCommission = currentPosition.entryCommission || 0;
                         const totalCommission = entryCommission + exitCommission;
-                        
+
                         // PnL с учетом комиссий
-                        const grossPnl = currentPosition.direction === 'BUY' 
+                        const grossPnl = currentPosition.direction === 'BUY'
                             ? (exitPrice - currentPosition.entryPrice) * currentPosition.quantity
                             : (currentPosition.entryPrice - exitPrice) * currentPosition.quantity;
                         const pnl = grossPnl - totalCommission;
-                        
+
                         const pnlPercent = currentPosition.direction === 'BUY'
                             ? ((exitPrice - currentPosition.entryPrice) / currentPosition.entryPrice) * 100
                             : ((currentPosition.entryPrice - exitPrice) / currentPosition.entryPrice) * 100;
@@ -222,16 +223,16 @@ class BacktestingService {
                         });
 
                         currentPosition = null;
-                        equityCurve.push({ date: candleDate, value: totalCapital });
+                        equityCurve.push({date: candleDate, value: totalCapital});
                     } else {
                         // Обновляем кривую капитала с учетом unrealized PnL
                         const unrealizedPnL = currentPosition.direction === 'BUY'
                             ? (currentPrice - currentPosition.entryPrice) * currentPosition.quantity
                             : (currentPosition.entryPrice - currentPrice) * currentPosition.quantity;
                         const totalCapital = availableCapital + currentPosition.positionCost + unrealizedPnL;
-                        equityCurve.push({ 
-                            date: candleDate, 
-                            value: totalCapital 
+                        equityCurve.push({
+                            date: candleDate,
+                            value: totalCapital
                         });
                     }
                 }
@@ -248,11 +249,11 @@ class BacktestingService {
                     for (const signal of signals) {
                         const signalStart = new Date(signal.createDt);
                         const signalEnd = new Date(signal.endDt);
-                        
+
                         if (candleDate >= signalStart && candleDate <= signalEnd) {
-                            const direction = signal.direction === 'SIGNAL_DIRECTION_BUY' ? 'BUY' : 
-                                            signal.direction === 'SIGNAL_DIRECTION_SELL' ? 'SELL' : null;
-                            
+                            const direction = signal.direction === 'SIGNAL_DIRECTION_BUY' ? 'BUY' :
+                                signal.direction === 'SIGNAL_DIRECTION_SELL' ? 'SELL' : null;
+
                             if (direction) {
                                 entrySignal = signal;
                                 entryDirection = direction;
@@ -266,7 +267,7 @@ class BacktestingService {
                         for (const rec of recommendations) {
                             const recDate = new Date(rec.analysisDate);
                             const daysDiff = Math.abs((candleDate - recDate) / (1000 * 60 * 60 * 24));
-                            
+
                             // Рекомендация актуальна в течение 3 дней
                             if (daysDiff <= 3 && rec.recommendation === 'BUY' && rec.confidence >= strategy.minConfidence && rec.score >= strategy.minScore) {
                                 entryDirection = 'BUY';
@@ -302,9 +303,9 @@ class BacktestingService {
                                     try {
                                         const candlesForATR = periodCandles.slice(Math.max(0, i - 30), i + 1);
                                         stopLoss = await RiskManagementService.calculateDynamicStopLoss(
-                                            figi, 
-                                            currentPrice, 
-                                            strategy, 
+                                            figi,
+                                            currentPrice,
+                                            strategy,
                                             entryDirection
                                         );
                                     } catch (error) {
@@ -350,11 +351,13 @@ class BacktestingService {
                                     entryCommission = commissionInfo.amount || 0;
                                 }
                             } catch (error) {
-                                console.warn('⚠️ Could not calculate commission in backtesting:', error.message);
+                                if (LoggerService.isInitialized) {
+                                    LoggerService.warn('⚠️ Could not calculate commission in backtesting:', {error});
+                                }
                             }
-                            
+
                             const positionCost = quantity * currentPrice + entryCommission;
-                            
+
                             currentPosition = {
                                 figi: figi,
                                 ticker: ticker,
@@ -373,11 +376,11 @@ class BacktestingService {
 
                             // Резервируем средства для позиции (включая комиссию)
                             availableCapital -= positionCost;
-                            
+
                             // Обновляем кривую капитала (пока без unrealized PnL)
-                            equityCurve.push({ 
-                                date: candleDate, 
-                                value: availableCapital + positionCost 
+                            equityCurve.push({
+                                date: candleDate,
+                                value: availableCapital + positionCost
                             });
                         }
                     }
@@ -388,7 +391,7 @@ class BacktestingService {
             if (currentPosition && periodCandles.length > 0) {
                 const lastCandle = periodCandles[periodCandles.length - 1];
                 const exitPrice = lastCandle.close;
-                
+
                 // Рассчитываем комиссию при выходе
                 let exitCommission = 0;
                 try {
@@ -403,18 +406,20 @@ class BacktestingService {
                         exitCommission = commissionInfo.amount || 0;
                     }
                 } catch (error) {
-                    console.warn('⚠️ Could not calculate exit commission in backtesting:', error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('⚠️ Could not calculate exit commission in backtesting:', {error});
+                    }
                 }
-                
+
                 const entryCommission = currentPosition.entryCommission || 0;
                 const totalCommission = entryCommission + exitCommission;
-                
+
                 // PnL с учетом комиссий
                 const grossPnl = currentPosition.direction === 'BUY'
                     ? (exitPrice - currentPosition.entryPrice) * currentPosition.quantity
                     : (currentPosition.entryPrice - exitPrice) * currentPosition.quantity;
                 const pnl = grossPnl - totalCommission;
-                
+
                 const pnlPercent = currentPosition.direction === 'BUY'
                     ? ((exitPrice - currentPosition.entryPrice) / currentPosition.entryPrice) * 100
                     : ((currentPosition.entryPrice - exitPrice) / currentPosition.entryPrice) * 100;
@@ -442,14 +447,14 @@ class BacktestingService {
                     signalId: currentPosition.signalId
                 });
 
-                equityCurve.push({ 
-                    date: new Date(lastCandle.time), 
-                    value: finalCapital 
+                equityCurve.push({
+                    date: new Date(lastCandle.time),
+                    value: finalCapital
                 });
             }
 
-            const finalCapital = equityCurve.length > 0 
-                ? equityCurve[equityCurve.length - 1].value 
+            const finalCapital = equityCurve.length > 0
+                ? equityCurve[equityCurve.length - 1].value
                 : availableCapital;
 
             return {
@@ -459,7 +464,9 @@ class BacktestingService {
                 totalTrades: trades.length
             };
         } catch (error) {
-            console.error(`❌ Error simulating trading for ${figi}:`, error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error(`❌ Error simulating trading for ${figi}:`, {error});
+            }
             throw error;
         }
     }
@@ -498,7 +505,7 @@ class BacktestingService {
         const profitableTrades = trades.filter(t => t.pnl > 0);
         const losingTrades = trades.filter(t => t.pnl < 0);
         const winRate = trades.length > 0 ? (profitableTrades.length / trades.length) * 100 : 0;
-        
+
         const totalWin = profitableTrades.reduce((sum, t) => sum + t.pnl, 0);
         const totalLoss = Math.abs(losingTrades.reduce((sum, t) => sum + t.pnl, 0));
         const avgWin = profitableTrades.length > 0 ? totalWin / profitableTrades.length : 0;
@@ -518,8 +525,8 @@ class BacktestingService {
 
         // Волатильность (стандартное отклонение доходностей)
         const avgReturn = returns.length > 0 ? returns.reduce((sum, r) => sum + r, 0) / returns.length : 0;
-        const variance = returns.length > 0 
-            ? returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length 
+        const variance = returns.length > 0
+            ? returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length
             : 0;
         const volatility = Math.sqrt(variance);
 
@@ -565,7 +572,7 @@ class BacktestingService {
             ? negativeReturns.reduce((sum, r) => sum + Math.pow(r, 2), 0) / negativeReturns.length
             : 0;
         const downsideDeviation = Math.sqrt(downsideVariance);
-        const sortinoRatio = downsideDeviation > 0 
+        const sortinoRatio = downsideDeviation > 0
             ? (annualReturn - this.riskFreeRate * 100) / (downsideDeviation * Math.sqrt(252))
             : 0;
 
@@ -602,7 +609,7 @@ class BacktestingService {
         for (const point of equityCurve) {
             const date = new Date(point.date);
             const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            
+
             if (!monthlyData.has(monthKey)) {
                 monthlyData.set(monthKey, {
                     startValue: point.value,
@@ -649,7 +656,7 @@ class BacktestingService {
      */
     async backtestStrategy(strategyId, options = {}) {
         const startTime = Date.now();
-        
+
         try {
             // Получаем стратегию
             const strategy = await TradingStrategy.findByPk(strategyId);
@@ -683,7 +690,7 @@ class BacktestingService {
                 // Получаем все активные инструменты с достаточным количеством данных
                 const allInstruments = await CacheService.getAllInstruments();
                 const maxInstruments = options.maxInstruments || 50;
-                
+
                 // Фильтруем инструменты с достаточным количеством свечей
                 const instrumentsWithData = [];
                 for (const instrument of allInstruments.slice(0, maxInstruments * 2)) { // Берем больше для фильтрации
@@ -696,7 +703,7 @@ class BacktestingService {
                             }
                         }
                     });
-                    
+
                     if (candleCount >= 20) { // Минимум 20 свечей за период
                         instrumentsWithData.push(instrument.figi);
                         if (instrumentsWithData.length >= maxInstruments) {
@@ -704,7 +711,7 @@ class BacktestingService {
                         }
                     }
                 }
-                
+
                 instruments = instrumentsWithData;
             }
 
@@ -712,14 +719,9 @@ class BacktestingService {
                 throw new Error('No instruments with sufficient data found for backtesting');
             }
 
-            console.log(`📊 Starting backtest for strategy "${strategy.name}" (ID: ${strategyId})`);
-            console.log(`   Period: ${startDate.toLocaleDateString('ru-RU')} - ${endDate.toLocaleDateString('ru-RU')}`);
-            console.log(`   Initial capital: ${initialCapital.toLocaleString('ru-RU')} ₽`);
-            console.log(`   Instruments: ${instruments.length}`);
-
             // Распределяем капитал между инструментами
             const capitalPerInstrument = initialCapital / instruments.length;
-            
+
             // Симулируем торговлю на каждом инструменте
             const allTrades = [];
             const allEquityCurves = [];
@@ -729,8 +731,6 @@ class BacktestingService {
             for (let i = 0; i < instruments.length; i++) {
                 const figi = instruments[i];
                 try {
-                    console.log(`   [${i + 1}/${instruments.length}] Testing ${figi}...`);
-                    
                     const result = await this.simulateTrading(
                         figi,
                         strategy,
@@ -753,7 +753,9 @@ class BacktestingService {
                         return: ((result.finalCapital - capitalPerInstrument) / capitalPerInstrument) * 100
                     });
                 } catch (error) {
-                    console.error(`   ❌ Error testing ${figi}:`, error.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error(`❌ Error testing ${figi}:`, {error});
+                    }
                     // Продолжаем с другими инструментами
                     totalFinalCapital += capitalPerInstrument; // Возвращаем капитал
                 }
@@ -775,7 +777,7 @@ class BacktestingService {
             const report = this.generateReport({
                 strategyId: strategy.id,
                 strategyName: strategy.name,
-                period: { startDate, endDate },
+                period: {startDate, endDate},
                 metrics,
                 trades: allTrades,
                 equityCurve: combinedEquityCurve,
@@ -789,7 +791,7 @@ class BacktestingService {
             const result = {
                 strategyId: strategy.id,
                 strategyName: strategy.name,
-                period: { startDate, endDate },
+                period: {startDate, endDate},
                 metrics,
                 trades: allTrades,
                 equityCurve: combinedEquityCurve,
@@ -802,24 +804,22 @@ class BacktestingService {
                 finalCapital: totalFinalCapital
             };
 
-            console.log(`✅ Backtest completed in ${executionTime}ms`);
-            console.log(`   Total return: ${metrics.totalReturn.toFixed(2)}%`);
-            console.log(`   Total trades: ${metrics.totalTrades}`);
-            console.log(`   Win rate: ${metrics.winRate.toFixed(2)}%`);
-
             // Сохраняем результат в БД (если не указано иное)
             if (options.saveToDb !== false) {
                 try {
                     await this.saveBacktestResult(result, 'full');
-                    console.log(`   💾 Result saved to database`);
                 } catch (saveError) {
-                    console.error(`   ⚠️ Failed to save result to database:`, saveError.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error(`⚠️ Failed to save result to database:`, {saveError});
+                    }
                 }
             }
 
             return result;
         } catch (error) {
-            console.error(`❌ Error in backtestStrategy:`, error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error(`❌ Error in backtestStrategy:`, {error});
+            }
             throw error;
         }
     }
@@ -838,7 +838,7 @@ class BacktestingService {
 
         for (const point of equityCurves) {
             const dateKey = new Date(point.date).toISOString().split('T')[0]; // YYYY-MM-DD
-            
+
             if (!pointsByDate.has(dateKey)) {
                 pointsByDate.set(dateKey, []);
             }
@@ -856,10 +856,10 @@ class BacktestingService {
             const values = pointsByDate.get(dateKey);
             // Суммируем значения от всех инструментов
             const totalValue = values.reduce((sum, val) => sum + val, 0);
-            
+
             // Обновляем капитал (берем последнее значение дня)
             currentCapital = totalValue;
-            
+
             combinedCurve.push({
                 date: new Date(dateKey),
                 value: currentCapital
@@ -868,7 +868,7 @@ class BacktestingService {
 
         // Если кривая пустая, добавляем начальную точку
         if (combinedCurve.length === 0) {
-            combinedCurve.push({ date: startDate, value: initialCapital });
+            combinedCurve.push({date: startDate, value: initialCapital});
         }
 
         return combinedCurve.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -946,11 +946,11 @@ class BacktestingService {
      * @returns {string} - Текстовый отчет в формате Markdown
      */
     generateReport(data) {
-        const { strategyName, period, metrics, trades, monthlyReturns, instrumentResults, alerts } = data;
-        
+        const {strategyName, period, metrics, trades, monthlyReturns, instrumentResults, alerts} = data;
+
         let report = `# Отчет о бэктестинге стратегии "${strategyName}"\n\n`;
         report += `**Период тестирования:** ${period.startDate.toLocaleDateString('ru-RU')} - ${period.endDate.toLocaleDateString('ru-RU')}\n\n`;
-        
+
         report += `## Основные метрики\n\n`;
         report += `- **Общая доходность:** ${metrics.totalReturn.toFixed(2)}%\n`;
         report += `- **Общая прибыль:** ${metrics.totalProfit.toLocaleString('ru-RU')} ₽\n`;
@@ -961,7 +961,7 @@ class BacktestingService {
         report += `- **Max Drawdown:** ${metrics.maxDrawdown.toFixed(2)}%\n`;
         report += `- **Calmar Ratio:** ${metrics.calmarRatio.toFixed(2)}\n`;
         report += `- **Sortino Ratio:** ${metrics.sortinoRatio.toFixed(2)}\n\n`;
-        
+
         if (monthlyReturns.length > 0) {
             report += `## Месячные доходности\n\n`;
             report += `| Месяц | Доходность |\n`;
@@ -971,7 +971,7 @@ class BacktestingService {
             }
             report += `\n`;
         }
-        
+
         if (instrumentResults.length > 0) {
             report += `## Результаты по инструментам\n\n`;
             report += `| Инструмент | Сделок | Доходность |\n`;
@@ -984,7 +984,7 @@ class BacktestingService {
             }
             report += `\n`;
         }
-        
+
         if (alerts.length > 0) {
             report += `## Предупреждения\n\n`;
             for (const alert of alerts) {
@@ -993,10 +993,10 @@ class BacktestingService {
             }
             report += `\n`;
         }
-        
+
         report += `---\n`;
         report += `*Отчет сгенерирован автоматически системой бэктестинга*\n`;
-        
+
         return report;
     }
 
@@ -1035,7 +1035,9 @@ class BacktestingService {
 
             return backtestResult;
         } catch (error) {
-            console.error('❌ Error saving backtest result:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('❌ Error saving backtest result:', {error});
+            }
             throw error;
         }
     }
@@ -1055,7 +1057,7 @@ class BacktestingService {
      */
     async walkForwardAnalysis(strategyId, options = {}) {
         const startTime = Date.now();
-        
+
         try {
             // Получаем стратегию
             const strategy = await TradingStrategy.findByPk(strategyId);
@@ -1087,15 +1089,8 @@ class BacktestingService {
                 initialCapital = portfolioSettings.user_max_portfolio_budget || 1000000;
             }
 
-            console.log(`📊 Starting walk-forward analysis for strategy "${strategy.name}" (ID: ${strategyId})`);
-            console.log(`   Period: ${startDate.toLocaleDateString('ru-RU')} - ${endDate.toLocaleDateString('ru-RU')}`);
-            console.log(`   Window size: ${windowSizeMonths} months`);
-            console.log(`   Step size: ${stepSizeMonths} months`);
-            console.log(`   Initial capital: ${initialCapital.toLocaleString('ru-RU')} ₽`);
-
             // Создаем окна для анализа
             const windows = this.createTimeWindows(startDate, endDate, windowSizeMonths, stepSizeMonths);
-            console.log(`   Total windows: ${windows.length}\n`);
 
             if (windows.length === 0) {
                 throw new Error('No time windows created. Period too short or invalid parameters.');
@@ -1105,8 +1100,6 @@ class BacktestingService {
             const windowResults = [];
             for (let i = 0; i < windows.length; i++) {
                 const window = windows[i];
-                console.log(`   [${i + 1}/${windows.length}] Testing window ${i + 1}: ${window.startDate.toLocaleDateString('ru-RU')} - ${window.endDate.toLocaleDateString('ru-RU')}`);
-                
                 try {
                     const result = await this.backtestStrategy(strategyId, {
                         startDate: window.startDate,
@@ -1130,9 +1123,10 @@ class BacktestingService {
                         profitFactor: result.metrics.profitFactor
                     });
 
-                    console.log(`      ✅ Return: ${result.metrics.totalReturn.toFixed(2)}%, Trades: ${result.metrics.totalTrades}, Win Rate: ${result.metrics.winRate.toFixed(2)}%`);
                 } catch (windowError) {
-                    console.error(`      ❌ Error testing window ${i + 1}:`, windowError.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error(`❌ Error testing window ${i + 1}:`, {windowError});
+                    }
                     // Продолжаем с другими окнами
                 }
             }
@@ -1149,7 +1143,7 @@ class BacktestingService {
             const report = this.generateWalkForwardReport({
                 strategyId: strategy.id,
                 strategyName: strategy.name,
-                period: { startDate, endDate },
+                period: {startDate, endDate},
                 windowSizeMonths,
                 stepSizeMonths,
                 windowResults,
@@ -1165,7 +1159,7 @@ class BacktestingService {
             const result = {
                 strategyId: strategy.id,
                 strategyName: strategy.name,
-                period: { startDate, endDate },
+                period: {startDate, endDate},
                 windowSizeMonths,
                 stepSizeMonths,
                 windowResults,
@@ -1176,25 +1170,22 @@ class BacktestingService {
                 executionTime
             };
 
-            console.log(`\n✅ Walk-forward analysis completed in ${executionTime}ms`);
-            console.log(`   Windows tested: ${windowResults.length}`);
-            console.log(`   Average return: ${stabilityAnalysis.averageReturn.toFixed(2)}%`);
-            console.log(`   Consistency: ${stabilityAnalysis.consistency.toFixed(2)}`);
-            console.log(`   Degradation detected: ${degradationAnalysis.isDegrading ? 'YES' : 'NO'}`);
-
             // Сохраняем результат в БД
             if (options.saveToDb !== false) {
                 try {
                     await this.saveWalkForwardResult(result);
-                    console.log(`   💾 Result saved to database`);
                 } catch (saveError) {
-                    console.error(`   ⚠️ Failed to save result to database:`, saveError.message);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error(`⚠️ Failed to save result to database:`, {saveError});
+                    }
                 }
             }
 
             return result;
         } catch (error) {
-            console.error(`❌ Error in walkForwardAnalysis:`, error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error(`❌ Error in walkForwardAnalysis:`, {error});
+            }
             throw error;
         }
     }
@@ -1210,9 +1201,7 @@ class BacktestingService {
     createTimeWindows(startDate, endDate, windowSizeMonths, stepSizeMonths) {
         const windows = [];
         const currentStart = new Date(startDate);
-        const totalPeriodMs = endDate.getTime() - startDate.getTime();
         const windowSizeMs = windowSizeMonths * 30 * 24 * 60 * 60 * 1000; // Приблизительно
-        const stepSizeMs = stepSizeMonths * 30 * 24 * 60 * 60 * 1000;
 
         while (currentStart.getTime() + windowSizeMs <= endDate.getTime()) {
             const windowEnd = new Date(currentStart.getTime() + windowSizeMs);
@@ -1401,14 +1390,22 @@ class BacktestingService {
      * @returns {string} - Текстовый отчет в формате Markdown
      */
     generateWalkForwardReport(data) {
-        const { strategyName, period, windowSizeMonths, stepSizeMonths, windowResults, stabilityAnalysis, degradationAnalysis } = data;
-        
+        const {
+            strategyName,
+            period,
+            windowSizeMonths,
+            stepSizeMonths,
+            windowResults,
+            stabilityAnalysis,
+            degradationAnalysis
+        } = data;
+
         let report = `# Walk-Forward анализ стратегии "${strategyName}"\n\n`;
         report += `**Период анализа:** ${period.startDate.toLocaleDateString('ru-RU')} - ${period.endDate.toLocaleDateString('ru-RU')}\n`;
         report += `**Размер окна:** ${windowSizeMonths} месяцев\n`;
         report += `**Шаг смещения:** ${stepSizeMonths} месяцев\n`;
         report += `**Количество окон:** ${windowResults.length}\n\n`;
-        
+
         report += `## Анализ стабильности\n\n`;
         report += `- **Средняя доходность:** ${stabilityAnalysis.averageReturn.toFixed(2)}%\n`;
         report += `- **Стандартное отклонение:** ${stabilityAnalysis.stdDevReturn.toFixed(2)}%\n`;
@@ -1417,7 +1414,7 @@ class BacktestingService {
         report += `- **Средний Sharpe Ratio:** ${stabilityAnalysis.averageSharpeRatio.toFixed(2)}\n`;
         report += `- **Средний Max Drawdown:** ${stabilityAnalysis.averageMaxDrawdown.toFixed(2)}%\n`;
         report += `- **Средний Profit Factor:** ${stabilityAnalysis.averageProfitFactor.toFixed(2)}\n\n`;
-        
+
         report += `## Анализ деградации\n\n`;
         if (degradationAnalysis.isDegrading) {
             report += `⚠️ **Обнаружена деградация производительности**\n\n`;
@@ -1430,7 +1427,7 @@ class BacktestingService {
         } else {
             report += `✅ **Деградация не обнаружена**\n\n`;
         }
-        
+
         if (degradationAnalysis.firstHalfMetrics && degradationAnalysis.lastHalfMetrics) {
             report += `**Сравнение первой и второй половины периода:**\n\n`;
             report += `| Метрика | Первая половина | Вторая половина | Изменение |\n`;
@@ -1440,7 +1437,7 @@ class BacktestingService {
             report += `| Sharpe Ratio | ${degradationAnalysis.firstHalfMetrics.averageSharpeRatio.toFixed(2)} | ${degradationAnalysis.lastHalfMetrics.averageSharpeRatio.toFixed(2)} | ${degradationAnalysis.sharpeDegradation > 0 ? '-' : '+'}${Math.abs(degradationAnalysis.sharpeDegradation).toFixed(2)} |\n`;
             report += `| Max Drawdown | ${degradationAnalysis.firstHalfMetrics.averageMaxDrawdown.toFixed(2)}% | ${degradationAnalysis.lastHalfMetrics.averageMaxDrawdown.toFixed(2)}% | ${(degradationAnalysis.lastHalfMetrics.averageMaxDrawdown - degradationAnalysis.firstHalfMetrics.averageMaxDrawdown).toFixed(2)}% |\n\n`;
         }
-        
+
         report += `## Результаты по окнам\n\n`;
         report += `| Окно | Период | Доходность | Сделок | Win Rate | Sharpe | Max DD |\n`;
         report += `|------|--------|------------|--------|----------|--------|-------|\n`;
@@ -1448,10 +1445,10 @@ class BacktestingService {
             report += `| ${window.windowIndex} | ${window.startDate.toLocaleDateString('ru-RU')} - ${window.endDate.toLocaleDateString('ru-RU')} | ${window.totalReturn.toFixed(2)}% | ${window.totalTrades} | ${window.winRate.toFixed(2)}% | ${(window.sharpeRatio || 0).toFixed(2)} | ${window.maxDrawdown.toFixed(2)}% |\n`;
         }
         report += `\n`;
-        
+
         report += `---\n`;
         report += `*Отчет сгенерирован автоматически системой walk-forward анализа*\n`;
-        
+
         return report;
     }
 
@@ -1554,7 +1551,9 @@ class BacktestingService {
 
             return backtestResult;
         } catch (error) {
-            console.error('❌ Error saving walk-forward result:', error);
+            if (LoggerService.isInitialized) {
+                LoggerService.error('❌ Error saving walk-forward result:', {error});
+            }
             throw error;
         }
     }

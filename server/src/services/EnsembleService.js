@@ -1,6 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
 import CacheService from './CacheService.js';
-import OptimizedAnalysisService from './OptimizedAnalysisService.js';
 import ModelManager from '../utils/ModelManager.js';
 import LoggerService from './LoggerService.js';
 import { getService } from './GlobalServiceManager.js';
@@ -603,8 +602,6 @@ class EnsembleService {
                         `❌ <b>ОШИБКА ОБУЧЕНИЯ АНСАМБЛЯ</b>\n\n📈 Инструмент: <b>${figi}</b>\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
                         'error'
                     );
-                } else {
-                    console.log('⚠️ Telegram service not initialized, skipping alert');
                 }
             } catch (telegramError) {
                 if (LoggerService.isInitialized) {
@@ -647,10 +644,6 @@ class EnsembleService {
         const normalizedNegWeight = (negWeight / sum) * 2;
         
         const imbalance = Math.abs(posCount - negCount) / total;
-        if (imbalance > 0.2) {
-            console.log(`⚖️ Обнаружен дисбаланс классов: ${(imbalance*100).toFixed(1)}% (pos=${posCount}, neg=${negCount})`);
-            console.log(`⚖️ Class weights: 0=${normalizedNegWeight.toFixed(3)}, 1=${normalizedPosWeight.toFixed(3)}`);
-        }
         
         return {
             0: normalizedNegWeight,
@@ -702,17 +695,9 @@ class EnsembleService {
 
         // Если модель не существует, создаем её
         if (!model) {
-            console.log(`🔨 Creating new ${modelType} model...`);
             model = await this.createModel(modelType);
             this.models[modelType] = model;
         }
-
-        // Проверяем размерности данных
-        console.log(`🔍 Debug ${modelType} data shapes:`);
-        console.log(`   Features: ${features.length} samples`);
-        console.log(`   Features[0]: ${features[0]?.length} time steps`);
-        console.log(`   Features[0][0]: ${features[0]?.[0]?.length} features per step`);
-        console.log(`   Labels: ${labels.length} samples`);
         
         // Диагностика данных для CNN
         if (modelType === 'cnn' && features.length > 0) {
@@ -723,8 +708,7 @@ class EnsembleService {
             const meanVal = sampleValues.reduce((a, b) => a + b, 0) / sampleValues.length;
             const stdVal = Math.sqrt(sampleValues.reduce((sum, val) => sum + Math.pow(val - meanVal, 2), 0) / sampleValues.length);
             
-            console.log(`📊 ${modelType} Data statistics: min=${minVal.toFixed(4)}, max=${maxVal.toFixed(4)}, mean=${meanVal.toFixed(4)}, std=${stdVal.toFixed(4)}`);
-            
+
             // Проверка на NaN и Infinity
             const hasNaN = sampleValues.some(v => isNaN(v));
             const hasInf = sampleValues.some(v => !isFinite(v));
@@ -735,7 +719,6 @@ class EnsembleService {
             // Проверка распределения labels
             const posCount = labels.filter(l => l === 1).length;
             const negCount = labels.filter(l => l === 0).length;
-            console.log(`📊 ${modelType} Labels distribution: pos=${posCount}, neg=${negCount}, ratio=${(posCount / labels.length * 100).toFixed(1)}%`);
         }
         
         // Создаем тензоры с правильными размерностями
@@ -752,18 +735,6 @@ class EnsembleService {
         }
         
         ys = tf.tensor2d(labels, [labels.length, 1]);
-        
-        // Расчет class weights для балансировки классов
-        const classWeights = this.calculateClassWeights(labels);
-        // Примечание: TensorFlow.js не поддерживает sampleWeight в model.fit()
-        // Используем взвешивание через дублирование данных
-        
-        if (modelType === 'transformer') {
-            console.log(`   X tensor shape: [${xs.shape[0]}, ${xs.shape[1]}, ${xs.shape[2]}] (3D for transformer: [samples, time_steps, features])`);
-        } else {
-            console.log(`   X tensor shape: [${xs.shape[0]}, ${xs.shape[1]}, ${xs.shape[2]}] (3D for ${modelType})`);
-        }
-        console.log(`   Y tensor shape: [${ys.shape[0]}, ${ys.shape[1]}]`);
 
         // Настройки для отслеживания лучшей модели
         let bestValLoss = Infinity;
@@ -831,7 +802,6 @@ class EnsembleService {
                     // Сохраняем начальный loss для отслеживания прогресса
                     if (initialLoss === null) {
                         initialLoss = logs.loss;
-                        console.log(`📊 ${modelType} Initial loss: ${initialLoss.toFixed(4)}, val_loss: ${(logs.val_loss || logs.loss).toFixed(4)}`);
                     }
                     
                     const valLoss = logs.val_loss || logs.loss;
@@ -851,7 +821,6 @@ class EnsembleService {
                         try {
                             const weights = model.getWeights();
                             bestModelWeights = weights.map(w => w.clone());
-                            console.log(`✅ ${modelType} Epoch ${epoch + 1}: Улучшение val_loss = ${valLoss.toFixed(4)}, val_acc = ${(valAccuracy * 100).toFixed(2)}%, acc = ${(accuracy * 100).toFixed(2)}% (улучшение на ${improvement}%, лучший на эпохе ${bestEpoch}) - веса сохранены`);
                         } catch (error) {
                             console.warn(`⚠️ ${modelType} Epoch ${epoch + 1}: Не удалось сохранить веса: ${error.message}`);
                         }
@@ -860,8 +829,7 @@ class EnsembleService {
                         reduceLRCount++;
                         
                         const noImprovement = ((valLoss - bestValLoss) / bestValLoss * 100).toFixed(2);
-                        console.log(`⏸️ ${modelType} Epoch ${epoch + 1}: Нет улучшения (val_loss=${valLoss.toFixed(4)}, лучший=${bestValLoss.toFixed(4)} на эпохе ${bestEpoch}, хуже на ${noImprovement}%)`);
-                        
+
                         // Автоматическое уменьшение LR при обнаружении плато
                         if (reduceLRCount >= reduceLRPatience && lrReductionCount < maxLRReductions) {
                             const oldLR = currentLR; // Сохраняем старое значение
@@ -886,7 +854,6 @@ class EnsembleService {
                                         reason: 'plateau_detected'
                                     });
                                     
-                                    console.log(`📉 ${modelType} Epoch ${epoch + 1}: Автоматическое уменьшение LR: ${oldLR.toFixed(6)} → ${currentLR.toFixed(6)} (плато ${reduceLRCount} эпох, уменьшение #${lrReductionCount})`);
                                 } catch (lrError) {
                                     if (LoggerService.isInitialized) {
                                         LoggerService.error('Failed to change learning rate', {
@@ -1372,7 +1339,6 @@ class EnsembleService {
 
             // Если данных недостаточно для всех моделей, используем упрощенную модель
             if (!hasEnoughDataForLSTM && !hasEnoughDataForCNN && !hasEnoughDataForTransformer) {
-                console.log(`📊 Insufficient data for neural networks (${candles.length} candles, need ${minRequiredForLSTM}/${minRequiredForCNN}/${minRequiredForTransformer}), using simple technical prediction`);
                 const simplePred = await this.simpleTechnicalPrediction(candles);
                 lstmPred = simplePred.score;
                 cnnPred = simplePred.score;
@@ -1395,7 +1361,6 @@ class EnsembleService {
                             lstmPred = await this.getModelPrediction('lstm', lstmFeatures);
                         } else {
                             // Размеры не совпадают - используем упрощенную модель
-                            console.log(`📊 LSTM features shape mismatch (${actualLSTMElements} vs ${expectedLSTMElements}), using simple technical prediction`);
                             const simplePred = await this.simpleTechnicalPrediction(candles);
                             lstmPred = simplePred.score;
                         }
@@ -1419,7 +1384,6 @@ class EnsembleService {
                             cnnPred = await this.getModelPrediction('cnn', cnnFeatures);
                         } else {
                             // Размеры не совпадают - используем упрощенную модель
-                            console.log(`📊 CNN features shape mismatch (${actualCNNElements} vs ${expectedCNNElements}), using simple technical prediction`);
                             const simplePred = await this.simpleTechnicalPrediction(candles);
                             cnnPred = simplePred.score;
                         }
@@ -1443,7 +1407,6 @@ class EnsembleService {
                             transformerPred = await this.getModelPrediction('transformer', transformerFeatures);
                         } else {
                             // Размеры не совпадают - используем упрощенную модель
-                            console.log(`📊 Transformer features shape mismatch (${actualTransformerElements} vs ${expectedTransformerElements}), using simple technical prediction`);
                             const simplePred = await this.simpleTechnicalPrediction(candles);
                             transformerPred = simplePred.score;
                         }
@@ -1956,7 +1919,6 @@ class EnsembleService {
             this.weights.transformer /= totalWeight;
         }
         
-        console.log('🔄 Updated ensemble weights:', this.weights);
     }
 
     /**
@@ -2289,20 +2251,15 @@ class EnsembleService {
      */
     async saveModels() {
         try {
-            console.log('💾 Saving ensemble models with new ModelManager...');
-            
+
             // Сохраняем каждую модель ансамбля через ModelManager
             for (const [modelType, model] of Object.entries(this.models)) {
                 if (model) {
                     const modelName = `ensemble/${modelType}`;
                     const success = await ModelManager.saveModel(model, modelName);
-                    if (success) {
-                        console.log(`✅ ${modelType} model saved`);
-                    } else {
+                    if (!success) {
                         console.error(`❌ Failed to save ${modelType} model`);
                     }
-                } else {
-                    console.warn(`⚠️ ${modelType} model is null, skipping save`);
                 }
             }
             
@@ -2331,7 +2288,6 @@ class EnsembleService {
                 JSON.stringify(metadata, null, 2)
             );
             
-            console.log('✅ Ensemble models saved with new format');
         } catch (error) {
             console.error('❌ Failed to save ensemble models:', error);
         }
@@ -2407,7 +2363,6 @@ class EnsembleService {
                 }
             }
             
-            console.log('✅ Ensemble models loaded with new format');
         } catch (error) {
             console.error('❌ Failed to load ensemble models:', error);
         }

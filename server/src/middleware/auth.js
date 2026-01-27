@@ -65,7 +65,6 @@ export const authenticate = async (req, res, next) => {
             });
         }
         
-        console.error('Ошибка аутентификации:', error);
         return res.status(500).json({
             success: false,
             message: 'Ошибка аутентификации'

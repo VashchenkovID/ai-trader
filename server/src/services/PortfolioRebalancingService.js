@@ -251,7 +251,6 @@ class PortfolioRebalancingService {
         for (const [figi, quantity] of Object.entries(rawPositions)) {
             // Пропускаем тестовые FIGI
             if (isTestFigi(figi)) {
-                console.log(`⏭️ Пропускаем тестовый FIGI: ${figi}`);
                 continue;
             }
             
@@ -427,12 +426,10 @@ class PortfolioRebalancingService {
 
                 // Проверяем целесообразность операции
                 if (netBenefit < this.settings.minBenefit) {
-                    console.log(`⏭️ Пропущена операция ${operation.ticker} ${operation.action}: чистая выгода ${netBenefit.toFixed(2)} руб < минимум ${this.settings.minBenefit} руб`);
                     continue;
                 }
 
                 if (dealAmount < this.settings.minAmount) {
-                    console.log(`⏭️ Пропущена операция ${operation.ticker} ${operation.action}: сумма ${dealAmount.toFixed(2)} руб < минимум ${this.settings.minAmount} руб`);
                     continue;
                 }
 
@@ -440,7 +437,6 @@ class PortfolioRebalancingService {
                 if (operation.action === 'BUY') {
                     const requiredAmount = dealAmount + estimatedCommission;
                     if (requiredAmount > (portfolio.cash || 0)) {
-                        console.log(`⏭️ Пропущена покупка ${operation.ticker}: недостаточно средств (нужно ${requiredAmount.toFixed(2)}, доступно ${(portfolio.cash || 0).toFixed(2)})`);
                         continue;
                     }
                 } else if (operation.action === 'SELL') {
@@ -448,7 +444,6 @@ class PortfolioRebalancingService {
                     const position = positions.find(p => p.figi === operation.figi || p.ticker === operation.ticker);
                     const availableQuantity = position?.quantity || 0;
                     if (operation.quantity > availableQuantity) {
-                        console.log(`⏭️ Пропущена продажа ${operation.ticker}: недостаточно позиций (нужно ${operation.quantity}, доступно ${availableQuantity})`);
                         continue;
                     }
                 }
@@ -487,7 +482,6 @@ class PortfolioRebalancingService {
             }
 
             if (this.settings.dryRun) {
-                console.log('🔍 DRY RUN: Ребалансировка не будет выполнена');
                 return {
                     success: true,
                     dryRun: true,

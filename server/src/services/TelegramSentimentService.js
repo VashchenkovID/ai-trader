@@ -38,7 +38,6 @@ class TelegramSentimentService {
             // Добавляем каналы по умолчанию
             this.defaultChannels.forEach(channel => this.addChannel(channel));
             
-            console.log('✅ TelegramSentimentService initialized');
         } catch (error) {
             console.error('❌ Error initializing TelegramSentimentService:', error);
         }
@@ -49,7 +48,6 @@ class TelegramSentimentService {
      */
     addChannel(channel) {
         this.channels.add(channel);
-        console.log(`📺 Added channel: ${channel}`);
     }
 
     /**
@@ -57,7 +55,6 @@ class TelegramSentimentService {
      */
     removeChannel(channel) {
         this.channels.delete(channel);
-        console.log(`📺 Removed channel: ${channel}`);
     }
 
     /**
@@ -423,7 +420,6 @@ class TelegramSentimentService {
                     updateOnDuplicate: ['sentiment', 'confidence', 'messageCount', 'positiveMessages', 'negativeMessages', 'neutralMessages', 'keywords', 'analyzedAt', 'cachedAt', 'expiresAt']
                 });
 
-                console.log(`💾 Кешировано ${sentimentsToCache.length} записей настроений для ${figi}`);
             }
 
         } catch (error) {
@@ -446,7 +442,6 @@ class TelegramSentimentService {
                 }
             });
 
-            console.log(`🧹 Очищено ${deletedCount} устаревших записей настроений из кеша`);
 
         } catch (error) {
             console.error('❌ Ошибка очистки кеша настроений:', error);

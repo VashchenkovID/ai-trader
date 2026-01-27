@@ -37,7 +37,6 @@ class OptimizedTelegramService {
     async initialize() {
         // Проверяем, не инициализирован ли уже бот
         if (this.isInitialized && this.bot) {
-            console.log('⚠️ Telegram bot already initialized, skipping...');
             return;
         }
 
@@ -67,8 +66,7 @@ class OptimizedTelegramService {
                 }
             }
 
-            console.log(`🤖 Initializing Telegram bot (attempt ${retryCount + 1}/${maxRetries + 1})...`);
-            
+
             // Сначала пытаемся создать бота с polling
             // Но если сразу возникает ошибка 409, переключаемся на режим без polling
             let botCreated = false;
@@ -99,12 +97,6 @@ class OptimizedTelegramService {
             this.setupHandlers();
             this.setupErrorHandlers();
             this.startSystemReportScheduler();
-            
-            if (botCreated && this.bot && this.bot._polling) {
-                console.log('✅ Telegram bot initialized successfully with polling');
-            } else {
-                console.log('✅ Telegram bot initialized without polling (another instance is active)');
-            }
         } catch (error) {
             console.error(`❌ Error initializing Telegram bot (attempt ${retryCount + 1}):`, error.message);
             
@@ -120,7 +112,6 @@ class OptimizedTelegramService {
                     this.setupHandlers();
                     this.setupErrorHandlers();
                     this.startSystemReportScheduler();
-                    console.log('✅ Telegram bot initialized without polling (another instance is active)');
                     return;
                 } catch (fallbackError) {
                     console.error('❌ Failed to initialize Telegram bot without polling:', fallbackError.message);
@@ -130,7 +121,6 @@ class OptimizedTelegramService {
             }
             
             if (retryCount < maxRetries) {
-                console.log(`🔄 Retrying in ${retryDelay / 1000} seconds...`);
                 setTimeout(() => {
                     this.initializeWithRetry(token, chatId, retryCount + 1);
                 }, retryDelay);
@@ -171,8 +161,6 @@ class OptimizedTelegramService {
                         // Переустанавливаем обработчики
                         this.setupHandlers();
                         this.setupErrorHandlers();
-                        
-                        console.log('✅ Telegram bot reinitialized without polling');
                     }
                 } catch (e) {
                     console.error('❌ Error reinitializing Telegram bot:', e.message);
@@ -186,15 +174,12 @@ class OptimizedTelegramService {
                 error.message.includes('ETIMEDOUT')) {
                 
                 this.networkErrors++;
-                console.log(`🔄 Network error detected (${this.networkErrors}/${this.maxNetworkErrors})`);
-                
+
                 if (this.networkErrors >= this.maxNetworkErrors) {
-                    console.log('❌ Too many network errors, temporarily disabling Telegram');
                     this.temporarilyDisabled = true;
                     this.isInitialized = false;
                     
                     setTimeout(() => {
-                        console.log('🔄 Attempting to re-enable Telegram after cooldown...');
                         this.temporarilyDisabled = false;
                         this.networkErrors = 0;
                         this.initialize();
@@ -333,7 +318,6 @@ class OptimizedTelegramService {
             const systemStatus = await this.getSystemStatus();
             const message = this.formatServerStartupMessage(systemStatus);
             await this.safeSendMessage(this.chatId, message, { parse_mode: 'HTML' });
-            console.log('✅ Server startup notification sent');
         } catch (error) {
             console.error('❌ Error sending startup notification:', error);
         }
@@ -372,7 +356,6 @@ class OptimizedTelegramService {
         try {
             const message = this.formatFullTrainingStartMessage(figi, options);
             await this.safeSendMessage(this.chatId, message, { parse_mode: 'HTML' });
-            console.log('✅ Full training start notification sent');
         } catch (error) {
             console.error('❌ Error sending full training start notification:', error);
         }
@@ -404,7 +387,6 @@ class OptimizedTelegramService {
         try {
             const message = this.formatPartialTrainingCompleteMessage(figi, options, results);
             await this.safeSendMessage(this.chatId, message, { parse_mode: 'HTML' });
-            console.log('✅ Partial training completion notification sent');
         } catch (error) {
             console.error('❌ Error sending partial training completion notification:', error);
         }
@@ -467,7 +449,6 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
             
             // Очищаем после отправки
             this.strongRecommendations = [];
-            console.log('✅ Strong recommendations sent');
         } catch (error) {
             console.error('❌ Error sending strong recommendations:', error);
         }
@@ -519,7 +500,6 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
 
             const alertMessage = `<b>Оповещение: ${alertType.toUpperCase()}</b>\n\n${message}\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`;
             await this.safeSendMessage(this.chatId, alertMessage, { parse_mode: 'HTML' });
-            console.log(`✅ Alert sent: ${alertType}`);
         } catch (error) {
             console.error('❌ Error sending alert:', error);
         }
@@ -573,7 +553,6 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
             await this.safeSendMessage(this.chatId, alertMessage, { parse_mode: 'HTML' });
             
             this.tradingSignalLastSent = Date.now();
-            console.log(`✅ Sent ${totalSignals} trading signals (grouped)`);
         } catch (error) {
             console.error('❌ Error flushing trading signal queue:', error);
         }
@@ -587,7 +566,6 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
             const uptime = this.getUptime();
             const message = this.formatServerShutdownMessage(reason, uptime);
             await this.safeSendMessage(this.chatId, message, { parse_mode: 'HTML' });
-            console.log('✅ Server shutdown notification sent');
         } catch (error) {
             console.error('❌ Error sending shutdown notification:', error);
         }
@@ -628,7 +606,6 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
             const report = await this.generateSystemReport();
             await this.safeSendMessage(this.chatId, report, { parse_mode: 'HTML' });
             this.lastSystemReport = new Date();
-            console.log('✅ System report sent');
         } catch (error) {
             console.error('❌ Error sending system report:', error);
         }
@@ -920,7 +897,6 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
                 reply_markup: keyboard
             });
 
-            console.log(`✅ Trading request approval message sent for ${ticker} (requestId: ${requestId})`);
             return sentMessage;
         } catch (error) {
             console.error('❌ Error sending trading request for approval:', error);
@@ -1090,7 +1066,7 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
             }
 
             // Подтверждаем заявку в фоне (не блокируем ответ пользователю)
-            (async () => {
+            await (async () => {
                 try {
                     await TradingRequestService.approveRequest(requestId);
                 } catch (error) {
@@ -1098,7 +1074,6 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
                 }
             })();
 
-            console.log(`✅ Trading request ${requestId} approved via Telegram`);
         } catch (error) {
             console.error('❌ Error handling request approval:', error.message);
             try {
@@ -1278,7 +1253,7 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
             }
 
             // Отклоняем заявку в фоне (не блокируем ответ пользователю)
-            (async () => {
+            await (async () => {
                 try {
                     await request.reject('Отклонено пользователем через Telegram');
                 } catch (error) {
@@ -1286,7 +1261,6 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
                 }
             })();
 
-            console.log(`✅ Trading request ${requestId} rejected via Telegram`);
         } catch (error) {
             console.error('❌ Error handling request rejection:', error.message);
             try {
@@ -1327,7 +1301,6 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
 
     async safeSendMessage(chatId, message, options = {}, retryCount = 0) {
         if (!this.isInitialized || !this.bot || this.temporarilyDisabled) {
-            console.log('Telegram temporarily disabled or not initialized, skipping message');
             return false;
         }
 
@@ -1388,9 +1361,7 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
      */
     async stop() {
         try {
-            console.log('🛑 Stopping Optimized Telegram Service...');
             this.cleanup();
-            console.log('✅ Optimized Telegram Service stopped');
         } catch (error) {
             console.error('❌ Error stopping Optimized Telegram Service:', error);
             throw error;

@@ -1,5 +1,4 @@
 import * as tf from '@tensorflow/tfjs';
-import NeuralNetworkService from './NeuralNetworkService.js';
 import OptimizedDataService from './OptimizedDataService.js';
 import CacheService from './CacheService.js';
 import ModelManager from '../utils/ModelManager.js';
@@ -473,17 +472,6 @@ class OptimizedTrainingService {
                 return { features, labels };
             }
 
-            // OptimizedDataService уже включает все необходимые фичи:
-            // - Нормализованные цены и объемы
-            // - Технические индикаторы (RSI, MACD, Bollinger Bands, SMA, EMA)
-            // - Временные фичи
-            // - Рыночные фичи
-            // - Новостные фичи
-            // - Telegram фичи
-            // Дополнительные технические индикаторы не нужны, так как они уже включены
-            
-            console.log(`📊 Prepared ${features.length} samples with ${features[0]?.length || 0} features each`);
-            
             return { features, labels };
         } catch (error) {
             console.warn('Error preparing features:', error.message);
@@ -661,10 +649,6 @@ class OptimizedTrainingService {
         const normalizedNegWeight = (negWeight / sum) * 2;
         
         const imbalance = Math.abs(posCount - negCount) / total;
-        if (imbalance > 0.2) {
-            console.log(`⚖️ Обнаружен дисбаланс классов: ${(imbalance*100).toFixed(1)}% (pos=${posCount}, neg=${negCount})`);
-            console.log(`⚖️ Class weights: 0=${normalizedNegWeight.toFixed(3)}, 1=${normalizedPosWeight.toFixed(3)}`);
-        }
         
         return {
             0: normalizedNegWeight,
@@ -919,7 +903,6 @@ class OptimizedTrainingService {
                         bestValLoss = valLoss;
                         patienceCount = 0;
                         reduceLRCount = 0;
-                        console.log(`✅ Epoch ${epoch + 1}: Улучшение val_loss = ${valLoss.toFixed(4)}, val_acc = ${(valAccuracy * 100).toFixed(2)}%, acc = ${(accuracy * 100).toFixed(2)}%`);
                     } else {
                         // Нет улучшения
                         patienceCount++;
@@ -949,7 +932,6 @@ class OptimizedTrainingService {
                                         reason: 'plateau_detected'
                                     });
                                     
-                                    console.log(`📉 Epoch ${epoch + 1}: Автоматическое уменьшение LR: ${oldLR.toFixed(6)} → ${currentLR.toFixed(6)} (плато ${reduceLRCount} эпох, уменьшение #${lrReductionCount})`);
                                 } catch (lrError) {
                                     console.warn(`⚠️ Не удалось изменить LR: ${lrError.message}`);
                                 }
@@ -958,14 +940,12 @@ class OptimizedTrainingService {
                             reduceLRCount = 0; // Сбрасываем счетчик после уменьшения LR
                         } else if (reduceLRCount >= reduceLRPatience && lrReductionCount >= maxLRReductions) {
                             // Достигнуто максимальное количество уменьшений LR
-                            console.log(`📉 Epoch ${epoch + 1}: Плато обнаружено, но LR уже уменьшен ${maxLRReductions} раз (текущий LR=${currentLR.toFixed(6)})`);
                             reduceLRCount = 0; // Сбрасываем счетчик
                         }
                         
                         // Early stopping
                         if (patienceCount >= patience) {
                             model.stopTraining = true; // Останавливаем обучение в TensorFlow.js
-                            console.log(`🛑 Epoch ${epoch + 1}: Early stopping (val_loss не улучшается ${patience} эпох, лучший val_loss = ${bestValLoss.toFixed(4)})`);
                         }
                     }
                 }
@@ -981,17 +961,6 @@ class OptimizedTrainingService {
         // Расчет метрик ROC-AUC и F1 на валидации
         const valMetrics = await this.calculateMetrics(model, split.val.features, split.val.labels);
         const testMetrics = await this.calculateMetrics(model, split.test.features, split.test.labels);
-        
-        console.log(`📊 Validation metrics: F1=${valMetrics.f1.toFixed(4)}, ROC-AUC=${valMetrics.auc.toFixed(4)}, Precision=${valMetrics.precision.toFixed(4)}, Recall=${valMetrics.recall.toFixed(4)}`);
-        console.log(`📊 Test metrics: F1=${testMetrics.f1.toFixed(4)}, ROC-AUC=${testMetrics.auc.toFixed(4)}, Precision=${testMetrics.precision.toFixed(4)}, Recall=${testMetrics.recall.toFixed(4)}`);
-        
-        // Логируем историю изменений LR, если были изменения
-        if (lrHistory.length > 0) {
-            console.log(`📈 История изменений LR (${lrHistory.length} раз):`);
-            lrHistory.forEach((lrChange, idx) => {
-                console.log(`   ${idx + 1}. Эпоха ${lrChange.epoch}: ${lrChange.oldLR.toFixed(6)} → ${lrChange.newLR.toFixed(6)} (val_loss=${lrChange.valLoss.toFixed(4)})`);
-            });
-        }
 
         return {
             history: history.history,
@@ -1214,7 +1183,6 @@ class OptimizedTrainingService {
             // Также сохраняем через ModelManager для совместимости
             try {
                 await ModelManager.saveModel(model, `neural/${figi}`);
-                console.log(`✅ Model also saved via ModelManager for ${figi}`);
             } catch (modelManagerError) {
                 console.warn(`⚠️ Failed to save model via ModelManager for ${figi}: ${modelManagerError.message}`);
             }
@@ -1327,7 +1295,6 @@ class OptimizedTrainingService {
                 metrics: ['accuracy']
             });
 
-            console.log(`✅ Loaded BEST model for ${figi}`);
             return model;
         } catch (error) {
             console.warn(`⚠️ Failed to load best model for ${figi}:`, error.message);
@@ -1345,7 +1312,6 @@ class OptimizedTrainingService {
                 // Нет best-модели, текущая модель становится best
                 if (currentMetrics && currentMetrics.accuracy) {
                     await this.saveBestModel(figi, currentModel, currentMetrics.accuracy);
-                    console.log(`🏅 Current model saved as best for ${figi} (accuracy=${currentMetrics.accuracy.toFixed(4)})`);
                 }
                 return { degraded: false, restored: false };
             }
@@ -1369,9 +1335,7 @@ class OptimizedTrainingService {
                         
                         // Заменяем текущую модель на best
                         await this.saveModel(figi, bestModel);
-                        
-                        console.log(`🔄 Restored BEST model for ${figi} (accuracy=${bestAccuracy.toFixed(4)})`);
-                        
+
                         // Отправляем уведомление о деградации
                         const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                         if (WebSocketService) {
@@ -1393,7 +1357,6 @@ class OptimizedTrainingService {
                 } else if (currentAccuracy > bestAccuracy) {
                     // Текущая модель лучше best - обновляем best
                     await this.saveBestModel(figi, currentModel, currentAccuracy);
-                    console.log(`🏅 Updated BEST model for ${figi} (accuracy=${currentAccuracy.toFixed(4)})`);
                     return { degraded: false, restored: false, bestUpdated: true };
                 }
             }
@@ -1480,7 +1443,6 @@ class OptimizedTrainingService {
                         const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
                         
                         if (modelInputSize !== null && modelInputSize !== inputSize) {
-                            console.log(`ℹ️ Input size mismatch for ${figi}: model expects ${modelInputSize}, but features have size ${inputSize}. This is expected when feature set changes. Creating new model.`);
                             // Удаляем несовместимую модель для освобождения места
                             try {
                                 if (await fs.access(figiModelPath).then(() => true).catch(() => false)) {
@@ -1489,7 +1451,6 @@ class OptimizedTrainingService {
                                 if (await fs.access(figiWeightsPath).then(() => true).catch(() => false)) {
                                     await fs.unlink(figiWeightsPath);
                                 }
-                                console.log(`🗑️ Removed incompatible model files for ${figi}`);
                             } catch (cleanupError) {
                                 // Игнорируем ошибки удаления
                             }
@@ -1520,12 +1481,10 @@ class OptimizedTrainingService {
                         const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
                         
                         if (modelInputSize !== null && modelInputSize !== inputSize) {
-                            console.log(`ℹ️ Input size mismatch for ${figi} (ModelManager): model expects ${modelInputSize}, but features have size ${inputSize}. This is expected when feature set changes. Creating new model.`);
                             return null;
                         }
                     }
                     
-                    console.log(`✅ Loaded model for ${figi} via ModelManager`);
                     return model;
                 }
             } catch (modelManagerError) {
@@ -1563,7 +1522,6 @@ class OptimizedTrainingService {
                         const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
                         
                         if (modelInputSize !== null && modelInputSize !== inputSize) {
-                            console.log(`ℹ️ Input size mismatch for general model (used for ${figi}): model expects ${modelInputSize}, but features have size ${inputSize}. This is expected when feature set changes. Creating new model.`);
                             // Удаляем несовместимую общую модель
                             try {
                                 if (await fs.access(generalModelPath).then(() => true).catch(() => false)) {
@@ -1573,7 +1531,6 @@ class OptimizedTrainingService {
                                 if (await fs.access(generalWeightsPath).then(() => true).catch(() => false)) {
                                     await fs.unlink(generalWeightsPath);
                                 }
-                                console.log(`🗑️ Removed incompatible general model files`);
                             } catch (cleanupError) {
                                 // Игнорируем ошибки удаления
                             }
@@ -1587,15 +1544,13 @@ class OptimizedTrainingService {
                         metrics: ['accuracy']
                     });
                     
-                    console.log(`✅ Loaded general model as fallback for ${figi}`);
                     return model;
                 }
             } catch (generalError) {
                 console.warn(`⚠️ Failed to load general model as fallback for ${figi}:`, generalError.message);
             }
-            
+
             // Fallback: модель не найдена, вернем null (будет создана новая)
-            console.log(`📭 No existing model found for ${figi}, will create new one`);
             return null;
         } catch (error) {
             console.warn(`⚠️ Failed to load model for ${figi}:`, error.message);
@@ -1689,23 +1644,11 @@ class OptimizedTrainingService {
         try {
             const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
             const CachedCandle = (await import('../models/CachedCandle.js')).default;
-            
-            // Сначала проверим общее количество инструментов
-            const totalInstruments = await CachedInstrument.count();
-            console.log(`📊 Total instruments in database: ${totalInstruments}`);
-            
-            // Проверим активные инструменты
-            const activeInstruments = await CachedInstrument.count({
-                where: { isActive: true }
-            });
-            console.log(`✅ Active instruments: ${activeInstruments}`);
-            
+
             const instruments = await CachedInstrument.findAll({
                 where: { isActive: true },
                 order: [['name', 'ASC']]
             });
-
-            console.log(`📋 Found ${instruments.length} active instruments`);
 
             const validInstruments = [];
             
@@ -1779,7 +1722,6 @@ class OptimizedTrainingService {
                 }
             } catch (modelManagerError) {
                 // Продолжаем попытки загрузки другими способами
-                console.log(`ℹ️ ModelManager load failed for ${figi}, trying direct file load: ${modelManagerError.message}`);
             }
 
             // Попытка 2: Загрузить напрямую из файлов используя tf.models.modelFromJSON
@@ -1905,8 +1847,6 @@ class OptimizedTrainingService {
      */
     async tuneHyperparameters(testFigis = null, options = {}) {
         try {
-            console.log('🔍 Starting hyperparameter tuning...');
-            
             // Получаем список FIGI для тестирования
             let figis = testFigis;
             if (!figis || figis.length === 0) {
@@ -1917,7 +1857,6 @@ class OptimizedTrainingService {
                 // Выбираем 3-5 инструментов для тестирования
                 const count = Math.min(5, Math.max(3, instruments.length));
                 figis = instruments.slice(0, count).map(inst => inst.figi);
-                console.log(`📊 Selected ${figis.length} instruments for tuning: ${figis.join(', ')}`);
             }
 
             // Сетка гиперпараметров для тестирования
@@ -1927,12 +1866,6 @@ class OptimizedTrainingService {
             const horizonOptions = options.horizonOptions || [3, 5, 7];
             const lookbackOptions = options.lookbackOptions || [40, 60, 80]; // Lookback период для тестирования
 
-            console.log(`🔍 Testing hyperparameter combinations:`);
-            console.log(`   Epochs: ${epochsOptions.join(', ')}`);
-            console.log(`   Batch Size: ${batchSizeOptions.join(', ')}`);
-            console.log(`   Days: ${daysOptions.join(', ')}`);
-            console.log(`   Horizon: ${horizonOptions.join(', ')}`);
-            console.log(`   Lookback: ${lookbackOptions.join(', ')}`);
 
             const results = [];
             let totalCombinations = epochsOptions.length * batchSizeOptions.length * daysOptions.length * horizonOptions.length * lookbackOptions.length;
@@ -1946,9 +1879,7 @@ class OptimizedTrainingService {
                             for (const lookback of lookbackOptions) {
                                 currentCombination++;
                                 const combination = { epochs, batchSize, days, horizon, lookback };
-                                
-                                console.log(`\n🔬 Testing combination ${currentCombination}/${totalCombinations}:`, combination);
-                                
+
                                 let totalAccuracy = 0;
                                 let totalF1 = 0;
                                 let totalAuc = 0;
@@ -1958,8 +1889,6 @@ class OptimizedTrainingService {
                                 // Тестируем на каждом FIGI
                                 for (const figi of figis) {
                                     try {
-                                        console.log(`   Testing ${figi} with epochs=${epochs}, batchSize=${batchSize}, days=${days}, horizon=${horizon}, lookback=${lookback}...`);
-                                        
                                         // Получаем данные
                                         const candles = await this.getTrainingData(figi, days);
                                         if (candles.length < 50) {
@@ -2009,9 +1938,6 @@ class OptimizedTrainingService {
                                     totalF1 += metrics.f1;
                                     totalAuc += metrics.auc;
                                     successfulTests++;
-
-                                        console.log(`   ✅ ${figi}: accuracy=${metrics.accuracy.toFixed(4)}, f1=${metrics.f1.toFixed(4)}, auc=${metrics.auc.toFixed(4)}`);
-
                                         // Освобождаем память
                                         model.dispose();
 
@@ -2038,8 +1964,6 @@ class OptimizedTrainingService {
                                         },
                                         figiResults
                                     });
-
-                                    console.log(`   📊 Average: accuracy=${avgAccuracy.toFixed(4)}, f1=${avgF1.toFixed(4)}, auc=${avgAuc.toFixed(4)}`);
                                 } else {
                                     console.warn(`   ⚠️ No successful tests for this combination`);
                                 }
@@ -2054,16 +1978,6 @@ class OptimizedTrainingService {
 
             // Выбираем лучшую комбинацию
             const bestCombination = results[0];
-            
-            console.log(`\n🏆 Best hyperparameters found:`);
-            console.log(`   Epochs: ${bestCombination.combination.epochs}`);
-            console.log(`   Batch Size: ${bestCombination.combination.batchSize}`);
-            console.log(`   Days: ${bestCombination.combination.days}`);
-            console.log(`   Horizon: ${bestCombination.combination.horizon}`);
-            console.log(`   Lookback: ${bestCombination.combination.lookback}`);
-            console.log(`   Average F1: ${bestCombination.metrics.f1.toFixed(4)}`);
-            console.log(`   Average Accuracy: ${bestCombination.metrics.accuracy.toFixed(4)}`);
-            console.log(`   Average AUC: ${bestCombination.metrics.auc.toFixed(4)}`);
 
             return {
                 best: bestCombination.combination,

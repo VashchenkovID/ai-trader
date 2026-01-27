@@ -115,8 +115,7 @@ class Stage3Validator {
      */
     async validateStage3Readiness() {
         try {
-            console.log('🔍 Начинаем валидацию готовности к Этапу 3...');
-            
+
             const validation = {
                 timestamp: new Date(),
                 overall: false,

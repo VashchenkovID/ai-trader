@@ -10,7 +10,6 @@
 
 import TradingRequest from '../models/TradingRequest.js';
 import Recommendation from '../models/Recommendation.js';
-import PositionStrategy from '../models/PositionStrategy.js';
 import ModelPerformance from '../models/ModelPerformance.js';
 import ModelWeightingService from './ModelWeightingService.js';
 import LoggerService from './LoggerService.js';
@@ -49,11 +48,6 @@ class FeedbackService {
             await this.loadSettings();
 
             this.isInitialized = true;
-            if (LoggerService.isInitialized) {
-                LoggerService.info('✅ FeedbackService initialized');
-            } else {
-                console.log('✅ FeedbackService initialized');
-            }
         } catch (error) {
             if (LoggerService.isInitialized) {
                 LoggerService.error('❌ Failed to initialize FeedbackService:', error);

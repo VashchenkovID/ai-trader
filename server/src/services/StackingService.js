@@ -1,6 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
 import Recommendation from '../models/Recommendation.js';
-import ModelPerformance from '../models/ModelPerformance.js';
 import LoggerService from './LoggerService.js';
 import { Op } from 'sequelize';
 import path from 'path';

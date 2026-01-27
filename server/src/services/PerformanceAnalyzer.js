@@ -2,13 +2,9 @@ import Settings from '../models/Settings.js';
 import MigrationStatus from '../models/MigrationStatus.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
 import TradingEngine from './TradingEngine.js';
-import ProfitabilityTracker from './ProfitabilityTracker.js';
 import CapitalScalingService from './CapitalScalingService.js';
 import RiskAdjustmentService from './RiskAdjustmentService.js';
 import NeuralNetworkService from './NeuralNetworkService.js';
-import SectorClassifier from '../utils/sectorClassifier.js';
-import CorrelationService from './CorrelationService.js';
-import CachedInstrument from '../models/CachedInstrument.js';
 import { Op } from 'sequelize';
 
 /**
@@ -1056,7 +1052,6 @@ class PerformanceAnalyzer {
      */
     clearCache() {
         this.analysisCache.clear();
-        console.log('🧹 Кеш анализа производительности очищен');
     }
 
     /**

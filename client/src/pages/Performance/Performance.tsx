@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { TabView, TabPanel } from '../components/ui/TabView/TabView';
-import PerformanceDashboard from '../components/performance/PerformanceDashboard';
-import PerformanceHeatmap from '../components/performance/PerformanceHeatmap';
-import SectorAnalysis from '../components/performance/SectorAnalysis';
-import BenchmarkComparison from '../components/performance/BenchmarkComparison';
-import ReportExport from '../components/performance/ReportExport';
-import { performanceApi } from '../services/performanceApi';
-import type { ChartPeriod } from '../components/performance/PerformanceChart';
+import { TabView, TabPanel } from '../../components/ui/TabView/TabView.tsx';
+import PerformanceDashboard from '../../components/performance/PerformanceDashboard.tsx';
+import PerformanceHeatmap from '../../components/performance/PerformanceHeatmap.tsx';
+import SectorAnalysis from '../../components/performance/SectorAnalysis.tsx';
+import BenchmarkComparison from '../../components/performance/BenchmarkComparison.tsx';
+import ReportExport from '../../components/performance/ReportExport.tsx';
+import { performanceApi } from '../../services/performanceApi.ts';
+import type { ChartPeriod } from '../../components/performance/PerformanceChart.tsx';
 import './Performance.css';
 
 const Performance: React.FC = () => {

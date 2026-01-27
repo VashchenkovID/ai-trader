@@ -374,7 +374,6 @@ class TradingRequestService {
                     
                     // Используем бюджет стратегии
                     await PortfolioAllocation.useBudget(strategy.id, estimatedAmount);
-                    console.log(`💰 Used ${estimatedAmount} RUB from strategy ${strategy.name} budget`);
                 } catch (positionError) {
                     console.warn('⚠️ Could not create PositionStrategy or use budget:', positionError.message);
                     // Не блокируем создание заявки, если не удалось создать PositionStrategy
@@ -384,10 +383,10 @@ class TradingRequestService {
             // Создаем трейлинг-стоп для BUY позиций - неблокирующе
             if (action === 'BUY' && tradingRequest.status === 'pending') {
                 // Выполняем в фоне, чтобы не блокировать создание заявки
-                (async () => {
+                await (async () => {
                     try {
                         const instrument = await CacheService.getInstrument(recommendation.figi, true);
-                        
+
                         if (instrument) {
                             await RiskManagementService.createTrailingStop({
                                 figi: recommendation.figi,
@@ -425,7 +424,7 @@ class TradingRequestService {
 
             // Отправляем заявку в Telegram для подтверждения (для всех заявок) - неблокирующе
             // Выполняем в фоне, чтобы не блокировать создание заявки
-            (async () => {
+            await (async () => {
                 try {
                     // Получаем agreement из IntegratedAIService, если доступно (с таймаутом)
                     let agreement = null;
@@ -464,8 +463,7 @@ class TradingRequestService {
                 }
             })();
 
-            console.log(`📝 Trading request created: ${tradingRequest.id} (${tradingRequest.action} ${tradingRequest.ticker})`);
-            
+
             // Возвращаем заявку с предупреждением о стратегии, если есть
             const result = tradingRequest.toJSON ? tradingRequest.toJSON() : tradingRequest;
             if (strategyValidation && !strategyValidation.isValid) {
@@ -535,7 +533,6 @@ class TradingRequestService {
                     }, null, { [recommendation.figi]: tradingRequest.priceAtRequest });
 
                     if (validation.isValid) {
-                        console.log(`✅ Auto-trade conditions met for ${recommendation.ticker}: confidence=${recommendation.confidence.toFixed(2)}, score=${recommendation.score.toFixed(2)}, agreement=${agreement !== null ? agreement.toFixed(2) : 'N/A'}`);
                         return true;
                     }
                 } catch (error) {
@@ -878,14 +875,11 @@ class TradingRequestService {
                 console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
             }
 
-            console.log(`✅ Trading request approved: ${requestId} (User confirmed execution)`);
-
             // Для paper режима обновляем виртуальный портфель
             const currentMode = TradingModeManager.getCurrentMode().mode;
             if (currentMode === 'paper') {
                 try {
                     await this.updateVirtualPortfolioForApprovedRequest(request);
-                    console.log(`📊 Виртуальный портфель обновлен для заявки ${requestId}`);
                 } catch (portfolioError) {
                     console.warn(`⚠️ Не удалось обновить виртуальный портфель: ${portfolioError.message}`);
                     // Не прерываем процесс одобрения, если обновление портфеля не удалось
@@ -937,8 +931,6 @@ class TradingRequestService {
                 console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
             }
 
-            console.log(`❌ Trading request rejected: ${requestId} - ${reason}`);
-            
             // Форматируем даты перед возвратом
             const { formatModelDates } = await import('../utils/dateFormatter.js');
             return formatModelDates(request, ['createdAt', 'updatedAt', 'executedAt', 'approvedAt', 'expiresAt']);
@@ -1053,7 +1045,6 @@ class TradingRequestService {
                         if (existingPyramid) {
                             // Добавляем следующий вход в существующую пирамиду
                             await PyramidingService.addNextEntry(existingPyramid, request);
-                            console.log(`📊 Added next entry to pyramid for ${request.ticker}`);
                         } else {
                             // Проверяем, нужно ли создавать новую пирамиду
                             // Создаем только если есть стратегия
@@ -1064,7 +1055,6 @@ class TradingRequestService {
                                 
                                 if (recommendation) {
                                     await PyramidingService.createPyramid(request, recommendation, targetSize);
-                                    console.log(`📊 Created pyramid for ${request.ticker}: target ${targetSize}₽`);
                                 }
                             }
                         }
@@ -1075,8 +1065,6 @@ class TradingRequestService {
                 }
             }
 
-            console.log(`✅ Trading request marked as executed: ${requestId} (User confirmed manual execution)`);
-            
             // Форматируем даты перед возвратом
             const { formatModelDates } = await import('../utils/dateFormatter.js');
             return formatModelDates(request, ['createdAt', 'updatedAt', 'executedAt', 'approvedAt', 'expiresAt']);
@@ -1254,7 +1242,6 @@ class TradingRequestService {
             // Проверяем, что таблица существует
             const tableExists = await TradingRequest.sequelize.getQueryInterface().showAllTables();
             if (!tableExists.includes('trading_requests')) {
-                console.log('⚠️ Trading requests table does not exist yet, skipping cleanup');
                 return;
             }
 
@@ -1263,8 +1250,6 @@ class TradingRequestService {
             for (const request of expiredRequests) {
                 request.status = 'EXPIRED';
                 await request.save();
-                
-                console.log(`⏰ Trading request expired: ${request.id}`);
             }
 
             if (expiredRequests.length > 0) {
@@ -1325,15 +1310,12 @@ class TradingRequestService {
             const requestIds = requestsToDelete.map(r => r.id);
 
             if (requestIds.length === 0) {
-                console.log('🧹 Нет завершенных заявок для удаления');
                 return {
                     success: true,
                     deletedCount: 0,
                     filters: { olderThanDays, tradingMode }
                 };
             }
-
-            console.log(`🧹 Найдено ${requestIds.length} завершенных заявок для удаления. Удаляем зависимые записи...`);
 
             // Удаляем зависимые записи в правильном порядке
             let deletedDependencies = {
@@ -1352,7 +1334,6 @@ class TradingRequestService {
                         }
                     }
                 });
-                console.log(`   ✅ Удалено ${deletedDependencies.positionStrategies} записей из position_strategies`);
             } catch (psError) {
                 console.warn(`⚠️ Ошибка удаления position_strategies:`, psError.message);
             }
@@ -1367,7 +1348,6 @@ class TradingRequestService {
                         }
                     }
                 });
-                console.log(`   ✅ Удалено ${deletedDependencies.positionExits} записей из position_exits`);
             } catch (peError) {
                 console.warn(`⚠️ Ошибка удаления position_exits:`, peError.message);
             }
@@ -1386,7 +1366,6 @@ class TradingRequestService {
                     }
                 );
                 deletedDependencies.triggeredSignals = updatedSignals[0] || 0;
-                console.log(`   ✅ Обновлено ${deletedDependencies.triggeredSignals} записей в triggered_signals (разорвана связь)`);
             } catch (tsError) {
                 console.warn(`⚠️ Ошибка обновления triggered_signals:`, tsError.message);
             }
@@ -1395,10 +1374,6 @@ class TradingRequestService {
             const deletedCount = await TradingRequest.destroy({
                 where: whereClause
             });
-
-            console.log(`🧹 Удалено ${deletedCount} завершенных торговых заявок (APPROVED/REJECTED)`);
-            console.log(`   Зависимости: ${deletedDependencies.positionStrategies} position_strategies, ${deletedDependencies.positionExits} position_exits, ${deletedDependencies.triggeredSignals} triggered_signals обновлено`);
-
             // Уведомляем через WebSocket (если доступен)
             try {
                 const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
@@ -1536,10 +1511,7 @@ class TradingRequestService {
             
             // Используем executePaperOrder напрямую, так как мы уже в paper mode
             const result = await TradingEngine.executePaperOrder(signal);
-            
-            // Портфель автоматически сохраняется в БД внутри executePaperOrder
-            console.log(`✅ Виртуальный портфель обновлен и сохранен в БД: ${request.action} ${request.quantity} ${request.ticker} по ${executionPrice.toFixed(2)} ₽`);
-            
+
             // Уведомляем через WebSocket об обновлении портфеля
             try {
                 const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
@@ -1624,7 +1596,6 @@ class TradingRequestService {
             const isSell = recommendation.recommendation === 'SELL' || recommendation.action === 'SELL';
             
             if (isSell) {
-                console.log(`✅ SELL операция: пропускаем валидацию уверенности (пользовательское решение)`);
                 return { isValid: true, warnings: [] }; // Пропускаем валидацию для продаж
             }
             
@@ -1866,8 +1837,6 @@ class TradingRequestService {
                 try {
                     if (OptimizedTelegramService && typeof OptimizedTelegramService.sendAlert === 'function') {
                         await OptimizedTelegramService.sendAlert('Торговая заявка', message);
-                    } else {
-                        console.log('📱 Telegram notification (service not available):', message);
                     }
                 } catch (telegramError) {
                     console.warn('⚠️ Could not send Telegram notification:', telegramError.message);
@@ -1903,9 +1872,6 @@ class TradingRequestService {
             } catch (wsError) {
                 console.warn('⚠️ Could not broadcast WebSocket message:', wsError.message);
             }
-
-            console.log(`🚫 Trading request cancelled: ${requestId}`);
-            
             // Форматируем даты перед возвратом
             const { formatModelDates } = await import('../utils/dateFormatter.js');
             return formatModelDates(request, ['createdAt', 'updatedAt', 'executedAt', 'approvedAt', 'expiresAt']);
@@ -2007,8 +1973,6 @@ class TradingRequestService {
             clearInterval(this.cleanupInterval);
             this.cleanupInterval = null;
         }
-        
-        console.log('🛑 Trading Request Service stopped');
     }
 }
 

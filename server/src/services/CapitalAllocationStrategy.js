@@ -1,9 +1,6 @@
 import Settings from '../models/Settings.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
 import TradingEngine from './TradingEngine.js';
-import RiskManagementService from './RiskManagementService.js';
-import CapitalScalingService from './CapitalScalingService.js';
-import ProfitabilityTracker from './ProfitabilityTracker.js';
 import CacheService from './CacheService.js';
 import TinkoffApiService from './TinkoffApiService.js';
 import CachedInstrument from '../models/CachedInstrument.js';
@@ -86,8 +83,7 @@ class CapitalAllocationStrategy {
             await this.determineCurrentStrategy();
             
             this.isInitialized = true;
-            console.log('✅ CapitalAllocationStrategy инициализирован');
-            
+
         } catch (error) {
             console.error('❌ Ошибка инициализации CapitalAllocationStrategy:', error);
             throw error;
@@ -162,7 +158,6 @@ class CapitalAllocationStrategy {
         try {
             const currentStrategy = await Settings.getSetting('current_allocation_strategy', this.allocationSettings.defaultStrategy);
             this.currentStrategy = currentStrategy;
-            console.log(`📊 Текущая стратегия распределения: ${this.strategies[currentStrategy]?.name || currentStrategy}`);
         } catch (error) {
             console.error('❌ Ошибка определения стратегии:', error);
             this.currentStrategy = this.allocationSettings.defaultStrategy;

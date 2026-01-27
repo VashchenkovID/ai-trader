@@ -256,7 +256,6 @@ class PartialExitService {
             });
             
             if (activeTrailingStop && activeTrailingStop.status === 'triggered') {
-                console.log(`⚠️ Трейлинг-стоп уже сработал для ${position.ticker}, пропускаем частичное закрытие`);
                 return {
                     success: false,
                     reason: 'Trailing stop already triggered',
@@ -285,9 +284,6 @@ class PartialExitService {
                 status: 'PENDING',
                 tradingMode: currentMode
             });
-
-            console.log(`📊 Creating partial exit for ${position.ticker}: ${exitInfo.exitQuantity} shares (${exitInfo.profitPercent.toFixed(2)}% profit)`);
-
             // Выполняем закрытие через TradingEngine
             const executionResult = await this.executeExitTrade(position, exitInfo, currentMode);
             
@@ -357,9 +353,6 @@ class PartialExitService {
                     takeProfit: null, // Частичное закрытие не требует takeProfit
                     userComment: `Автоматическое частичное закрытие: ${exitInfo.stage}`
                 });
-                
-                console.log(`📋 Created SELL request for partial exit: ${exitRequest.id}`);
-                
                 return {
                     price: exitInfo.exitPrice,
                     commission: 0, // Будет рассчитана при реальном исполнении

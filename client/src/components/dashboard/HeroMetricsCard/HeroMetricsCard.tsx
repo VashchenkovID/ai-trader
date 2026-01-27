@@ -1,13 +1,15 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card } from '../../ui/Card/Card.tsx';
 import { Skeleton } from '../../ui/Skeleton/Skeleton.tsx';
 import { ProgressBar } from '../../ui/ProgressBar/ProgressBar.tsx';
 import { TradingStats } from '../../WebSocketDataProvider.tsx';
+import { apiService, Portfolio } from '../../../services/apiService.ts';
 import './HeroMetricsCard.css';
 
 interface HeroMetricsCardProps {
   tradingStats: TradingStats | null;
   sharpeRatio?: number | null;
+  portfolioData?: Portfolio | null; // Опциональные данные портфеля из API
 }
 
 const formatCurrency = (value: number) =>
@@ -53,11 +55,51 @@ const AnimatedNumber: React.FC<{ value: string | number; className?: string; sty
   );
 };
 
-export const HeroMetricsCard: React.FC<HeroMetricsCardProps> = ({ tradingStats, sharpeRatio }) => {
-  // Рассчитываем процент прибыли
-  const initialCapital = tradingStats?.initialCapital || 1000000;
-  const totalPnL = tradingStats?.totalPnL || 0;
-  const totalPnLPercent = initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
+export const HeroMetricsCard: React.FC<HeroMetricsCardProps> = ({ tradingStats, sharpeRatio, portfolioData: propPortfolioData }) => {
+  const [portfolioData, setPortfolioData] = useState<Portfolio | null>(propPortfolioData || null);
+  
+  // Загружаем данные портфеля, если не переданы через пропсы
+  useEffect(() => {
+    if (!propPortfolioData) {
+      const loadPortfolio = () => {
+        apiService.getPortfolio()
+          .then(data => setPortfolioData(data))
+          .catch(err => console.warn('Failed to load portfolio data for HeroMetricsCard:', err));
+      };
+      
+      // Загружаем сразу
+      loadPortfolio();
+      
+      // Обновляем каждые 30 секунд
+      const interval = setInterval(loadPortfolio, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [propPortfolioData]);
+  
+  // Обновляем portfolioData при изменении propPortfolioData
+  useEffect(() => {
+    if (propPortfolioData) {
+      setPortfolioData(propPortfolioData);
+    }
+  }, [propPortfolioData]);
+  
+  // Используем ту же логику расчета PnL, что и в PortfolioVisualization
+  const totalValue = portfolioData?.totalValue || tradingStats?.portfolioValue || 0;
+  const initialCapital = portfolioData?.initialCapital || tradingStats?.initialCapital || 1000000;
+  
+  // Приоритет: pnl.total из API > totalPnL из API > tradingStats.totalPnL > расчет как разница
+  const totalPnL = portfolioData?.pnl?.total !== undefined
+    ? portfolioData.pnl.total
+    : (portfolioData?.totalPnL !== undefined 
+        ? portfolioData.totalPnL 
+        : (tradingStats?.totalPnL !== undefined 
+            ? tradingStats.totalPnL 
+            : (totalValue - initialCapital))); // Если PnL не передан, рассчитываем как разницу
+  
+  // Процент прибыли: pnl.totalPercent из API > расчет относительно initialCapital
+  const totalPnLPercent = portfolioData?.pnl?.totalPercent !== undefined
+    ? portfolioData.pnl.totalPercent
+    : (initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0);
   
   // Win Rate
   const winRate = tradingStats?.winRate || 0;
@@ -97,7 +139,7 @@ export const HeroMetricsCard: React.FC<HeroMetricsCardProps> = ({ tradingStats, 
                   <div className="text-xs mb-2 number-text-secondary">Баланс</div>
                   <div className={`number-xlarge mb-1 ${totalPnL >= 0 ? 'number-positive' : 'number-negative'}`}>
                     <AnimatedNumber 
-                      value={formatCurrency(tradingStats.portfolioValue || 0)}
+                      value={formatCurrency(totalValue)}
                     />
                   </div>
                   <div className={`text-sm font-semibold ${totalPnL >= 0 ? 'number-positive' : 'number-negative'}`}>

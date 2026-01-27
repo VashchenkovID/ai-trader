@@ -205,7 +205,6 @@ class SchedulerService {
         this.partialExitCheckTask = SchedulerUtils.createScheduledTask(
             portfolioPricesUpdateSchedule,
             async () => {
-                console.log('📊 Checking positions for partial exit...');
                 const PartialExitService = (await import('./PartialExitService.js')).default;
                 if (!PartialExitService.isInitialized) {
                     await PartialExitService.initialize();
@@ -259,7 +258,6 @@ class SchedulerService {
         this.cleanupTask = SchedulerUtils.createScheduledTask(
             '0 2 * * *',
             async () => {
-                console.log('🧹 Scheduled cleanup started...');
                 await this.performCleanup();
             },
             {
@@ -274,7 +272,6 @@ class SchedulerService {
         this.trainingTask = SchedulerUtils.createScheduledTask(
             trainingSchedule,
             async () => {
-                console.log('🧠 Scheduled neural network training started...');
                 await this.performScheduledTraining();
             },
             {
@@ -295,7 +292,6 @@ class SchedulerService {
             this.quickTrainingTask = SchedulerUtils.createScheduledTask(
                 quickTrainingSchedule,
                 async () => {
-                    console.log('⚡ Scheduled quick neural network training started...');
                     const QuickTrainingService = (await import('./QuickTrainingService.js')).default;
                     await QuickTrainingService.performQuickTraining();
                 },
@@ -330,7 +326,6 @@ class SchedulerService {
         this.newsCleanupTask = SchedulerUtils.createScheduledTask(
             newsWeeklyCleanupSchedule,
             async () => {
-                console.log('📰 Scheduled weekly news cleanup (older than 1 year) started...');
                 await this.performNewsCacheCleanup();
             },
             {
@@ -341,35 +336,10 @@ class SchedulerService {
                 minDelay: 60 * 1000
             }
         );
-
-        // Задача: Периодическое обновление кеша новостей (каждые 6 часов по умолчанию)
-        // ОТКЛЮЧЕНО: Новости теперь обновляются в performCacheUpdate и performDailyNewsUpdate
-        // чтобы не превысить лимит в 100 запросов в день
-        // this.newsCacheUpdateTask = cron.schedule(newsCacheSchedule, async () => {
-        //     // Пропускаем первый запуск при старте (минимум 10 минут с момента старта)
-        //     const timeSinceStart = Date.now() - this.startTime;
-        //     if (timeSinceStart < 10 * 60 * 1000) {
-        //         console.log('⏭️ Skipping first news cache update run (too soon after startup)');
-        //         return;
-        //     }
-        //     
-        //     try {
-        //         console.log('📰 Scheduled news cache update started...');
-        //         await this.performDailyNewsUpdate();
-        //     } catch (error) {
-        //         console.error('Error in scheduled news cache update:', error);
-        //         await OptimizedTelegramService.sendAlert('NEWS_CACHE_UPDATE_ERROR', error.message, 'warning');
-        //     }
-        // }, {
-        //     scheduled: true,
-        //     timezone: "Europe/Moscow"
-        // });
-
         // Задача: Ежедневная проверка и загрузка свежих новостей
         this.newsDailyUpdateTask = SchedulerUtils.createScheduledTask(
             newsDailyUpdateSchedule,
             async () => {
-                console.log('📰 Scheduled daily news update started...');
                 await this.performDailyNewsUpdate();
             },
             {
@@ -385,7 +355,6 @@ class SchedulerService {
         this.telegramCacheTask = SchedulerUtils.createScheduledTask(
             telegramCacheSchedule,
             async () => {
-                console.log('📱 Scheduled Telegram sentiment cache update started...');
                 await this.performTelegramCacheUpdate();
             },
             {
@@ -449,7 +418,6 @@ class SchedulerService {
                 this.dataCleanupTask = SchedulerUtils.createScheduledTask(
                     cleanupSchedule,
                     async () => {
-                        console.log('🧹 Scheduled data cleanup started...');
                         try {
                             await DataCleanupService.performCleanup();
                         } catch (error) {
@@ -487,7 +455,6 @@ class SchedulerService {
         this.degradationCheckTask = SchedulerUtils.createScheduledTask(
             degradationCheckSchedule,
             async () => {
-                console.log('🔍 Scheduled degradation check started...');
                 await this.checkDegradationAndRestoreAll();
             },
             {
@@ -522,7 +489,6 @@ class SchedulerService {
         this.predictionsUpdateTask = SchedulerUtils.createScheduledTask(
             '*/20 * * * *',
             async () => {
-                console.log('🔄 Scheduled predictions update started...');
                 await this.updateRecommendationsPredictions();
             },
             {
@@ -542,7 +508,6 @@ class SchedulerService {
         this.signalsUpdateTask = SchedulerUtils.createScheduledTask(
             '0 6 * * *',
             async () => {
-                console.log('⚡ Scheduled signals update started...');
                 await this.performSignalsUpdate();
             },
             {
@@ -576,7 +541,6 @@ class SchedulerService {
         this.strategyRebalanceTask = SchedulerUtils.createScheduledTask(
             '0 3 * * 0',
             async () => {
-                console.log('🔄 Scheduled strategy rebalancing started...');
                 const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
                 await StrategyAllocationService.rebalanceStrategies();
                 await OptimizedTelegramService.sendAlert('STRATEGY_REBALANCE_COMPLETE', 'Стратегии перебалансированы', 'info');
@@ -717,18 +681,15 @@ class SchedulerService {
                 // Проверяем свежесть данных перед первым анализом
                 const isStale = await this.isCacheStale();
                 if (isStale) {
-                    console.log('⚠️ Cache is stale, skipping initial portfolio analysis (will run after cache update)...');
                     return;
                 }
                 
-                console.log('📊 Starting initial portfolio analysis (30 minutes after startup)...');
                 await this.performPortfolioAnalysis();
             } catch (error) {
                 console.error('Error in initial portfolio analysis:', error);
                 await OptimizedTelegramService.sendAlert('PORTFOLIO_ANALYSIS_ERROR', error.message, 'warning');
             }
         }, 30 * 60 * 1000); // 30 минут = 30 * 60 * 1000 миллисекунд
-        console.log('⏰ Initial portfolio analysis scheduled in 30 minutes');
     }
 
     /**
@@ -1237,18 +1198,13 @@ class SchedulerService {
             // Пропускаем первый запуск при старте (минимум 5 минут с момента старта)
             const timeSinceStart = Date.now() - this.startTime;
             if (timeSinceStart < 5 * 60 * 1000) {
-                console.log('⏭️ Skipping first cache check run (too soon after startup)');
                 return;
             }
             
             try {
-                console.log('🔍 Checking cache update need...');
-                
+
                 if (await this.shouldUpdateCache()) {
-                    console.log('🔄 Cache update needed, starting update...');
                     await this.performCacheUpdate();
-                } else {
-                    console.log('⏰ Cache update not needed yet');
                 }
             } catch (error) {
                 console.error('❌ Error in cache check:', error);
@@ -1257,28 +1213,11 @@ class SchedulerService {
         this.intervals.add(cacheCheckTask);
         
         // Запускаем все cron задачи
-        console.log('🚀 Starting cron tasks...');
         this.intervals.forEach(task => {
             if (task && typeof task.start === 'function') {
                 task.start();
-                console.log('✅ Cron task started');
             }
         });
-        
-        // Проверка кеша при старте ОТКЛЮЧЕНА - не запускаем сразу при старте
-        // setTimeout(async () => {
-        //     try {
-        //         console.log('🔍 Initial cache check on startup...');
-        //         if (await this.shouldUpdateCache()) {
-        //             console.log('🔄 Cache update needed on startup, starting update...');
-        //             await this.performCacheUpdate();
-        //         } else {
-        //             console.log('✅ Cache is up to date');
-        //         }
-        //     } catch (error) {
-        //         console.error('❌ Error in startup cache check:', error);
-        //     }
-        // }, 5000); // 5 секунд после запуска
     }
 
     /**
@@ -1304,7 +1243,6 @@ class SchedulerService {
         try {
             this.lastCacheUpdate = Date.now();
             await this.saveLastCacheUpdateTime();
-            console.log(`🔄 Forced cache update time: ${new Date(this.lastCacheUpdate).toISOString()}`);
             return true;
         } catch (error) {
             console.error('❌ Error forcing cache update time:', error);
@@ -1317,122 +1255,102 @@ class SchedulerService {
      */
     async stop() {
         try {
-            console.log('🛑 Stopping Scheduler Service...');
-            
+
             // Сначала сбрасываем флаг инициализации
             this.isInitialized = false;
-            console.log('🛑 Scheduler Service marked as stopped');
-            
+
             // Останавливаем все cron задачи
             if (this.cacheTask) {
                 this.cacheTask.stop();
                 this.cacheTask.destroy();
                 this.cacheTask = null;
-                console.log('✅ Cache task stopped and destroyed');
             }
             if (this.priceUpdateTask) {
                 this.priceUpdateTask.stop();
                 this.priceUpdateTask.destroy();
                 this.priceUpdateTask = null;
-                console.log('✅ Price update task stopped and destroyed');
             }
             if (this.cleanupTask) {
                 this.cleanupTask.stop();
                 this.cleanupTask.destroy();
                 this.cleanupTask = null;
-                console.log('✅ Cleanup task stopped and destroyed');
             }
             if (this.newsCleanupTask) {
                 this.newsCleanupTask.stop();
                 this.newsCleanupTask.destroy();
                 this.newsCleanupTask = null;
-                console.log('✅ News cleanup task stopped and destroyed');
             }
             if (this.newsCacheUpdateTask) {
                 this.newsCacheUpdateTask.stop();
                 this.newsCacheUpdateTask.destroy();
                 this.newsCacheUpdateTask = null;
-                console.log('✅ News cache update task stopped and destroyed');
             }
             if (this.newsDailyUpdateTask) {
                 this.newsDailyUpdateTask.stop();
                 this.newsDailyUpdateTask.destroy();
                 this.newsDailyUpdateTask = null;
-                console.log('✅ News daily update task stopped and destroyed');
             }
             if (this.telegramCacheTask) {
                 this.telegramCacheTask.stop();
                 this.telegramCacheTask.destroy();
                 this.telegramCacheTask = null;
-                console.log('✅ Telegram cache task stopped and destroyed');
             }
             if (this.trainingTask) {
                 this.trainingTask.stop();
                 this.trainingTask.destroy();
                 this.trainingTask = null;
-                console.log('✅ Training task stopped and destroyed');
             }
             if (this.quickTrainingTask) {
                 this.quickTrainingTask.stop();
                 this.quickTrainingTask.destroy();
                 this.quickTrainingTask = null;
-                console.log('✅ Quick training task stopped and destroyed');
             }
             if (this.tradingHoursTask) {
                 this.tradingHoursTask.stop();
                 this.tradingHoursTask.destroy();
                 this.tradingHoursTask = null;
-                console.log('✅ Trading hours task stopped and destroyed');
             }
             if (this.tradingHoursCacheTask) {
                 this.tradingHoursCacheTask.stop();
                 this.tradingHoursCacheTask.destroy();
                 this.tradingHoursCacheTask = null;
-                console.log('✅ Trading hours cache task stopped and destroyed');
             }
             if (this.weeklyBacktestTask) {
                 this.weeklyBacktestTask.stop();
                 this.weeklyBacktestTask.destroy();
                 this.weeklyBacktestTask = null;
-                console.log('✅ Weekly backtest task stopped and destroyed');
             }
             if (this.macroDataUpdateTask) {
                 this.macroDataUpdateTask.stop();
                 this.macroDataUpdateTask.destroy();
                 this.macroDataUpdateTask = null;
-                console.log('✅ Macro data update task stopped and destroyed');
             }
             
             if (this.optionsDataUpdateTask) {
                 this.optionsDataUpdateTask.stop();
                 this.optionsDataUpdateTask.destroy();
                 this.optionsDataUpdateTask = null;
-                console.log('✅ Options data update task stopped and destroyed');
             }
             
             if (this.portfolioRebalancingTask) {
                 this.portfolioRebalancingTask.stop();
                 this.portfolioRebalancingTask.destroy();
                 this.portfolioRebalancingTask = null;
-                console.log('✅ Portfolio rebalancing task stopped and destroyed');
             }
             if (this.positionMonitoringTask) {
                 this.positionMonitoringTask.stop();
                 this.positionMonitoringTask.destroy();
                 this.positionMonitoringTask = null;
-                console.log('✅ Position monitoring task stopped and destroyed');
             }
             if (this.dailyReportTask) {
                 this.dailyReportTask.stop();
                 this.dailyReportTask.destroy();
                 this.dailyReportTask = null;
-                console.log('✅ Daily report task stopped and destroyed');
             }
             if (this.dataCleanupTask) {
                 this.dataCleanupTask.stop();
                 this.dataCleanupTask.destroy();
                 this.dataCleanupTask = null;
-                console.log('✅ Data cleanup task stopped and destroyed');
             }
             
             // Останавливаем все cron задачи из intervals
@@ -1445,8 +1363,7 @@ class SchedulerService {
                 }
             });
             this.intervals.clear();
-            console.log('✅ All interval tasks stopped and destroyed');
-            
+
             // Завершаем все worker'ы
             this.workers.forEach(worker => {
                 if (worker && worker.terminate) {
@@ -1460,7 +1377,6 @@ class SchedulerService {
             this.isAnalyzing = false;
             this.isInitialized = false;
             
-            console.log('✅ Scheduler Service stopped');
         } catch (error) {
             console.error('❌ Error stopping Scheduler Service:', error);
             throw error;
@@ -1521,94 +1437,71 @@ class SchedulerService {
      * Приостанавливает все процессы во время полного обновления кеша
      */
     async pauseAllProcesses() {
-        console.log('⏸️ Pausing all processes for full cache update...');
-        
+
         // Останавливаем все cron задачи
         if (this.cacheTask) {
             this.cacheTask.stop();
-            console.log('⏸️ Paused: cache update task');
         }
         if (this.priceUpdateTask) {
             this.priceUpdateTask.stop();
-            console.log('⏸️ Paused: price update task');
         }
         if (this.portfolioPricesUpdateTask) {
             this.portfolioPricesUpdateTask.stop();
-            console.log('⏸️ Paused: portfolio prices update task');
         }
         if (this.partialExitCheckTask) {
             this.partialExitCheckTask.stop();
-            console.log('⏸️ Paused: partial exit check task');
         }
         if (this.activeSignalsPricesUpdateTask) {
             this.activeSignalsPricesUpdateTask.stop();
-            console.log('⏸️ Paused: active signals prices update task');
         }
         if (this.tradingRequestsPricesUpdateTask) {
             this.tradingRequestsPricesUpdateTask.stop();
-            console.log('⏸️ Paused: trading requests prices update task');
         }
         if (this.trainingTask) {
             this.trainingTask.stop();
-            console.log('⏸️ Paused: training task');
         }
         if (this.quickTrainingTask) {
             this.quickTrainingTask.stop();
-            console.log('⏸️ Paused: quick training task');
         }
         if (this.portfolioAnalysisTask) {
             this.portfolioAnalysisTask.stop();
-            console.log('⏸️ Paused: portfolio analysis task');
         }
         if (this.predictionsUpdateTask) {
             this.predictionsUpdateTask.stop();
-            console.log('⏸️ Paused: predictions update task');
         }
         if (this.signalsUpdateTask) {
             this.signalsUpdateTask.stop();
-            console.log('⏸️ Paused: signals update task');
         }
         if (this.trailingStopsCheckTask) {
             this.trailingStopsCheckTask.stop();
-            console.log('⏸️ Paused: trailing stops check task');
         }
         if (this.realPortfolioSyncTask) {
             this.realPortfolioSyncTask.stop();
-            console.log('⏸️ Paused: real portfolio sync task');
         }
         if (this.virtualPortfolioUpdateTask) {
             this.virtualPortfolioUpdateTask.stop();
-            console.log('⏸️ Paused: virtual portfolio update task');
         }
         if (this.degradationCheckTask) {
             this.degradationCheckTask.stop();
-            console.log('⏸️ Paused: degradation check task');
         }
         if (this.weeklyBacktestTask) {
             this.weeklyBacktestTask.stop();
-            console.log('⏸️ Paused: weekly backtest task');
         }
         if (this.macroDataUpdateTask) {
             this.macroDataUpdateTask.stop();
-            console.log('⏸️ Paused: macro data update task');
         }
         
         if (this.optionsDataUpdateTask) {
             this.optionsDataUpdateTask.stop();
-            console.log('⏸️ Paused: options data update task');
         }
         
         if (this.fundamentalDataUpdateTask) {
             this.fundamentalDataUpdateTask.stop();
-            console.log('⏸️ Paused: fundamental data update task');
         }
         
         if (this.marketIndicesLoadTask) {
             this.marketIndicesLoadTask.stop();
-            console.log('⏸️ Paused: market indices load task');
         }
-        
-        console.log('✅ All processes paused');
     }
 
     /**
@@ -1616,15 +1509,13 @@ class SchedulerService {
      * ВАЖНО: Возобновляем постепенно с задержками, чтобы не перегрузить БД одновременными подключениями
      */
     async resumeAllProcesses() {
-        console.log('▶️ Resuming all processes after full cache update (gradually to avoid DB overload)...');
-        
+
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Возобновляем процессы постепенно с задержками
         // Это предотвращает одновременное подключение всех worker'ов к БД
         
         // Группа 1: Критичные процессы (сразу)
         if (this.trailingStopsCheckTask) {
             this.trailingStopsCheckTask.start();
-            console.log('▶️ Resumed: trailing stops check task');
         }
         
         // Небольшая задержка перед следующей группой
@@ -1633,31 +1524,26 @@ class SchedulerService {
         // Группа 2: Обновление цен (постепенно)
         if (this.priceUpdateTask) {
             this.priceUpdateTask.start();
-            console.log('▶️ Resumed: price update task');
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
         
         if (this.portfolioPricesUpdateTask) {
             this.portfolioPricesUpdateTask.start();
-            console.log('▶️ Resumed: portfolio prices update task');
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
         
         if (this.partialExitCheckTask) {
             this.partialExitCheckTask.start();
-            console.log('▶️ Resumed: partial exit check task');
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
         
         if (this.activeSignalsPricesUpdateTask) {
             this.activeSignalsPricesUpdateTask.start();
-            console.log('▶️ Resumed: active signals prices update task');
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
         
         if (this.tradingRequestsPricesUpdateTask) {
             this.tradingRequestsPricesUpdateTask.start();
-            console.log('▶️ Resumed: trading requests prices update task');
         }
         
         // Задержка перед тяжелыми процессами
@@ -1666,69 +1552,58 @@ class SchedulerService {
         // Группа 3: Анализ и предсказания
         if (this.portfolioAnalysisTask) {
             this.portfolioAnalysisTask.start();
-            console.log('▶️ Resumed: portfolio analysis task');
         }
         await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
         
         if (this.predictionsUpdateTask) {
             this.predictionsUpdateTask.start();
-            console.log('▶️ Resumed: predictions update task');
         }
         await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
         
         // Группа 4: Обновление кеша и обучение (самые тяжелые)
         if (this.cacheTask) {
             this.cacheTask.start();
-            console.log('▶️ Resumed: cache update task');
         }
         await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
         
         if (this.trainingTask) {
             this.trainingTask.start();
-            console.log('▶️ Resumed: training task');
         }
         await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
         
         if (this.quickTrainingTask) {
             this.quickTrainingTask.start();
-            console.log('▶️ Resumed: quick training task');
         }
         await new Promise(resolve => setTimeout(resolve, 2000)); // 2 секунды
         
         // Группа 5: Остальные процессы
         if (this.signalsUpdateTask) {
             this.signalsUpdateTask.start();
-            console.log('▶️ Resumed: signals update task');
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
         
         if (this.realPortfolioSyncTask) {
             this.realPortfolioSyncTask.start();
-            console.log('▶️ Resumed: real portfolio sync task');
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
         
         if (this.virtualPortfolioUpdateTask) {
             this.virtualPortfolioUpdateTask.start();
-            console.log('▶️ Resumed: virtual portfolio update task');
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
         
         if (this.degradationCheckTask) {
             this.degradationCheckTask.start();
-            console.log('▶️ Resumed: degradation check task');
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
         
         if (this.weeklyBacktestTask) {
             this.weeklyBacktestTask.start();
-            console.log('▶️ Resumed: weekly backtest task');
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1 секунда
         
         if (this.macroDataUpdateTask) {
             this.macroDataUpdateTask.start();
-            console.log('▶️ Resumed: macro data update task');
         }
         
         // Задержка перед следующей группой
@@ -1736,20 +1611,15 @@ class SchedulerService {
         
         if (this.optionsDataUpdateTask) {
             this.optionsDataUpdateTask.start();
-            console.log('▶️ Resumed: options data update task');
         }
         
         if (this.fundamentalDataUpdateTask) {
             this.fundamentalDataUpdateTask.start();
-            console.log('▶️ Resumed: fundamental data update task');
         }
         
         if (this.marketIndicesLoadTask) {
             this.marketIndicesLoadTask.start();
-            console.log('▶️ Resumed: market indices load task');
         }
-        
-        console.log('✅ All processes resumed gradually (total delay: ~24 seconds)');
     }
 
     /**
@@ -1771,7 +1641,6 @@ class SchedulerService {
             // Обновляем время последнего обновления цен
         if (result && !result.skipped) {
             this.lastPriceUpdate = Date.now();
-            console.log(`📅 Price update timestamp updated: ${new Date(this.lastPriceUpdate).toISOString()}`);
             }
 
             return result;
@@ -2038,7 +1907,6 @@ class SchedulerService {
                     
                     // Если заявка уже выполнена, отклонена или отменена, пропускаем уведомление
                     if (['EXECUTED', 'REJECTED', 'CANCELLED', 'EXPIRED'].includes(currentStatus)) {
-                        console.log(`⚠️ Skipping notification for request ${requestData.requestId}: status is ${currentStatus}`);
                         // Очищаем запись о последнем уведомлении для неактивных заявок
                         this.lastPendingRequestNotification.delete(requestData.requestId);
                         continue;
@@ -2046,7 +1914,6 @@ class SchedulerService {
                     
                     // Дополнительная проверка: убеждаемся, что заявка все еще в ожидающем статусе
                     if (currentStatus !== 'PENDING' && currentStatus !== 'APPROVED') {
-                        console.log(`⚠️ Skipping notification for request ${requestData.requestId}: unexpected status ${currentStatus}`);
                         // Очищаем запись о последнем уведомлении для неактивных заявок
                         this.lastPendingRequestNotification.delete(requestData.requestId);
                         continue;
@@ -2055,24 +1922,6 @@ class SchedulerService {
                     // Формируем сообщение
                     const actionText = requestData.action === 'BUY' ? 'ПОКУПКА' : 'ПРОДАЖА';
                     const statusText = requestData.isPriceReached ? '✅ Цена достигнута - готово к исполнению' : '⚠️ Цена приближается - готово к исполнению';
-                    
-                    const message = `📋 Заявка готова к исполнению\n` +
-                        `📈 Инструмент: ${requestData.ticker} (${requestData.name})\n` +
-                        `📊 Действие: ${actionText}\n` +
-                        `💰 Цена заявки: ${requestData.priceAtRequest.toFixed(2)} ₽\n` +
-                        `💵 Текущая цена: ${requestData.currentPrice.toFixed(2)} ₽\n` +
-                        `📉 Разница: ${requestData.priceDiffPercent.toFixed(2)}%\n` +
-                        `📦 Количество: ${requestData.quantity}\n` +
-                        `🎯 Уверенность: ${(requestData.confidence * 100).toFixed(0)}%\n` +
-                        `📋 Статус: ${statusText}`;
-
-                    // Отправляем уведомление в Telegram только для ожидающих заявок (PENDING или APPROVED)
-                    // Статус уже проверен выше, поэтому здесь заявка гарантированно не выполнена
-                    await OptimizedTelegramService.sendAlert(
-                        'Заявка готова к исполнению',
-                        message,
-                        requestData.isPriceReached ? 'success' : 'info'
-                    );
 
                     // Сохраняем время последнего уведомления
                     this.lastPendingRequestNotification.set(requestData.requestId, now);
@@ -2099,7 +1948,6 @@ class SchedulerService {
                         });
                     }
 
-                    console.log(`✅ Request ready to execute: ${requestData.requestId} (${requestData.figi}) - ${statusText}`);
                 } catch (requestError) {
                     console.error(`❌ Error handling ready to execute request ${requestData.requestId}:`, requestError.message);
                 }
@@ -2138,7 +1986,6 @@ class SchedulerService {
                 }
             });
 
-            console.log(`🧹 Cleanup completed. Deleted ${deletedCandlesCount} old candles, ${deletedSignalsCount} old triggered signals`);
         } catch (error) {
             console.error('Cleanup error:', error);
             throw error;
@@ -2148,13 +1995,11 @@ class SchedulerService {
     async performScheduledTraining() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
-            console.log('🧠 Scheduled training skipped: full cache update is running');
             return;
         }
         
         // Проверяем, не идет ли уже обучение
         if (this.isTraining) {
-            console.log('🧠 Scheduled training skipped: training already in progress');
             return;
         }
 
@@ -2163,19 +2008,16 @@ class SchedulerService {
         
         try {
             // Сначала проверяем деградацию и восстанавливаем best-модели
-            console.log('🔍 Checking model degradation before scheduled training...');
             await this.checkDegradationAndRestoreAll();
 
             // Проверяем, нужно ли переобучение
             const shouldRetrain = await this.shouldRetrainModel();
             if (!shouldRetrain) {
-                console.log('🧠 Model is up to date, skipping scheduled training');
                 // Уведомления о периодическом обучении теперь обрабатываются в IntegratedAIService
                 return;
             }
 
-            console.log('🧠 Starting scheduled FULL training (sequential: Base → Ensemble → Meta → RL)...');
-            
+
             // Получаем настройки
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
             const trainingDays = nnSettings.nn_retrain_days || parseInt(process.env.NN_TRAINING_DAYS) || 180;
@@ -2189,7 +2031,6 @@ class SchedulerService {
             
             // ПОСЛЕДОВАТЕЛЬНОЕ ОБУЧЕНИЕ: Базовая → Ансамбль → Мета-обучение → RL
             // Этап 1: Базовая нейросеть для всех инструментов
-            console.log('📊 Stage 1/4: Training Base Neural Network for all instruments...');
             for (const instrument of instruments) {
                 try {
                     const shouldRetrain = await this.shouldRetrainModel(instrument.figi);
@@ -2197,7 +2038,6 @@ class SchedulerService {
                         continue;
                     }
                     
-                    console.log(`🧠 [Base] Training ${instrument.ticker}...`);
                     await NeuralNetworkService.trainForInstrument(instrument.figi, trainingDays);
                     successes++;
                     totalTrained++;
@@ -2209,11 +2049,9 @@ class SchedulerService {
             }
             
             // Этап 2: Ансамбль для всех инструментов
-            console.log('📊 Stage 2/4: Training Ensemble for all instruments...');
             const EnsembleService = (await import('./EnsembleService.js')).default;
             for (const instrument of instruments) {
                 try {
-                    console.log(`🧠 [Ensemble] Training ${instrument.ticker}...`);
                     await EnsembleService.train(instrument.figi, {
                         days: trainingDays,
                         epochs: 50
@@ -2226,11 +2064,9 @@ class SchedulerService {
             }
             
             // Этап 3: Мета-обучение для всех инструментов
-            console.log('📊 Stage 3/4: Training Meta-Learning for all instruments...');
             const MetaLearningService = (await import('./MetaLearningService.js')).default;
             for (const instrument of instruments) {
                 try {
-                    console.log(`🧠 [Meta] Training ${instrument.ticker}...`);
                     await MetaLearningService.train(instrument.figi, {
                         days: trainingDays
                     });
@@ -2242,11 +2078,9 @@ class SchedulerService {
             }
             
             // Этап 4: Обучение с подкреплением для всех инструментов
-            console.log('📊 Stage 4/4: Training Reinforcement Learning for all instruments...');
             const ReinforcementLearningService = (await import('./ReinforcementLearningService.js')).default;
             for (const instrument of instruments) {
                 try {
-                    console.log(`🧠 [RL] Training ${instrument.ticker}...`);
                     await ReinforcementLearningService.train(instrument.figi, {
                         days: trainingDays,
                         episodes: 50
@@ -2267,8 +2101,6 @@ class SchedulerService {
                 'info'
             );
 
-            console.log(`✅ Scheduled training completed in ${duration} seconds`);
-            
         } catch (error) {
             console.error('Scheduled training error:', error);
             await OptimizedTelegramService.sendAlert('TRAINING_ERROR', error.message, 'critical');
@@ -2281,13 +2113,11 @@ class SchedulerService {
     async performQuickTraining() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
-            console.log('⚡ Quick training skipped: full cache update is running');
             return;
         }
         
         // Проверяем, не идет ли уже обучение или анализ
         if (this.isTraining || this.isAnalyzing) {
-            console.log('⚡ Quick training skipped: another process is running');
             return;
         }
 
@@ -2298,8 +2128,6 @@ class SchedulerService {
             // Получаем настройки быстрого обучения
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
             const quickTrainingDays = nnSettings.nn_quick_training_days || nnSettings.nn_retrain_days || 30;
-
-            console.log(`⚡ Starting quick training: all instruments, ${quickTrainingDays} days`);
 
             // Получаем все инструменты для быстрого обучения
             const instruments = await CacheService.getAllInstruments();
@@ -2317,7 +2145,6 @@ class SchedulerService {
                         batchSize: 16
                     });
                     successCount++;
-                    console.log(`⚡ Quick training completed for ${instrument.ticker}`);
                 } catch (error) {
                     failCount++;
                     console.warn(`⚡ Quick training failed for ${instrument.ticker}:`, error.message);
@@ -2325,7 +2152,6 @@ class SchedulerService {
             }
 
             const duration = Math.round((Date.now() - startTime) / 1000);
-            console.log(`⚡ Quick training completed: ${successCount} success, ${failCount} failed, ${duration}s`);
 
             // Отправляем уведомление о завершении всего процесса быстрого обучения
             if (successCount > 0) {
@@ -2364,7 +2190,6 @@ class SchedulerService {
             // Проверяем, есть ли сохраненная модель
             const modelExists = NeuralNetworkService.model !== null;
             if (!modelExists) {
-                console.log('🧠 No model found, training required');
                 return true;
             }
 
@@ -2386,14 +2211,11 @@ class SchedulerService {
                 const ageInDays = (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24);
                 
                 if (ageInDays > modelAge) {
-                    console.log(`🧠 Model is ${ageInDays.toFixed(1)} days old (max: ${modelAge} days), retraining required`);
                     return true;
                 }
                 
-                console.log(`🧠 Model is ${ageInDays.toFixed(1)} days old (max: ${modelAge} days), still fresh`);
                 return false;
             } catch (error) {
-                console.log('🧠 Cannot check model age, retraining to be safe');
                 return true;
             }
         } catch (error) {
@@ -2425,12 +2247,10 @@ class SchedulerService {
                 const modelAge = nnSettings.nn_model_max_age_days || 7;
                 
                 if (ageInDays > modelAge) {
-                    console.log(`🧠 Model for ${figi} is ${ageInDays.toFixed(1)} days old (max: ${modelAge} days), retraining required`);
                     return true;
                 }
             } catch (error) {
                 // Модель не найдена - нужно обучить
-                console.log(`🧠 No model found for ${figi}, training required`);
                 return true;
             }
 
@@ -2448,8 +2268,6 @@ class SchedulerService {
                             const degradationThreshold = 0.05; // 5% деградация
                             
                             if (degradation > degradationThreshold) {
-                                console.log(`⚠️ Model degradation detected for ${figi}: current=${currentMetrics.accuracy.toFixed(4)}, best=${bestMeta.bestAccuracy.toFixed(4)}, degradation=${(degradation*100).toFixed(2)}%`);
-                                console.log(`🔄 Retraining required due to degradation`);
                                 return true;
                             }
                         }
@@ -2479,8 +2297,7 @@ class SchedulerService {
                 return;
             }
 
-            console.log('🔍 Checking model degradation for all instruments...');
-            
+
             // Получаем все инструменты
             const instruments = await CacheService.getAllInstruments();
             let checked = 0;
@@ -2513,8 +2330,6 @@ class SchedulerService {
                 }
             }
 
-            console.log(`✅ Degradation check completed: checked=${checked}, degraded=${degraded}, restored=${restored}`);
-            
             if (degraded > 0 || restored > 0) {
                 // Отправляем уведомление о результатах проверки
                 await OptimizedTelegramService.sendAlert(
@@ -2531,83 +2346,66 @@ class SchedulerService {
     stop() {
         if (this.cacheTask) {
             this.cacheTask.stop();
-            console.log('Cache update task stopped');
         }
         if (this.cleanupTask) {
             this.cleanupTask.stop();
-            console.log('Cleanup task stopped');
         }
         if (this.trainingTask) {
             this.trainingTask.stop();
-            console.log('Training task stopped');
         }
         if (this.quickTrainingTask) {
             this.quickTrainingTask.stop();
-            console.log('Quick training task stopped');
         }
         if (this.tradingHoursTask) {
             this.tradingHoursTask.stop();
-            console.log('Trading hours task stopped');
         }
         if (this.tradingHoursCacheTask) {
             this.tradingHoursCacheTask.stop();
-            console.log('Trading hours cache task stopped');
         }
         if (this.degradationCheckTask) {
             this.degradationCheckTask.stop();
-            console.log('Degradation check task stopped');
         }
         if (this.newsCleanupTask) {
             this.newsCleanupTask.stop();
-            console.log('News cleanup task stopped');
         }
         if (this.newsCacheUpdateTask) {
             this.newsCacheUpdateTask.stop();
-            console.log('News cache update task stopped');
         }
         if (this.newsDailyUpdateTask) {
             this.newsDailyUpdateTask.stop();
-            console.log('News daily update task stopped');
         }
         if (this.telegramCacheTask) {
             this.telegramCacheTask.stop();
-            console.log('Telegram cache task stopped');
         }
             if (this.portfolioAnalysisTask) {
                 this.portfolioAnalysisTask.stop();
                 this.portfolioAnalysisTask.destroy();
                 this.portfolioAnalysisTask = null;
-                console.log('✅ Portfolio analysis task stopped and destroyed');
             }
             if (this.predictionsUpdateTask) {
                 this.predictionsUpdateTask.stop();
                 this.predictionsUpdateTask.destroy();
                 this.predictionsUpdateTask = null;
-                console.log('✅ Predictions update task stopped and destroyed');
             }
             if (this.signalsUpdateTask) {
                 this.signalsUpdateTask.stop();
                 this.signalsUpdateTask.destroy();
                 this.signalsUpdateTask = null;
-                console.log('✅ Signals update task stopped and destroyed');
             }
             if (this.trailingStopsCheckTask) {
                 this.trailingStopsCheckTask.stop();
                 this.trailingStopsCheckTask.destroy();
                 this.trailingStopsCheckTask = null;
-                console.log('✅ Trailing stops check task stopped and destroyed');
             }
             if (this.realPortfolioSyncTask) {
                 this.realPortfolioSyncTask.stop();
                 this.realPortfolioSyncTask.destroy();
                 this.realPortfolioSyncTask = null;
-                console.log('✅ Real portfolio sync task stopped and destroyed');
             }
             if (this.virtualPortfolioUpdateTask) {
                 this.virtualPortfolioUpdateTask.stop();
                 this.virtualPortfolioUpdateTask.destroy();
                 this.virtualPortfolioUpdateTask = null;
-                console.log('✅ Virtual portfolio update task stopped and destroyed');
             }
     }
 
@@ -2620,7 +2418,6 @@ class SchedulerService {
     async updateRecommendationsPredictions() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
-            console.log('🔄 Predictions update skipped: full cache update is running');
             return;
         }
         
@@ -2635,12 +2432,10 @@ class SchedulerService {
             
             // Проверяем и инициализируем, если нужно
             if (!IntegratedAIService) {
-                console.log('⚠️ IntegratedAIService not found, skipping predictions update');
                 return;
             }
             
             if (!IntegratedAIService.isInitialized) {
-                console.log('🔄 IntegratedAIService not initialized, initializing...');
                 try {
                     await IntegratedAIService.initialize();
                 } catch (initError) {
@@ -2663,12 +2458,8 @@ class SchedulerService {
             });
 
             if (recommendationsToUpdate.length === 0) {
-                console.log('✅ No recommendations need updating (all are fresh)');
                 return;
             }
-
-            console.log(`🔄 Updating ${recommendationsToUpdate.length} recommendations...`);
-
             let updatedCount = 0;
             let errorCount = 0;
 
@@ -2720,7 +2511,6 @@ class SchedulerService {
                                 });
 
                                 updatedCount++;
-                                console.log(`✅ Updated prediction for ${rec.ticker}: ${freshPrediction.recommendation} (score: ${freshPrediction.score.toFixed(3)})`);
                             }
                         } catch (error) {
                             errorCount++;
@@ -2734,8 +2524,6 @@ class SchedulerService {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
-
-            console.log(`✅ Predictions update completed: ${updatedCount} updated, ${errorCount} errors`);
 
             // Отправляем уведомление через WebSocket
             const WebSocketService = this.getWebSocketService();
@@ -2889,7 +2677,6 @@ class SchedulerService {
                     const signalAge = now - new Date(triggered.signalCreateDt).getTime();
                     if (signalAge > maxAge) {
                         const hoursAgo = Math.floor(signalAge / (60 * 60 * 1000));
-                        console.log(`⏭️ Skipped old triggered signal ${triggered.signalId}: created ${hoursAgo} hours ago`);
                         return false;
                     }
                 }
@@ -2900,7 +2687,6 @@ class SchedulerService {
                     const timeSinceEnd = now - endDt.getTime();
                     if (timeSinceEnd > maxTimeSinceEnd) {
                         const daysAgo = Math.floor(timeSinceEnd / (24 * 60 * 60 * 1000));
-                        console.log(`⏭️ Skipped expired triggered signal ${triggered.signalId}: ended ${daysAgo} days ago`);
                         return false;
                     }
                 }
@@ -3302,7 +3088,6 @@ class SchedulerService {
                                 timestamp: new Date().toISOString()
                         });
 
-                    console.log(`✅ Signal message prepared: ${triggered.signalId} (${triggered.figi}) - ${triggerText} (count: ${totalCount})`);
                 } catch (signalError) {
                     console.error(`❌ Error preparing notification for signal ${triggered.signalId}:`, signalError.message);
                 }
@@ -3325,8 +3110,6 @@ class SchedulerService {
                     groupedMessage,
                     severity
                 );
-
-                console.log(`📤 Sent grouped notification with ${totalSignals} signals`);
             }
 
             // Отправляем уведомления через WebSocket (каждое отдельно для реального времени)
@@ -3341,7 +3124,6 @@ class SchedulerService {
 
             // Очищаем очередь после отправки
             this.pendingTriggeredSignals = [];
-            console.log(`✅ Sent ${signalMessages.length} triggered signal notifications (grouped) after analysis`);
         } catch (error) {
             console.error('❌ Error sending pending triggered signals:', error);
         }
@@ -3349,8 +3131,7 @@ class SchedulerService {
 
     async performNewsCacheCleanup() {
         try {
-            console.log('📰 Starting cleanup of expired news and sentiment cache...');
-            
+
             // Очистка кеша новостей
             const NewsAnalysisService = (await import('./NewsAnalysisService.js')).default;
             await NewsAnalysisService.cleanExpiredNews();
@@ -3359,8 +3140,7 @@ class SchedulerService {
             const TelegramSentimentService = (await import('./TelegramSentimentService.js')).default;
             await TelegramSentimentService.cleanExpiredSentiments();
             
-            console.log('✅ News cache cleanup completed');
-            
+
         } catch (error) {
             console.error('❌ Error during news cache cleanup:', error);
             throw error;
@@ -3389,7 +3169,6 @@ class SchedulerService {
             );
             
             if (shares.length === 0) {
-                console.log('⚠️ No shares found for news update');
                 return { success: true, updated: 0, message: 'No shares found' };
             }
             
@@ -3426,14 +3205,12 @@ class SchedulerService {
             }
             
             if (instrumentsNeedingUpdate.length === 0) {
-                console.log('✅ All instruments have fresh news, skipping update');
                 // Сохраняем текущий индекс для следующего раза
                 await SettingsService.setSetting('news_update_last_index', currentIndex % shares.length);
                 return { success: true, updated: 0, message: 'No instruments need news update' };
             }
             
-            console.log(`📰 Updating news for ${instrumentsNeedingUpdate.length} instruments (rotation: starting from index ${startIndex}, limited to ${maxRequests} requests to avoid API limits)...`);
-            
+
             // Обновляем новости только для инструментов, которым это нужно
             const to = new Date();
             const from = new Date();
@@ -3486,9 +3263,7 @@ class SchedulerService {
             
             // Сохраняем индекс последнего обновленного инструмента для ротации
             await SettingsService.setSetting('news_update_last_index', currentIndex % shares.length);
-            
-            console.log(`✅ Limited news update completed: ${updated} instruments updated, ${totalNews} news articles loaded (next update will start from index ${currentIndex % shares.length})`);
-            
+
             return {
                 success: true,
                 updated,
@@ -3616,7 +3391,6 @@ class SchedulerService {
     async checkTrailingStops() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
-            console.log('🛑 Trailing stops check skipped: full cache update is running');
             return;
         }
         
@@ -3634,8 +3408,6 @@ class SchedulerService {
             const allTriggered = [...virtualTriggered, ...realTriggered];
 
             if (allTriggered.length > 0) {
-                console.log(`🛑 Обнаружено ${allTriggered.length} сработавших трейлинг-стопов`);
-
                 // Закрываем позиции для каждого сработавшего трейлинг-стопа
                 for (const stop of allTriggered) {
                     try {
@@ -3653,7 +3425,6 @@ class SchedulerService {
                         // Исполняем ордер через TradingEngine
                         const result = await TradingEngine.executeOrder(signal);
 
-                        console.log(`✅ Позиция закрыта по трейлинг-стопу для ${stop.ticker}: ${stop.quantity} шт. по цене ${stop.triggerPrice.toFixed(2)}`);
 
                         // Отправляем уведомление через WebSocket
                         if (WebSocketService) {
@@ -3705,7 +3476,6 @@ class SchedulerService {
      */
     async performCorrelationPrecalculation() {
         try {
-            console.log('🔗 Scheduled correlation precalculation started...');
             const CorrelationService = (await import('./CorrelationService.js')).default;
             const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
             
@@ -3794,7 +3564,6 @@ class SchedulerService {
      */
     async performDynamicBudgetRebalance() {
         try {
-            console.log('💰 Scheduled dynamic budget rebalancing based on performance started...');
             const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
             
             // Выполняем перераспределение на основе метрик за последние 30 дней
@@ -3816,10 +3585,6 @@ class SchedulerService {
                 });
                 
                 await OptimizedTelegramService.sendAlert('DYNAMIC_BUDGET_REBALANCE_COMPLETE', message, 'info');
-            } else if (result.success && result.reason) {
-                console.log(`✅ Dynamic budget rebalancing completed: ${result.reason}`);
-            } else {
-                console.warn(`⚠️ Dynamic budget rebalancing completed with issues: ${result.reason || 'Unknown'}`);
             }
         } catch (error) {
             console.error('Error in scheduled dynamic budget rebalancing:', error);
@@ -3831,13 +3596,11 @@ class SchedulerService {
     async performSignalsUpdate() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
-            console.log('⚡ Signals update skipped: full cache update is running');
             return;
         }
         
         try {
-            console.log('⚡ Starting signals update...');
-            
+
             const SignalCacheService = (await import('./SignalCacheService.js')).default;
             const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
             
@@ -3861,12 +3624,6 @@ class SchedulerService {
                     isActive: true
                 }
             });
-            
-            console.log(`📊 Instruments statistics:`);
-            console.log(`   Total: ${totalInstruments}`);
-            console.log(`   RUB currency: ${rubInstruments}`);
-            console.log(`   Share type: ${shareInstruments}`);
-            console.log(`   Active: ${activeInstruments}`);
             
             // Получаем список активных инструментов (более гибкий запрос)
             // Для рекомендаций используем только доступные инструменты (не требующие квалифицированного инвестора)
@@ -3900,8 +3657,6 @@ class SchedulerService {
             let instrumentsToProcess = instruments;
             
             if (instruments.length === 0) {
-                console.log('⚠️ No active instruments found for signals update');
-                console.log('💡 Trying fallback: searching without isActive filter...');
                 
                 // Fallback: пробуем без фильтра isActive
                 const fallbackInstruments = await CachedInstrument.findAll({
@@ -3917,18 +3672,11 @@ class SchedulerService {
                 });
                 
                 if (fallbackInstruments.length === 0) {
-                    console.log('❌ No instruments found even without isActive filter');
                     return;
                 }
                 
-                console.log(`✅ Found ${fallbackInstruments.length} instruments (fallback mode)`);
                 instrumentsToProcess = fallbackInstruments;
-            } else {
-                console.log(`✅ Found ${instruments.length} active instruments`);
             }
-
-            console.log(`📊 Updating signals for ${instrumentsToProcess.length} instruments...`);
-
             let updatedCount = 0;
             let errorCount = 0;
             const batchSize = 5; // Обрабатываем по 5 инструментов параллельно
@@ -3956,10 +3704,7 @@ class SchedulerService {
 
                             if (result.success) {
                                 updatedCount++;
-                                console.log(`✅ Updated signals for ${instrument.ticker} (${instrument.figi}): ${result.savedCount} signals`);
                             }
-                        } else {
-                            console.log(`⏭️ Skipping ${instrument.ticker} - cache is fresh`);
                         }
                     } catch (error) {
                         errorCount++;
@@ -3973,7 +3718,6 @@ class SchedulerService {
                 }
             }
 
-            console.log(`✅ Signals update completed: ${updatedCount} instruments updated, ${errorCount} errors`);
 
             // Отправляем уведомление через Telegram
             if (updatedCount > 0) {
@@ -3995,8 +3739,7 @@ class SchedulerService {
 
     async performTelegramCacheUpdate() {
         try {
-            console.log('📱 Starting Telegram sentiment cache update...');
-            
+
             // Получаем список активных инструментов для обновления настроений
             const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
             const instruments = await CachedInstrument.findAll({
@@ -4021,15 +3764,13 @@ class SchedulerService {
                     // Кешируем результат
                     await TelegramSentimentService.cacheSentiment(instrument.figi, sentiment);
                     
-                    console.log(`📱 Updated sentiment for ${instrument.ticker}: ${sentiment.sentiment?.toFixed(2)}`);
-                    
+
                 } catch (error) {
                     console.warn(`⚠️ Failed to update sentiment for ${instrument.ticker}:`, error.message);
                 }
             }
             
-            console.log('✅ Telegram sentiment cache update completed');
-            
+
         } catch (error) {
             console.error('❌ Error during Telegram cache update:', error);
             throw error;
@@ -4039,8 +3780,7 @@ class SchedulerService {
 
     async stop() {
         try {
-            console.log('🛑 Stopping Scheduler Service...');
-            
+
             // Останавливаем все задачи
             if (this.cacheTask) {
                 this.cacheTask.stop();
@@ -4091,8 +3831,7 @@ class SchedulerService {
             }
             
             this.isInitialized = false;
-            console.log('✅ Scheduler Service stopped successfully');
-            
+
         } catch (error) {
             console.error('❌ Error stopping Scheduler Service:', error);
             throw error;
@@ -4105,13 +3844,11 @@ class SchedulerService {
     async performRealPortfolioSync() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
-            console.log('💼 Real portfolio sync skipped: full cache update is running');
             return;
         }
         
         try {
-            console.log('💼 Starting real portfolio sync from Tinkoff API...');
-            
+
             const TradingEngine = (await import('./TradingEngine.js')).default;
             const RealPortfolio = (await import('../models/RealPortfolio.js')).default;
             
@@ -4162,8 +3899,7 @@ class SchedulerService {
                 initialCapital: portfolioData.initialCapital || null
             });
             
-            console.log(`✅ Real portfolio synced: totalValue=${finalTotalValue.toLocaleString('ru-RU')} RUB, cash=${cash.toLocaleString('ru-RU')} RUB, positions=${Object.keys(rawPositions).length}`);
-            
+
             // Обновляем распределение стратегий на основе актуального totalValue (cash + positionsValue)
             // Это позволяет правильно распределять бюджет по стратегиям от общей суммы портфеля
             try {
@@ -4185,8 +3921,7 @@ class SchedulerService {
      */
     async performWeeklyBacktesting() {
         try {
-            console.log('📊 Starting weekly backtesting for all active strategies...');
-            
+
             const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
             const BacktestingService = (await import('./BacktestingService.js')).default;
             const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
@@ -4197,11 +3932,9 @@ class SchedulerService {
             });
 
             if (strategies.length === 0) {
-                console.log('⚠️ No active strategies found for backtesting');
                 return;
             }
 
-            console.log(`📊 Found ${strategies.length} active strategies to backtest`);
 
             const results = [];
             const degradedStrategies = [];
@@ -4210,8 +3943,7 @@ class SchedulerService {
             // Выполняем walk-forward анализ для каждой стратегии
             for (const strategy of strategies) {
                 try {
-                    console.log(`\n📊 Backtesting strategy "${strategy.name}" (ID: ${strategy.id})...`);
-                    
+
                     // Выполняем walk-forward анализ за последние 6 месяцев
                     const endDate = new Date();
                     const startDate = new Date();
@@ -4254,7 +3986,6 @@ class SchedulerService {
 
                         // Если критическая деградация - отключаем стратегию
                         if (walkForwardResult.degradationAnalysis.severity === 'critical') {
-                            console.log(`🔴 CRITICAL: Disabling strategy "${strategy.name}" due to degradation`);
                             await strategy.update({ isActive: false });
                             
                             // Уведомление в Telegram
@@ -4282,7 +4013,6 @@ class SchedulerService {
                         }
                     }
 
-                    console.log(`✅ Strategy "${strategy.name}" backtested: Return=${walkForwardResult.stabilityAnalysis.averageReturn.toFixed(2)}%, Degrading=${walkForwardResult.degradationAnalysis.isDegrading ? 'YES' : 'NO'}`);
                 } catch (error) {
                     console.error(`❌ Error backtesting strategy ${strategy.id}:`, error);
                     await OptimizedTelegramService.sendAlert(
@@ -4301,12 +4031,6 @@ class SchedulerService {
                 criticalDegradations: degradedStrategies.filter(s => s.severity === 'critical').length,
                 warnings: warnings.length
             };
-
-            console.log(`\n📊 Weekly backtesting completed:`);
-            console.log(`   Total strategies: ${summary.totalStrategies}`);
-            console.log(`   Tested: ${summary.testedStrategies}`);
-            console.log(`   Degraded: ${summary.degradedStrategies} (${summary.criticalDegradations} critical)`);
-            console.log(`   Warnings: ${summary.warnings}`);
 
             // Отправляем сводный отчет в Telegram
             if (summary.degradedStrategies > 0 || summary.warnings > 0) {
@@ -4351,9 +4075,7 @@ class SchedulerService {
             // Обновляем распределение бюджета на основе результатов бэктестинга
             if (summary.degradedStrategies > 0) {
                 try {
-                    console.log('🔄 Updating budget allocation based on backtest results...');
                     await StrategyAllocationService.rebalanceBudgetByPerformance(30, 0);
-                    console.log('✅ Budget allocation updated');
                 } catch (error) {
                     console.error('❌ Error updating budget allocation:', error);
                 }
@@ -4376,8 +4098,7 @@ class SchedulerService {
      */
     async performMacroDataUpdate() {
         try {
-            console.log('📊 Starting macro data update...');
-            
+
             const MacroDataService = (await import('./MacroDataService.js')).default;
             
             // Убеждаемся, что сервис инициализирован
@@ -4420,14 +4141,6 @@ class SchedulerService {
                     saved: updateStats.total?.saved || 0
                 }
             };
-            
-            console.log(`\n📊 Macro data update completed:`);
-            console.log(`   ЦБ РФ: получено ${summary.cbr.fetched}, сохранено ${summary.cbr.saved}`);
-            console.log(`   Росстат: получено ${summary.rosstat.fetched}, сохранено ${summary.rosstat.saved}`);
-            console.log(`   Мосбиржа (волатильность): получено ${summary.moex.fetched}, сохранено ${summary.moex.saved}`);
-            console.log(`   Мосбиржа (сырье): получено ${summary.moexCommodity.fetched}, сохранено ${summary.moexCommodity.saved}`);
-            console.log(`   Рыночные индексы: получено ${summary.marketIndices.fetched}, сохранено ${summary.marketIndices.saved}`);
-            console.log(`   Всего: получено ${summary.total.fetched}, сохранено ${summary.total.saved}`);
             
             // Проверяем наличие ошибок
             const totalErrors = summary.cbr.errors.length + summary.rosstat.errors.length + summary.moex.errors.length + 
@@ -4515,9 +4228,6 @@ class SchedulerService {
                     successMessage,
                     'info'
                 );
-            } else {
-                // Данные не получены (возможно, источники недоступны или нет новых данных)
-                console.log('ℹ️ No new macro data to save (sources may be unavailable or no updates)');
             }
             
         } catch (error) {
@@ -4535,8 +4245,7 @@ class SchedulerService {
      */
     async performMarketIndicesLoad() {
         try {
-            console.log('📊 Starting market indices load...');
-            
+
             const MacroDataService = (await import('./MacroDataService.js')).default;
             
             // Убеждаемся, что сервис инициализирован
@@ -4552,8 +4261,7 @@ class SchedulerService {
 • Загружено индексов: ${loadStats.loaded}
 • Ошибок: ${loadStats.errors.length}`;
             
-            console.log(`✅ Market indices load completed:\n${summary}`);
-            
+
             // Отправляем уведомление в Telegram
             if (loadStats.errors.length === 0 && loadStats.loaded > 0) {
                 await OptimizedTelegramService.sendAlert(
@@ -4591,8 +4299,7 @@ class SchedulerService {
      */
     async performFundamentalDataUpdate() {
         try {
-            console.log('📊 Starting fundamental data update...');
-            
+
             const FundamentalDataService = (await import('./FundamentalDataService.js')).default;
             
             // Убеждаемся, что сервис инициализирован
@@ -4616,8 +4323,7 @@ class SchedulerService {
 • Пропущено: ${stats.skipped || 0}
 • Ошибок: ${stats.errors || 0}`;
             
-            console.log(`✅ Fundamental data update completed:\n${summary}`);
-            
+
             // Отправляем уведомление в Telegram
             if (stats.errors === 0 && (stats.saved || 0) > 0) {
                 await OptimizedTelegramService.sendAlert(
@@ -4669,8 +4375,7 @@ class SchedulerService {
      */
     async performPortfolioRebalancing() {
         try {
-            console.log('🔄 Starting portfolio rebalancing...');
-            
+
             const PortfolioRebalancingService = (await import('./PortfolioRebalancingService.js')).default;
             
             // Убеждаемся, что сервис инициализирован
@@ -4681,7 +4386,6 @@ class SchedulerService {
             // Проверяем, включена ли автоматическая ребалансировка
             const status = PortfolioRebalancingService.getStatus();
             if (!status.enabled) {
-                console.log('⏭️ Portfolio rebalancing is disabled, skipping...');
                 return;
             }
             
@@ -4696,16 +4400,13 @@ class SchedulerService {
                     needsRebalancing: result.needsRebalancing || false
                 };
                 
-                console.log('✅ Portfolio rebalancing completed:', summary);
-                
+
                 if (result.operations && result.operations.length > 0) {
                     await OptimizedTelegramService.sendAlert(
                         'PORTFOLIO_REBALANCING_COMPLETE',
                         `Ребалансировка портфеля выполнена: ${result.operations.length} операций, комиссия: ${result.totalCommission?.toFixed(2)} ₽`,
                         'info'
                     );
-                } else {
-                    console.log('ℹ️ No rebalancing needed');
                 }
             } else {
                 console.warn('⚠️ Portfolio rebalancing completed with warnings:', result.error || 'Unknown error');
@@ -4728,13 +4429,10 @@ class SchedulerService {
     async performVirtualPortfolioUpdate() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
-            console.log('💼 Virtual portfolio update skipped: full cache update is running');
             return;
         }
         
         try {
-            console.log('💼 Starting virtual portfolio update (recalculating totalValue)...');
-            
             const TradingEngine = (await import('./TradingEngine.js')).default;
             const VirtualPortfolio = (await import('../models/VirtualPortfolio.js')).default;
             
@@ -4757,9 +4455,7 @@ class SchedulerService {
                 totalValue: portfolioValue.totalValue,
                 initialCapital: savedPortfolio.initialCapital || 1000000
             });
-            
-            console.log(`✅ Virtual portfolio updated: totalValue=${portfolioValue.totalValue.toLocaleString('ru-RU')} RUB`);
-            
+
             // Обновляем распределение стратегий на основе актуального totalValue (только если режим виртуальный)
             try {
                 const TradingModeManager = (await import('./TradingModeManager.js')).default;

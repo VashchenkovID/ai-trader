@@ -64,8 +64,7 @@ class RiskManagementService {
      */
     async initialize() {
         try {
-            console.log('🛡️ Инициализация RiskManagementService...');
-            
+
             // Загружаем сохраненную статистику если есть
             await this.loadStats();
             
@@ -73,8 +72,7 @@ class RiskManagementService {
             await this.loadKellySettings();
             
             this.isInitialized = true;
-            console.log('✅ RiskManagementService инициализирован');
-            
+
         } catch (error) {
             console.error('❌ Ошибка инициализации RiskManagementService:', error);
             throw error;
@@ -846,7 +844,6 @@ class RiskManagementService {
         try {
             const message = `🚨 ${alert.type.toUpperCase()}: ${alert.message}`;
             await OptimizedTelegramService.sendAlert(message);
-            console.log(`📢 Алерт отправлен: ${message}`);
         } catch (error) {
             console.error('❌ Ошибка отправки алерта:', error);
         }
@@ -863,7 +860,6 @@ class RiskManagementService {
                           `Все торговые операции приостановлены!`;
             
             await OptimizedTelegramService.sendAlert(message);
-            console.log('🚨 Экстренный алерт отправлен');
         } catch (error) {
             console.error('❌ Ошибка отправки экстренного алерта:', error);
         }
@@ -875,7 +871,6 @@ class RiskManagementService {
     resetDailyStats() {
         this.stats.dailyPnL = 0;
         this.dailyHistory = [];
-        console.log('📅 Дневная статистика сброшена');
     }
 
     /**
@@ -883,7 +878,6 @@ class RiskManagementService {
      */
     resetEmergencyStop() {
         this.emergencyStop = false;
-        console.log('✅ Экстренная остановка снята');
     }
 
     /**
@@ -917,7 +911,6 @@ class RiskManagementService {
     async saveStats() {
         try {
             // В реальной системе здесь было бы сохранение в БД
-            console.log('💾 Статистика риск-менеджмента сохранена');
         } catch (error) {
             console.error('❌ Ошибка сохранения статистики:', error);
         }
@@ -929,7 +922,6 @@ class RiskManagementService {
     async loadStats() {
         try {
             // В реальной системе здесь была бы загрузка из БД
-            console.log('📂 Статистика риск-менеджмента загружена');
         } catch (error) {
             console.error('❌ Ошибка загрузки статистики:', error);
         }
@@ -946,7 +938,6 @@ class RiskManagementService {
                 minTrades: await Settings.getSetting('kelly_min_trades', 10),
                 volatilityPeriod: await Settings.getSetting('kelly_volatility_period', 30)
             };
-            console.log(`📊 Настройки Келли загружены: ${this.kellySettings.enabled ? 'включен' : 'выключен'}`);
         } catch (error) {
             console.warn('⚠️ Ошибка загрузки настроек Келли, используем значения по умолчанию:', error.message);
             // Убеждаемся, что настройки установлены значениями по умолчанию при ошибке
@@ -964,7 +955,6 @@ class RiskManagementService {
      */
     updateLimits(newLimits) {
         this.limits = { ...this.limits, ...newLimits };
-        console.log('⚙️ Лимиты риск-менеджмента обновлены:', newLimits);
     }
 
     /**
@@ -1030,7 +1020,6 @@ class RiskManagementService {
                 strategyId
             });
 
-            console.log(`✅ Трейлинг-стоп создан для ${ticker}: активация при +${activationProfitPercent}%`);
             return trailingStop;
         } catch (error) {
             console.error(`❌ Ошибка создания трейлинг-стопа для ${params.ticker}:`, error);
@@ -1107,7 +1096,6 @@ class RiskManagementService {
                 trailingStop.currentStopPrice = stopPrice;
                 await trailingStop.save(options);
 
-                console.log(`✅ Трейлинг-стоп активирован для ${trailingStop.ticker} при цене ${currentPrice.toFixed(2)}`);
             }
 
             // Обновление трейлинг-стопа, если он активен
@@ -1142,7 +1130,6 @@ class RiskManagementService {
                         trailingStop.triggerPrice = currentPrice;
                         await trailingStop.save(options);
 
-                        console.log(`🛑 Трейлинг-стоп сработал для ${trailingStop.ticker}: цена ${currentPrice.toFixed(2)} <= стоп ${trailingStop.currentStopPrice.toFixed(2)}`);
                         return trailingStop;
                     }
                 } else {
@@ -1172,7 +1159,6 @@ class RiskManagementService {
                         trailingStop.triggerPrice = currentPrice;
                         await trailingStop.save(options);
 
-                        console.log(`🛑 Трейлинг-стоп сработал для ${trailingStop.ticker}: цена ${currentPrice.toFixed(2)} >= стоп ${trailingStop.currentStopPrice.toFixed(2)}`);
                         return trailingStop;
                     }
                 }
@@ -1344,7 +1330,6 @@ class RiskManagementService {
                     const remainingQuantity = tradingRequest.quantity - totalExited;
                     
                     if (remainingQuantity <= 0) {
-                        console.log(`ℹ️ Позиция ${tradingRequest.ticker} уже полностью закрыта`);
                         continue;
                     }
 
@@ -1417,7 +1402,6 @@ class RiskManagementService {
                             notes: `Автоматическое закрытие по трейлинг-стопу`
                         });
 
-                        console.log(`✅ Позиция ${tradingRequest.ticker} закрыта по трейлинг-стопу: ${remainingQuantity} акций (${closeAction})`);
                     } else {
                         // В режиме real создаем торговую заявку
                         const exitRequest = await TradingRequest.create({
@@ -1446,7 +1430,6 @@ class RiskManagementService {
                             notes: `Создана заявка на закрытие по трейлинг-стопу: ${exitRequest.id}`
                         });
 
-                        console.log(`📋 Создана заявка на закрытие позиции ${tradingRequest.ticker} по трейлинг-стопу: ${exitRequest.id}`);
                     }
                 } catch (error) {
                     console.error(`❌ Ошибка закрытия позиции для трейлинг-стопа ${stop.id}:`, error);
@@ -1469,7 +1452,6 @@ class RiskManagementService {
             if (trailingStop) {
                 trailingStop.status = 'cancelled';
                 await trailingStop.save();
-                console.log(`✅ Трейлинг-стоп ${trailingStopId} отменен`);
             }
         } catch (error) {
             console.error(`❌ Ошибка отмены трейлинг-стопа ${trailingStopId}:`, error);

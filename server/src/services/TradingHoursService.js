@@ -73,7 +73,6 @@ class TradingHoursService {
                     console.warn('⚠️ Таблица cached_trading_hours отсутствует. Создаю...');
                     try {
                         await CachedTradingHours.sync({ force: false });
-                        console.log('✅ Таблица cached_trading_hours создана');
                         return { status: 'initialized' };
                     } catch (syncErr) {
                         console.error('❌ Не удалось создать таблицу cached_trading_hours:', syncErr);

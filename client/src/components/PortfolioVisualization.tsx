@@ -67,6 +67,7 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
           name: rec.strategy.name,
           type: rec.strategy.type
         };
+        // eslint-disable-next-line no-dupe-else-if
       } else if (rec?.strategyId && rec?.strategy) {
         // Если есть и strategyId и объект strategy
         strategy = {
@@ -91,7 +92,6 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
           ...p,
           prediction,
           // Приоритет: стратегия из позиции (от бэкенда) важнее стратегии из рекомендации
-          // Стратегия из рекомендации используется только если у позиции её нет
           strategy: p.strategy || recStrategy || undefined
         };
       }
@@ -103,7 +103,6 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
   useWebSocket({
     onMessage: (message) => {
       if (message.type === 'portfolio_analysis_completed') {
-        console.log('📊 Portfolio analysis completed:', message.data);
         const sellRecs = message.data?.sellRecommendations || [];
         setAnalysisResults({
           sellRecommendations: sellRecs
@@ -154,8 +153,8 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
           totalPnL: wsTotalPnL,
           totalPnLPercent: wsTotalPnLPercent,
           positionsCount: positionsData.length,
-          dayChange: typedTradingStats?.dayChange ?? 0,
-          dayChangePercent: typedTradingStats?.dayChangePercent ?? 0
+          dayChange: 0, // Убрано: изменение за день не рассчитывается
+          dayChangePercent: 0 // Убрано: изменение за день не рассчитывается
         };
       }
       return null;
@@ -169,29 +168,20 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
     // Рассчитываем PnL
     // Используем initialCapital из данных портфеля, если он есть, иначе используем значение по умолчанию
     const initialCapital = portfolioData.initialCapital || 1000000;
-    const totalPnL = portfolioData.totalPnL !== undefined 
-      ? portfolioData.totalPnL 
-      : (tradingStats?.totalPnL !== undefined 
-          ? tradingStats.totalPnL 
-          : (totalValue - initialCapital)); // Если PnL не передан, рассчитываем как разницу
     
-    // Процент прибыли рассчитываем относительно начального капитала
-    const totalPnLPercent = initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
-
-    // Рассчитываем изменение за день
-    // Если есть данные о дневном изменении из API, используем их, иначе рассчитываем упрощенно
-    const dayChange = portfolioData.dayChange !== undefined 
-      ? portfolioData.dayChange 
-      : (tradingStats && (tradingStats as TradingStats).dayChange !== undefined 
-          ? (tradingStats as TradingStats).dayChange 
-          : 0); // Если данных нет, показываем 0 вместо неправильного расчета
-    const dayChangePercent = totalValue > 0 && dayChange !== 0 
-      ? (dayChange / totalValue) * 100 
-      : (portfolioData.dayChangePercent !== undefined 
-          ? portfolioData.dayChangePercent 
-          : (tradingStats && (tradingStats as TradingStats).dayChangePercent !== undefined 
-              ? (tradingStats as TradingStats).dayChangePercent 
-              : 0)); // Согласованная логика fallback: сначала portfolioData, затем tradingStats, затем 0
+    // Приоритет: pnl.total из API > totalPnL из API > tradingStats.totalPnL > расчет как разница
+    const totalPnL = portfolioData.pnl?.total !== undefined
+      ? portfolioData.pnl.total
+      : (portfolioData.totalPnL !== undefined 
+          ? portfolioData.totalPnL 
+          : (tradingStats?.totalPnL !== undefined 
+              ? tradingStats.totalPnL 
+              : (totalValue - initialCapital))); // Если PnL не передан, рассчитываем как разницу
+    
+    // Процент прибыли: pnl.totalPercent из API > расчет относительно initialCapital
+    const totalPnLPercent = portfolioData.pnl?.totalPercent !== undefined
+      ? portfolioData.pnl.totalPercent
+      : (initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0);
 
     return {
       totalValue,
@@ -200,8 +190,8 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
       totalPnL,
       totalPnLPercent,
       positionsCount: positionsData.length || Object.keys(portfolioData.positions || {}).length,
-      dayChange,
-      dayChangePercent
+      dayChange: 0, // Убрано: изменение за день не рассчитывается
+      dayChangePercent: 0 // Убрано: изменение за день не рассчитывается
     };
   };
 
@@ -602,6 +592,7 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
           loading={loading}
           isConnected={isConnected}
           strategies={strategies}
+          strategyPositions={strategyPositions}
         />
       </div>
 

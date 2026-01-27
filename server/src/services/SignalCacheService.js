@@ -356,7 +356,6 @@ class SignalCacheService {
                     });
                 }
 
-                console.log(`✅ Отправлена сводка по ${totalActualSignals} сигналам для ${ticker} (${figi})`);
             } catch (error) {
                 console.error(`❌ Ошибка отправки группированных сигналов для ${figi}:`, error.message);
             }
@@ -636,7 +635,6 @@ class SignalCacheService {
                     telegramSentAt: new Date()
                 });
                 const hoursAgo = Math.floor(signalAge / (60 * 60 * 1000));
-                console.log(`⏭️ Skipped old signal ${signal.signalId}: created ${hoursAgo} hours ago`);
                 return;
             }
 
@@ -652,7 +650,6 @@ class SignalCacheService {
                     telegramSent: true,
                     telegramSentAt: new Date()
                 });
-                console.log(`⏭️ Skipped expired signal ${signal.signalId}: ended ${Math.floor(timeSinceEnd / (24 * 60 * 60 * 1000))} days ago`);
                 return;
             }
 
@@ -684,7 +681,6 @@ class SignalCacheService {
                 telegramSentAt: new Date()
             });
 
-            console.log(`✅ Новый сигнал отправлен в Telegram: ${signal.signalId}`);
         } catch (error) {
             console.error(`❌ Ошибка отправки сигнала в Telegram:`, error);
             // Не бросаем ошибку, чтобы не прерывать сохранение сигналов

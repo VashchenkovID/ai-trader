@@ -1,7 +1,6 @@
 import * as tf from '@tensorflow/tfjs';
 import ModelManager from '../utils/ModelManager.js';
 import CacheService from './CacheService.js';
-import WebSocketService from './WebSocketService.js';
 import OptimizedAnalysisService from './OptimizedAnalysisService.js';
 import { getService } from './GlobalServiceManager.js';
 import ServiceManager from './ServiceManager.js';
@@ -54,26 +53,22 @@ class ReinforcementLearningService {
      */
     async initialize() {
         try {
-            console.log('🤖 Initializing Reinforcement Learning Service...');
-            
+
             // Сначала пытаемся загрузить существующую модель
             await this.loadModel();
             
             // Если модель не загружена, создаем новую
             if (!this.agent) {
-                console.log('Creating new RL agent...');
                 this.agent = this.createDQN();
             }
 
             // Гарантируем наличие целевой сети
             if (!this.targetAgent && this.agent) {
-                console.log('Creating target RL agent...');
                 this.targetAgent = this.createDQN();
                 this.targetAgent.setWeights(this.agent.getWeights());
             }
             
             this.isInitialized = true;
-            console.log('✅ Reinforcement Learning Service initialized');
         } catch (error) {
             console.error('❌ Failed to initialize RL Service:', error);
             throw error;
@@ -152,8 +147,7 @@ class ReinforcementLearningService {
                 console.warn(`⚠️ RL training already running for ${figi}, skipping duplicate start`);
                 return { success: false, error: 'RL training already running for this FIGI' };
             }
-            console.log(`🤖 Starting RL training for ${figi}...`);
-            
+
             // Обновляем статус обучения
             if (trainingStatusService) {
                 trainingStatusService.startTraining('reinforcementLearning', 1);
@@ -171,7 +165,6 @@ class ReinforcementLearningService {
 
             // На всякий случай гарантируем наличие целевой сети
             if (!this.targetAgent && this.agent) {
-                console.log('RL: targetAgent is null, recreating target network...');
                 this.targetAgent = this.createDQN();
                 this.targetAgent.setWeights(this.agent.getWeights());
             }
@@ -239,7 +232,6 @@ class ReinforcementLearningService {
                 // Уменьшаем количество эпизодов и шагов для малого количества данных
                 adaptedEpisodes = Math.min(episodes, Math.floor(candles.length / 2));
                 adaptedMaxSteps = Math.min(100, candles.length - 1);
-                console.log(`📊 RL: Adapted parameters: episodes=${adaptedEpisodes}, maxSteps=${adaptedMaxSteps}`);
             }
 
             const results = [];
@@ -280,7 +272,6 @@ class ReinforcementLearningService {
                 this.broadcastTrainingProgress(episode, episodes, result);
             }
 
-            console.log('✅ RL training completed');
             // Сохраняем обновлённую модель для накопления знаний
             await this.saveModel();
             
@@ -575,7 +566,6 @@ class ReinforcementLearningService {
                 loss: 'meanSquaredError',
                 metrics: ['mae']
             });
-            console.log('⚙️ Compiled RL agent inside trainBatchStep');
         }
 
         // Предсказанные Q-значения для текущих состояний
@@ -829,8 +819,6 @@ class ReinforcementLearningService {
                 metrics: ['mae']
             });
         }
-        
-        console.log('⚙️ RL config updated');
     }
 
     /**
@@ -842,14 +830,7 @@ class ReinforcementLearningService {
                 console.warn('⚠️ RL agent is null, skipping save');
                 return;
             }
-            
-            // Сохраняем через ModelManager в стандартном формате
-            const success = await ModelManager.saveModel(this.agent, 'rl_agent/rl_model');
-            if (success) {
-                console.log('✅ RL model saved');
-            } else {
-                console.warn('⚠️ RL model save reported failure');
-            }
+            await ModelManager.saveModel(this.agent, 'rl_agent/rl_model');
         } catch (error) {
             console.error('❌ Failed to save RL model:', error);
         }
@@ -868,7 +849,6 @@ class ReinforcementLearningService {
                     bestReward,
                     savedAt: new Date().toISOString()
                 }, null, 2));
-                console.log(`🏅 RL best checkpoint saved (reward=${bestReward.toFixed(2)})`);
             }
         } catch (error) {
             console.warn('⚠️ Failed to save RL best checkpoint:', error.message);
@@ -924,8 +904,7 @@ class ReinforcementLearningService {
      */
     async stopTraining() {
         try {
-            console.log('🛑 Stopping RL training');
-            
+
             this.isTraining = false;
             this.status = 'idle';
             
@@ -958,8 +937,6 @@ class ReinforcementLearningService {
      */
     async resetAgent() {
         try {
-            console.log('🔄 Resetting RL agent');
-            
             // Остановить обучение если оно идет
             this.isTraining = false;
             

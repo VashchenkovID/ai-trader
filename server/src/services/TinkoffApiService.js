@@ -160,13 +160,11 @@ class TinkoffApiService {
                 });
 
                 const allInstruments = response?.instruments || [];
-                console.log(`📊 Получено из API: ${allInstruments.length} инструментов`);
 
                 // Сначала фильтруем по наличию обязательных полей
                 const validInstruments = allInstruments.filter(inst => {
                     return inst && inst.figi && inst.ticker;
                 });
-                console.log(`✅ С FIGI и ticker: ${validInstruments.length} инструментов`);
 
                 // Фильтруем только российские акции по стране и валюте
                 const russianInstruments = validInstruments.filter(inst => {
@@ -187,7 +185,6 @@ class TinkoffApiService {
                     return isRussian;
                 });
 
-                console.log(`🇷🇺 Российских акций после фильтрации по стране: ${russianInstruments.length}`);
                 return { ...response, instruments: russianInstruments };
             },
             // Кеш запрос
@@ -265,12 +262,6 @@ class TinkoffApiService {
             });
             return response;
         } catch (error) {
-            // Если это ошибка 429, не логируем как warning, а просто возвращаем пустой результат
-            if (error.message.includes('Rate limit exceeded')) {
-                console.log(`Skipping dividends for ${figi} due to rate limit`);
-            } else {
-                console.warn(`Could not get dividends for ${figi}:`, error.message);
-            }
             return {dividends: []};
         }
     }
@@ -406,22 +397,7 @@ class TinkoffApiService {
     // Получение информации о счетах
     async getAccounts() {
         try {
-            console.log('🔍 Getting accounts from T-Bank API...');
             const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.UsersService/GetAccounts', {});
-
-            console.log(`📊 Raw accounts response:`, JSON.stringify(response, null, 2));
-            
-            // Обрабатываем ответ и показываем только нужную информацию
-            const accounts = response.accounts || [];
-            console.log(`📊 Found ${accounts.length} accounts:`);
-            accounts.forEach((account, index) => {
-                console.log(`  ${index + 1}. ID: ${account.id}`);
-                console.log(`     Type: ${account.type}`);
-                console.log(`     Name: ${account.name}`);
-                console.log(`     Status: ${account.status}`);
-                console.log(`     Access Level: ${account.accessLevel}`);
-                console.log('     ---');
-            });
 
             return response;
         } catch (error) {
@@ -433,19 +409,7 @@ class TinkoffApiService {
     // Получение информации о пользователе
     async getUserInfo() {
         try {
-            console.log('🔍 Getting user info from T-Bank API...');
-            const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.UsersService/GetInfo', {});
-
-            console.log(`📊 Raw user info response:`, JSON.stringify(response, null, 2));
-            
-            if (response) {
-                console.log(`👤 User info:`);
-                console.log(`   Premium Status: ${response.premiumStatus || 'N/A'}`);
-                console.log(`   Qual Status: ${response.qualStatus || 'N/A'}`);
-                console.log(`   Tariff: ${response.tariff || 'N/A'}`);
-            }
-
-            return response;
+            return await this.makeRequest('/tinkoff.public.invest.api.contract.v1.UsersService/GetInfo', {});
         } catch (error) {
             console.error('Error getting user info:', error);
             return null;
@@ -1183,12 +1147,7 @@ class TinkoffApiService {
             for (const path of possiblePaths) {
                 for (const body of possibleBodies) {
                     try {
-                        console.log(`🔍 Пробуем получить сигналы через ${path} с телом:`, JSON.stringify(body));
-                        
                         const response = await this.makeRequest(path, body);
-
-                        console.log(`✅ Успешно получены сигналы:`, JSON.stringify(response, null, 2));
-                        
                         return {
                             success: true,
                             path: path,

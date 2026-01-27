@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
-import { Button, Card, Badge, ProgressBar, Skeleton, Input, Select, Modal, Table } from '../components/ui';
+import { useTheme } from '../../contexts/ThemeContext.tsx';
+import { Button, Card, Badge, ProgressBar, Skeleton, Input, Select, Modal, Table } from '../../components/ui';
 import './DesignSystemTest.css';
 
 const DesignSystemTest: React.FC = () => {

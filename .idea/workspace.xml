@@ -5,48 +5,94 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="eabbd32b-9e15-4bc9-856b-cea21edbae60" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/client/src/pages/Recommendations/types.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/SettingsStats.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/SettingsStats.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/TradingRequestManager.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/TradingRequestManager.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/performance/PerformanceHeatmap.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/performance/PerformanceHeatmap.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/performance/SectorAnalysis.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/performance/SectorAnalysis.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/settings/LogsMonitoringSection.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/LogsMonitoringSection.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/settings/SchedulerStatusCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/SchedulerStatusCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/settings/SettingsGroup.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/SettingsGroup.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/settings/SettingsTabs.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/SettingsTabs.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/settings/StrategiesSection.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/StrategiesSection.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/settings/TradingModeSection.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/TradingModeSection.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/settings/TradingModeValidationCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/TradingModeValidationCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/settings/TrainingSettingsSection.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/TrainingSettingsSection.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/stock/HorizonCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/stock/HorizonCard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/stock/NewsList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/stock/NewsList.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/stock/SignalsList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/stock/SignalsList.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/trading/EntryOptimization.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/trading/EntryOptimization.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Alert/Alert.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Alert/Alert.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Button/Button.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Button/Button.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Chart/Chart.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Chart/Chart.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/ConfirmDialog/ConfirmDialog.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/ConfirmDialog/ConfirmDialog.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/InfoTooltip/InfoTooltip.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/InfoTooltip/InfoTooltip.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Input/Input.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Input/Input.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Select/Select.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Select/Select.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Table/DataTable.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Table/DataTable.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Table/Table.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Table/Table.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Tabs/Tabs.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Tabs/Tabs.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Tooltip/Tooltip.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Tooltip/Tooltip.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/websocket/ModelMetricsWidget.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/websocket/ModelMetricsWidget.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/websocket/TradingSignalsWidget.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/websocket/TradingSignalsWidget.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/components/websocket/TrainingProgressWidget.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/websocket/TrainingProgressWidget.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/hooks/useStockDataCache.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/hooks/useStockDataCache.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/Dashboard/Dashboard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Dashboard/Dashboard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/DesignSystemTest.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/DesignSystemTest.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/MetricsMonitoring.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/MetricsMonitoring.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/Performance.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Performance.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/Recommendations.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Recommendations.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/pages/Settings.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Settings.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/common/AppRouter.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/common/AppRouter.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/PortfolioVisualization.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/PortfolioVisualization.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/dashboard/HeroMetricsCard/HeroMetricsCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/dashboard/HeroMetricsCard/HeroMetricsCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/performance/PerformanceDashboard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/performance/PerformanceDashboard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/portfolio/PortfolioSummaryCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/portfolio/PortfolioSummaryCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/DesignSystemTest.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/DesignSystemTest/DesignSystemTest.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/DesignSystemTest.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/DesignSystemTest/DesignSystemTest.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/MetricsMonitoring.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/MetricsMonitoring/MetricsMonitoring.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/MetricsMonitoring.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/MetricsMonitoring/MetricsMonitoring.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/Performance.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Performance/Performance.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/Performance.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Performance/Performance.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/Portfolio.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Portfolio/Portfolio.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/Portfolio.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Portfolio/Portfolio.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/Recommendations.css" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Recommendations/Recommendations.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/Recommendations.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Recommendations/Recommendations.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/client/src/services/apiService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/services/apiService.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/services/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/services/index.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/styles/design-system/themes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/styles/design-system/themes.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/tsconfig.json" beforeDir="false" afterPath="$PROJECT_DIR$/client/tsconfig.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/app.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/app.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/middleware/auth.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/middleware/auth.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/middleware/monitoring.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/middleware/monitoring.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/AdaptiveThresholdService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/AdaptiveThresholdService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/AssetSyncService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/AssetSyncService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/BacktestingService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/BacktestingService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/BackupService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/BackupService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/BenchmarkService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/BenchmarkService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/CacheService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/CacheService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/CapitalAllocationStrategy.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/CapitalAllocationStrategy.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/CapitalScalingService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/CapitalScalingService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/CorrelationService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/CorrelationService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/DiversificationService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/DiversificationService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/DividendService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/DividendService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/EnsembleService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/EnsembleService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/EntryOptimizationService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/EntryOptimizationService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/ExitOptimizationService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/ExitOptimizationService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/FeedbackService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/FeedbackService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/FundamentalDataService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/FundamentalDataService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/IntegratedAIService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/IntegratedAIService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/LoggerService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/LoggerService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/MacroDataService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/MacroDataService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/MarketRegimeService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/MarketRegimeService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/MetaLearningService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/MetaLearningService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/MigrationService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/MigrationService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/ModelSaveService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/ModelSaveService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/ModelWeightingService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/ModelWeightingService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/MonitoringService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/MonitoringService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/NeuralNetworkService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/NeuralNetworkService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/NewsAnalysisService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/NewsAnalysisService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/NewsApiService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/NewsApiService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/OptimizedDataService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/OptimizedDataService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/OptimizedTelegramService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/OptimizedTelegramService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/OptimizedTrainingService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/OptimizedTrainingService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/OptionsDataService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/OptionsDataService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/PartialExitService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/PartialExitService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/PerformanceAnalyzer.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/PerformanceAnalyzer.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/PnLCalculationService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/PnLCalculationService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/PortfolioMigrator.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/PortfolioMigrator.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/PortfolioOptimizer.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/PortfolioOptimizer.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/PortfolioRebalancingService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/PortfolioRebalancingService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/PortfolioSyncService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/PortfolioSyncService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/PositionMonitoringService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/PositionMonitoringService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/PreflightCheckService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/PreflightCheckService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/ProfitabilityTracker.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/ProfitabilityTracker.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/PyramidingService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/PyramidingService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/QuickTrainingService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/QuickTrainingService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/ReinforcementLearningService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/ReinforcementLearningService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/RiskAdjustmentService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/RiskAdjustmentService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/RiskManagementService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/RiskManagementService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/SchedulerService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/SchedulerService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/ServiceManager.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/ServiceManager.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/SettingsService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/SettingsService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/SignalCacheService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/SignalCacheService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/StackingService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/StackingService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/Stage3Validator.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/Stage3Validator.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/StrategyAllocationService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/StrategyAllocationService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/SwitchValidator.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/SwitchValidator.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/TaxOptimizationService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/TaxOptimizationService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/TelegramSentimentService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/TelegramSentimentService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/TelegramService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/TelegramService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/TinkoffApiService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/TinkoffApiService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/TradingEngine.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/TradingEngine.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/TradingHoursCacheService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/TradingHoursCacheService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/TradingHoursService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/TradingHoursService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/TradingModeManager.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/TradingModeManager.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/TradingRequestService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/TradingRequestService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/services/WebSocketService.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/services/WebSocketService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/src/workers/tradingRequestsPricesUpdateWorker.js" beforeDir="false" afterPath="$PROJECT_DIR$/server/src/workers/tradingRequestsPricesUpdateWorker.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -103,11 +149,11 @@
       <recent name="C:\Users\Vashh\WebstormProjects\IvashkaTradeHelper\client\src" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
-      <recent name="C:\Users\Фронтендер3000\projects\ai-trader\client\src\components\dashboard\TradingSummaryCard" />
-      <recent name="C:\Users\Фронтендер3000\projects\ai-trader\client\src\components\dashboard\RecentTradesCard" />
-      <recent name="C:\Users\Фронтендер3000\projects\ai-trader\client\src\components\dashboard\RebalancingStatusCard" />
-      <recent name="C:\Users\Фронтендер3000\projects\ai-trader\client\src\components\dashboard\QuickLinksAndSystemCard" />
-      <recent name="C:\Users\Фронтендер3000\projects\ai-trader\client\src\components\dashboard\QuickActionsCard" />
+      <recent name="C:\Users\Фронтендер3000\projects\ai-trader\client\src\pages\Recommendations" />
+      <recent name="C:\Users\Фронтендер3000\projects\ai-trader\client\src\pages\Portfolio" />
+      <recent name="C:\Users\Фронтендер3000\projects\ai-trader\client\src\pages\Performance" />
+      <recent name="C:\Users\Фронтендер3000\projects\ai-trader\client\src\pages\MetricsMonitoring" />
+      <recent name="C:\Users\Фронтендер3000\projects\ai-trader\client\src\pages\DesignSystemTest" />
     </key>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
@@ -131,6 +177,8 @@
       <workItem from="1769270863612" duration="3024000" />
       <workItem from="1769410006620" duration="6000" />
       <workItem from="1769507032925" duration="1774000" />
+      <workItem from="1769516123639" duration="7000" />
+      <workItem from="1769520934257" duration="5077000" />
     </task>
     <servers />
   </component>

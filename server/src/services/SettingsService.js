@@ -211,9 +211,7 @@ class SettingsService {
             if (nnSettings.nn_model_max_age_days) {
                 process.env.NN_MODEL_MAX_AGE_DAYS = nnSettings.nn_model_max_age_days.toString();
             }
-            
-            console.log('✅ Settings applied to environment variables');
-            
+
             return {
                 portfolio: portfolioSettings,
                 scheduler: schedulerSettings,

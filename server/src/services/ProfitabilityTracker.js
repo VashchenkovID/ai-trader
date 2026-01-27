@@ -6,7 +6,6 @@ import sequelize from '../config/database.js';
 import {
     calculateSortinoRatio,
     calculateCalmarRatio,
-    calculateInformationRatio,
     calculateMAEandMFE,
     analyzeByDayOfWeek,
     analyzeByMonth
@@ -110,7 +109,6 @@ class ProfitabilityTracker {
             // Проверяем, существует ли таблица migration_status
             const tableExists = await this.checkTableExists('migration_status');
             if (!tableExists) {
-                console.log('⚠️ Таблица migration_status не существует, пропускаем загрузку исторических данных');
                 return;
             }
 
@@ -139,9 +137,6 @@ class ProfitabilityTracker {
                     await this.recordTradeStats(date, trade);
                 }
             }
-
-            console.log(`📊 Загружено ${migrations.length} миграций и ${TradingEngine.virtualPortfolio?.trades?.length || 0} сделок`);
-
         } catch (error) {
             console.error('❌ Ошибка загрузки исторических данных:', error);
         }

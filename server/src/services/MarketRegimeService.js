@@ -111,11 +111,6 @@ class MarketRegimeService {
             await this.loadSettings();
 
             this.isInitialized = true;
-            if (LoggerService.isInitialized) {
-                LoggerService.info('✅ Market Regime Service initialized');
-            } else {
-                console.log('✅ Market Regime Service initialized');
-            }
         } catch (error) {
             if (LoggerService.isInitialized) {
                 LoggerService.error('❌ Failed to initialize MarketRegimeService:', error);

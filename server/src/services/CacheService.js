@@ -41,14 +41,12 @@ class CacheService {
     async cacheInstruments() {
         // Защита от параллельных вызовов и слишком частых обновлений
         if (this.cacheInstrumentsInProgress) {
-            console.log('⏳ cacheInstruments уже выполняется, пропускаем...');
             return [];
         }
         
         const now = Date.now();
         if (now - this.lastCacheUpdate < this.cacheUpdateCooldown) {
             const secondsAgo = Math.round((now - this.lastCacheUpdate) / 1000);
-            console.log(`⏳ cacheInstruments вызывался недавно (${secondsAgo} сек назад), пропускаем...`);
             return [];
         }
         
@@ -75,7 +73,6 @@ class CacheService {
                     return true;
                 });
             
-            console.log(`📊 Всего инструментов для кеширования: ${instruments.length}`);
 
             // Попробуем получить последние цены пачкой заранее
             let priceMap = {};
@@ -95,8 +92,7 @@ class CacheService {
                 console.warn('Could not prefetch last prices:', e.message);
             }
 
-            console.log(`📊 Всего инструментов для обработки: ${instruments.length}`);
-            
+
             for (const instrument of instruments) {
                 try {
                     // Пропускаем инструменты без FIGI или тикера
@@ -127,18 +123,15 @@ class CacheService {
                     // Если apiTradeAvailableFlag = false, инструмент недоступен через API
                     if (instrument.apiTradeAvailableFlag === false) {
                         isAccessible = false;
-                        console.log(`  ⚠️ ${instrument.ticker}: apiTradeAvailableFlag = false`);
                     }
                     
                     // Если buyAvailableFlag = false, инструмент недоступен для покупки
                     if (instrument.buyAvailableFlag === false) {
                         isAccessible = false;
-                        console.log(`  ⚠️ ${instrument.ticker}: buyAvailableFlag = false`);
                     }
                     
                     if (instrument.forQualInvestorFlag === true || instrument.forQualifiedInvestorFlag === true) {
                         isAccessible = false;
-                        console.log(`  ⚠️ ${instrument.ticker}: requires qualified investor (forQualInvestorFlag = true)`);
                     }
                     
                     await CachedInstrument.upsert({
@@ -296,7 +289,6 @@ class CacheService {
         try {
             // Пропускаем запросы к API для тестовых FIGI
             if (this.isTestFigi(figi)) {
-                console.log(`⚠️ Skipping API request for test FIGI: ${figi}`);
                 return [];
             }
 
@@ -365,8 +357,7 @@ class CacheService {
                     }
                 }
                 if (insertedCount > 0) {
-                    console.log(`✅ Inserted ${insertedCount} new candles for ${figi} (skipped ${toInsert.length - insertedCount} duplicates)`);
-                    
+
                     // Фаза 3, задача 3.1.2: Инвалидация кеша индикаторов при обновлении данных
                     try {
                         const OptimizedAnalysisService = (await import('./OptimizedAnalysisService.js')).default;
@@ -375,10 +366,8 @@ class CacheService {
                         }
                     } catch (invalidateError) {
                         // Игнорируем ошибки инвалидации кеша - это не критично
-                        console.debug(`Debug: Could not invalidate cache for ${figi}:`, invalidateError.message);
                     }
                 } else if (toInsert.length > 0) {
-                    console.log(`ℹ️ All ${toInsert.length} candles for ${figi} already exist in cache`);
                 }
             }
 
@@ -389,7 +378,6 @@ class CacheService {
                 error.code === '23505' ||
                 error.message?.includes('unique') ||
                 error.message?.includes('уникальности')) {
-                console.log(`ℹ️ Candles for ${figi} already exist in cache, skipping`);
                 return [];
             }
             console.error(`Error caching candles for ${figi}:`, error);
@@ -401,7 +389,6 @@ class CacheService {
     async fetchCandlesRangeBatched(figi, interval, from, to) {
         // Пропускаем запросы к API для тестовых FIGI
         if (this.isTestFigi(figi)) {
-            console.log(`⚠️ Skipping API request for test FIGI: ${figi}`);
             return [];
         }
 
@@ -468,7 +455,6 @@ class CacheService {
                     
                     if (isNotFoundError) {
                         // Для тестовых FIGI или несуществующих инструментов просто возвращаем пустой массив
-                        console.log(`ℹ️ Instrument not found in API: ${figi} (skipping)`);
                         return [];
                     }
                     

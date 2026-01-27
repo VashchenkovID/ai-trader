@@ -59,9 +59,7 @@ class TradingModeManager {
                 });
 
                 this.currentMode = newMode;
-                
-                console.log(`🔄 Режим торговли изменен на: ${newMode}`);
-                
+
                 return {
                     success: true,
                     previousMode: this.currentMode,
@@ -84,9 +82,7 @@ class TradingModeManager {
             });
 
             this.currentMode = newMode;
-            
-            console.log(`🔄 Режим торговли изменен на: ${newMode}`);
-            
+
             return {
                 success: true,
                 previousMode: this.currentMode,

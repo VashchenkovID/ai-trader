@@ -2,7 +2,6 @@ import * as tf from '@tensorflow/tfjs';
 import ModelManager from '../utils/ModelManager.js';
 import CacheService from './CacheService.js';
 import OptimizedDataService from './OptimizedDataService.js';
-import WebSocketService from './WebSocketService.js';
 import { getService } from './GlobalServiceManager.js';
 import ServiceManager from './ServiceManager.js';
 
@@ -173,7 +172,6 @@ class MetaLearningService {
                 console.warn(`⚠️ Meta-learning already running for ${figi}, skipping duplicate start`);
                 return { success: false, error: 'Meta-learning already running for this FIGI' };
             }
-            console.log(`🧠 Meta-learning training for ${figi}...`);
             this.isTraining = true;
             this.isAdapting = true;
             this.trainingFigiLocks.add(figi);
@@ -316,8 +314,7 @@ class MetaLearningService {
                 throw new Error('Meta-Learning not initialized');
             }
 
-            console.log(`🔄 Adapting to task: ${taskData.taskType}...`);
-            
+
             // Создаем эмбеддинг задачи
             const taskEmbedding = this.createTaskEmbedding(
                 taskData.marketData,
@@ -339,7 +336,6 @@ class MetaLearningService {
             // Сохраняем задачу в базу знаний
             await this.saveTaskToKnowledgeBase(taskData, adaptationParams);
             
-            console.log('✅ Task adaptation completed');
             return adaptedModel;
             
         } catch (error) {
@@ -445,8 +441,7 @@ class MetaLearningService {
      */
     async trainMetaModel(tasks) {
         try {
-            console.log('🧠 Training meta-model...');
-            
+
             const metaFeatures = [];
             const metaLabels = [];
             
@@ -484,7 +479,6 @@ class MetaLearningService {
             featuresTensor.dispose();
             labelsTensor.dispose();
             
-            console.log('✅ Meta-model training completed');
             return history;
             
         } catch (error) {
@@ -577,7 +571,6 @@ class MetaLearningService {
         // Сохраняем на диск
         await this.saveKnowledgeBase();
         
-        console.log(`💾 Task saved to knowledge base. Total tasks: ${this.knowledgeBase.length}`);
     }
 
     /**
@@ -597,7 +590,6 @@ class MetaLearningService {
             // Сохраняем базу знаний
             await fs.writeFile(knowledgeBasePath, JSON.stringify(this.knowledgeBase, null, 2));
             
-            console.log(`💾 Knowledge base saved: ${this.knowledgeBase.length} tasks`);
         } catch (error) {
             console.warn('⚠️ Failed to save knowledge base:', error.message);
         }
@@ -618,11 +610,9 @@ class MetaLearningService {
                 await fs.access(knowledgeBasePath);
                 const data = await fs.readFile(knowledgeBasePath, 'utf-8');
                 this.knowledgeBase = JSON.parse(data);
-                console.log(`📚 Knowledge base loaded: ${this.knowledgeBase.length} tasks`);
             } catch (fileError) {
                 // Файл не существует - создаем пустую базу знаний
                 this.knowledgeBase = [];
-                console.log('📚 Knowledge base file not found, starting with empty base');
             }
         } catch (error) {
             console.warn('⚠️ Failed to load knowledge base:', error.message);
@@ -683,7 +673,6 @@ class MetaLearningService {
             });
         }
         
-        console.log('⚙️ Meta-Learning config updated');
     }
 
     /**
@@ -710,9 +699,7 @@ class MetaLearningService {
 
             // Сохраняем через ModelManager в стандартном формате
             const success = await ModelManager.saveModel(this.metaModel, 'meta_model/meta_model');
-            if (success) {
-                console.log('✅ Meta-model saved');
-            } else {
+            if (!success) {
                 console.warn('⚠️ Meta-model save reported failure');
             }
             
@@ -784,8 +771,7 @@ class MetaLearningService {
      */
     async stopAdaptation() {
         try {
-            console.log('🛑 Stopping meta-learning adaptation');
-            
+
             this.isAdapting = false;
             this.status = 'idle';
             

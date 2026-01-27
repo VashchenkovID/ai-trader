@@ -1,5 +1,4 @@
 import TradingEngine from './TradingEngine.js';
-import RiskManagementService from './RiskManagementService.js';
 import SwitchValidator from './SwitchValidator.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
 import TinkoffApiService from './TinkoffApiService.js';
@@ -27,13 +26,10 @@ class PortfolioMigrator {
      */
     async initialize() {
         try {
-            console.log('🔄 Инициализация PortfolioMigrator...');
-            
             // Загружаем настройки миграции из базы данных
             await this.loadMigrationSettings();
             
             this.isInitialized = true;
-            console.log('✅ PortfolioMigrator инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации PortfolioMigrator:', error);
             throw error;
@@ -67,7 +63,6 @@ class PortfolioMigrator {
                 autoStopOnError: await Settings.getSetting('migration_auto_stop_on_error', true)
             };
             
-            console.log('📋 Настройки миграции загружены из БД');
         } catch (error) {
             console.error('❌ Ошибка загрузки настроек миграции:', error);
             // Используем настройки по умолчанию
@@ -103,8 +98,7 @@ class PortfolioMigrator {
         }
 
         try {
-            console.log('📋 Создание плана миграции...');
-            
+
             // 1. Валидация готовности к миграции
             const validation = await SwitchValidator.canSwitchToMicro();
             if (!validation.canSwitch) {
@@ -126,7 +120,6 @@ class PortfolioMigrator {
                 throw new Error(`План миграции невалиден: ${planValidation.errors.join(', ')}`);
             }
 
-            console.log(`✅ План миграции создан: ${migrationPlan.length} шагов`);
             return {
                 success: true,
                 plan: migrationPlan,
@@ -154,8 +147,7 @@ class PortfolioMigrator {
         }
 
         try {
-            console.log('🚀 Начало выполнения миграции...');
-            
+
             // Создаем запись миграции в БД
             this.currentMigration = await MigrationStatus.createMigration({
                 type: migrationType,
@@ -180,8 +172,7 @@ class PortfolioMigrator {
             // Выполнение каждого шага миграции
             for (let i = 0; i < migrationPlan.length; i++) {
                 try {
-                    console.log(`📊 Выполнение шага ${i + 1}/${migrationPlan.length}...`);
-                    
+
                     const step = migrationPlan[i];
                     const result = await this.executeMigrationStep(step, i + 1);
                     
@@ -241,9 +232,7 @@ class PortfolioMigrator {
             
             // Уведомление о завершении
             await this.notifyMigrationComplete();
-            
-            console.log('✅ Миграция завершена успешно');
-            
+
             const finalMigration = await MigrationStatus.findOne({ 
                 where: { migrationId: this.currentMigration.migrationId } 
             });
@@ -645,8 +634,7 @@ class PortfolioMigrator {
             });
             
             await OptimizedTelegramService.sendAlert('🛑 МИГРАЦИЯ ОСТАНОВЛЕНА ПОЛЬЗОВАТЕЛЕМ');
-            console.log('🛑 Миграция остановлена пользователем');
-            
+
             this.currentMigration = null;
         }
     }
@@ -706,7 +694,6 @@ class PortfolioMigrator {
             // Перезагружаем настройки
             await this.loadMigrationSettings();
             
-            console.log('✅ Настройки миграции обновлены');
             return true;
         } catch (error) {
             console.error('❌ Ошибка обновления настроек миграции:', error);

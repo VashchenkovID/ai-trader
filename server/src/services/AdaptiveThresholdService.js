@@ -1,7 +1,7 @@
 /**
  * Сервис адаптивных порогов для рекомендаций
  * Фаза 2, задача 2.1: Система обратной связи
- * 
+ *
  * Функциональность:
  * - Определение рыночных режимов (тренд, флэт, волатильность)
  * - Расчет адаптивных порогов на основе рыночных условий
@@ -9,7 +9,6 @@
  */
 
 import CacheService from './CacheService.js';
-import OptimizedDataService from './OptimizedDataService.js';
 import LoggerService from './LoggerService.js';
 
 class AdaptiveThresholdService {
@@ -23,7 +22,7 @@ class AdaptiveThresholdService {
                 sellScore: 0.35,
                 sellConfidence: 0.6
             },
-            
+
             // Адаптации для разных режимов
             trendMode: {
                 buyScoreMultiplier: 0.9,      // Снижаем порог в тренде
@@ -31,28 +30,28 @@ class AdaptiveThresholdService {
                 sellScoreMultiplier: 1.1,     // Повышаем порог продажи
                 sellConfidenceMultiplier: 1.0
             },
-            
+
             flatMode: {
                 buyScoreMultiplier: 1.1,      // Повышаем порог во флэте
                 buyConfidenceMultiplier: 1.1,
                 sellScoreMultiplier: 0.9,
                 sellConfidenceMultiplier: 1.0
             },
-            
+
             volatileMode: {
                 buyScoreMultiplier: 1.15,     // Значительно повышаем порог при волатильности
                 buyConfidenceMultiplier: 1.2,
                 sellScoreMultiplier: 0.85,
                 sellConfidenceMultiplier: 1.1
             },
-            
+
             // Параметры определения режима
             trendDetectionPeriod: 20,         // Период для определения тренда (свечей)
             volatilityPeriod: 14,             // Период для расчета волатильности
             volatilityThreshold: 0.02,        // Порог волатильности (2% в день)
             trendStrengthThreshold: 0.015     // Порог силы тренда (1.5% в день)
         };
-        
+
         // Кэш режимов и порогов
         this.marketModeCache = new Map();
         this.thresholdCache = new Map();
@@ -72,16 +71,9 @@ class AdaptiveThresholdService {
             await this.loadSettings();
 
             this.isInitialized = true;
-            if (LoggerService.isInitialized) {
-                LoggerService.info('✅ AdaptiveThresholdService initialized');
-            } else {
-                console.log('✅ AdaptiveThresholdService initialized');
-            }
         } catch (error) {
             if (LoggerService.isInitialized) {
                 LoggerService.error('❌ Failed to initialize AdaptiveThresholdService:', error);
-            } else {
-                console.error('❌ Failed to initialize AdaptiveThresholdService:', error);
             }
             throw error;
         }
@@ -94,12 +86,12 @@ class AdaptiveThresholdService {
         try {
             const SettingsService = (await import('./SettingsService.js')).default;
             const settings = await SettingsService.getAllSettings('adaptive_threshold');
-            
+
             if (settings && settings.length > 0) {
                 for (const setting of settings) {
                     const key = setting.key.replace('adaptive_threshold.', '');
                     const value = setting.value;
-                    
+
                     // Обновляем настройки рекурсивно
                     this._updateNestedSetting(this.settings, key, value);
                 }
@@ -147,12 +139,12 @@ class AdaptiveThresholdService {
                 LoggerService.error('Failed to get adaptive thresholds', {
                     service: 'AdaptiveThresholdService',
                     figi,
-                    error: { message: error.message }
+                    error: {message: error.message}
                 });
             }
-            
+
             // В случае ошибки возвращаем базовые пороги
-            return { ...this.settings.baseThresholds };
+            return {...this.settings.baseThresholds};
         }
     }
 
@@ -172,8 +164,8 @@ class AdaptiveThresholdService {
 
             // Получаем свечи
             const candles = await CacheService.getCandles(
-                figi, 
-                'DAY', 
+                figi,
+                'DAY',
                 Math.max(this.settings.trendDetectionPeriod, this.settings.volatilityPeriod) + 10
             );
 
@@ -183,13 +175,13 @@ class AdaptiveThresholdService {
 
             // Рассчитываем волатильность
             const volatility = this._calculateVolatility(candles);
-            
+
             // Рассчитываем силу тренда
             const trendStrength = this._calculateTrendStrength(candles);
 
             // Определяем режим
             let mode = 'normal';
-            
+
             if (volatility > this.settings.volatilityThreshold) {
                 mode = 'volatile';
             } else if (Math.abs(trendStrength) > this.settings.trendStrengthThreshold) {
@@ -212,7 +204,7 @@ class AdaptiveThresholdService {
                 LoggerService.warn('Failed to detect market mode, using normal', {
                     service: 'AdaptiveThresholdService',
                     figi,
-                    error: { message: error.message }
+                    error: {message: error.message}
                 });
             }
             return 'normal';
@@ -258,7 +250,7 @@ class AdaptiveThresholdService {
 
         const period = this.settings.trendDetectionPeriod;
         const recentCandles = candles.slice(-period);
-        
+
         const firstPrice = recentCandles[0].close;
         const lastPrice = recentCandles[recentCandles.length - 1].close;
 
@@ -268,7 +260,7 @@ class AdaptiveThresholdService {
 
         // Процентное изменение за период
         const trendStrength = (lastPrice - firstPrice) / firstPrice;
-        
+
         // Нормализуем на период (приводим к дневной)
         return trendStrength / period;
     }
@@ -316,14 +308,14 @@ class AdaptiveThresholdService {
     _updateNestedSetting(obj, key, value) {
         const keys = key.split('.');
         let current = obj;
-        
+
         for (let i = 0; i < keys.length - 1; i++) {
             if (!current[keys[i]]) {
                 current[keys[i]] = {};
             }
             current = current[keys[i]];
         }
-        
+
         const finalKey = keys[keys.length - 1];
         if (typeof current[finalKey] === 'number') {
             current[finalKey] = parseFloat(value) || current[finalKey];

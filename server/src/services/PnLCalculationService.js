@@ -409,13 +409,44 @@ class PnLCalculationService {
                 });
 
                 unrealizedPnL = this.calculateUnrealizedPnL(openPositions, currentPrices);
+                
+                // Если позиции не найдены через TradingRequest, но есть positionsValue в портфеле,
+                // используем упрощенный расчет unrealizedPnL на основе totalValue и initialCapital
+                if (unrealizedPnL.count === 0 && portfolio.positionsValue > 0 && portfolio.positions) {
+                    const positionsCount = Object.keys(portfolio.positions).length;
+                    if (positionsCount > 0) {
+                        const totalValue = portfolio.totalValue || 0;
+                        const initialCapital = portfolio.initialCapital || (tradingMode === 'paper' ? 1000000 : 0);
+                        
+                        // Если totalValue отличается от initialCapital, часть разницы - это unrealizedPnL
+                        // (остальное - realizedPnL, если он есть)
+                        if (totalValue !== initialCapital) {
+                            const totalPnLFromValue = totalValue - initialCapital;
+                            // Если есть realizedPnL, вычитаем его, иначе весь PnL - unrealized
+                            unrealizedPnL.total = totalPnLFromValue - realizedPnL.total;
+                            unrealizedPnL.count = positionsCount;
+                        }
+                    }
+                }
             }
 
             // Общий PnL
-            const totalPnL = realizedPnL.total + unrealizedPnL.total;
+            let totalPnL = realizedPnL.total + unrealizedPnL.total;
+
+            // Если нет сделок и позиций, но есть totalValue, рассчитываем PnL как разницу
+            // Это важно для бумажной торговли, где может не быть закрытых сделок
+            if (totalPnL === 0 && realizedPnL.count === 0 && unrealizedPnL.count === 0) {
+                const totalValue = portfolio.totalValue || 0;
+                const initialCapital = portfolio.initialCapital || (tradingMode === 'paper' ? 1000000 : 0);
+                if (totalValue > 0 && initialCapital > 0) {
+                    totalPnL = totalValue - initialCapital;
+                }
+            }
 
             // Получаем данные о вводах/выводах средств (если нужно)
-            let adjustedCapital = portfolio.initialCapital || 0;
+            // Для бумажной торговли используем 1 000 000 по умолчанию, если initialCapital не задан
+            const defaultInitialCapital = tradingMode === 'paper' ? 1000000 : 0;
+            let adjustedCapital = portfolio.initialCapital || defaultInitialCapital;
             let cashFlowData = null;
 
             if (includeCashFlow) {
@@ -471,8 +502,8 @@ class PnLCalculationService {
                     count: realizedPnL.count + unrealizedPnL.count
                 },
                 portfolio: {
-                    initialCapital: portfolio.initialCapital || 0,
-                    adjustedCapital: cashFlowData?.adjustedCapital || portfolio.initialCapital || 0,
+                    initialCapital: portfolio.initialCapital || defaultInitialCapital,
+                    adjustedCapital: cashFlowData?.adjustedCapital || (portfolio.initialCapital || defaultInitialCapital),
                     totalValue,
                     cash: portfolio.cash || 0,
                     positionsValue: portfolio.positionsValue || 0

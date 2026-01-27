@@ -4,7 +4,6 @@ import TradingEngine from './TradingEngine.js';
 import IntegratedAIService from './IntegratedAIService.js';
 import WebSocketService from './WebSocketService.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
-import TinkoffApiService from './TinkoffApiService.js';
 import CacheService from './CacheService.js';
 
 /**
@@ -74,9 +73,7 @@ class PreflightCheckService {
      */
     async initialize() {
         try {
-            console.log('🔍 Инициализация PreflightCheckService...');
             this.isInitialized = true;
-            console.log('✅ PreflightCheckService инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации PreflightCheckService:', error);
             throw error;
@@ -91,8 +88,6 @@ class PreflightCheckService {
             throw new Error('PreflightCheckService не инициализирован');
         }
 
-        console.log('🔍 Запуск предварительной проверки системы...');
-        
         this.checkResults = {
             timestamp: new Date(),
             overallStatus: 'checking',
@@ -104,27 +99,21 @@ class PreflightCheckService {
 
         try {
             // 1. Проверка API соединений
-            console.log('1. 🌐 Проверка API соединений...');
             this.checkResults.checks.apiConnections = await this.checkApiConnections();
             
             // 2. Проверка риск-лимитов
-            console.log('2. 🛡️ Проверка риск-лимитов...');
             this.checkResults.checks.riskLimits = await this.checkRiskLimits();
             
             // 3. Проверка систем мониторинга
-            console.log('3. 📊 Проверка систем мониторинга...');
             this.checkResults.checks.monitoring = await this.checkMonitoringSystems();
             
             // 4. Проверка резервных планов
-            console.log('4. 🔄 Проверка резервных планов...');
             this.checkResults.checks.backupPlans = await this.checkBackupPlans();
             
             // 5. Проверка AI систем
-            console.log('5. 🧠 Проверка AI систем...');
             this.checkResults.checks.aiSystems = await this.checkAISystems();
             
             // 6. Проверка готовности к торговле
-            console.log('6. 💼 Проверка готовности к торговле...');
             this.checkResults.checks.tradingReadiness = await this.checkTradingReadiness();
             
             // 7. Анализ результатов
@@ -132,9 +121,7 @@ class PreflightCheckService {
             
             // 8. Генерация рекомендаций
             this.generateRecommendations();
-            
-            console.log(`✅ Предварительная проверка завершена: ${this.checkResults.overallStatus.toUpperCase()}`);
-            
+
             return this.checkResults;
 
         } catch (error) {

@@ -1,6 +1,5 @@
 import TradingStrategy from '../models/TradingStrategy.js';
 import PortfolioAllocation from '../models/PortfolioAllocation.js';
-import PositionStrategy from '../models/PositionStrategy.js';
 import SettingsService from './SettingsService.js';
 import ProfitabilityTracker from './ProfitabilityTracker.js';
 import InstrumentStats from '../models/InstrumentStats.js';
@@ -32,7 +31,6 @@ class StrategyAllocationService {
             await this.initializeAllocations();
             
             this.isInitialized = true;
-            console.log('✅ StrategyAllocationService initialized');
         } catch (error) {
             console.error('❌ Failed to initialize StrategyAllocationService:', error);
             throw error;
@@ -65,7 +63,6 @@ class StrategyAllocationService {
                     const portfolio = await TradingEngine.getRealPortfolioValue();
                     if (portfolio && portfolio.totalValue > 0) {
                         totalBudget = portfolio.totalValue;
-                        console.log(`💰 Using real portfolio totalValue for allocations: ${totalBudget.toLocaleString('ru-RU')} RUB`);
                     }
                 } else {
                     // Для виртуального портфеля используем настройку из портфеля
@@ -85,7 +82,6 @@ class StrategyAllocationService {
                 if (parseFloat(allocation.allocatedAmount) === 0) {
                     const allocatedAmount = (totalBudget * strategy.budgetAllocation) / 100;
                     await PortfolioAllocation.updateAllocation(strategy.id, allocatedAmount);
-                    console.log(`💰 Initialized allocation for ${strategy.name}: ${allocatedAmount.toFixed(2)} RUB (${strategy.budgetAllocation}% of ${totalBudget.toLocaleString('ru-RU')} RUB)`);
                 }
             }
         } catch (error) {
@@ -430,7 +426,6 @@ class StrategyAllocationService {
     async allocateBudget(strategyId, amount) {
         try {
             await PortfolioAllocation.updateAllocation(strategyId, amount);
-            console.log(`💰 Allocated ${amount} RUB to strategy ${strategyId}`);
         } catch (error) {
             console.error(`❌ Error allocating budget to strategy ${strategyId}:`, error);
             throw error;
@@ -446,9 +441,7 @@ class StrategyAllocationService {
             const usePerformanceBased = options.usePerformanceBased !== false; // По умолчанию включено
             const days = options.days || 30;
             const minSharpeRatio = options.minSharpeRatio || 0;
-            
-            console.log('🔄 Starting strategy rebalancing...');
-            
+
             let performanceBasedSucceeded = false;
             
             // Если включена перебалансировка на основе производительности (2.5.1)
@@ -456,14 +449,12 @@ class StrategyAllocationService {
                 try {
                     const performanceResult = await this.rebalanceBudgetByPerformance(days, minSharpeRatio);
                     if (performanceResult.success && performanceResult.changes.length > 0) {
-                        console.log('✅ Performance-based rebalancing completed');
                         performanceBasedSucceeded = true;
                         return {
                             ...performanceResult,
                             method: 'performance-based'
                         };
                     } else if (performanceResult.success) {
-                        console.log('✅ No significant changes needed for performance-based rebalancing');
                         // Продолжаем с обычной перебалансировкой
                     }
                 } catch (perfError) {
@@ -507,11 +498,8 @@ class StrategyAllocationService {
                 const difference = Math.abs(newAllocatedAmount - currentAllocated);
                 if (difference > totalBudget * 0.05) {
                     await PortfolioAllocation.updateAllocation(strategy.id, newAllocatedAmount);
-                    console.log(`🔄 Rebalanced ${strategy.name}: ${currentAllocated.toFixed(2)} → ${newAllocatedAmount.toFixed(2)} RUB (used: ${usedAmount.toFixed(2)}, available: ${(newAllocatedAmount - usedAmount).toFixed(2)})`);
                 }
             }
-
-            console.log('✅ Strategy rebalancing completed');
             return {
                 success: true,
                 method: performanceBasedSucceeded ? 'performance-based' : 'standard',
@@ -533,8 +521,6 @@ class StrategyAllocationService {
                 return;
             }
 
-            console.log(`💰 Updating strategy allocations based on portfolio totalValue: ${totalValue.toLocaleString('ru-RU')} RUB`);
-            
             // Получаем все активные стратегии
             const strategies = await TradingStrategy.findAll({
                 where: { isActive: true },
@@ -568,11 +554,8 @@ class StrategyAllocationService {
                 
                 if (difference > threshold) {
                     await PortfolioAllocation.updateAllocation(strategy.id, newAllocatedAmount);
-                    console.log(`💰 Updated ${strategy.name}: ${currentAllocated.toFixed(2)} → ${newAllocatedAmount.toFixed(2)} RUB (${strategy.budgetAllocation}% of ${totalValue.toLocaleString('ru-RU')} RUB)`);
                 }
             }
-
-            console.log('✅ Strategy allocations updated based on portfolio totalValue');
         } catch (error) {
             console.error('❌ Error updating allocations from portfolio value:', error);
             throw error;
@@ -802,8 +785,6 @@ class StrategyAllocationService {
      */
     async rebalanceBudgetByPerformance(days = 30, minSharpeRatio = 0) {
         try {
-            console.log(`🔄 Starting dynamic budget rebalancing based on performance (last ${days} days)...`);
-
             // Получаем все активные стратегии
             const strategies = await TradingStrategy.findAll({
                 where: { isActive: true },
@@ -847,7 +828,6 @@ class StrategyAllocationService {
                     
                     // Проверяем минимальное количество сделок
                     if (m.totalTrades < minTrades) {
-                        console.log(`⚠️ Strategy ${m.strategy?.name || 'Unknown'} has only ${m.totalTrades} trades (minimum ${minTrades} required)`);
                         return false;
                     }
                     
@@ -1011,7 +991,6 @@ class StrategyAllocationService {
             }
 
             if (changes.length === 0) {
-                console.log('✅ No significant changes needed for budget rebalancing');
                 return {
                     success: true,
                     reason: 'No significant changes',
@@ -1026,11 +1005,6 @@ class StrategyAllocationService {
                     }))
                 };
             }
-
-            console.log(`✅ Budget rebalancing completed: ${changes.length} strategies updated`);
-            changes.forEach(change => {
-                console.log(`   📊 ${change.strategyName}: ${change.oldAllocation} → ${change.newAllocation} (Sharpe: ${change.sharpeRatio}, Win Rate: ${change.winRate})`);
-            });
 
             return {
                 success: true,

@@ -10,7 +10,6 @@ import { Op } from 'sequelize';
 class QuickTrainingService {
     constructor() {
         this.isTraining = false;
-        this.currentBatch = [];
         this.batchSize = 10; // Количество инструментов за один запуск
         this.minHoursSinceLastTraining = 2; // Минимальное время между обучениями одного инструмента
     }
@@ -57,9 +56,7 @@ class QuickTrainingService {
                     selectedInstruments.push(instrument);
                 }
             }
-            
-            console.log(`📊 Selected ${selectedInstruments.length} instruments for quick training (from index ${startIndex})`);
-            
+
             return selectedInstruments;
         } catch (error) {
             console.error('❌ Error getting next instruments for quick training:', error);
@@ -97,7 +94,6 @@ class QuickTrainingService {
      */
     async trainQuickBatch(instruments) {
         if (!instruments || instruments.length === 0) {
-            console.log('⏭️ No instruments to train in quick batch');
             return {
                 success: true,
                 processed: 0,
@@ -120,12 +116,10 @@ class QuickTrainingService {
         let errorCount = 0;
 
         try {
-            console.log(`🚀 Starting quick training batch: ${instruments.length} instruments`);
-            
+
             // Проверяем, не идет ли полное обучение
             const isFullTrainingActive = await this.isFullTrainingActive();
             if (isFullTrainingActive) {
-                console.log('⏭️ Full training is active, skipping quick training');
                 return {
                     success: false,
                     message: 'Full training is active'
@@ -134,8 +128,7 @@ class QuickTrainingService {
 
             for (const instrument of instruments) {
                 try {
-                    console.log(`🔧 Quick training: ${instrument.ticker} (${instrument.figi})`);
-                    
+
                     // Быстрое обучение только базовой нейросети
                     // Используем оптимизированные параметры: меньше эпох, меньше данных
                     await NeuralNetworkService.trainQuick(instrument.figi, {
@@ -145,7 +138,6 @@ class QuickTrainingService {
                     });
                     
                     successCount++;
-                    console.log(`✅ Quick training completed for ${instrument.ticker}`);
                 } catch (error) {
                     errorCount++;
                     console.error(`❌ Quick training failed for ${instrument.ticker}:`, error.message);
@@ -163,7 +155,6 @@ class QuickTrainingService {
                 executionTimeSeconds
             });
 
-            console.log(`✅ Quick training batch completed: ${successCount} successful, ${errorCount} errors (${executionTimeSeconds.toFixed(1)}s)`);
 
             return {
                 success: true,
@@ -201,24 +192,16 @@ class QuickTrainingService {
      */
     async performQuickTraining() {
         try {
-            console.log('⚡ Starting scheduled quick training...');
-            
+
             // Получаем следующие инструменты для обучения
             const instruments = await this.getNextInstruments();
             
             if (instruments.length === 0) {
-                console.log('⏭️ No instruments available for quick training');
                 return;
             }
 
             // Обучаем батч
             const result = await this.trainQuickBatch(instruments);
-            
-            if (result.success) {
-                console.log(`✅ Quick training completed: ${result.successful}/${result.processed} successful`);
-            } else {
-                console.log(`⚠️ Quick training skipped: ${result.message || result.error}`);
-            }
         } catch (error) {
             console.error('❌ Error performing quick training:', error);
         }

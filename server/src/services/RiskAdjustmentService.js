@@ -135,7 +135,6 @@ class RiskAdjustmentService {
         try {
             const currentLevel = await Settings.getSetting('current_risk_level', 'medium');
             this.currentRiskLevel = currentLevel;
-            console.log(`📊 Текущий уровень риска: ${this.riskLevels[currentLevel]?.name || currentLevel}`);
         } catch (error) {
             console.error('❌ Ошибка определения уровня риска:', error);
             this.currentRiskLevel = 'medium';
@@ -551,7 +550,6 @@ class RiskAdjustmentService {
             });
 
             this.currentRiskLevel = newLevel;
-            console.log(`🔄 Уровень риска изменен на: ${this.riskLevels[newLevel]?.name || newLevel}`);
 
         } catch (error) {
             console.error('❌ Ошибка обновления уровня риска:', error);

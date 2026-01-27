@@ -1,4 +1,4 @@
-import { Op } from 'sequelize';
+import {Op} from 'sequelize';
 import FundamentalData from '../models/FundamentalData.js';
 import Asset from '../models/Asset.js';
 import AssetSyncService from './AssetSyncService.js';
@@ -8,7 +8,7 @@ import TinkoffApiService from './TinkoffApiService.js';
 
 /**
  * Сервис для работы с фундаментальными данными компаний
- * 
+ *
  * Основные функции:
  * - Получение и сохранение фундаментальных показателей (P/E, P/B, EV/EBITDA, ROE и т.д.)
  * - Предоставление нормализованных фичей для нейросетей
@@ -32,20 +32,13 @@ class FundamentalDataService {
         }
 
         try {
-            if (LoggerService.isInitialized) {
-                LoggerService.info('Initializing FundamentalDataService', { service: 'FundamentalDataService' });
-            }
-            
+
             this.isInitialized = true;
-            
-            if (LoggerService.isInitialized) {
-                LoggerService.info('FundamentalDataService initialized', { service: 'FundamentalDataService' });
-            }
         } catch (error) {
             if (LoggerService.isInitialized) {
                 LoggerService.error('Failed to initialize FundamentalDataService', {
                     service: 'FundamentalDataService',
-                    error: { message: error.message, stack: error.stack }
+                    error: {message: error.message, stack: error.stack}
                 });
             }
             throw error;
@@ -69,11 +62,11 @@ class FundamentalDataService {
             const cacheKey = `${figi}_${date.toISOString().split('T')[0]}`;
             const cached = this.dataCache.get(cacheKey);
             const cacheTimestamp = this.cacheTimestamps.get(cacheKey);
-            
+
             if (cached && cacheTimestamp) {
                 const cacheAge = Date.now() - cacheTimestamp;
                 const cacheTtlMs = this.cacheTtlHours * 60 * 60 * 1000;
-                
+
                 if (cacheAge < cacheTtlMs) {
                     return cached;
                 } else {
@@ -112,7 +105,7 @@ class FundamentalDataService {
                     service: 'FundamentalDataService',
                     figi,
                     date,
-                    error: { message: error.message }
+                    error: {message: error.message}
                 });
             }
             return null;
@@ -129,7 +122,7 @@ class FundamentalDataService {
         try {
             // 1. Ищем актив, в котором в массиве apiData.instruments есть инструмент с нужным FIGI
             const assetUid = await AssetSyncService.getAssetUidByFigi(figi);
-            
+
             if (!assetUid) {
                 if (LoggerService.isInitialized) {
                     LoggerService.warn('Cannot fetch from Tinkoff: asset not found in database', {
@@ -139,12 +132,12 @@ class FundamentalDataService {
                 }
                 return null;
             }
-            
+
             // Получаем полные данные актива для извлечения ticker
             const asset = await Asset.findOne({
-                where: { uid: assetUid }
+                where: {uid: assetUid}
             });
-            
+
             if (!asset) {
                 if (LoggerService.isInitialized) {
                     LoggerService.warn('Cannot fetch from Tinkoff: asset not found after UID lookup', {
@@ -158,7 +151,7 @@ class FundamentalDataService {
 
             // 2. Запрашиваем фундаментальные данные по UID актива
             const fundamentals = await TinkoffApiService.getAssetFundamentals([assetUid]);
-            
+
             // Обрабатываем случай, когда fundamentals может быть пустым массивом
             if (!fundamentals || fundamentals.length === 0) {
                 if (LoggerService.isInitialized) {
@@ -183,15 +176,15 @@ class FundamentalDataService {
             }
 
             // 4. Определить период (используем дату из API или текущую дату)
-            const period = data.fiscalPeriodEndDate 
-                ? new Date(data.fiscalPeriodEndDate) 
+            const period = data.fiscalPeriodEndDate
+                ? new Date(data.fiscalPeriodEndDate)
                 : new Date(date.getFullYear(), date.getMonth() - (date.getMonth() % 3), 1);
             const periodType = 'quarterly'; // Tinkoff API возвращает квартальные данные
 
             // 5. Получить тикер из кеша или из apiData.instruments
             const cachedInstrument = await CacheService.getInstrument(figi, true);
             let ticker = cachedInstrument?.ticker || null;
-            
+
             // Если не нашли в кеше, ищем в apiData.instruments
             if (!ticker && asset?.apiData) {
                 const instruments = asset.apiData.instruments || asset.apiData.instrument || [];
@@ -255,7 +248,7 @@ class FundamentalDataService {
                 LoggerService.error('Error fetching from Tinkoff API', {
                     service: 'FundamentalDataService',
                     figi,
-                    error: { message: error.message, stack: error.stack }
+                    error: {message: error.message, stack: error.stack}
                 });
             }
             return null;
@@ -327,7 +320,7 @@ class FundamentalDataService {
             if (LoggerService.isInitialized) {
                 LoggerService.error('Error saving fundamental data', {
                     service: 'FundamentalDataService',
-                    error: { message: error.message, stack: error.stack }
+                    error: {message: error.message, stack: error.stack}
                 });
             }
             throw error;
@@ -348,11 +341,11 @@ class FundamentalDataService {
             }
 
             const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
-            
+
             // Получаем данные только из БД (не делаем запросы к API)
             // Это важно для режима обучения, чтобы не делать запросы к API
             let fundamentalData = await this.getFundamentalData(figi, date, false);
-            
+
             // НЕ делаем fallback к API - используем только данные из БД
             // Если данных нет в БД, возвращаем нули
             if (!fundamentalData) {
@@ -392,7 +385,7 @@ class FundamentalDataService {
                     service: 'FundamentalDataService',
                     figi,
                     timestamp,
-                    error: { message: error.message }
+                    error: {message: error.message}
                 });
             }
             // Возвращаем нулевые значения при ошибке
@@ -452,7 +445,7 @@ class FundamentalDataService {
             // Собираем все FIGI и asset_uid из активов
             const assetUidToFigis = new Map(); // asset_uid -> [figi1, figi2, ...]
             const figiToInfo = new Map(); // figi -> {assetUid, ticker}
-            
+
             for (const asset of assets) {
                 if (!asset.apiData || !asset.uid) continue;
 
@@ -499,11 +492,11 @@ class FundamentalDataService {
             for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
                 const assetUidBatch = batches[batchIndex];
                 const batchNumber = batchIndex + 1;
-                
+
                 try {
                     // Запрашиваем фундаментальные данные для батча asset_uid
                     const fundamentals = await TinkoffApiService.getAssetFundamentals(assetUidBatch);
-                    
+
                     if (!fundamentals || fundamentals.length === 0) {
                         // Нет данных для всех asset_uid в этом батче
                         for (const assetUid of assetUidBatch) {
@@ -513,11 +506,11 @@ class FundamentalDataService {
                         }
                         continue;
                     }
-                    
+
                     // Создаем мапу asset_uid -> fundamental data
                     // Используем порядок запроса для сопоставления
                     const fundamentalsMap = new Map();
-                    
+
                     for (let idx = 0; idx < fundamentals.length && idx < assetUidBatch.length; idx++) {
                         const fund = fundamentals[idx];
                         const assetUid = assetUidBatch[idx];
@@ -525,31 +518,31 @@ class FundamentalDataService {
                         const uid = fund.assetUid || fund.asset_uid || assetUid;
                         fundamentalsMap.set(uid, fund);
                     }
-                    
+
                     // Обрабатываем каждый asset_uid из батча
                     for (const assetUid of assetUidBatch) {
                         const fundData = fundamentalsMap.get(assetUid);
                         const figis = assetUidToFigis.get(assetUid) || [];
-                        
+
                         if (!fundData) {
                             // Нет данных для этого asset_uid
                             stats.processed += figis.length;
                             stats.noData += figis.length;
                             continue;
                         }
-                        
+
                         // Обрабатываем каждый FIGI для этого asset_uid
                         for (const figi of figis) {
                             try {
                                 stats.processed++;
-                                
+
                                 const info = figiToInfo.get(figi);
                                 if (!info) continue;
-                                
+
                                 // Проверяем, есть ли уже данные (если не forceUpdate)
                                 if (!forceUpdate) {
                                     const existing = await FundamentalData.findOne({
-                                        where: { figi },
+                                        where: {figi},
                                         order: [['period', 'DESC']]
                                     });
                                     if (existing) {
@@ -557,7 +550,7 @@ class FundamentalDataService {
                                         continue;
                                     }
                                 }
-                                
+
                                 const date = new Date();
 
                                 // Вычисляем Operating Margin
@@ -569,8 +562,8 @@ class FundamentalDataService {
                                 }
 
                                 // Определяем период
-                                const period = fundData.fiscalPeriodEndDate 
-                                    ? new Date(fundData.fiscalPeriodEndDate) 
+                                const period = fundData.fiscalPeriodEndDate
+                                    ? new Date(fundData.fiscalPeriodEndDate)
                                     : new Date(date.getFullYear(), date.getMonth() - (date.getMonth() % 3), 1);
                                 const periodType = 'quarterly';
 
@@ -601,7 +594,7 @@ class FundamentalDataService {
                                         fetchedAt: new Date().toISOString()
                                     }
                                 };
-                                
+
                                 await this.saveFundamentalData(dataToSave);
                                 stats.saved++;
 
@@ -612,13 +605,13 @@ class FundamentalDataService {
                                         service: 'FundamentalDataService',
                                         figi,
                                         assetUid,
-                                        error: { message: error.message, stack: error.stack }
+                                        error: {message: error.message, stack: error.stack}
                                     });
                                 }
                             }
                         }
                     }
-                    
+
                     // Задержка между батчами запросов к API
                     if (batchIndex < batches.length - 1 && delayMs > 0) {
                         await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -631,7 +624,7 @@ class FundamentalDataService {
                         LoggerService.error('Error processing asset UID batch', {
                             service: 'FundamentalDataService',
                             batchSize: assetUidBatch.length,
-                            error: { message: error.message }
+                            error: {message: error.message}
                         });
                     }
                 }
@@ -650,7 +643,7 @@ class FundamentalDataService {
             if (LoggerService.isInitialized) {
                 LoggerService.error('Error in mass fill of fundamental data', {
                     service: 'FundamentalDataService',
-                    error: { message: error.message, stack: error.stack }
+                    error: {message: error.message, stack: error.stack}
                 });
             }
             throw error;
@@ -698,9 +691,9 @@ class FundamentalDataService {
                 if (!AssetSyncService.isInitialized) {
                     await AssetSyncService.initialize();
                 }
-                
+
                 result.assetsSync = await AssetSyncService.syncRussianShares(forceUpdateAssets);
-                
+
                 if (LoggerService.isInitialized) {
                     LoggerService.info('Assets sync completed', {
                         service: 'FundamentalDataService',
@@ -729,7 +722,7 @@ class FundamentalDataService {
             if (LoggerService.isInitialized) {
                 LoggerService.error('Error in sync and fill of fundamental data', {
                     service: 'FundamentalDataService',
-                    error: { message: error.message, stack: error.stack }
+                    error: {message: error.message, stack: error.stack}
                 });
             }
             throw error;

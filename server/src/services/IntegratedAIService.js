@@ -2,7 +2,6 @@ import EnsembleService from './EnsembleService.js';
 import MetaLearningService from './MetaLearningService.js';
 import ReinforcementLearningService from './ReinforcementLearningService.js';
 import NeuralNetworkService from './NeuralNetworkService.js';
-import WebSocketService from './WebSocketService.js';
 import CacheService from './CacheService.js';
 import OptimizedTelegramService from './OptimizedTelegramService.js';
 import SignalCacheService from './SignalCacheService.js';

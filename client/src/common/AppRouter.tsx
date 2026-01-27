@@ -3,15 +3,15 @@ import {Route, Routes} from "react-router-dom";
 import Dashboard from '../pages/Dashboard/Dashboard.tsx'
 // import EnhancedDashboardPage from '../pages/EnhancedDashboardPage' // File not found
 // import NewDashboard from '../pages/NewDashboard' // File not found
-import Portfolio from '../pages/Portfolio'
+import Portfolio from '../pages/Portfolio/Portfolio.tsx'
 // import Market from '../pages/Market' // File not found
 // import NeuralNetwork from '../pages/NeuralNetwork' // File not found
 import Settings from '../pages/Settings'
 // import Strategies from '../pages/Strategies' // File not found
 // import ServerMonitoring from '../pages/ServerMonitoring' // File not found
 // import TradingHours from '../pages/TradingHours' // File not found
-import MetricsMonitoring from '../pages/MetricsMonitoring'
-import Performance from '../pages/Performance'
+import MetricsMonitoring from '../pages/MetricsMonitoring/MetricsMonitoring.tsx'
+import Performance from '../pages/Performance/Performance.tsx'
 
 const AppRouter: FC = () => {
 

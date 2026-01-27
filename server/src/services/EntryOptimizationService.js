@@ -1,9 +1,7 @@
 import * as tf from '@tensorflow/tfjs';
 import OptimizedAnalysisService from './OptimizedAnalysisService.js';
 import CacheService from './CacheService.js';
-import TinkoffApiService from './TinkoffApiService.js';
 import LoggerService from './LoggerService.js';
-import EntryOptimizationModel from '../models/EntryOptimizationModel.js';
 
 /**
  * Фаза 4, задача 4.2: ML для Entry Optimization
