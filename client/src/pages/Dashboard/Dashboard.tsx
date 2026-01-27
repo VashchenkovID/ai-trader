@@ -162,7 +162,7 @@ const Dashboard: React.FC<DashboardProps> = ({className = ''}) => {
     // Локальное состояние
     const [sharpeRatio, setSharpeRatio] = useState<number | null>(null);
 
-    const toast = useRef<Toast>();
+    const toast = useRef<Toast | null>(null);
 
     // Загрузка Sharpe Ratio
     const loadSharpeRatio = async () => {

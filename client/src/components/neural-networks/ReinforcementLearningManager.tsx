@@ -15,6 +15,7 @@ interface ReinforcementLearningManagerProps {
 }
 
 interface RLStatus {
+  isInitialized?: boolean; // Опциональное поле
   isActive: boolean;
   episodes: number;
   averageReward: number;

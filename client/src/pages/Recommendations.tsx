@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Toast } from 'primereact/toast';
 import { useNavigate } from 'react-router-dom';
-import { apiService } from '../services/apiService';
+import { apiService } from '../services';
 import { Card } from '../components/ui';
 import { Skeleton } from '../components/ui';
-import BuyButton from '../components/recommendations/BuyButton';
 import { useWebSocketData } from '../components/WebSocketDataProvider';
 import RecommendationsLayout from '../components/recommendations/RecommendationsLayout';
 import RecommendationsSummary from '../components/recommendations/RecommendationsSummary';
@@ -30,6 +29,12 @@ interface Recommendation {
   isActive: boolean;
   explanation?: any;
   analysis?: any;
+  // Дополнительные поля для совместимости с API
+  id?: string;
+  price?: number;
+  action?: 'BUY' | 'SELL' | 'HOLD';
+  createdAt?: string;
+  strategyId?: number;
   horizons?: {
     shortTerm?: {
       recommendation: 'BUY' | 'SELL' | 'HOLD';
@@ -107,7 +112,6 @@ const Recommendations: React.FC = () => {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [portfolioPositions, setPortfolioPositions] = useState<PortfolioPosition[]>([]);
   const [loading, setLoading] = useState(true);
-  const [portfolioLoading, setPortfolioLoading] = useState(false);
   
   // Фильтры
   const [filterType, setFilterType] = useState<string>('all');
@@ -119,7 +123,7 @@ const Recommendations: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('confidence');
   
-  const [strategies, setStrategies] = useState<any[]>([]);
+  const [strategies, setStrategies] = useState<Array<{ id: number; name: string; type: string }>>([]);
   const [sectors, setSectors] = useState<string[]>([]);
   const [buyingFigi, setBuyingFigi] = useState<string | null>(null);
   const [newRecommendations, setNewRecommendations] = useState<Set<string>>(new Set());
@@ -158,7 +162,7 @@ const Recommendations: React.FC = () => {
     if (tradingStats?.recommendations && Array.isArray(tradingStats.recommendations)) {
       const wsRecommendations = tradingStats.recommendations;
       
-      wsRecommendations.forEach((wsRec: any) => {
+      wsRecommendations.forEach((wsRec: Partial<Recommendation> & { figi?: string; price?: number }) => {
         const existingIndex = recommendations.findIndex((r) => r.figi === wsRec.figi);
         
         if (existingIndex === -1) {
@@ -184,24 +188,28 @@ const Recommendations: React.FC = () => {
           };
           
           setRecommendations((prev) => [newRec, ...prev]);
-          setNewRecommendations((prev) => new Set([...prev, wsRec.figi]));
+          if (wsRec.figi) {
+            setNewRecommendations((prev) => new Set([...prev, wsRec.figi!]));
+          }
           
-          if (wsRec.confidence > 0.7) {
+          if (wsRec.confidence && wsRec.confidence > 0.7) {
             toast.current?.show({
               severity: 'info',
               summary: 'Новая рекомендация',
-              detail: `${wsRec.recommendation === 'BUY' ? 'Покупка' : wsRec.recommendation === 'SELL' ? 'Продажа' : 'Удержание'} ${wsRec.ticker} (уверенность: ${Math.round(wsRec.confidence * 100)}%)`,
+              detail: `${wsRec.recommendation === 'BUY' ? 'Покупка' : wsRec.recommendation === 'SELL' ? 'Продажа' : 'Удержание'} ${wsRec.ticker} (уверенность: ${Math.round((wsRec.confidence || 0) * 100)}%)`,
               life: 5000,
             });
           }
           
-          setTimeout(() => {
-            setNewRecommendations((prev) => {
-              const newSet = new Set(prev);
-              newSet.delete(wsRec.figi);
-              return newSet;
-            });
-          }, 30000);
+          if (wsRec.figi) {
+            setTimeout(() => {
+              setNewRecommendations((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(wsRec.figi!);
+                return newSet;
+              });
+            }, 30000);
+          }
         } else {
           setRecommendations((prev) => {
             const updated = [...prev];
@@ -220,7 +228,11 @@ const Recommendations: React.FC = () => {
   const loadStrategies = async () => {
     try {
       const data = await apiService.getAllStrategies();
-      setStrategies(data || []);
+      setStrategies((data || []).map((s: { id: number; name?: string; type?: string }) => ({
+        id: s.id,
+        name: s.name || '',
+        type: s.type || 'moderate'
+      })));
     } catch (error) {
       console.error('Error loading strategies:', error);
     }
@@ -244,9 +256,9 @@ const Recommendations: React.FC = () => {
         recommendationsData = data.data;
       }
       
-      const filteredData = recommendationsData.filter((rec: any) => rec.isActive !== false);
+      const filteredData = recommendationsData.filter((rec: Recommendation) => rec.isActive !== false);
       
-      const recommendationsWithStrategies = filteredData.map((rec: any) => {
+      const recommendationsWithStrategies = filteredData.map((rec: Recommendation) => {
         let strategy = null;
         
         if (rec.strategy && typeof rec.strategy === 'object' && rec.strategy !== null) {
@@ -256,7 +268,7 @@ const Recommendations: React.FC = () => {
         }
         
         if (!strategy && rec.strategyId) {
-          strategy = strategies.find((s: any) => s.id === rec.strategyId);
+          strategy = strategies.find((s: { id: number; type?: string }) => s.id === rec.strategyId);
         }
         
         let suggestedStrategy = strategy;
@@ -266,11 +278,11 @@ const Recommendations: React.FC = () => {
             const score = rec.score || 0;
             
             if (confidence > 0.8 && score > 0.75) {
-              suggestedStrategy = strategies.find((s: any) => s.type === 'aggressive');
+              suggestedStrategy = strategies.find((s: { type?: string }) => s.type === 'aggressive');
             } else if (confidence >= 0.6 && score >= 0.6) {
-              suggestedStrategy = strategies.find((s: any) => s.type === 'moderate');
+              suggestedStrategy = strategies.find((s: { type?: string }) => s.type === 'moderate');
             } else if (confidence >= 0.5 && score >= 0.5) {
-              suggestedStrategy = strategies.find((s: any) => s.type === 'conservative');
+              suggestedStrategy = strategies.find((s: { type?: string }) => s.type === 'conservative');
             }
           } catch (error) {
             // Игнорируем ошибки
@@ -377,10 +389,10 @@ const Recommendations: React.FC = () => {
       
       // Извлекаем уникальные секторы
       const uniqueSectors = Array.from(
-        new Set(filteredRecommendations.map((r) => r.sector).filter(Boolean))
+        new Set(filteredRecommendations.map((r: Recommendation) => r.sector).filter(Boolean))
       ) as string[];
       setSectors(uniqueSectors);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading recommendations:', error);
       toast.current?.show({
         severity: 'error',
@@ -396,7 +408,6 @@ const Recommendations: React.FC = () => {
 
   const loadPortfolioPositions = async () => {
     try {
-      setPortfolioLoading(true);
       const data = await apiService.getPortfolioPositions();
       
       let positionsData = [];
@@ -406,7 +417,20 @@ const Recommendations: React.FC = () => {
         positionsData = data;
       }
       
-      const positions: PortfolioPosition[] = positionsData.map((pos: any) => {
+      const positions: PortfolioPosition[] = positionsData.map((pos: {
+        figi?: string;
+        instrumentId?: string;
+        ticker?: string;
+        name?: string;
+        size?: number;
+        quantity?: number;
+        currentPrice?: number;
+        price?: number;
+        entryPrice?: number;
+        averagePrice?: number;
+        stopLoss?: number;
+        takeProfit?: number;
+      }) => {
         const currentPrice = pos.currentPrice || pos.price || 0;
         const entryPrice = pos.entryPrice || pos.averagePrice || 0;
         const pnl = entryPrice > 0 ? ((currentPrice - entryPrice) / entryPrice) * 100 : 0;
@@ -443,8 +467,6 @@ const Recommendations: React.FC = () => {
       console.error('Error loading portfolio positions:', error);
       // Не показываем ошибку пользователю, просто оставляем пустой массив
       setPortfolioPositions([]);
-    } finally {
-      setPortfolioLoading(false);
     }
   };
 
@@ -682,12 +704,6 @@ const Recommendations: React.FC = () => {
     }, 100);
   };
 
-  const handleBuyComplete = () => {
-    setBuyingFigi(null);
-    loadRecommendations();
-    loadPortfolioPositions();
-  };
-
   const handleDetails = (figi: string) => {
     navigate(`/stock/${figi}`);
   };
@@ -771,7 +787,7 @@ const Recommendations: React.FC = () => {
           loading ? (
             <div className="recommendations-grid">
               {[...Array(6)].map((_, i) => (
-                <Skeleton key={i} variant="card" height="400px" />
+                <Skeleton key={i} variant="rectangular" height="400px" />
               ))}
             </div>
           ) : filteredAndSortedRecommendations.length === 0 ? (

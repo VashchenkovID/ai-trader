@@ -1,6 +1,6 @@
 import React, { SelectHTMLAttributes, forwardRef, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useTheme } from '../../../contexts/ThemeContext';
+// import { useTheme } from '../../../contexts/ThemeContext'; // Reserved for future use
 import './Select.css';
 
 export type SelectSize = 'sm' | 'md' | 'lg';
@@ -44,7 +44,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     },
     ref
   ) => {
-    const { theme } = useTheme();
+    // const { theme } = useTheme(); // Reserved for future use
     const [isOpen, setIsOpen] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');

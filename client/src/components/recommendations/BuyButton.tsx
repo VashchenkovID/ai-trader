@@ -33,6 +33,7 @@ interface Recommendation {
   confidence: number;
   score: number;
   priceAtAnalysis: number;
+  currentPrice?: number; // Опциональное поле для текущей цены
   targetPrice?: number;
   stopLoss?: number;
   takeProfit?: number;

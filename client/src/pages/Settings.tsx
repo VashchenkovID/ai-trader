@@ -72,18 +72,18 @@ interface PerformanceMetrics {
 
 const Settings: React.FC<SettingsProps> = ({ className = '' }) => {
   const { isConnected, systemStatus } = useWebSocketData();
-  const toast = useRef<Toast>(null);
+  const toast = useRef<Toast | null>(null);
 
   // Настройки
   const [settings, setSettings] = useState<Setting[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
 
   // Кеш
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [cacheUpdating, setCacheUpdating] = useState(false);
-  
+
   // Новости
   const [newsUpdating, setNewsUpdating] = useState(false);
 
@@ -135,7 +135,7 @@ const Settings: React.FC<SettingsProps> = ({ className = '' }) => {
     try {
       const result = await apiService.getSettings();
       // Преобразуем результат в формат Setting[]
-      const formattedSettings: Setting[] = Array.isArray(result) 
+      const formattedSettings: Setting[] = Array.isArray(result)
         ? result.map((s: any) => ({
             key: s.key || '',
             value: s.value !== undefined ? s.value : '',
@@ -404,7 +404,7 @@ const Settings: React.FC<SettingsProps> = ({ className = '' }) => {
   const filteredSettings = useMemo(() => {
     if (!searchQuery) return settings;
     const query = searchQuery.toLowerCase();
-    return settings.filter(s => 
+    return settings.filter(s =>
       s.key.toLowerCase().includes(query) ||
       (s.description || '').toLowerCase().includes(query)
     );
@@ -412,7 +412,7 @@ const Settings: React.FC<SettingsProps> = ({ className = '' }) => {
 
   return (
     <div className={`settings ${className}`}>
-      <SettingsHeader 
+      <SettingsHeader
         isConnected={isConnected}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}

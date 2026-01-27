@@ -11,7 +11,7 @@ import { InputNumber } from '../ui/InputNumber/InputNumber';
 import { Skeleton } from '../ui/Skeleton/Skeleton';
 import { apiService } from '../../services/apiService';
 import { Toast } from 'primereact/toast';
-import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
+import { ConfirmDialog } from 'primereact/confirmdialog';
 import './StrategiesSection.css';
 
 interface Strategy {
@@ -180,7 +180,7 @@ const StrategiesSection: React.FC<StrategiesSectionProps> = ({ className = '' })
       key: 'type',
       header: 'Тип',
       sortable: true,
-      render: (value, row) => {
+      render: (_value, row) => {
         const typeMap: Record<string, { label: string; variant: 'info' | 'warning' | 'error' }> = {
           conservative: { label: 'Консервативная', variant: 'info' },
           moderate: { label: 'Умеренная', variant: 'warning' },
@@ -194,7 +194,7 @@ const StrategiesSection: React.FC<StrategiesSectionProps> = ({ className = '' })
       key: 'timeframe',
       header: 'Горизонт',
       sortable: true,
-      render: (value, row) => {
+      render: (_value, row) => {
         const timeframeMap: Record<string, string> = {
           long: 'Долгосрочная',
           medium: 'Среднесрочная',
@@ -214,7 +214,7 @@ const StrategiesSection: React.FC<StrategiesSectionProps> = ({ className = '' })
       key: 'allocation',
       header: 'Распределение',
       sortable: false,
-      render: (value, row) => {
+      render: (_value, row) => {
         const allocation = row.allocation;
         if (!allocation) return <span>—</span>;
         
@@ -227,7 +227,7 @@ const StrategiesSection: React.FC<StrategiesSectionProps> = ({ className = '' })
 
         return (
           <div className="strategies-allocation-cell">
-            <ProgressBar value={usedPercent} showValue={false} size="sm" className="strategies-allocation-progress" />
+            <ProgressBar value={usedPercent} showLabel={false} size="sm" className="strategies-allocation-progress" />
             <div className="strategies-allocation-details">
               <div>Выделено: {formatCurrency(allocation.allocatedAmount)}</div>
               <div>
@@ -281,7 +281,7 @@ const StrategiesSection: React.FC<StrategiesSectionProps> = ({ className = '' })
       key: 'stats',
       header: 'Статистика',
       sortable: false,
-      render: (value, row) => {
+      render: (_value, row) => {
         const stats = row.stats;
         if (!stats || stats.closedPositions === 0) {
           return <span className="strategies-stats-empty">Нет данных</span>;
@@ -308,7 +308,7 @@ const StrategiesSection: React.FC<StrategiesSectionProps> = ({ className = '' })
       key: 'isActive',
       header: 'Активна',
       sortable: true,
-      render: (value, row) => (
+      render: (_value, row) => (
         <Badge variant={row.isActive ? 'success' : 'error'} size="sm">
           {row.isActive ? 'Да' : 'Нет'}
         </Badge>
@@ -359,9 +359,10 @@ const StrategiesSection: React.FC<StrategiesSectionProps> = ({ className = '' })
           <Alert 
             variant="info" 
             title="Информация"
-            message="Стратегии не найдены. Стратегии будут созданы автоматически при первом запуске сервера."
             className="strategies-empty-alert"
-          />
+          >
+            Стратегии не найдены. Стратегии будут созданы автоматически при первом запуске сервера.
+          </Alert>
         )}
 
         <Toolbar
@@ -372,7 +373,7 @@ const StrategiesSection: React.FC<StrategiesSectionProps> = ({ className = '' })
           }
           end={
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={handleRebalance}
               icon={<i className="pi pi-refresh"></i>}
             >
@@ -412,9 +413,10 @@ const StrategiesSection: React.FC<StrategiesSectionProps> = ({ className = '' })
             <Alert
               variant="warning"
               title="Внимание"
-              message={`Сумма распределения должна быть 100%. Текущая сумма: ${totalAllocation.toFixed(2)}%`}
               className="strategies-rebalance-warning"
-            />
+            >
+              Сумма распределения должна быть 100%. Текущая сумма: {totalAllocation.toFixed(2)}%
+            </Alert>
           )}
           
           <div className="strategies-rebalance-list">

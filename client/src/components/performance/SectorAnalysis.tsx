@@ -1,13 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { Card } from '../ui/Card/Card';
 import { Skeleton } from '../ui/Skeleton/Skeleton';
-import { SectorAnalysis as SectorAnalysisData, SectorPerformance, ChartPeriod } from '../../services/performanceApi';
+import { SectorAnalysis as SectorAnalysisData } from '../../services/performanceApi';
 import { translateSector } from '../../utils/sectorTranslator';
 import './SectorAnalysis.css';
 
 interface SectorAnalysisProps {
   data: SectorAnalysisData | null;
-  period?: ChartPeriod;
   loading?: boolean;
   className?: string;
 }
@@ -25,7 +24,6 @@ const formatPercent = (value: number, decimals: number = 2) => {
 
 export const SectorAnalysis: React.FC<SectorAnalysisProps> = ({
   data,
-  period = 'month',
   loading = false,
   className = ''
 }) => {
@@ -36,8 +34,8 @@ export const SectorAnalysis: React.FC<SectorAnalysisProps> = ({
     if (!data?.sectors) return [];
 
     const sectorsArray = Object.entries(data.sectors).map(([sector, performance]) => ({
-      sector,
-      ...performance
+      ...performance,
+      sector // sector должен быть последним, чтобы не перезаписать из performance
     }));
 
     return sectorsArray.sort((a, b) => {

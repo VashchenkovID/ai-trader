@@ -138,29 +138,29 @@ const getSourceLabel = (source: string, indicatorType?: string) => {
   return sources[source] || source;
 };
 
-const getPeriodTypeLabel = (periodType: string) => {
-  const types: { [key: string]: string } = {
-    'daily': 'День',
-    'monthly': 'Месяц',
-    'quarterly': 'Квартал',
-    'yearly': 'Год'
-  };
-  return types[periodType] || periodType;
-};
+// const getPeriodTypeLabel = (periodType: string) => { // Reserved for future use
+//   const types: { [key: string]: string } = {
+//     'daily': 'День',
+//     'monthly': 'Месяц',
+//     'quarterly': 'Квартал',
+//     'yearly': 'Год'
+//   };
+//   return types[periodType] || periodType;
+// };
 
-const formatPeriod = (period: string | Date | null | undefined) => {
-  if (!period) return '—';
-  try {
-    const date = typeof period === 'string' ? new Date(period) : period;
-    return date.toLocaleDateString('ru-RU', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
-    });
-  } catch {
-    return '—';
-  }
-};
+// const formatPeriod = (period: string | Date | null | undefined) => { // Reserved for future use
+//   if (!period) return '—';
+//   try {
+//     const date = typeof period === 'string' ? new Date(period) : period;
+//     return date.toLocaleDateString('ru-RU', { 
+//       year: 'numeric', 
+//       month: 'short', 
+//       day: 'numeric' 
+//     });
+//   } catch {
+//     return '—';
+//   }
+// };
 
 export const MacroDataPreview: React.FC<MacroDataPreviewProps> = ({ className = '' }) => {
   const [loading, setLoading] = useState(true);

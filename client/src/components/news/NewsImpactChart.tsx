@@ -27,9 +27,11 @@ export const NewsImpactChart: React.FC<NewsImpactChartProps> = ({
 
     news.forEach(item => {
       if (item.category && item.impactOnPrice !== undefined) {
-        const category = item.category;
-        impactByCategory[category].count++;
-        impactByCategory[category].totalImpact += item.impactOnPrice;
+        const category = item.category as NewsCategory;
+        if (category in impactByCategory) {
+          impactByCategory[category].count++;
+          impactByCategory[category].totalImpact += item.impactOnPrice;
+        }
       }
     });
 

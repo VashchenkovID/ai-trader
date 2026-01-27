@@ -47,15 +47,15 @@ export const Chart: React.FC<ChartProps> = ({
   className = '',
   height = 300,
 }) => {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const { themeName } = useTheme();
+  const isDark = themeName === 'dark';
 
   // Темная тема для графиков с использованием дизайн-системы
   const chartOptions = useMemo(() => {
     // Получаем цвета из CSS переменных
     const textPrimary = isDark ? '#F9FAFB' : '#1A1A24';
     const textSecondary = isDark ? '#9CA3AF' : '#6B7280';
-    const textTertiary = isDark ? '#6B7280' : '#9CA3AF';
+    // const textTertiary = isDark ? '#6B7280' : '#9CA3AF'; // Reserved for future use
     const borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
     const tooltipBg = isDark ? 'rgba(26, 26, 36, 0.95)' : 'rgba(255, 255, 255, 0.95)';
 

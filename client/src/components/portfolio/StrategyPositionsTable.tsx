@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../ui/Card/Card';
 import { Table, TableColumn } from '../ui/Table/Table';
@@ -18,7 +18,7 @@ interface StrategyPositionsTableProps {
 }
 
 const StrategyPositionsTable: React.FC<StrategyPositionsTableProps> = ({
-  strategyId,
+  strategyId: _strategyId,
   strategyName,
   strategyType,
   positions,
@@ -62,7 +62,7 @@ const StrategyPositionsTable: React.FC<StrategyPositionsTableProps> = ({
       key: 'ticker',
       header: 'Инструмент',
       sortable: true,
-      render: (value, row) => {
+      render: (_value, row) => {
         const ticker = row.ticker && row.ticker !== 'Неизвестно' ? row.ticker : row.figi?.substring(0, 10) || '—';
         const name = row.name && row.name !== 'Неизвестно' ? row.name : 'Название недоступно';
         
@@ -82,7 +82,7 @@ const StrategyPositionsTable: React.FC<StrategyPositionsTableProps> = ({
       key: 'quantity',
       header: 'Количество',
       sortable: true,
-      render: (value, row) => {
+      render: (_value, row) => {
         const quantity = typeof row.quantity === 'number' && !isNaN(row.quantity) && isFinite(row.quantity) && row.quantity > 0
           ? row.quantity
           : 0;
@@ -101,7 +101,7 @@ const StrategyPositionsTable: React.FC<StrategyPositionsTableProps> = ({
       key: 'currentPrice',
       header: 'Текущая цена',
       sortable: true,
-      render: (value, row) => {
+      render: (_value, row) => {
         const currentPrice = typeof row.currentPrice === 'number' && !isNaN(row.currentPrice) && isFinite(row.currentPrice) 
           ? row.currentPrice 
           : 0;
@@ -119,7 +119,7 @@ const StrategyPositionsTable: React.FC<StrategyPositionsTableProps> = ({
       key: 'averagePrice',
       header: 'Цена закупки',
       sortable: true,
-      render: (value, row) => {
+      render: (_value, row) => {
         const averagePrice = typeof row.averagePrice === 'number' && !isNaN(row.averagePrice) && isFinite(row.averagePrice)
           ? row.averagePrice
           : 0;
@@ -137,7 +137,7 @@ const StrategyPositionsTable: React.FC<StrategyPositionsTableProps> = ({
       key: 'priceDifference',
       header: 'Разница в цене',
       sortable: true,
-      render: (value, row) => {
+      render: (_value, row) => {
         const currentPrice = typeof row.currentPrice === 'number' && !isNaN(row.currentPrice) && isFinite(row.currentPrice) 
           ? row.currentPrice 
           : 0;
@@ -169,7 +169,7 @@ const StrategyPositionsTable: React.FC<StrategyPositionsTableProps> = ({
       key: 'unrealizedPnL',
       header: 'P&L',
       sortable: true,
-      render: (value, row) => (
+      render: (_value, row) => (
         <div className="strategy-positions-cell">
           <div className={`strategy-positions-value ${row.unrealizedPnL >= 0 ? 'strategy-positions-positive' : 'strategy-positions-negative'}`}>
             {formatCurrency(row.unrealizedPnL)}
@@ -184,7 +184,7 @@ const StrategyPositionsTable: React.FC<StrategyPositionsTableProps> = ({
       key: 'prediction',
       header: 'Предсказание стратегии',
       sortable: false,
-      render: (value, row) => {
+      render: (_value, row) => {
         if (!row.prediction) return <div className="strategy-positions-cell">—</div>;
 
         const { recommendation, score, confidence } = row.prediction;

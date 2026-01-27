@@ -88,7 +88,7 @@ const defaultTrainingSettings: TrainingSettings = {
 
 const TrainingSettingsSection: React.FC = () => {
   const [settings, setSettings] = useState<TrainingSettings>(defaultTrainingSettings);
-  const [trainingStatus, setTrainingStatus] = useState<TrainingStatus | null>(null);
+  const [trainingStatus, _setTrainingStatus] = useState<TrainingStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [startingTraining, setStartingTraining] = useState(false);
@@ -246,7 +246,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Learning Rate</label>
               <InputNumber
                 value={settings.nnLearningRate}
-                onChange={(value) => handleUpdate('nnLearningRate', value)}
+                onValueChange={(e) => handleUpdate('nnLearningRate', e.value ?? 0)}
                 min={0.0001}
                 max={0.01}
                 step={0.0001}
@@ -261,7 +261,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Batch Size</label>
               <InputNumber
                 value={settings.nnBatchSize}
-                onChange={(value) => handleUpdate('nnBatchSize', value)}
+                onValueChange={(e) => handleUpdate('nnBatchSize', e.value ?? 0)}
                 min={8}
                 max={64}
                 step={8}
@@ -276,7 +276,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Epochs</label>
               <InputNumber
                 value={settings.nnEpochs}
-                onChange={(value) => handleUpdate('nnEpochs', value)}
+                onValueChange={(e) => handleUpdate('nnEpochs', e.value ?? 0)}
                 min={20}
                 max={200}
                 step={10}
@@ -291,7 +291,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Dropout Rate</label>
               <InputNumber
                 value={settings.nnDropoutRate}
-                onChange={(value) => handleUpdate('nnDropoutRate', value)}
+                onValueChange={(e) => handleUpdate('nnDropoutRate', e.value ?? 0)}
                 min={0.1}
                 max={0.5}
                 step={0.05}
@@ -306,7 +306,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Validation Split</label>
               <InputNumber
                 value={settings.nnValidationSplit}
-                onChange={(value) => handleUpdate('nnValidationSplit', value)}
+                onValueChange={(e) => handleUpdate('nnValidationSplit', e.value ?? 0)}
                 min={0.1}
                 max={0.3}
                 step={0.05}
@@ -321,7 +321,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Early Stopping Patience</label>
               <InputNumber
                 value={settings.nnEarlyStoppingPatience}
-                onChange={(value) => handleUpdate('nnEarlyStoppingPatience', value)}
+                onValueChange={(e) => handleUpdate('nnEarlyStoppingPatience', e.value ?? 0)}
                 min={5}
                 max={20}
                 step={1}
@@ -346,7 +346,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Training Days</label>
               <InputNumber
                 value={settings.nnTrainingDays}
-                onChange={(value) => handleUpdate('nnTrainingDays', value)}
+                onValueChange={(e) => handleUpdate('nnTrainingDays', e.value ?? 0)}
                 min={30}
                 max={730}
                 step={30}
@@ -361,7 +361,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Training Limit</label>
               <InputNumber
                 value={settings.nnTrainingLimit}
-                onChange={(value) => handleUpdate('nnTrainingLimit', value)}
+                onValueChange={(e) => handleUpdate('nnTrainingLimit', e.value ?? 0)}
                 min={10}
                 max={100}
                 step={10}
@@ -376,7 +376,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Retrain Days</label>
               <InputNumber
                 value={settings.nnRetrainDays}
-                onChange={(value) => handleUpdate('nnRetrainDays', value)}
+                onValueChange={(e) => handleUpdate('nnRetrainDays', e.value ?? 0)}
                 min={7}
                 max={90}
                 step={7}
@@ -391,7 +391,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Model Max Age (Days)</label>
               <InputNumber
                 value={settings.nnModelMaxAgeDays}
-                onChange={(value) => handleUpdate('nnModelMaxAgeDays', value)}
+                onValueChange={(e) => handleUpdate('nnModelMaxAgeDays', e.value ?? 0)}
                 min={1}
                 max={365}
                 step={1}
@@ -421,7 +421,7 @@ const TrainingSettingsSection: React.FC = () => {
                   <label>Quick Training Limit</label>
                   <InputNumber
                     value={settings.nnQuickTrainingLimit}
-                    onChange={(value) => handleUpdate('nnQuickTrainingLimit', value)}
+                    onValueChange={(e) => handleUpdate('nnQuickTrainingLimit', e.value ?? 0)}
                     min={5}
                     max={50}
                     step={5}
@@ -436,7 +436,7 @@ const TrainingSettingsSection: React.FC = () => {
                   <label>Quick Training Days</label>
                   <InputNumber
                     value={settings.nnQuickTrainingDays}
-                    onChange={(value) => handleUpdate('nnQuickTrainingDays', value)}
+                    onValueChange={(e) => handleUpdate('nnQuickTrainingDays', e.value ?? 0)}
                     min={7}
                     max={60}
                     step={7}
@@ -463,7 +463,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Training Strategy</label>
               <Select
                 value={settings.nnTrainingStrategy}
-                onChange={(value) => handleUpdate('nnTrainingStrategy', value)}
+                onChange={(e) => handleUpdate('nnTrainingStrategy', e.target.value)}
                 options={[
                   { value: 'progressive', label: 'Прогрессивное обучение' },
                   { value: 'ensemble', label: 'Ансамблевое обучение' },
@@ -482,7 +482,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Sequence Length</label>
               <InputNumber
                 value={settings.nnSequenceLength}
-                onChange={(value) => handleUpdate('nnSequenceLength', value)}
+                onValueChange={(e) => handleUpdate('nnSequenceLength', e.value ?? 0)}
                 min={20}
                 max={120}
                 step={10}
@@ -497,7 +497,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Prediction Horizon (Days)</label>
               <InputNumber
                 value={settings.nnPredictionHorizon}
-                onChange={(value) => handleUpdate('nnPredictionHorizon', value)}
+                onValueChange={(e) => handleUpdate('nnPredictionHorizon', e.value ?? 0)}
                 min={1}
                 max={30}
                 step={1}
@@ -512,7 +512,7 @@ const TrainingSettingsSection: React.FC = () => {
               <label>Accuracy Threshold</label>
               <InputNumber
                 value={settings.nnAccuracyThreshold}
-                onChange={(value) => handleUpdate('nnAccuracyThreshold', value)}
+                onValueChange={(e) => handleUpdate('nnAccuracyThreshold', e.value ?? 0)}
                 min={0.5}
                 max={0.95}
                 step={0.05}
@@ -541,7 +541,7 @@ const TrainingSettingsSection: React.FC = () => {
                 <label>Dividend Weight</label>
                 <InputNumber
                   value={settings.nnDividendWeight}
-                  onChange={(value) => handleUpdate('nnDividendWeight', value)}
+                  onValueChange={(e) => handleUpdate('nnDividendWeight', e.value ?? 0)}
                   min={0.0}
                   max={1.0}
                   step={0.1}

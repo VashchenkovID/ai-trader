@@ -24,6 +24,14 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({
     </div>
   );
 
+  const tooltipChild = children ? (
+    React.isValidElement(children) ? children : <span>{children}</span>
+  ) : (
+    <span className="info-tooltip-icon" aria-label="Информация">
+      <i className="pi pi-info-circle"></i>
+    </span>
+  );
+
   return (
     <Tooltip
       content={content}
@@ -31,11 +39,7 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({
       variant={variant}
       delay={200}
     >
-      {children || (
-        <span className="info-tooltip-icon" aria-label="Информация">
-          <i className="pi pi-info-circle"></i>
-        </span>
-      )}
+      {tooltipChild}
     </Tooltip>
   );
 };

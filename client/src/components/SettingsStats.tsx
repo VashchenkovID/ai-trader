@@ -33,7 +33,7 @@ const SettingsStats: React.FC<SettingsStatsProps> = ({ settings, originalSetting
     return original && JSON.stringify(original.value) !== JSON.stringify(setting.value);
   }).length;
 
-  const unchangedSettings = totalSettings - changedSettings;
+  // const unchangedSettings = totalSettings - changedSettings; // Reserved for future use
 
   // Группировка по типам данных
   const dataTypeStats = settings.reduce((acc, setting) => {
@@ -167,7 +167,7 @@ const SettingsStats: React.FC<SettingsStatsProps> = ({ settings, originalSetting
                     <i className="pi pi-folder text-xs text-gray-500"></i>
                     <span className="text-sm">{category}</span>
                   </div>
-                  <Badge value={count} severity="secondary" />
+                  <Badge value={count} severity="info" />
                 </div>
               ))}
           </div>

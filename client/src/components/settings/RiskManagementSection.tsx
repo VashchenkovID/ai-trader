@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card } from '../ui/Card/Card';
 import { Button } from '../ui/Button/Button';
 import { Alert } from '../ui/Alert/Alert';
-import { Input } from '../ui/Input/Input';
+// import { Input } from '../ui/Input/Input'; // Reserved for future use
 import { InputNumber } from '../ui/InputNumber/InputNumber';
 import { InputSwitch } from 'primereact/inputswitch';
 import { Divider } from '../ui/Divider/Divider';
@@ -92,13 +92,8 @@ const RiskManagementSection: React.FC<RiskManagementSectionProps> = ({ className
         : [];
 
       // Получаем лимиты из RiskManagementService
-      let limits: any = {};
-      try {
-        const limitsResponse = await apiService.getRiskManagementStatus();
-        limits = limitsResponse.limits || {};
-      } catch (error) {
-        console.warn('Error loading risk limits:', error);
-      }
+      // RiskManagementStatus не имеет поля limits, используем только settingsMap
+      const limits: any = {};
 
       const settingsMap: Partial<RiskManagementSettings> = {};
       riskSettings.forEach(setting => {
@@ -138,21 +133,19 @@ const RiskManagementSection: React.FC<RiskManagementSectionProps> = ({ className
   const loadStatus = async () => {
     try {
       const statusData = await apiService.getRiskManagementStatus();
-      // getStatus() возвращает { isInitialized, emergencyStop, limits, stats, recentAlerts }
-      // Нам нужны stats и emergencyStop
-      if (statusData.stats) {
+      // getStatus() возвращает RiskManagementStatus (из apiService)
+      // Локальный интерфейс RiskManagementStatus имеет дополнительные поля
+      if (statusData) {
         setStatus({
-          currentDrawdown: statusData.stats.currentDrawdown || 0,
-          maxDrawdown: statusData.stats.maxDrawdown || 0,
-          consecutiveLosses: statusData.stats.consecutiveLosses || 0,
-          dailyPnL: statusData.stats.dailyPnL || 0,
-          totalPnL: statusData.stats.totalPnL || 0,
-          winRate: statusData.stats.winRate || 0,
+          currentDrawdown: statusData.currentDrawdown || 0,
+          maxDrawdown: statusData.maxDrawdown || 0,
+          consecutiveLosses: statusData.consecutiveLosses || 0,
+          // Эти поля могут отсутствовать в API ответе, используем значения по умолчанию
+          dailyPnL: (statusData as any).dailyPnL || 0,
+          totalPnL: (statusData as any).totalPnL || 0,
+          winRate: (statusData as any).winRate || 0,
           emergencyStop: statusData.emergencyStop || false,
         });
-      } else if (statusData.currentDrawdown !== undefined) {
-        // Если данные уже в нужном формате
-        setStatus(statusData);
       } else {
         // Fallback
         setStatus({
@@ -162,7 +155,7 @@ const RiskManagementSection: React.FC<RiskManagementSectionProps> = ({ className
           dailyPnL: 0,
           totalPnL: 0,
           winRate: 0,
-          emergencyStop: statusData.emergencyStop || false,
+          emergencyStop: false,
         });
       }
     } catch (error: any) {
@@ -284,7 +277,6 @@ const RiskManagementSection: React.FC<RiskManagementSectionProps> = ({ className
             showButtons
             buttonLayout="horizontal"
             size="sm"
-            suffix={suffix}
           />
         </div>
       </div>
@@ -310,7 +302,7 @@ const RiskManagementSection: React.FC<RiskManagementSectionProps> = ({ className
   }
 
   const drawdownPercent = status ? (status.currentDrawdown / settings.maxDrawdown) * 100 : 0;
-  const drawdownColor = drawdownPercent > 80 ? 'danger' : drawdownPercent > 60 ? 'warning' : 'success';
+  const drawdownColor = drawdownPercent > 80 ? 'error' : drawdownPercent > 60 ? 'warning' : 'success';
 
   return (
     <div className={`risk-management-section ${className}`}>
@@ -351,8 +343,8 @@ const RiskManagementSection: React.FC<RiskManagementSectionProps> = ({ className
               </div>
               <ProgressBar
                 value={drawdownPercent}
-                variant={drawdownColor}
-                showValue
+                variant={drawdownColor === 'error' ? 'error' : drawdownColor === 'warning' ? 'warning' : 'success'}
+                showLabel
               />
               <div className="risk-status-hint">
                 Лимит: {(settings.maxDrawdown * 100).toFixed(1)}%
@@ -369,7 +361,7 @@ const RiskManagementSection: React.FC<RiskManagementSectionProps> = ({ className
             <div className="risk-status-item">
               <div className="risk-status-label">Подряд убытков</div>
               <div className="risk-status-value">
-                <Badge variant={status.consecutiveLosses >= settings.maxConsecutiveLosses ? 'danger' : 'warning'}>
+                <Badge variant={status.consecutiveLosses >= settings.maxConsecutiveLosses ? 'error' : 'warning'}>
                   {status.consecutiveLosses} / {settings.maxConsecutiveLosses}
                 </Badge>
               </div>
@@ -378,7 +370,7 @@ const RiskManagementSection: React.FC<RiskManagementSectionProps> = ({ className
             <div className="risk-status-item">
               <div className="risk-status-label">Дневной P&L</div>
               <div className="risk-status-value">
-                <Badge variant={status.dailyPnL < 0 ? 'danger' : 'success'}>
+                <Badge variant={status.dailyPnL < 0 ? 'error' : 'success'}>
                   {status.dailyPnL >= 0 ? '+' : ''}{status.dailyPnL.toFixed(2)}%
                 </Badge>
               </div>
@@ -387,7 +379,7 @@ const RiskManagementSection: React.FC<RiskManagementSectionProps> = ({ className
             <div className="risk-status-item">
               <div className="risk-status-label">Общий P&L</div>
               <div className="risk-status-value">
-                <Badge variant={status.totalPnL < 0 ? 'danger' : 'success'}>
+                <Badge variant={status.totalPnL < 0 ? 'error' : 'success'}>
                   {status.totalPnL >= 0 ? '+' : ''}{status.totalPnL.toFixed(2)}%
                 </Badge>
               </div>
@@ -396,7 +388,7 @@ const RiskManagementSection: React.FC<RiskManagementSectionProps> = ({ className
             <div className="risk-status-item">
               <div className="risk-status-label">Винрейт</div>
               <div className="risk-status-value">
-                <Badge variant={status.winRate >= 0.6 ? 'success' : status.winRate >= 0.5 ? 'warning' : 'danger'}>
+                <Badge variant={status.winRate >= 0.6 ? 'success' : status.winRate >= 0.5 ? 'warning' : 'error'}>
                   {(status.winRate * 100).toFixed(1)}%
                 </Badge>
               </div>

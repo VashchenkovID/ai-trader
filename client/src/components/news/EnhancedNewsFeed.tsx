@@ -11,7 +11,7 @@ export type NewsCategory = 'earnings' | 'mergers' | 'macro' | 'dividends' | 'gui
 
 export type NewsPriority = 'critical' | 'high' | 'medium' | 'low';
 
-interface EnhancedNewsItem {
+export interface EnhancedNewsItem {
   id?: string;
   title: string;
   description?: string;
@@ -36,7 +36,7 @@ interface EnhancedNewsFeedProps {
   showFilters?: boolean;
 }
 
-const CATEGORY_LABELS: Record<NewsCategory, string> = {
+export const CATEGORY_LABELS: Record<NewsCategory, string> = {
   earnings: 'Отчетность',
   mergers: 'Слияния',
   macro: 'Макро',
@@ -46,7 +46,7 @@ const CATEGORY_LABELS: Record<NewsCategory, string> = {
   other: 'Прочее',
 };
 
-const CATEGORY_COLORS: Record<NewsCategory, string> = {
+export const CATEGORY_COLORS: Record<NewsCategory, string> = {
   earnings: 'var(--color-accent-primary)',
   mergers: 'var(--color-accent-info)',
   macro: 'var(--color-accent-warning)',
@@ -65,7 +65,7 @@ const PRIORITY_COLORS: Record<NewsPriority, string> = {
 
 export const EnhancedNewsFeed: React.FC<EnhancedNewsFeedProps> = ({
   figi,
-  ticker,
+  ticker: _ticker, // Переименовано для избежания неиспользуемой переменной
   className = '',
   maxItems = 10,
   showFilters = true

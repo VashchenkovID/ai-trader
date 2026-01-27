@@ -8,7 +8,7 @@ export interface AlertProps {
   variant?: AlertVariant;
   size?: AlertSize;
   title?: string;
-  children: ReactNode;
+  children?: ReactNode;
   onClose?: () => void;
   className?: string;
   icon?: ReactNode;
@@ -62,7 +62,7 @@ export const Alert: React.FC<AlertProps> = ({
         )}
         <div className="alert-body">
           {title && <div className="alert-title">{title}</div>}
-          <div className="alert-message">{children}</div>
+          {(children || title) && <div className="alert-message">{children || title}</div>}
         </div>
       </div>
       {onClose && (

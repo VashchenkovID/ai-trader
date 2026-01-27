@@ -5,7 +5,7 @@ import './DesignSystemTest.css';
 
 const DesignSystemTest: React.FC = () => {
   const { theme, themeName, toggleTheme } = useTheme();
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('overview');
   const [modalOpen, setModalOpen] = useState<{ [key: string]: boolean }>({});
   const sectionsRef = useRef<{ [key: string]: HTMLDivElement | null }>({});
@@ -916,7 +916,7 @@ const DesignSystemTest: React.FC = () => {
           <div className="component-group">
             <h3 className="group-title">Анимированный прогресс</h3>
             <p className="group-description">Плавная анимация заполнения с shimmer эффектом</p>
-            <ProgressBar value={loading ? 100 : 0} variant="primary" showLabel animated />
+            <ProgressBar value={loading ? 100 : 0} variant="default" showLabel animated />
             <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', marginTop: 'var(--spacing-2)' }}>
               Нажмите кнопку "Нажми меня" в секции Button, чтобы увидеть анимацию
             </p>

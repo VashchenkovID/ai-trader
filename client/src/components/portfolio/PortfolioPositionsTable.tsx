@@ -562,7 +562,7 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
           <div className="portfolio-positions-actions">
             {onAnalyze && (
               <Button
-                variant="info"
+                variant="primary"
                 size="sm"
                 icon={<i className="pi pi-chart-line"></i>}
                 onClick={onAnalyze}
@@ -574,7 +574,7 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
             )}
             {onRefresh && (
               <Button
-                variant="default"
+                variant="secondary"
                 size="sm"
                 icon={<i className="pi pi-refresh"></i>}
                 onClick={onRefresh}

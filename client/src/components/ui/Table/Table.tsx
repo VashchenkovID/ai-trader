@@ -1,4 +1,4 @@
-import React, { useState, useMemo, ReactNode } from 'react';
+import { useState, useMemo, ReactNode } from 'react';
 import './Table.css';
 
 export type SortDirection = 'asc' | 'desc' | null;
@@ -6,7 +6,7 @@ export type TableSize = 'sm' | 'md' | 'lg';
 
 export interface TableColumn<T = any> {
   key: string;
-  header: string;
+  header: string | ReactNode;
   accessor?: (row: T) => any;
   sortable?: boolean;
   render?: (value: any, row: T) => ReactNode;

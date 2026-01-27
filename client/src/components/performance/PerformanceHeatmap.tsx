@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
 import { Card } from '../ui/Card/Card';
 import { Skeleton } from '../ui/Skeleton/Skeleton';
-import { PerformanceHeatmapData, ChartPeriod } from '../../services/performanceApi';
+import { PerformanceHeatmapData } from '../../services/performanceApi';
+// import { ChartPeriod } from '../../services/performanceApi'; // Reserved for future use
 import './PerformanceHeatmap.css';
 
 interface PerformanceHeatmapProps {
   data: PerformanceHeatmapData | null;
-  period?: ChartPeriod;
   loading?: boolean;
   className?: string;
   onCellClick?: (sector: string, strategy: string, data: any) => void;
@@ -14,7 +14,6 @@ interface PerformanceHeatmapProps {
 
 export const PerformanceHeatmap: React.FC<PerformanceHeatmapProps> = ({
   data,
-  period = 'month',
   loading = false,
   className = '',
   onCellClick

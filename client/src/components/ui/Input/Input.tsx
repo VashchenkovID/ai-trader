@@ -1,5 +1,5 @@
 import React, { InputHTMLAttributes, forwardRef, useState } from 'react';
-import { useTheme } from '../../../contexts/ThemeContext';
+// import { useTheme } from '../../../contexts/ThemeContext'; // Reserved for future use
 import './Input.css';
 
 export type InputSize = 'sm' | 'md' | 'lg';
@@ -33,7 +33,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
-    const { theme } = useTheme();
+    // const { theme } = useTheme(); // Reserved for future use
     const [isFocused, setIsFocused] = useState(false);
     const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
 

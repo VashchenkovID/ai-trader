@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
-import { Card } from '../ui/Card/Card';
+import React from 'react';
+// import { useMemo } from 'react'; // Reserved for future use
+// import { Card } from '../ui/Card/Card'; // Reserved for future use
 import './IchimokuOverlay.css';
 
 export interface IchimokuData {
@@ -23,74 +24,74 @@ interface IchimokuOverlayProps {
 
 export const IchimokuOverlay: React.FC<IchimokuOverlayProps> = ({
   data,
-  labels,
-  prices,
+  labels: _labels, // Reserved for future use
+  prices: _prices, // Reserved for future use
   className = ''
 }) => {
-  const chartData = useMemo(() => {
-    if (!data || !labels || labels.length === 0) return null;
+  // const chartData = useMemo(() => { // Reserved for future use
+  //   if (!data || !labels || labels.length === 0) return null;
 
-    // Для визуализации нужно сдвинуть Senkou Span A/B на 26 периодов вперед
-    // и Chikou Span на 26 периодов назад
-    const senkouA = new Array(26).fill(null).concat([data.senkouA]);
-    const senkouB = new Array(26).fill(null).concat([data.senkouB]);
-    const chikou = [data.chikou].concat(new Array(26).fill(null));
+  //   // Для визуализации нужно сдвинуть Senkou Span A/B на 26 периодов вперед
+  //   // и Chikou Span на 26 периодов назад
+  //   const senkouA = new Array(26).fill(null).concat([data.senkouA]);
+  //   const senkouB = new Array(26).fill(null).concat([data.senkouB]);
+  //   const chikou = [data.chikou].concat(new Array(26).fill(null));
 
-    return {
-      labels,
-      datasets: [
-        {
-          label: 'Tenkan-sen',
-          data: [data.tenkan],
-          borderColor: '#FF6B6B',
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          pointRadius: 0,
-          borderDash: [],
-        },
-        {
-          label: 'Kijun-sen',
-          data: [data.kijun],
-          borderColor: '#4ECDC4',
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          pointRadius: 0,
-          borderDash: [],
-        },
-        {
-          label: 'Senkou Span A',
-          data: senkouA,
-          borderColor: data.cloudColor === 'bullish' ? '#10B981' : '#EF4444',
-          backgroundColor: data.cloudColor === 'bullish' 
-            ? 'rgba(16, 185, 129, 0.2)' 
-            : 'rgba(239, 68, 68, 0.2)',
-          borderWidth: 1,
-          pointRadius: 0,
-          fill: '+1',
-        },
-        {
-          label: 'Senkou Span B',
-          data: senkouB,
-          borderColor: data.cloudColor === 'bullish' ? '#10B981' : '#EF4444',
-          backgroundColor: data.cloudColor === 'bullish' 
-            ? 'rgba(16, 185, 129, 0.2)' 
-            : 'rgba(239, 68, 68, 0.2)',
-          borderWidth: 1,
-          pointRadius: 0,
-          fill: '-1',
-        },
-        {
-          label: 'Chikou Span',
-          data: chikou,
-          borderColor: '#8B5CF6',
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          pointRadius: 0,
-          borderDash: [5, 5],
-        },
-      ],
-    };
-  }, [data, labels]);
+  //   return {
+  //     labels,
+  //     datasets: [
+  //       {
+  //         label: 'Tenkan-sen',
+  //         data: [data.tenkan],
+  //         borderColor: '#FF6B6B',
+  //         backgroundColor: 'transparent',
+  //         borderWidth: 2,
+  //         pointRadius: 0,
+  //         borderDash: [],
+  //       },
+  //       {
+  //         label: 'Kijun-sen',
+  //         data: [data.kijun],
+  //         borderColor: '#4ECDC4',
+  //         backgroundColor: 'transparent',
+  //         borderWidth: 2,
+  //         pointRadius: 0,
+  //         borderDash: [],
+  //       },
+  //       {
+  //         label: 'Senkou Span A',
+  //         data: senkouA,
+  //         borderColor: data.cloudColor === 'bullish' ? '#10B981' : '#EF4444',
+  //         backgroundColor: data.cloudColor === 'bullish' 
+  //           ? 'rgba(16, 185, 129, 0.2)' 
+  //           : 'rgba(239, 68, 68, 0.2)',
+  //         borderWidth: 1,
+  //         pointRadius: 0,
+  //         fill: '+1',
+  //       },
+  //       {
+  //         label: 'Senkou Span B',
+  //         data: senkouB,
+  //         borderColor: data.cloudColor === 'bullish' ? '#10B981' : '#EF4444',
+  //         backgroundColor: data.cloudColor === 'bullish' 
+  //           ? 'rgba(16, 185, 129, 0.2)' 
+  //           : 'rgba(239, 68, 68, 0.2)',
+  //         borderWidth: 1,
+  //         pointRadius: 0,
+  //         fill: '-1',
+  //       },
+  //       {
+  //         label: 'Chikou Span',
+  //         data: chikou,
+  //         borderColor: '#8B5CF6',
+  //         backgroundColor: 'transparent',
+  //         borderWidth: 2,
+  //         pointRadius: 0,
+  //         borderDash: [5, 5],
+  //       },
+  //     ],
+  //   };
+  // }, [data, labels]); // Reserved for future use
 
   if (!data) {
     return null;

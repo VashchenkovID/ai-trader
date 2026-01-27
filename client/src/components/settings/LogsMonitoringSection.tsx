@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card } from '../ui/Card/Card';
 import { Button } from '../ui/Button/Button';
-import { Alert } from '../ui/Alert/Alert';
+// import { Alert } from '../ui/Alert/Alert'; // Reserved for future use
 import { InputNumber } from '../ui/InputNumber/InputNumber';
 import { InputSwitch } from 'primereact/inputswitch';
 import { Divider } from '../ui/Divider/Divider';
 import { Badge } from '../ui/Badge/Badge';
 import { Select } from '../ui/Select/Select';
-import { apiService } from '../../services/apiService';
+import { apiService, PerformanceMetrics } from '../../services';
 import { Toast } from 'primereact/toast';
 import { Skeleton } from '../ui/Skeleton/Skeleton';
 import './LogsMonitoringSection.css';
@@ -31,26 +31,21 @@ interface MonitoringSettings {
   highMemoryThreshold: number;
 }
 
-interface SystemStatus {
+// Используем SystemStatus из apiService, но добавляем локальные поля если нужно
+type LocalSystemStatus = {
   neuralNetwork: any;
   websocket: any;
-  trading: any;
+  trading?: any; // Может отсутствовать в API
+  tradingEngine?: any; // Из API
   database: any;
   ensemble: any;
   timestamp: string;
-}
-
-interface PerformanceMetrics {
-  responseTime: number;
-  throughput: number;
-  errorRate: number;
-  cacheHitRate: number;
-}
+};
 
 const LogsMonitoringSection: React.FC = () => {
   const [loggingSettings, setLoggingSettings] = useState<LoggingSettings | null>(null);
   const [monitoringSettings, setMonitoringSettings] = useState<MonitoringSettings | null>(null);
-  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [systemStatus, setSystemStatus] = useState<LocalSystemStatus | null>(null);
   const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<Record<string, boolean>>({});
@@ -61,7 +56,7 @@ const LogsMonitoringSection: React.FC = () => {
     loadData();
     
     // Автообновление статуса и метрик каждые 10 секунд
-    let interval: NodeJS.Timeout | null = null;
+    let interval: ReturnType<typeof setTimeout> | null = null;
     if (autoRefresh) {
       interval = setInterval(() => {
         loadSystemStatus();
@@ -184,7 +179,11 @@ const LogsMonitoringSection: React.FC = () => {
   const loadSystemStatus = async () => {
     try {
       const status = await apiService.getSystemStatus();
-      setSystemStatus(status);
+      // Преобразуем API SystemStatus в LocalSystemStatus
+      setSystemStatus({
+        ...status,
+        trading: status.tradingEngine, // Маппинг tradingEngine -> trading для совместимости
+      } as LocalSystemStatus);
     } catch (error) {
       console.error('Error loading system status:', error);
     }
@@ -314,7 +313,7 @@ const LogsMonitoringSection: React.FC = () => {
               <label>Уровень логирования</label>
               <Select
                 value={loggingSettings?.logLevel || 'info'}
-                onChange={(value) => handleUpdateLogging('logLevel', value)}
+                onChange={(e) => handleUpdateLogging('logLevel', e.target.value)}
                 options={[
                   { value: 'error', label: 'Error (только ошибки)' },
                   { value: 'warn', label: 'Warn (предупреждения и ошибки)' },
@@ -358,7 +357,7 @@ const LogsMonitoringSection: React.FC = () => {
               <label>Максимальный размер файла (MB)</label>
               <InputNumber
                 value={loggingSettings ? loggingSettings.maxLogFileSize / 1024 / 1024 : 5}
-                onChange={(value) => handleUpdateLogging('maxLogFileSize', (value || 5) * 1024 * 1024)}
+                onValueChange={(e) => handleUpdateLogging('maxLogFileSize', ((e.value ?? 5) * 1024 * 1024))}
                 min={1}
                 max={100}
                 step={1}
@@ -373,7 +372,7 @@ const LogsMonitoringSection: React.FC = () => {
               <label>Максимальное количество файлов</label>
               <InputNumber
                 value={loggingSettings?.maxLogFiles || 5}
-                onChange={(value) => handleUpdateLogging('maxLogFiles', value)}
+                onValueChange={(e) => handleUpdateLogging('maxLogFiles', e.value ?? 0)}
                 min={1}
                 max={20}
                 step={1}
@@ -388,7 +387,7 @@ const LogsMonitoringSection: React.FC = () => {
               <label>Хранение логов (дни)</label>
               <InputNumber
                 value={loggingSettings?.logRetentionDays || 30}
-                onChange={(value) => handleUpdateLogging('logRetentionDays', value)}
+                onValueChange={(e) => handleUpdateLogging('logRetentionDays', e.value ?? 0)}
                 min={1}
                 max={365}
                 step={1}
@@ -433,7 +432,7 @@ const LogsMonitoringSection: React.FC = () => {
               <label>Интервал сбора метрик (секунды)</label>
               <InputNumber
                 value={monitoringSettings?.metricsCollectionInterval || 60}
-                onChange={(value) => handleUpdateMonitoring('metricsCollectionInterval', value)}
+                onValueChange={(e) => handleUpdateMonitoring('metricsCollectionInterval', e.value ?? 0)}
                 min={10}
                 max={300}
                 step={10}
@@ -475,7 +474,7 @@ const LogsMonitoringSection: React.FC = () => {
                 <label>Порог медленного запроса (мс)</label>
                 <InputNumber
                   value={monitoringSettings?.slowRequestThreshold || 1000}
-                  onChange={(value) => handleUpdateMonitoring('slowRequestThreshold', value)}
+                  onValueChange={(e) => handleUpdateMonitoring('slowRequestThreshold', e.value ?? 0)}
                   min={100}
                   max={10000}
                   step={100}
@@ -505,7 +504,7 @@ const LogsMonitoringSection: React.FC = () => {
                 <label>Порог потребления памяти (MB)</label>
                 <InputNumber
                   value={monitoringSettings?.highMemoryThreshold || 100}
-                  onChange={(value) => handleUpdateMonitoring('highMemoryThreshold', value)}
+                  onValueChange={(e) => handleUpdateMonitoring('highMemoryThreshold', e.value ?? 0)}
                   min={10}
                   max={1000}
                   step={10}
@@ -527,7 +526,7 @@ const LogsMonitoringSection: React.FC = () => {
               <label style={{ fontSize: '12px' }}>Автообновление</label>
               <InputSwitch
                 checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.value)}
+                onChange={(e) => setAutoRefresh(e.value ?? false)}
               />
             </div>
           </div>
@@ -615,28 +614,28 @@ const LogsMonitoringSection: React.FC = () => {
                 <div className="logs-monitoring-metric">
                   <div className="logs-monitoring-metric-label">Время отклика</div>
                   <div className="logs-monitoring-metric-value">
-                    {performanceMetrics.responseTime.toFixed(2)} мс
+                    {(performanceMetrics.responseTime ?? 0).toFixed(2)} мс
                   </div>
                 </div>
                 
                 <div className="logs-monitoring-metric">
                   <div className="logs-monitoring-metric-label">Пропускная способность</div>
                   <div className="logs-monitoring-metric-value">
-                    {performanceMetrics.throughput.toFixed(2)} req/s
+                    {(performanceMetrics.throughput ?? 0).toFixed(2)} req/s
                   </div>
                 </div>
                 
                 <div className="logs-monitoring-metric">
                   <div className="logs-monitoring-metric-label">Частота ошибок</div>
                   <div className="logs-monitoring-metric-value">
-                    {performanceMetrics.errorRate.toFixed(2)}%
+                    {(performanceMetrics.errorRate ?? 0).toFixed(2)}%
                   </div>
                 </div>
                 
                 <div className="logs-monitoring-metric">
                   <div className="logs-monitoring-metric-label">Cache Hit Rate</div>
                   <div className="logs-monitoring-metric-value">
-                    {performanceMetrics.cacheHitRate.toFixed(2)}%
+                    {(performanceMetrics.cacheHitRate ?? 0).toFixed(2)}%
                   </div>
                 </div>
               </>

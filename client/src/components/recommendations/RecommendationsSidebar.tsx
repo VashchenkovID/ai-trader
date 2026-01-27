@@ -86,9 +86,9 @@ export const RecommendationsSidebar: React.FC<RecommendationsSidebarProps> = ({
     }
   };
 
-  const criticalPositions = portfolioPositions.filter(
-    (p) => p.proximityToStopLoss !== undefined && p.proximityToStopLoss < 5
-  );
+  // const _criticalPositions = portfolioPositions.filter( // Reserved for future use
+  //   (p) => p.proximityToStopLoss !== undefined && p.proximityToStopLoss < 5
+  // );
 
   return (
     <div className="recommendations-sidebar">

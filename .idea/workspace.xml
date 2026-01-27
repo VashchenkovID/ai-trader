@@ -4,7 +4,50 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="eabbd32b-9e15-4bc9-856b-cea21edbae60" name="Changes" comment="" />
+    <list default="true" id="eabbd32b-9e15-4bc9-856b-cea21edbae60" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/SettingsStats.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/SettingsStats.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/TradingRequestManager.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/TradingRequestManager.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/performance/PerformanceHeatmap.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/performance/PerformanceHeatmap.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/performance/SectorAnalysis.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/performance/SectorAnalysis.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/settings/LogsMonitoringSection.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/LogsMonitoringSection.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/settings/SchedulerStatusCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/SchedulerStatusCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/settings/SettingsGroup.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/SettingsGroup.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/settings/SettingsTabs.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/SettingsTabs.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/settings/StrategiesSection.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/StrategiesSection.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/settings/TradingModeSection.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/TradingModeSection.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/settings/TradingModeValidationCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/TradingModeValidationCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/settings/TrainingSettingsSection.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/settings/TrainingSettingsSection.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/stock/HorizonCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/stock/HorizonCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/stock/NewsList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/stock/NewsList.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/stock/SignalsList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/stock/SignalsList.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/trading/EntryOptimization.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/trading/EntryOptimization.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Alert/Alert.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Alert/Alert.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Button/Button.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Button/Button.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Chart/Chart.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Chart/Chart.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/ui/ConfirmDialog/ConfirmDialog.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/ConfirmDialog/ConfirmDialog.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/ui/InfoTooltip/InfoTooltip.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/InfoTooltip/InfoTooltip.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Input/Input.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Input/Input.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Select/Select.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Select/Select.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Table/DataTable.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Table/DataTable.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Table/Table.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Table/Table.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Tabs/Tabs.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Tabs/Tabs.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/ui/Tooltip/Tooltip.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/ui/Tooltip/Tooltip.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/websocket/ModelMetricsWidget.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/websocket/ModelMetricsWidget.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/websocket/TradingSignalsWidget.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/websocket/TradingSignalsWidget.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/components/websocket/TrainingProgressWidget.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/components/websocket/TrainingProgressWidget.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/hooks/useStockDataCache.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/hooks/useStockDataCache.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/Dashboard/Dashboard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Dashboard/Dashboard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/DesignSystemTest.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/DesignSystemTest.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/MetricsMonitoring.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/MetricsMonitoring.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/Performance.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Performance.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/Recommendations.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Recommendations.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/pages/Settings.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/pages/Settings.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/services/apiService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/services/apiService.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/services/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/services/index.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/src/styles/design-system/themes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/styles/design-system/themes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/tsconfig.json" beforeDir="false" afterPath="$PROJECT_DIR$/client/tsconfig.json" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -20,6 +63,9 @@
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/client/src/components/ui/ProgressBar/ProgressBar.tsx" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
@@ -84,6 +130,7 @@
       <workItem from="1759129106335" duration="19000" />
       <workItem from="1769270863612" duration="3024000" />
       <workItem from="1769410006620" duration="6000" />
+      <workItem from="1769507032925" duration="1774000" />
     </task>
     <servers />
   </component>

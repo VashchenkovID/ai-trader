@@ -3,7 +3,7 @@ import { Card } from '../ui/Card/Card';
 import { Skeleton } from '../ui/Skeleton/Skeleton';
 import { Chart } from '../ui/Chart/Chart';
 import { Badge } from '../ui/Badge/Badge';
-import { apiService } from '../../services/apiService';
+// import { apiService } from '../../services/apiService'; // Reserved for future use
 import './MultiTimeframeView.css';
 
 export type Timeframe = 'H1' | 'D1' | 'W1';
@@ -35,11 +35,11 @@ const TIMEFRAME_LABELS: Record<Timeframe, string> = {
   W1: 'Неделя (W1)',
 };
 
-const TIMEFRAME_WEIGHTS: Record<Timeframe, number> = {
-  H1: 0.2,
-  D1: 0.3,
-  W1: 0.5,
-};
+// const TIMEFRAME_WEIGHTS: Record<Timeframe, number> = { // Reserved for future use
+//   H1: 0.2,
+//   D1: 0.3,
+//   W1: 0.5,
+// };
 
 export const MultiTimeframeView: React.FC<MultiTimeframeViewProps> = ({
   figi,
@@ -77,16 +77,16 @@ export const MultiTimeframeView: React.FC<MultiTimeframeViewProps> = ({
     }
   };
 
-  const getSignalColor = (signal: string) => {
-    switch (signal) {
-      case 'buy':
-        return 'var(--color-accent-success)';
-      case 'sell':
-        return 'var(--color-accent-error)';
-      default:
-        return 'var(--color-text-secondary)';
-    }
-  };
+  // const _getSignalColor = (signal: string) => { // Reserved for future use
+  //   switch (signal) {
+  //     case 'buy':
+  //       return 'var(--color-accent-success)';
+  //     case 'sell':
+  //       return 'var(--color-accent-error)';
+  //     default:
+  //       return 'var(--color-text-secondary)';
+  //   }
+  // };
 
   const getSignalLabel = (signal: string) => {
     switch (signal) {

@@ -15,9 +15,10 @@ interface Recommendation {
   confidence: number;
   score: number;
   priceAtAnalysis: number;
-  currentPrice?: number;
+  currentPrice?: number; // Опциональное поле для текущей цены
   targetPrice?: number;
   stopLoss?: number;
+  explanation?: any; // Опциональное поле для объяснения
   takeProfit?: number;
   sector?: string;
   analysisDate: string;
@@ -92,7 +93,7 @@ export const RecommendationInstrumentCard: React.FC<RecommendationInstrumentCard
   onSell,
   onDetails,
   onWatchlist,
-  loading = false,
+  loading: _loading = false,
   isNew = false,
   expanded = false,
   onToggleExpand,
@@ -191,19 +192,19 @@ export const RecommendationInstrumentCard: React.FC<RecommendationInstrumentCard
     }
   };
 
-  const handleBuy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onBuy) {
-      onBuy(recommendation.figi);
-    }
-  };
+  // const _handleBuy = (e: React.MouseEvent) => { // Reserved for future use
+  //   e.stopPropagation();
+  //   if (onBuy) {
+  //     onBuy(recommendation.figi);
+  //   }
+  // };
 
-  const handleSell = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onSell) {
-      onSell(recommendation.figi);
-    }
-  };
+  // const _handleSell = (e: React.MouseEvent) => { // Reserved for future use
+  //   e.stopPropagation();
+  //   if (onSell) {
+  //     onSell(recommendation.figi);
+  //   }
+  // };
 
   const handleDetails = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -384,8 +385,8 @@ export const RecommendationInstrumentCard: React.FC<RecommendationInstrumentCard
       )}
 
       {/* Предсказания по стратегиям (всегда видно) */}
-      {recommendation.explanation?.details?.ensemble?.horizons && (() => {
-        const horizons = recommendation.explanation.details.ensemble.horizons;
+      {recommendation.explanation && (recommendation.explanation as any)?.details?.ensemble?.horizons && (() => {
+        const horizons = (recommendation.explanation as any).details.ensemble.horizons;
         const mainHorizon = horizons.mediumTerm || horizons.shortTerm || horizons.longTerm;
         
         if (!mainHorizon?.strategies) return null;

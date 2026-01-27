@@ -15,7 +15,7 @@ export interface PerformanceChartProps {
 export const PerformanceChart: React.FC<PerformanceChartProps> = ({
   type,
   data,
-  period = 'month',
+  period: _period = 'month', // Reserved for future use
   height = 300,
   className = ''
 }) => {

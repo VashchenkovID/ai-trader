@@ -38,16 +38,16 @@ export const TimeframeSummary: React.FC<TimeframeSummaryProps> = ({
   weightedSignal,
   className = ''
 }) => {
-  const getSignalColor = (signal: string) => {
-    switch (signal) {
-      case 'buy':
-        return 'var(--color-accent-success)';
-      case 'sell':
-        return 'var(--color-accent-error)';
-      default:
-        return 'var(--color-text-secondary)';
-    }
-  };
+  // const getSignalColor = (signal: string) => { // Reserved for future use
+  //   switch (signal) {
+  //     case 'buy':
+  //       return 'var(--color-accent-success)';
+  //     case 'sell':
+  //       return 'var(--color-accent-error)';
+  //     default:
+  //       return 'var(--color-text-secondary)';
+  //   }
+  // };
 
   const getSignalLabel = (signal: string) => {
     switch (signal) {

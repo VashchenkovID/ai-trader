@@ -22,7 +22,7 @@ interface SettingsTabsProps {
 
 const SettingsTabs: React.FC<SettingsTabsProps> = ({
   settingsByModule,
-  filteredSettings,
+  filteredSettings: _filteredSettings,
   onUpdateSetting
 }) => {
   const moduleNames: { [key: string]: string } = {

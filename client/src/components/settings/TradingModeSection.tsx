@@ -601,7 +601,7 @@ const TradingModeSection: React.FC<TradingModeSectionProps> = ({ className = '' 
                             const isPercentage = key.includes('Rate') || key.includes('Confidence') || key.includes('Consistency') || key.includes('Drawdown') || key.includes('Return');
                             const isDecimal = key.includes('Factor') || key.includes('Ratio');
                             
-                            const formatValue = (val: number | undefined, isThreshold: boolean = false): string => {
+                            const formatValue = (val: number | undefined, _isThreshold: boolean = false): string => {
                               if (val === undefined || val === null) return '—';
                               if (isPercentage) {
                                 return (val * 100).toFixed(1) + '%';

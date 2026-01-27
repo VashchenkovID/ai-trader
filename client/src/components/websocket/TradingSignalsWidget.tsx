@@ -75,7 +75,7 @@ const TradingSignalsWidget: React.FC<TradingSignalsWidgetProps> = ({
           <span>📊 Торговые сигналы</span>
           <Badge 
             value={tradingSignals.length} 
-            severity={isConnected ? 'success' : 'secondary'}
+            severity={isConnected ? 'success' : 'info'}
           />
         </div>
       }

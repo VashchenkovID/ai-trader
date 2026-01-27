@@ -24,7 +24,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   disabled = false,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
-  const [showTimeout, setShowTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [showTimeout, setShowTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 

@@ -43,11 +43,11 @@ export const HorizonCard: React.FC<HorizonCardProps> = ({ horizon, type }) => {
     return 'error';
   };
 
-  const getStrategyVariant = (strategyType: string): 'success' | 'error' | 'warning' | 'neutral' => {
-    if (strategyType === 'aggressive') return 'error';
-    if (strategyType === 'moderate') return 'warning';
-    return 'success';
-  };
+  // const getStrategyVariant = (strategyType: string): 'success' | 'error' | 'warning' | 'neutral' => { // Reserved for future use
+  //   if (strategyType === 'aggressive') return 'error';
+  //   if (strategyType === 'moderate') return 'warning';
+  //   return 'success';
+  // };
 
   const getHorizonIcon = (type: string) => {
     switch (type) {

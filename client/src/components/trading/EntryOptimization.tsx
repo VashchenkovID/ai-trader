@@ -3,8 +3,8 @@ import { Card } from '../ui/Card/Card';
 import { Badge } from '../ui/Badge/Badge';
 import { Button } from '../ui/Button/Button';
 import { Skeleton } from '../ui/Skeleton/Skeleton';
-import { Chart } from '../ui/Chart/Chart';
-import { apiService } from '../../services/apiService';
+// import { Chart } from '../ui/Chart/Chart'; // Reserved for future use
+// import { apiService } from '../../services/apiService'; // Reserved for future use
 import './EntryOptimization.css';
 
 export type OrderType = 'MARKET' | 'LIMIT' | 'STOP_LIMIT';
@@ -60,7 +60,7 @@ const formatPercent = (value: number, decimals: number = 2) => {
 
 export const EntryOptimization: React.FC<EntryOptimizationProps> = ({
   figi,
-  ticker,
+  // ticker, // Reserved for future use
   currentPrice,
   className = ''
 }) => {

@@ -3,7 +3,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import './Badge.css';
 
 export type BadgeVariant = 'success' | 'error' | 'warning' | 'info' | 'primary' | 'neutral';
-export type BadgeSize = 'sm' | 'md' | 'lg';
+export type BadgeSize = 'xs' | 'sm' | 'md' | 'lg';
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;

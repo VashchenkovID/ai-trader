@@ -11,7 +11,7 @@ import './Performance.css';
 
 const Performance: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
-  const [period, setPeriod] = useState<ChartPeriod>('month');
+  const period: ChartPeriod = 'month'
   const [heatmapData, setHeatmapData] = React.useState<any>(null);
   const [sectorData, setSectorData] = React.useState<any>(null);
   const [heatmapLoading, setHeatmapLoading] = React.useState(false);
@@ -20,7 +20,7 @@ const Performance: React.FC = () => {
   React.useEffect(() => {
     loadHeatmapData();
     loadSectorData();
-  }, [period]);
+  }, []);
 
   const loadHeatmapData = async () => {
     setHeatmapLoading(true);
@@ -64,7 +64,6 @@ const Performance: React.FC = () => {
           <TabPanel header="Heatmap">
             <PerformanceHeatmap
               data={heatmapData}
-              period={period}
               loading={heatmapLoading}
             />
           </TabPanel>
@@ -72,7 +71,6 @@ const Performance: React.FC = () => {
           <TabPanel header="Секторный анализ">
             <SectorAnalysis
               data={sectorData}
-              period={period}
               loading={sectorLoading}
             />
           </TabPanel>

@@ -14,11 +14,11 @@ import { apiService } from '../services/apiService';
 import {
   AdvancedMetricsSummaryResponse,
   PeriodType,
-  AdvancedMetrics as AdvancedMetricsType,
-  BaseMetrics,
+  // AdvancedMetrics, // Reserved for future use
+  // BaseMetrics, // Reserved for future use
   PeriodAnalysis,
   DayOfWeekAnalysis,
-  MonthStats
+  // MonthStats // Reserved for future use
 } from '../types/advancedMetrics';
 
 interface AdvancedMetricsProps {

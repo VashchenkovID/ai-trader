@@ -31,9 +31,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   rejectClassName = '',
   onAccept,
   onReject,
-  acceptIcon = 'pi pi-check',
-  rejectIcon = 'pi pi-times',
-  blockScroll = true,
+  // acceptIcon = 'pi pi-check', // Reserved for future use
+  // rejectIcon = 'pi pi-times', // Reserved for future use
+  // blockScroll = true, // Reserved for future use
   dismissableMask = true,
 }) => {
   return (
@@ -42,8 +42,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       onClose={onReject}
       title={header}
       size="sm"
-      blockScroll={blockScroll}
-      dismissableMask={dismissableMask}
+      closeOnBackdropClick={dismissableMask}
     >
       <div className="confirm-dialog-content">
         {icon && (
@@ -104,8 +103,8 @@ export const confirmDialog = (options: {
   if (globalConfirmDialogRef) {
     globalConfirmDialogRef.show({
       ...options,
-      onAccept: options.accept || (() => {}),
-      onReject: options.reject || (() => {}),
+      accept: options.accept || (() => {}),
+      reject: options.reject || (() => {}),
     });
   } else {
     // Fallback на стандартный confirm, если компонент не инициализирован

@@ -27,7 +27,7 @@ interface NewsListProps {
 export const NewsList: React.FC<NewsListProps> = ({
   news,
   loading = false,
-  loadingMore = false,
+  // loadingMore = false, // Reserved for future use
   onRefresh,
   onShowMore,
   formatDate,

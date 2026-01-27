@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/Card/Card';
 import { Badge } from '../ui/Badge/Badge';
 import { Skeleton } from '../ui/Skeleton/Skeleton';
-import { apiService } from '../../services/apiService';
+// import { apiService } from '../../services/apiService'; // Reserved for future use
 import './MarketRegimeIndicator.css';
 
 export type MarketRegime = 'trend' | 'flat' | 'volatile' | 'normal';

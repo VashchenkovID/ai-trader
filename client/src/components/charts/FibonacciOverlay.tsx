@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Card } from '../ui/Card/Card';
+// import { Card } from '../ui/Card/Card'; // Reserved for future use
 import './FibonacciOverlay.css';
 
 export interface FibonacciData {
@@ -7,6 +7,7 @@ export interface FibonacciData {
     level: number;
     price: number;
     percentage: number;
+    label?: string; // Опциональное поле для метки
   }>;
   currentLevel: number | null;
   support: number | null;
@@ -21,19 +22,19 @@ interface FibonacciOverlayProps {
   className?: string;
 }
 
-const FIBONACCI_LEVELS = [
-  { percentage: 0, label: '0%' },
-  { percentage: 23.6, label: '23.6%' },
-  { percentage: 38.2, label: '38.2%' },
-  { percentage: 50, label: '50%' },
-  { percentage: 61.8, label: '61.8%' },
-  { percentage: 78.6, label: '78.6%' },
-  { percentage: 100, label: '100%' },
-];
+// const FIBONACCI_LEVELS = [ // Reserved for future use
+//   { percentage: 0, label: '0%' },
+//   { percentage: 23.6, label: '23.6%' },
+//   { percentage: 38.2, label: '38.2%' },
+//   { percentage: 50, label: '50%' },
+//   { percentage: 61.8, label: '61.8%' },
+//   { percentage: 78.6, label: '78.6%' },
+//   { percentage: 100, label: '100%' },
+// ];
 
 export const FibonacciOverlay: React.FC<FibonacciOverlayProps> = ({
   data,
-  currentPrice,
+  currentPrice: _currentPrice,
   className = ''
 }) => {
   const currentLevelInfo = useMemo(() => {
@@ -47,7 +48,7 @@ export const FibonacciOverlay: React.FC<FibonacciOverlayProps> = ({
     return null;
   }
 
-  const range = data.high - data.low;
+  // const range = data.high - data.low; // Reserved for future use
 
   return (
     <div className={`fibonacci-overlay ${className}`}>
@@ -60,7 +61,7 @@ export const FibonacciOverlay: React.FC<FibonacciOverlayProps> = ({
         {currentLevelInfo && (
           <div className="fibonacci-current">
             <span className="current-label">Текущий уровень:</span>
-            <span className="current-value">{currentLevelInfo.label} ({currentLevelInfo.price.toFixed(2)})</span>
+            <span className="current-value">{currentLevelInfo.label || `${currentLevelInfo.percentage}%`} ({currentLevelInfo.price.toFixed(2)})</span>
           </div>
         )}
         {data.support && (
@@ -96,7 +97,7 @@ export const FibonacciOverlay: React.FC<FibonacciOverlayProps> = ({
             >
               <div className="level-line" />
               <div className="level-label">
-                <span className="level-percentage">{level.label}</span>
+                <span className="level-percentage">{level.label || `${level.percentage}%`}</span>
                 <span className="level-price">{level.price.toFixed(2)}</span>
               </div>
             </div>

@@ -32,7 +32,7 @@ const SchedulerStatusCard: React.FC<SchedulerStatusCardProps> = ({ schedulerStat
           {[1, 2, 3].map((item) => (
             <div key={item} className="scheduler-status-skeleton-item">
               <Skeleton variant="text" size="sm" style={{ width: '60%', marginBottom: '0.5rem' }} />
-              <Skeleton variant="text" size="xs" style={{ width: '40%' }} />
+              <Skeleton variant="text" size="sm" style={{ width: '40%' }} />
             </div>
           ))}
         </div>
@@ -98,17 +98,17 @@ const SchedulerStatusCard: React.FC<SchedulerStatusCardProps> = ({ schedulerStat
                   <div className="scheduler-status-task-name">{task.name}</div>
                   {task.schedule && (
                     <div className="scheduler-status-task-schedule">
-                      Статус: <Badge variant={task.status === 'active' ? 'success' : 'error'} size="sm">
-                        {task.status || task.schedule}
+                      Статус: <Badge variant={('status' in task && task.status === 'active') ? 'success' : 'error'} size="sm">
+                        {('status' in task ? task.status : null) || task.schedule}
                       </Badge>
                     </div>
                   )}
-                  {task.lastRun && (
+                  {'lastRun' in task && task.lastRun && (
                     <div className="scheduler-status-task-time">
                       Последний запуск: {new Date(task.lastRun).toLocaleString('ru-RU')}
                     </div>
                   )}
-                  {task.nextRun && (
+                  {'nextRun' in task && task.nextRun && (
                     <div className="scheduler-status-task-time">
                       Следующий запуск: {new Date(task.nextRun).toLocaleString('ru-RU')}
                     </div>

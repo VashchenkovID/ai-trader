@@ -15,7 +15,7 @@ export const CriticalAlertsCard: React.FC<CriticalAlertsCardProps> = ({
   className = '',
   maxAlerts = 3
 }) => {
-  const { alerts, clearAlerts } = useWebSocketData();
+  const { alerts } = useWebSocketData();
   const navigate = useNavigate();
 
   // Фильтруем только критические и высокие алерты
@@ -86,7 +86,7 @@ export const CriticalAlertsCard: React.FC<CriticalAlertsCardProps> = ({
               <div className="alert-body">
                 <div className="alert-header">
                   <span className="alert-title">{alert.title || alert.message}</span>
-                  <Badge variant={getSeverityVariant(alert.severity)} size="xs">
+                  <Badge variant={getSeverityVariant(alert.severity)} size="sm">
                     {alert.severity === 'critical' ? 'Критично' : 'Высокий'}
                   </Badge>
                 </div>

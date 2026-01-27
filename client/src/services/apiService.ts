@@ -111,6 +111,8 @@ export interface TradingStats {
     winRate: number;
     totalTrades: number;
     successfulTrades: number;
+    dayChange?: number; // Опциональное поле для изменения за день
+    dayChangePercent?: number; // Опциональное поле для процентного изменения за день
     recommendations?: {
         figi: string;
         ticker: string;
@@ -129,8 +131,9 @@ export interface Recommendation {
     confidence: number;
     score: number;
     analysis: any;
-    explanation: any;
+    explanation?: any; // Опциональное поле
     priceAtAnalysis: number;
+    currentPrice?: number; // Опциональное поле для текущей цены
     targetPrice: number;
     stopLoss: number;
     takeProfit: number;
@@ -198,6 +201,11 @@ export interface PerformanceMetrics {
     trading: any;
     system: any;
     timestamp: string;
+    // Дополнительные метрики производительности
+    responseTime?: number;
+    throughput?: number;
+    errorRate?: number;
+    cacheHitRate?: number;
 }
 
 export interface Settings {

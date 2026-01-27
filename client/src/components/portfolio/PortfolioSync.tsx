@@ -93,7 +93,7 @@ const PortfolioSync: React.FC = () => {
         life: 2000
       });
 
-      const response = await apiService.syncRealPortfolio();
+      await apiService.syncRealPortfolio();
       
       toast.current?.show({
         severity: 'success',

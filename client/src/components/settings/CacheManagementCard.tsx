@@ -115,7 +115,7 @@ const CacheManagementCard: React.FC<CacheManagementCardProps> = ({
               loading={newsUpdating}
               disabled={cacheUpdating || newsUpdating}
               size="sm"
-              variant="default"
+              variant="secondary"
               icon={<i className="pi pi-refresh"></i>}
               fullWidth
             >

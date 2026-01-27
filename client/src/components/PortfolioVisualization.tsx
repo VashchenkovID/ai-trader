@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Alert } from './ui/Alert/Alert';
 import { Toast } from 'primereact/toast';
 import './PortfolioVisualization.css';
-import { apiService } from '../services/apiService';
+import { apiService, TradingStats } from '../services/apiService';
 import { useWebSocketData } from './WebSocketDataProvider';
 import useWebSocket from '../hooks/useWebSocket';
 import PortfolioSummaryCard, { PortfolioSummary } from './portfolio/PortfolioSummaryCard';
@@ -137,12 +137,13 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
     if (!portfolioData) {
       // Если нет данных портфеля, но есть данные из WebSocket, используем их
       if (tradingStats) {
-        const wsTotalValue = tradingStats.portfolioValue || 0;
-        const wsCash = tradingStats.cash || 0;
+        const typedTradingStats = tradingStats as TradingStats;
+        const wsTotalValue = typedTradingStats.portfolioValue || 0;
+        const wsCash = typedTradingStats.cash || 0;
         const wsInvestedAmount = wsTotalValue - wsCash;
         const wsInitialCapital = 1000000; // Значение по умолчанию для paper mode
-        const wsTotalPnL = tradingStats.totalPnL !== undefined 
-          ? tradingStats.totalPnL 
+        const wsTotalPnL = typedTradingStats.totalPnL !== undefined 
+          ? typedTradingStats.totalPnL 
           : (wsTotalValue - wsInitialCapital);
         const wsTotalPnLPercent = wsInitialCapital > 0 ? (wsTotalPnL / wsInitialCapital) * 100 : 0;
         
@@ -153,8 +154,8 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
           totalPnL: wsTotalPnL,
           totalPnLPercent: wsTotalPnLPercent,
           positionsCount: positionsData.length,
-          dayChange: tradingStats.dayChange || 0,
-          dayChangePercent: tradingStats.dayChangePercent || 0
+          dayChange: typedTradingStats?.dayChange ?? 0,
+          dayChangePercent: typedTradingStats?.dayChangePercent ?? 0
         };
       }
       return null;
@@ -181,15 +182,15 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
     // Если есть данные о дневном изменении из API, используем их, иначе рассчитываем упрощенно
     const dayChange = portfolioData.dayChange !== undefined 
       ? portfolioData.dayChange 
-      : (tradingStats?.dayChange !== undefined 
-          ? tradingStats.dayChange 
+      : (tradingStats && (tradingStats as TradingStats).dayChange !== undefined 
+          ? (tradingStats as TradingStats).dayChange 
           : 0); // Если данных нет, показываем 0 вместо неправильного расчета
     const dayChangePercent = totalValue > 0 && dayChange !== 0 
       ? (dayChange / totalValue) * 100 
       : (portfolioData.dayChangePercent !== undefined 
           ? portfolioData.dayChangePercent 
-          : (tradingStats?.dayChangePercent !== undefined 
-              ? tradingStats.dayChangePercent 
+          : (tradingStats && (tradingStats as TradingStats).dayChangePercent !== undefined 
+              ? (tradingStats as TradingStats).dayChangePercent 
               : 0)); // Согласованная логика fallback: сначала portfolioData, затем tradingStats, затем 0
 
     return {

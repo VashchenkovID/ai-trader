@@ -93,7 +93,7 @@ const ModelMetricsWidget: React.FC<ModelMetricsWidgetProps> = ({
           <span>📈 Метрики моделей</span>
           <Badge 
             value={modelMetrics.length} 
-            severity={isConnected ? 'success' : 'secondary'}
+            severity={isConnected ? 'success' : 'info'}
           />
         </div>
       }

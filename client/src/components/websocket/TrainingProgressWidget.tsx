@@ -2,7 +2,7 @@ import React from 'react';
 import { Card } from 'primereact/card';
 import { ProgressBar } from 'primereact/progressbar';
 import { Badge } from 'primereact/badge';
-import { useWebSocketData, TrainingProgress } from '../WebSocketDataProvider';
+import { useWebSocketData } from '../WebSocketDataProvider';
 
 interface TrainingProgressWidgetProps {
   className?: string;

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, ReactNode, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Table, TableColumn, SortDirection } from './Table';
 import { Button } from '../Button/Button';
 import { Skeleton } from '../Skeleton/Skeleton';
@@ -28,7 +28,7 @@ export interface DataTableProps<T = any> {
   size?: 'sm' | 'md' | 'lg';
 }
 
-export const DataTable = <T extends Record<string, any>>({
+export function DataTable<T extends Record<string, any>>({
   data,
   columns,
   loading = false,
@@ -39,14 +39,18 @@ export const DataTable = <T extends Record<string, any>>({
   selection = [],
   onSelectionChange,
   selectionMode,
-  sortMode = 'single',
-  removableSort = false,
+  sortMode = 'single' as const, // Reserved for future use
+  removableSort = false, // Reserved for future use
   emptyMessage = 'Нет данных',
   className = '',
   size = 'md',
-}: DataTableProps<T>) => {
+}: DataTableProps<T>) {
+  // Подавляем предупреждения о неиспользуемых параметрах
+  void sortMode;
+  void removableSort;
+  
   const [currentPage, setCurrentPage] = useState(Math.floor(initialFirst / rows));
-  const [sortColumns, setSortColumns] = useState<Map<string, SortDirection>>(new Map());
+  const [sortColumns, _setSortColumns] = useState<Map<string, SortDirection>>(new Map()); // Reserved for future use
 
   // Обработка сортировки
   const sortedData = useMemo(() => {
@@ -142,37 +146,38 @@ export const DataTable = <T extends Record<string, any>>({
     return paginatedData.length > 0 && paginatedData.every((row) => isRowSelected(row));
   }, [paginatedData, isRowSelected]);
 
-  // Обработка сортировки
-  const handleSort = useCallback((column: DataTableColumn<T>) => {
-    if (!column.sortable) return;
+  // Обработка сортировки (зарезервировано для будущего использования)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // const handleSort = useCallback((column: DataTableColumn<T>) => { // Reserved for future use
+  //   if (!column.sortable) return;
 
-    const currentDirection = sortColumns.get(column.key);
-    let newDirection: SortDirection = 'asc';
+  //   const currentDirection = sortColumns.get(column.key);
+  //   let newDirection: SortDirection = 'asc';
 
-    if (currentDirection === 'asc') {
-      newDirection = 'desc';
-    } else if (currentDirection === 'desc') {
-      if (removableSort) {
-        newDirection = null;
-      } else {
-        newDirection = 'asc';
-      }
-    }
+  //   if (currentDirection === 'asc') {
+  //     newDirection = 'desc';
+  //   } else if (currentDirection === 'desc') {
+  //     if (removableSort) {
+  //       newDirection = null;
+  //     } else {
+  //       newDirection = 'asc';
+  //     }
+  //   }
 
-    const newSortColumns = new Map(sortColumns);
+  //   const newSortColumns = new Map(sortColumns);
 
-    if (sortMode === 'single') {
-      newSortColumns.clear();
-    }
+  //   if (sortMode === 'single') {
+  //     newSortColumns.clear();
+  //   }
 
-    if (newDirection) {
-      newSortColumns.set(column.key, newDirection);
-    } else {
-      newSortColumns.delete(column.key);
-    }
+  //   if (newDirection) {
+  //     newSortColumns.set(column.key, newDirection);
+  //   } else {
+  //     newSortColumns.delete(column.key);
+  //   }
 
-    setSortColumns(newSortColumns);
-  }, [sortColumns, sortMode, removableSort]);
+  //   setSortColumns(newSortColumns);
+  // }, [sortColumns, sortMode, removableSort]);
 
   // Преобразование колонок для Table
   const tableColumns: TableColumn<T>[] = useMemo(() => {
@@ -298,7 +303,6 @@ export const DataTable = <T extends Record<string, any>>({
       )}
     </div>
   );
-};
+}
 
 export default DataTable;
-

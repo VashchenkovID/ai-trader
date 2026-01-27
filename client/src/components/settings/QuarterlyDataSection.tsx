@@ -106,7 +106,7 @@ const QuarterlyDataSection: React.FC = () => {
         {stats.errors > 0 && (
           <div className="quarterly-data-stat-item">
             <span className="quarterly-data-stat-label">Ошибок:</span>
-            <Badge variant="danger" size="sm">{stats.errors || 0}</Badge>
+            <Badge variant="error" size="sm">{stats.errors || 0}</Badge>
           </div>
         )}
       </div>
@@ -204,7 +204,7 @@ const QuarterlyDataSection: React.FC = () => {
               {optionsResult.data.errors > 0 && (
                 <div className="quarterly-data-stat-item">
                   <span className="quarterly-data-stat-label">Ошибок:</span>
-                  <Badge variant="danger" size="sm">{optionsResult.data.errors || 0}</Badge>
+                  <Badge variant="error" size="sm">{optionsResult.data.errors || 0}</Badge>
                 </div>
               )}
             </div>
@@ -286,7 +286,7 @@ const QuarterlyDataSection: React.FC = () => {
                 macroResult.data.marketIndices?.errors?.length > 0) && (
                 <div className="quarterly-data-stat-item">
                   <span className="quarterly-data-stat-label">Ошибок:</span>
-                  <Badge variant="danger" size="sm">
+                  <Badge variant="error" size="sm">
                     {(macroResult.data.cbr?.errors?.length || 0) + 
                      (macroResult.data.rosstat?.errors?.length || 0) + 
                      (macroResult.data.moex?.errors?.length || 0) +
@@ -375,7 +375,7 @@ const QuarterlyDataSection: React.FC = () => {
               {indicesResult.data.errors && indicesResult.data.errors.length > 0 && (
                 <div className="quarterly-data-stat-item">
                   <span className="quarterly-data-stat-label">Ошибок:</span>
-                  <Badge variant="danger" size="sm">{indicesResult.data.errors.length}</Badge>
+                  <Badge variant="error" size="sm">{indicesResult.data.errors.length}</Badge>
                 </div>
               )}
             </div>

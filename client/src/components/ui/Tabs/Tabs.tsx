@@ -1,5 +1,5 @@
 import React, { HTMLAttributes } from 'react';
-import { useTheme } from '../../../contexts/ThemeContext';
+// import { useTheme } from '../../../contexts/ThemeContext'; // Reserved for future use
 import './Tabs.css';
 
 export interface TabOption {
@@ -25,7 +25,7 @@ export const Tabs: React.FC<TabsProps> = ({
   className = '',
   ...props
 }) => {
-  const { theme } = useTheme();
+  // const { theme } = useTheme(); // Reserved for future use
 
   const baseClasses = 'tabs';
   const sizeClass = `tabs-${size}`;

@@ -23,7 +23,7 @@ interface MetricCardData {
 
 const MetricsMonitoring: React.FC<MetricsMonitoringProps> = ({ className = '' }) => {
   const { systemStatus, systemResources, tradingStats, isConnected } = useWebSocketData();
-  const toast = useRef<Toast>(null);
+  const toast = useRef<Toast | null>(null);
   
   const [loading, setLoading] = useState(true);
   const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics | null>(null);
@@ -79,7 +79,7 @@ const MetricsMonitoring: React.FC<MetricsMonitoringProps> = ({ className = '' })
   const formatMetricCard = (title: string, value: any, unit: string = ''): MetricCardData => {
     let formattedValue: string | number = value;
     let change: number | undefined;
-    let trend: 'up' | 'down' | 'neutral' = 'neutral';
+    const trend: 'up' | 'down' | 'neutral' = 'neutral';
 
     if (typeof value === 'number') {
       if (value >= 1000) {
@@ -108,7 +108,7 @@ const MetricsMonitoring: React.FC<MetricsMonitoringProps> = ({ className = '' })
     {
       title: 'Использование памяти',
       value: `${systemResources.memory?.usage?.toFixed(1) || 0}%`,
-      description: `${(systemResources.memory?.used || 0 / 1024 / 1024 / 1024).toFixed(2)} GB / ${(systemResources.memory?.total || 0 / 1024 / 1024 / 1024).toFixed(2)} GB`
+      description: `${(systemResources.memory?.usage || 0 / 1024 / 1024 / 1024).toFixed(2)} GB / ${(systemResources.memory?.total || 0 / 1024 / 1024 / 1024).toFixed(2)} GB`
     }
   ] : [];
 
@@ -267,7 +267,7 @@ const MetricsMonitoring: React.FC<MetricsMonitoringProps> = ({ className = '' })
               {/* Hero Metrics Card */}
               <div>
                 <h2 className="text-xl font-semibold mb-4">Ключевые метрики</h2>
-                <HeroMetricsCard />
+                <HeroMetricsCard tradingStats={tradingStats} />
               </div>
             </div>
           </TabPanel>
@@ -410,8 +410,8 @@ const MetricsMonitoring: React.FC<MetricsMonitoringProps> = ({ className = '' })
                         ></div>
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        Использовано: {(systemResources.memory?.used || 0 / 1024 / 1024 / 1024).toFixed(2)} GB / 
-                        Всего: {(systemResources.memory?.total || 0 / 1024 / 1024 / 1024).toFixed(2)} GB
+                        Использовано: {((systemResources.memory?.usage || 0) / 1024 / 1024 / 1024).toFixed(2)} GB /
+                        Всего: {((systemResources.memory?.total || 0) / 1024 / 1024 / 1024).toFixed(2)} GB
                       </p>
                     </div>
                   </div>

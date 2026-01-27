@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card } from 'primereact/card';
 import { InputNumber } from 'primereact/inputnumber';
-import { Button } from 'primereact/button';
+// import { Button } from 'primereact/button'; // Reserved for future use
 import { Tag } from 'primereact/tag';
 import { Message } from 'primereact/message';
 import { Slider } from 'primereact/slider';

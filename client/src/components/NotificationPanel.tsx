@@ -3,7 +3,8 @@ import { Button } from './ui/Button/Button';
 import { OverlayPanel } from 'primereact/overlaypanel';
 import { Badge } from './ui/Badge/Badge';
 import { ScrollPanel } from 'primereact/scrollpanel';
-import { useWebSocketData, Alert, TradingSignal, TrainingProgress } from './WebSocketDataProvider';
+import { useWebSocketData, Alert, TradingSignal } from './WebSocketDataProvider';
+// import { TrainingProgress } from './WebSocketDataProvider'; // Reserved for future use
 import './NotificationPanel.css';
 
 interface NotificationItem {
@@ -91,9 +92,9 @@ const NotificationPanel: React.FC = () => {
 
     // Обработка прогресса обучения
     if (trainingProgress) {
-      const progressPercent = trainingProgress.totalEpochs > 0
-        ? Math.round((trainingProgress.currentEpoch / trainingProgress.totalEpochs) * 100)
-        : 0;
+      // const progressPercent = trainingProgress.totalEpochs > 0 // Reserved for future use
+      //   ? Math.round((trainingProgress.currentEpoch / trainingProgress.totalEpochs) * 100)
+      //   : 0;
 
       // Уведомление о начале обучения
       if (trainingProgress.currentEpoch === 1) {

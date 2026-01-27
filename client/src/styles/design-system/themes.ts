@@ -2,7 +2,7 @@
  * Темы дизайн-системы
  */
 
-import { darkColors, lightColors, type ColorScheme } from './colors';
+import { darkColors, lightColors } from './colors';
 import { typography } from './typography';
 import { spacing, borderRadius, layout } from './spacing';
 import { shadows } from './shadows';
@@ -39,7 +39,7 @@ export type ThemeName = 'dark' | 'light';
 
 // Хелперы для получения значений темы
 export const getTheme = (themeName: ThemeName = 'dark'): Theme => {
-  return themes[themeName];
+  return <Theme>themes[themeName];
 };
 
 // CSS переменные для темы (для использования в CSS)

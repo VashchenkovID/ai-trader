@@ -13,7 +13,7 @@ interface TradingModeValidationCardProps {
 
 const TradingModeValidationCard: React.FC<TradingModeValidationCardProps> = ({ 
   validation, 
-  currentMode 
+  currentMode: _currentMode 
 }) => {
   if (!validation) {
     return (

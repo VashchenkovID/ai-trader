@@ -16,6 +16,7 @@ interface MetaLearningManagerProps {
 
 interface MetaLearningStatus {
   isActive: boolean;
+  isInitialized?: boolean; // Опциональное поле
   adaptationCount: number;
   successRate: number;
   lastAdaptation: string;

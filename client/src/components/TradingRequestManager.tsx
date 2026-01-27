@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card/Card';
 import { Button } from '../components/ui/Button/Button';
 import { Badge } from '../components/ui/Badge/Badge';
@@ -118,12 +118,13 @@ const TradingRequestManager: React.FC = () => {
       await Promise.allSettled(
         uniqueFigis.map(async (figi) => {
           try {
-            const statResult = await apiService.getInstrumentStat(figi);
+            const statResult = await apiService.getInstrumentStat(figi as string);
             if (statResult.success && statResult.data) {
-              statsMap.set(figi, {
-                winRate: statResult.data.winRate,
-                kellyFraction: statResult.data.kellyFraction,
-                totalTrades: statResult.data.totalTrades
+              const data = statResult.data as { winRate: number; kellyFraction: number | null; totalTrades: number };
+              statsMap.set(figi as string, {
+                winRate: data.winRate,
+                kellyFraction: data.kellyFraction,
+                totalTrades: data.totalTrades
               });
             }
           } catch (error) {
@@ -224,68 +225,68 @@ const TradingRequestManager: React.FC = () => {
     );
   };
 
-  const getWinRateDisplay = (rowData: TradingRequest) => {
-    const winRate = rowData.instrumentStats?.winRate;
-    const totalTrades = rowData.instrumentStats?.totalTrades;
-    
-    if (winRate === undefined || winRate === null) {
-      return <span style={{ color: 'var(--color-text-secondary)' }}>—</span>;
-    }
-    
-    const winRatePercent = (winRate * 100).toFixed(1);
-    
-    // Определяем цвет в зависимости от Win Rate
-    let variant: 'success' | 'warning' | 'error' | 'info' = 'info';
-    if (winRate >= 0.6) {
-      variant = 'success';
-    } else if (winRate >= 0.5) {
-      variant = 'warning';
-    } else {
-      variant = 'error';
-    }
-    
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <Badge variant={variant} size="sm">{winRatePercent}%</Badge>
-        {totalTrades !== undefined && totalTrades > 0 && (
-          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>({totalTrades})</span>
-        )}
-      </div>
-    );
-  };
+  // const getWinRateDisplay = (rowData: TradingRequest) => { // Reserved for future use
+  //   const winRate = rowData.instrumentStats?.winRate;
+  //   const totalTrades = rowData.instrumentStats?.totalTrades;
+  //   
+  //   if (winRate === undefined || winRate === null) {
+  //     return <span style={{ color: 'var(--color-text-secondary)' }}>—</span>;
+  //   }
+  //   
+  //   const winRatePercent = (winRate * 100).toFixed(1);
+  //   
+  //   // Определяем цвет в зависимости от Win Rate
+  //   let variant: 'success' | 'warning' | 'error' | 'info' = 'info';
+  //   if (winRate >= 0.6) {
+  //     variant = 'success';
+  //   } else if (winRate >= 0.5) {
+  //     variant = 'warning';
+  //   } else {
+  //     variant = 'error';
+  //   }
+  //   
+  //   return (
+  //     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+  //       <Badge variant={variant} size="sm">{winRatePercent}%</Badge>
+  //       {totalTrades !== undefined && totalTrades > 0 && (
+  //         <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>({totalTrades})</span>
+  //       )}
+  //     </div>
+  //   );
+  // };
 
-  const getKellyDisplay = (rowData: TradingRequest) => {
-    const kellyFraction = rowData.instrumentStats?.kellyFraction;
-    
-    if (kellyFraction === undefined || kellyFraction === null) {
-      return <span style={{ color: 'var(--color-text-secondary)' }}>—</span>;
-    }
-    
-    const kellyPercent = (kellyFraction * 100).toFixed(2);
-    
-    // Определяем цвет в зависимости от Kelly Fraction
-    let variant: 'success' | 'warning' | 'error' | 'info' = 'info';
-    if (kellyFraction >= 0.15) {
-      variant = 'success';
-    } else if (kellyFraction >= 0.05) {
-      variant = 'warning';
-    } else if (kellyFraction > 0) {
-      variant = 'info';
-    } else {
-      variant = 'error';
-    }
-    
-    return <Badge variant={variant} size="sm">{kellyPercent}%</Badge>;
-  };
+  // const getKellyDisplay = (rowData: TradingRequest) => { // Reserved for future use
+  //   const kellyFraction = rowData.instrumentStats?.kellyFraction;
+  //   
+  //   if (kellyFraction === undefined || kellyFraction === null) {
+  //     return <span style={{ color: 'var(--color-text-secondary)' }}>—</span>;
+  //   }
+  //   
+  //   const kellyPercent = (kellyFraction * 100).toFixed(2);
+  //   
+  //   // Определяем цвет в зависимости от Kelly Fraction
+  //   let variant: 'success' | 'warning' | 'error' | 'info' = 'info';
+  //   if (kellyFraction >= 0.15) {
+  //     variant = 'success';
+  //   } else if (kellyFraction >= 0.05) {
+  //     variant = 'warning';
+  //   } else if (kellyFraction > 0) {
+  //     variant = 'info';
+  //   } else {
+  //     variant = 'error';
+  //   }
+  //   
+  //   return <Badge variant={variant} size="sm">{kellyPercent}%</Badge>;
+  // };
 
   // Функции сортировки для вложенных полей (PrimeReact не поддерживает dot notation)
-  const winRateSortFunction = (rowData: TradingRequest) => {
-    return rowData.instrumentStats?.winRate ?? -1; // -1 для сортировки null значений в конец
-  };
+  // const winRateSortFunction = (rowData: TradingRequest) => { // Reserved for future use
+  //   return rowData.instrumentStats?.winRate ?? -1; // -1 для сортировки null значений в конец
+  // };
 
-  const kellySortFunction = (rowData: TradingRequest) => {
-    return rowData.instrumentStats?.kellyFraction ?? -1; // -1 для сортировки null значений в конец
-  };
+  // const kellySortFunction = (rowData: TradingRequest) => { // Reserved for future use
+  //   return rowData.instrumentStats?.kellyFraction ?? -1; // -1 для сортировки null значений в конец
+  // };
 
   const handleApprove = (request: TradingRequest) => {
     setCurrentRequest(request);
@@ -825,7 +826,7 @@ const TradingRequestManager: React.FC = () => {
         <Select
           value={selectedMode}
           options={modeOptions}
-          onChange={(value) => setSelectedMode(value)}
+          onChange={(e) => setSelectedMode(e.target.value)}
           placeholder="Выберите режим"
           style={{ minWidth: '150px', maxWidth: '200px' }}
         />
@@ -837,7 +838,7 @@ const TradingRequestManager: React.FC = () => {
             { label: translateRecommendation('BUY'), value: 'BUY' },
             { label: translateRecommendation('SELL'), value: 'SELL' }
           ]}
-          onChange={(value) => setActionFilter(value as 'all' | 'BUY' | 'SELL')}
+          onChange={(e) => setActionFilter(e.target.value as 'all' | 'BUY' | 'SELL')}
           placeholder="Действие"
           style={{ minWidth: '120px', maxWidth: '180px' }}
         />
@@ -877,7 +878,7 @@ const TradingRequestManager: React.FC = () => {
               Одобрить ({selectedRequests.length})
             </Button>
             <Button
-              variant="error"
+              variant="danger"
               size="sm"
               onClick={handleBulkReject}
             >
@@ -943,7 +944,12 @@ const TradingRequestManager: React.FC = () => {
   return (
     <div className="trading-request-manager">
       <Toast ref={toast} />
-      <ConfirmDialog />
+      <ConfirmDialog 
+        visible={false}
+        message=""
+        onAccept={() => {}}
+        onReject={() => {}}
+      />
       
       <Card variant="default" className="h-full" header="🎯 Торговые заявки">
         <TabView activeIndex={activeTab} onTabChange={(e) => setActiveTab(e.index)}>
@@ -957,7 +963,7 @@ const TradingRequestManager: React.FC = () => {
                 data={filteredRequests}
                 columns={getTableColumns()}
                 selection={selectedRequests}
-                onSelectionChange={(selection) => setSelectedRequests(selection)}
+                onSelectionChange={(selection: TradingRequest[]) => setSelectedRequests(selection)}
                 selectionMode="multiple"
                 paginator
                 rows={10}
@@ -980,7 +986,7 @@ const TradingRequestManager: React.FC = () => {
                 data={filteredRequests}
                 columns={getPendingTableColumns()}
                 selection={selectedRequests}
-                onSelectionChange={(selection) => setSelectedRequests(selection)}
+                onSelectionChange={(selection: TradingRequest[]) => setSelectedRequests(selection)}
                 selectionMode="multiple"
                 paginator
                 rows={10}
@@ -1003,7 +1009,7 @@ const TradingRequestManager: React.FC = () => {
                 paginator
                 rows={10}
                 loading={loading}
-                size="sm"
+                // size="sm" // DataTable не поддерживает prop size
                 emptyMessage="Нет одобренных заявок"
               />
             )}
@@ -1029,14 +1035,13 @@ const TradingRequestManager: React.FC = () => {
             
             <div style={{ marginBottom: '16px' }}>
               <label htmlFor="comment" style={{ display: 'block', marginBottom: '8px' }}>Комментарий (необязательно)</label>
-              <Input
+              <textarea
                 id="comment"
-                type="textarea"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={3}
                 placeholder="Добавьте комментарий к одобрению..."
-                style={{ width: '100%' }}
+                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
               />
             </div>
             
@@ -1077,15 +1082,14 @@ const TradingRequestManager: React.FC = () => {
             
             <div style={{ marginBottom: '16px' }}>
               <label htmlFor="reason" style={{ display: 'block', marginBottom: '8px' }}>Причина отклонения *</label>
-              <Input
+              <textarea
                 id="reason"
-                type="textarea"
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
                 rows={3}
                 placeholder="Укажите причину отклонения заявки..."
                 required
-                style={{ width: '100%' }}
+                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
               />
             </div>
             
@@ -1098,7 +1102,7 @@ const TradingRequestManager: React.FC = () => {
                 Отмена
               </Button>
               <Button
-                variant="error"
+                variant="danger"
                 size="md"
                 onClick={confirmRejection}
                 disabled={!rejectionReason.trim()}

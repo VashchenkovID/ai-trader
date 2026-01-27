@@ -33,7 +33,7 @@ interface SignalsListProps {
 export const SignalsList: React.FC<SignalsListProps> = ({
   signals,
   loading = false,
-  loadingMore = false,
+  // loadingMore = false, // Reserved for future use
   onRefresh,
   onShowMore,
   formatDate,

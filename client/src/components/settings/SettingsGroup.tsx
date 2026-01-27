@@ -20,7 +20,7 @@ interface SettingsGroupProps {
   onUpdate: (key: string, value: any) => void;
 }
 
-const SettingsGroup: React.FC<SettingsGroupProps> = ({ module, settings, onUpdate }) => {
+const SettingsGroup: React.FC<SettingsGroupProps> = ({ module: _module, settings, onUpdate }) => {
   if (settings.length === 0) {
     return (
       <Card variant="glass" className="settings-group">
