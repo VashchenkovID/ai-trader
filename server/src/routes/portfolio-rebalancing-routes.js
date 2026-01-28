@@ -117,10 +117,14 @@ router.get('/history', async (req, res) => {
                 order: [['timestamp', 'DESC']]
             });
             
+            // Форматируем даты в строках ISO
+            const { formatModelsDates } = await import('../utils/dateFormatter.js');
+            const formattedHistory = formatModelsDates(rows, ['timestamp', 'createdAt', 'updatedAt']);
+            
             return res.json({
                 success: true,
                 data: {
-                    history: rows,
+                    history: formattedHistory,
                     total: count,
                     limit,
                     offset

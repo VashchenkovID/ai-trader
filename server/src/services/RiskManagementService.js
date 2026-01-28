@@ -769,14 +769,33 @@ class RiskManagementService {
         
         let runningPnL = 0;
         for (const trade of this.tradeHistory) {
-            runningPnL += trade.pnl;
+            runningPnL += trade.pnl || 0;
             if (runningPnL > peak) {
                 peak = runningPnL;
             }
             currentDrawdown = Math.max(currentDrawdown, peak - runningPnL);
         }
         
-        this.stats.currentDrawdown = currentDrawdown / (peak || 1);
+        // Рассчитываем просадку относительно пика или начального капитала
+        // Если peak <= 0, используем начальный капитал (1 000 000 по умолчанию для бумажной торговли)
+        const initialCapital = 1000000; // Начальный капитал по умолчанию
+        const referenceValue = peak > 0 ? peak : initialCapital;
+        
+        // Просадка не может быть больше 100% (1.0)
+        // Также ограничиваем максимальное значение разумным пределом (например, 2.0 = 200%)
+        let calculatedDrawdown = currentDrawdown / referenceValue;
+        
+        // Ограничиваем просадку разумными пределами
+        // Если просадка больше 1.0 (100%), это означает, что убытки превысили пик/капитал
+        // В этом случае устанавливаем просадку в 1.0 (100%)
+        calculatedDrawdown = Math.min(calculatedDrawdown, 1.0);
+        
+        // Также проверяем на NaN и Infinity
+        if (!isFinite(calculatedDrawdown) || isNaN(calculatedDrawdown)) {
+            calculatedDrawdown = 0;
+        }
+        
+        this.stats.currentDrawdown = calculatedDrawdown;
         this.stats.maxDrawdown = Math.max(this.stats.maxDrawdown, this.stats.currentDrawdown);
     }
 
@@ -842,8 +861,10 @@ class RiskManagementService {
      */
     async sendAlert(alert) {
         try {
-            const message = `🚨 ${alert.type.toUpperCase()}: ${alert.message}`;
-            await OptimizedTelegramService.sendAlert(message);
+            const alertType = alert.type.toUpperCase();
+            const message = alert.message || 'Нет описания';
+            const severity = alert.type === 'critical' ? 'critical' : alert.type === 'warning' ? 'warning' : 'info';
+            await OptimizedTelegramService.sendAlert(alertType, message, severity);
         } catch (error) {
             console.error('❌ Ошибка отправки алерта:', error);
         }
@@ -854,10 +875,13 @@ class RiskManagementService {
      */
     async sendEmergencyAlert() {
         try {
+            const drawdownPercent = (this.stats.currentDrawdown * 100).toFixed(1);
+            const limitPercent = (this.limits.maxDrawdown * 100).toFixed(1);
             const message = `🚨🚨🚨 ЭКСТРЕННАЯ ОСТАНОВКА ТОРГОВЛИ! 🚨🚨🚨\n\n` +
-                          `Просадка: ${(this.stats.currentDrawdown * 100).toFixed(1)}%\n` +
-                          `Лимит: ${(this.limits.maxDrawdown * 100)}%\n` +
+                          `Просадка: ${drawdownPercent}%\n` +
+                          `Лимит: ${limitPercent}%\n` +
                           `Все торговые операции приостановлены!`;
+            await OptimizedTelegramService.sendAlert('CRITICAL', message, 'critical');
             
             await OptimizedTelegramService.sendAlert(message);
         } catch (error) {

@@ -59,7 +59,7 @@
   background: var(--color-surface-hover);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-base);
-  padding: var(--spacing-2);
+  padding: var(--spacing-2) !important;
   transition: all 0.2s ease;
 }
 
@@ -116,6 +116,11 @@
 .rebalancing-result .result-message {
   font-size: 0.875rem;
   color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-2);
+}
+
+.rebalancing-result .rebalancing-button {
+  margin-top: var(--spacing-2);
 }
 
 .rebalancing-status-card .loading-spinner {

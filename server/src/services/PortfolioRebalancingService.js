@@ -712,12 +712,25 @@ class PortfolioRebalancingService {
      * Получение статуса сервиса
      */
     getStatus() {
+        // Форматируем даты в строки ISO
+        const formatDate = (date) => {
+            if (!date) return null;
+            if (date instanceof Date) {
+                return date.toISOString();
+            }
+            // Если это уже строка, возвращаем как есть
+            if (typeof date === 'string') {
+                return date;
+            }
+            return null;
+        };
+
         return {
             initialized: this.isInitialized,
             enabled: this.settings.enabled,
             settings: this.settings,
-            lastCheck: this.lastCheck,
-            lastRebalance: this.lastRebalance
+            lastCheck: formatDate(this.lastCheck),
+            lastRebalance: formatDate(this.lastRebalance)
         };
     }
 }

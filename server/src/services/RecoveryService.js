@@ -620,8 +620,32 @@ class RecoveryService {
      * Получение состояния восстановления
      */
     getRecoveryState() {
+        // Форматируем даты в строки ISO
+        const formatDate = (date) => {
+            if (!date) return null;
+            if (date instanceof Date) {
+                return date.toISOString();
+            }
+            if (typeof date === 'string') {
+                return date;
+            }
+            return null;
+        };
+
         return {
             ...this.recoveryState,
+            database: {
+                ...this.recoveryState.database,
+                lastCheck: formatDate(this.recoveryState.database.lastCheck)
+            },
+            websocket: {
+                ...this.recoveryState.websocket,
+                lastCheck: formatDate(this.recoveryState.websocket.lastCheck)
+            },
+            services: {
+                ...this.recoveryState.services,
+                lastCheck: formatDate(this.recoveryState.services.lastCheck)
+            },
             config: this.config,
             isInitialized: this.isInitialized
         };
@@ -631,23 +655,35 @@ class RecoveryService {
      * Получение статистики восстановления
      */
     getRecoveryStats() {
+        // Форматируем даты в строки ISO
+        const formatDate = (date) => {
+            if (!date) return null;
+            if (date instanceof Date) {
+                return date.toISOString();
+            }
+            if (typeof date === 'string') {
+                return date;
+            }
+            return null;
+        };
+
         return {
             database: {
                 isHealthy: this.recoveryState.database.isHealthy,
                 reconnectAttempts: this.recoveryState.database.reconnectAttempts,
-                lastCheck: this.recoveryState.database.lastCheck,
+                lastCheck: formatDate(this.recoveryState.database.lastCheck),
                 lastError: this.recoveryState.database.lastError
             },
             websocket: {
                 isHealthy: this.recoveryState.websocket.isHealthy,
                 reconnectAttempts: this.recoveryState.websocket.reconnectAttempts,
-                lastCheck: this.recoveryState.websocket.lastCheck,
+                lastCheck: formatDate(this.recoveryState.websocket.lastCheck),
                 lastError: this.recoveryState.websocket.lastError
             },
             services: {
                 isHealthy: this.recoveryState.services.isHealthy,
                 failedServices: this.recoveryState.services.failedServices,
-                lastCheck: this.recoveryState.services.lastCheck
+                lastCheck: formatDate(this.recoveryState.services.lastCheck)
             }
         };
     }

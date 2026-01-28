@@ -33,9 +33,10 @@ interface RebalancingCheck {
 }
 
 export const RebalancingStatusCard: React.FC<RebalancingStatusCardProps> = ({ className = '' }) => {
-  const toast = useRef<Toast>(null);
+  const toast = useRef<Toast | null>(null);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
+  const [executing, setExecuting] = useState(false);
   const [status, setStatus] = useState<RebalancingStatus | null>(null);
   const [checkResult, setCheckResult] = useState<RebalancingCheck | null>(null);
 
@@ -94,6 +95,60 @@ export const RebalancingStatusCard: React.FC<RebalancingStatusCardProps> = ({ cl
     }
   };
 
+  const handleExecuteRebalancing = async () => {
+    try {
+      setExecuting(true);
+      const { apiService } = await import('../../../services/apiService.ts');
+      const result = await apiService.executeRebalancing(false);
+      if (result.success) {
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Ребалансировка выполнена',
+          detail: result.data?.message || 'Портфель успешно ребалансирован',
+          life: 5000
+        });
+        // Обновляем статус после выполнения
+        const statusResult = await apiService.getRebalancingStatus();
+        if (statusResult.success) {
+          setStatus(statusResult.data);
+        }
+        // Сбрасываем результат проверки, чтобы убрать предупреждение
+        // Пользователь может выполнить новую проверку, если захочет
+        setCheckResult(null);
+        // Опционально: автоматически выполняем проверку после ребалансировки
+        // чтобы показать актуальное состояние
+        setTimeout(async () => {
+          try {
+            const checkResult = await apiService.checkRebalancingNeeded();
+            if (checkResult.success) {
+              setCheckResult(checkResult.data);
+            }
+          } catch (error) {
+            // Игнорируем ошибки при автоматической проверке
+            console.warn('Failed to auto-check rebalancing after execution:', error);
+          }
+        }, 1000);
+      } else {
+        toast.current?.show({
+          severity: 'error',
+          summary: 'Ошибка выполнения',
+          detail: result.message || 'Не удалось выполнить ребалансировку',
+          life: 5000
+        });
+      }
+    } catch (error: any) {
+      console.error('Error executing rebalancing:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Ошибка',
+        detail: error.message || 'Не удалось выполнить ребалансировку',
+        life: 5000
+      });
+    } finally {
+      setExecuting(false);
+    }
+  };
+
   const formatTimeAgo = (dateString: string | null) => {
     if (!dateString) return 'Никогда';
     const date = new Date(dateString);
@@ -110,7 +165,7 @@ export const RebalancingStatusCard: React.FC<RebalancingStatusCardProps> = ({ cl
   };
 
   const needsRebalancing = checkResult?.needsRebalancing || false;
-  const deviationsCount = checkResult?.deviations?.filter(d => d.needsRebalancing).length || 0;
+  const deviationsCount = checkResult?.deviations?.filter(d => !!d?.needsRebalancing).length || 0;
 
   return (
     <>
@@ -189,9 +244,23 @@ export const RebalancingStatusCard: React.FC<RebalancingStatusCardProps> = ({ cl
                   </div>
                 </div>
                 {needsRebalancing && deviationsCount > 0 && (
-                  <div className="result-message">
-                    {deviationsCount} позиций требуют корректировки
-                  </div>
+                  <>
+                    <div className="result-message">
+                      {deviationsCount} позиций требуют корректировки
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      fullWidth
+                      icon={executing ? <i className="pi pi-spin pi-spinner"></i> : <i className="pi pi-check"></i>}
+                      onClick={handleExecuteRebalancing}
+                      disabled={executing || loading}
+                      loading={executing}
+                      className="rebalancing-button"
+                    >
+                      {executing ? 'Выполняется...' : 'Выполнить ребалансировку'}
+                    </Button>
+                  </>
                 )}
               </div>
             )}

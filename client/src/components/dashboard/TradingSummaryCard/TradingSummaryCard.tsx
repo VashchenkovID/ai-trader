@@ -65,7 +65,7 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
         <div className="content-wrapper">
           {/* Активные позиции - компактный вид */}
           <div className="positions-block">
-            <div className="positions-label">Активные позиции</div>
+            <div className="positions-title">Активные позиции</div>
             <div className="positions-grid">
               <div className="positions-col">
                 <div className="positions-label-small">Количество</div>
@@ -80,17 +80,19 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
                 </div>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              fullWidth
-              icon={<i className="pi pi-arrow-right"></i>}
-              iconPosition="right"
-              onClick={() => navigate('/portfolio')}
-              style={{ marginTop: 'var(--spacing-2)' }}
-            >
-              Портфель
-            </Button>
+            <div className={'button-wrapper'}>
+              <Button
+                  variant="ghost"
+                  size="sm"
+                  fullWidth
+                  icon={<i className="pi pi-arrow-right"></i>}
+                  iconPosition="right"
+                  onClick={() => navigate('/portfolio')}
+                  style={{marginTop: 'var(--spacing-2)' }}
+              >
+                Портфель
+              </Button>
+            </div>
           </div>
 
           {/* Топ-3 рекомендаций */}
@@ -108,7 +110,6 @@ export const TradingSummaryCard: React.FC<TradingSummaryCardProps> = ({ tradingS
                   };
                   const strategyName = rec.strategyType ? strategyNames[rec.strategyType] || rec.strategyType : '';
                   const confidencePercent = (rec.confidence * 100).toFixed(0);
-                  
                   const isBuy = rec.recommendation === 'BUY';
                   return (
                     <div

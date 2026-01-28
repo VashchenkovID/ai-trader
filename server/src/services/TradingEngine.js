@@ -1,6 +1,6 @@
 import TradingModeManager from './TradingModeManager.js';
 import TinkoffApiService from './TinkoffApiService.js';
-import WebSocketService from './WebSocketService.js';
+import { getWebSocketService } from './WebSocketService.js';
 import RiskManagementService from './RiskManagementService.js';
 import CacheService from './CacheService.js';
 import VirtualPortfolio from '../models/VirtualPortfolio.js';
@@ -1137,7 +1137,15 @@ class TradingEngine {
         };
 
         // WebSocket уведомление
-        WebSocketService.broadcast(message);
+        try {
+            const webSocketService = getWebSocketService();
+            if (webSocketService && typeof webSocketService.broadcast === 'function') {
+                webSocketService.broadcast(message);
+            }
+        } catch (error) {
+            // Игнорируем ошибки WebSocket, чтобы не прерывать выполнение ордера
+            console.warn('Failed to broadcast order execution via WebSocket:', error.message);
+        }
     }
 
     /**

@@ -426,11 +426,26 @@ class ModelMonitoringService {
      * Получение статуса мониторинга
      */
     getStatus() {
+        // Форматируем даты в строки ISO
+        const formatDate = (date) => {
+            if (!date) return null;
+            if (date instanceof Date) {
+                return date.toISOString();
+            }
+            if (typeof date === 'string') {
+                return date;
+            }
+            return null;
+        };
+
         return {
             isInitialized: this.isInitialized,
             baselineModelsCount: this.baselineMetrics.size,
-            lastCheckTime: this.settings.lastCheckTime,
-            settings: { ...this.settings }
+            lastCheckTime: formatDate(this.settings.lastCheckTime),
+            settings: { 
+                ...this.settings,
+                lastCheckTime: formatDate(this.settings.lastCheckTime)
+            }
         };
     }
 
