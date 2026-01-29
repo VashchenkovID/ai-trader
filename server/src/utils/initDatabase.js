@@ -1,3 +1,28 @@
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+// Загружаем переменные окружения из .env файла
+// Определяем путь к .env файлу относительно текущего файла
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const envPath = path.resolve(__dirname, '../../../.env');
+
+// Загружаем .env файл (если он существует)
+const envResult = dotenv.config({ path: envPath });
+
+// Если не удалось загрузить из указанного пути, пробуем загрузить из корня проекта
+if (envResult.error) {
+    dotenv.config();
+}
+
+// Отладочный вывод (только если NODE_ENV не production)
+if (process.env.NODE_ENV !== 'production') {
+    console.log('📝 Загрузка переменных окружения:');
+    console.log(`   Путь к .env: ${envPath}`);
+    console.log(`   USER_PASSWORD установлен: ${process.env.USER_PASSWORD ? 'Да (длина: ' + process.env.USER_PASSWORD.length + ')' : 'Нет'}`);
+}
+
 import sequelize from '../config/database.js';
 import { Sequelize } from 'sequelize';
 import DatabaseConnectionManager from './DatabaseConnectionManager.js';
@@ -2919,16 +2944,17 @@ async function initializeUser() {
         console.log('\n👤 ИНИЦИАЛИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ:');
         
         // Проверяем наличие пароля в переменных окружения
-        let userPassword = process.env.USER_PASSWORD;
+        // Важно: dotenv.config() должен быть вызван в начале файла
+        const userPassword = process.env.USER_PASSWORD;
         
         if (!userPassword) {
             console.warn('   ⚠️ USER_PASSWORD не установлен в .env файле');
-            console.warn('   ⚠️ Будет создан пользователь с дефолтным паролем "admin123"');
-            console.warn('   ⚠️ ВАЖНО: Измените пароль после первого входа!');
-            userPassword = 'admin123'; // Дефолтный пароль для начальной настройки
-        } else {
-            console.log('   📝 Пароль из .env найден, длина:', userPassword.length);
+            console.warn('   ⚠️ Пользователь не будет создан');
+            console.warn('   ⚠️ Установите USER_PASSWORD в .env файле для создания пользователя');
+            return; // Не создаем пользователя без пароля
         }
+        
+        console.log('   📝 Пароль из .env найден, длина:', userPassword.length);
         
         // Проверяем, существует ли уже пользователь
         const existingUser = await User.findOne({ where: { username: 'admin' } });
