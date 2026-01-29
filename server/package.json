@@ -19,7 +19,9 @@
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "test:backup": "node test-backup.js",
     "test:auth": "node test-auth.js",
-    "switch:real": "node switch-to-real-mode.js"
+    "switch:real": "node switch-to-real-mode.js",
+    "fix:password": "node fix-user-password.js",
+    "check:password": "node check-password.js"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.15.0",

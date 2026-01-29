@@ -5,7 +5,7 @@ import User from '../models/User.js';
 import { authenticate } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { validateBody, validationRules } from '../middleware/validation.js';
-import { ValidationError } from '../utils/errors/AppError.js';
+import { ValidationError, AuthenticationError } from '../utils/errors/AppError.js';
 import { getJWTSecret } from '../utils/envValidator.js';
 
 const router = express.Router();
@@ -26,24 +26,27 @@ router.post('/login',
         const user = await User.findOne({ where: { username } });
         
         if (!user) {
-            throw new ValidationError('Неверное имя пользователя или пароль', [
-                { field: 'username', message: 'Пользователь не найден' }
-            ]);
+            // Используем AuthenticationError вместо ValidationError для ошибок авторизации
+            throw new AuthenticationError('Неверное имя пользователя или пароль');
         }
         
         if (!user.isActive) {
-            throw new ValidationError('Пользователь неактивен', [
-                { field: 'username', message: 'Аккаунт заблокирован' }
-            ]);
+            throw new AuthenticationError('Пользователь неактивен');
         }
         
         // Проверяем пароль
         const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
         
         if (!isPasswordValid) {
-            throw new ValidationError('Неверное имя пользователя или пароль', [
-                { field: 'password', message: 'Неверный пароль' }
-            ]);
+            // Логируем для отладки (без пароля)
+            console.warn('Login failed:', {
+                username,
+                userId: user.id,
+                passwordLength: password.length,
+                passwordHashLength: user.passwordHash.length,
+                reason: 'Password mismatch'
+            });
+            throw new AuthenticationError('Неверное имя пользователя или пароль');
         }
         
         // Обновляем время последнего входа
