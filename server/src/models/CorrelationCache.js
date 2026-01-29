@@ -137,15 +137,26 @@ CorrelationCache.getOrCalculate = async function(figi1, figi2, period = 30, calc
  * Очистка устаревших записей из кеша
  */
 CorrelationCache.cleanExpired = async function() {
-    const deleted = await this.destroy({
-        where: {
-            expiresAt: {
-                [Op.lt]: new Date()
+    try {
+        const deleted = await this.destroy({
+            where: {
+                expiresAt: {
+                    [Op.lt]: new Date()
+                }
             }
-        }
-    });
+        });
     
-    return deleted;
+        return deleted;
+    } catch (error) {
+        // Если таблица не существует, это не критично
+        if (error.name === 'SequelizeDatabaseError' && error.parent?.code === '42P01') {
+            // Таблица будет создана при синхронизации БД
+            return 0;
+        }
+        // Для других ошибок логируем и возвращаем 0
+        console.warn('⚠️ Не удалось очистить устаревшие записи из кеша корреляций:', error.message);
+        return 0;
+    }
 };
 
 /**

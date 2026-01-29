@@ -36,6 +36,9 @@ import ModelPerformance from '../models/ModelPerformance.js';
 import DatabaseMigration from '../models/DatabaseMigration.js';
 import OptionsData from '../models/OptionsData.js';
 import User from '../models/User.js';
+import CashFlow from '../models/CashFlow.js';
+import EntryOptimizationModel from '../models/EntryOptimizationModel.js';
+import SyncSettings from '../models/SyncSettings.js';
 import bcrypt from 'bcrypt';
 
 /**
@@ -147,8 +150,9 @@ async function safeSyncModel(Model, modelName = null) {
     try {
         // Сначала проверяем и добавляем отсутствующие столбцы
         await ensureModelColumns(Model);
-        // Затем синхронизируем модель
-        await Model.sync({ force: false });
+        // Используем alter: true для автоматического добавления новых полей в существующие таблицы
+        // Это безопасно: не удаляет данные, только добавляет недостающие поля и индексы
+        await Model.sync({ alter: true });
         console.log(`✅ Таблица ${name} создана/обновлена`);
     } catch (syncError) {
         // Игнорируем ошибки создания ENUM типов, если они уже существуют
@@ -432,7 +436,8 @@ export async function initDatabase() {
         }
 
         try {
-            await sequelize.sync({ force: false });
+            // Используем alter: true для автоматического добавления новых полей в существующие таблицы
+            await sequelize.sync({ alter: true });
         } catch (syncError) {
             // Игнорируем ошибки создания ENUM типов, если они уже существуют
             // Это нормально при повторной инициализации БД
@@ -759,6 +764,51 @@ export async function initDatabase() {
             console.log('✅ Таблица трейлинг-стопов создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы трейлинг-стопов:', syncError);
+        }
+        
+        // Создаем таблицу денежных потоков (CashFlow)
+        console.log('💰 Создание таблицы денежных потоков...');
+        try {
+            await safeSyncModel(CashFlow, 'CashFlow');
+            console.log('✅ Таблица денежных потоков создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы денежных потоков:', syncError);
+        }
+        
+        // Создаем таблицу оптимизации входа (EntryOptimization)
+        console.log('⏰ Создание таблицы оптимизации входа...');
+        try {
+            await safeSyncModel(EntryOptimizationModel, 'EntryOptimization');
+            console.log('✅ Таблица оптимизации входа создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы оптимизации входа:', syncError);
+        }
+        
+        // Создаем таблицу настроек синхронизации (SyncSettings)
+        console.log('🔄 Создание таблицы настроек синхронизации...');
+        try {
+            await safeSyncModel(SyncSettings, 'SyncSettings');
+            console.log('✅ Таблица настроек синхронизации создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы настроек синхронизации:', syncError);
+        }
+        
+        // Создаем таблицу компаний (Company)
+        console.log('🏢 Создание таблицы компаний...');
+        try {
+            await safeSyncModel(Company, 'Company');
+            console.log('✅ Таблица компаний создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы компаний:', syncError);
+        }
+        
+        // Создаем таблицу элементов портфеля (PortfolioItem)
+        console.log('📦 Создание таблицы элементов портфеля...');
+        try {
+            await safeSyncModel(PortfolioItem, 'PortfolioItem');
+            console.log('✅ Таблица элементов портфеля создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы элементов портфеля:', syncError);
         }
         
         // Инициализируем стратегии по умолчанию

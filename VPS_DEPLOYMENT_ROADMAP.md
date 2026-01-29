@@ -1376,6 +1376,87 @@ docker compose restart client
 2. Проверьте firewall (должны быть открыты порты 80 и 443)
 3. Проверьте, что контейнеры запущены: `docker compose ps`
 
+### Проблема: 502 Bad Gateway и ошибки прав доступа (EACCES)
+
+**Симптомы:**
+- `502 Bad Gateway` при запросах к API
+- В логах server: `EACCES: permission denied, mkdir '/app/backups/...'`
+- В логах server: `relation "correlation_cache" does not exist`
+
+**Причины:**
+1. Volume `./server/backups` монтируется с хоста, но директории не созданы или имеют неправильные права
+2. Таблица `correlation_cache` не создана в БД (не критично, но вызывает ошибки)
+
+**Решение:**
+
+1. **Исправление прав доступа к директориям backups:**
+
+```bash
+# Создайте директории на хосте
+cd ~/projects/ai-trader
+mkdir -p server/backups/database
+mkdir -p server/backups/settings
+mkdir -p server/backups/models
+mkdir -p server/backups/full
+mkdir -p server/backups/exports
+mkdir -p server/backups/uploads
+
+# Установите права доступа
+chmod -R 755 server/backups
+
+# Проверьте права
+ls -la server/backups/
+```
+
+Или используйте скрипт:
+```bash
+chmod +x fix-permissions.sh
+./fix-permissions.sh
+```
+
+2. **Инициализация базы данных (создание всех таблиц):**
+
+```bash
+# Убедитесь, что контейнеры запущены
+docker compose ps
+
+# Запустите инициализацию БД
+docker compose exec server npm run init-db
+
+# Проверьте логи на ошибки
+docker compose logs server --tail=50
+```
+
+3. **Перезапуск сервера:**
+
+```bash
+# Перезапустите server контейнер
+docker compose restart server
+
+# Проверьте, что он запустился без ошибок
+docker compose logs server --tail=50 | grep -i error
+
+# Проверьте health endpoint
+curl http://localhost:3001/health
+```
+
+4. **Проверка доступности из client контейнера:**
+
+```bash
+# Проверьте, что server доступен из client
+docker compose exec client curl http://server:3001/health
+
+# Если не работает, проверьте сеть
+docker network inspect ai-trader_ai-trader-network
+```
+
+**После исправления:**
+- Backend не должен падать при старте
+- 502 ошибки должны исчезнуть
+- API запросы должны работать
+
+**Примечание:** Ошибки о `correlation_cache` не критичны - таблица будет создана при синхронизации БД. Код теперь обрабатывает эти ошибки корректно.
+
 ---
 
 ## 📝 Чеклист развертывания

@@ -27,8 +27,17 @@ class CorrelationService {
             // Загружаем настройки
             await this.loadSettings();
             
-            // Очищаем устаревшие записи из кеша
-            await CorrelationCache.cleanExpired();
+            // Очищаем устаревшие записи из кеша (если таблица существует)
+            try {
+                await CorrelationCache.cleanExpired();
+            } catch (cleanError) {
+                // Если таблица не существует, это не критично - она будет создана при синхронизации
+                if (cleanError.name === 'SequelizeDatabaseError' && cleanError.parent?.code === '42P01') {
+                    console.warn('⚠️ Таблица correlation_cache не существует, будет создана при синхронизации БД');
+                } else {
+                    console.warn('⚠️ Не удалось очистить устаревшие записи из кеша корреляций:', cleanError.message);
+                }
+            }
             
             this.isInitialized = true;
         } catch (error) {
