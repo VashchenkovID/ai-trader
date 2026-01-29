@@ -435,6 +435,27 @@ export async function initDatabase() {
             console.warn('⚠️ Не удалось инициализировать менеджер соединений:', e.message);
         }
 
+        // ВАЖНО: Сначала создаем критически важные таблицы, которые используются сервисами при инициализации
+        // Settings должна быть ПЕРВОЙ, так как многие сервисы обращаются к ней при инициализации
+        console.log('⚙️ Создание таблицы настроек (Settings) - ПРИОРИТЕТ #1...');
+        try {
+            await safeSyncModel(Settings, 'Settings');
+            console.log('✅ Таблица настроек создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: Не удалось создать таблицу Settings:', syncError.message);
+            throw syncError; // Это критическая ошибка, прерываем инициализацию
+        }
+        
+        // TradingStrategy должна быть создана ПЕРЕД StrategyAllocationService
+        console.log('📈 Создание таблицы торговых стратегий (TradingStrategy) - ПРИОРИТЕТ #2...');
+        try {
+            await safeSyncModel(TradingStrategy, 'TradingStrategy');
+            console.log('✅ Таблица торговых стратегий создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: Не удалось создать таблицу TradingStrategy:', syncError.message);
+            throw syncError;
+        }
+        
         try {
             // Используем alter: true для автоматического добавления новых полей в существующие таблицы
             await sequelize.sync({ alter: true });
@@ -455,6 +476,15 @@ export async function initDatabase() {
                 // Пробрасываем другие ошибки
                 throw syncError;
             }
+        }
+        
+        // Создаем таблицу кешированных инструментов (CachedInstrument) - ДО добавления столбца instrumentType
+        console.log('📊 Создание таблицы кешированных инструментов...');
+        try {
+            await safeSyncModel(CachedInstrument, 'CachedInstrument');
+            console.log('✅ Таблица кешированных инструментов создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы кешированных инструментов:', syncError);
         }
         
         // Добавляем столбец instrumentType, если его нет
@@ -541,8 +571,8 @@ export async function initDatabase() {
         await safeSyncModel(TrainingState);
         
         // Создаем таблицы для стратегий торговли
-        console.log('📈 Создание таблиц торговых стратегий...');
-        await safeSyncModel(TradingStrategy);
+        // TradingStrategy уже создана в начале, создаем только связанные таблицы
+        console.log('📈 Создание таблиц для стратегий торговли...');
         await safeSyncModel(PortfolioAllocation);
         await safeSyncModel(PositionStrategy);
         
@@ -809,6 +839,69 @@ export async function initDatabase() {
             console.log('✅ Таблица элементов портфеля создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы элементов портфеля:', syncError);
+        }
+        
+        // Создаем таблицу кешированных свечей (CachedCandle)
+        console.log('🕯️ Создание таблицы кешированных свечей...');
+        try {
+            await safeSyncModel(CachedCandle, 'CachedCandle');
+            console.log('✅ Таблица кешированных свечей создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы кешированных свечей:', syncError);
+        }
+        
+        // Создаем таблицу рекомендаций (Recommendation)
+        console.log('💡 Создание таблицы рекомендаций...');
+        try {
+            await safeSyncModel(Recommendation, 'Recommendation');
+            console.log('✅ Таблица рекомендаций создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы рекомендаций:', syncError);
+        }
+        
+        // Создаем таблицу пользователей (User)
+        console.log('👤 Создание таблицы пользователей...');
+        try {
+            await safeSyncModel(User, 'User');
+            console.log('✅ Таблица пользователей создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы пользователей:', syncError);
+        }
+        
+        // Создаем таблицу пирамиды позиций (PositionPyramid)
+        console.log('🔺 Создание таблицы пирамиды позиций...');
+        try {
+            await safeSyncModel(PositionPyramid, 'PositionPyramid');
+            console.log('✅ Таблица пирамиды позиций создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы пирамиды позиций:', syncError);
+        }
+        
+        // Создаем таблицу производительности моделей (ModelPerformance)
+        console.log('📈 Создание таблицы производительности моделей...');
+        try {
+            await safeSyncModel(ModelPerformance, 'ModelPerformance');
+            console.log('✅ Таблица производительности моделей создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы производительности моделей:', syncError);
+        }
+        
+        // Создаем таблицу миграций БД (DatabaseMigration)
+        console.log('🔄 Создание таблицы миграций БД...');
+        try {
+            await safeSyncModel(DatabaseMigration, 'DatabaseMigration');
+            console.log('✅ Таблица миграций БД создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы миграций БД:', syncError);
+        }
+        
+        // Создаем таблицу статуса миграций (MigrationStatus)
+        console.log('📋 Создание таблицы статуса миграций...');
+        try {
+            await safeSyncModel(MigrationStatus, 'MigrationStatus');
+            console.log('✅ Таблица статуса миграций создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы статуса миграций:', syncError);
         }
         
         // Инициализируем стратегии по умолчанию
