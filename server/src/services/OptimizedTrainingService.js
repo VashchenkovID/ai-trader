@@ -259,28 +259,7 @@ class OptimizedTrainingService {
                 }
             }
 
-            // Завершаем воркер в мониторинге при успехе
-            if (workerId) {
-                try {
-                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
-                    WorkerMonitoringService.updateWorkerStatus(workerId, {
-                        progress: 100,
-                        metadata: {
-                            accuracy: trainingResult.finalAccuracy || 0,
-                            testAccuracy: testResult?.accuracy || null
-                        }
-                    });
-                    WorkerMonitoringService.completeWorker(workerId, true, {
-                        result: {
-                            accuracy: trainingResult.finalAccuracy || 0,
-                            testAccuracy: testResult?.accuracy || null,
-                            featuresCount: features.length
-                        }
-                    });
-                } catch (monitoringError) {
-                    console.warn('Failed to complete training worker in monitoring service:', monitoringError);
-                }
-            }
+            // Мониторинг воркера обрабатывается внутри trainModelViaWorker
 
             return {
                 success: true,
@@ -298,16 +277,7 @@ class OptimizedTrainingService {
             };
 
         } catch (error) {
-            // Завершаем воркер в мониторинге при ошибке
-            if (workerId) {
-                try {
-                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
-                    WorkerMonitoringService.reportWorkerError(workerId, error);
-                    WorkerMonitoringService.completeWorker(workerId, false, { error: error.message });
-                } catch (monitoringError) {
-                    console.warn('Failed to report training error in monitoring service:', monitoringError);
-                }
-            }
+            // Мониторинг воркера обрабатывается внутри trainModelViaWorker
             if (LoggerService.isInitialized) {
                 LoggerService.error('Training failed', {
                     service: 'OptimizedTrainingService',

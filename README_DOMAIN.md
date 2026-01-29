@@ -1,4 +1,4 @@
-# 🌐 Настройка домена vashchenkovaitrader.ru
+docker compose exec server cat logs/error.log# 🌐 Настройка домена vashchenkovaitrader.ru
 
 ## Быстрая настройка
 

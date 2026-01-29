@@ -22,22 +22,10 @@ router.post('/login',
     asyncHandler(async (req, res) => {
         const { username, password } = req.body;
         
-        // Отладочное логирование (безопасно - не логируем полный пароль)
-        console.log('Login attempt:', {
-            username,
-            passwordLength: password ? password.length : 0,
-            passwordType: typeof password,
-            passwordFirstChar: password ? password.charAt(0) : null,
-            passwordLastChar: password ? password.charAt(password.length - 1) : null,
-            bodyKeys: Object.keys(req.body),
-            contentType: req.get('content-type')
-        });
-        
         // Находим пользователя
         const user = await User.findOne({ where: { username } });
         
         if (!user) {
-            // Используем AuthenticationError вместо ValidationError для ошибок авторизации
             throw new AuthenticationError('Неверное имя пользователя или пароль');
         }
         
@@ -46,53 +34,10 @@ router.post('/login',
         }
         
         // Проверяем пароль
-        // Важно: убеждаемся, что password - это строка
         const passwordString = typeof password === 'string' ? password : String(password);
-        
-        // Логируем для диагностики (безопасно - не показываем полный пароль)
-        console.log('Password check:', {
-            passwordLength: passwordString.length,
-            passwordType: typeof password,
-            passwordFirstChars: passwordString.substring(0, 3),
-            passwordLastChars: passwordString.substring(passwordString.length - 3),
-            hashLength: user.passwordHash.length
-        });
-        
-        // Пробуем сравнить пароль
-        let isPasswordValid = await bcrypt.compare(passwordString, user.passwordHash);
-        
-        // Если пароль не совпадает и содержит %, пробуем декодировать URL-encoded символы
-        if (!isPasswordValid && passwordString.includes('%')) {
-            try {
-                const decodedPassword = decodeURIComponent(passwordString);
-                if (decodedPassword !== passwordString) {
-                    console.log('Password contains URL-encoded characters, trying decoded version');
-                    const isDecodedValid = await bcrypt.compare(decodedPassword, user.passwordHash);
-                    if (isDecodedValid) {
-                        console.log('✅ Password matches after URL decoding!');
-                        isPasswordValid = true; // Пароль совпадает после декодирования
-                        passwordString = decodedPassword; // Используем декодированный пароль
-                    }
-                }
-            } catch (decodeError) {
-                // Игнорируем ошибки декодирования
-                console.warn('URL decode failed:', decodeError.message);
-            }
-        }
+        const isPasswordValid = await bcrypt.compare(passwordString, user.passwordHash);
         
         if (!isPasswordValid) {
-            // Логируем для отладки (без пароля)
-            console.warn('Login failed - Password mismatch:', {
-                username,
-                userId: user.id,
-                passwordLength: passwordString.length,
-                passwordType: typeof password,
-                passwordHashLength: user.passwordHash.length,
-                passwordHashStart: user.passwordHash.substring(0, 20),
-                passwordPreview: `${passwordString.substring(0, 3)}...${passwordString.substring(passwordString.length - 3)}`,
-                containsPercent: passwordString.includes('%'),
-                reason: 'Password mismatch'
-            });
             throw new AuthenticationError('Неверное имя пользователя или пароль');
         }
         

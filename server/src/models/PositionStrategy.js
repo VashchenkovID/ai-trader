@@ -85,12 +85,11 @@ const PositionStrategy = sequelize.define('PositionStrategy', {
             fields: ['strategyId']
         },
         {
-            fields: ['strategyId']
-        },
-        {
+            name: 'idx_position_strategies_entry_date',
             fields: ['entryDate']
         },
         {
+            name: 'idx_position_strategies_exit_date',
             fields: ['exitDate']
         }
     ]

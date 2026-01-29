@@ -16,9 +16,19 @@ RUN npm ci --only=production && npm cache clean --force
 FROM node:22.15.0-alpine
 
 # Установка необходимых системных зависимостей
+# Добавляем glibc для onnxruntime-node (требует glibc вместо musl)
 RUN apk add --no-cache \
     postgresql-client \
+    gcompat \
     && rm -rf /var/cache/apk/*
+
+# Альтернативный способ: установка glibc через wget (если gcompat недостаточно)
+# RUN apk add --no-cache wget && \
+#     wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub && \
+#     wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.35-r1/glibc-2.35-r1.apk && \
+#     apk add --no-cache glibc-2.35-r1.apk && \
+#     rm glibc-2.35-r1.apk && \
+#     apk del wget
 
 WORKDIR /app
 
@@ -28,8 +38,8 @@ COPY --from=builder /app/node_modules ./node_modules
 # Копируем исходный код
 COPY . .
 
-# Создаем директории для логов и бэкапов
-RUN mkdir -p logs backups/database backups/settings backups/models backups/full backups/exports backups/uploads
+# Создаем директории для логов, бэкапов и моделей
+RUN mkdir -p logs models backups/database backups/settings backups/models backups/full backups/exports backups/uploads
 
 # Создаем непривилегированного пользователя
 RUN addgroup -g 1001 -S nodejs && \

@@ -290,6 +290,16 @@ async function safeSyncModel(Model, modelName = null) {
         )) {
             // Ошибка с кешем индексов - возможно, таблица в процессе изменения
             console.log(`⚠️ Таблица ${name} в процессе изменения индексов (это нормально)`);
+        } else if (syncError.message && (
+            syncError.message.includes('Unknown constraint') ||
+            syncError.message.includes('constraint') && syncError.message.includes('does not exist') ||
+            (syncError.original && syncError.original.message && (
+                syncError.original.message.includes('Unknown constraint') ||
+                syncError.original.message.includes('constraint') && syncError.original.message.includes('does not exist')
+            ))
+        )) {
+            // Ошибка с ограничениями/индексами - возможно, индекс уже существует или таблица в процессе изменения
+            console.log(`⚠️ Таблица ${name} имеет проблемы с ограничениями/индексами (это нормально, если таблица уже существует)`);
         } else {
             console.error(`❌ Ошибка синхронизации таблицы ${name}:`, syncError.message);
             // Не прерываем инициализацию при ошибке синхронизации
