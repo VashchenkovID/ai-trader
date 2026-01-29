@@ -78,7 +78,8 @@ class BackupService {
             this.settingsBackupDir,
             this.modelsBackupDir,
             this.fullBackupDir,
-            this.exportDir
+            this.exportDir,
+            path.join(this.backupDir, 'uploads') // Директория для загрузок файлов
         ];
 
         for (const dir of dirs) {

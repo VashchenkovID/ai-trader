@@ -29,7 +29,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY . .
 
 # Создаем директории для логов и бэкапов
-RUN mkdir -p logs backups/database backups/settings backups/models backups/full backups/exports
+RUN mkdir -p logs backups/database backups/settings backups/models backups/full backups/exports backups/uploads
 
 # Создаем непривилегированного пользователя
 RUN addgroup -g 1001 -S nodejs && \

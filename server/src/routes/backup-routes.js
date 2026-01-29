@@ -11,9 +11,29 @@ import { strictLimiter, heavyOperationLimiter } from '../middleware/rateLimiter.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Создаем директорию для загрузок, если её нет
+import fs from 'fs';
+const uploadsDir = path.join(__dirname, '../../backups/uploads');
+
+// Пытаемся создать директорию, но не падаем если не получилось
+// (права могут быть установлены позже через volume или при первом использовании)
+try {
+    if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true, mode: 0o755 });
+    }
+} catch (error) {
+    // Не критично - multer попытается создать при первом использовании
+    // или директория будет создана через volume mount
+    console.warn('⚠️ Не удалось создать директорию для загрузок при инициализации:', error.message);
+    console.warn('   Директория будет создана при первом использовании или через volume mount');
+}
+
 // Настройка multer для загрузки файлов
-const upload = multer({
-    dest: path.join(__dirname, '../../backups/uploads'),
+// Используем try-catch чтобы приложение не падало при ошибке прав доступа
+let upload;
+try {
+    upload = multer({
+        dest: uploadsDir,
     limits: {
         fileSize: 5 * 1024 * 1024 * 1024 // 5GB для ZIP архивов (бэкапы БД и моделей могут быть большими)
     },
@@ -28,7 +48,25 @@ const upload = multer({
             ]));
         }
     }
-});
+    });
+} catch (error) {
+    // Если не удалось инициализировать multer, создаем заглушку
+    // которая будет выбрасывать ошибку при использовании
+    console.error('❌ Критическая ошибка: не удалось инициализировать multer:', error.message);
+    console.error('   Проверьте права доступа к директории:', uploadsDir);
+    upload = {
+        single: () => (req, res, next) => {
+            next(new ValidationError('File upload is not available', [
+                { field: 'file', message: 'File upload service is not initialized. Check server logs.' }
+            ]));
+        },
+        array: () => (req, res, next) => {
+            next(new ValidationError('File upload is not available', [
+                { field: 'file', message: 'File upload service is not initialized. Check server logs.' }
+            ]));
+        }
+    };
+}
 
 const router = express.Router();
 
