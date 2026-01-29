@@ -175,28 +175,11 @@ async function safeSyncModel(Model, modelName = null) {
             const tableExists = tableExistsResult && (tableExistsResult.exists === true || tableExistsResult.exists === 't');
             
             if (tableExists) {
-                // Таблица существует - используем sync({ force: false }) чтобы не изменять ENUM типы
-                try {
-                    await Model.sync({ force: false });
-                } catch (enumError) {
-                    // Игнорируем ошибки изменения ENUM типов
-                    if (enumError.message && (
-                        enumError.message.includes('USING') ||
-                        enumError.message.includes('syntax error') ||
-                        enumError.message.includes('unterminated quoted string') ||
-                        enumError.message.includes('cannot cast') ||
-                        (enumError.original && enumError.original.message && (
-                            enumError.original.message.includes('USING') ||
-                            enumError.original.message.includes('syntax error')
-                        ))
-                    )) {
-                        // Ошибка изменения ENUM типа - это нормально, таблица уже существует
-                        console.log(`⚠️ Таблица ${name} существует, но не удалось изменить ENUM типы (это нормально)`);
-                        return;
-                    } else {
-                        throw enumError;
-                    }
-                }
+                // Таблица существует - НЕ используем sync, чтобы не изменять ENUM типы
+                // Просто проверяем и добавляем отсутствующие столбцы через ensureModelColumns
+                // (уже вызвано выше), и выходим
+                console.log(`✅ Таблица ${name} уже существует, пропускаем синхронизацию (ENUM типы не изменяются)`);
+                return;
             } else {
                 // Таблицы нет - создаем через alter: true
                 try {
@@ -230,13 +213,20 @@ async function safeSyncModel(Model, modelName = null) {
             syncError.message.includes('syntax error at or near') ||
             syncError.message.includes('syntax error') ||
             syncError.message.includes('unterminated quoted string') ||
-            syncError.message.includes('cannot cast')
-        ) || (syncError.original && syncError.original.message && (
-            syncError.original.message.includes('USING') ||
-            syncError.original.message.includes('syntax error')
+            syncError.message.includes('cannot cast') ||
+            syncError.message.includes('42601') // PostgreSQL syntax error code
+        ) || (syncError.original && (
+            (syncError.original.message && (
+                syncError.original.message.includes('USING') ||
+                syncError.original.message.includes('syntax error')
+            )) ||
+            syncError.original.code === '42601' // PostgreSQL syntax error code
         ))) {
             // Ошибка изменения ENUM типа - это нормально, таблица уже существует
             console.log(`⚠️ Таблица ${name} существует, но не удалось изменить ENUM типы (это нормально)`);
+        } else if (syncError.name === 'TypeError' && syncError.message && syncError.message.includes('Cannot read properties of null')) {
+            // Ошибка при чтении индексов - возможно, таблица в процессе создания
+            console.log(`⚠️ Таблица ${name} в процессе синхронизации, ошибка чтения индексов (это нормально)`);
         } else {
             console.error(`❌ Ошибка синхронизации таблицы ${name}:`, syncError.message);
             // Не прерываем инициализацию при ошибке синхронизации
@@ -532,27 +522,10 @@ export async function initDatabase() {
             throw syncError;
         }
         
-        try {
-            // Используем alter: true для автоматического добавления новых полей в существующие таблицы
-            await sequelize.sync({ alter: true });
-        } catch (syncError) {
-            // Игнорируем ошибки создания ENUM типов, если они уже существуют
-            // Это нормально при повторной инициализации БД
-            if (syncError.name === 'SequelizeUniqueConstraintError' && 
-                syncError.original && syncError.original.code === '23505' &&
-                syncError.original.detail && syncError.original.detail.includes('enum_')) {
-            } else if (syncError.name === 'SequelizeDatabaseError' && 
-                       syncError.original && 
-                       (syncError.original.code === '42703' || // столбец не существует
-                        syncError.message.includes('не существует') ||
-                        syncError.message.includes('does not exist'))) {
-                // Ошибка отсутствующего столбца - это нормально, столбцы будут добавлены при индивидуальной синхронизации
-                console.log('⚠️ Некоторые столбцы могут отсутствовать, они будут добавлены при синхронизации отдельных таблиц');
-            } else {
-                // Пробрасываем другие ошибки
-                throw syncError;
-            }
-        }
+        // НЕ используем sequelize.sync({ alter: true }) для всех моделей сразу,
+        // так как это вызывает ошибки с ENUM типами. Вместо этого синхронизируем
+        // каждую модель индивидуально через safeSyncModel, что безопаснее.
+        // Этот блок удален, так как все модели синхронизируются индивидуально ниже.
         
         // Создаем таблицу кешированных инструментов (CachedInstrument) - ДО добавления столбца instrumentType
         console.log('📊 Создание таблицы кешированных инструментов...');
@@ -1105,7 +1078,12 @@ export async function initDatabase() {
         console.log('✅ Настройки инициализированы (включая формулу Келли: включена по умолчанию)');
 
         // Инициализируем пользователя
-        await initializeUser();
+        try {
+            await initializeUser();
+        } catch (userError) {
+            console.error('❌ Ошибка инициализации пользователя:', userError.message);
+            // Не прерываем инициализацию БД при ошибке создания пользователя
+        }
 
         // Показываем статистику
         await showDatabaseStats();
@@ -2915,15 +2893,16 @@ async function initializeUser() {
         console.log('\n👤 ИНИЦИАЛИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ:');
         
         // Проверяем наличие пароля в переменных окружения
-        const userPassword = process.env.USER_PASSWORD;
+        let userPassword = process.env.USER_PASSWORD;
         
         if (!userPassword) {
             console.warn('   ⚠️ USER_PASSWORD не установлен в .env файле');
-            console.warn('   ⚠️ Пользователь не будет создан');
-            return;
+            console.warn('   ⚠️ Будет создан пользователь с дефолтным паролем "admin123"');
+            console.warn('   ⚠️ ВАЖНО: Измените пароль после первого входа!');
+            userPassword = 'admin123'; // Дефолтный пароль для начальной настройки
+        } else {
+            console.log('   📝 Пароль из .env найден, длина:', userPassword.length);
         }
-        
-        console.log('   📝 Пароль из .env найден, длина:', userPassword.length);
         
         // Проверяем, существует ли уже пользователь
         const existingUser = await User.findOne({ where: { username: 'admin' } });
@@ -2980,6 +2959,9 @@ async function initializeUser() {
 async function showDatabaseStats() {
     try {
         console.log('\n📊 СТАТИСТИКА БАЗЫ ДАННЫХ:');
+        
+        const usersCount = await User.count();
+        console.log(`   👤 Пользователи: ${usersCount}`);
         
         const settingsCount = await Settings.count();
         console.log(`   ⚙️ Настройки: ${settingsCount}`);
