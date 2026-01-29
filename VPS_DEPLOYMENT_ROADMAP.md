@@ -365,12 +365,17 @@ A      www    217.114.3.127         3600
 
 #### Если домен зарегистрирован у другого регистратора (например, Reg.ru):
 
-1. Войдите в панель вашего регистратора
-2. Найдите раздел "DNS" или "Управление DNS"
+**📖 Подробная инструкция:** См. файл [DNS_SETUP_REG_RU.md](./DNS_SETUP_REG_RU.md)
+
+**Краткая инструкция:**
+
+1. Войдите в панель управления Reg.ru: https://www.reg.ru/
+2. Перейдите в раздел **"Домены"** -> выберите ваш домен
 3. Убедитесь, что DNS серверы настроены на:
    - `ns1.reg.ru`
    - `ns2.reg.ru`
-4. Добавьте записи:
+4. Перейдите в раздел **"DNS-зона"** или **"Управление DNS"**
+5. Добавьте/измените записи:
 
 ```
 Тип    Имя    Значение              TTL
@@ -380,6 +385,8 @@ A      www    217.114.3.127         3600
 
 **IP адрес сервера:** `217.114.3.127`  
 **DNS серверы:** `ns1.reg.ru`, `ns2.reg.ru`
+
+**Примечание:** Для подробной пошаговой инструкции с скриншотами см. файл `DNS_SETUP_REG_RU.md`
 
 ### 6.3. Проверка DNS записей
 
@@ -397,7 +404,7 @@ dig www.yourdomain.com +short
 
 ---
 
-## 7. Настройка SSL/HTTPS
+## 7. Настройка SSL/HTTPS Вернуться сюда
 
 ### 7.1. Установка Certbot (Let's Encrypt)
 
@@ -413,6 +420,21 @@ certbot --version
 
 **Важно:** DNS записи должны быть настроены и распространены перед получением сертификата!
 
+#### Проверка занятости порта 80
+
+Перед получением сертификата убедитесь, что порт 80 свободен:
+
+```bash
+# Проверка, что занимает порт 80
+sudo lsof -i :80
+# или
+sudo netstat -tulpn | grep :80
+
+# Если порт занят, нужно временно освободить его
+```
+
+#### Вариант 1: Получение сертификата (если порт 80 свободен)
+
 ```bash
 # Получение сертификата для домена и www поддомена
 # Замените yourdomain.com на ваш реальный домен
@@ -426,29 +448,217 @@ sudo certbot certonly --standalone \
 # - Подтвердите email (Y или N)
 ```
 
+#### Вариант 2: Если порт 80 занят (nginx или Docker контейнеры запущены)
+
+Если у вас уже запущены Docker контейнеры или nginx на хосте:
+
+```bash
+# Шаг 1: Определите, что занимает порт 80
+sudo lsof -i :80
+# или
+sudo netstat -tulpn | grep :80
+
+# Вы увидите что-то вроде:
+# nginx   14905     root    5u  IPv4  36749      0t0  TCP *:http (LISTEN)
+# Это означает, что nginx запущен на хосте
+
+# Шаг 2: Остановите процесс
+# Если это nginx на хосте (наиболее вероятно):
+sudo systemctl stop nginx
+
+# Или если это Docker контейнеры:
+cd ~/projects/ai-trader
+docker compose down
+
+# Шаг 3: Проверьте, что порт 80 свободен
+sudo lsof -i :80
+# Должно быть пусто (или "command not found" если lsof не установлен)
+
+# Шаг 4: Получите сертификат
+sudo certbot certonly --standalone \
+  -d yourdomain.com \
+  -d www.yourdomain.com
+
+# Шаг 5: После получения сертификата
+# Если останавливали nginx на хосте, его можно оставить остановленным,
+# так как мы будем использовать nginx внутри Docker контейнера.
+# Или если хотите запустить обратно:
+sudo systemctl start nginx
+
+# Если останавливали Docker контейнеры:
+cd ~/projects/ai-trader
+docker compose up -d
+```
+
+**Примечание:** Если nginx был установлен автоматически при установке certbot (`python3-certbot-nginx`), его можно оставить остановленным, так как мы будем использовать nginx внутри Docker контейнера.
+
+#### Вариант 3: Использование webroot (если веб-сервер уже работает)
+
+Если вы не можете остановить веб-сервер, можно использовать метод webroot:
+
+```bash
+# Создайте директорию для проверки
+sudo mkdir -p /var/www/certbot
+
+# Получите сертификат через webroot
+sudo certbot certonly --webroot \
+  -w /var/www/certbot \
+  -d yourdomain.com \
+  -d www.yourdomain.com
+
+# Примечание: Для этого метода нужно настроить nginx так,
+# чтобы он отдавал файлы из /var/www/certbot по пути /.well-known/acme-challenge/
+```
+
 **Где сертификаты сохраняются:**
 - Сертификат: `/etc/letsencrypt/live/yourdomain.com/fullchain.pem`
 - Приватный ключ: `/etc/letsencrypt/live/yourdomain.com/privkey.pem`
 
 ### 7.2.1. Подготовка nginx.conf с вашим доменом
 
-После получения SSL сертификата нужно обновить конфигурацию nginx:
+После получения SSL сертификата нужно обновить конфигурацию nginx с вашим доменом.
+
+**Важно:** Замените `yourdomain.com` на ваш реальный домен во всех командах ниже!
+
+#### Вариант 1: Использовать шаблон (рекомендуется)
+
+Этот способ автоматически подставит ваш домен во все нужные места в конфигурации.
 
 ```bash
 # Переход в директорию проекта
 cd ~/projects/ai-trader
 
-# Вариант 1: Использовать шаблон (рекомендуется)
-# Установите gettext для envsubst (если не установлен)
+# Установка gettext для утилиты envsubst (если не установлен)
 sudo apt install -y gettext-base
 
-# Создайте nginx.conf из шаблона (замените yourdomain.com на ваш домен)
+# Создание nginx.conf из шаблона
+# ЗАМЕНИТЕ yourdomain.com на ваш реальный домен!
 export DOMAIN=yourdomain.com
 envsubst '${DOMAIN}' < client/nginx.conf.template > client/nginx.conf
 
-# Вариант 2: Редактировать вручную
+# Проверка результата
+cat client/nginx.conf | grep server_name
+# Должно показать: server_name yourdomain.com www.yourdomain.com;
+
+# Проверка SSL путей
+cat client/nginx.conf | grep ssl_certificate
+# Должно показать пути с вашим доменом: /etc/letsencrypt/live/yourdomain.com/...
+```
+
+**Пример для домена `example.ru`:**
+```bash
+export DOMAIN=example.ru
+envsubst '${DOMAIN}' < client/nginx.conf.template > client/nginx.conf
+```
+
+#### Вариант 2: Редактировать вручную
+
+Если вы предпочитаете редактировать вручную или у вас нет доступа к `envsubst`:
+
+```bash
+# Переход в директорию проекта
+cd ~/projects/ai-trader
+
+# Создание резервной копии (на всякий случай)
+cp client/nginx.conf client/nginx.conf.backup
+
+# Открытие файла для редактирования
 nano client/nginx.conf
-# Замените все вхождения vashchenkovaitrader.ru на yourdomain.com
+```
+
+**Что нужно заменить:**
+1. Найдите все вхождения `vashchenkovaitrader.ru` (или другого старого домена)
+2. Замените на ваш домен (например, `yourdomain.com`)
+3. Проверьте следующие места:
+   - `server_name` (должно быть: `yourdomain.com www.yourdomain.com`)
+   - `ssl_certificate` (должно быть: `/etc/letsencrypt/live/yourdomain.com/fullchain.pem`)
+   - `ssl_certificate_key` (должно быть: `/etc/letsencrypt/live/yourdomain.com/privkey.pem`)
+   - `Content-Security-Policy` (должно содержать: `wss://yourdomain.com https://yourdomain.com`)
+
+**Быстрая замена через sed (альтернатива):**
+```bash
+# ЗАМЕНИТЕ yourdomain.com на ваш реальный домен!
+sed -i 's/vashchenkovaitrader\.ru/yourdomain.com/g' client/nginx.conf
+
+# Проверка результата
+grep -n "yourdomain.com" client/nginx.conf
+```
+
+#### Проверка конфигурации nginx
+
+После создания/редактирования файла проверьте его корректность:
+
+```bash
+# Переход в директорию проекта (если еще не там)
+cd ~/projects/ai-trader
+
+# Вариант 1: Проверка через Docker (рекомендуется)
+# Это проверит синтаксис без установки nginx на хост
+docker run --rm \
+  -v $(pwd)/client/nginx.conf:/etc/nginx/conf.d/default.conf:ro \
+  nginx:alpine \
+  nginx -t
+
+# ⚠️ ВАЖНО: client/nginx.conf - это конфигурация виртуального хоста (server block),
+# а не полный конфигурационный файл nginx. Она предназначена для использования
+# внутри Docker контейнера. 
+#
+# НЕ используйте команду: sudo nginx -t -c "/root/projects/ai-trader/client/nginx.conf"
+# Это НЕ СРАБОТАЕТ, так как nginx ожидает полный конфигурационный файл с директивой http {},
+# а не только server block.
+#
+# Используйте ТОЛЬКО проверку через Docker (команда выше) - это правильный способ.
+```
+
+**Ожидаемый результат (успешная проверка):**
+```
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+
+**⚠️ Важно:** Если вы видите ошибку:
+```
+[emerg] host not found in upstream "server" in /etc/nginx/conf.d/default.conf:61
+```
+
+**Это нормально!** Имя "server" - это имя сервиса из docker-compose, которое доступно только когда контейнеры запущены в одной docker-compose сети. При проверке через отдельный Docker контейнер этот хост недоступен, но это не означает, что конфигурация неправильная.
+
+**Проверка синтаксиса (без проверки доступности upstream):**
+
+Если нужно проверить только синтаксис без проверки доступности upstream, можно использовать:
+
+```bash
+# Проверка только синтаксиса (игнорирует недоступные upstream)
+docker run --rm \
+  -v "$(pwd)/client/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+  nginx:alpine \
+  sh -c "nginx -t 2>&1 | grep -v 'host not found in upstream' || nginx -t"
+```
+
+**Или просто проверьте синтаксис вручную:**
+- Убедитесь, что все директивы правильно закрыты
+- Проверьте, что нет опечаток в именах директив
+- В реальной работе внутри docker-compose конфигурация будет работать корректно
+
+#### Что проверяет конфигурация
+
+Убедитесь, что в созданном `client/nginx.conf`:
+
+1. ✅ `server_name` содержит ваш домен (2 раза: для HTTP и HTTPS)
+2. ✅ `ssl_certificate` указывает на правильный путь с вашим доменом
+3. ✅ `ssl_certificate_key` указывает на правильный путь с вашим доменом
+4. ✅ `Content-Security-Policy` содержит `wss://yourdomain.com` и `https://yourdomain.com`
+
+**Пример правильной конфигурации:**
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name yourdomain.com www.yourdomain.com;
+    
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+    # ...
+}
 ```
 
 ### 7.3. Настройка автоматического обновления сертификата
@@ -941,6 +1151,45 @@ dig yourdomain.com +short
 
 # Проверка портов
 sudo netstat -tulpn | grep -E ':(80|443)'
+```
+
+### Проблема: Порт 80 уже занят при получении SSL сертификата
+
+**Ошибка:** `Could not bind TCP port 80 because it is already in use by another process`
+
+**Решение:**
+
+```bash
+# Шаг 1: Определите, что занимает порт 80
+sudo lsof -i :80
+# или
+sudo netstat -tulpn | grep :80
+
+# Шаг 2: Остановите процесс
+# Если это nginx на хосте (наиболее вероятно):
+sudo systemctl stop nginx
+
+# Или если это Docker контейнеры:
+cd ~/projects/ai-trader
+docker compose down
+
+# Если это другой процесс, найдите его PID и остановите:
+# sudo kill -9 <PID>
+
+# Шаг 3: Проверьте, что порт свободен
+sudo lsof -i :80
+# Должно быть пусто
+
+# Шаг 4: Получите сертификат
+sudo certbot certonly --standalone \
+  -d yourdomain.com \
+  -d www.yourdomain.com
+
+# Шаг 5: После получения сертификата запустите сервисы обратно
+cd ~/projects/ai-trader
+docker compose up -d
+# или
+sudo systemctl start nginx
 ```
 
 ### Проблема: Домен не открывается
