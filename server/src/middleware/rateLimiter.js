@@ -134,11 +134,14 @@ export function createRateLimiter(config = {}) {
 
 /**
  * Rate limiter для общих API endpoints
- * 1000 запросов за 15 минут (увеличено для одного пользователя)
+ * Для продакшена: 100000 запросов за 15 минут
+ * Для разработки: 1000 запросов за 15 минут
  */
 export const generalLimiter = createRateLimiter({
     windowMs: 15 * 60 * 1000, // 15 минут
-    max: 1000 // Увеличено с 100 до 1000 для одного пользователя
+    max: process.env.NODE_ENV === 'production' 
+        ? parseInt(process.env.RATE_LIMIT_MAX || '100000', 10) 
+        : parseInt(process.env.RATE_LIMIT_MAX || '1000', 10) // 100000 для продакшена, 1000 для разработки
 });
 
 /**

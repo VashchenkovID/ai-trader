@@ -41,6 +41,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100000}
       FRONTEND_URL: ${FRONTEND_URL:-https://vashchenkovaitrader.ru,https://www.vashchenkovaitrader.ru,http://vashchenkovaitrader.ru,http://www.vashchenkovaitrader.ru}
       TINKOFF_TOKEN: ${TINKOFF_TOKEN}
       TINKOFF_ACCOUNT_ID: ${TINKOFF_ACCOUNT_ID}
