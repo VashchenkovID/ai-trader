@@ -20,7 +20,8 @@
     "test:backup": "node test-backup.js",
     "test:auth": "node test-auth.js",
     "switch:real": "node switch-to-real-mode.js",
-    "check:user": "node check-user.js"
+    "check:user": "node check-user.js",
+    "check:auth": "node check-user-auth.js"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.15.0",
