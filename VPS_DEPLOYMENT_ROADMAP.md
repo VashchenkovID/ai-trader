@@ -750,6 +750,35 @@ docker compose logs -f
 docker compose logs client
 ```
 
+**✅ Важно: Nginx запускается автоматически!**
+
+Контейнер `client` использует образ `nginx:alpine` и автоматически запускает nginx при старте контейнера. Nginx будет:
+- ✅ Слушать на портах 80 (HTTP) и 443 (HTTPS)
+- ✅ Отдавать собранное React приложение из `/usr/share/nginx/html`
+- ✅ Использовать конфигурацию из `client/nginx.conf`
+- ✅ Проксировать запросы `/api` на backend контейнер `server:3001`
+- ✅ Проксировать WebSocket соединения `/ws` на backend
+- ✅ Редиректить HTTP на HTTPS (если настроено)
+
+**Проверка работы nginx после запуска:**
+
+```bash
+# Проверка, что контейнер client запущен
+docker compose ps client
+
+# Проверка логов nginx
+docker compose logs client
+
+# Проверка health check nginx
+docker compose exec client wget -qO- http://localhost/health
+# Должно вернуть: healthy
+
+# Проверка снаружи контейнера
+curl http://localhost/
+# или
+curl http://217.114.3.127/
+```
+
 ### 8.3. Инициализация базы данных
 
 ```bash
@@ -1265,6 +1294,79 @@ docker compose build client --no-cache
 
 # Или соберите только сервер и postgres, клиент соберете позже
 docker compose up -d postgres server
+```
+
+### Проблема: Ошибка "Неподдерживаемый протокол" или "Protocol not supported"
+
+**Ошибка:** `Протокол не поддерживается. Клиент и сервер используют либо разные версии протокола SSL, либо разные наборы шифров`
+
+**Причины:**
+1. Устаревшая конфигурация SSL/TLS в nginx
+2. Несовместимые наборы шифров
+3. Проблемы с сертификатами
+
+**Решение:**
+
+```bash
+# Шаг 1: Проверьте текущую конфигурацию nginx
+docker compose exec client cat /etc/nginx/conf.d/default.conf | grep -A 10 "ssl_protocols"
+
+# Шаг 2: Проверьте логи nginx на ошибки SSL
+docker compose logs client | grep -i ssl
+docker compose logs client | grep -i error
+
+# Шаг 3: Проверьте, что сертификаты существуют и доступны
+docker compose exec client ls -la /etc/letsencrypt/live/vashchenkovaitrader.ru/
+
+# Шаг 4: Если сертификаты отсутствуют, получите их
+sudo certbot certonly --standalone \
+  -d vashchenkovaitrader.ru \
+  -d www.vashchenkovaitrader.ru
+
+# Шаг 5: Убедитесь, что сертификаты смонтированы в docker-compose.yml
+# В docker-compose.yml должно быть (раскомментируйте):
+# volumes:
+#   - /etc/letsencrypt:/etc/letsencrypt:ro
+
+# Шаг 6: Пересоберите и перезапустите контейнер клиента
+cd ~/projects/ai-trader
+docker compose up -d --build client
+
+# Шаг 7: Проверьте конфигурацию nginx
+docker compose exec client nginx -t
+
+# Шаг 8: Проверьте SSL соединение
+openssl s_client -connect vashchenkovaitrader.ru:443 -servername vashchenkovaitrader.ru
+
+# Или через curl
+curl -vI https://vashchenkovaitrader.ru/
+```
+
+**Если проблема сохраняется:**
+
+```bash
+# Временно отключите OCSP stapling (может вызывать проблемы)
+# Отредактируйте client/nginx.conf и закомментируйте:
+# ssl_stapling on;
+# ssl_stapling_verify on;
+
+# Затем пересоберите:
+docker compose up -d --build client
+```
+
+**Проверка совместимости SSL:**
+
+```bash
+# Проверка через SSL Labs (онлайн)
+# Откройте: https://www.ssllabs.com/ssltest/analyze.html?d=vashchenkovaitrader.ru
+
+# Проверка поддерживаемых протоколов
+nmap --script ssl-enum-ciphers -p 443 vashchenkovaitrader.ru
+```
+
+**Важно:** После обновления конфигурации SSL обязательно перезапустите контейнер:
+```bash
+docker compose restart client
 ```
 
 ### Проблема: Домен не открывается

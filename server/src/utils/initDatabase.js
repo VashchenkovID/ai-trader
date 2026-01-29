@@ -1,4 +1,5 @@
 import sequelize from '../config/database.js';
+import { Sequelize } from 'sequelize';
 import DatabaseConnectionManager from './DatabaseConnectionManager.js';
 import Settings from '../models/Settings.js';
 import MigrationStatus from '../models/MigrationStatus.js';
@@ -329,9 +330,97 @@ async function ensureColumnsExist(tableName, columns) {
     }
 }
 
+/**
+ * Создает базу данных, если она не существует
+ */
+async function ensureDatabaseExists() {
+    const dbName = process.env.DB_NAME || 'smart_exchange';
+    const dbUser = process.env.DB_USER || 'postgres';
+    const dbPassword = process.env.DB_PASSWORD || '';
+    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbPort = process.env.DB_PORT || 5432;
+
+    // Подключаемся к системной БД postgres для создания целевой БД
+    const adminSequelize = new Sequelize('postgres', dbUser, dbPassword, {
+        host: dbHost,
+        port: dbPort,
+        dialect: 'postgres',
+        logging: false
+    });
+
+    try {
+        await adminSequelize.authenticate();
+        console.log('✅ Подключение к PostgreSQL установлено');
+
+        // Проверяем, существует ли БД
+        // Используем параметризованный запрос для безопасности (хотя dbName из env)
+        const [results] = await adminSequelize.query(
+            `SELECT 1 FROM pg_database WHERE datname = :dbName`,
+            {
+                replacements: { dbName }
+            }
+        );
+
+        if (results.length === 0) {
+            console.log(`📦 Создание базы данных "${dbName}"...`);
+            // CREATE DATABASE не поддерживает параметризацию, но dbName берется из env
+            await adminSequelize.query(`CREATE DATABASE "${dbName.replace(/"/g, '""')}"`);
+            console.log(`✅ База данных "${dbName}" создана успешно`);
+        } else {
+            console.log(`✅ База данных "${dbName}" уже существует`);
+        }
+
+        await adminSequelize.close();
+    } catch (error) {
+        // Закрываем соединение в любом случае
+        try {
+            await adminSequelize.close();
+        } catch (closeError) {
+            // Игнорируем ошибки закрытия
+        }
+
+        // Если ошибка подключения - возможно, PostgreSQL еще не запущен
+        if (error.name === 'SequelizeConnectionError' || 
+            error.name === 'SequelizeConnectionRefusedError' ||
+            error.message?.includes('ECONNREFUSED') ||
+            error.message?.includes('Connection refused')) {
+            console.error(`❌ Не удалось подключиться к PostgreSQL на ${dbHost}:${dbPort}`);
+            console.error(`   Убедитесь, что PostgreSQL запущен и доступен`);
+            throw new Error(`PostgreSQL недоступен: ${error.message}`);
+        }
+
+        // Если ошибка "база данных не существует" - это нормально, попробуем создать
+        if (error.message && error.message.includes('does not exist')) {
+            try {
+                const retrySequelize = new Sequelize('postgres', dbUser, dbPassword, {
+                    host: dbHost,
+                    port: dbPort,
+                    dialect: 'postgres',
+                    logging: false
+                });
+                await retrySequelize.authenticate();
+                console.log(`📦 Попытка создать базу данных "${dbName}"...`);
+                // CREATE DATABASE не поддерживает параметризацию, но dbName берется из env
+                await retrySequelize.query(`CREATE DATABASE "${dbName.replace(/"/g, '""')}"`);
+                console.log(`✅ База данных "${dbName}" создана успешно`);
+                await retrySequelize.close();
+            } catch (createError) {
+                console.error(`❌ Ошибка создания базы данных:`, createError.message);
+                throw createError;
+            }
+        } else {
+            console.error(`❌ Ошибка проверки базы данных:`, error.message);
+            throw error;
+        }
+    }
+}
+
 export async function initDatabase() {
 
     try {
+        // Сначала убеждаемся, что БД существует
+        await ensureDatabaseExists();
+
         // Подключение к базе данных
         await sequelize.authenticate();
 

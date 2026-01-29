@@ -23,12 +23,21 @@ server {
     # ssl_certificate /etc/nginx/ssl/cert.pem;
     # ssl_certificate_key /etc/nginx/ssl/key.pem;
 
-    # SSL настройки
+    # SSL настройки - современная и безопасная конфигурация
     ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
+    # Современный набор шифров, совместимый с большинством клиентов
+    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384';
+    ssl_prefer_server_ciphers off; # Для TLS 1.3 не нужен
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 10m;
+    ssl_session_tickets off; # Более безопасно
+    
+    # OCSP stapling (опционально, требует resolver)
+    # Раскомментируйте, если нужен OCSP stapling:
+    # resolver 8.8.8.8 8.8.4.4 valid=300s;
+    # resolver_timeout 5s;
+    # ssl_stapling on;
+    # ssl_stapling_verify on;
 
     # HSTS (HTTP Strict Transport Security)
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
@@ -100,3 +109,26 @@ server {
     }
 }
 
+
+
+# 1. Убедитесь, что сертификаты получены
+sudo certbot certificates
+
+# 2. Если сертификатов нет, получите их:
+sudo certbot certonly --standalone \
+  -d vashchenkovaitrader.ru \
+  -d www.vashchenkovaitrader.ru
+
+# 3. Пересоберите и перезапустите контейнер клиента
+cd ~/projects/ai-trader
+git pull  # Получите обновленную конфигурацию
+docker compose up -d --build client
+
+# 4. Проверьте конфигурацию nginx
+docker compose exec client nginx -t
+
+# 5. Перезапустите контейнер
+docker compose restart client
+
+# 6. Проверьте SSL соединение
+curl -vI https://vashchenkovaitrader.ru/
