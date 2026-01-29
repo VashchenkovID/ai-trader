@@ -193,6 +193,27 @@ export async function performFullCacheUpdate(context, force = false) {
             });
         }
         
+        // Регистрируем воркер для мониторинга
+        let workerId = null;
+        try {
+            const WorkerMonitoringService = (await import('../../services/WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            workerId = WorkerMonitoringService.registerWorker(
+                'cache_update',
+                'Полное обновление кеша',
+                { 
+                    fullUpdate: true,
+                    updateInstruments: true,
+                    updateCandles: true,
+                    updateSignals: true
+                }
+            );
+        } catch (monitoringError) {
+            console.warn('Failed to register cache update worker:', monitoringError);
+        }
+
         // Создаем worker для полного обновления кеша
         worker = createWorker('cacheUpdateWorker.js', {
             updateInstruments: true, // Обновляем список инструментов
@@ -212,7 +233,24 @@ export async function performFullCacheUpdate(context, force = false) {
         }
         
         // Обработчик прогресса с WebSocket
-        const progressHandler = (data) => {
+        const progressHandler = async (data) => {
+            // Обновляем прогресс воркера
+            if (workerId && data.progress !== undefined) {
+                try {
+                    const WorkerMonitoringService = (await import('../../services/WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress: data.progress,
+                        metadata: { 
+                            stage: data.stage || 'Обновление кеша',
+                            instrumentsProcessed: data.instrumentsProcessed || 0,
+                            totalInstruments: data.totalInstruments || 0
+                        }
+                    });
+                } catch (monitoringError) {
+                    console.warn('Failed to update cache worker progress:', monitoringError);
+                }
+            }
+            
             if (WebSocketService) {
                 WebSocketService.broadcast({
                     type: 'cache_update_progress',
@@ -242,7 +280,34 @@ export async function performFullCacheUpdate(context, force = false) {
                 }),
                 timeoutPromise
             ]);
+            
+            // Завершаем воркер успешно
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('../../services/WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.completeWorker(workerId, true, {
+                        result: result.message || 'Обновление кеша завершено успешно',
+                        duration: Math.round((Date.now() - startTime) / 1000)
+                    });
+                } catch (monitoringError) {
+                    console.warn('Failed to complete cache worker:', monitoringError);
+                }
+            }
         } catch (raceError) {
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('../../services/WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.reportWorkerError(workerId, raceError);
+                    WorkerMonitoringService.completeWorker(workerId, false, { 
+                        error: raceError.message,
+                        timeout: raceError.message?.includes('timeout')
+                    });
+                } catch (monitoringError) {
+                    console.warn('Failed to report cache worker error:', monitoringError);
+                }
+            }
+            
             // Если это таймаут, worker все еще может быть активен
             // Используем локальную переменную worker, а не context.currentFullCacheUpdateWorker
             if (raceError.message && raceError.message.includes('timeout')) {

@@ -106,11 +106,49 @@ export async function executeWorkerTask(workerFileName, workerData, options = {}
         }
     }
     
+    // Регистрируем воркер для мониторинга
+    let workerId = null;
+    try {
+        const WorkerMonitoringService = (await import('../../services/WorkerMonitoringService.js')).default;
+        if (!WorkerMonitoringService.isInitialized) {
+            await WorkerMonitoringService.initialize();
+        }
+        
+        // Определяем тип воркера по имени файла
+        const workerType = workerFileName.replace('Worker.js', '').replace('.js', '');
+        const workerName = workerType.split(/(?=[A-Z])/).join(' ').toLowerCase()
+            .replace(/^\w/, c => c.toUpperCase());
+        
+        workerId = WorkerMonitoringService.registerWorker(
+            workerType,
+            workerName,
+            { workerFileName, ...workerData }
+        );
+    } catch (monitoringError) {
+        console.warn('Failed to register worker in monitoring service:', monitoringError);
+    }
+
     // Создаем worker
     const worker = createWorker(workerFileName, workerData);
     
     // Обработчик прогресса с WebSocket
     const progressHandler = async (data) => {
+        // Обновляем прогресс воркера
+        if (workerId && data.progress !== undefined) {
+            try {
+                const WorkerMonitoringService = (await import('../../services/WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                    progress: data.progress,
+                    metadata: { 
+                        stage: data.stage || 'Обработка',
+                        ...data
+                    }
+                });
+            } catch (monitoringError) {
+                console.warn('Failed to update worker progress:', monitoringError);
+            }
+        }
+        
         if (onProgress) {
             onProgress(data);
         }
@@ -143,6 +181,20 @@ export async function executeWorkerTask(workerFileName, workerData, options = {}
         
         const duration = Math.round((Date.now() - startTime) / 1000);
         
+        // Завершаем воркер успешно
+        if (workerId) {
+            try {
+                const WorkerMonitoringService = (await import('../../services/WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.completeWorker(workerId, true, {
+                    result: result.message || 'Задача завершена успешно',
+                    duration,
+                    totalUpdated: result.totalUpdated || 0
+                });
+            } catch (monitoringError) {
+                console.warn('Failed to complete worker:', monitoringError);
+            }
+        }
+        
         // Отправляем уведомление о завершении через WebSocket
         if (getWebSocketService && broadcastType) {
             const WebSocketService = await getWebSocketService();
@@ -165,6 +217,19 @@ export async function executeWorkerTask(workerFileName, workerData, options = {}
             success: true
         };
     } catch (error) {
+        // Завершаем воркер с ошибкой
+        if (workerId) {
+            try {
+                const WorkerMonitoringService = (await import('../../services/WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.reportWorkerError(workerId, error);
+                WorkerMonitoringService.completeWorker(workerId, false, { 
+                    error: error.message 
+                });
+            } catch (monitoringError) {
+                console.warn('Failed to report worker error:', monitoringError);
+            }
+        }
+        
         // Отправляем уведомление об ошибке через WebSocket
         if (getWebSocketService && broadcastType) {
             const WebSocketService = await getWebSocketService();

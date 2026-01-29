@@ -12,6 +12,7 @@ import Settings from '../pages/Settings'
 // import TradingHours from '../pages/TradingHours' // File not found
 import MetricsMonitoring from '../pages/MetricsMonitoring/MetricsMonitoring.tsx'
 import Performance from '../pages/Performance/Performance.tsx'
+import WorkerMonitoring from '../pages/WorkerMonitoring/WorkerMonitoring.tsx'
 
 const AppRouter: FC = () => {
 
@@ -31,6 +32,7 @@ const AppRouter: FC = () => {
                 {/* <Route path="/trading-hours" element={<TradingHours/>}/> */}
                 <Route path="/metrics-monitoring" element={<MetricsMonitoring/>}/>
                 <Route path="/performance" element={<Performance/>}/>
+                <Route path="/worker-monitoring" element={<WorkerMonitoring/>}/>
                 <Route path="*" element={<>Нет роута</>}/>
             </Routes>
 

@@ -49,6 +49,7 @@ import assetRoutes from './asset-routes.js';
 import fundamentalDataRoutes from './fundamental-data-routes.js';
 import optionsDataRoutes from './options-data-routes.js';
 import authRoutes from './auth-routes.js';
+import workerMonitoringRoutes from './worker-monitoring-routes.js';
 import ServiceManager from '../services/ServiceManager.js';
 import Recommendation from '../models/Recommendation.js';
 import { Op } from 'sequelize';
@@ -145,6 +146,7 @@ router.use('/data-cleanup', dataCleanupRoutes);
 router.use('/assets', assetRoutes);
 router.use('/fundamental-data', fundamentalDataRoutes);
 router.use('/options-data', optionsDataRoutes);
+router.use('/workers', workerMonitoringRoutes);
 
 // Прямые роуты для совместимости с фронтендом (копируем логику из system-routes)
 router.get('/settings', async (req, res) => {

@@ -1333,6 +1333,26 @@ class NeuralNetworkService {
             }
             
             
+            // Регистрируем воркер для мониторинга
+            let workerId = null;
+            try {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                if (!WorkerMonitoringService.isInitialized) {
+                    await WorkerMonitoringService.initialize();
+                }
+                workerId = WorkerMonitoringService.registerWorker(
+                    'portfolio_analysis',
+                    `Анализ портфеля (${analysisType})`,
+                    { 
+                        portfolioType,
+                        portfolioItemsCount: portfolioItems.length,
+                        analysisType 
+                    }
+                );
+            } catch (monitoringError) {
+                console.warn('Failed to register portfolio analysis worker:', monitoringError);
+            }
+
             const worker = new Worker(workerPath, {
                 workerData: {
                     portfolioType,
@@ -1347,12 +1367,46 @@ class NeuralNetworkService {
             
             // Обрабатываем результат
             const result = await new Promise((resolve, reject) => {
-                worker.on('message', (msg) => {
+                worker.on('message', async (msg) => {
                     if (msg.type === 'done') {
+                        // Завершаем воркер успешно
+                        if (workerId) {
+                            try {
+                                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                                WorkerMonitoringService.completeWorker(workerId, true, {
+                                    result: 'Анализ портфеля завершен успешно',
+                                    recommendationsCount: msg.data.analysis?.buyRecommendations?.length || 0
+                                });
+                            } catch (monitoringError) {
+                                console.warn('Failed to complete worker:', monitoringError);
+                            }
+                        }
                         resolve(msg.data.analysis);
                     } else if (msg.type === 'error') {
+                        // Завершаем воркер с ошибкой
+                        if (workerId) {
+                            try {
+                                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                                WorkerMonitoringService.reportWorkerError(workerId, new Error(msg.data.error));
+                                WorkerMonitoringService.completeWorker(workerId, false, { error: msg.data.error });
+                            } catch (monitoringError) {
+                                console.warn('Failed to report worker error:', monitoringError);
+                            }
+                        }
                         reject(new Error(msg.data.error));
                     } else if (msg.type === 'progress') {
+                        // Обновляем прогресс воркера
+                        if (workerId && msg.data.progress !== undefined) {
+                            try {
+                                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                    progress: msg.data.progress,
+                                    metadata: { stage: msg.data.stage || 'Обработка' }
+                                });
+                            } catch (monitoringError) {
+                                console.warn('Failed to update worker progress:', monitoringError);
+                            }
+                        }
                         // Отправляем прогресс через WebSocket
                         const webSocketService = this.getWebSocketService();
                         if (webSocketService && typeof webSocketService.broadcast === 'function') {
@@ -1365,13 +1419,35 @@ class NeuralNetworkService {
                     }
                 });
                 
-                worker.on('error', (error) => {
+                worker.on('error', async (error) => {
                     console.error('❌ [Worker] Error:', error);
+                    // Завершаем воркер с ошибкой
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            WorkerMonitoringService.reportWorkerError(workerId, error);
+                            WorkerMonitoringService.completeWorker(workerId, false, { error: error.message });
+                        } catch (monitoringError) {
+                            console.warn('Failed to report worker error:', monitoringError);
+                        }
+                    }
                     reject(error);
                 });
                 
-                worker.on('exit', (code) => {
+                worker.on('exit', async (code) => {
                     this.analysisWorkers.delete(worker);
+                    // Завершаем воркер, если он еще не завершен
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            const worker = WorkerMonitoringService.getWorker(workerId);
+                            if (worker && worker.status === 'running') {
+                                WorkerMonitoringService.completeWorker(workerId, code === 0, { exitCode: code });
+                            }
+                        } catch (monitoringError) {
+                            console.warn('Failed to complete worker on exit:', monitoringError);
+                        }
+                    }
                     // Не считаем ошибкой завершение worker'а при остановке сервиса
                     if (code !== 0 && !this.isStopping) {
                         reject(new Error(`Worker stopped with exit code ${code}`));
@@ -2693,6 +2769,22 @@ class NeuralNetworkService {
             return;
         }
 
+        // Регистрируем воркер для мониторинга
+        let workerId = null;
+        try {
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            workerId = WorkerMonitoringService.registerWorker(
+                'market_analysis',
+                'Анализ рынка и портфеля',
+                { startTime: new Date().toISOString() }
+            );
+        } catch (monitoringError) {
+            console.warn('Failed to register market analysis worker:', monitoringError);
+        }
+
         // ВАЖНО: Убеждаемся, что IntegratedAIService инициализирован перед анализом
         // Это гарантирует, что везде используются одинаковые предсказания
         // Используем прямой импорт, так как метод может вызываться из worker'а
@@ -2718,6 +2810,19 @@ class NeuralNetworkService {
             if (!loaded) {
                 // Уведомления о невозможности анализа теперь обрабатываются в IntegratedAIService
                 return;
+            }
+        }
+
+        // Обновляем прогресс воркера
+        if (workerId) {
+            try {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                    progress: 10,
+                    metadata: { stage: 'Инициализация' }
+                });
+            } catch (monitoringError) {
+                console.warn('Failed to update worker progress:', monitoringError);
             }
         }
 
@@ -2836,6 +2941,19 @@ class NeuralNetworkService {
                 }
             }
 
+            // Обновляем прогресс воркера
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress: 30,
+                        metadata: { stage: 'Обработка портфеля', portfolioItems: portfolioItems.length }
+                    });
+                } catch (monitoringError) {
+                    console.warn('Failed to update worker progress:', monitoringError);
+                }
+            }
+
             // Получаем настройки портфеля
             const portfolioSettings = await SettingsService.getPortfolioSettings();
             const totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
@@ -2923,6 +3041,23 @@ class NeuralNetworkService {
                 }
             }
 
+            // Обновляем прогресс перед отправкой результатов
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress: 95,
+                        metadata: { 
+                            stage: 'Отправка результатов',
+                            buyRecommendations: analysis.buyRecommendations?.length || 0,
+                            sellRecommendations: analysis.sellRecommendations?.length || 0
+                        }
+                    });
+                } catch (monitoringError) {
+                    console.warn('Failed to update worker progress:', monitoringError);
+                }
+            }
+
             // Отправляем анализ через WebSocket
             try {
                 const webSocketService = this.getWebSocketService();
@@ -2944,6 +3079,17 @@ class NeuralNetworkService {
             }
 
         } catch (error) {
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.reportWorkerError(workerId, error);
+                    WorkerMonitoringService.completeWorker(workerId, false, { error: error.message });
+                } catch (monitoringError) {
+                    console.warn('Failed to report worker error:', monitoringError);
+                }
+            }
+
             if (LoggerService.isInitialized) {
                 LoggerService.error('Error performing market analysis', {
                     service: 'NeuralNetworkService',
@@ -2972,6 +3118,21 @@ class NeuralNetworkService {
             // Ошибки теперь обрабатываются в IntegratedAIService
             throw error;
         } finally {
+            // Завершаем воркер успешно, если он еще не завершен
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    const worker = WorkerMonitoringService.getWorker(workerId);
+                    if (worker && worker.status === 'running') {
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            result: 'Анализ рынка завершен успешно'
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('Failed to complete worker:', monitoringError);
+                }
+            }
+
             // Сбрасываем флаг анализа
             const SchedulerService = (await import('./SchedulerService.js')).default;
             SchedulerService.isAnalyzing = false;

@@ -259,6 +259,29 @@ class OptimizedTrainingService {
                 }
             }
 
+            // Завершаем воркер в мониторинге при успехе
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress: 100,
+                        metadata: {
+                            accuracy: trainingResult.finalAccuracy || 0,
+                            testAccuracy: testResult?.accuracy || null
+                        }
+                    });
+                    WorkerMonitoringService.completeWorker(workerId, true, {
+                        result: {
+                            accuracy: trainingResult.finalAccuracy || 0,
+                            testAccuracy: testResult?.accuracy || null,
+                            featuresCount: features.length
+                        }
+                    });
+                } catch (monitoringError) {
+                    console.warn('Failed to complete training worker in monitoring service:', monitoringError);
+                }
+            }
+
             return {
                 success: true,
                 figi,
@@ -275,6 +298,16 @@ class OptimizedTrainingService {
             };
 
         } catch (error) {
+            // Завершаем воркер в мониторинге при ошибке
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.reportWorkerError(workerId, error);
+                    WorkerMonitoringService.completeWorker(workerId, false, { error: error.message });
+                } catch (monitoringError) {
+                    console.warn('Failed to report training error in monitoring service:', monitoringError);
+                }
+            }
             if (LoggerService.isInitialized) {
                 LoggerService.error('Training failed', {
                     service: 'OptimizedTrainingService',
@@ -555,6 +588,22 @@ class OptimizedTrainingService {
             const workerPath = join(__dirname, '../workers/standaloneTrainingWorker.js');
             const worker = new Worker(workerPath);
             
+            // Регистрируем воркер в WorkerMonitoringService
+            let workerId = null;
+            try {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                if (!WorkerMonitoringService.isInitialized) {
+                    await WorkerMonitoringService.initialize();
+                }
+                workerId = WorkerMonitoringService.registerWorker(
+                    'training',
+                    `Training ${modelType} model`,
+                    { modelType, epochs, batchSize, featuresCount: features.length }
+                );
+            } catch (monitoringError) {
+                console.warn('Failed to register worker in monitoring service:', monitoringError);
+            }
+            
             // Добавляем worker в список для отслеживания
             this.workers.add(worker);
             
@@ -563,16 +612,57 @@ class OptimizedTrainingService {
                 data: { features, labels, epochs, batchSize, modelType }
             });
             
-            worker.on('message', (msg) => {
+            worker.on('message', async (msg) => {
                 if (msg.type === 'training_complete') {
+                    // Завершаем воркер в мониторинге
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            WorkerMonitoringService.completeWorker(workerId, true, { result: msg.data });
+                        } catch (monitoringError) {
+                            console.warn('Failed to complete worker in monitoring service:', monitoringError);
+                        }
+                    }
+                    
                     this.workers.delete(worker);
                     resolve(msg.data);
                     worker.terminate();
                 } else if (msg.type === 'training_error') {
+                    // Отмечаем ошибку в мониторинге
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            WorkerMonitoringService.reportWorkerError(workerId, msg.data.error);
+                            WorkerMonitoringService.completeWorker(workerId, false, { error: msg.data.error });
+                        } catch (monitoringError) {
+                            console.warn('Failed to report worker error in monitoring service:', monitoringError);
+                        }
+                    }
+                    
                     this.workers.delete(worker);
                     reject(new Error(msg.data.error));
                     worker.terminate();
                 } else if (msg.type === 'training_progress') {
+                    // Обновляем прогресс в мониторинге
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            const progress = ((msg.data.epoch || 0) / epochs) * 100;
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                progress,
+                                metadata: {
+                                    epoch: msg.data.epoch,
+                                    loss: msg.data.loss,
+                                    accuracy: msg.data.accuracy,
+                                    valLoss: msg.data.valLoss,
+                                    valAccuracy: msg.data.valAccuracy
+                                }
+                            });
+                        } catch (monitoringError) {
+                            console.warn('Failed to update worker progress in monitoring service:', monitoringError);
+                        }
+                    }
+                    
                     // Передаем прогресс в основной процесс
                     this.trainingProgress.accuracy = msg.data.accuracy || 0;
                     this.broadcastEpochProgress(msg.data.epoch - 1, {
@@ -584,13 +674,37 @@ class OptimizedTrainingService {
                 }
             });
             
-            worker.on('error', (error) => {
+            worker.on('error', async (error) => {
+                // Отмечаем ошибку в мониторинге
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.reportWorkerError(workerId, error);
+                        WorkerMonitoringService.completeWorker(workerId, false, { error: error.message });
+                    } catch (monitoringError) {
+                        console.warn('Failed to report worker error in monitoring service:', monitoringError);
+                    }
+                }
+                
                 this.workers.delete(worker);
                 reject(error);
                 worker.terminate();
             });
             
-            worker.on('exit', (code) => {
+            worker.on('exit', async (code) => {
+                // Завершаем воркер в мониторинге, если еще не завершен
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        const worker = WorkerMonitoringService.getWorker(workerId);
+                        if (worker && worker.status === 'running') {
+                            WorkerMonitoringService.completeWorker(workerId, code === 0, { exitCode: code });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('Failed to complete worker in monitoring service:', monitoringError);
+                    }
+                }
+                
                 this.workers.delete(worker);
                 if (code !== 0) {
                     reject(new Error(`Worker stopped with exit code ${code}`));

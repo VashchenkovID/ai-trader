@@ -321,6 +321,18 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         console.log(`❌ Unsubscribed from channel: ${message.channel}`);
         break;
 
+      // События воркеров
+      case 'worker_started':
+      case 'worker_progress':
+      case 'worker_completed':
+      case 'worker_error':
+      case 'worker_paused':
+      case 'worker_resumed':
+      case 'worker_status_update':
+        // События воркеров обрабатываются компонентами напрямую через useWebSocket
+        // Здесь можно добавить глобальную обработку, если нужно
+        break;
+
       default:
         console.log('Unknown WebSocket message type:', message.type);
     }

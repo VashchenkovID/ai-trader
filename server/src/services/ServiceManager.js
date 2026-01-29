@@ -153,6 +153,7 @@ class ServiceManager {
             await this.initializeService('DiversificationService', () => import('./DiversificationService.js'));
             await this.initializeService('MigrationService', () => import('./MigrationService.js'));
             await this.initializeService('DataCleanupService', () => import('./DataCleanupService.js'));
+            await this.initializeService('WorkerMonitoringService', () => import('./WorkerMonitoringService.js'));
 
             // 5. Инициализируем WebSocket с сервером (если передан)
             if (server) {

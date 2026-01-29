@@ -48,6 +48,22 @@ router.post('/train', async (req, res) => {
             data: { figi }
         });
 
+        // Регистрируем воркер для мониторинга
+        let workerId = null;
+        try {
+            const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            workerId = WorkerMonitoringService.registerWorker(
+                'ensemble_training',
+                `Обучение ансамбля для ${figi}`,
+                { figi, options }
+            );
+        } catch (monitoringError) {
+            console.warn('Failed to register ensemble worker:', monitoringError);
+        }
+
         // Запускаем обучение в воркере
         const workerPath = path.join(__dirname, '../workers/ensembleWorker.js');
         const worker = new Worker(workerPath, {
@@ -63,6 +79,18 @@ router.post('/train', async (req, res) => {
                 const { result } = msg.data;
                 console.log('Обучение ансамбля завершено:', result?.success ? 'Успешно' : 'Ошибка');
                 
+                // Завершаем воркер успешно
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.completeWorker(workerId, result?.success || false, {
+                            result: result
+                        });
+                    } catch (monitoringError) {
+                        console.warn('Failed to complete ensemble worker:', monitoringError);
+                    }
+                }
+                
                 // Уведомляем через WebSocket
                 const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
@@ -74,6 +102,17 @@ router.post('/train', async (req, res) => {
             } else if (msg.type === 'error') {
                 const { error } = msg.data;
                 console.error('Ошибка обучения ансамбля:', error);
+                
+                // Завершаем воркер с ошибкой
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.reportWorkerError(workerId, new Error(error));
+                        WorkerMonitoringService.completeWorker(workerId, false, { error });
+                    } catch (monitoringError) {
+                        console.warn('Failed to report ensemble worker error:', monitoringError);
+                    }
+                }
                 
                 // Отправляем ошибку в Telegram
                 if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
@@ -91,11 +130,33 @@ router.post('/train', async (req, res) => {
                         data: { success: false, error }
                     });
                 }
+            } else if (msg.type === 'progress' && workerId) {
+                // Обновляем прогресс воркера
+                try {
+                    const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress: msg.data.progress || 0,
+                        metadata: { stage: msg.data.stage || 'Обучение' }
+                    });
+                } catch (monitoringError) {
+                    console.warn('Failed to update ensemble worker progress:', monitoringError);
+                }
             }
         });
 
         worker.on('error', async (error) => {
             console.error('Ошибка воркера обучения ансамбля:', error);
+            
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.reportWorkerError(workerId, error);
+                    WorkerMonitoringService.completeWorker(workerId, false, { error: error.message });
+                } catch (monitoringError) {
+                    console.warn('Failed to report ensemble worker error:', monitoringError);
+                }
+            }
             
             // Отправляем ошибку в Telegram
             if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {

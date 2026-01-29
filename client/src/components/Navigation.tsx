@@ -61,6 +61,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
     { path: '/', label: 'Главная', icon: 'pi pi-home' },
     { path: '/portfolio', label: 'Портфель', icon: 'pi pi-briefcase' },
     { path: '/performance', label: 'Производительность', icon: 'pi pi-chart-line' },
+    { path: '/worker-monitoring', label: 'Мониторинг воркеров', icon: 'pi pi-cog' },
     { path: '/recommendations', label: 'Рекомендации', icon: 'pi pi-star' },
     { path: '/trading-requests', label: 'Торговые заявки', icon: 'pi pi-list-check' },
     { path: '/training-debug', label: 'Отладка обучения', icon: 'pi pi-cog' },
@@ -112,7 +113,10 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
           <button
             key={item.path}
             className={`navigation-menu-item ${isActive(item.path) ? 'active' : ''}`}
-            onClick={() => navigate(item.path)}
+            onClick={() => {
+              console.log('Navigating to:', item.path);
+              navigate(item.path);
+            }}
           >
             <i className={`${item.icon} navigation-menu-item-icon`}></i>
             <span className="navigation-menu-item-label">{item.label}</span>

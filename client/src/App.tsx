@@ -23,6 +23,7 @@ import TrainingDebug from './pages/TrainingDebug';
 import StockDetail from './pages/StockDetail';
 import DesignSystemTest from './pages/DesignSystemTest/DesignSystemTest.tsx';
 import Performance from './pages/Performance/Performance.tsx';
+import WorkerMonitoring from './pages/WorkerMonitoring/WorkerMonitoring.tsx';
 
 function App() {
   // Инициализируем глобальный обработчик ошибок
@@ -51,6 +52,7 @@ function App() {
                           <Route path="/training-debug" element={<TrainingDebug />} />
                           <Route path="/design-system-test" element={<DesignSystemTest />} />
                           <Route path="/performance" element={<Performance />} />
+                          <Route path="/worker-monitoring" element={<WorkerMonitoring />} />
                           <Route path="/stock/:figi" element={<StockDetail />} />
                           <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
