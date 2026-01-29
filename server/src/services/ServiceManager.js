@@ -42,6 +42,18 @@ class ServiceManager {
             await this.initializeService('RecoveryService', () => import('./RecoveryService.js'));
             await this.initializeService('BackupService', () => import('./BackupService.js'));
             
+            // ApiRequestQueue - централизованная очередь для API запросов
+            try {
+                await this.initializeService('ApiRequestQueue', () => import('./ApiRequestQueue.js'));
+            } catch (error) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Не удалось инициализировать ApiRequestQueue', {
+                        service: 'ServiceManager',
+                        error: error.message
+                    });
+                }
+            }
+            
             // CacheService - критический сервис
             try {
                 await this.initializeService('CacheService', () => import('./CacheService.js'));
@@ -154,6 +166,15 @@ class ServiceManager {
             await this.initializeService('MigrationService', () => import('./MigrationService.js'));
             await this.initializeService('DataCleanupService', () => import('./DataCleanupService.js'));
             await this.initializeService('WorkerMonitoringService', () => import('./WorkerMonitoringService.js'));
+            
+            // ApiRequestQueue должен быть инициализирован (уже инициализирован выше, но проверяем)
+            if (!this.services.has('ApiRequestQueue')) {
+                try {
+                    await this.initializeService('ApiRequestQueue', () => import('./ApiRequestQueue.js'));
+                } catch (error) {
+                    // Игнорируем, если уже инициализирован
+                }
+            }
 
             // 5. Инициализируем WebSocket с сервером (если передан)
             if (server) {

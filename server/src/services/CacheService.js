@@ -6,7 +6,7 @@ import { Op } from 'sequelize';
 
 class CacheService {
     constructor() {
-        this.cacheTimeout = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+        this.cacheTimeout = 24 * 60 * 60 * 1000; // 24 hours in milliseconds (оптимизировано для низкой нагрузки)
         this.isInitialized = false;
         this.lastFetchMap = new Map(); // key: `${figi}:${interval}` -> timestamp
         this.cacheInstrumentsInProgress = false; // Флаг для предотвращения параллельных вызовов

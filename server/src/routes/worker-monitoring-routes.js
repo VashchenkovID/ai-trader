@@ -1,5 +1,6 @@
 import express from 'express';
 import WorkerMonitoringService from '../services/WorkerMonitoringService.js';
+import WorkerPriorityManager from '../utils/scheduler/WorkerPriorityManager.js';
 
 const router = express.Router();
 
@@ -45,10 +46,16 @@ router.get('/stats', async (req, res) => {
 
         const period = req.query.period || '24h';
         const stats = WorkerMonitoringService.getWorkerStats(period);
+        
+        // Добавляем статистику очереди воркеров
+        const queueStats = WorkerPriorityManager.getStats();
 
         res.json({
             success: true,
-            data: stats
+            data: {
+                ...stats,
+                queue: queueStats
+            }
         });
     } catch (error) {
         console.error('Error getting worker stats:', error);

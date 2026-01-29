@@ -334,8 +334,13 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
 
       // Загружаем стратегии и группируем позиции по стратегиям
       try {
-        // Загружаем стратегии с информацией о распределении бюджета
-        const strategiesResp = await apiService.getStrategyAllocations();
+        // Определяем тип портфеля из ответа API
+        const portfolioData = portfolioResponse.status === 'fulfilled' ? portfolioResponse.value : null;
+        const portfolioMode = portfolioData?.mode || portfolioData?.data?.mode || 'virtual';
+        const portfolioType = (portfolioMode === 'real' || portfolioMode === 'micro') ? 'real' : 'virtual';
+        
+        // Загружаем стратегии с информацией о распределении бюджета для правильного типа портфеля
+        const strategiesResp = await apiService.getStrategyAllocations(portfolioType);
         
         // API возвращает: { success: true, data: { strategies: [...], totalAllocated, ... } }
         let strategiesData = [];

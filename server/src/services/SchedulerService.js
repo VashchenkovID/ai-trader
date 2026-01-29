@@ -56,7 +56,7 @@ class SchedulerService {
         this.lastCacheUpdate = null; // Время последнего обновления кеша
         this.lastPriceUpdate = null; // Время последнего обновления цен
         this.cacheUpdateInterval = 4 * 60 * 60 * 1000; // 4 часа в миллисекундах
-        this.priceUpdateInterval = 20 * 60 * 1000; // 20 минут в миллисекундах
+        this.priceUpdateInterval = 60 * 60 * 1000; // 1 час в миллисекундах (оптимизировано для низкой нагрузки)
         this.intervals = new Set(); // Храним все интервалы для очистки
         this.workers = new Set(); // Храним все worker'ы для завершения
         this.webSocketService = null; // Кэшируем WebSocketService
@@ -169,8 +169,8 @@ class SchedulerService {
             }
         );
 
-        // Задача 1.5: Обновление цен акций (каждые 20 минут)
-        const priceUpdateIntervalMinutes = schedulerSettings.price_update_interval_minutes || 20;
+        // Задача 1.5: Обновление цен акций (каждые 60 минут - оптимизировано для низкой нагрузки)
+        const priceUpdateIntervalMinutes = schedulerSettings.price_update_interval_minutes || 60;
         const priceUpdateSchedule = `*/${priceUpdateIntervalMinutes} * * * *`; // Каждые N минут
         this.priceUpdateTask = SchedulerUtils.createScheduledTask(
             priceUpdateSchedule,
@@ -186,7 +186,7 @@ class SchedulerService {
         );
 
         // Задача 1.6: Обновление цен активных позиций в портфеле (каждые 2 минуты в торговые часы)
-        const portfolioPricesUpdateIntervalMinutes = schedulerSettings.portfolio_prices_update_interval_minutes || 2;
+        const portfolioPricesUpdateIntervalMinutes = schedulerSettings.portfolio_prices_update_interval_minutes || 10; // Оптимизировано для низкой нагрузки
         const portfolioPricesUpdateSchedule = `*/${portfolioPricesUpdateIntervalMinutes} * * * *`; // Каждые N минут
         this.portfolioPricesUpdateTask = SchedulerUtils.createScheduledTask(
             portfolioPricesUpdateSchedule,
@@ -622,8 +622,9 @@ class SchedulerService {
         );
         
         // Задача 18: Обновление опционных данных (через worker)
-        // Расписание из настроек (по умолчанию: ежедневно в 01:00)
-        const optionsDataUpdateSchedule = await SettingsService.getSetting('options_data_update_interval', '0 1 * * *');
+        // Расписание из настроек (по умолчанию: раз в 2 дня в 01:00 - оптимизировано для низкой нагрузки)
+        // Используем: каждый нечетный день месяца (1, 3, 5, ...) как приближение к раз в 2 дня
+        const optionsDataUpdateSchedule = await SettingsService.getSetting('options_data_update_interval', '0 1 1-31/2 * *');
         this.optionsDataUpdateTask = SchedulerUtils.createScheduledTask(
             optionsDataUpdateSchedule,
             async () => {
@@ -639,8 +640,9 @@ class SchedulerService {
         );
 
         // Задача 19: Обновление фундаментальных данных (квартальные данные)
-        // Расписание из настроек (по умолчанию: еженедельно в воскресенье в 02:00)
-        const fundamentalDataUpdateSchedule = await SettingsService.getSetting('fundamental_data_update_interval', '0 2 * * 0');
+        // Расписание из настроек (по умолчанию: раз в 2 недели в воскресенье в 02:00 - оптимизировано для низкой нагрузки)
+        // Используем: каждое 1-е и 15-е число месяца (приблизительно раз в 2 недели)
+        const fundamentalDataUpdateSchedule = await SettingsService.getSetting('fundamental_data_update_interval', '0 2 1,15 * *');
         this.fundamentalDataUpdateTask = SchedulerUtils.createScheduledTask(
             fundamentalDataUpdateSchedule,
             async () => {

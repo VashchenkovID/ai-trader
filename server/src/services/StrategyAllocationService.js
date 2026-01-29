@@ -5,6 +5,7 @@ import ProfitabilityTracker from './ProfitabilityTracker.js';
 import InstrumentStats from '../models/InstrumentStats.js';
 import CorrelationService from './CorrelationService.js';
 import AdaptiveThresholdService from './AdaptiveThresholdService.js';
+import LoggerService from './LoggerService.js';
 import { Op } from 'sequelize';
 
 /**
@@ -565,8 +566,9 @@ class StrategyAllocationService {
     /**
      * Получить все стратегии с их распределением бюджета
      * Рассчитывает реальное использование на основе торговых заявок
+     * @param {string} portfolioType - Тип портфеля ('virtual' или 'real'). Если не указан, определяется автоматически
      */
-    async getAllStrategiesWithAllocations() {
+    async getAllStrategiesWithAllocations(portfolioType = null) {
         try {
             const strategies = await TradingStrategy.findAll({
                 where: { isActive: true },
@@ -580,6 +582,20 @@ class StrategyAllocationService {
             const TradingRequest = (await import('../models/TradingRequest.js')).default;
             const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
             const { Op } = await import('sequelize');
+            
+            // Определяем тип портфеля, если не указан
+            let currentPortfolioType = portfolioType;
+            if (!currentPortfolioType) {
+                try {
+                    const TradingModeManager = (await import('./TradingModeManager.js')).default;
+                    const currentMode = TradingModeManager.getCurrentMode();
+                    const mode = currentMode?.mode || currentMode;
+                    currentPortfolioType = (mode === 'real' || mode === 'micro') ? 'real' : 'virtual';
+                } catch (error) {
+                    // По умолчанию используем виртуальный портфель
+                    currentPortfolioType = 'virtual';
+                }
+            }
 
             // Оптимизация N+1: загружаем все данные одним запросом
             const strategyIds = strategies.map(s => s.id);
@@ -593,36 +609,151 @@ class StrategyAllocationService {
                 allocationsByStrategyId.set(alloc.strategyId, alloc);
             }
             
-            // Загружаем все PositionStrategy одним запросом
-            const allActivePositions = await PositionStrategy.findAll({
-                where: {
-                    strategyId: { [Op.in]: strategyIds },
-                    exitDate: null // Только открытые позиции
+            // Для виртуального портфеля используем данные из виртуального портфеля
+            // Для реального - из реального
+            let allActivePositions = [];
+            let allActiveRequests = [];
+            
+            if (currentPortfolioType === 'virtual') {
+                // Для виртуального портфеля получаем данные из виртуального портфеля
+                const TradingEngine = (await import('./TradingEngine.js')).default;
+                const virtualPortfolio = TradingEngine.virtualPortfolio;
+                
+                if (!virtualPortfolio) {
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('Virtual portfolio is not initialized', {
+                            service: 'StrategyAllocationService',
+                            operation: 'getAllStrategiesWithAllocations'
+                        });
+                    }
+                    allActivePositions = [];
+                    allActiveRequests = [];
+                } else if (virtualPortfolio.positions) {
+                    // Получаем текущие позиции из virtualPortfolio.positions (это объект { FIGI: quantity })
+                    const positions = virtualPortfolio.positions || {};
+                    const virtualTrades = virtualPortfolio.trades || [];
+                    
+                    // Создаем мапу trades по FIGI для быстрого поиска strategyId и других данных
+                    // Используем последнюю сделку BUY для каждого FIGI
+                    const tradesByFigi = new Map();
+                    for (const trade of virtualTrades) {
+                        if (trade.figi && trade.action === 'BUY') {
+                            const existingTrade = tradesByFigi.get(trade.figi);
+                            if (!existingTrade) {
+                                tradesByFigi.set(trade.figi, trade);
+                            } else {
+                                // Берем более новую сделку (по timestamp или id)
+                                const existingTime = existingTrade.timestamp || existingTrade.id || 0;
+                                const currentTime = trade.timestamp || trade.id || 0;
+                                if (currentTime > existingTime) {
+                                    tradesByFigi.set(trade.figi, trade);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Преобразуем positions в формат, совместимый с PositionStrategy
+                    allActivePositions = [];
+                    for (const [figi, quantity] of Object.entries(positions)) {
+                        if (quantity > 0 && figi) {
+                            // Находим соответствующую сделку для получения strategyId
+                            const trade = tradesByFigi.get(figi);
+                            const strategyId = trade?.strategyId || null;
+                            
+                            // Включаем только позиции со стратегиями из списка
+                            if (strategyId && strategyIds.includes(strategyId)) {
+                                allActivePositions.push({
+                                    positionId: trade?.id || trade?.requestId || null,
+                                    strategyId: strategyId,
+                                    figi: figi,
+                                    quantity: quantity,
+                                    price: trade?.price || trade?.currentPrice || 0
+                                });
+                            }
+                        }
+                    }
+                    
+                    // Получаем заявки из виртуального портфеля (только активные BUY)
+                    allActiveRequests = virtualTrades
+                        .filter(t => 
+                            t.action === 'BUY' && 
+                            t.figi &&
+                            positions[t.figi] > 0 && // Только для позиций, которые есть в портфеле
+                            (t.status === 'APPROVED' || t.status === 'EXECUTED' || t.status === 'PENDING' || !t.status)
+                        )
+                        .map(t => ({
+                            id: t.id || t.requestId,
+                            strategyId: t.strategyId,
+                            figi: t.figi,
+                            actualAmount: t.actualAmount || t.estimatedAmount || (t.quantity || 0) * (t.price || 0),
+                            estimatedAmount: t.estimatedAmount || (t.quantity || 0) * (t.price || 0),
+                            quantity: t.quantity || positions[t.figi] || 0,
+                            price: t.price || t.currentPrice || 0
+                        }));
+                    
+                    if (LoggerService.isInitialized) {
+                        LoggerService.debug('Virtual portfolio positions loaded', {
+                            service: 'StrategyAllocationService',
+                            operation: 'getAllStrategiesWithAllocations',
+                            positionsCount: allActivePositions.length,
+                            requestsCount: allActiveRequests.length,
+                            totalPositionsInPortfolio: Object.keys(positions).length
+                        });
+                    }
+                } else {
+                    // Если виртуальный портфель пуст, используем пустые данные
+                    if (LoggerService.isInitialized) {
+                        LoggerService.debug('Virtual portfolio has no positions', {
+                            service: 'StrategyAllocationService',
+                            operation: 'getAllStrategiesWithAllocations'
+                        });
+                    }
+                    allActivePositions = [];
+                    allActiveRequests = [];
                 }
-            });
+            } else {
+                // Для реального портфеля используем PositionStrategy из БД
+                allActivePositions = await PositionStrategy.findAll({
+                    where: {
+                        strategyId: { [Op.in]: strategyIds },
+                        exitDate: null // Только открытые позиции
+                    }
+                });
+                
+                // Загружаем торговые заявки из БД
+                const allPositionIds = new Set();
+                for (const pos of allActivePositions) {
+                    if (pos.positionId) {
+                        allPositionIds.add(pos.positionId);
+                    }
+                }
+                
+                allActiveRequests = await TradingRequest.findAll({
+                    where: {
+                        [Op.or]: [
+                            { id: { [Op.in]: Array.from(allPositionIds) } },
+                            { strategyId: { [Op.in]: strategyIds } }
+                        ],
+                        status: { [Op.in]: ['APPROVED', 'EXECUTED', 'PENDING'] },
+                        action: 'BUY'
+                    }
+                });
+            }
             
             // Группируем позиции по strategyId
             const positionsByStrategyId = new Map();
             const allPositionIds = new Set();
             for (const pos of allActivePositions) {
+                const posId = pos.positionId || pos.id;
                 if (!positionsByStrategyId.has(pos.strategyId)) {
                     positionsByStrategyId.set(pos.strategyId, []);
                 }
                 positionsByStrategyId.get(pos.strategyId).push(pos);
-                allPositionIds.add(pos.positionId);
+                if (posId) {
+                    allPositionIds.add(posId);
+                }
             }
             
-            // Загружаем все торговые заявки одним запросом
-            const allActiveRequests = await TradingRequest.findAll({
-                where: {
-                    [Op.or]: [
-                        { id: { [Op.in]: Array.from(allPositionIds) } },
-                        { strategyId: { [Op.in]: strategyIds } }
-                    ],
-                    status: { [Op.in]: ['APPROVED', 'EXECUTED', 'PENDING'] },
-                    action: 'BUY'
-                }
-            });
             
             // Группируем заявки по strategyId и по positionId
             const requestsByStrategyId = new Map();
@@ -639,6 +770,36 @@ class StrategyAllocationService {
                 }
             }
 
+            // Для виртуального портфеля получаем initialCapital для расчета allocatedAmount
+            let initialCapital = null;
+            if (currentPortfolioType === 'virtual') {
+                try {
+                    const TradingEngine = (await import('./TradingEngine.js')).default;
+                    const virtualPortfolio = TradingEngine.virtualPortfolio;
+                    if (virtualPortfolio && virtualPortfolio.initialCapital) {
+                        initialCapital = virtualPortfolio.initialCapital;
+                    } else {
+                        // Пытаемся получить из БД
+                        const VirtualPortfolio = (await import('../models/VirtualPortfolio.js')).default;
+                        const savedPortfolio = await VirtualPortfolio.getCurrent();
+                        if (savedPortfolio) {
+                            initialCapital = savedPortfolio.initialCapital || 1000000;
+                        } else {
+                            initialCapital = 1000000; // Значение по умолчанию
+                        }
+                    }
+                } catch (error) {
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('Failed to get initialCapital for virtual portfolio', {
+                            service: 'StrategyAllocationService',
+                            operation: 'getAllStrategiesWithAllocations',
+                            error: { message: error.message }
+                        });
+                    }
+                    initialCapital = 1000000; // Значение по умолчанию
+                }
+            }
+
             const result = [];
             for (const strategy of strategies) {
                 // Получаем или создаем allocation
@@ -649,33 +810,49 @@ class StrategyAllocationService {
                 
                 // Получаем позиции для стратегии
                 const activePositions = positionsByStrategyId.get(strategy.id) || [];
-                const positionIds = activePositions.map(p => p.positionId);
+                const positionIds = activePositions.map(p => p.positionId || p.id);
                 
-                // Рассчитываем реальное использование
+                // Рассчитываем реальное использование и выделенную сумму
                 let realUsedAmount = 0;
+                let allocatedAmount = 0;
                 
-                // Суммируем использование из заявок через PositionStrategy
-                for (const posId of positionIds) {
-                    const request = requestsByPositionId.get(posId);
-                    if (request) {
-                        const amount = parseFloat(request.actualAmount || request.estimatedAmount || 0);
-                        realUsedAmount += amount;
+                if (currentPortfolioType === 'virtual') {
+                    // Для виртуального портфеля считаем allocatedAmount на основе initialCapital
+                    // allocatedAmount = процент от initialCapital
+                    allocatedAmount = (initialCapital * strategy.budgetAllocation) / 100;
+                    
+                    // usedAmount = allocatedAmount (вся выделенная сумма считается использованной из initialCapital)
+                    realUsedAmount = allocatedAmount;
+                } else {
+                    // Для реального портфеля используем allocatedAmount из БД
+                    allocatedAmount = parseFloat(allocation.allocatedAmount || 0);
+                    
+                    // Для реального портфеля используем данные из заявок
+                    // Суммируем использование из заявок через PositionStrategy
+                    for (const posId of positionIds) {
+                        const request = requestsByPositionId.get(posId);
+                        if (request) {
+                            const amount = parseFloat(request.actualAmount || request.estimatedAmount || 0);
+                            realUsedAmount += amount;
+                        }
                     }
-                }
-                
-                // Учитываем прямые заявки без PositionStrategy
-                const accountedIds = new Set(positionIds);
-                const directRequests = requestsByStrategyId.get(strategy.id) || [];
-                for (const request of directRequests) {
-                    if (!accountedIds.has(request.id)) {
-                        const amount = parseFloat(request.actualAmount || request.estimatedAmount || 0);
-                        realUsedAmount += amount;
+                    
+                    // Учитываем прямые заявки без PositionStrategy
+                    const accountedIds = new Set(positionIds);
+                    const directRequests = requestsByStrategyId.get(strategy.id) || [];
+                    for (const request of directRequests) {
+                        if (!accountedIds.has(request.id)) {
+                            const amount = parseFloat(request.actualAmount || request.estimatedAmount || 0);
+                            realUsedAmount += amount;
+                        }
                     }
                 }
 
-                // Используем реальное использование, если оно больше чем в allocation
-                const finalUsedAmount = Math.max(realUsedAmount, parseFloat(allocation.usedAmount || 0));
-                const allocatedAmount = parseFloat(allocation.allocatedAmount);
+                // Для виртуального портфеля используем allocatedAmount как usedAmount
+                // Для реального - максимум из realUsedAmount и allocation.usedAmount
+                const finalUsedAmount = currentPortfolioType === 'virtual' 
+                    ? realUsedAmount 
+                    : Math.max(realUsedAmount, parseFloat(allocation.usedAmount || 0));
                 const availableAmount = allocatedAmount - finalUsedAmount;
 
                 result.push({

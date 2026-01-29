@@ -593,7 +593,8 @@ class OptionsDataService {
         const {
             delayMs = 2000,
             forceUpdate = false,
-            limit = null
+            limit = null,
+            onProgress = null
         } = options;
 
         const stats = {
@@ -633,8 +634,14 @@ class OptionsDataService {
                 });
             }
 
+            // Отправляем начальный прогресс
+            if (onProgress) {
+                onProgress(0, 'Инициализация', `Начало обработки ${instruments.length} инструментов`);
+            }
+
             // Обрабатываем каждый инструмент
-            for (const instrument of instruments) {
+            for (let i = 0; i < instruments.length; i++) {
+                const instrument = instruments[i];
                 try {
                     const savedOptions = await this.fetchAndSaveOptions(
                         instrument.figi,
@@ -643,6 +650,14 @@ class OptionsDataService {
 
                     stats.processed++;
                     stats.saved += savedOptions.length;
+
+                    // Отправляем прогресс
+                    if (onProgress) {
+                        const progress = Math.round(((i + 1) / instruments.length) * 100);
+                        const stage = `Обработка инструментов`;
+                        const message = `Обработано: ${i + 1} / ${instruments.length} (${instrument.ticker || instrument.figi})`;
+                        onProgress(progress, stage, message);
+                    }
 
                     // Задержка между запросами для избежания rate limiting
                     if (delayMs > 0) {
@@ -657,6 +672,14 @@ class OptionsDataService {
                             ticker: instrument.ticker,
                             error: { message: error.message }
                         });
+                    }
+                    
+                    // Отправляем прогресс даже при ошибке
+                    if (onProgress) {
+                        const progress = Math.round(((i + 1) / instruments.length) * 100);
+                        const stage = `Обработка инструментов`;
+                        const message = `Ошибка при обработке ${instrument.ticker || instrument.figi}: ${error.message}`;
+                        onProgress(progress, stage, message);
                     }
                 }
             }

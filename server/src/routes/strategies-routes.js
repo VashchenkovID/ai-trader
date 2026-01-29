@@ -231,7 +231,9 @@ router.post('/rebalance', async (req, res) => {
  */
 router.get('/allocations/summary', async (req, res) => {
     try {
-        const strategies = await StrategyAllocationService.getAllStrategiesWithAllocations();
+        // Определяем тип портфеля из query параметра или из текущего режима
+        const portfolioType = req.query.portfolioType || req.query.type || null;
+        const strategies = await StrategyAllocationService.getAllStrategiesWithAllocations(portfolioType);
         
         const summary = {
             totalAllocated: 0,

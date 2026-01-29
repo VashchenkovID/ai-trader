@@ -1,6 +1,7 @@
 import { Worker } from 'worker_threads';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import WorkerPriorityManager from './WorkerPriorityManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -87,7 +88,43 @@ export async function executeWorkerTask(workerFileName, workerData, options = {}
         getWebSocketService,
         onProgress,
         workersSet,
-        broadcastType
+        broadcastType,
+        priority = null // Приоритет воркера (если не указан, определяется автоматически)
+    } = options;
+    
+    // Определяем тип воркера для приоритизации
+    let workerType = workerFileName.replace(/Worker\.js$/, '').replace(/\.js$/, '');
+    workerType = workerType.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/, '');
+    
+    // Оборачиваем выполнение воркера в функцию для очереди
+    const workerExecutionFn = async () => {
+        return await executeWorkerTaskInternal(workerFileName, workerData, {
+            getWebSocketService,
+            onProgress,
+            workersSet,
+            broadcastType,
+            workerType
+        });
+    };
+    
+    // Добавляем воркер в приоритетную очередь
+    return await WorkerPriorityManager.enqueue(workerExecutionFn, workerType, {
+        workerFileName,
+        ...workerData
+    });
+}
+
+/**
+ * Внутренняя функция выполнения воркера (без очереди)
+ * @private
+ */
+async function executeWorkerTaskInternal(workerFileName, workerData, options = {}) {
+    const {
+        getWebSocketService,
+        onProgress,
+        workersSet,
+        broadcastType,
+        workerType
     } = options;
     
     const startTime = Date.now();
@@ -114,11 +151,6 @@ export async function executeWorkerTask(workerFileName, workerData, options = {}
             await WorkerMonitoringService.initialize();
         }
         
-        // Определяем тип воркера по имени файла
-        // Убираем расширение и суффикс Worker
-        let workerType = workerFileName.replace(/Worker\.js$/, '').replace(/\.js$/, '');
-        // Преобразуем camelCase в snake_case для единообразия
-        workerType = workerType.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/, '');
         const workerName = workerType.split(/[_-]/).map(word => 
             word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
         ).join(' ');

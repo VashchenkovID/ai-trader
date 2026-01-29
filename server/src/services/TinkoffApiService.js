@@ -2,6 +2,7 @@ import fetch from 'node-fetch';
 import https from 'https';
 import RetryService from './RetryService.js';
 import FallbackService from './FallbackService.js';
+import ApiRequestQueue from './ApiRequestQueue.js';
 
 const agent = new https.Agent({
     rejectUnauthorized: false
@@ -19,6 +20,45 @@ class TinkoffApiService {
     }
 
     async makeRequest(path, body = {}, retryCount = 0) {
+        // Определяем тип запроса для приоритизации
+        let requestType = 'price_update'; // По умолчанию
+        if (path.includes('GetLastPrices')) {
+            requestType = 'last_prices';
+        } else if (path.includes('GetCandles')) {
+            requestType = 'candles';
+        } else if (path.includes('Shares') || path.includes('Instruments')) {
+            requestType = 'instruments';
+        } else if (path.includes('GetOrderBook')) {
+            requestType = 'order_book';
+        } else if (path.includes('GetTradingStatus')) {
+            requestType = 'trading_status';
+        }
+
+        // Если используется очередь, добавляем запрос в очередь
+        if (this.useQueue) {
+            await this.initializeQueue();
+            
+            return await ApiRequestQueue.enqueue(
+                async () => {
+                    return await this.executeRequest(path, body);
+                },
+                requestType,
+                {
+                    batchable: requestType === 'last_prices' || requestType === 'candles',
+                    metadata: { path, body }
+                }
+            );
+        }
+
+        // Иначе выполняем напрямую (для обратной совместимости)
+        return await this.executeRequest(path, body);
+    }
+
+    /**
+     * Внутренний метод выполнения запроса (без очереди)
+     * @private
+     */
+    async executeRequest(path, body = {}) {
         // Используем RetryService для автоматических повторов
         return await RetryService.executeWithRetry(async () => {
             try {

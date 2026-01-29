@@ -66,10 +66,35 @@ async function performOptionsDataUpdate() {
             await OptionsDataService.initialize();
         }
         
+        // Отправляем сообщение о начале работы
+        if (parentPort) {
+            parentPort.postMessage({
+                type: 'progress',
+                data: {
+                    progress: 0,
+                    stage: 'Инициализация',
+                    message: 'Начало обновления опционных данных'
+                }
+            });
+        }
+        
         // Выполняем массовое обновление опционов
         const updateStats = await OptionsDataService.updateOptionsForAllInstruments({
             delayMs,
-            forceUpdate
+            forceUpdate,
+            onProgress: (progress, stage, message) => {
+                // Отправляем прогресс в главный поток
+                if (parentPort) {
+                    parentPort.postMessage({
+                        type: 'progress',
+                        data: {
+                            progress: progress || 0,
+                            stage: stage || 'Обработка',
+                            message: message || `Обработано: ${progress}%`
+                        }
+                    });
+                }
+            }
         });
         
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);

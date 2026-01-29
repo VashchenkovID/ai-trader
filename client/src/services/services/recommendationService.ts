@@ -110,9 +110,11 @@ export const recommendationService = {
     /**
      * Получить распределение бюджета
      */
-    async getStrategyAllocations(): Promise<any> {
+    async getStrategyAllocations(portfolioType: 'virtual' | 'real' = 'virtual'): Promise<any> {
         try {
-            const response = await api.get('/api/strategies/allocations/summary');
+            const response = await api.get('/api/strategies/allocations/summary', {
+                params: { portfolioType }
+            });
             // Endpoint возвращает { success: true, data: { strategies: [...], totalAllocated, ... } }
             // Возвращаем весь объект data, чтобы фронтенд мог получить и strategies, и summary данные
             return response.data.data || response.data;
