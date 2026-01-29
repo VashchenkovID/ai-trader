@@ -16,7 +16,7 @@ const DatabaseMigration = sequelize.define('DatabaseMigration', {
     name: {
         type: DataTypes.STRING(255),
         allowNull: false,
-        unique: true,
+        // unique: true убрано - уникальность обеспечивается через индекс ниже
         comment: 'Имя миграции (имя файла)'
     },
     

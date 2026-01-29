@@ -16,7 +16,7 @@ const MigrationStatus = sequelize.define('MigrationStatus', {
     migrationId: {
         type: DataTypes.STRING(100),
         allowNull: false,
-        unique: true,
+        // unique: true убрано - уникальность обеспечивается через индекс ниже
         comment: 'Уникальный идентификатор миграции'
     },
     
@@ -183,7 +183,9 @@ const MigrationStatus = sequelize.define('MigrationStatus', {
     updatedAt: 'updated_at',
     indexes: [
         {
-            fields: ['migrationId']
+            fields: ['migrationId'],
+            unique: true,
+            name: 'unique_migration_id'
         },
         {
             fields: ['status']

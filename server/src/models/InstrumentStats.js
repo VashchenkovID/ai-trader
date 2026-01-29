@@ -12,7 +12,7 @@ InstrumentStats.init({
     figi: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true,
+        // unique: true убрано - уникальность обеспечивается через индекс ниже
         comment: 'FIGI инструмента'
     },
     ticker: {

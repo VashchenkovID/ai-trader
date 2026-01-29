@@ -11,8 +11,8 @@ const TradingStrategy = sequelize.define('TradingStrategy', {
     // Название стратегии
     name: {
         type: DataTypes.STRING,
-        allowNull: false,
-        unique: true
+        allowNull: false
+        // unique: true убрано - уникальность обеспечивается через индекс ниже
     },
     
     // Тип стратегии: conservative, moderate, aggressive
@@ -143,6 +143,11 @@ const TradingStrategy = sequelize.define('TradingStrategy', {
     tableName: 'trading_strategies',
     timestamps: true,
     indexes: [
+        {
+            fields: ['name'],
+            unique: true,
+            name: 'unique_trading_strategy_name'
+        },
         {
             fields: ['type']
         },

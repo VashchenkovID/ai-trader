@@ -5,8 +5,8 @@ const SyncSettings = sequelize.define('SyncSettings', {
     userId: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true,
         primaryKey: true
+        // unique: true убрано - primaryKey уже обеспечивает уникальность
     },
     tbankEnabled: {
         type: DataTypes.BOOLEAN,

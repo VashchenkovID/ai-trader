@@ -15,8 +15,8 @@ const PositionStrategy = sequelize.define('PositionStrategy', {
         references: {
             model: 'trading_requests',
             key: 'id'
-        },
-        unique: true // Одна стратегия на позицию
+        }
+        // unique: true убрано - уникальность обеспечивается через индекс ниже
     },
     
     // Ссылка на стратегию

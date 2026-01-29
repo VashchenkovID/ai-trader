@@ -12,7 +12,7 @@ CachedSignal.init({
     signalId: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true,
+        // unique: true убрано - уникальность обеспечивается через индекс ниже
         comment: 'Уникальный идентификатор сигнала от Tinkoff API'
     },
     strategyId: {
@@ -107,6 +107,11 @@ CachedSignal.init({
     modelName: 'CachedSignal',
     tableName: 'cached_signals',
     indexes: [
+        {
+            name: 'unique_cached_signals_signal_id',
+            unique: true,
+            fields: ['signalId']
+        },
         {
             name: 'idx_cached_signals_figi',
             fields: ['figi']

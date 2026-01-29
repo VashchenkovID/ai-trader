@@ -10,7 +10,7 @@ const User = sequelize.define('User', {
     username: {
         type: DataTypes.STRING(100),
         allowNull: false,
-        unique: true,
+        // unique: true убрано - уникальность обеспечивается через индекс ниже
         comment: 'Имя пользователя'
     },
     fullName: {

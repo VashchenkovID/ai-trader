@@ -11,8 +11,8 @@ CachedInstrument.init({
     },
     figi: {
         type: DataTypes.STRING,
-        allowNull: false,
-        unique: true,
+        allowNull: false
+        // unique: true убрано - уникальность обеспечивается через индекс ниже
     },
     ticker: {
         type: DataTypes.STRING,

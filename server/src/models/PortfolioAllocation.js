@@ -15,8 +15,8 @@ const PortfolioAllocation = sequelize.define('PortfolioAllocation', {
         references: {
             model: 'trading_strategies',
             key: 'id'
-        },
-        unique: true // Одна запись на стратегию
+        }
+        // unique: true убрано - уникальность обеспечивается через индекс ниже
     },
     
     // Выделенная сумма (в рублях)
@@ -62,7 +62,9 @@ const PortfolioAllocation = sequelize.define('PortfolioAllocation', {
     timestamps: true,
     indexes: [
         {
-            fields: ['strategyId']
+            fields: ['strategyId'],
+            unique: true,
+            name: 'unique_portfolio_allocation_strategy_id'
         },
         {
             fields: ['lastUpdated']

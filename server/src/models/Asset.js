@@ -16,7 +16,7 @@ Asset.init({
     uid: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true,
+        // unique: true убрано - уникальность обеспечивается через индекс ниже
         comment: 'UID актива из Tinkoff API'
     },
     name: {
