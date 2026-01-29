@@ -3,24 +3,49 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 
 // Загружаем переменные окружения из .env файла
-// Определяем путь к .env файлу относительно текущего файла
+// В Docker контейнере переменные передаются через docker-compose.yml,
+// но также пробуем загрузить из .env файла для локальной разработки
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const envPath = path.resolve(__dirname, '../../../.env');
 
-// Загружаем .env файл (если он существует)
-const envResult = dotenv.config({ path: envPath });
+// Пробуем несколько путей к .env файлу
+const envPaths = [
+    path.resolve(__dirname, '../../../.env'),  // Корень проекта
+    path.resolve(__dirname, '../../.env'),     // server/.env
+    path.join(process.cwd(), '.env'),          // Текущая рабочая директория
+    path.join(process.cwd(), 'server', '.env') // server/.env из корня
+];
 
-// Если не удалось загрузить из указанного пути, пробуем загрузить из корня проекта
-if (envResult.error) {
+let envLoaded = false;
+for (const envPath of envPaths) {
+    try {
+        const result = dotenv.config({ path: envPath });
+        if (!result.error) {
+            envLoaded = true;
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`📝 Загружен .env из: ${envPath}`);
+            }
+            break;
+        }
+    } catch (error) {
+        // Игнорируем ошибки загрузки файла
+    }
+}
+
+// Если не загрузили из файла, пробуем стандартный путь
+if (!envLoaded) {
     dotenv.config();
 }
 
-// Отладочный вывод (только если NODE_ENV не production)
-if (process.env.NODE_ENV !== 'production') {
-    console.log('📝 Загрузка переменных окружения:');
-    console.log(`   Путь к .env: ${envPath}`);
-    console.log(`   USER_PASSWORD установлен: ${process.env.USER_PASSWORD ? 'Да (длина: ' + process.env.USER_PASSWORD.length + ')' : 'Нет'}`);
+// В Docker контейнере переменные окружения уже установлены через docker-compose.yml
+// Отладочный вывод для диагностики
+console.log('📝 Проверка переменных окружения:');
+console.log(`   USER_PASSWORD установлен: ${process.env.USER_PASSWORD ? 'Да (длина: ' + process.env.USER_PASSWORD.length + ')' : 'Нет'}`);
+console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'не установлен'}`);
+if (!process.env.USER_PASSWORD) {
+    console.warn('   ⚠️ USER_PASSWORD не найден в переменных окружения!');
+    console.warn('   ⚠️ Убедитесь, что USER_PASSWORD установлен в .env файле или docker-compose.yml');
 }
 
 import sequelize from '../config/database.js';

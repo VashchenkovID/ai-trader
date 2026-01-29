@@ -54,6 +54,7 @@ services:
       MIN_CONFIDENCE: ${MIN_CONFIDENCE:-0.6}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       DISABLE_RATE_LIMIT: ${DISABLE_RATE_LIMIT:-false}
+      USER_PASSWORD: ${USER_PASSWORD}
     volumes:
       - ./server/logs:/app/logs
       - ./server/backups:/app/backups
