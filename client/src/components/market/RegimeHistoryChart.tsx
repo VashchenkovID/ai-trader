@@ -57,7 +57,7 @@ export const RegimeHistoryChart: React.FC<RegimeHistoryChartProps> = ({
     setError(null);
     try {
       const response = await fetch(
-        `${(window as any).env?.REACT_APP_API_URL || 'http://localhost:3001'}/api/market-regime/${figi}/history?days=${selectedDays}`
+        `${(window as any).env?.REACT_APP_API_URL || ''}/api/market-regime/${figi}/history?days=${selectedDays}`
       );
       
       if (!response.ok) {

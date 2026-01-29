@@ -1,7 +1,8 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
 
-const API_BASE_URL = (window as any).env?.REACT_APP_API_URL || 'http://localhost:3001';
+// В продакшене используем относительный путь через nginx proxy
+const API_BASE_URL = (window as any).env?.REACT_APP_API_URL || '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

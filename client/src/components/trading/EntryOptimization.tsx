@@ -79,7 +79,7 @@ export const EntryOptimization: React.FC<EntryOptimizationProps> = ({
     setError(null);
     try {
       const response = await fetch(
-        `${(window as any).env?.REACT_APP_API_URL || 'http://localhost:3001'}/api/entry-optimization/${figi}`
+        `${(window as any).env?.REACT_APP_API_URL || ''}/api/entry-optimization/${figi}`
       );
       
       if (!response.ok) {

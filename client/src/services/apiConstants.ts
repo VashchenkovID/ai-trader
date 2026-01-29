@@ -1,7 +1,8 @@
 // Константы для API
 export const API_CONSTANTS = {
   // Базовые настройки
-  BASE_URL: (window as any).env?.REACT_APP_API_URL || 'http://localhost:3001',
+  // В продакшене используем относительный путь через nginx proxy
+  BASE_URL: (window as any).env?.REACT_APP_API_URL || '',
   TIMEOUT: 10000,
   
   // Таймауты для разных типов запросов

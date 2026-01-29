@@ -73,7 +73,7 @@ export const ReportExport: React.FC<ReportExportProps> = ({ className = '' }) =>
       setProgress(100);
 
       // Формируем URL для скачивания
-      const API_BASE_URL = (window as any).env?.REACT_APP_API_URL || 'http://localhost:3001';
+      const API_BASE_URL = (window as any).env?.REACT_APP_API_URL || '';
       const url = result.downloadUrl || `${API_BASE_URL}${result.filepath}`;
       setDownloadUrl(url);
 

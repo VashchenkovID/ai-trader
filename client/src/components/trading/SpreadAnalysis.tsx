@@ -44,7 +44,7 @@ export const SpreadAnalysis: React.FC<SpreadAnalysisProps> = ({
     setError(null);
     try {
       const response = await fetch(
-        `${(window as any).env?.REACT_APP_API_URL || 'http://localhost:3001'}/api/trading/entry-optimization/${figi}/spread?days=${days}`
+        `${(window as any).env?.REACT_APP_API_URL || ''}/api/trading/entry-optimization/${figi}/spread?days=${days}`
       );
       
       if (!response.ok) {

@@ -82,7 +82,7 @@ export const MarketRegimeIndicator: React.FC<MarketRegimeIndicatorProps> = ({
     try {
       // Используем существующий API или создаем новый endpoint
       const response = await fetch(
-        `${(window as any).env?.REACT_APP_API_URL || 'http://localhost:3001'}/api/market-regime/${figi}`
+        `${(window as any).env?.REACT_APP_API_URL || ''}/api/market-regime/${figi}`
       );
       
       if (!response.ok) {

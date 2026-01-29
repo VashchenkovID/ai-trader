@@ -3,7 +3,9 @@
 Пошаговое руководство для запуска проекта на VPS сервере Beget с нуля.
 
 **Сервер:** Beget Cloud VPS  
-**URL панели:** https://cp.beget.com/cloud/servers/hearty-lazure
+**URL панели:** https://cp.beget.com/cloud/servers/hearty-lazure  
+**IP адрес сервера:** `217.114.3.127`  
+**DNS серверы:** `ns1.reg.ru`, `ns2.reg.ru`
 
 ---
 
@@ -28,8 +30,8 @@
 ### 1.1. Получение данных для подключения
 
 1. Войдите в панель Beget: https://cp.beget.com/cloud/servers/hearty-lazure
-2. Найдите информацию о сервере:
-   - **IP адрес сервера** (например: `185.123.45.67`)
+2. Информация о сервере:
+   - **IP адрес сервера:** `217.114.3.127`
    - **Логин** (обычно `root` или указан в панели)
    - **Пароль** (установлен при создании сервера или в панели)
 
@@ -37,21 +39,19 @@
 
 #### Windows (PowerShell или CMD):
 ```bash
-ssh root@IP_АДРЕС_СЕРВЕРА
-# Например: ssh root@185.123.45.67
+ssh root@217.114.3.127
 ```
 
 #### Windows (PuTTY):
 1. Скачайте PuTTY: https://www.putty.org/
-2. Введите IP адрес сервера
+2. Введите IP адрес сервера: `217.114.3.127`
 3. Порт: 22
 4. Нажмите "Open"
 5. Введите логин и пароль
 
 #### Linux/Mac:
 ```bash
-ssh root@IP_АДРЕС_СЕРВЕРА
-# Например: ssh root@185.123.45.67
+ssh root@217.114.3.127
 ```
 
 **При первом подключении** подтвердите добавление сервера в known_hosts (введите `yes`).
@@ -357,23 +357,29 @@ CLIENT_PORT=80
 
 ```
 Тип    Имя    Значение              TTL
-A      @      IP_ВАШЕГО_СЕРВЕРА     3600
-A      www    IP_ВАШЕГО_СЕРВЕРА     3600
+A      @      217.114.3.127         3600
+A      www    217.114.3.127         3600
 ```
 
-**Где `IP_ВАШЕГО_СЕРВЕРА`** - это IP адрес вашего VPS сервера (можно узнать в панели Beget Cloud).
+**IP адрес сервера:** `217.114.3.127`
 
-#### Если домен зарегистрирован у другого регистратора:
+#### Если домен зарегистрирован у другого регистратора (например, Reg.ru):
 
 1. Войдите в панель вашего регистратора
 2. Найдите раздел "DNS" или "Управление DNS"
-3. Добавьте записи:
+3. Убедитесь, что DNS серверы настроены на:
+   - `ns1.reg.ru`
+   - `ns2.reg.ru`
+4. Добавьте записи:
 
 ```
 Тип    Имя    Значение              TTL
-A      @      IP_ВАШЕГО_СЕРВЕРА     3600
-A      www    IP_ВАШЕГО_СЕРВЕРА     3600
+A      @      217.114.3.127         3600
+A      www    217.114.3.127         3600
 ```
+
+**IP адрес сервера:** `217.114.3.127`  
+**DNS серверы:** `ns1.reg.ru`, `ns2.reg.ru`
 
 ### 6.3. Проверка DNS записей
 
@@ -409,6 +415,7 @@ certbot --version
 
 ```bash
 # Получение сертификата для домена и www поддомена
+# Замените yourdomain.com на ваш реальный домен
 sudo certbot certonly --standalone \
   -d yourdomain.com \
   -d www.yourdomain.com
@@ -422,6 +429,27 @@ sudo certbot certonly --standalone \
 **Где сертификаты сохраняются:**
 - Сертификат: `/etc/letsencrypt/live/yourdomain.com/fullchain.pem`
 - Приватный ключ: `/etc/letsencrypt/live/yourdomain.com/privkey.pem`
+
+### 7.2.1. Подготовка nginx.conf с вашим доменом
+
+После получения SSL сертификата нужно обновить конфигурацию nginx:
+
+```bash
+# Переход в директорию проекта
+cd ~/projects/ai-trader
+
+# Вариант 1: Использовать шаблон (рекомендуется)
+# Установите gettext для envsubst (если не установлен)
+sudo apt install -y gettext-base
+
+# Создайте nginx.conf из шаблона (замените yourdomain.com на ваш домен)
+export DOMAIN=yourdomain.com
+envsubst '${DOMAIN}' < client/nginx.conf.template > client/nginx.conf
+
+# Вариант 2: Редактировать вручную
+nano client/nginx.conf
+# Замените все вхождения vashchenkovaitrader.ru на yourdomain.com
+```
 
 ### 7.3. Настройка автоматического обновления сертификата
 
@@ -445,6 +473,18 @@ nano ~/projects/ai-trader/.env
 
 # Обновите FRONTEND_URL (замените yourdomain.com на ваш домен)
 FRONTEND_URL=https://yourdomain.com,https://www.yourdomain.com,http://yourdomain.com,http://www.yourdomain.com
+```
+
+### 7.5. Обновление docker-compose.yml для SSL
+
+```bash
+# Откройте docker-compose.yml
+nano ~/projects/ai-trader/docker-compose.yml
+
+# Раскомментируйте строки для монтирования SSL сертификатов (строки 87-88):
+# Найдите секцию client -> volumes и раскомментируйте:
+volumes:
+  - /etc/letsencrypt:/etc/letsencrypt:ro
 ```
 
 ---
@@ -597,7 +637,7 @@ curl http://localhost:3001/health
 curl http://localhost/
 
 # Проверка через внешний IP
-curl http://IP_ВАШЕГО_СЕРВЕРА/
+curl http://217.114.3.127/
 
 # Проверка через домен (после настройки DNS)
 curl http://yourdomain.com/
@@ -840,9 +880,10 @@ sudo systemctl restart nginx
 ### Проблема: Не могу подключиться по SSH
 
 **Решение:**
-1. Проверьте IP адрес сервера в панели Beget
+1. IP адрес сервера: `217.114.3.127`
 2. Проверьте, что порт 22 открыт в firewall
 3. Убедитесь, что используете правильный логин и пароль
+4. Команда подключения: `ssh root@217.114.3.127`
 
 ### Проблема: Docker не запускается
 
@@ -894,8 +935,9 @@ docker compose exec server env | grep DB_
 3. Убедитесь, что на портах 80/443 нет других сервисов
 
 ```bash
-# Проверка DNS
+# Проверка DNS (должен вернуть IP сервера)
 dig yourdomain.com +short
+# Ожидаемый результат: 217.114.3.127
 
 # Проверка портов
 sudo netstat -tulpn | grep -E ':(80|443)'

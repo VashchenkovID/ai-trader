@@ -57,7 +57,7 @@ const NeuralNetworkManager: React.FC<NeuralNetworkManagerProps> = ({ className =
       
       // Активируем нейросеть
       try {
-        const response = await fetch(`${(window as any).env?.REACT_APP_API_URL || 'http://localhost:3001'}/api/neural-network/activate`, {
+        const response = await fetch(`${(window as any).env?.REACT_APP_API_URL || ''}/api/neural-network/activate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });

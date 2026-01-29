@@ -60,7 +60,7 @@ export const MultiTimeframeView: React.FC<MultiTimeframeViewProps> = ({
       // Используем существующий endpoint для анализа, если есть мультитаймфреймовый
       // Или создаем новый запрос к MultiTimeframeService
       const response = await fetch(
-        `${(window as any).env?.REACT_APP_API_URL || 'http://localhost:3001'}/api/analysis/${figi}/multi-timeframe`
+        `${(window as any).env?.REACT_APP_API_URL || ''}/api/analysis/${figi}/multi-timeframe`
       );
       
       if (!response.ok) {

@@ -15,7 +15,10 @@ import {cacheService} from "./services/cacheService.ts";
 import {stockService} from "./services/stockService.ts";
 import {macroDataService} from "./services/macroDataService.ts";
 
-const API_BASE_URL = (window as any).env?.REACT_APP_API_URL || 'http://localhost:3001';
+// В продакшене используем относительный путь через nginx proxy
+// В development можно установить window.env.REACT_APP_API_URL
+// Если window.env не установлен, используем относительный путь (работает через nginx proxy)
+const API_BASE_URL = (window as any).env?.REACT_APP_API_URL || '';
 
 export const api = axios.create({
     baseURL: API_BASE_URL,

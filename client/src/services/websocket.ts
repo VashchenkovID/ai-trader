@@ -28,7 +28,10 @@ class WebSocketService {
     }
 
     try {
-      const wsUrl = (window as any).env?.REACT_APP_WS_URL || 'ws://localhost:3001/';
+      // В продакшене используем относительный путь через nginx proxy (wss://)
+      // В development можно установить window.env.REACT_APP_WS_URL
+      const wsUrl = (window as any).env?.REACT_APP_WS_URL || 
+        (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws';
       console.log('🔌 Connecting to WebSocket:', wsUrl);
       this.ws = new WebSocket(wsUrl);
 

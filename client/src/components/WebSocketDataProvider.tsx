@@ -511,7 +511,10 @@ export const WebSocketDataProvider: React.FC<WebSocketDataProviderProps> = ({ ch
       isConnecting = true;
       
       try {
-        const ws = new WebSocket('ws://localhost:3001/');
+        // В продакшене используем относительный путь через nginx proxy
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = (window as any).env?.REACT_APP_WS_URL || `${wsProtocol}//${window.location.host}/ws`;
+        const ws = new WebSocket(wsUrl);
         
         ws.onopen = () => {
           if (!mounted) return;
