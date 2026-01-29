@@ -33,12 +33,7 @@ const PositionStrategy = sequelize.define('PositionStrategy', {
     entryReason: {
         type: DataTypes.JSON,
         allowNull: true,
-        defaultValue: {
-            confidence: null,
-            score: null,
-            signalsMatch: false,
-            aiRecommendation: null
-        }
+        defaultValue: null // Используем null вместо объекта, чтобы избежать проблем с валидацией
     },
     
     // Целевой срок удержания (в днях)
