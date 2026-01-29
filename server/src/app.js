@@ -146,23 +146,13 @@ const server = createServer(app);
 // Initialize services
 async function initializeServices() {
     try {
-        // Проверяем, существует ли таблица Settings (критически важная таблица)
-        // Если её нет, значит БД не инициализирована - запускаем init-db
-        try {
-            await sequelize.query('SELECT 1 FROM "settings" LIMIT 1');
-        } catch (dbError) {
-            // Если таблицы не существует, инициализируем БД
-            if (dbError.name === 'SequelizeDatabaseError' && 
-                dbError.original && dbError.original.code === '42P01') {
-                console.log('⚠️ База данных не инициализирована. Запускаем автоматическую инициализацию...');
-                const { initDatabase } = await import('./utils/initDatabase.js');
-                await initDatabase();
-                console.log('✅ База данных успешно инициализирована');
-            } else {
-                // Другая ошибка - пробрасываем дальше
-                throw dbError;
-            }
-        }
+        // Проверяем наличие критических таблиц для быстрой проверки
+        // Если все таблицы существуют, initDatabase() быстро пройдет проверку
+        // Если нет - создаст отсутствующие таблицы и столбцы безопасно
+        console.log('🔄 Проверка и инициализация базы данных...');
+        const { initDatabase } = await import('./utils/initDatabase.js');
+        await initDatabase();
+        console.log('✅ База данных проверена и инициализирована');
         
         // Импортируем трекер для отметки сервисов как глобально инициализированных
         const ServiceInitializationTracker = (await import('./utils/ServiceInitializationTracker.js')).default;

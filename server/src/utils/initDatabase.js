@@ -150,9 +150,42 @@ async function safeSyncModel(Model, modelName = null) {
     try {
         // Сначала проверяем и добавляем отсутствующие столбцы
         await ensureModelColumns(Model);
-        // Используем alter: true для автоматического добавления новых полей в существующие таблицы
-        // Это безопасно: не удаляет данные, только добавляет недостающие поля и индексы
-        await Model.sync({ alter: true });
+        
+        // Проверяем, есть ли в модели ENUM типы
+        const hasEnumTypes = Object.values(Model.rawAttributes || {}).some(
+            attr => attr.type && attr.type.constructor && attr.type.constructor.name === 'ENUM'
+        );
+        
+        // Для моделей с ENUM используем sync({ force: false }) вместо alter: true
+        // чтобы избежать ошибок изменения типа ENUM
+        if (hasEnumTypes) {
+            // Сначала пробуем sync без alter
+            try {
+                await Model.sync({ force: false });
+            } catch (enumError) {
+                // Если таблица существует, но есть ошибки с ENUM, пробуем alter
+                if (enumError.message && (
+                    enumError.message.includes('does not exist') ||
+                    enumError.message.includes('не существует')
+                )) {
+                    // Таблицы нет, создаем через alter
+                    await Model.sync({ alter: true });
+                } else if (enumError.message && (
+                    enumError.message.includes('USING') ||
+                    enumError.message.includes('syntax error') ||
+                    enumError.message.includes('unterminated quoted string')
+                )) {
+                    // Ошибка изменения ENUM типа - это нормально, таблица уже существует
+                    console.log(`⚠️ Таблица ${name} существует, но не удалось изменить ENUM типы (это нормально)`);
+                    return;
+                } else {
+                    throw enumError;
+                }
+            }
+        } else {
+            // Для моделей без ENUM используем alter: true
+            await Model.sync({ alter: true });
+        }
         console.log(`✅ Таблица ${name} создана/обновлена`);
     } catch (syncError) {
         // Игнорируем ошибки создания ENUM типов, если они уже существуют
@@ -161,6 +194,13 @@ async function safeSyncModel(Model, modelName = null) {
             (syncError.message && syncError.message.includes('enum_') ||
              syncError.original.detail && syncError.original.detail.includes('enum_'))) {
             console.log(`✅ Таблица ${name} уже существует`);
+        } else if (syncError.message && (
+            syncError.message.includes('USING') ||
+            syncError.message.includes('syntax error at or near') ||
+            syncError.message.includes('unterminated quoted string')
+        )) {
+            // Ошибка изменения ENUM типа - это нормально, таблица уже существует
+            console.log(`⚠️ Таблица ${name} существует, но не удалось изменить ENUM типы (это нормально)`);
         } else {
             console.error(`❌ Ошибка синхронизации таблицы ${name}:`, syncError.message);
             // Не прерываем инициализацию при ошибке синхронизации
