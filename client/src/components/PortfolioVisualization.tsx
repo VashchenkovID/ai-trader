@@ -336,7 +336,7 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
       try {
         // Определяем тип портфеля из ответа API
         const portfolioData = portfolioResponse.status === 'fulfilled' ? portfolioResponse.value : null;
-        const portfolioMode = portfolioData?.mode || portfolioData?.data?.mode || 'virtual';
+        const portfolioMode = portfolioData?.mode || 'virtual';
         const portfolioType = (portfolioMode === 'real' || portfolioMode === 'micro') ? 'real' : 'virtual';
         
         // Загружаем стратегии с информацией о распределении бюджета для правильного типа портфеля

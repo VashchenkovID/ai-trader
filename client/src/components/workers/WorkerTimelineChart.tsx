@@ -87,12 +87,6 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
     const types = Array.from(new Set(timeline.map(e => e.type)));
     const datasets = types.map(type => {
       const events = timeline.filter(e => e.type === type);
-      const labels = events.map(e => new Date(e.startTime).toLocaleString('ru-RU', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }));
 
       return {
         label: translateWorkerType(type),
