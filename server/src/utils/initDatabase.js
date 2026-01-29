@@ -156,30 +156,61 @@ async function safeSyncModel(Model, modelName = null) {
             attr => attr.type && attr.type.constructor && attr.type.constructor.name === 'ENUM'
         );
         
-        // Для моделей с ENUM используем sync({ force: false }) вместо alter: true
-        // чтобы избежать ошибок изменения типа ENUM
+        // Для моделей с ENUM используем специальную обработку
+        // чтобы избежать ошибок изменения типа ENUM в существующих таблицах
         if (hasEnumTypes) {
-            // Сначала пробуем sync без alter
-            try {
-                await Model.sync({ force: false });
-            } catch (enumError) {
-                // Если таблица существует, но есть ошибки с ENUM, пробуем alter
-                if (enumError.message && (
-                    enumError.message.includes('does not exist') ||
-                    enumError.message.includes('не существует')
-                )) {
-                    // Таблицы нет, создаем через alter
+            // Проверяем, существует ли таблица
+            const tableName = Model.tableName || (typeof Model.getTableName === 'function' ? Model.getTableName() : name);
+            const [tableExistsResult] = await sequelize.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = $1
+                ) as exists;
+            `, {
+                bind: [tableName],
+                type: sequelize.QueryTypes.SELECT
+            });
+            
+            const tableExists = tableExistsResult && (tableExistsResult.exists === true || tableExistsResult.exists === 't');
+            
+            if (tableExists) {
+                // Таблица существует - используем sync({ force: false }) чтобы не изменять ENUM типы
+                try {
+                    await Model.sync({ force: false });
+                } catch (enumError) {
+                    // Игнорируем ошибки изменения ENUM типов
+                    if (enumError.message && (
+                        enumError.message.includes('USING') ||
+                        enumError.message.includes('syntax error') ||
+                        enumError.message.includes('unterminated quoted string') ||
+                        enumError.message.includes('cannot cast') ||
+                        (enumError.original && enumError.original.message && (
+                            enumError.original.message.includes('USING') ||
+                            enumError.original.message.includes('syntax error')
+                        ))
+                    )) {
+                        // Ошибка изменения ENUM типа - это нормально, таблица уже существует
+                        console.log(`⚠️ Таблица ${name} существует, но не удалось изменить ENUM типы (это нормально)`);
+                        return;
+                    } else {
+                        throw enumError;
+                    }
+                }
+            } else {
+                // Таблицы нет - создаем через alter: true
+                try {
                     await Model.sync({ alter: true });
-                } else if (enumError.message && (
-                    enumError.message.includes('USING') ||
-                    enumError.message.includes('syntax error') ||
-                    enumError.message.includes('unterminated quoted string')
-                )) {
-                    // Ошибка изменения ENUM типа - это нормально, таблица уже существует
-                    console.log(`⚠️ Таблица ${name} существует, но не удалось изменить ENUM типы (это нормально)`);
-                    return;
-                } else {
-                    throw enumError;
+                } catch (enumError) {
+                    // Если ошибка с ENUM при создании, пробуем без alter
+                    if (enumError.message && (
+                        enumError.message.includes('USING') ||
+                        enumError.message.includes('syntax error')
+                    )) {
+                        await Model.sync({ force: false });
+                    } else {
+                        throw enumError;
+                    }
                 }
             }
         } else {
@@ -197,8 +228,13 @@ async function safeSyncModel(Model, modelName = null) {
         } else if (syncError.message && (
             syncError.message.includes('USING') ||
             syncError.message.includes('syntax error at or near') ||
-            syncError.message.includes('unterminated quoted string')
-        )) {
+            syncError.message.includes('syntax error') ||
+            syncError.message.includes('unterminated quoted string') ||
+            syncError.message.includes('cannot cast')
+        ) || (syncError.original && syncError.original.message && (
+            syncError.original.message.includes('USING') ||
+            syncError.original.message.includes('syntax error')
+        ))) {
             // Ошибка изменения ENUM типа - это нормально, таблица уже существует
             console.log(`⚠️ Таблица ${name} существует, но не удалось изменить ENUM типы (это нормально)`);
         } else {
@@ -551,15 +587,23 @@ export async function initDatabase() {
         
         // Создаем новые таблицы для кеширования
         console.log('📰 Создание таблиц кеширования новостей, настроений и торговых часов...');
-        await safeSyncModel(CachedNews, 'CachedNews');
-        await safeSyncModel(CachedTelegramSentiment, 'CachedTelegramSentiment');
-        await safeSyncModel(CachedTradingHours, 'CachedTradingHours');
-        console.log('✅ Таблицы кеширования созданы/обновлены');
+        try {
+            await safeSyncModel(CachedNews, 'CachedNews');
+            await safeSyncModel(CachedTelegramSentiment, 'CachedTelegramSentiment');
+            await safeSyncModel(CachedTradingHours, 'CachedTradingHours');
+            console.log('✅ Таблицы кеширования созданы/обновлены');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблиц кеширования:', syncError);
+        }
         
         // Создаем таблицу торговых заявок
         console.log('🎯 Создание таблицы торговых заявок...');
-        await safeSyncModel(TradingRequest, 'TradingRequest');
-        console.log('✅ Таблица торговых заявок создана/обновлена');
+        try {
+            await safeSyncModel(TradingRequest, 'TradingRequest');
+            console.log('✅ Таблица торговых заявок создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы торговых заявок:', syncError);
+        }
         
         // Добавляем столбец entryOptimization, если его нет
         try {
@@ -577,21 +621,36 @@ export async function initDatabase() {
         
         // Создаем таблицу виртуального портфеля
         console.log('💼 Создание таблицы виртуального портфеля...');
-        await safeSyncModel(VirtualPortfolio);
+        try {
+            await safeSyncModel(VirtualPortfolio, 'VirtualPortfolio');
+            console.log('✅ Таблица виртуального портфеля создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы виртуального портфеля:', syncError);
+        }
         
         // Создаем таблицу реального портфеля
         console.log('💼 Создание таблицы реального портфеля...');
-        await safeSyncModel(RealPortfolio);
-        console.log('✅ Таблица реального портфеля создана/обновлена');
+        try {
+            await safeSyncModel(RealPortfolio, 'RealPortfolio');
+            console.log('✅ Таблица реального портфеля создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы реального портфеля:', syncError);
+        }
         
         // Создаем таблицу кэшированных сигналов
         console.log('⚡ Создание таблицы кэшированных сигналов...');
-        await safeSyncModel(CachedSignal);
+        try {
+            await safeSyncModel(CachedSignal, 'CachedSignal');
+            console.log('✅ Таблица кэшированных сигналов создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы кэшированных сигналов:', syncError);
+        }
         
         // Создаем таблицу частичных закрытий позиций
         console.log('📊 Создание таблицы частичных закрытий позиций...');
         try {
-            await safeSyncModel(PositionExit);
+            await safeSyncModel(PositionExit, 'PositionExit');
+            console.log('✅ Таблица частичных закрытий позиций создана/обновлена');
         } catch (syncError) {
             // Игнорируем ошибки создания ENUM типов, если они уже существуют
             if (syncError.name === 'SequelizeUniqueConstraintError' && 
@@ -600,21 +659,43 @@ export async function initDatabase() {
                  syncError.original.detail && syncError.original.detail.includes('enum_position_exits'))) {
                 console.log('✅ Таблица частичных закрытий позиций уже существует');
             } else {
-                throw syncError;
+                console.error('❌ Ошибка синхронизации таблицы частичных закрытий позиций:', syncError);
             }
         }
         
-        await safeSyncModel(TriggeredSignal);
+        // Создаем таблицу сработавших сигналов
+        console.log('⚡ Создание таблицы сработавших сигналов...');
+        try {
+            await safeSyncModel(TriggeredSignal, 'TriggeredSignal');
+            console.log('✅ Таблица сработавших сигналов создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы сработавших сигналов:', syncError);
+        }
         
         // Создаем таблицу состояния обучения
         console.log('📊 Создание таблицы состояния обучения...');
-        await safeSyncModel(TrainingState);
+        try {
+            await safeSyncModel(TrainingState, 'TrainingState');
+            console.log('✅ Таблица состояния обучения создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы состояния обучения:', syncError);
+        }
         
         // Создаем таблицы для стратегий торговли
         // TradingStrategy уже создана в начале, создаем только связанные таблицы
         console.log('📈 Создание таблиц для стратегий торговли...');
-        await safeSyncModel(PortfolioAllocation);
-        await safeSyncModel(PositionStrategy);
+        try {
+            await safeSyncModel(PortfolioAllocation, 'PortfolioAllocation');
+            console.log('✅ Таблица распределения портфеля создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы распределения портфеля:', syncError);
+        }
+        try {
+            await safeSyncModel(PositionStrategy, 'PositionStrategy');
+            console.log('✅ Таблица стратегий позиций создана/обновлена');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы стратегий позиций:', syncError);
+        }
         
         // Создаем таблицу результатов бэктестинга
         console.log('📊 Создание таблицы результатов бэктестинга...');
