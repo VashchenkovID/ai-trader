@@ -9,6 +9,10 @@ server {
 
 # HTTPS сервер
 server {
+    # Резолвер для DNS (нужен для резолвинга имени "server" в Docker сети)
+    resolver 127.0.0.11 valid=30s;
+    resolver_timeout 5s;
+    
     listen 443 ssl;
     http2 on;
     server_name ${DOMAIN} www.${DOMAIN};
@@ -68,7 +72,9 @@ server {
 
     # API проксирование на backend
     location /api {
-        proxy_pass http://server:3001;
+        # Используем переменную для резолвинга DNS во время выполнения запроса
+        set $backend "http://server:3001";
+        proxy_pass $backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -83,7 +89,9 @@ server {
 
     # WebSocket проксирование
     location /ws {
-        proxy_pass http://server:3001;
+        # Используем переменную для резолвинга DNS во время выполнения запроса
+        set $backend "http://server:3001";
+        proxy_pass $backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -108,24 +116,6 @@ server {
         log_not_found off;
     }
 }
-
-
-
-# 1. Убедитесь, что сертификаты получены
-sudo certbot certificates
-
-# 2. Если сертификатов нет, получите их:
-sudo certbot certonly --standalone \
-  -d vashchenkovaitrader.ru \
-  -d www.vashchenkovaitrader.ru
-
-# 3. Пересоберите и перезапустите контейнер клиента
-cd ~/projects/ai-trader
-git pull  # Получите обновленную конфигурацию
-docker compose up -d --build client
-
-# 4. Проверьте конфигурацию nginx
-docker compose exec client nginx -t
 
 # 5. Перезапустите контейнер
 docker compose restart client
