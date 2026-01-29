@@ -28,9 +28,8 @@ jest.config.js
 .eslintrc*
 .prettierrc*
 .editorconfig
-tsconfig.json
-tsconfig.node.json
-vite.config.ts
-tailwind.config.js
-postcss.config.js
+# tsconfig.json и vite.config.ts нужны для сборки - НЕ исключаем их!
+# tailwind.config.js и postcss.config.js тоже нужны для сборки
+# tailwind.config.js
+# postcss.config.js
 

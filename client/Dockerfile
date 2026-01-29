@@ -15,6 +15,8 @@ COPY . .
 # Собираем приложение для production
 # Используем NODE_ENV=production для оптимизаций
 ENV NODE_ENV=production
+
+# Собираем приложение
 RUN npm run build
 
 # Production образ с nginx

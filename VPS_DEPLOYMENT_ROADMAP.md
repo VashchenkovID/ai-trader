@@ -610,35 +610,49 @@ docker run --rm \
 # Используйте ТОЛЬКО проверку через Docker (команда выше) - это правильный способ.
 ```
 
-**Ожидаемый результат (успешная проверка):**
+**Ожидаемый результат:**
+
+При проверке вы можете увидеть:
+1. ✅ Предупреждение о deprecated директиве (если еще не исправлено) - это исправлено в обновленной версии
+2. ⚠️ Ошибку `host not found in upstream "server"` - **это нормально!**
+
+**Пример вывода:**
 ```
-nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
-nginx: configuration file /etc/nginx/nginx.conf test is successful
+nginx: [warn] the "listen ... http2" directive is deprecated... (если не исправлено)
+nginx: [emerg] host not found in upstream "server" in /etc/nginx/conf.d/default.conf:61
+nginx: configuration file /etc/nginx/nginx.conf test failed
 ```
 
-**⚠️ Важно:** Если вы видите ошибку:
-```
-[emerg] host not found in upstream "server" in /etc/nginx/conf.d/default.conf:61
-```
+**⚠️ Почему это нормально:**
 
-**Это нормально!** Имя "server" - это имя сервиса из docker-compose, которое доступно только когда контейнеры запущены в одной docker-compose сети. При проверке через отдельный Docker контейнер этот хост недоступен, но это не означает, что конфигурация неправильная.
+Ошибка `host not found in upstream "server"` возникает потому, что:
+- Имя "server" - это имя сервиса из docker-compose
+- Оно доступно только когда контейнеры запущены в одной docker-compose сети
+- При проверке через отдельный Docker контейнер этот хост недоступен
+- **Это НЕ означает, что конфигурация неправильная!**
 
-**Проверка синтаксиса (без проверки доступности upstream):**
+**Что проверить вручную:**
 
-Если нужно проверить только синтаксис без проверки доступности upstream, можно использовать:
+Вместо автоматической проверки, убедитесь вручную:
+1. ✅ Синтаксис правильный (все директивы закрыты, нет опечаток)
+2. ✅ `server_name` содержит ваш домен
+3. ✅ `ssl_certificate` указывает на правильный путь
+4. ✅ `proxy_pass http://server:3001` - это правильно для docker-compose
+
+**В реальной работе:**
+Когда контейнеры запущены через `docker compose up`, они будут в одной сети, и имя "server" будет резолвиться корректно. Конфигурация будет работать правильно.
+
+**Альтернативная проверка (только визуальная):**
 
 ```bash
-# Проверка только синтаксиса (игнорирует недоступные upstream)
-docker run --rm \
-  -v "$(pwd)/client/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
-  nginx:alpine \
-  sh -c "nginx -t 2>&1 | grep -v 'host not found in upstream' || nginx -t"
+# Просто проверьте, что файл существует и читается
+cat client/nginx.conf | head -20
+
+# Проверьте основные директивы
+grep -E "server_name|ssl_certificate|proxy_pass" client/nginx.conf
 ```
 
-**Или просто проверьте синтаксис вручную:**
-- Убедитесь, что все директивы правильно закрыты
-- Проверьте, что нет опечаток в именах директив
-- В реальной работе внутри docker-compose конфигурация будет работать корректно
+**Примечание:** Если в выводе вы видите домен `vashchenkovaitrader.ru` - это нормально, если это ваш актуальный домен. Если у вас другой домен, используйте шаблон или замените вручную (см. раздел выше).
 
 #### Что проверяет конфигурация
 
@@ -719,11 +733,21 @@ cat docker-compose.yml
 # Сборка и запуск всех сервисов в фоновом режиме
 docker compose up -d --build
 
+# Если сборка клиента падает с ошибкой, попробуйте собрать с более подробными логами:
+docker compose build client --progress=plain --no-cache
+
+# Или соберите только клиент для диагностики:
+cd ~/projects/ai-trader
+docker build -t ai-trader-client:test -f client/Dockerfile client/ --progress=plain
+
 # Просмотр статуса контейнеров
 docker compose ps
 
 # Просмотр логов
 docker compose logs -f
+
+# Просмотр логов конкретного сервиса при сборке
+docker compose logs client
 ```
 
 ### 8.3. Инициализация базы данных
@@ -1190,6 +1214,57 @@ cd ~/projects/ai-trader
 docker compose up -d
 # или
 sudo systemctl start nginx
+```
+
+### Проблема: Ошибка сборки клиента (npm run build failed)
+
+**Ошибка:** `process "/bin/sh -c npm run build" did not complete successfully: exit code: 1`
+
+**Решение:**
+
+```bash
+# Шаг 1: Проверьте детальные логи сборки
+cd ~/projects/ai-trader
+docker compose build client --progress=plain --no-cache 2>&1 | tee build.log
+
+# Шаг 2: Если видите ошибки TypeScript, проверьте код
+# Попробуйте собрать с проверкой типов:
+cd client
+npm run type-check
+
+# Шаг 3: Проверьте, что все зависимости установлены
+rm -rf node_modules package-lock.json
+npm install
+
+# Шаг 4: Если проблема с памятью, увеличьте лимит памяти для Docker
+# В docker-compose.yml можно добавить:
+# services:
+#   client:
+#     build:
+#       context: ./client
+#     deploy:
+#       resources:
+#         limits:
+#           memory: 2G
+
+# Шаг 5: Попробуйте собрать только клиент для диагностики
+cd ~/projects/ai-trader
+docker build -t ai-trader-client:test -f client/Dockerfile client/ --progress=plain
+```
+
+**Частые причины:**
+- Ошибки TypeScript (проверьте `npm run type-check` в директории client)
+- Недостаточно памяти (увеличьте лимит Docker или используйте swap)
+- Проблемы с зависимостями (удалите `node_modules` и `package-lock.json`, затем `npm install`)
+- Предупреждение о "W3tkqq" можно игнорировать, если это не критично (возможно, это случайная переменная в каком-то файле)
+
+**Если проблема не решается:**
+```bash
+# Попробуйте собрать без кеша
+docker compose build client --no-cache
+
+# Или соберите только сервер и postgres, клиент соберете позже
+docker compose up -d postgres server
 ```
 
 ### Проблема: Домен не открывается
