@@ -1,7 +1,7 @@
 import MonitoringService from '../services/MonitoringService.js';
 import OptimizedTelegramService from '../services/OptimizedTelegramService.js';
 import LoggerService from '../services/LoggerService.js';
-import { AppError } from '../utils/errors/AppError.js';
+import { AppError, ValidationError } from '../utils/errors/AppError.js';
 
 /**
  * Централизованный обработчик ошибок
@@ -22,12 +22,23 @@ export const errorHandler = (err, req, res, next) => {
         statusCode = err.statusCode;
         message = err.message;
         details = err.details || null;
+        
+        // Для ValidationError логируем детали
+        if (err instanceof ValidationError || err.type === 'validation') {
+            console.warn('Validation error details:', JSON.stringify(details, null, 2));
+        }
     }
-    // Обработка ошибок валидации (например, от express-validator)
+    // Обработка ошибок валидации (например, от express-validator или Sequelize)
     else if (err.name === 'ValidationError' || err.name === 'SequelizeValidationError') {
         statusCode = 400;
-        message = 'Validation error';
-        details = err.errors || err.details || null;
+        message = err.message || 'Validation error';
+        // Для ValidationError details может быть массивом ошибок
+        details = err.details || err.errors || null;
+        
+        // Логируем детали ошибки валидации для отладки
+        if (details) {
+            console.warn('Validation error details:', JSON.stringify(details, null, 2));
+        }
     }
     // Обработка ошибок Sequelize
     else if (err.name === 'SequelizeDatabaseError') {

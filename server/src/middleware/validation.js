@@ -137,6 +137,15 @@ export const validateBody = (rules) => {
     return (req, res, next) => {
         const errors = [];
         
+        // Отладочное логирование для диагностики
+        if (process.env.NODE_ENV !== 'production' || req.path.includes('/auth/login')) {
+            console.log('Validation check:', {
+                path: req.path,
+                body: req.body,
+                rules: Object.keys(rules)
+            });
+        }
+        
         for (const [field, rule] of Object.entries(rules)) {
             const value = req.body[field];
             
@@ -172,12 +181,23 @@ export const validateBody = (rules) => {
                     continue;
                 }
                 
-                if (rule.type === 'string' && typeof value !== 'string') {
-                    errors.push({
-                        field,
-                        message: `${field} must be a string`
-                    });
-                    continue;
+                if (rule.type === 'string') {
+                    // Для строковых полей проверяем тип, но также конвертируем в строку, если возможно
+                    if (typeof value !== 'string') {
+                        // Пытаемся конвертировать в строку, если это не строка
+                        if (value !== null && value !== undefined) {
+                            const stringValue = String(value);
+                            // Обновляем значение в req.body для дальнейшего использования
+                            req.body[field] = stringValue;
+                            // Продолжаем валидацию с конвертированным значением
+                        } else {
+                            errors.push({
+                                field,
+                                message: `${field} must be a string`
+                            });
+                            continue;
+                        }
+                    }
                 }
                 
                 if (rule.type === 'array' && !Array.isArray(value)) {
@@ -284,6 +304,12 @@ export const validateBody = (rules) => {
         }
         
         if (errors.length > 0) {
+            // Логируем детали ошибок валидации
+            console.warn('Validation failed:', {
+                path: req.path,
+                errors: errors,
+                body: req.body
+            });
             return next(new ValidationError('Validation failed', errors));
         }
         
