@@ -180,7 +180,8 @@ class ServiceManager {
             if (server) {
                 const WebSocketService = (await import('./WebSocketService.js')).default;
                 const webSocketService = new WebSocketService();
-                webSocketService.initialize(server);
+                // Инициализируем WebSocket на пути /ws для соответствия nginx конфигурации
+                webSocketService.initialize(server, '/ws');
                 this.services.set('WebSocketService', webSocketService);
                 
                 // Отмечаем WebSocketService как глобально инициализированный (если не воркер)

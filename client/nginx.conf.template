@@ -99,7 +99,7 @@ server {
     location /ws {
         # Используем переменную для резолвинга DNS во время выполнения запроса
         set $backend "http://server:3001";
-        proxy_pass $backend;
+        proxy_pass $backend/ws;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -108,6 +108,10 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
+        proxy_connect_timeout 75s;
+        
+        # Отключаем буферизацию для WebSocket
+        proxy_buffering off;
     }
 
     # Health check endpoint
