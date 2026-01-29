@@ -5,6 +5,10 @@
 const workerTypeTranslations: { [key: string]: string } = {
   // Обучение
   'training': 'Обучение модели',
+  'optimized_training': 'Оптимизированное обучение',
+  'optimizedTraining': 'Оптимизированное обучение',
+  'standalone_training': 'Автономное обучение',
+  'standaloneTraining': 'Автономное обучение',
   'ensemble_training': 'Обучение ансамбля',
   'ensembleTraining': 'Обучение ансамбля',
   'rl_training': 'Обучение с подкреплением',
@@ -31,12 +35,25 @@ const workerTypeTranslations: { [key: string]: string } = {
   'active_signals_prices_update': 'Обновление цен сигналов',
   'active Signals Prices Update': 'Обновление цен сигналов',
   'options_data_update': 'Обновление опционов',
+  'optionsDataUpdate': 'Обновление опционов',
   'options Data Update': 'Обновление опционов',
+  'options_data_update_worker': 'Обновление опционов',
+  
+  // Фундаментальные и квартальные данные
+  'fundamental_data_update': 'Обновление фундаментальных данных',
+  'fundamentalDataUpdate': 'Обновление фундаментальных данных',
+  'fundamental Data Update': 'Обновление фундаментальных данных',
+  'quarterly_data_update': 'Обновление квартальных данных',
+  'quarterlyDataUpdate': 'Обновление квартальных данных',
+  'quarterly Data Update': 'Обновление квартальных данных',
   
   // Другие
   'neuralNetwork': 'Нейронная сеть',
   'neural_network': 'Нейронная сеть',
   'ensemble': 'Ансамбль',
+  'portfolioRebalancing': 'Ребалансировка портфеля',
+  'portfolio_rebalancing': 'Ребалансировка портфеля',
+  'portfolio Rebalancing': 'Ребалансировка портфеля',
 };
 
 /**

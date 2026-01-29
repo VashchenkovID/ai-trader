@@ -4299,6 +4299,22 @@ class SchedulerService {
      */
     async performFundamentalDataUpdate() {
         try {
+            // Регистрируем воркер для мониторинга
+            let workerId = null;
+            try {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                if (!WorkerMonitoringService.isInitialized) {
+                    await WorkerMonitoringService.initialize();
+                }
+                
+                workerId = WorkerMonitoringService.registerWorker(
+                    'fundamental_data_update',
+                    'Обновление фундаментальных данных (квартальные данные)',
+                    { startTime: new Date().toISOString() }
+                );
+            } catch (monitoringError) {
+                console.warn('Failed to register worker in monitoring service:', monitoringError);
+            }
 
             const FundamentalDataService = (await import('./FundamentalDataService.js')).default;
             
@@ -4339,6 +4355,19 @@ class SchedulerService {
                 );
             }
             
+            // Завершаем воркер
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    await WorkerMonitoringService.completeWorker(workerId, {
+                        success: true,
+                        stats: stats
+                    });
+                } catch (monitoringError) {
+                    console.warn('Failed to complete worker in monitoring service:', monitoringError);
+                }
+            }
+
             return {
                 success: true,
                 stats: stats,
@@ -4346,6 +4375,17 @@ class SchedulerService {
             };
         } catch (error) {
             console.error('❌ Error in performFundamentalDataUpdate:', error);
+            
+            // Сообщаем об ошибке воркеру
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    await WorkerMonitoringService.reportWorkerError(workerId, error.message);
+                } catch (monitoringError) {
+                    console.warn('Failed to report worker error in monitoring service:', monitoringError);
+                }
+            }
+
             await OptimizedTelegramService.sendAlert(
                 'FUNDAMENTAL_DATA_UPDATE_ERROR',
                 `❌ Ошибка при обновлении фундаментальных данных:\n${error.message}`,

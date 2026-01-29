@@ -115,9 +115,13 @@ export async function executeWorkerTask(workerFileName, workerData, options = {}
         }
         
         // Определяем тип воркера по имени файла
-        const workerType = workerFileName.replace('Worker.js', '').replace('.js', '');
-        const workerName = workerType.split(/(?=[A-Z])/).join(' ').toLowerCase()
-            .replace(/^\w/, c => c.toUpperCase());
+        // Убираем расширение и суффикс Worker
+        let workerType = workerFileName.replace(/Worker\.js$/, '').replace(/\.js$/, '');
+        // Преобразуем camelCase в snake_case для единообразия
+        workerType = workerType.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/, '');
+        const workerName = workerType.split(/[_-]/).map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
         
         workerId = WorkerMonitoringService.registerWorker(
             workerType,
