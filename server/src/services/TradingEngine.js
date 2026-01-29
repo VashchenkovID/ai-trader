@@ -773,17 +773,29 @@ class TradingEngine {
      * Расчет стоимости виртуального портфеля
      */
     async getVirtualPortfolioValue() {
-        // Здесь должна быть логика получения текущих цен
-        // Пока возвращаем базовую стоимость
-        let positionsValue = 0;
         
-        for (const [symbol, quantity] of Object.entries(this.virtualPortfolio.positions)) {
+        let positionsValue = 0;
+        const positionsDetails = [];
+        
+        for (const [symbol, quantity] of Object.entries(this.virtualPortfolio.positions || {})) {
             if (quantity > 0) {
-                // Получаем реальную цену
-                // skipUpdate = true, чтобы не дергать API при обучении
-                const prices = await this.getCurrentPrices([symbol], true);
-                const currentPrice = prices[symbol] || 0;
-                positionsValue += currentPrice * quantity;
+                try {
+                    // Получаем реальную цену
+                    // skipUpdate = true, чтобы не дергать API при обучении
+                    const prices = await this.getCurrentPrices([symbol], true);
+                    const currentPrice = prices[symbol] || 0;
+                    const positionValue = currentPrice * quantity;
+                    positionsValue += positionValue;
+                    
+                    positionsDetails.push({
+                        figi: symbol,
+                        quantity,
+                        currentPrice,
+                        positionValue
+                    });
+                    
+                } catch (error) {
+                }
             }
         }
         
@@ -815,6 +827,7 @@ class TradingEngine {
             let cash = 0;
             let positionsValue = 0;
             let cashFromPositions = 0; // Переменная для накопления cash из валютных позиций
+            const positionsDetails = [];
             
             if (portfolio.positions && Array.isArray(portfolio.positions)) {
                 // Если positions - массив объектов из Tinkoff API
@@ -851,21 +864,79 @@ class TradingEngine {
                         } else {
                             // Обычная позиция (акция, облигация и т.д.)
                             positions[position.figi] = quantity;
+                            
                             // Рассчитываем стоимость позиции
-                            // currentPrice может быть объектом {value, currency} или числом
+                            // Приоритет: expectedYield (текущая стоимость позиции) > currentPrice * quantity > averagePositionPrice * quantity
+                            let positionValue = 0;
                             let currentPrice = 0;
+                            let averagePrice = 0;
+                            
+                            let hasExpectedYield = false;
+                            if (position.expectedYield !== undefined && position.expectedYield !== null) {
+                                hasExpectedYield = true;
+                                // expectedYield может быть объектом {value, currency} или числом
+                                if (typeof position.expectedYield === 'object' && position.expectedYield.value !== undefined) {
+                                    hasExpectedYield = Math.abs(position.expectedYield.value) > 0;
+                                } else if (typeof position.expectedYield === 'number') {
+                                    hasExpectedYield = Math.abs(position.expectedYield) > 0;
+                                }
+                            }
+                            
+                            // Приоритет 1: currentPrice (текущая рыночная цена)
                             if (typeof position.currentPrice === 'number') {
                                 currentPrice = position.currentPrice;
                             } else if (position.currentPrice && typeof position.currentPrice === 'object') {
                                 currentPrice = position.currentPrice.value || position.currentPrice.units || 0;
                             }
                             
-                            if (currentPrice > 0) {
-                                positionsValue += currentPrice * quantity;
+                            if (currentPrice > 0 && quantity > 0) {
+                                positionValue = currentPrice * quantity;
                             }
+                            
+                            // Приоритет 2: Если currentPrice нет, используем averagePositionPrice (средняя цена покупки)
+                            // Но это менее точно, так как цена могла измениться
+                            if (positionValue === 0) {
+                                if (typeof position.averagePositionPrice === 'number') {
+                                    averagePrice = position.averagePositionPrice;
+                                } else if (position.averagePositionPrice && typeof position.averagePositionPrice === 'object') {
+                                    averagePrice = position.averagePositionPrice.value || position.averagePositionPrice.units || 0;
+                                }
+                                
+                                if (averagePrice > 0 && quantity > 0) {
+                                    positionValue = averagePrice * quantity;
+                                    currentPrice = averagePrice;
+                                }
+                            }
+                            
+                            // Приоритет 3: Если ничего не помогло, пытаемся получить цену из кеша
+                            if (positionValue === 0 && quantity > 0) {
+                                try {
+                                    const instrument = await CacheService.getInstrument(position.figi, true);
+                                    const cachedPrice = instrument?.lastPrice || 0;
+                                    if (cachedPrice > 0) {
+                                        currentPrice = cachedPrice;
+                                        positionValue = cachedPrice * quantity;
+                                    }
+                                } catch (error) {
+                                }
+                            }
+                            
+                            if (positionValue > 0) {
+                                positionsValue += positionValue;
+                            }
+                            
+                            positionsDetails.push({
+                                figi: position.figi,
+                                ticker: position.ticker,
+                                quantity,
+                                currentPrice,
+                                averagePrice,
+                                expectedYield: position.expectedYield,
+                                positionValue,
+                                instrumentType: position.instrumentType
+                            });
+                            
                         }
-                    } else {
-                        console.warn(`  ⚠️ Position ${position.figi} has zero or invalid quantity:`, position.quantity);
                     }
                 }
             } else if (portfolio.positions && typeof portfolio.positions === 'object' && !Array.isArray(portfolio.positions)) {
@@ -879,22 +950,29 @@ class TradingEngine {
                                 try {
                                     const instrument = await CacheService.getInstrument(figi, true);
                                     const currentPrice = instrument?.lastPrice || 0;
-                                    if (currentPrice > 0) {
-                                        positionsValue += currentPrice * quantity;
+                                    const positionValue = currentPrice > 0 ? currentPrice * quantity : 0;
+                                    if (positionValue > 0) {
+                                        positionsValue += positionValue;
                                     }
+                                    
+                                    positionsDetails.push({
+                                        figi,
+                                        quantity,
+                                        currentPrice,
+                                        positionValue,
+                                        source: 'cache'
+                                    });
+                                    
                                 } catch (error) {
-                                    console.warn(`  ⚠️ Error getting price for ${figi}:`, error.message);
                                 }
                             }
                         }
                     } catch (error) {
-                        console.warn('⚠️ Error calculating positionsValue from positions object:', error.message);
                     }
                 }
-            } else {
-                console.warn('⚠️ No positions found or invalid format:', portfolio.positions);
             }
             
+    
             // Извлекаем cash из totalAmountCurrencies
             let cashFromCurrencies = null;
             if (portfolio.totalAmountCurrencies && Array.isArray(portfolio.totalAmountCurrencies) && portfolio.totalAmountCurrencies.length > 0) {
@@ -934,23 +1012,9 @@ class TradingEngine {
                     : (typeof totalPortfolioValue === 'number' ? totalPortfolioValue : 0);
             }
             
-            // Определяем cash и positionsValue
-            if (cashFromCurrencies !== null) {
-                // Если cash найден в totalAmountCurrencies или portfolio.cash, используем его
-                cash = cashFromCurrencies;
-                // Если positionsValue не рассчитан, вычисляем из totalPortfolio
-                if (positionsValue === 0 && totalPortfolio !== null) {
-                    positionsValue = Math.max(0, totalPortfolio - cash);
-                }
-            } else if (totalPortfolio !== null) {
-                // Если cash не найден, но есть totalPortfolio, вычисляем cash как разницу
-                // totalPortfolio = cash + positionsValue
-                cash = Math.max(0, totalPortfolio - positionsValue);
-            }
-            
             // Убеждаемся, что positionsValue рассчитан из всех позиций
             // Если positionsValue неполный или равен 0, но есть позиции, рассчитываем из кеша
-            if (Object.keys(positions).length > 0 && (positionsValue === 0 || positionsValue < cash * 0.1)) {
+            if (Object.keys(positions).length > 0 && positionsValue === 0) {
                 // Пересчитываем positionsValue из всех позиций через кеш
                 let recalculatedPositionsValue = 0;
                 try {
@@ -959,13 +1023,11 @@ class TradingEngine {
                             try {
                                 const instrument = await CacheService.getInstrument(figi, true);
                                 const currentPrice = instrument?.lastPrice || 0;
-                                if (currentPrice > 0) {
-                                    recalculatedPositionsValue += currentPrice * quantity;
-                                } else {
-                                    console.warn(`  ⚠️ No price in cache for ${figi}, skipping from positionsValue`);
+                                const positionValue = currentPrice > 0 ? currentPrice * quantity : 0;
+                                if (positionValue > 0) {
+                                    recalculatedPositionsValue += positionValue;
                                 }
                             } catch (error) {
-                                console.warn(`  ⚠️ Error getting price for ${figi} from cache:`, error.message);
                             }
                         }
                     }
@@ -973,13 +1035,42 @@ class TradingEngine {
                         positionsValue = recalculatedPositionsValue;
                     }
                 } catch (error) {
-                    console.warn('⚠️ Error recalculating positionsValue from cache:', error.message);
                 }
             }
             
-            // Финальный расчет totalValue как сумма cash и всех позиций
-            const finalTotalValue = cash + positionsValue;
-
+            // Определяем cash и проверяем согласованность с totalPortfolio
+            if (cashFromCurrencies !== null) {
+                // Если cash найден в totalAmountCurrencies или portfolio.cash, используем его
+                cash = cashFromCurrencies;
+            } else if (totalPortfolio !== null && positionsValue > 0) {
+                // Если cash не найден, но есть totalPortfolio и positionsValue, вычисляем cash как разницу
+                // totalPortfolio = cash + positionsValue
+                cash = Math.max(0, totalPortfolio - positionsValue);
+            }
+            
+            // Финальный расчет totalValue
+            // Приоритет: totalPortfolio из API > cash + positionsValue
+            let finalTotalValue;
+            const calculatedTotal = cash + positionsValue;
+            
+            if (totalPortfolio !== null && totalPortfolio > 0) {
+                // Используем totalPortfolio из API как источник истины
+                finalTotalValue = totalPortfolio;
+                // Проверяем согласованность: если разница больше 1%, корректируем
+                const difference = Math.abs(finalTotalValue - calculatedTotal);
+                const differencePercent = finalTotalValue > 0 ? (difference / finalTotalValue) * 100 : 0;
+                
+                if (differencePercent > 1) {
+                    // Если разница больше 1%, пересчитываем positionsValue из totalPortfolio
+                    // Это может быть, если цены в кеше устарели
+                    positionsValue = Math.max(0, finalTotalValue - cash);
+                }
+            } else {
+                // Если totalPortfolio нет, используем расчетную сумму
+                finalTotalValue = calculatedTotal;
+                console.log('📊 [REAL] totalPortfolio нет, используем calculatedTotal:', finalTotalValue);
+            }
+            
             return {
                 cash,
                 positions,

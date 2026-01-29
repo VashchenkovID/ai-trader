@@ -204,14 +204,21 @@ const PortfolioSummaryCard: React.FC<PortfolioSummaryCardProps> = ({
               const positionsCount = strategyPositionsList.length;
               
               // Рассчитываем использованные средства как сумму marketValue всех позиций стратегии
-              // Если marketValue нет, используем averagePrice * quantity
+              // ВАЖНО: marketValue в позициях - это общая стоимость позиции (не по стратегии)
+              // Но quantity - это количество для конкретной стратегии
+              // Поэтому для расчета usedAmount нужно использовать: currentPrice * quantity (для стратегии)
               let usedAmount = 0;
               if (strategyPositionsList.length > 0) {
                 usedAmount = strategyPositionsList.reduce((sum, pos) => {
-                  // Используем marketValue если есть, иначе рассчитываем как averagePrice * quantity
-                  const positionValue = pos.marketValue !== undefined && pos.marketValue !== null
+                  // Используем currentPrice * quantity для этой стратегии
+                  // Если currentPrice нет, используем averagePrice * quantity
+                  const currentPrice = pos.currentPrice || pos.averagePrice || 0;
+                  const quantity = pos.quantity || 0;
+                  const positionValue = currentPrice > 0 && quantity > 0 
+                    ? currentPrice * quantity
+                    : (pos.marketValue !== undefined && pos.marketValue !== null
                     ? pos.marketValue
-                    : ((pos.averagePrice || 0) * (pos.quantity || 0));
+                        : ((pos.averagePrice || 0) * (pos.quantity || 0)));
                   return sum + (positionValue || 0);
                 }, 0);
               } else {

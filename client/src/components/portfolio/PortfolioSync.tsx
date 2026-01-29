@@ -8,6 +8,12 @@ import { Button } from '../ui/Button/Button';
 import { Card } from '../ui/Card/Card';
 import { Alert } from '../ui/Alert/Alert';
 import { Badge } from '../ui/Badge/Badge';
+import { InputNumber } from '../ui/InputNumber/InputNumber';
+import { DataTable } from '../ui/Table/DataTable';
+import { Divider } from '../ui/Divider/Divider';
+import { Skeleton } from '../ui/Skeleton/Skeleton';
+import { InfoTooltip } from '../ui/InfoTooltip/InfoTooltip';
+import { ProgressBar } from '../ui/ProgressBar/ProgressBar';
 import { Toast } from 'primereact/toast';
 import { apiService } from '../../services/apiService';
 import './PortfolioSync.css';
@@ -193,7 +199,9 @@ const PortfolioSync: React.FC = () => {
       
       <Card variant="default" className="portfolio-sync-card">
         <div className="portfolio-sync-header">
-          <h2 className="portfolio-sync-title">🔄 Синхронизация портфеля со стратегиями</h2>
+          <h2 className="portfolio-sync-title">
+            <i className="pi pi-sync"></i> Синхронизация портфеля со стратегиями
+          </h2>
           <p className="portfolio-sync-description">
             Сопоставляет позиции из реального портфеля с одобренными торговыми заявками
             и создает связи между позициями и стратегиями.
@@ -208,7 +216,9 @@ const PortfolioSync: React.FC = () => {
               disabled={syncingRealPortfolio}
               loading={syncingRealPortfolio}
               variant="secondary"
-              icon={<span>📥</span>}
+              icon={<i className="pi pi-download"></i>}
+              fullWidth
+              size="sm"
             >
               {syncingRealPortfolio ? 'Обновление...' : 'Обновить реальный портфель'}
             </Button>
@@ -221,18 +231,19 @@ const PortfolioSync: React.FC = () => {
             <div className="portfolio-sync-action-label">Синхронизация со стратегиями</div>
             <div className="portfolio-sync-controls">
               <div className="sync-input-group">
-                <label htmlFor="lookback-hours" className="sync-input-label">
-                  Период поиска заявок (часов):
-                </label>
-                <input
+                <InputNumber
                   id="lookback-hours"
-                  type="number"
-                  min="1"
-                  max="168"
+                  label="Период поиска (ч)"
                   value={maxLookbackHours}
-                  onChange={(e) => setMaxLookbackHours(parseInt(e.target.value) || 48)}
+                  onValueChange={(e) => setMaxLookbackHours(e.value || 48)}
+                  min={1}
+                  max={168}
+                  step={1}
                   disabled={syncing}
-                  className="sync-input"
+                  showButtons={true}
+                  buttonLayout="horizontal"
+                  size="sm"
+                  fullWidth
                 />
               </div>
               
@@ -241,42 +252,153 @@ const PortfolioSync: React.FC = () => {
                 disabled={syncing}
                 loading={syncing}
                 variant="primary"
-                icon={<span>🔄</span>}
+                icon={<i className="pi pi-sync"></i>}
+                fullWidth
+                size="sm"
               >
-                {syncing ? 'Синхронизация...' : 'Синхронизировать со стратегиями'}
+                {syncing ? 'Синхронизация...' : 'Синхронизировать'}
               </Button>
             </div>
             <p className="portfolio-sync-action-hint">
-              Сопоставляет позиции с одобренными заявками и создает связи со стратегиями
+              <InfoTooltip explanation="Сопоставляет позиции с одобренными заявками и создает связи со стратегиями">
+                <i className="pi pi-info-circle"></i>
+              </InfoTooltip>
+              {' '}Сопоставляет позиции с одобренными заявками
             </p>
           </div>
         </div>
 
-        {syncStatus && (
-          <div className="sync-status-section">
-            <h3 className="sync-section-title">📊 Статус последней синхронизации</h3>
-            <div className="sync-status-info">
-              <div className="status-item">
-                <span className="status-label">Последняя синхронизация:</span>
-                <span className="status-value">{formatDate(syncStatus.lastSync)}</span>
-              </div>
-              <div className="status-item">
-                <span className="status-label">Сопоставлено позиций:</span>
-                <Badge variant="success" size="sm">{syncStatus.positionsMatched}</Badge>
-              </div>
-              <div className="status-item">
-                <span className="status-label">Несоответствий:</span>
-                <Badge variant={syncStatus.positionsUnmatched > 0 ? 'warning' : 'success'} size="sm">
-                  {syncStatus.positionsUnmatched}
-                </Badge>
-              </div>
+        {(syncStatus || mismatches) && (
+          <>
+            <Divider spacing="md" />
+            <div className="sync-info-grid">
+              {syncStatus && (
+                <div className="sync-status-section">
+                  <h3 className="sync-section-title">
+                    <i className="pi pi-chart-bar"></i> Статус последней синхронизации
+                  </h3>
+                  <div className="sync-status-info">
+                    <div className="status-item">
+                      <span className="status-label">Последняя синхронизация:</span>
+                      <span className="status-value">{formatDate(syncStatus.lastSync)}</span>
+                    </div>
+                    <div className="status-item">
+                      <span className="status-label">Сопоставлено позиций:</span>
+                      <Badge variant="success" size="sm" icon={<i className="pi pi-check"></i>}>
+                        {syncStatus.positionsMatched}
+                      </Badge>
+                    </div>
+                    <div className="status-item">
+                      <span className="status-label">Несоответствий:</span>
+                      <Badge 
+                        variant={syncStatus.positionsUnmatched > 0 ? 'warning' : 'success'} 
+                        size="sm"
+                        icon={syncStatus.positionsUnmatched > 0 ? <i className="pi pi-exclamation-triangle"></i> : <i className="pi pi-check"></i>}
+                      >
+                        {syncStatus.positionsUnmatched}
+                      </Badge>
+                    </div>
+                    {syncStatus.positionsMatched > 0 && (
+                      <div className="status-item">
+                        <span className="status-label">Процент сопоставления:</span>
+                        <ProgressBar
+                          value={(syncStatus.positionsMatched / (syncStatus.positionsMatched + syncStatus.positionsUnmatched)) * 100}
+                          variant={syncStatus.positionsUnmatched > 0 ? 'warning' : 'success'}
+                          showLabel={true}
+                          size="sm"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {loadingMismatches ? (
+                <div className="mismatches-section">
+                  <Skeleton variant="rectangular" size="lg" />
+                  <Skeleton variant="text" size="md" />
+                  <Skeleton variant="text" size="md" />
+                </div>
+              ) : mismatches && (
+                <div className="mismatches-section">
+                  <div className="mismatches-header">
+                    <h3 className="sync-section-title">
+                      <i className="pi pi-exclamation-triangle"></i> Текущие несоответствия
+                    </h3>
+                    <Button
+                      onClick={loadMismatches}
+                      disabled={loadingMismatches}
+                      variant="secondary"
+                      size="sm"
+                      icon={<i className="pi pi-refresh"></i>}
+                    >
+                      {loadingMismatches ? 'Загрузка...' : 'Обновить'}
+                    </Button>
+                  </div>
+
+                  {mismatches.positionsWithoutStrategy.length > 0 && (
+                    <>
+                      <Alert variant="warning" className="mismatch-alert">
+                        <strong>Позиции без стратегии ({mismatches.positionsWithoutStrategy.length}):</strong>
+                      </Alert>
+                      <DataTable
+                        data={mismatches.positionsWithoutStrategy}
+                        columns={[
+                          { key: 'figi', header: 'FIGI', render: (item) => item.figi || 'N/A' },
+                          { key: 'quantity', header: 'Количество', render: (item) => (item.quantity != null ? item.quantity.toLocaleString() : 'N/A') }
+                        ]}
+                        paginator={mismatches.positionsWithoutStrategy.length > 10}
+                        rows={10}
+                        emptyMessage="Нет данных"
+                        size="sm"
+                      />
+                    </>
+                  )}
+
+                  {mismatches.requestsWithoutPosition.length > 0 && (
+                    <>
+                      <Alert variant="info" className="mismatch-alert">
+                        <strong>Заявки без позиций ({mismatches.requestsWithoutPosition.length}):</strong>
+                      </Alert>
+                      <DataTable
+                        data={mismatches.requestsWithoutPosition}
+                        columns={[
+                          { key: 'ticker', header: 'Тикер', render: (item) => item.ticker || 'N/A' },
+                          { key: 'figi', header: 'FIGI', render: (item) => item.figi || 'N/A' },
+                          { key: 'quantity', header: 'Количество', render: (item) => (item.quantity != null ? item.quantity.toLocaleString() : 'N/A') },
+                          { 
+                            key: 'approvedAt', 
+                            header: 'Одобрена', 
+                            render: (item) => item.approvedAt ? formatDate(item.approvedAt) : 'N/A'
+                          }
+                        ]}
+                        paginator={mismatches.requestsWithoutPosition.length > 10}
+                        rows={10}
+                        emptyMessage="Нет данных"
+                        size="sm"
+                      />
+                    </>
+                  )}
+
+                  {mismatches.positionsWithoutStrategy.length === 0 &&
+                    mismatches.requestsWithoutPosition.length === 0 && (
+                    <Alert variant="success">
+                      <i className="pi pi-check-circle"></i> Все позиции сопоставлены со стратегиями
+                    </Alert>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
+          </>
         )}
 
         {syncResult && (
-          <div className="sync-result-section">
-            <h3 className="sync-section-title">📈 Результаты синхронизации</h3>
+          <>
+            <Divider spacing="md" />
+            <div className="sync-result-section">
+              <h3 className="sync-section-title">
+                <i className="pi pi-chart-line"></i> Результаты синхронизации
+              </h3>
             
             {syncResult.success ? (
               <Alert variant="success" className="sync-result-alert">
@@ -309,112 +431,64 @@ const PortfolioSync: React.FC = () => {
               syncResult.requestsWithoutPosition?.length > 0 ||
               syncResult.sellRequestsWithoutPosition?.length > 0) && (
               <div className="sync-mismatches">
+                <Divider spacing="md" />
                 <h4>Несоответствия:</h4>
                 
                 {syncResult.unmatchedBuys.length > 0 && (
                   <div className="mismatch-group">
-                    <strong>Позиции без BUY заявок ({syncResult.unmatchedBuys.length}):</strong>
-                    <ul>
-                      {syncResult.unmatchedBuys.slice(0, 5).map((item, idx) => (
-                        <li key={idx}>FIGI: {item.figi}, количество: {item.quantity}</li>
-                      ))}
-                      {syncResult.unmatchedBuys.length > 5 && (
-                        <li>... и еще {syncResult.unmatchedBuys.length - 5}</li>
-                      )}
-                    </ul>
+                    <Alert variant="warning" className="mismatch-alert">
+                      <strong>Позиции без BUY заявок ({syncResult.unmatchedBuys.length}):</strong>
+                    </Alert>
+                    <DataTable
+                      data={syncResult.unmatchedBuys}
+                      columns={[
+                        { key: 'figi', header: 'FIGI', render: (item) => item.figi || 'N/A' },
+                        { key: 'quantity', header: 'Количество', render: (item) => (item.quantity != null ? item.quantity.toLocaleString() : 'N/A') }
+                      ]}
+                      paginator={syncResult.unmatchedBuys.length > 5}
+                      rows={5}
+                      emptyMessage="Нет данных"
+                      size="sm"
+                    />
                   </div>
                 )}
 
                 {syncResult.requestsWithoutPosition.length > 0 && (
                   <div className="mismatch-group">
-                    <strong>BUY заявки без позиций ({syncResult.requestsWithoutPosition.length}):</strong>
-                    <ul>
-                      {syncResult.requestsWithoutPosition.slice(0, 5).map((item, idx) => (
-                        <li key={idx}>
-                          {item.ticker} ({item.figi}) - {item.quantity} шт.
-                        </li>
-                      ))}
-                      {syncResult.requestsWithoutPosition.length > 5 && (
-                        <li>... и еще {syncResult.requestsWithoutPosition.length - 5}</li>
-                      )}
-                    </ul>
+                    <Alert variant="info" className="mismatch-alert">
+                      <strong>BUY заявки без позиций ({syncResult.requestsWithoutPosition.length}):</strong>
+                    </Alert>
+                    <DataTable
+                      data={syncResult.requestsWithoutPosition}
+                      columns={[
+                        { key: 'ticker', header: 'Тикер', render: (item) => item.ticker || 'N/A' },
+                        { key: 'figi', header: 'FIGI', render: (item) => item.figi || 'N/A' },
+                        { key: 'quantity', header: 'Количество', render: (item) => (item.quantity != null ? item.quantity.toLocaleString() : 'N/A') }
+                      ]}
+                      paginator={syncResult.requestsWithoutPosition.length > 5}
+                      rows={5}
+                      emptyMessage="Нет данных"
+                      size="sm"
+                    />
                   </div>
                 )}
 
                 {syncResult.warnings && syncResult.warnings.length > 0 && (
                   <div className="mismatch-group">
-                    <strong>Предупреждения:</strong>
-                    <ul>
-                      {syncResult.warnings.map((warning, idx) => (
-                        <li key={idx}>{warning}</li>
-                      ))}
-                    </ul>
+                    <Alert variant="warning" className="mismatch-alert">
+                      <strong>Предупреждения:</strong>
+                      <ul>
+                        {syncResult.warnings.map((warning, idx) => (
+                          <li key={idx}>{warning}</li>
+                        ))}
+                      </ul>
+                    </Alert>
                   </div>
                 )}
               </div>
             )}
           </div>
-        )}
-
-        {mismatches && (
-          <div className="mismatches-section">
-            <div className="mismatches-header">
-              <h3 className="sync-section-title">⚠️ Текущие несоответствия</h3>
-              <Button
-                onClick={loadMismatches}
-                disabled={loadingMismatches}
-                variant="secondary"
-                size="sm"
-                icon={<span>🔄</span>}
-              >
-                {loadingMismatches ? 'Загрузка...' : 'Обновить'}
-              </Button>
-            </div>
-
-            {mismatches.positionsWithoutStrategy.length > 0 && (
-              <Alert variant="warning" className="mismatch-alert">
-                <strong>Позиции без стратегии ({mismatches.positionsWithoutStrategy.length}):</strong>
-                <ul>
-                  {mismatches.positionsWithoutStrategy.slice(0, 10).map((item, idx) => (
-                    <li key={idx}>
-                      FIGI: {item.figi}, количество: {item.quantity}
-                    </li>
-                  ))}
-                  {mismatches.positionsWithoutStrategy.length > 10 && (
-                    <li>... и еще {mismatches.positionsWithoutStrategy.length - 10}</li>
-                  )}
-                </ul>
-              </Alert>
-            )}
-
-            {mismatches.requestsWithoutPosition.length > 0 && (
-              <Alert variant="info" className="mismatch-alert">
-                <strong>Заявки без позиций ({mismatches.requestsWithoutPosition.length}):</strong>
-                <ul>
-                  {mismatches.requestsWithoutPosition.slice(0, 10).map((item, idx) => (
-                    <li key={idx}>
-                      {item.ticker} ({item.figi}) - {item.quantity} шт.
-                      {item.approvedAt && (
-                        <span className="mismatch-date">
-                          {' '}одобрена: {formatDate(item.approvedAt)}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                  {mismatches.requestsWithoutPosition.length > 10 && (
-                    <li>... и еще {mismatches.requestsWithoutPosition.length - 10}</li>
-                  )}
-                </ul>
-              </Alert>
-            )}
-
-            {mismatches.positionsWithoutStrategy.length === 0 &&
-              mismatches.requestsWithoutPosition.length === 0 && (
-              <Alert variant="success">
-                Все позиции сопоставлены со стратегиями
-              </Alert>
-            )}
-          </div>
+          </>
         )}
       </Card>
     </div>

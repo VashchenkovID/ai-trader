@@ -88,7 +88,11 @@ class PerformanceVisualizationService {
             });
 
             const result = {
-                period: { startDate, endDate, days },
+                period: { 
+                    startDate: startDate.toISOString(), 
+                    endDate: endDate.toISOString(), 
+                    days 
+                },
                 data: chartData,
                 summary: {
                     totalReturn: cumulativeReturn,
@@ -157,7 +161,11 @@ class PerformanceVisualizationService {
             });
 
             const result = {
-                period: { startDate, endDate, days },
+                period: { 
+                    startDate: startDate.toISOString(), 
+                    endDate: endDate.toISOString(), 
+                    days 
+                },
                 bins: bins.map(bin => ({
                     label: `${bin.range[0].toFixed(0)} - ${bin.range[1].toFixed(0)}`,
                     count: bin.count,
@@ -169,7 +177,21 @@ class PerformanceVisualizationService {
                     profitableTrades: pnls.filter(p => p > 0).length,
                     losingTrades: pnls.filter(p => p < 0).length,
                     totalProfit: pnls.filter(p => p > 0).reduce((sum, p) => sum + p, 0),
-                    totalLoss: pnls.filter(p => p < 0).reduce((sum, p) => sum + p, 0)
+                    totalLoss: pnls.filter(p => p < 0).reduce((sum, p) => sum + p, 0),
+                    // Добавляем статистические метрики для фронтенда
+                    mean: pnls.length > 0 ? pnls.reduce((sum, p) => sum + p, 0) / pnls.length : 0,
+                    median: pnls.length > 0 ? (() => {
+                        const sorted = [...pnls].sort((a, b) => a - b);
+                        const mid = Math.floor(sorted.length / 2);
+                        return sorted.length % 2 === 0 
+                            ? (sorted[mid - 1] + sorted[mid]) / 2 
+                            : sorted[mid];
+                    })() : 0,
+                    stdDev: pnls.length > 1 ? (() => {
+                        const mean = pnls.reduce((sum, p) => sum + p, 0) / pnls.length;
+                        const variance = pnls.reduce((sum, p) => sum + Math.pow(p - mean, 2), 0) / pnls.length;
+                        return Math.sqrt(variance);
+                    })() : 0
                 }
             };
 
@@ -312,7 +334,11 @@ class PerformanceVisualizationService {
             });
 
             const result = {
-                period: { startDate, endDate, days },
+                period: { 
+                    startDate: startDate.toISOString(), 
+                    endDate: endDate.toISOString(), 
+                    days 
+                },
                 sectors,
                 strategies,
                 data: heatmapData,
@@ -354,16 +380,28 @@ class PerformanceVisualizationService {
             const heatmap = await this.getPerformanceHeatmapData(period);
             const sectorAnalysis = await PerformanceAnalyzer.analyzeSectorPerformance(period);
 
+            // Трансформируем summary для фронтенда
+            const transformedSummary = {
+                totalProfit: analysis.summary?.keyMetrics?.profit ?? 0,
+                totalTrades: analysis.summary?.keyMetrics?.trades ?? 0,
+                winRate: analysis.summary?.keyMetrics?.winRate ?? 0,
+                sharpeRatio: analysis.summary?.keyMetrics?.sharpeRatio ?? 0,
+                maxDrawdown: drawdownChart?.summary?.maxDrawdown ?? 0,
+                volatility: analysis.trading?.volatility ?? 0
+            };
+            
             const result = {
                 period,
                 filters: { strategy, sector },
-                summary: analysis.summary,
-                charts: {
-                    returns: returnsChart,
-                    pnlDistribution: pnlDistribution,
-                    drawdown: drawdownChart,
-                    heatmap: heatmap
+                summary: transformedSummary,
+                returns: returnsChart?.data ?? returnsChart,
+                pnlDistribution: pnlDistribution,
+                drawdown: {
+                    ...drawdownChart,
+                    maxDrawdown: drawdownChart?.summary?.maxDrawdown ?? 0,
+                    maxDrawdownDate: drawdownChart?.summary?.maxDrawdownDate ?? null
                 },
+                heatmap: heatmap,
                 sectorAnalysis: sectorAnalysis,
                 recommendations: analysis.recommendations,
                 alerts: analysis.alerts,

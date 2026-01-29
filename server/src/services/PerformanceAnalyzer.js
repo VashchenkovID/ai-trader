@@ -6,6 +6,7 @@ import CapitalScalingService from './CapitalScalingService.js';
 import RiskAdjustmentService from './RiskAdjustmentService.js';
 import NeuralNetworkService from './NeuralNetworkService.js';
 import { Op } from 'sequelize';
+import { formatDateToISO } from '../utils/dateFormatter.js';
 
 /**
  * Сервис для комплексного анализа производительности системы
@@ -103,7 +104,7 @@ class PerformanceAnalyzer {
             const analysis = {
                 period,
                 days,
-                timestamp: new Date(),
+                timestamp: formatDateToISO(new Date()),
                 summary: {},
                 trading: {},
                 ai: {},
@@ -848,7 +849,7 @@ class PerformanceAnalyzer {
             const report = {
                 title: `Отчет о производительности за ${analysis.days} дней`,
                 period: analysis.period,
-                generatedAt: analysis.timestamp,
+                generatedAt: formatDateToISO(analysis.timestamp),
                 summary: analysis.summary,
                 trading: analysis.trading,
                 ai: analysis.ai,
@@ -1048,6 +1049,20 @@ class PerformanceAnalyzer {
     }
 
     /**
+     * Получение анализа производительности (алиас для analyzePerformance)
+     */
+    async getAnalysis(period = 'medium', customDays = null) {
+        return await this.analyzePerformance(period, customDays);
+    }
+
+    /**
+     * Получение отчета о производительности (алиас для generateReport)
+     */
+    async getReport(period = 'medium', customDays = null) {
+        return await this.generateReport(period, customDays);
+    }
+
+    /**
      * Очистка кеша
      */
     clearCache() {
@@ -1165,7 +1180,11 @@ class PerformanceAnalyzer {
             );
 
             return {
-                period: { startDate, endDate, days },
+                period: { 
+                    startDate: formatDateToISO(startDate), 
+                    endDate: formatDateToISO(endDate), 
+                    days 
+                },
                 sectors: sectorAnalysis,
                 correlations: sectorCorrelations,
                 diversification: diversificationRecommendations,

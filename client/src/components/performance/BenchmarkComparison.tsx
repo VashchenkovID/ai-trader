@@ -147,7 +147,7 @@ export const BenchmarkComparison: React.FC<BenchmarkComparisonProps> = ({ classN
       legend: {
         position: 'bottom' as const,
         labels: {
-          color: 'var(--color-text-primary)',
+          color: '#FFFFFF', // Белый цвет для текста легенды
           padding: 15,
           usePointStyle: true,
           font: {
@@ -159,13 +159,21 @@ export const BenchmarkComparison: React.FC<BenchmarkComparisonProps> = ({ classN
         },
       },
       tooltip: {
-        backgroundColor: 'var(--color-surface-elevated)',
-        titleColor: 'var(--color-text-primary)',
-        bodyColor: 'var(--color-text-primary)',
-        borderColor: 'var(--color-border-default)',
+        backgroundColor: 'rgba(26, 26, 36, 0.95)', // Темный фон для tooltip
+        titleColor: '#FFFFFF', // Белый цвет для заголовка
+        bodyColor: '#FFFFFF', // Белый цвет для текста
+        borderColor: 'rgba(255, 255, 255, 0.2)', // Светлая граница
         borderWidth: 1,
         padding: 12,
         cornerRadius: 8,
+        titleFont: {
+          size: 13,
+          weight: '600',
+        },
+        bodyFont: {
+          size: 12,
+        },
+        displayColors: true, // Показывать цветные индикаторы
         callbacks: {
           label: function(context: any) {
             return `${context.dataset.label}: ${formatPercent(context.parsed.y)}`;
@@ -176,7 +184,7 @@ export const BenchmarkComparison: React.FC<BenchmarkComparisonProps> = ({ classN
     scales: {
       x: {
         ticks: {
-          color: 'var(--color-text-primary)',
+          color: '#FFFFFF', // Белый цвет для текста оси X
           font: {
             size: 12,
             weight: '500' as const,
@@ -193,7 +201,7 @@ export const BenchmarkComparison: React.FC<BenchmarkComparisonProps> = ({ classN
       },
       y: {
         ticks: {
-          color: 'var(--color-text-primary)',
+          color: '#FFFFFF', // Белый цвет для текста оси Y
           font: {
             size: 12,
             weight: '500' as const,

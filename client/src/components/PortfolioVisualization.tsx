@@ -160,9 +160,30 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
       return null;
     }
 
+    // Получаем данные из API, приоритет: API > WebSocket
     const totalValue = portfolioData.totalValue || portfolioData.portfolioValue || tradingStats?.portfolioValue || 0;
-    const cash = portfolioData.cash || tradingStats?.cash || 0;
-    const positionsValue = portfolioData.positionsValue || (totalValue - cash);
+    const cash = portfolioData.cash !== undefined && portfolioData.cash !== null 
+      ? portfolioData.cash 
+      : (tradingStats?.cash !== undefined && tradingStats?.cash !== null ? tradingStats.cash : 0);
+    
+    // positionsValue должен быть передан из API, если нет - рассчитываем из позиций
+    let positionsValue = portfolioData.positionsValue;
+    if (positionsValue === undefined || positionsValue === null) {
+      // Если positionsValue не передан, пытаемся рассчитать из totalValue и cash
+      // Но только если оба значения валидны
+      if (totalValue > 0 && cash >= 0) {
+        positionsValue = Math.max(0, totalValue - cash);
+      } else {
+        // Если не можем рассчитать, используем 0
+        positionsValue = 0;
+      }
+    }
+    
+    // Убеждаемся, что totalValue = cash + positionsValue для согласованности
+    const calculatedTotalValue = cash + positionsValue;
+    // Используем totalValue из API, если он есть и больше 0, иначе используем расчетное значение
+    const finalTotalValue = totalValue > 0 ? totalValue : calculatedTotalValue;
+    
     const investedAmount = positionsValue;
 
     // Рассчитываем PnL
@@ -176,7 +197,7 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
           ? portfolioData.totalPnL 
           : (tradingStats?.totalPnL !== undefined 
               ? tradingStats.totalPnL 
-              : (totalValue - initialCapital))); // Если PnL не передан, рассчитываем как разницу
+              : (finalTotalValue - initialCapital))); // Если PnL не передан, рассчитываем как разницу
     
     // Процент прибыли: pnl.totalPercent из API > расчет относительно initialCapital
     const totalPnLPercent = portfolioData.pnl?.totalPercent !== undefined
@@ -184,7 +205,7 @@ const PortfolioVisualization: React.FC<PortfolioVisualizationProps> = ({ classNa
       : (initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0);
 
     return {
-      totalValue,
+      totalValue: finalTotalValue,
       cash,
       investedAmount,
       totalPnL,

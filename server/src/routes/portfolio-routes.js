@@ -189,22 +189,29 @@ router.get('/positions', async (req, res) => {
         const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
         const TradingStrategy = (await import('../models/TradingStrategy.js')).default;
         
-        // Группируем позиции по FIGI + strategyId
-        // Для каждого FIGI находим все BUY заявки и группируем их по стратегиям
-        const positionsByStrategy = new Map(); // Ключ: `${figi}_${strategyId || 'null'}`, значение: {figi, strategyId, buyTrades, sellTrades}
+        // УПРОЩЕННЫЙ ПОДХОД: Используем количество из портфеля как источник истины
+        // Заявки и сделки используем только для определения стратегий и расчета средней цены
+        const positionsByStrategy = new Map(); // Ключ: `${figi}_${strategyId || 'null'}`, значение: {figi, strategyId, quantity, buyTrades, sellTrades}
         
-        // Собираем все уникальные FIGI из rawPositions
+        // Собираем все уникальные FIGI из rawPositions (это уже правильные количества!)
         const allFigis = Object.keys(rawPositions).filter(figi => rawPositions[figi] > 0);
         
         // Отладочная информация
         console.log(`🔍 Portfolio positions debug:`, {
             rawPositionsCount: Object.keys(rawPositions).length,
             allFigisCount: allFigis.length,
-            allFigis: allFigis.slice(0, 5), // Первые 5 для примера
-            tradesCount: trades.length
+            allFigis: allFigis.slice(0, 5),
+            tradesCount: trades.length,
+            rawPositions: Object.fromEntries(allFigis.map(f => [f, rawPositions[f]]))
         });
         
         for (const figi of allFigis) {
+            // ИСПОЛЬЗУЕМ КОЛИЧЕСТВО ИЗ ПОРТФЕЛЯ КАК ИСТОЧНИК ИСТИНЫ
+            const totalQuantityFromPortfolio = rawPositions[figi] || 0;
+            
+            if (totalQuantityFromPortfolio <= 0) {
+                continue; // Пропускаем нулевые позиции
+            }
             try {
                 // Получаем все BUY заявки для этого FIGI (не только EXECUTED, но и APPROVED, PENDING)
                 // EXECUTED заявки могут не существовать, если сделки выполняются напрямую через TradingEngine
@@ -250,9 +257,10 @@ router.get('/positions', async (req, res) => {
                 // Группируем сделки по strategyId из самих сделок
                 if (buyRequests.length === 0 && rawPositions[figi] > 0) {
                     const buyTradesForFigi = trades.filter(t => (t.symbol === figi || t.figi === figi) && t.action === 'BUY');
+                    const sellTradesForFigi = trades.filter(t => (t.symbol === figi || t.figi === figi) && t.action === 'SELL');
                     
                     if (buyTradesForFigi.length > 0) {
-                        // Группируем сделки по strategyId
+                        // Группируем BUY сделки по strategyId
                         for (const trade of buyTradesForFigi) {
                             const strategyId = trade.strategyId || null;
                             const key = `${figi}_${strategyId || 'null'}`;
@@ -271,6 +279,66 @@ router.get('/positions', async (req, res) => {
                                 price: trade.price || 0,
                                 executedAt: trade.timestamp || new Date()
                             });
+                        }
+                        
+                        // Обрабатываем SELL сделки из trades (если они есть)
+                        // Используем FIFO: списываем с позиций в порядке покупки
+                        for (const sellTrade of sellTradesForFigi) {
+                            const sellQuantity = sellTrade.quantity || 0;
+                            let remainingSellQty = sellQuantity;
+                            const sellStrategyId = sellTrade.strategyId || null;
+                            
+                            if (sellStrategyId) {
+                                // Если стратегия определена, списываем с соответствующей позиции
+                                const key = `${figi}_${sellStrategyId}`;
+                                if (positionsByStrategy.has(key)) {
+                                    const position = positionsByStrategy.get(key);
+                                    const totalBuyQty = position.buyTrades.reduce((sum, t) => sum + t.quantity, 0);
+                                    const totalSellQty = position.sellTrades.reduce((sum, t) => sum + t.quantity, 0);
+                                    const availableQty = totalBuyQty - totalSellQty;
+                                    
+                                    if (availableQty > 0) {
+                                        const sellQty = Math.min(remainingSellQty, availableQty);
+                                        position.sellTrades.push({
+                                            quantity: sellQty,
+                                            price: sellTrade.price || 0,
+                                            executedAt: sellTrade.timestamp || new Date()
+                                        });
+                                        remainingSellQty -= sellQty;
+                                    }
+                                }
+                            } else {
+                                // Если стратегия не определена, списываем с позиций в порядке FIFO
+                                const sortedKeys = Array.from(positionsByStrategy.keys())
+                                    .filter(k => k.startsWith(`${figi}_`))
+                                    .sort((a, b) => {
+                                        const aTrades = positionsByStrategy.get(a).buyTrades;
+                                        const bTrades = positionsByStrategy.get(b).buyTrades;
+                                        const aDate = aTrades.length > 0 ? new Date(aTrades[0].executedAt) : new Date(0);
+                                        const bDate = bTrades.length > 0 ? new Date(bTrades[0].executedAt) : new Date(0);
+                                        return aDate - bDate;
+                                    });
+                                
+                                // Списываем с позиций в порядке FIFO
+                                for (const key of sortedKeys) {
+                                    if (remainingSellQty <= 0) break;
+                                    
+                                    const position = positionsByStrategy.get(key);
+                                    const totalBuyQty = position.buyTrades.reduce((sum, t) => sum + t.quantity, 0);
+                                    const totalSellQty = position.sellTrades.reduce((sum, t) => sum + t.quantity, 0);
+                                    const availableQty = totalBuyQty - totalSellQty;
+                                    
+                                    if (availableQty > 0) {
+                                        const sellQty = Math.min(remainingSellQty, availableQty);
+                                        position.sellTrades.push({
+                                            quantity: sellQty,
+                                            price: sellTrade.price || 0,
+                                            executedAt: sellTrade.timestamp || new Date()
+                                        });
+                                        remainingSellQty -= sellQty;
+                                    }
+                                }
+                            }
                         }
                     } else {
                         // Если нет сделок, создаем одну запись с количеством из rawPositions
@@ -324,6 +392,68 @@ router.get('/positions', async (req, res) => {
                         price: buyPrice,
                         executedAt: buyRequest.executedAt || buyRequest.createdAt
                     });
+                }
+                
+                // Также обрабатываем SELL операции из trades (если они есть и не были обработаны через TradingRequest)
+                const sellTradesForFigi = trades.filter(t => (t.symbol === figi || t.figi === figi) && t.action === 'SELL');
+                
+                // Обрабатываем SELL сделки из trades (если они не были обработаны через TradingRequest)
+                for (const sellTrade of sellTradesForFigi) {
+                    const sellQuantity = sellTrade.quantity || 0;
+                    let remainingSellQty = sellQuantity;
+                    const sellStrategyId = sellTrade.strategyId || null;
+                    
+                    if (sellStrategyId) {
+                        // Если стратегия определена, списываем с соответствующей позиции
+                        const key = `${figi}_${sellStrategyId}`;
+                        if (positionsByStrategy.has(key)) {
+                            const position = positionsByStrategy.get(key);
+                            const totalBuyQty = position.buyTrades.reduce((sum, t) => sum + t.quantity, 0);
+                            const totalSellQty = position.sellTrades.reduce((sum, t) => sum + t.quantity, 0);
+                            const availableQty = totalBuyQty - totalSellQty;
+                            
+                            if (availableQty > 0) {
+                                const sellQty = Math.min(remainingSellQty, availableQty);
+                                position.sellTrades.push({
+                                    quantity: sellQty,
+                                    price: sellTrade.price || 0,
+                                    executedAt: sellTrade.timestamp || new Date()
+                                });
+                                remainingSellQty -= sellQty;
+                            }
+                        }
+                    } else {
+                        // Если стратегия не определена, списываем с позиций в порядке FIFO
+                        const sortedKeys = Array.from(positionsByStrategy.keys())
+                            .filter(k => k.startsWith(`${figi}_`))
+                            .sort((a, b) => {
+                                const aTrades = positionsByStrategy.get(a).buyTrades;
+                                const bTrades = positionsByStrategy.get(b).buyTrades;
+                                const aDate = aTrades.length > 0 ? new Date(aTrades[0].executedAt) : new Date(0);
+                                const bDate = bTrades.length > 0 ? new Date(bTrades[0].executedAt) : new Date(0);
+                                return aDate - bDate;
+                            });
+                        
+                        // Списываем с позиций в порядке FIFO
+                        for (const key of sortedKeys) {
+                            if (remainingSellQty <= 0) break;
+                            
+                            const position = positionsByStrategy.get(key);
+                            const totalBuyQty = position.buyTrades.reduce((sum, t) => sum + t.quantity, 0);
+                            const totalSellQty = position.sellTrades.reduce((sum, t) => sum + t.quantity, 0);
+                            const availableQty = totalBuyQty - totalSellQty;
+                            
+                            if (availableQty > 0) {
+                                const sellQty = Math.min(remainingSellQty, availableQty);
+                                position.sellTrades.push({
+                                    quantity: sellQty,
+                                    price: sellTrade.price || 0,
+                                    executedAt: sellTrade.timestamp || new Date()
+                                });
+                                remainingSellQty -= sellQty;
+                            }
+                        }
+                    }
                 }
                 
                 // Группируем SELL заявки по стратегиям (используем FIFO - первая купленная, первая проданная)
@@ -401,129 +531,243 @@ router.get('/positions', async (req, res) => {
             positionsByStrategyKeys: Array.from(positionsByStrategy.keys()).slice(0, 5)
         });
         
-        // Формируем финальные позиции
+        // Получаем общий totalValue из портфеля для правильного расчета весов
+        const portfolioValue = await TradingEngine.getPortfolioValue();
+        const portfolioTotalValue = portfolioValue?.totalValue || portfolioValue?.cash + (portfolioValue?.positionsValue || 0);
+        const portfolioCash = portfolioValue?.cash || 0;
+        const portfolioPositionsValue = portfolioValue?.positionsValue || 0;
+        
+        // УПРОЩЕННЫЙ ПОДХОД: Используем количество из портфеля как источник истины
+        // Группируем позиции по FIGI, затем распределяем по стратегиям пропорционально
+        const positionsByFigi = new Map(); // Ключ: figi, значение: {figi, totalQuantity, strategies: []}
+        
+        // Сначала группируем все позиции по FIGI
         for (const [key, positionData] of positionsByStrategy.entries()) {
             const { figi, strategyId, buyTrades, sellTrades } = positionData;
             
-            // Рассчитываем количество акций (BUY - SELL)
+            if (!positionsByFigi.has(figi)) {
+                positionsByFigi.set(figi, {
+                    figi,
+                    totalQuantity: rawPositions[figi] || 0, // ИСТОЧНИК ИСТИНЫ - количество из портфеля
+                    strategies: []
+                });
+            }
+            
+            const figiData = positionsByFigi.get(figi);
+            
+            // Рассчитываем количество для стратегии на основе заявок (для пропорционального распределения)
             const totalBuyQty = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
             const totalSellQty = sellTrades.reduce((sum, t) => sum + t.quantity, 0);
-            const quantity = totalBuyQty - totalSellQty;
+            const calculatedQtyForStrategy = Math.max(0, totalBuyQty - totalSellQty);
             
-            // Отладочная информация для первой позиции
-            if (positions.length === 0) {
-                console.log(`🔍 First position calculation:`, {
-                    key,
-                    figi,
-                    strategyId,
-                    buyTradesCount: buyTrades.length,
-                    sellTradesCount: sellTrades.length,
-                    totalBuyQty,
-                    totalSellQty,
-                    quantity
-                });
+            figiData.strategies.push({
+                strategyId,
+                buyTrades,
+                sellTrades,
+                calculatedQty: calculatedQtyForStrategy
+            });
+        }
+        
+        // Теперь формируем позиции, используя количество из портфеля
+        for (const [figi, figiData] of positionsByFigi.entries()) {
+            const totalQuantityForFigi = figiData.totalQuantity; // ИСТОЧНИК ИСТИНЫ
+            
+            if (totalQuantityForFigi <= 0) {
+                continue; // Пропускаем нулевые позиции
             }
             
-            // Пропускаем позиции с нулевым или отрицательным количеством
-            if (quantity <= 0) {
-                if (positions.length === 0) {
-                    console.log(`⚠️ Skipping position ${key}: quantity = ${quantity}`);
-                }
-                continue;
-            }
-            
-            try {
-                // Получаем инструмент
-                let instrument = await CacheService.getInstrument(figi, true);
-                if (!instrument) {
-                    console.warn(`⚠️ Пропущена позиция ${figi}: инструмент не найден в кеше`);
-                    continue;
-                }
+            // Если есть стратегии, распределяем позицию между ними пропорционально
+            if (figiData.strategies.length > 0) {
+                // Рассчитываем общее рассчитанное количество для пропорционального распределения
+                const totalCalculatedQty = figiData.strategies.reduce((sum, s) => sum + Math.max(0, s.calculatedQty), 0);
                 
-                // Получаем текущую цену
-                let currentPrice = instrument.lastPrice || 0;
-                
-                // Рассчитываем среднюю цену покупки
-                let averagePrice = currentPrice || 0;
-                if (buyTrades.length > 0) {
-                    const totalCost = buyTrades.reduce((sum, t) => sum + (t.price * t.quantity), 0);
-                    const totalQuantity = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
-                    if (totalQuantity > 0) {
-                        averagePrice = totalCost / totalQuantity;
+                for (const strategyData of figiData.strategies) {
+                    const { strategyId, buyTrades, sellTrades, calculatedQty } = strategyData;
+                    
+                    // Распределяем количество пропорционально рассчитанным количествам
+                    let quantityForStrategy = 0;
+                    if (totalCalculatedQty > 0 && calculatedQty > 0) {
+                        // Пропорциональное распределение на основе рассчитанных количеств
+                        quantityForStrategy = Math.round((calculatedQty / totalCalculatedQty) * totalQuantityForFigi);
+                    } else if (figiData.strategies.length === 1) {
+                        // Если только одна стратегия, используем все количество
+                        quantityForStrategy = totalQuantityForFigi;
+                    } else {
+                        // Если нет рассчитанных количеств, распределяем поровну
+                        quantityForStrategy = Math.round(totalQuantityForFigi / figiData.strategies.length);
                     }
-                }
-                
-                if (!currentPrice && !averagePrice) {
-                    console.warn(`⚠️ Пропущена позиция ${figi}: нет данных о цене`);
-                    continue;
-                }
-                
-                const marketValue = currentPrice > 0 ? currentPrice * quantity : 0;
-                const unrealizedPnL = currentPrice > 0 && averagePrice > 0 ? (currentPrice - averagePrice) * quantity : 0;
-                const unrealizedPnLPercent = averagePrice > 0 && currentPrice > 0 ? ((currentPrice - averagePrice) / averagePrice) * 100 : 0;
-                
-                totalValue += marketValue;
-                
-                // Определяем сектор
-                let sector = instrument.sector || 'Неизвестно';
-                if (sector === 'Неизвестно' && instrument.ticker) {
-                    const ticker = instrument.ticker.toUpperCase();
-                    if (['SBER', 'VTBR', 'GAZS', 'TCSG'].includes(ticker)) {
-                        sector = 'Финансы';
-                    } else if (['GAZP', 'LKOH', 'ROSN', 'NVTK', 'TATN'].includes(ticker)) {
-                        sector = 'Энергетика';
-                    } else if (['YNDX', 'OZON', 'VKCO', 'TCIT'].includes(ticker)) {
-                        sector = 'IT';
-                    } else if (['MGNT', 'FIVE', 'FIXP', 'MVID'].includes(ticker)) {
-                        sector = 'Ритейл';
-                    } else if (ticker.startsWith('RUB')) {
-                        sector = 'Валюта';
+                    
+                    // Убеждаемся, что не превышаем общее количество и не меньше 0
+                    quantityForStrategy = Math.max(0, Math.min(quantityForStrategy, totalQuantityForFigi));
+                    
+                    if (quantityForStrategy <= 0) {
+                        continue; // Пропускаем нулевые позиции
                     }
-                }
-                
-                // Получаем стратегию
-                let strategy = null;
-                if (strategyId) {
+                    
                     try {
-                        strategy = await TradingStrategy.findByPk(strategyId);
+                        // Получаем инструмент
+                        let instrument = await CacheService.getInstrument(figi, true);
+                        if (!instrument) {
+                            console.warn(`⚠️ Пропущена позиция ${figi}: инструмент не найден в кеше`);
+                            continue;
+                        }
+                        
+                        // Получаем текущую цену
+                        let currentPrice = instrument.lastPrice || 0;
+                        
+                        // Рассчитываем среднюю цену покупки для этой стратегии
+                        let averagePrice = currentPrice || 0;
+                        if (buyTrades.length > 0) {
+                            const totalCost = buyTrades.reduce((sum, t) => sum + (t.price * t.quantity), 0);
+                            const totalQuantity = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
+                            if (totalQuantity > 0) {
+                                averagePrice = totalCost / totalQuantity;
+                            }
+                        }
+                        
+                        if (!currentPrice && !averagePrice) {
+                            console.warn(`⚠️ Пропущена позиция ${figi}: нет данных о цене`);
+                            continue;
+                        }
+                        
+                        // Рассчитываем marketValue на основе quantityForStrategy (количество для этой стратегии)
+                        const marketValueForStrategy = currentPrice > 0 ? currentPrice * quantityForStrategy : 0;
+                        
+                        // Для расчета PnL используем количество стратегии
+                        const unrealizedPnL = currentPrice > 0 && averagePrice > 0 ? (currentPrice - averagePrice) * quantityForStrategy : 0;
+                        const unrealizedPnLPercent = averagePrice > 0 && currentPrice > 0 ? ((currentPrice - averagePrice) / averagePrice) * 100 : 0;
+                    
+                        
+                        // Определяем сектор
+                        let sector = instrument.sector || 'Неизвестно';
+                        if (sector === 'Неизвестно' && instrument.ticker) {
+                            const ticker = instrument.ticker.toUpperCase();
+                            if (['SBER', 'VTBR', 'GAZS', 'TCSG'].includes(ticker)) {
+                                sector = 'Финансы';
+                            } else if (['GAZP', 'LKOH', 'ROSN', 'NVTK', 'TATN'].includes(ticker)) {
+                                sector = 'Энергетика';
+                            } else if (['YNDX', 'OZON', 'VKCO', 'TCIT'].includes(ticker)) {
+                                sector = 'IT';
+                            } else if (['MGNT', 'FIVE', 'FIXP', 'MVID'].includes(ticker)) {
+                                sector = 'Ритейл';
+                            } else if (ticker.startsWith('RUB')) {
+                                sector = 'Валюта';
+                            }
+                        }
+                        
+                        // Получаем стратегию
+                        let strategy = null;
+                        if (strategyId) {
+                            try {
+                                strategy = await TradingStrategy.findByPk(strategyId);
+                            } catch (error) {
+                                console.warn(`Could not load strategy ${strategyId}:`, error.message);
+                            }
+                        }
+                        
+                        positions.push({
+                            figi,
+                            ticker: instrument.ticker || figi.substring(0, 10),
+                            name: instrument.name || 'Неизвестно',
+                            quantity: quantityForStrategy, // Количество для этой стратегии (из портфеля, распределенное пропорционально)
+                            averagePrice: Math.round(averagePrice * 100) / 100,
+                            currentPrice: Math.round(currentPrice * 100) / 100,
+                            marketValue: Math.round(marketValueForStrategy * 100) / 100, // marketValue для этой стратегии
+                            unrealizedPnL: Math.round(unrealizedPnL * 100) / 100,
+                            unrealizedPnLPercent: Math.round(unrealizedPnLPercent * 100) / 100,
+                            weight: 0, // Будет рассчитано ниже
+                            sector,
+                            currency: instrument.currency || 'RUB',
+                            lastUpdate: new Date().toISOString(),
+                            strategy: strategy ? {
+                                id: strategy.id,
+                                name: strategy.name,
+                                type: strategy.type
+                            } : null,
+                            positionStrategy: strategyId ? {
+                                id: null,
+                                strategyId: strategyId
+                            } : null,
+                            _debug: {
+                                quantityForStrategy,
+                                totalQuantityForFigi,
+                                calculatedQty,
+                                marketValueForStrategy: Math.round(marketValueForStrategy * 100) / 100
+                            }
+                        });
                     } catch (error) {
-                        console.warn(`Could not load strategy ${strategyId}:`, error.message);
+                        console.warn(`⚠️ Пропущена позиция ${figi} (стратегия ${strategyId || 'null'}) из-за ошибки:`, error.message);
+                        continue;
                     }
                 }
-                
-                positions.push({
-                    figi,
-                    ticker: instrument.ticker || figi.substring(0, 10),
-                    name: instrument.name || 'Неизвестно',
-                    quantity,
-                    averagePrice: Math.round(averagePrice * 100) / 100,
-                    currentPrice: Math.round(currentPrice * 100) / 100,
-                    marketValue: Math.round(marketValue * 100) / 100,
-                    unrealizedPnL: Math.round(unrealizedPnL * 100) / 100,
-                    unrealizedPnLPercent: Math.round(unrealizedPnLPercent * 100) / 100,
-                    weight: 0,
-                    sector,
-                    currency: instrument.currency || 'RUB',
-                    lastUpdate: new Date().toISOString(),
-                    strategy: strategy ? {
-                        id: strategy.id,
-                        name: strategy.name,
-                        type: strategy.type
-                    } : null,
-                    positionStrategy: strategyId ? {
-                        id: null, // Можно добавить ID PositionStrategy если нужно
-                        strategyId: strategyId
-                    } : null
-                });
-            } catch (error) {
-                console.warn(`⚠️ Пропущена позиция ${figi} из-за ошибки загрузки:`, error.message);
-                continue;
+            } else {
+                // Если нет стратегий, создаем одну позицию без стратегии
+                try {
+                    let instrument = await CacheService.getInstrument(figi, true);
+                    if (!instrument) {
+                        console.warn(`⚠️ Пропущена позиция ${figi}: инструмент не найден в кеше`);
+                        continue;
+                    }
+                    
+                    const currentPrice = instrument.lastPrice || 0;
+                    const marketValue = currentPrice > 0 ? currentPrice * totalQuantityForFigi : 0;
+                    
+                    positions.push({
+                        figi,
+                        ticker: instrument.ticker || figi.substring(0, 10),
+                        name: instrument.name || 'Неизвестно',
+                        quantity: totalQuantityForFigi,
+                        averagePrice: Math.round(currentPrice * 100) / 100,
+                        currentPrice: Math.round(currentPrice * 100) / 100,
+                        marketValue: Math.round(marketValue * 100) / 100,
+                        unrealizedPnL: 0,
+                        unrealizedPnLPercent: 0,
+                        weight: 0,
+                        sector: instrument.sector || 'Неизвестно',
+                        currency: instrument.currency || 'RUB',
+                        lastUpdate: new Date().toISOString(),
+                        strategy: null,
+                        positionStrategy: null
+                    });
+                } catch (error) {
+                    console.warn(`⚠️ Пропущена позиция ${figi} из-за ошибки:`, error.message);
+                    continue;
+                }
             }
         }
         
-        // Рассчитываем веса позиций
+        // Рассчитываем веса позиций на основе общего totalValue портфеля
+        // ВАЖНО: Для расчета веса используем общую стоимость позиции (FIGI),
+        // а не marketValue для стратегии, так как вес должен отражать долю позиции в общем портфеле
+        const finalTotalValue = portfolioTotalValue || (portfolioCash + portfolioPositionsValue);
+        
+        // Группируем позиции по FIGI для правильного расчета веса
+        const positionsByFigiForWeight = new Map();
         positions.forEach(position => {
-            position.weight = totalValue > 0 ? (position.marketValue / totalValue) * 100 : 0;
+            if (!positionsByFigiForWeight.has(position.figi)) {
+                // Используем количество из портфеля для расчета общей стоимости позиции
+                const totalQuantity = position._debug?.totalQuantityForFigi || position.quantity;
+                const totalMarketValue = position.currentPrice * totalQuantity;
+                
+                positionsByFigiForWeight.set(position.figi, {
+                    figi: position.figi,
+                    totalMarketValue,
+                    positions: []
+                });
+            }
+            const figiData = positionsByFigiForWeight.get(position.figi);
+            figiData.positions.push(position);
+        });
+        
+        // Рассчитываем вес для каждой позиции на основе общей стоимости позиции (FIGI)
+        positions.forEach(position => {
+            const figiData = positionsByFigiForWeight.get(position.figi);
+            if (figiData && finalTotalValue > 0) {
+                // Вес рассчитываем на основе общей стоимости позиции (FIGI), а не стоимости для стратегии
+                position.weight = (figiData.totalMarketValue / finalTotalValue) * 100;
+            } else {
+                position.weight = 0;
+            }
         });
         
         res.json({

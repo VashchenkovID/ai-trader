@@ -231,10 +231,74 @@ export const performanceApi = {
    */
   async getDashboardData(period: 'day' | 'week' | 'month' | 'quarter' | 'year' = 'month'): Promise<DashboardData> {
     try {
+      // Преобразуем period в days для бэкенда
+      const periodDaysMap: Record<string, number> = {
+        day: 1,
+        week: 7,
+        month: 30,
+        quarter: 90,
+        year: 365
+      };
+      const days = periodDaysMap[period] || 30;
+      
       const response = await api.get('/api/performance/visualization/dashboard', {
-        params: { period }
+        params: { period: days }
       });
-      return response.data.data || response.data;
+      const rawData = response.data.data || response.data;
+      
+      // Бэкенд теперь возвращает правильную структуру, но нужно адаптировать для совместимости
+      const transformed: DashboardData = {
+        summary: rawData.summary || {
+          totalProfit: rawData.summary?.keyMetrics?.profit ?? 0,
+          totalTrades: rawData.summary?.keyMetrics?.trades ?? 0,
+          winRate: rawData.summary?.keyMetrics?.winRate ?? 0,
+          sharpeRatio: rawData.summary?.keyMetrics?.sharpeRatio ?? 0,
+          maxDrawdown: rawData.drawdown?.maxDrawdown ?? rawData.charts?.drawdown?.summary?.maxDrawdown ?? 0,
+          volatility: rawData.summary?.keyMetrics?.volatility ?? 0
+        },
+        returns: rawData.returns?.data ? {
+          labels: rawData.returns.data.labels ?? [],
+          returns: rawData.returns.data.dailyReturns ?? [],
+          cumulativeReturns: rawData.returns.data.cumulativeReturns ?? []
+        } : (rawData.returns || {
+          labels: [],
+          returns: [],
+          cumulativeReturns: []
+        }),
+        pnlDistribution: rawData.pnlDistribution ? {
+          // Сохраняем оригинальную структуру bins от бэкенда (массив объектов)
+          bins: rawData.pnlDistribution.bins ?? [],
+          // Также сохраняем для совместимости
+          frequencies: rawData.pnlDistribution.bins?.map((bin: any) => bin.count) ?? [],
+          mean: rawData.pnlDistribution.summary?.mean ?? 0,
+          median: rawData.pnlDistribution.summary?.median ?? 0,
+          stdDev: rawData.pnlDistribution.summary?.stdDev ?? 0
+        } : {
+          bins: [],
+          frequencies: [],
+          mean: 0,
+          median: 0,
+          stdDev: 0
+        },
+        drawdown: rawData.drawdown ? {
+          labels: rawData.drawdown.data?.labels ?? [],
+          drawdown: rawData.drawdown.data?.drawdowns ?? [],
+          maxDrawdown: rawData.drawdown.maxDrawdown ?? rawData.drawdown.summary?.maxDrawdown ?? 0,
+          maxDrawdownDate: rawData.drawdown.maxDrawdownDate ?? rawData.drawdown.summary?.maxDrawdownDate ?? null
+        } : {
+          labels: [],
+          drawdown: [],
+          maxDrawdown: 0,
+          maxDrawdownDate: null
+        },
+        heatmap: rawData.heatmap ?? rawData.charts?.heatmap ?? {
+          sectors: [],
+          strategies: [],
+          data: []
+        }
+      };
+      
+      return transformed;
     } catch (error: any) {
       console.error('Error fetching dashboard data:', error);
       throw error;
