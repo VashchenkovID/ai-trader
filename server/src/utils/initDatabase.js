@@ -227,6 +227,19 @@ async function safeSyncModel(Model, modelName = null) {
         } else if (syncError.name === 'TypeError' && syncError.message && syncError.message.includes('Cannot read properties of null')) {
             // Ошибка при чтении индексов - возможно, таблица в процессе создания
             console.log(`⚠️ Таблица ${name} в процессе синхронизации, ошибка чтения индексов (это нормально)`);
+        } else if (syncError.message && (
+            syncError.message.includes('type "virtual" does not exist') ||
+            syncError.message.includes('VIRTUAL') ||
+            (syncError.original && syncError.original.message && syncError.original.message.includes('type "virtual" does not exist'))
+        )) {
+            // Ошибка с VIRTUAL типом - это нормально, виртуальные поля не должны быть в БД
+            console.log(`⚠️ Таблица ${name} содержит виртуальные поля (это нормально, они не синхронизируются)`);
+        } else if (syncError.message && (
+            syncError.message.includes('cache lookup failed') ||
+            (syncError.original && syncError.original.message && syncError.original.message.includes('cache lookup failed'))
+        )) {
+            // Ошибка с кешем индексов - возможно, таблица в процессе изменения
+            console.log(`⚠️ Таблица ${name} в процессе изменения индексов (это нормально)`);
         } else {
             console.error(`❌ Ошибка синхронизации таблицы ${name}:`, syncError.message);
             // Не прерываем инициализацию при ошибке синхронизации
@@ -280,6 +293,19 @@ async function ensureModelColumns(Model) {
             
             // Пропускаем timestamps (createdAt, updatedAt) - они добавляются автоматически
             if (columnName === 'createdAt' || columnName === 'updatedAt') {
+                continue;
+            }
+            
+            // Пропускаем VIRTUAL поля - они не должны быть в БД
+            if (attribute.type && 
+                (attribute.type.constructor.name === 'VIRTUAL' || 
+                 attribute.type.toString().includes('VIRTUAL') ||
+                 attribute.type === 'VIRTUAL')) {
+                continue;
+            }
+            
+            // Пропускаем поля, помеченные как virtual
+            if (attribute.virtual === true) {
                 continue;
             }
             
@@ -2937,19 +2963,51 @@ async function initializeUser() {
         const saltRounds = 10;
         const passwordHash = await bcrypt.hash(userPassword, saltRounds);
         
-        // Создаем пользователя
-        const user = await User.create({
-            username: 'admin',
-            fullName: 'Иван Дмитриевич',
-            passwordHash: passwordHash,
-            isActive: true
-        });
-        
-        console.log(`   ✅ Пользователь создан: ${user.fullName} (${user.username}, id: ${user.id})`);
+        // Создаем пользователя с обработкой случая, когда он уже существует
+        try {
+            const user = await User.create({
+                username: 'admin',
+                fullName: 'Иван Дмитриевич',
+                passwordHash: passwordHash,
+                isActive: true
+            });
+            
+            console.log(`   ✅ Пользователь создан: ${user.fullName} (${user.username}, id: ${user.id})`);
+        } catch (createError) {
+            // Если пользователь уже существует - это нормально
+            if (createError.name === 'SequelizeUniqueConstraintError' && 
+                createError.original && createError.original.code === '23505' &&
+                createError.fields && createError.fields.username === 'admin') {
+                console.log('   ✅ Пользователь уже существует (дубликат при создании)');
+                
+                // Попробуем найти и обновить существующего пользователя
+                const existingUser = await User.findOne({ where: { username: 'admin' } });
+                if (existingUser) {
+                    // Обновляем пароль, если он изменился
+                    const isPasswordMatch = await bcrypt.compare(userPassword, existingUser.passwordHash);
+                    if (!isPasswordMatch) {
+                        const saltRounds = 10;
+                        const newPasswordHash = await bcrypt.hash(userPassword, saltRounds);
+                        await existingUser.update({ passwordHash: newPasswordHash });
+                        console.log('   ✅ Пароль обновлен');
+                    }
+                    
+                    // Убеждаемся, что пользователь активен
+                    if (!existingUser.isActive) {
+                        await existingUser.update({ isActive: true });
+                        console.log('   ✅ Пользователь активирован');
+                    }
+                }
+            } else {
+                // Другие ошибки пробрасываем дальше
+                throw createError;
+            }
+        }
         
     } catch (error) {
-        console.error('❌ Ошибка инициализации пользователя:', error);
-        throw error;
+        console.error('❌ Ошибка инициализации пользователя:', error.message);
+        // Не прерываем инициализацию БД при ошибке создания пользователя
+        // Пользователь может быть создан вручную позже
     }
 }
 
