@@ -287,17 +287,21 @@ class SchedulerService {
         );
 
         // Задача 4: Быстрое обучение нейросети (если включено)
-        // Расписание: каждые 2 часа (08:00, 10:00, 12:00, 14:00, 16:00, 18:00)
+        // Расписание: каждые 2 часа (08:00, 10:00, 12:00, 14:00, 16:00, 18:00) или из настроек
         if (quickTrainingEnabled) {
             this.quickTrainingTask = SchedulerUtils.createScheduledTask(
                 quickTrainingSchedule,
                 async () => {
-                    const QuickTrainingService = (await import('./QuickTrainingService.js')).default;
-                    await QuickTrainingService.performQuickTraining();
+                    try {
+                        const QuickTrainingService = (await import('./QuickTrainingService.js')).default;
+                        await QuickTrainingService.performQuickTraining();
+                    } catch (error) {
+                        console.error('❌ Error in quick training task:', error);
+                    }
                 },
                 {
                     taskName: 'quick-training',
-                    sendAlerts: false, // Не отправляем в Telegram для быстрого обучения, чтобы не спамить
+                    sendAlerts: false, // Уведомления отправляются внутри QuickTrainingService
                     startTime: this.startTime,
                     minDelay: 60 * 1000,
                     checkCacheStale: true,
@@ -2042,6 +2046,13 @@ class SchedulerService {
             // Получаем все инструменты для обучения
             const instruments = await CacheService.getAllInstruments();
             
+            // Отправляем уведомление о начале обучения
+            await OptimizedTelegramService.sendAlert(
+                'TRAINING_STARTED',
+                `🧠 <b>ПОЛНОЕ ОБУЧЕНИЕ НАЧАЛОСЬ</b>\n\n📊 Параметры:\n• Инструментов в очереди: ${instruments.length}\n• Дней данных: ${trainingDays}\n• Этапы: Базовая → Ансамбль → Мета-обучение → RL\n\n⏱️ Ожидаемое время: ~${Math.round(instruments.length * 2)} минут`,
+                'info'
+            );
+            
             let totalTrained = 0;
             let successes = 0;
             let failures = 0;
@@ -2110,17 +2121,28 @@ class SchedulerService {
             }
             
             const duration = Math.round((Date.now() - startTime) / 1000);
+            const durationMinutes = Math.round(duration / 60);
+            const durationHours = Math.floor(durationMinutes / 60);
+            const remainingMinutes = durationMinutes % 60;
+            const durationText = durationHours > 0 
+                ? `${durationHours}ч ${remainingMinutes}м` 
+                : `${durationMinutes}м`;
             
             // Отправляем уведомление о завершении через оптимизированный сервис
             await OptimizedTelegramService.sendAlert(
                 'TRAINING_COMPLETED',
-                `Полное обучение завершено:\n• Всего инструментов: ${totalTrained}\n• Успешно: ${successes}\n• Ошибок: ${failures}\n• Время: ${duration}с`,
-                'info'
+                `✅ <b>ПОЛНОЕ ОБУЧЕНИЕ ЗАВЕРШЕНО</b>\n\n📊 Результаты:\n• Всего обработано: ${totalTrained} инструментов\n• ✅ Успешно: ${successes}\n• ❌ Ошибок: ${failures}\n• ⏱️ Время выполнения: ${durationText} (${duration}с)\n\n🧠 Все этапы обучения завершены:\n• Базовая нейросеть\n• Ансамбль моделей\n• Мета-обучение\n• Обучение с подкреплением`,
+                'success'
             );
 
         } catch (error) {
             console.error('Scheduled training error:', error);
-            await OptimizedTelegramService.sendAlert('TRAINING_ERROR', error.message, 'critical');
+            const duration = Math.round((Date.now() - startTime) / 1000);
+            await OptimizedTelegramService.sendAlert(
+                'TRAINING_ERROR',
+                `🚨 <b>ОШИБКА ПОЛНОГО ОБУЧЕНИЯ</b>\n\n❌ ${error.message}\n\n⏱️ Время до ошибки: ${duration}с\n\n⚠️ Обучение прервано`,
+                'critical'
+            );
             throw error;
         } finally {
             this.isTraining = false;

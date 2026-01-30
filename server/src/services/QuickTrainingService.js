@@ -5,12 +5,12 @@ import { Op } from 'sequelize';
 
 /**
  * Сервис для быстрого обучения нейросетей
- * Обучает небольшие батчи инструментов (по 10) каждые 2 часа
+ * Обучает небольшие батчи инструментов каждые 2 часа
  */
 class QuickTrainingService {
     constructor() {
         this.isTraining = false;
-        this.batchSize = 10; // Количество инструментов за один запуск
+        this.batchSize = 10; // Количество инструментов за один запуск (по умолчанию)
         this.minHoursSinceLastTraining = 2; // Минимальное время между обучениями одного инструмента
     }
 
@@ -92,7 +92,7 @@ class QuickTrainingService {
     /**
      * Быстрое обучение батча инструментов
      */
-    async trainQuickBatch(instruments) {
+    async trainQuickBatch(instruments, trainingDays = 30) {
         if (!instruments || instruments.length === 0) {
             return {
                 success: true,
@@ -131,9 +131,10 @@ class QuickTrainingService {
 
                     // Быстрое обучение только базовой нейросети
                     // Используем оптимизированные параметры: меньше эпох, меньше данных
+                    // Используем количество дней из настроек
                     await NeuralNetworkService.trainQuick(instrument.figi, {
                         epochs: 15, // Вместо стандартных 50-100
-                        dataDays: 60, // Последние 60 дней вместо всех данных
+                        dataDays: trainingDays, // Используем настройку из БД
                         skipValidation: true // Пропускаем валидацию для скорости
                     });
                     
@@ -191,19 +192,90 @@ class QuickTrainingService {
      * Выполнить быстрое обучение (главный метод)
      */
     async performQuickTraining() {
+        const startTime = Date.now();
+        
         try {
+            // Получаем настройки из БД
+            const SettingsService = (await import('./SettingsService.js')).default;
+            const nnSettings = await SettingsService.getNeuralNetworkSettings();
+            
+            // Используем настройки из БД или значения по умолчанию
+            const trainingLimit = nnSettings.nn_quick_training_limit || this.batchSize;
+            const trainingDays = nnSettings.nn_quick_training_days || 30;
 
-            // Получаем следующие инструменты для обучения
-            const instruments = await this.getNextInstruments();
+            // Получаем следующие инструменты для обучения с учетом лимита из настроек
+            const instruments = await this.getNextInstruments(trainingLimit);
             
             if (instruments.length === 0) {
+                console.warn('⚠️ No instruments available for quick training');
                 return;
             }
 
-            // Обучаем батч
-            const result = await this.trainQuickBatch(instruments);
+            // Обучаем батч с учетом настроек дней
+            const result = await this.trainQuickBatch(instruments, trainingDays);
+            
+            // Отправляем уведомление в Telegram
+            if (result && result.success) {
+                const duration = Math.round((Date.now() - startTime) / 1000);
+                await this.sendTelegramNotification(result, duration, instruments.length);
+            } else if (result && !result.success) {
+                // Отправляем уведомление об ошибке
+                const duration = Math.round((Date.now() - startTime) / 1000);
+                await this.sendTelegramErrorNotification(result, duration);
+            }
         } catch (error) {
             console.error('❌ Error performing quick training:', error);
+            // Отправляем уведомление об ошибке
+            const duration = Math.round((Date.now() - startTime) / 1000);
+            await this.sendTelegramErrorNotification({ error: error.message }, duration);
+        }
+    }
+
+    /**
+     * Отправить уведомление в Telegram о завершении быстрого обучения
+     */
+    async sendTelegramNotification(result, duration, totalInstruments) {
+        try {
+            const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+            const { successful, errors } = result;
+            
+            // Отправляем уведомление о завершении
+            if (successful > 0) {
+                await OptimizedTelegramService.sendAlert(
+                    'QUICK_TRAINING_COMPLETED',
+                    `⚡ <b>БЫСТРОЕ ОБУЧЕНИЕ ЗАВЕРШЕНО</b>\n\n📊 Результаты:\n• Успешно обучено: ${successful} инструментов\n• Ошибок: ${errors || 0}\n• Время выполнения: ${duration} секунд\n• Инструментов в очереди: ${totalInstruments}\n\n🧠 Нейросети обновлены и готовы к работе`,
+                    'success'
+                );
+            }
+
+            // Отправляем уведомление только при критических ошибках
+            if (errors > 5) {
+                await OptimizedTelegramService.sendAlert(
+                    'QUICK_TRAINING_ERRORS',
+                    `⚠️ Быстрое обучение завершено с ошибками:\n• Успешно: ${successful}\n• Ошибок: ${errors}\n• Время: ${duration}с`,
+                    'warning'
+                );
+            }
+        } catch (error) {
+            console.error('❌ Error sending Telegram notification:', error);
+        }
+    }
+
+    /**
+     * Отправить уведомление об ошибке в Telegram
+     */
+    async sendTelegramErrorNotification(result, duration) {
+        try {
+            const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+            const errorMessage = result.error || result.message || 'Неизвестная ошибка';
+            
+            await OptimizedTelegramService.sendAlert(
+                'QUICK_TRAINING_ERROR',
+                `🚨 <b>ОШИБКА БЫСТРОГО ОБУЧЕНИЯ</b>\n\n❌ ${errorMessage}\n\n⏱️ Время до ошибки: ${duration}с`,
+                'critical'
+            );
+        } catch (error) {
+            console.error('❌ Error sending Telegram error notification:', error);
         }
     }
 
