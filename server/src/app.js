@@ -332,6 +332,21 @@ process.on('uncaughtException', (error) => {
             name: error.name
         }
     });
+    
+    // Не перезапускаем сервер для ошибок ONNX Runtime / BERT модели
+    const errorMessage = error.message || '';
+    const isONNXError = errorMessage.includes('Ort::Exception') ||
+                       errorMessage.includes('onnxruntime') ||
+                       errorMessage.includes('transformers') ||
+                       errorMessage.includes('BERT') ||
+                       error.name === 'Ort::Exception';
+    
+    if (isONNXError) {
+        console.error('⚠️ ONNX Runtime error (non-critical, server continues):', errorMessage);
+        // Не перезапускаем сервер - это некритичная ошибка
+        return;
+    }
+    
     gracefulShutdown('uncaughtException').catch(() => {
         process.exit(1);
     });

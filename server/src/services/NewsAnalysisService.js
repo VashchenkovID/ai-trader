@@ -27,6 +27,11 @@ class NewsAnalysisService {
      * @returns {Promise<object>} - Загруженная модель (pipeline)
      */
     async loadSentimentModel() {
+        // Проверяем, не отключен ли анализ тональности
+        if (process.env.DISABLE_SENTIMENT_ANALYSIS === 'true') {
+            return null;
+        }
+        
         try {
             if (this.modelLoading) {
                 while (this.modelLoading) {
@@ -41,36 +46,69 @@ class NewsAnalysisService {
 
             this.modelLoading = true;
 
-            const { pipeline } = await import('@xenova/transformers');
+            try {
+                const { pipeline } = await import('@xenova/transformers');
 
-            const modelsToTry = [
-                'Xenova/bert-base-multilingual-uncased-sentiment',
-                'Xenova/rubert-base-cased-sentiment',
-                'cointegrated/rubert-tiny2',
-                'nlptown/bert-base-multilingual-uncased-sentiment',
-                'Xenova/distilbert-base-multilingual-cased',
-                null
-            ];
+                const modelsToTry = [
+                    'Xenova/bert-base-multilingual-uncased-sentiment',
+                    'Xenova/rubert-base-cased-sentiment',
+                    'cointegrated/rubert-tiny2',
+                    'nlptown/bert-base-multilingual-uncased-sentiment',
+                    'Xenova/distilbert-base-multilingual-cased',
+                    null
+                ];
 
-            let lastError = null;
-            for (const modelName of modelsToTry) {
-                try {
-                    this.sentimentModel = await pipeline(
-                        'sentiment-analysis',
-                        modelName,
-                        {
-                            quantized: true
+                let lastError = null;
+                for (const modelName of modelsToTry) {
+                    if (!modelName) {
+                        // Пропускаем null модели
+                        continue;
+                    }
+                    
+                    try {
+                        // Добавляем timeout для защиты от зависания и segmentation fault
+                        this.sentimentModel = await Promise.race([
+                            pipeline(
+                                'sentiment-analysis',
+                                modelName,
+                                {
+                                    quantized: true
+                                }
+                            ),
+                            new Promise((_, reject) => 
+                                setTimeout(() => reject(new Error('Model loading timeout')), 30000)
+                            )
+                        ]);
+                        break;
+                    } catch (error) {
+                        lastError = error;
+                        const errorMsg = error.message || String(error);
+                        // Если это ONNX ошибка, прекращаем попытки и отключаем анализ тональности
+                        if (errorMsg.includes('Ort::Exception') || 
+                            errorMsg.includes('onnxruntime') ||
+                            errorMsg.includes('No error information')) {
+                            console.warn('⚠️ ONNX Runtime error detected, disabling sentiment analysis');
+                            this.sentimentModel = null;
+                            this.modelLoading = false;
+                            return null;
                         }
-                    );
-                    break;
-                } catch (error) {
-                    lastError = error;
-                    continue;
+                        continue;
+                    }
                 }
-            }
 
-            if (!this.sentimentModel) {
-                throw lastError || new Error('Не удалось загрузить ни одну модель для анализа тональности');
+                if (!this.sentimentModel) {
+                    throw lastError || new Error('Не удалось загрузить ни одну модель для анализа тональности');
+                }
+            } catch (importError) {
+                // Если импорт @xenova/transformers вызывает ошибку, отключаем анализ тональности
+                if (importError.message && (importError.message.includes('Ort::Exception') || 
+                    importError.message.includes('onnxruntime'))) {
+                    console.warn('⚠️ ONNX Runtime error, sentiment analysis disabled');
+                    this.sentimentModel = null;
+                    this.modelLoading = false;
+                    return null;
+                }
+                throw importError;
             }
 
             this.modelLoading = false;

@@ -286,10 +286,48 @@ async function safeSyncModel(Model, modelName = null) {
             console.log(`⚠️ Таблица ${name} содержит виртуальные поля (это нормально, они не синхронизируются)`);
         } else if (syncError.message && (
             syncError.message.includes('cache lookup failed') ||
-            (syncError.original && syncError.original.message && syncError.original.message.includes('cache lookup failed'))
+            syncError.message.includes('cache lookup failed for attribute') ||
+            (syncError.original && syncError.original.message && (
+                syncError.original.message.includes('cache lookup failed') ||
+                syncError.original.message.includes('cache lookup failed for attribute')
+            ))
         )) {
-            // Ошибка с кешем индексов - возможно, таблица в процессе изменения
-            console.log(`⚠️ Таблица ${name} в процессе изменения индексов (это нормально)`);
+            // Ошибка с кешем индексов - поврежденный индекс, нужно пересоздать
+            console.log(`⚠️ Обнаружен поврежденный индекс в таблице ${name}, пытаемся исправить...`);
+            try {
+                const tableName = Model.tableName || (typeof Model.getTableName === 'function' ? Model.getTableName() : name);
+                
+                // Удаляем все индексы таблицы (кроме первичного ключа)
+                const [results] = await sequelize.query(`
+                    SELECT indexname 
+                    FROM pg_indexes 
+                    WHERE tablename = $1 
+                    AND indexname != $2
+                `, {
+                    bind: [tableName, `${tableName}_pkey`],
+                    type: sequelize.QueryTypes.SELECT
+                });
+                
+                for (const row of results) {
+                    try {
+                        await sequelize.query(`DROP INDEX IF EXISTS "${row.indexname}" CASCADE`);
+                    } catch (dropError) {
+                        // Игнорируем ошибки удаления
+                    }
+                }
+                
+                // Синхронизируем модель заново для пересоздания индексов
+                await Model.sync({ alter: true });
+                console.log(`✅ Индексы таблицы ${name} пересозданы`);
+            } catch (fixError) {
+                console.warn(`⚠️ Не удалось исправить индексы таблицы ${name}:`, fixError.message);
+                // Пробуем просто синхронизировать без alter
+                try {
+                    await Model.sync({ alter: false });
+                } catch (retryError) {
+                    // Игнорируем повторные ошибки
+                }
+            }
         } else if (syncError.message && (
             syncError.message.includes('Unknown constraint') ||
             syncError.message.includes('constraint') && syncError.message.includes('does not exist') ||
