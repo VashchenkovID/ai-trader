@@ -84,7 +84,13 @@ class BackupService {
 
         for (const dir of dirs) {
             try {
-                await fs.mkdir(dir, {recursive: true});
+                await fs.mkdir(dir, {recursive: true, mode: 0o755});
+                // Устанавливаем права доступа (если возможно)
+                try {
+                    await fs.chmod(dir, 0o755);
+                } catch (chmodError) {
+                    // Игнорируем ошибки chmod (может не работать в некоторых окружениях)
+                }
             } catch (error) {
                 LoggerService.warn('Не удалось создать директорию для бэкапов', {
                     service: 'BackupService',
@@ -93,6 +99,18 @@ class BackupService {
                         message: error.message
                     }
                 });
+                // Пытаемся создать снова с базовыми правами
+                try {
+                    await fs.mkdir(dir, {recursive: true});
+                } catch (retryError) {
+                    LoggerService.error('Критическая ошибка создания директории для бэкапов', {
+                        service: 'BackupService',
+                        directory: dir,
+                        error: {
+                            message: retryError.message
+                        }
+                    });
+                }
             }
         }
     }
@@ -107,7 +125,16 @@ class BackupService {
         const backupPath = path.join(this.fullBackupDir, backupId);
 
         try {
-            await fs.mkdir(backupPath, {recursive: true});
+            // Убеждаемся, что родительская директория существует
+            await this.ensureDirectories();
+            // Создаем директорию для бэкапа
+            await fs.mkdir(backupPath, {recursive: true, mode: 0o755});
+            // Устанавливаем права доступа
+            try {
+                await fs.chmod(backupPath, 0o755);
+            } catch (chmodError) {
+                // Игнорируем ошибки chmod
+            }
 
             const results = {
                 id: backupId,

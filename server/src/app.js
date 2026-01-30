@@ -347,9 +347,24 @@ process.on('unhandledRejection', (reason, promise) => {
         } : String(reason),
         promise: promise?.toString()
     });
-    gracefulShutdown('unhandledRejection').catch(() => {
-        process.exit(1);
-    });
+    
+    // Не перезапускаем сервер для некритичных ошибок (например, ошибки обновления новостей)
+    // Только для критичных ошибок вызываем gracefulShutdown
+    const errorMessage = reason instanceof Error ? reason.message : String(reason);
+    const isCritical = errorMessage.includes('database') || 
+                       errorMessage.includes('connection') ||
+                       errorMessage.includes('sequelize') ||
+                       errorMessage.includes('ECONNREFUSED') ||
+                       errorMessage.includes('ENOTFOUND');
+    
+    if (isCritical) {
+        gracefulShutdown('unhandledRejection').catch(() => {
+            process.exit(1);
+        });
+    } else {
+        // Логируем, но не перезапускаем сервер
+        console.error('⚠️ Non-critical unhandled rejection (server continues):', errorMessage);
+    }
 });
 
 // Start the server

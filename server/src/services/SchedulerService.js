@@ -340,7 +340,20 @@ class SchedulerService {
         this.newsDailyUpdateTask = SchedulerUtils.createScheduledTask(
             newsDailyUpdateSchedule,
             async () => {
-                await this.performDailyNewsUpdate();
+                try {
+                    await this.performDailyNewsUpdate();
+                } catch (error) {
+                    // Логируем ошибку, но не позволяем ей перезапустить сервер
+                    const LoggerService = (await import('./LoggerService.js')).default;
+                    LoggerService.error('Error in scheduled news update (non-critical)', {
+                        service: 'SchedulerService',
+                        operation: 'performDailyNewsUpdate',
+                        error: {
+                            message: error.message,
+                            stack: error.stack
+                        }
+                    });
+                }
             },
             {
                 taskName: 'news-daily-update',

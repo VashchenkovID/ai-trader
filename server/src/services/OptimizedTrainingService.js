@@ -12,7 +12,6 @@ import ServiceManager from './ServiceManager.js';
  */
 class OptimizedTrainingService {
     constructor() {
-        this.isTraining = false;
         this.trainingProgress = {
             currentInstrument: null,
             totalInstruments: 0,
@@ -38,8 +37,7 @@ class OptimizedTrainingService {
             });
             this.workers.clear();
             
-            // Сбрасываем флаги
-            this.isTraining = false;
+            // Сбрасываем флаги (убрали this.isTraining для поддержки параллельного обучения)
             this.trainingProgress = {
                 currentInstrument: null,
                 totalInstruments: 0,
@@ -73,16 +71,12 @@ class OptimizedTrainingService {
         } = options;
 
         try {
-            // Глобальный лок для типа модели (nn) — предотвращает параллельные запуски
-            if (this.isTraining) {
-                return { success: false, figi, error: 'Training already in progress' };
-            }
             // Per-FIGI лок — не позволяем запустить обучение для того же инструмента повторно
             if (this.trainingFigiLocks.has(figi)) {
                 return { success: false, figi, error: 'Training already running for this FIGI' };
             }
 
-            this.isTraining = true;
+            // Добавляем лок для этого FIGI (убрали глобальный лок для поддержки параллельного обучения)
             this.trainingProgress.currentInstrument = figi;
             this.trainingFigiLocks.add(figi);
 
@@ -311,15 +305,15 @@ class OptimizedTrainingService {
                 error: error.message
             };
         } finally {
-            this.isTraining = false;
+            // Снимаем лок для FIGI (убрали this.isTraining для поддержки параллельного обучения)
             this.trainingProgress.currentInstrument = null;
-            // Снимаем лок для FIGI
             try { this.trainingFigiLocks.delete(figi); } catch {}
         }
     }
 
     /**
      * Пакетное обучение для множества инструментов
+     * Поддерживает параллельное обучение до 3 инструментов одновременно
      */
     async trainMultipleInstruments(instruments, options = {}) {
         // Обновляем статус обучения
@@ -333,9 +327,12 @@ class OptimizedTrainingService {
 
         const results = [];
         const errors = [];
+        const maxConcurrent = 3; // Максимальное количество параллельных обучений
+        let activeTrainings = 0;
+        let currentIndex = 0;
 
-        for (let index = 0; index < instruments.length; index++) {
-            const instrument = instruments[index];
+        // Функция для обработки одного инструмента
+        const processInstrument = async (instrument, index) => {
             try {
                 // Обрабатываем как строки FIGI или как объекты
                 const figi = typeof instrument === 'string' ? instrument : instrument.figi;
@@ -347,7 +344,7 @@ class OptimizedTrainingService {
                 
                 // Обновляем прогресс в TrainingStatusService
                 if (TrainingStatusService) {
-                    const progress = ((index + 1) / instruments.length) * 100;
+                    const progress = ((results.length + errors.length) / instruments.length) * 100;
                     const ticker = typeof instrument === 'string' ? figi.substring(0, 10) : (instrument.ticker || name);
                     TrainingStatusService.updateProgress('neuralNetwork', progress, ticker);
                 }
@@ -368,7 +365,33 @@ class OptimizedTrainingService {
                         error: { message: error.message, stack: error.stack }
                     });
                 }
+            } finally {
+                activeTrainings--;
+                // Запускаем следующий инструмент, если есть
+                if (currentIndex < instruments.length) {
+                    const nextInstrument = instruments[currentIndex++];
+                    activeTrainings++;
+                    processInstrument(nextInstrument, currentIndex - 1).catch(err => {
+                        console.error('Error in parallel training:', err);
+                    });
+                }
             }
+        };
+
+        // Запускаем первые maxConcurrent обучений
+        const initialPromises = [];
+        for (let i = 0; i < Math.min(maxConcurrent, instruments.length); i++) {
+            currentIndex = i + 1;
+            activeTrainings++;
+            initialPromises.push(processInstrument(instruments[i], i));
+        }
+
+        // Ждем завершения всех обучений
+        await Promise.all(initialPromises);
+
+        // Ждем завершения оставшихся активных обучений
+        while (activeTrainings > 0) {
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
 
         const summary = {
@@ -1716,7 +1739,8 @@ class OptimizedTrainingService {
      */
     getStatus() {
         return {
-            isTraining: this.isTraining,
+            isTraining: this.trainingFigiLocks.size > 0, // Проверяем наличие активных обучений
+            activeTrainings: this.trainingFigiLocks.size,
             progress: this.trainingProgress
         };
     }

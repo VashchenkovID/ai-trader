@@ -38,15 +38,15 @@ COPY --from=builder /app/node_modules ./node_modules
 # Копируем исходный код
 COPY . .
 
-# Создаем директории для логов, бэкапов и моделей
-RUN mkdir -p logs models backups/database backups/settings backups/models backups/full backups/exports backups/uploads
-
 # Создаем непривилегированного пользователя
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# Меняем владельца файлов
-RUN chown -R nodejs:nodejs /app
+# Создаем директории для логов, бэкапов и моделей с правильными правами
+RUN mkdir -p logs models backups/database backups/settings backups/models backups/full backups/exports backups/uploads && \
+    chown -R nodejs:nodejs /app && \
+    chmod -R 755 /app/logs /app/models /app/backups && \
+    chmod -R 777 /app/backups/full /app/backups/database /app/backups/settings /app/backups/models /app/backups/exports /app/backups/uploads
 
 # Переключаемся на непривилегированного пользователя
 USER nodejs
