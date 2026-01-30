@@ -63,16 +63,6 @@ class ModelManager {
             const modelJson = model.toJSON();
             const weights = model.getWeights();
             
-            // Сохраняем архитектуру
-            await fs.writeFile(`${modelPath}.json`, JSON.stringify(modelJson, null, 2));
-            
-            // Устанавливаем права на файл
-            try {
-                await fs.chmod(`${modelPath}.json`, 0o666);
-            } catch (chmodError) {
-                // Игнорируем ошибки chmod
-            }
-            
             // Сохраняем веса в бинарном формате
             const weightsData = new Float32Array(weights.reduce((acc, w) => acc + w.size, 0));
             let offset = 0;
@@ -92,7 +82,14 @@ class ModelManager {
             // Сохраняем бинарные данные весов
             await fs.writeFile(`${modelPath}.weights.bin`, Buffer.from(weightsData.buffer));
             
-            // Сохраняем спецификации весов
+            // Устанавливаем права на файл весов
+            try {
+                await fs.chmod(`${modelPath}.weights.bin`, 0o666);
+            } catch (chmodError) {
+                // Игнорируем ошибки chmod
+            }
+            
+            // Сохраняем манифест с топологией и спецификациями весов
             const manifest = {
                 format: 'layers-model',
                 generatedBy: 'IvashkaTradeHelper-ModelManager',
@@ -104,7 +101,15 @@ class ModelManager {
                 }]
             };
             
+            // Сохраняем манифест (это основной файл модели)
             await fs.writeFile(`${modelPath}.json`, JSON.stringify(manifest, null, 2));
+            
+            // Устанавливаем права на файл манифеста
+            try {
+                await fs.chmod(`${modelPath}.json`, 0o666);
+            } catch (chmodError) {
+                // Игнорируем ошибки chmod
+            }
             
             console.log(`✅ Model ${modelName} saved successfully`);
             return true;
@@ -179,16 +184,25 @@ class ModelManager {
             
             if (weightsPath.endsWith('.bin')) {
                 // Бинарный формат
+                if (!manifest.weightsManifest || !manifest.weightsManifest[0] || !manifest.weightsManifest[0].weights) {
+                    console.error(`❌ Invalid weightsManifest for ${modelName}`);
+                    return null;
+                }
+                
                 const weightsBuffer = await fs.readFile(weightsPath);
-                const weightsData = new Float32Array(weightsBuffer.buffer);
+                const weightsData = new Float32Array(weightsBuffer.buffer, weightsBuffer.byteOffset, weightsBuffer.byteLength / 4);
                 
                 const weightsSpecs = manifest.weightsManifest[0].weights;
                 let offset = 0;
                 
                 for (const spec of weightsSpecs) {
                     const size = spec.shape.reduce((a, b) => a * b, 1);
+                    if (offset + size > weightsData.length) {
+                        console.error(`❌ Weights data size mismatch for ${modelName}: expected ${offset + size}, got ${weightsData.length}`);
+                        return null;
+                    }
                     const data = weightsData.slice(offset, offset + size);
-                    const tensor = tf.tensor(Array.from(data), spec.shape, spec.dtype);
+                    const tensor = tf.tensor(Array.from(data), spec.shape, spec.dtype || 'float32');
                     weightTensors.push(tensor);
                     offset += size;
                 }
@@ -197,10 +211,20 @@ class ModelManager {
                 const weightsData = await fs.readFile(weightsPath, 'utf8');
                 const weightsJson = JSON.parse(weightsData);
                 
+                if (!weightsJson.specs || !Array.isArray(weightsJson.specs)) {
+                    console.error(`❌ Invalid weights JSON format for ${modelName}`);
+                    return null;
+                }
+                
                 for (const spec of weightsJson.specs) {
-                    const tensor = tf.tensor(spec.data, spec.shape, spec.dtype);
+                    const tensor = tf.tensor(spec.data, spec.shape, spec.dtype || 'float32');
                     weightTensors.push(tensor);
                 }
+            }
+            
+            // Проверяем, что количество весов совпадает
+            if (weightTensors.length !== model.weights.length) {
+                console.warn(`⚠️ Weights count mismatch for ${modelName}: model expects ${model.weights.length}, got ${weightTensors.length}`);
             }
             
             model.setWeights(weightTensors);

@@ -508,15 +508,14 @@ class FundamentalDataService {
                     }
 
                     // Создаем мапу asset_uid -> fundamental data
-                    // Используем порядок запроса для сопоставления
+                    // Используем порядок запроса для сопоставления (по индексу, так как API возвращает в том же порядке)
                     const fundamentalsMap = new Map();
 
                     for (let idx = 0; idx < fundamentals.length && idx < assetUidBatch.length; idx++) {
                         const fund = fundamentals[idx];
                         const assetUid = assetUidBatch[idx];
-                        // Пробуем использовать assetUid из ответа, если есть, иначе используем из запроса
-                        const uid = fund.assetUid || fund.asset_uid || assetUid;
-                        fundamentalsMap.set(uid, fund);
+                        // Сохраняем по assetUid из запроса (порядок гарантирован API)
+                        fundamentalsMap.set(assetUid, fund);
                     }
 
                     // Обрабатываем каждый asset_uid из батча
@@ -528,6 +527,13 @@ class FundamentalDataService {
                             // Нет данных для этого asset_uid
                             stats.processed += figis.length;
                             stats.noData += figis.length;
+                            if (LoggerService.isInitialized && figis.length > 0) {
+                                LoggerService.debug('No fundamental data for asset', {
+                                    service: 'FundamentalDataService',
+                                    assetUid,
+                                    figisCount: figis.length
+                                });
+                            }
                             continue;
                         }
 
@@ -549,13 +555,20 @@ class FundamentalDataService {
                                     operatingMargin = fundData.netMarginMrq;
                                 }
 
-                                // Определяем период
-                                const period = fundData.fiscalPeriodEndDate
-                                    ? new Date(fundData.fiscalPeriodEndDate)
-                                    : new Date(date.getFullYear(), date.getMonth() - (date.getMonth() % 3), 1);
+                                // Определяем период (нормализуем дату - убираем время для корректного сравнения)
+                                let period;
+                                if (fundData.fiscalPeriodEndDate) {
+                                    const periodDate = new Date(fundData.fiscalPeriodEndDate);
+                                    period = new Date(periodDate.getFullYear(), periodDate.getMonth(), periodDate.getDate());
+                                } else {
+                                    // Используем начало текущего квартала
+                                    const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
+                                    period = new Date(date.getFullYear(), quarterStartMonth, 1);
+                                }
                                 const periodType = 'quarterly';
 
                                 // Проверяем, есть ли уже данные для этого периода (если не forceUpdate)
+                                // Используем точное сравнение нормализованной даты
                                 if (!forceUpdate) {
                                     const existing = await FundamentalData.findOne({
                                         where: {
@@ -566,6 +579,13 @@ class FundamentalDataService {
                                     });
                                     if (existing) {
                                         stats.skipped++;
+                                        if (LoggerService.isInitialized) {
+                                            LoggerService.debug('Skipping existing fundamental data', {
+                                                service: 'FundamentalDataService',
+                                                figi,
+                                                period: period.toISOString()
+                                            });
+                                        }
                                         continue;
                                     }
                                 }
@@ -598,9 +618,37 @@ class FundamentalDataService {
                                     }
                                 };
 
+                                // Проверяем, есть ли хотя бы одно непустое значение для сохранения
+                                const hasData = dataToSave.pe !== null || 
+                                             dataToSave.pb !== null || 
+                                             dataToSave.evEbitda !== null || 
+                                             dataToSave.roe !== null || 
+                                             dataToSave.debtEbitda !== null || 
+                                             dataToSave.operatingMargin !== null || 
+                                             dataToSave.netMargin !== null;
+
+                                if (!hasData) {
+                                    stats.skipped++;
+                                    if (LoggerService.isInitialized) {
+                                        LoggerService.debug('Skipping empty fundamental data', {
+                                            service: 'FundamentalDataService',
+                                            figi,
+                                            assetUid
+                                        });
+                                    }
+                                    continue;
+                                }
+
                                 try {
                                     await this.saveFundamentalData(dataToSave);
                                     stats.saved++;
+                                    if (LoggerService.isInitialized && stats.saved % 10 === 0) {
+                                        LoggerService.debug('Saved fundamental data', {
+                                            service: 'FundamentalDataService',
+                                            saved: stats.saved,
+                                            figi
+                                        });
+                                    }
                                 } catch (saveError) {
                                     stats.errors++;
                                     if (LoggerService.isInitialized) {
@@ -609,6 +657,12 @@ class FundamentalDataService {
                                             figi,
                                             assetUid,
                                             period: period.toISOString(),
+                                            dataToSave: {
+                                                pe: dataToSave.pe,
+                                                pb: dataToSave.pb,
+                                                evEbitda: dataToSave.evEbitda,
+                                                roe: dataToSave.roe
+                                            },
                                             error: {message: saveError.message, stack: saveError.stack}
                                         });
                                     }

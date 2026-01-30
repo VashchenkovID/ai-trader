@@ -2358,6 +2358,19 @@ class EnsembleService {
                                 this.models[modelType] = this.createTransformerModel();
                                 break;
                         }
+                        // Сохраняем созданную модель
+                        if (this.models[modelType]) {
+                            try {
+                                const success = await ModelManager.saveModel(this.models[modelType], `ensemble/${modelType}`);
+                                if (success) {
+                                    console.log(`✅ Saved newly created ${modelType} model`);
+                                } else {
+                                    console.warn(`⚠️ Failed to save newly created ${modelType} model`);
+                                }
+                            } catch (saveError) {
+                                console.warn(`⚠️ Error saving newly created ${modelType} model:`, saveError.message);
+                            }
+                        }
                     }
                 } catch (modelError) {
                     const LoggerService = (await import('./LoggerService.js')).default;
@@ -2380,6 +2393,19 @@ class EnsembleService {
                         case 'transformer':
                             this.models[modelType] = this.createTransformerModel();
                             break;
+                    }
+                    // Сохраняем созданную модель
+                    if (this.models[modelType]) {
+                        try {
+                            const success = await ModelManager.saveModel(this.models[modelType], `ensemble/${modelType}`);
+                            if (success) {
+                                console.log(`✅ Saved newly created ${modelType} model (after error)`);
+                            } else {
+                                console.warn(`⚠️ Failed to save newly created ${modelType} model (after error)`);
+                            }
+                        } catch (saveError) {
+                            console.warn(`⚠️ Error saving newly created ${modelType} model (after error):`, saveError.message);
+                        }
                     }
                 }
             }

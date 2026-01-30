@@ -40,6 +40,18 @@ class MetaLearningService {
             // Если модель не загружена, создаем новую
             if (!this.metaModel) {
                 this.metaModel = this.createMetaModel();
+                // Сохраняем созданную модель
+                try {
+                    const ModelManager = (await import('../utils/ModelManager.js')).default;
+                    const success = await ModelManager.saveModel(this.metaModel, 'meta_model/meta_model');
+                    if (success) {
+                        console.log(`✅ Saved newly created meta-model`);
+                    } else {
+                        console.warn(`⚠️ Failed to save newly created meta-model`);
+                    }
+                } catch (saveError) {
+                    console.warn(`⚠️ Error saving newly created meta-model:`, saveError.message);
+                }
             }
             
             // Загружаем базу знаний
@@ -742,6 +754,17 @@ class MetaLearningService {
                 this.metaModel = model;
             } else {
                 this.metaModel = this.createMetaModel();
+                // Сохраняем созданную модель
+                try {
+                    const success = await ModelManager.saveModel(this.metaModel, 'meta_model/meta_model');
+                    if (success) {
+                        console.log(`✅ Saved newly created meta-model (from loadMetaModel)`);
+                    } else {
+                        console.warn(`⚠️ Failed to save newly created meta-model (from loadMetaModel)`);
+                    }
+                } catch (saveError) {
+                    console.warn(`⚠️ Error saving newly created meta-model (from loadMetaModel):`, saveError.message);
+                }
             }
         } catch (error) {
             const LoggerService = (await import('./LoggerService.js')).default;
@@ -754,6 +777,18 @@ class MetaLearningService {
                 }
             });
             this.metaModel = this.createMetaModel();
+            // Сохраняем созданную модель после ошибки
+            try {
+                const ModelManager = (await import('../utils/ModelManager.js')).default;
+                const success = await ModelManager.saveModel(this.metaModel, 'meta_model/meta_model');
+                if (success) {
+                    console.log(`✅ Saved newly created meta-model (after error)`);
+                } else {
+                    console.warn(`⚠️ Failed to save newly created meta-model (after error)`);
+                }
+            } catch (saveError) {
+                console.warn(`⚠️ Error saving newly created meta-model (after error):`, saveError.message);
+            }
         }
     }
 

@@ -70,7 +70,23 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
       }
 
       const data = await workerMonitoringApi.getWorkerTimeline(startDate, endDate);
-      setTimeline(data.timeline || []);
+      const timelineData = data.timeline || [];
+      
+      // Проверяем и нормализуем данные
+      const normalizedTimeline = timelineData.map(event => ({
+        ...event,
+        duration: typeof event.duration === 'number' ? event.duration : parseInt(event.duration) || 0,
+        startTime: event.startTime || (event as any)?.start_time || new Date().toISOString(),
+        type: event.type || 'unknown'
+      }));
+      
+      console.log('📊 WorkerTimelineChart: Получены данные:', {
+        count: normalizedTimeline.length,
+        sample: normalizedTimeline[0],
+        durations: normalizedTimeline.map(e => ({ type: e.type, duration: e.duration }))
+      });
+      
+      setTimeline(normalizedTimeline);
     } catch (err: any) {
       console.error('Error loading timeline:', err);
       setError(err.message || 'Ошибка загрузки временной линии');
@@ -87,25 +103,30 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
     }
 
     console.log(`📊 WorkerTimelineChart: Обработка ${timeline.length} событий`);
+    console.log('📊 WorkerTimelineChart: Первые 3 события:', timeline.slice(0, 3));
 
     // Группируем по типам воркеров
     const types = Array.from(new Set(timeline.map(e => e.type)));
     console.log(`📊 WorkerTimelineChart: Найдено ${types.length} типов воркеров:`, types);
 
+    // Функция для нормализации даты в строку (используем одинаковый формат везде)
+    const formatTimeLabel = (date: Date): string => {
+      const month = date.toLocaleString('ru-RU', { month: 'short' });
+      const day = date.getDate();
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${day} ${month}, ${hours}:${minutes}`;
+    };
+
     // Создаем уникальные метки времени из всех событий
     const allLabels = Array.from(new Set(
       timeline.map(e => {
         const date = new Date(e.startTime);
-        return date.toLocaleString('ru-RU', {
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
+        return formatTimeLabel(date);
       })
     )).sort();
 
-    console.log(`📊 WorkerTimelineChart: Создано ${allLabels.length} меток времени`);
+    console.log(`📊 WorkerTimelineChart: Создано ${allLabels.length} меток времени:`, allLabels.slice(0, 5));
 
     // Создаем датасеты для каждого типа воркера
     const datasets = types.map(type => {
@@ -115,20 +136,20 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
       console.log(`📊 WorkerTimelineChart: Тип ${typeLabel}: ${events.length} событий`);
 
       // Создаем массив данных для каждой метки времени
-      const data = allLabels.map(label => {
+      const data = allLabels.map((label) => {
         // Находим событие этого типа, которое соответствует метке времени
         const event = events.find(e => {
-          const eventLabel = new Date(e.startTime).toLocaleString('ru-RU', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          });
+          const date = new Date(e.startTime);
+          const eventLabel = formatTimeLabel(date);
           return eventLabel === label;
         });
         
-        return event ? event.duration / 1000 / 60 : 0; // Длительность в минутах
+        const duration = event ? event.duration / 1000 / 60 : 0; // Длительность в минутах
+        return duration;
       });
+
+      const totalDuration = data.reduce((sum, val) => sum + val, 0);
+      console.log(`📊 WorkerTimelineChart: Датасет ${typeLabel}: общая длительность ${totalDuration.toFixed(2)} минут, ненулевых значений: ${data.filter(v => v > 0).length}`);
 
       return {
         label: typeLabel,
@@ -147,7 +168,8 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
     console.log(`📊 WorkerTimelineChart: Данные графика подготовлены:`, {
       labelsCount: allLabels.length,
       datasetsCount: datasets.length,
-      totalDataPoints: datasets.reduce((sum, ds) => sum + ds.data.length, 0)
+      totalDataPoints: datasets.reduce((sum, ds) => sum + ds.data.length, 0),
+      sampleData: datasets[0]?.data.slice(0, 5)
     });
 
     return result;

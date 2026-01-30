@@ -534,7 +534,42 @@ class CacheService {
 
                 const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
                 if (toInsert.length > 0) {
-                    await CachedCandle.bulkCreate(toInsert);
+                    try {
+                        // Используем ignoreDuplicates для предотвращения ошибок при race condition
+                        await CachedCandle.bulkCreate(toInsert, {
+                            ignoreDuplicates: true,
+                            updateOnDuplicate: ['open', 'close', 'high', 'low', 'volume', 'updatedAt']
+                        });
+                    } catch (bulkError) {
+                        // Если bulkCreate с ignoreDuplicates не поддерживается или произошла другая ошибка,
+                        // пробуем вставить по одной с обработкой дубликатов
+                        if (bulkError.name === 'SequelizeUniqueConstraintError' || 
+                            bulkError.code === '23505' ||
+                            bulkError.message?.includes('unique') ||
+                            bulkError.message?.includes('уникальности')) {
+                            // Пробуем вставить по одной
+                            let insertedCount = 0;
+                            for (const candle of toInsert) {
+                                try {
+                                    await CachedCandle.create(candle);
+                                    insertedCount++;
+                                } catch (createError) {
+                                    // Игнорируем ошибки уникальности - это нормально при race condition
+                                    if (createError.name !== 'SequelizeUniqueConstraintError' && 
+                                        createError.code !== '23505' &&
+                                        !createError.message?.includes('unique') &&
+                                        !createError.message?.includes('уникальности')) {
+                                        console.warn(`⚠️ Error inserting candle for ${figi} at ${candle.time}:`, createError.message);
+                                    }
+                                }
+                            }
+                            if (insertedCount > 0) {
+                                console.debug(`✅ Inserted ${insertedCount} candles for ${figi} (${toInsert.length - insertedCount} duplicates skipped)`);
+                            }
+                        } else {
+                            console.error(`❌ Error in bulkCreate for ${figi}:`, bulkError.message);
+                        }
+                    }
                     
                     // Фаза 3, задача 3.1.2: Инвалидация кеша индикаторов при обновлении данных
                     // Инвалидируем кеш для всех обновленных инструментов

@@ -60,6 +60,18 @@ class ReinforcementLearningService {
             // Если модель не загружена, создаем новую
             if (!this.agent) {
                 this.agent = this.createDQN();
+                // Сохраняем созданную модель
+                try {
+                    const ModelManager = (await import('../utils/ModelManager.js')).default;
+                    const success = await ModelManager.saveModel(this.agent, 'rl_agent/rl_model');
+                    if (success) {
+                        console.log(`✅ Saved newly created RL agent model`);
+                    } else {
+                        console.warn(`⚠️ Failed to save newly created RL agent model`);
+                    }
+                } catch (saveError) {
+                    console.warn(`⚠️ Error saving newly created RL agent model:`, saveError.message);
+                }
             }
 
             // Гарантируем наличие целевой сети
@@ -893,6 +905,20 @@ class ReinforcementLearningService {
                     this.targetAgent = this.createDQN();
                 }
                 this.targetAgent.setWeights(this.agent.getWeights());
+            } else {
+                // Модель не найдена, создаем новую
+                this.agent = this.createDQN();
+                // Сохраняем созданную модель
+                try {
+                    const success = await ModelManager.saveModel(this.agent, 'rl_agent/rl_model');
+                    if (success) {
+                        console.log(`✅ Saved newly created RL agent model (from loadModel)`);
+                    } else {
+                        console.warn(`⚠️ Failed to save newly created RL agent model (from loadModel)`);
+                    }
+                } catch (saveError) {
+                    console.warn(`⚠️ Error saving newly created RL agent model (from loadModel):`, saveError.message);
+                }
             }
         } catch (error) {
             const LoggerService = (await import('./LoggerService.js')).default;
@@ -904,6 +930,19 @@ class ReinforcementLearningService {
                     stack: error.stack
                 }
             });
+            // Создаем новую модель при ошибке
+            this.agent = this.createDQN();
+            // Сохраняем созданную модель
+            try {
+                const success = await ModelManager.saveModel(this.agent, 'rl_agent/rl_model');
+                if (success) {
+                    console.log(`✅ Saved newly created RL agent model (after error)`);
+                } else {
+                    console.warn(`⚠️ Failed to save newly created RL agent model (after error)`);
+                }
+            } catch (saveError) {
+                console.warn(`⚠️ Error saving newly created RL agent model (after error):`, saveError.message);
+            }
         }
     }
 
