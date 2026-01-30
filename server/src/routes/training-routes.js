@@ -4,7 +4,7 @@ import MetaLearningService from '../services/MetaLearningService.js';
 import ReinforcementLearningService from '../services/ReinforcementLearningService.js';
 import ServiceManager from '../services/ServiceManager.js';
 import OptimizedTelegramService from '../services/OptimizedTelegramService.js';
-import { heavyOperationLimiter, batchTrainLimiter } from '../middleware/rateLimiter.js';
+import { heavyOperationLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
@@ -24,9 +24,9 @@ router.use(applyHeavyLimiter);
 
 /**
  * Пакетное обучение всех нейросетей
- * Использует отдельный лимитер с более мягкими ограничениями
+ * Rate limiter отключен для этого эндпоинта
  */
-router.post('/batch-train-all', batchTrainLimiter, async (req, res) => {
+router.post('/batch-train-all', async (req, res) => {
     try {
         const { epochs = 10, batchSize = 32 } = req.body;
         

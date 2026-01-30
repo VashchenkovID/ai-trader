@@ -298,21 +298,31 @@ async function safeSyncModel(Model, modelName = null) {
                 const tableName = Model.tableName || (typeof Model.getTableName === 'function' ? Model.getTableName() : name);
                 
                 // Удаляем все индексы таблицы (кроме первичного ключа)
-                const [results] = await sequelize.query(`
+                // Используем правильный формат запроса для Sequelize
+                const results = await sequelize.query(`
                     SELECT indexname 
                     FROM pg_indexes 
-                    WHERE tablename = $1 
-                    AND indexname != $2
+                    WHERE tablename = :tableName 
+                    AND indexname != :pkeyName
                 `, {
-                    bind: [tableName, `${tableName}_pkey`],
+                    replacements: { 
+                        tableName: tableName, 
+                        pkeyName: `${tableName}_pkey` 
+                    },
                     type: sequelize.QueryTypes.SELECT
                 });
                 
-                for (const row of results) {
-                    try {
-                        await sequelize.query(`DROP INDEX IF EXISTS "${row.indexname}" CASCADE`);
-                    } catch (dropError) {
-                        // Игнорируем ошибки удаления
+                // Проверяем, что results - массив
+                if (Array.isArray(results) && results.length > 0) {
+                    for (const row of results) {
+                        try {
+                            const indexName = row.indexname || row.indexName;
+                            if (indexName) {
+                                await sequelize.query(`DROP INDEX IF EXISTS "${indexName}" CASCADE`);
+                            }
+                        } catch (dropError) {
+                            // Игнорируем ошибки удаления
+                        }
                     }
                 }
                 
