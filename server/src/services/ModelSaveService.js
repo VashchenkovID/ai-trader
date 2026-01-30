@@ -3,14 +3,16 @@ import {join} from 'path';
 import fs from 'fs/promises';
 
 const __filename = fileURLToPath(import.meta.url);
+const __dirname = join(__filename, '..', '..');
 
 /**
  * Улучшенный сервис для сохранения моделей с проверками и валидацией
  */
 class ModelSaveService {
     constructor() {
-        this.modelsDir = './models';
-        this.backupDir = './models/backups';
+        // Используем правильный путь относительно server директории
+        this.modelsDir = join(__dirname, 'models');
+        this.backupDir = join(__dirname, 'models', 'backups');
         this.validationEnabled = true;
     }
 
@@ -130,6 +132,14 @@ class ModelSaveService {
         })));
 
         await fs.writeFile(weightsPath, JSON.stringify({specs}, null, 2));
+        
+        // Устанавливаем права на файлы
+        try {
+            await fs.chmod(modelPath, 0o666);
+            await fs.chmod(weightsPath, 0o666);
+        } catch (chmodError) {
+            // Игнорируем ошибки chmod
+        }
 
         // Сохраняем метаданные
         const fullMetadata = {
@@ -142,6 +152,13 @@ class ModelSaveService {
         };
 
         await fs.writeFile(metadataPath, JSON.stringify(fullMetadata, null, 2));
+        
+        // Устанавливаем права на файл метаданных
+        try {
+            await fs.chmod(metadataPath, 0o666);
+        } catch (chmodError) {
+            // Игнорируем ошибки chmod
+        }
 
         return {
             modelPath,
@@ -215,11 +232,19 @@ class ModelSaveService {
     }
 
     /**
-     * Создание необходимых директорий
+     * Создание необходимых директорий с правильными правами
      */
     async ensureDirectories() {
         await fs.mkdir(this.modelsDir, {recursive: true});
         await fs.mkdir(this.backupDir, {recursive: true});
+        
+        // Устанавливаем права доступа
+        try {
+            await fs.chmod(this.modelsDir, 0o777);
+            await fs.chmod(this.backupDir, 0o777);
+        } catch (chmodError) {
+            // Игнорируем ошибки chmod (может не работать в некоторых окружениях)
+        }
     }
 
     /**

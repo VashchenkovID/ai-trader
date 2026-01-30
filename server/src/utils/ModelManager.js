@@ -46,6 +46,15 @@ class ModelManager {
             // Создаем директорию если не существует
             await fs.mkdir(modelDir, { recursive: true });
             
+            // Устанавливаем права доступа на созданную папку
+            try {
+                await fs.chmod(modelDir, 0o777);
+                // Также устанавливаем права на родительскую папку models
+                await fs.chmod(this.modelsDir, 0o777);
+            } catch (chmodError) {
+                // Игнорируем ошибки chmod (может не работать в некоторых окружениях)
+            }
+            
             // Используем tf.io.fileSystem для Node.js
             console.log(`💾 Saving model ${modelName} to ${modelPath}`);
             console.log(`📊 Model info: layers=${model.layers?.length || 0}, trainable=${model.trainable}`);
@@ -56,6 +65,13 @@ class ModelManager {
             
             // Сохраняем архитектуру
             await fs.writeFile(`${modelPath}.json`, JSON.stringify(modelJson, null, 2));
+            
+            // Устанавливаем права на файл
+            try {
+                await fs.chmod(`${modelPath}.json`, 0o666);
+            } catch (chmodError) {
+                // Игнорируем ошибки chmod
+            }
             
             // Сохраняем веса в бинарном формате
             const weightsData = new Float32Array(weights.reduce((acc, w) => acc + w.size, 0));

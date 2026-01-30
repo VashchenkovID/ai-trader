@@ -1268,6 +1268,13 @@ class OptimizedTrainingService {
             const modelsDir = path.join(__dirname, '../../models');
             await fs.mkdir(modelsDir, { recursive: true });
             
+            // Устанавливаем права доступа на созданную папку
+            try {
+                await fs.chmod(modelsDir, 0o777);
+            } catch (chmodError) {
+                // Игнорируем ошибки chmod (может не работать в некоторых окружениях)
+            }
+            
             // Сохраняем архитектуру модели
             const modelPath = path.join(modelsDir, `${figi}_model.json`);
             const weightsPath = path.join(modelsDir, `${figi}_weights.json`);
@@ -1284,8 +1291,22 @@ class OptimizedTrainingService {
             // Сохраняем архитектуру
             await fs.writeFile(modelPath, JSON.stringify(archJson, null, 2));
             
+            // Устанавливаем права на файлы
+            try {
+                await fs.chmod(modelPath, 0o666);
+            } catch (chmodError) {
+                // Игнорируем ошибки chmod
+            }
+            
             // Сохраняем веса
             await fs.writeFile(weightsPath, JSON.stringify({ specs }, null, 2));
+            
+            // Устанавливаем права на файлы
+            try {
+                await fs.chmod(weightsPath, 0o666);
+            } catch (chmodError) {
+                // Игнорируем ошибки chmod
+            }
             
             // Также сохраняем через ModelManager для совместимости
             try {
@@ -1309,10 +1330,21 @@ class OptimizedTrainingService {
         try {
             const fs = await import('fs/promises');
             const path = await import('path');
+            const { fileURLToPath } = await import('url');
             const { default: tf } = await import('@tensorflow/tfjs');
 
-            const modelsDir = './models';
+            // Используем правильный путь относительно server директории
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const modelsDir = path.join(__dirname, '../../models');
             await fs.mkdir(modelsDir, { recursive: true });
+            
+            // Устанавливаем права доступа на созданную папку
+            try {
+                await fs.chmod(modelsDir, 0o777);
+            } catch (chmodError) {
+                // Игнорируем ошибки chmod
+            }
 
             const bestModelPath = path.join(modelsDir, `${figi}_best_model.json`);
             const bestWeightsPath = path.join(modelsDir, `${figi}_best_weights.json`);
@@ -1337,6 +1369,15 @@ class OptimizedTrainingService {
                 bestAccuracy,
                 savedAt: new Date().toISOString()
             }, null, 2));
+            
+            // Устанавливаем права на все файлы
+            try {
+                await fs.chmod(bestModelPath, 0o666);
+                await fs.chmod(bestWeightsPath, 0o666);
+                await fs.chmod(metaPath, 0o666);
+            } catch (chmodError) {
+                // Игнорируем ошибки chmod
+            }
         } catch (error) {
             console.warn(`⚠️ Failed to save best model for ${figi}:`, error.message);
         }
@@ -1364,9 +1405,13 @@ class OptimizedTrainingService {
         try {
             const fs = await import('fs/promises');
             const path = await import('path');
+            const { fileURLToPath } = await import('url');
             const { default: tf } = await import('@tensorflow/tfjs');
 
-            const modelsDir = './models';
+            // Используем правильный путь относительно server директории
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const modelsDir = path.join(__dirname, '../../models');
             const bestModelPath = path.join(modelsDir, `${figi}_best_model.json`);
             const bestWeightsPath = path.join(modelsDir, `${figi}_best_weights.json`);
 
@@ -1515,8 +1560,12 @@ class OptimizedTrainingService {
         try {
             const fs = await import('fs/promises');
             const path = await import('path');
+            const { fileURLToPath } = await import('url');
 
-            const modelsDir = './models';
+            // Используем правильный путь относительно server директории
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const modelsDir = path.join(__dirname, '../../models');
             
             // Попытка 1: Загрузить модель для конкретного FIGI
             const figiModelPath = path.join(modelsDir, `${figi}_model.json`);
