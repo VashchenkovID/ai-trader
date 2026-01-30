@@ -264,6 +264,24 @@ class DatabaseOptimization {
             
             return { created: true, exists: false };
         } catch (error) {
+            // Если индекс уже существует, это не ошибка
+            if (error.message && (
+                error.message.includes('already exists') ||
+                error.message.includes('уже существует') ||
+                (error.original && error.original.message && (
+                    error.original.message.includes('already exists') ||
+                    error.original.message.includes('уже существует')
+                ))
+            )) {
+                LoggerService.info('Индекс уже существует (пропуск)', {
+                    service: 'DatabaseOptimization',
+                    tableName,
+                    indexName,
+                    fields
+                });
+                return { created: false, exists: true };
+            }
+            
             LoggerService.error('Ошибка создания индекса', {
                 service: 'DatabaseOptimization',
                 tableName,

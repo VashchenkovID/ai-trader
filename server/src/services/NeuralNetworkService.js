@@ -66,10 +66,15 @@ class NeuralNetworkService {
     // Создание архитектуры модели
     async createModel(inputShape, sequenceLength = 60) {
         try {
+            console.log(`🧠 Создание модели нейросети (NeuralNetworkService)...`);
+            console.log(`   📊 Входной размер: ${inputShape}, Длина последовательности: ${sequenceLength}`);
+            
             // Получаем настройки из базы данных
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
             const dropoutRate = nnSettings.nn_dropout_rate || 0.2;
             const learningRate = nnSettings.nn_learning_rate || 0.0005;
+            
+            console.log(`   ⚙️  Параметры: dropout=${dropoutRate}, learningRate=${learningRate}`);
             
             const model = tf.sequential();
 

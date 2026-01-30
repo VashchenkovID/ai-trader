@@ -299,27 +299,42 @@ async function safeSyncModel(Model, modelName = null) {
                 
                 // Удаляем все индексы таблицы (кроме первичного ключа)
                 // Используем правильный формат запроса для Sequelize
-                const results = await sequelize.query(`
-                    SELECT indexname 
-                    FROM pg_indexes 
-                    WHERE tablename = :tableName 
-                    AND indexname != :pkeyName
-                `, {
-                    replacements: { 
-                        tableName: tableName, 
-                        pkeyName: `${tableName}_pkey` 
-                    },
-                    type: sequelize.QueryTypes.SELECT
-                });
-                
-                // Проверяем, что results - массив
-                if (Array.isArray(results) && results.length > 0) {
-                    for (const row of results) {
-                        try {
-                            const indexName = row.indexname || row.indexName;
-                            if (indexName) {
-                                await sequelize.query(`DROP INDEX IF EXISTS "${indexName}" CASCADE`);
+                try {
+                    const results = await sequelize.query(`
+                        SELECT indexname 
+                        FROM pg_indexes 
+                        WHERE tablename = :tableName 
+                        AND indexname != :pkeyName
+                    `, {
+                        replacements: { 
+                            tableName: tableName, 
+                            pkeyName: `${tableName}_pkey` 
+                        },
+                        type: sequelize.QueryTypes.SELECT
+                    });
+                    
+                    // Проверяем, что results - массив
+                    if (Array.isArray(results) && results.length > 0) {
+                        for (const row of results) {
+                            try {
+                                const indexName = row.indexname || row.indexName;
+                                if (indexName) {
+                                    await sequelize.query(`DROP INDEX IF EXISTS "${indexName}" CASCADE`);
+                                }
+                            } catch (dropError) {
+                                // Игнорируем ошибки удаления
                             }
+                        }
+                    }
+                } catch (queryError) {
+                    // Если не удалось получить список индексов (поврежденный индекс), 
+                    // пытаемся удалить все индексы по известным именам из модели
+                    console.warn(`⚠️ Не удалось получить список индексов для ${name} (поврежденный индекс), пытаемся удалить по именам из модели`);
+                    const indexes = Model.options?.indexes || [];
+                    for (const index of indexes) {
+                        try {
+                            const indexName = index.name || `${tableName}_${(index.fields || []).join('_')}`;
+                            await sequelize.query(`DROP INDEX IF EXISTS "${indexName}" CASCADE`);
                         } catch (dropError) {
                             // Игнорируем ошибки удаления
                         }

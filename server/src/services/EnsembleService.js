@@ -193,6 +193,9 @@ class EnsembleService {
      * Создание LSTM модели для краткосрочного анализа
      */
     createLSTMModel() {
+        console.log(`🧠 Создание LSTM модели (EnsembleService)...`);
+        console.log(`   📊 Входной размер: [24, 10] (24 часа, 10 фичей)`);
+        
         const model = tf.sequential({
             layers: [
                 tf.layers.lstm({
@@ -235,6 +238,10 @@ class EnsembleService {
             metrics: ['accuracy']
         });
 
+        const totalParams = model.countParams();
+        console.log(`   ✅ LSTM модель успешно создана: ${model.layers.length} слоев, ${totalParams.toLocaleString()} параметров`);
+        console.log(`   📐 Архитектура: LSTM(64) -> LSTM(32) -> Dense(16) -> Dense(1)`);
+
         return model;
     }
 
@@ -242,6 +249,9 @@ class EnsembleService {
      * Создание CNN модели для среднесрочного анализа
      */
     createCNNModel() {
+        console.log(`🧠 Создание CNN модели (EnsembleService)...`);
+        console.log(`   📊 Входной размер: [30, 10] (30 дней, 10 фичей)`);
+        
         const model = tf.sequential({
             layers: [
                 tf.layers.conv1d({
@@ -297,6 +307,10 @@ class EnsembleService {
             metrics: ['accuracy']
         });
 
+        const totalParams = model.countParams();
+        console.log(`   ✅ CNN модель успешно создана: ${model.layers.length} слоев, ${totalParams.toLocaleString()} параметров`);
+        console.log(`   📐 Архитектура: Conv1D(32) -> Conv1D(64) -> Dense(64) -> Dense(32) -> Dense(1)`);
+
         return model;
     }
 
@@ -304,6 +318,9 @@ class EnsembleService {
      * Создание Transformer модели для долгосрочного анализа
      */
     createTransformerModel() {
+        console.log(`🧠 Создание Transformer модели (EnsembleService)...`);
+        console.log(`   📊 Входной размер: [60, 10] (60 дней, 10 фичей)`);
+        
         // Упрощенная версия Transformer для браузера
         const model = tf.sequential({
             layers: [
@@ -346,6 +363,10 @@ class EnsembleService {
             loss: 'binaryCrossentropy',
             metrics: ['accuracy']
         });
+
+        const totalParams = model.countParams();
+        console.log(`   ✅ Transformer модель успешно создана: ${model.layers.length} слоев, ${totalParams.toLocaleString()} параметров`);
+        console.log(`   📐 Архитектура: Flatten -> Dense(128) -> Dense(64) -> Dense(32) -> Dense(1)`);
 
         return model;
     }

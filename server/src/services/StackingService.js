@@ -91,6 +91,9 @@ class StackingService {
      * @param {number} inputSize - Количество базовых моделей (фичи)
      */
     createMetaModel(inputSize) {
+        console.log(`🧠 Создание мета-модели (StackingService)...`);
+        console.log(`   📊 Входной размер: ${inputSize} (количество базовых моделей)`);
+        
         const l2Regularizer = tf.regularizers.l2({ l2: 0.001 });
         
         const model = tf.sequential({
@@ -120,6 +123,11 @@ class StackingService {
             loss: 'binaryCrossentropy',
             metrics: ['accuracy']
         });
+        
+        const totalParams = model.countParams();
+        console.log(`   ✅ Мета-модель успешно создана: ${model.layers.length} слоев, ${totalParams.toLocaleString()} параметров`);
+        console.log(`   📐 Архитектура: Dense(${this.settings.hiddenUnits[0]}) -> Dense(${this.settings.hiddenUnits[1]}) -> Dense(1)`);
+        console.log(`   ⚙️  Параметры: learningRate=${this.settings.learningRate}, dropout=${this.settings.dropoutRate}`);
         
         return model;
     }

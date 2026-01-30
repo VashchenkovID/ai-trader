@@ -79,6 +79,9 @@ class ReinforcementLearningService {
      * Создание DQN сети
      */
     createDQN() {
+        console.log(`🧠 Создание DQN модели (ReinforcementLearningService)...`);
+        console.log(`   📊 Размер состояния: ${this.config.stateSize}, Размер действий: ${this.config.actionSize}`);
+        
         // L2 регуляризация для предотвращения переобучения
         const l2Regularizer = tf.regularizers.l2({ l2: 0.001 });
         
@@ -119,6 +122,11 @@ class ReinforcementLearningService {
             loss: 'meanSquaredError',
             metrics: ['mae']
         });
+
+        const totalParams = model.countParams();
+        console.log(`   ✅ DQN модель успешно создана: ${model.layers.length} слоев, ${totalParams.toLocaleString()} параметров`);
+        console.log(`   📐 Архитектура: Dense(128) -> Dense(64) -> Dense(32) -> Dense(${this.config.actionSize})`);
+        console.log(`   ⚙️  Параметры: learningRate=${this.config.learningRate}, loss=meanSquaredError`);
 
         return model;
     }

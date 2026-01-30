@@ -583,6 +583,9 @@ class EntryOptimizationService {
      * @private
      */
     createModel(inputShape) {
+        console.log(`🧠 Создание модели оптимизации входа (EntryOptimizationService)...`);
+        console.log(`   📊 Входной размер: ${inputShape}`);
+        
         const model = tf.sequential({
             layers: [
                 tf.layers.lstm({
@@ -606,6 +609,10 @@ class EntryOptimizationService {
             loss: 'binaryCrossentropy',
             metrics: ['accuracy']
         });
+
+        const totalParams = model.countParams();
+        console.log(`   ✅ Модель оптимизации входа успешно создана: ${model.layers.length} слоев, ${totalParams.toLocaleString()} параметров`);
+        console.log(`   📐 Архитектура: LSTM(64) -> LSTM(32) -> Dense(16) -> Dense(1)`);
 
         return model;
     }

@@ -64,6 +64,9 @@ class MetaLearningService {
      * Создание мета-модели
      */
     createMetaModel() {
+        console.log(`🧠 Создание мета-модели (MetaLearningService)...`);
+        console.log(`   📊 Размер эмбеддинга задачи: ${this.config.taskEmbeddingSize}`);
+        
         // L2 регуляризация для предотвращения переобучения
         const l2Regularizer = tf.regularizers.l2({ l2: 0.001 });
         
@@ -104,6 +107,11 @@ class MetaLearningService {
             loss: 'meanSquaredError',
             metrics: ['mae']
         });
+
+        const totalParams = model.countParams();
+        console.log(`   ✅ Мета-модель успешно создана: ${model.layers.length} слоев, ${totalParams.toLocaleString()} параметров`);
+        console.log(`   📐 Архитектура: Dense(128) -> Dense(64) -> Dense(32) -> Dense(10)`);
+        console.log(`   ⚙️  Параметры: metaLearningRate=${this.config.metaLearningRate}, loss=meanSquaredError`);
 
         return model;
     }

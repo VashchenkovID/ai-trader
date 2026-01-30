@@ -29,6 +29,21 @@ export async function performOptionsDataUpdate(context, options = {}) {
     try {
         console.log('📊 Starting options data update in worker...');
         
+        // Отправляем уведомление о начале обновления
+        try {
+            await OptimizedTelegramService.sendAlert(
+                'OPTIONS_DATA_UPDATE_START',
+                `📊 <b>Начато обновление опционных данных</b>\n\n` +
+                `⏰ Время: ${new Date().toLocaleString('ru-RU')}\n` +
+                `🔄 Режим: ${forceUpdate ? 'Принудительное обновление' : 'Обновление только новых'}\n` +
+                `⏱️ Задержка между запросами: ${delayMs}мс`,
+                'info'
+            );
+        } catch (telegramError) {
+            // Игнорируем ошибки отправки уведомления
+            console.warn('Failed to send Telegram notification about options update start:', telegramError.message);
+        }
+        
         const result = await executeWorkerTask(
             'optionsDataUpdateWorker.js',
             {
@@ -46,19 +61,26 @@ export async function performOptionsDataUpdate(context, options = {}) {
         
         // Формируем отчет для Telegram
         if (result.stats) {
-            const summary = `Обновление опционных данных завершено:
-• Обработано инструментов: ${result.stats.processed} / ${result.stats.total}
-• Сохранено опционов: ${result.stats.saved}
-• Ошибок: ${result.stats.errors}
-• Пропущено: ${result.stats.skipped}
-• Время выполнения: ${result.duration}с`;
+            const summary = `✅ <b>Обновление опционных данных завершено</b>\n\n` +
+                `📊 <b>Статистика:</b>\n` +
+                `• Обработано инструментов: ${result.stats.processed} / ${result.stats.total}\n` +
+                `• Сохранено опционов: ${result.stats.saved}\n` +
+                `• Ошибок: ${result.stats.errors}\n` +
+                `• Пропущено: ${result.stats.skipped}\n\n` +
+                `⏱️ Время выполнения: ${result.duration}с\n` +
+                `⏰ Завершено: ${new Date().toLocaleString('ru-RU')}`;
             
             // Отправляем уведомление в Telegram
-            await OptimizedTelegramService.sendAlert(
-                'OPTIONS_DATA_UPDATE',
-                summary,
-                result.stats.errors > 0 ? 'warning' : 'info'
-            );
+            try {
+                await OptimizedTelegramService.sendAlert(
+                    'OPTIONS_DATA_UPDATE_COMPLETE',
+                    summary,
+                    result.stats.errors > 0 ? 'warning' : 'info'
+                );
+            } catch (telegramError) {
+                // Игнорируем ошибки отправки уведомления
+                console.warn('Failed to send Telegram notification about options update completion:', telegramError.message);
+            }
         }
         
         return {
@@ -71,11 +93,20 @@ export async function performOptionsDataUpdate(context, options = {}) {
         console.error('❌ Error in performOptionsDataUpdate:', error);
         
         // Отправляем уведомление об ошибке в Telegram
-        await OptimizedTelegramService.sendAlert(
-            'OPTIONS_DATA_UPDATE_ERROR',
-            `❌ Ошибка при обновлении опционных данных:\n${error.message}`,
-            'error'
-        );
+        try {
+            await OptimizedTelegramService.sendAlert(
+                'OPTIONS_DATA_UPDATE_ERROR',
+                `❌ <b>Ошибка при обновлении опционных данных</b>\n\n` +
+                `📋 <b>Детали:</b>\n` +
+                `• Ошибка: ${error.message}\n` +
+                `• Время: ${new Date().toLocaleString('ru-RU')}\n\n` +
+                `⚠️ Обновление прервано`,
+                'error'
+            );
+        } catch (telegramError) {
+            // Игнорируем ошибки отправки уведомления
+            console.warn('Failed to send Telegram notification about options update error:', telegramError.message);
+        }
         
         throw error;
     }

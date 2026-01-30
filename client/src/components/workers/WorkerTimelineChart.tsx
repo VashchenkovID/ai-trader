@@ -81,48 +81,76 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
 
   // Группируем события по типам для графика
   const chartData = useMemo(() => {
-    if (timeline.length === 0) return null;
+    if (timeline.length === 0) {
+      console.log('📊 WorkerTimelineChart: Нет данных для графика');
+      return null;
+    }
+
+    console.log(`📊 WorkerTimelineChart: Обработка ${timeline.length} событий`);
 
     // Группируем по типам воркеров
     const types = Array.from(new Set(timeline.map(e => e.type)));
+    console.log(`📊 WorkerTimelineChart: Найдено ${types.length} типов воркеров:`, types);
+
+    // Создаем уникальные метки времени из всех событий
+    const allLabels = Array.from(new Set(
+      timeline.map(e => {
+        const date = new Date(e.startTime);
+        return date.toLocaleString('ru-RU', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      })
+    )).sort();
+
+    console.log(`📊 WorkerTimelineChart: Создано ${allLabels.length} меток времени`);
+
+    // Создаем датасеты для каждого типа воркера
     const datasets = types.map(type => {
       const events = timeline.filter(e => e.type === type);
+      const typeLabel = translateWorkerType(type);
+      
+      console.log(`📊 WorkerTimelineChart: Тип ${typeLabel}: ${events.length} событий`);
+
+      // Создаем массив данных для каждой метки времени
+      const data = allLabels.map(label => {
+        // Находим событие этого типа, которое соответствует метке времени
+        const event = events.find(e => {
+          const eventLabel = new Date(e.startTime).toLocaleString('ru-RU', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          return eventLabel === label;
+        });
+        
+        return event ? event.duration / 1000 / 60 : 0; // Длительность в минутах
+      });
 
       return {
-        label: translateWorkerType(type),
-        data: events.map(e => e.duration / 1000 / 60), // Длительность в минутах
+        label: typeLabel,
+        data: data,
         backgroundColor: getStatusColor(events[0]?.status || 'running'),
         borderColor: getStatusColor(events[0]?.status || 'running'),
         borderWidth: 2,
       };
     });
 
-    const allLabels = Array.from(new Set(
-      timeline.map(e => new Date(e.startTime).toLocaleString('ru-RU', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }))
-    )).sort();
-
-    return {
+    const result = {
       labels: allLabels,
-      datasets: datasets.map(ds => ({
-        ...ds,
-        data: allLabels.map(label => {
-          const event = timeline.find(e => 
-            new Date(e.startTime).toLocaleString('ru-RU', {
-              month: 'short',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            }) === label && ds.label === e.type
-          );
-          return event ? event.duration / 1000 / 60 : 0;
-        })
-      }))
+      datasets: datasets
     };
+
+    console.log(`📊 WorkerTimelineChart: Данные графика подготовлены:`, {
+      labelsCount: allLabels.length,
+      datasetsCount: datasets.length,
+      totalDataPoints: datasets.reduce((sum, ds) => sum + ds.data.length, 0)
+    });
+
+    return result;
   }, [timeline]);
 
   const chartOptions = useMemo(() => ({
@@ -261,9 +289,16 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
               height={400}
             />
           </div>
-        ) : (
+        ) : timeline.length === 0 ? (
           <div className="empty-state">
             <p>Нет данных за выбранный период</p>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <p>Ошибка подготовки данных графика</p>
+            <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '8px' }}>
+              Событий: {timeline.length}, chartData: {chartData ? 'есть' : 'нет'}
+            </p>
           </div>
         )}
 

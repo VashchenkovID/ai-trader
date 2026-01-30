@@ -528,13 +528,21 @@ class OptimizedTrainingService {
      * Создание оптимизированной модели
      */
     async createOptimizedModel(inputShape) {
+        console.log(`🧠 Создание оптимизированной модели нейросети...`);
+        console.log(`   📊 Входной размер: ${inputShape}`);
+        
         // L2 регуляризация для предотвращения переобучения
         const l2Regularizer = tf.regularizers.l2({ l2: 0.001 });
+        
+        const layer1Units = Math.min(128, Math.max(32, inputShape * 2));
+        const layer2Units = Math.min(64, Math.max(16, inputShape));
+        
+        console.log(`   🏗️  Архитектура: Dense(${layer1Units}) -> Dropout(0.25) -> Dense(${layer2Units}) -> Dropout(0.2) -> Dense(1)`);
         
         const model = tf.sequential({
             layers: [
                 tf.layers.dense({
-                    units: Math.min(128, Math.max(32, inputShape * 2)),
+                    units: layer1Units,
                     activation: 'relu',
                     inputShape: [inputShape],
                     kernelInitializer: 'heUniform',
@@ -542,7 +550,7 @@ class OptimizedTrainingService {
                 }),
                 tf.layers.dropout({ rate: 0.25 }), // Увеличен dropout для лучшей регуляризации
                 tf.layers.dense({
-                    units: Math.min(64, Math.max(16, inputShape)),
+                    units: layer2Units,
                     activation: 'relu',
                     kernelInitializer: 'heUniform',
                     kernelRegularizer: l2Regularizer // L2 регуляризация
@@ -557,12 +565,17 @@ class OptimizedTrainingService {
             ]
         });
 
+        console.log(`   ⚙️  Компиляция модели: optimizer=adam(0.001), loss=binaryCrossentropy, metrics=[accuracy]`);
+        
         model.compile({
             optimizer: tf.train.adam(0.001),
             loss: 'binaryCrossentropy',
             metrics: ['accuracy']
         });
 
+        const totalParams = model.countParams();
+        console.log(`   ✅ Модель успешно создана: ${model.layers.length} слоев, ${totalParams.toLocaleString()} параметров`);
+        
         return model;
     }
 
