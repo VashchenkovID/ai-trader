@@ -271,6 +271,21 @@ class PnLCalculationService {
             const positions = [];
             const portfolioPositions = portfolio.positions || {};
 
+            // Извлекаем tradingMode из portfolio
+            // portfolio.mode может быть строкой или объектом { mode: 'paper' }
+            let tradingMode = 'real';
+            if (portfolio.mode) {
+                if (typeof portfolio.mode === 'string') {
+                    tradingMode = portfolio.mode;
+                } else if (typeof portfolio.mode === 'object' && portfolio.mode.mode) {
+                    tradingMode = portfolio.mode.mode;
+                } else if (typeof portfolio.mode === 'object' && portfolio.mode.tradingMode) {
+                    tradingMode = portfolio.mode.tradingMode;
+                }
+            } else if (portfolio.tradingMode) {
+                tradingMode = portfolio.tradingMode;
+            }
+
             // Получаем все открытые BUY заявки
             const openBuyRequests = await TradingRequest.findAll({
                 where: {
@@ -278,7 +293,7 @@ class PnLCalculationService {
                     status: {
                         [Op.in]: ['EXECUTED', 'APPROVED']
                     },
-                    tradingMode: portfolio.mode || 'real'
+                    tradingMode: tradingMode
                 },
                 order: [['executedAt', 'ASC'], ['createdAt', 'ASC']]
             });

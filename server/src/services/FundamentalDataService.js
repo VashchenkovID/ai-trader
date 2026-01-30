@@ -539,18 +539,6 @@ class FundamentalDataService {
                                 const info = figiToInfo.get(figi);
                                 if (!info) continue;
 
-                                // Проверяем, есть ли уже данные (если не forceUpdate)
-                                if (!forceUpdate) {
-                                    const existing = await FundamentalData.findOne({
-                                        where: {figi},
-                                        order: [['period', 'DESC']]
-                                    });
-                                    if (existing) {
-                                        stats.skipped++;
-                                        continue;
-                                    }
-                                }
-
                                 const date = new Date();
 
                                 // Вычисляем Operating Margin
@@ -566,6 +554,21 @@ class FundamentalDataService {
                                     ? new Date(fundData.fiscalPeriodEndDate)
                                     : new Date(date.getFullYear(), date.getMonth() - (date.getMonth() % 3), 1);
                                 const periodType = 'quarterly';
+
+                                // Проверяем, есть ли уже данные для этого периода (если не forceUpdate)
+                                if (!forceUpdate) {
+                                    const existing = await FundamentalData.findOne({
+                                        where: {
+                                            figi: figi,
+                                            period: period,
+                                            periodType: periodType
+                                        }
+                                    });
+                                    if (existing) {
+                                        stats.skipped++;
+                                        continue;
+                                    }
+                                }
 
                                 // Сохраняем данные
                                 // Сохраняем все поля из API ответа в metadata
@@ -595,8 +598,21 @@ class FundamentalDataService {
                                     }
                                 };
 
-                                await this.saveFundamentalData(dataToSave);
-                                stats.saved++;
+                                try {
+                                    await this.saveFundamentalData(dataToSave);
+                                    stats.saved++;
+                                } catch (saveError) {
+                                    stats.errors++;
+                                    if (LoggerService.isInitialized) {
+                                        LoggerService.error('Error saving fundamental data in mass fill', {
+                                            service: 'FundamentalDataService',
+                                            figi,
+                                            assetUid,
+                                            period: period.toISOString(),
+                                            error: {message: saveError.message, stack: saveError.stack}
+                                        });
+                                    }
+                                }
 
                             } catch (error) {
                                 stats.errors++;
