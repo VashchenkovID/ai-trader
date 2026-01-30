@@ -17,9 +17,11 @@ FROM node:22.15.0-alpine
 
 # Установка необходимых системных зависимостей
 # Добавляем glibc для onnxruntime-node (требует glibc вместо musl)
+# Добавляем su-exec для переключения пользователя
 RUN apk add --no-cache \
     postgresql-client \
     gcompat \
+    su-exec \
     && rm -rf /var/cache/apk/*
 
 # Альтернативный способ: установка glibc через wget (если gcompat недостаточно)
@@ -45,11 +47,18 @@ RUN addgroup -g 1001 -S nodejs && \
 # Создаем директории для логов, бэкапов и моделей с правильными правами
 RUN mkdir -p logs models backups/database backups/settings backups/models backups/full backups/exports backups/uploads && \
     chown -R nodejs:nodejs /app && \
-    chmod -R 755 /app/logs /app/models /app/backups && \
-    chmod -R 777 /app/backups/full /app/backups/database /app/backups/settings /app/backups/models /app/backups/exports /app/backups/uploads
+    chmod -R 755 /app/logs /app/backups && \
+    chmod -R 777 /app/models /app/backups/full /app/backups/database /app/backups/settings /app/backups/models /app/backups/exports /app/backups/uploads
 
-# Переключаемся на непривилегированного пользователя
-USER nodejs
+# Копируем entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Устанавливаем entrypoint (выполняется от root, затем переключается на nodejs)
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
+# Переключаемся на root для выполнения entrypoint (он переключится на nodejs)
+USER root
 
 # Открываем порт
 EXPOSE 3001
