@@ -350,9 +350,11 @@ class SchedulerService {
                         operation: 'performDailyNewsUpdate',
                         error: {
                             message: error.message,
-                            stack: error.stack
+                            stack: error.stack,
+                            name: error.name
                         }
                     });
+                    // НЕ пробрасываем ошибку дальше - это некритичная операция
                 }
             },
             {
@@ -3393,10 +3395,21 @@ class SchedulerService {
                 operation: 'performDailyNewsUpdate',
                 error: {
                     message: error.message,
-                    stack: error.stack
+                    stack: error.stack,
+                    name: error.name
                 }
             });
-            throw error;
+            
+            // НЕ пробрасываем ошибку для некритичных операций
+            // Возвращаем пустой результат вместо throw
+            return {
+                success: false,
+                updated: 0,
+                totalNews: 0,
+                processed: 0,
+                total: 0,
+                error: error.message
+            };
         }
     }
 

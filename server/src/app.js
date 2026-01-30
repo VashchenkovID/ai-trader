@@ -351,18 +351,32 @@ process.on('unhandledRejection', (reason, promise) => {
     // Не перезапускаем сервер для некритичных ошибок (например, ошибки обновления новостей)
     // Только для критичных ошибок вызываем gracefulShutdown
     const errorMessage = reason instanceof Error ? reason.message : String(reason);
+    const errorName = reason instanceof Error ? reason.name : '';
+    
+    // Критичные ошибки - только проблемы с БД и подключениями
     const isCritical = errorMessage.includes('database') || 
                        errorMessage.includes('connection') ||
                        errorMessage.includes('sequelize') ||
                        errorMessage.includes('ECONNREFUSED') ||
-                       errorMessage.includes('ENOTFOUND');
+                       errorMessage.includes('ENOTFOUND') ||
+                       errorMessage.includes('EACCES') && errorMessage.includes('database');
     
-    if (isCritical) {
+    // Некритичные ошибки - новости, BERT модель, анализ тональности
+    const isNonCritical = errorMessage.includes('news') ||
+                          errorMessage.includes('sentiment') ||
+                          errorMessage.includes('BERT') ||
+                          errorMessage.includes('transformers') ||
+                          errorMessage.includes('NewsAnalysis') ||
+                          errorMessage.includes('loadFreshNews') ||
+                          errorMessage.includes('performDailyNewsUpdate') ||
+                          errorName === 'TypeError' && errorMessage.includes('model');
+    
+    if (isCritical && !isNonCritical) {
         gracefulShutdown('unhandledRejection').catch(() => {
             process.exit(1);
         });
     } else {
-        // Логируем, но не перезапускаем сервер
+        // Логируем, но не перезапускаем сервер для некритичных ошибок
         console.error('⚠️ Non-critical unhandled rejection (server continues):', errorMessage);
     }
 });

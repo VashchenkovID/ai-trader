@@ -2832,21 +2832,30 @@ class NeuralNetworkService {
 
         // Отправляем уведомление о старте анализа
         try {
+            const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+            
+            if (!OptimizedTelegramService || !OptimizedTelegramService.isInitialized) {
+                // Пытаемся инициализировать, если не инициализирован
+                if (OptimizedTelegramService && !OptimizedTelegramService.isInitialized) {
+                    try {
+                        await OptimizedTelegramService.initialize();
+                    } catch (initError) {
+                        // Игнорируем ошибки инициализации
+                    }
+                }
+            }
+            
+            // Отправляем уведомление, если сервис инициализирован
             if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
                 await OptimizedTelegramService.sendAlert('MARKET_ANALYSIS_START', 
-                    `🔍 Запущен анализ рынка и портфеля\n` +
-                    `Время: ${new Date().toLocaleString('ru-RU')}\n` +
-                    `Статус: Анализ начат...`
+                    `🔍 <b>Запущен анализ рынка и портфеля</b>\n\n` +
+                    `⏰ Время: ${new Date().toLocaleString('ru-RU')}\n` +
+                    `📊 Статус: Анализ начат...`,
+                    'info'
                 );
             }
         } catch (telegramError) {
-            if (LoggerService.isInitialized) {
-                LoggerService.error('Failed to send Telegram notification about analysis start', {
-                    service: 'NeuralNetworkService',
-                    operation: 'performMarketAnalysis',
-                    error: { message: telegramError.message }
-                });
-            }
+            // Игнорируем ошибки отправки уведомлений - это некритично
         }
 
         try {
@@ -2989,14 +2998,16 @@ class NeuralNetworkService {
 
             // Отправляем уведомление о завершении анализа
             try {
+                // Импортируем OptimizedTelegramService, если еще не импортирован
+                const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
                 if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
                     const buyCount = analysis.buyRecommendations?.length || 0;
                     const sellCount = analysis.sellRecommendations?.length || 0;
                     const portfolioValue = analysis.portfolioValue || 0;
                     const availableBudget = analysis.availableBudget || 0;
                     
-                    let message = `✅ Анализ рынка завершен\n\n`;
-                    message += `📊 Результаты:\n`;
+                    let message = `✅ <b>Анализ рынка завершен</b>\n\n`;
+                    message += `📊 <b>Результаты:</b>\n`;
                     message += `• Рекомендаций на покупку: ${buyCount}\n`;
                     message += `• Рекомендаций на продажу: ${sellCount}\n`;
                     message += `• Стоимость портфеля: ${portfolioValue.toFixed(2)} ₽\n`;

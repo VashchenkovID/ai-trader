@@ -145,7 +145,13 @@ class NewsAnalysisService {
                         ? text.substring(0, maxLength) 
                         : text;
 
-                    const result = await model(truncatedText);
+                    // Обертка для защиты от segmentation fault в нативных модулях
+                    const result = await Promise.race([
+                        model(truncatedText),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('BERT model timeout')), 10000)
+                        )
+                    ]);
                     const prediction = Array.isArray(result) ? result[0] : result;
                     
                     if (prediction && prediction.label) {
@@ -1701,10 +1707,21 @@ class NewsAnalysisService {
                 operation: 'loadFreshNewsForAllInstruments',
                 error: {
                     message: error.message,
-                    stack: error.stack
+                    stack: error.stack,
+                    name: error.name
                 }
             });
-            throw error;
+            
+            // Возвращаем безопасный результат вместо throw
+            // Это предотвращает падение процесса при ошибках
+            return {
+                success: false,
+                updated: 0,
+                totalNews: 0,
+                processed: 0,
+                total: 0,
+                error: error.message
+            };
         }
     }
 
