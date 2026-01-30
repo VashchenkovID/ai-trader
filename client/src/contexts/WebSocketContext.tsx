@@ -321,6 +321,31 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         console.log(`❌ Unsubscribed from channel: ${message.channel}`);
         break;
 
+      // События обновления опционных данных
+      case 'options_data_update_completed':
+        setRealTimeData(prev => ({
+          ...prev,
+          alerts: [{
+            id: Date.now(),
+            type: 'success',
+            message: `Обновление опционных данных завершено: ${message.data?.result?.stats?.saved || 0} опционов сохранено`,
+            timestamp: message.timestamp || new Date().toISOString()
+          }, ...prev.alerts.slice(0, 99)]
+        }));
+        break;
+
+      case 'options_data_update_error':
+        setRealTimeData(prev => ({
+          ...prev,
+          alerts: [{
+            id: Date.now(),
+            type: 'error',
+            message: `Ошибка обновления опционных данных: ${message.data?.error || 'Неизвестная ошибка'}`,
+            timestamp: message.timestamp || new Date().toISOString()
+          }, ...prev.alerts.slice(0, 99)]
+        }));
+        break;
+
       // События воркеров
       case 'worker_started':
       case 'worker_progress':

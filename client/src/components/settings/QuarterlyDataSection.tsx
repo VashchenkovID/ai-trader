@@ -63,12 +63,26 @@ const QuarterlyDataSection: React.FC = () => {
         delayMs: 2000
       });
 
-      setOptionsResult(result);
-
+      // Теперь запрос асинхронный - получаем ответ сразу о том, что обновление запущено
       if (result.success) {
-        alert('Опционные данные успешно обновлены!');
+        setOptionsResult({
+          success: true,
+          message: result.message || 'Обновление опционных данных запущено в фоновом режиме',
+          data: {
+            status: 'processing',
+            ...result.data
+          }
+        });
+        
+        // Показываем сообщение о том, что обновление запущено
+        alert('Обновление опционных данных запущено в фоновом режиме. Результаты будут доступны после завершения.');
+        
+        // Обновление будет продолжаться в фоне, статус можно отслеживать через WebSocket
+        // или периодически проверять статус (если добавить соответствующий endpoint)
       } else {
-        alert(`Ошибка обновления: ${result.message || 'Неизвестная ошибка'}`);
+        setOptionsResult(result);
+        alert(`Ошибка запуска обновления: ${result.message || 'Неизвестная ошибка'}`);
+        setUpdatingOptions(false);
       }
     } catch (error: any) {
       console.error('Error updating options data:', error);
@@ -77,9 +91,10 @@ const QuarterlyDataSection: React.FC = () => {
         message: error.message || 'Ошибка обновления опционных данных'
       });
       alert(`Ошибка обновления: ${error.message || 'Неизвестная ошибка'}`);
-    } finally {
       setUpdatingOptions(false);
     }
+    // Не сбрасываем setUpdatingOptions(false) сразу, так как обновление идет в фоне
+    // Можно добавить таймер или слушать WebSocket для обновления статуса
   };
 
   const formatStats = (stats: any) => {

@@ -50,7 +50,9 @@ async function ensureDatabaseConnection() {
 async function performOptionsDataUpdate() {
     try {
         // Проверяем соединение с БД перед началом работы
+        console.log('📊 [OPTIONS WORKER] Checking database connection...');
         await ensureDatabaseConnection();
+        console.log('✅ [OPTIONS WORKER] Database connection OK');
         
         const { 
             delayMs = 2000,
@@ -59,11 +61,13 @@ async function performOptionsDataUpdate() {
         
         const startTime = Date.now();
         
-        console.log('📊 Starting options data update in worker...');
+        console.log(`📊 [OPTIONS WORKER] Starting options data update: delayMs=${delayMs}, forceUpdate=${forceUpdate}`);
         
         // Убеждаемся, что сервис инициализирован
         if (!OptionsDataService.isInitialized) {
+            console.log('📊 [OPTIONS WORKER] Initializing OptionsDataService...');
             await OptionsDataService.initialize();
+            console.log('✅ [OPTIONS WORKER] OptionsDataService initialized');
         }
         
         // Отправляем сообщение о начале работы
@@ -79,10 +83,16 @@ async function performOptionsDataUpdate() {
         }
         
         // Выполняем массовое обновление опционов
+        console.log('📊 [OPTIONS WORKER] Starting mass update of options...');
         const updateStats = await OptionsDataService.updateOptionsForAllInstruments({
             delayMs,
             forceUpdate,
             onProgress: (progress, stage, message) => {
+                // Логируем каждые 10% прогресса
+                if (progress % 10 === 0 || progress === 100) {
+                    console.log(`📊 [OPTIONS WORKER] Progress: ${progress}% - ${stage}: ${message}`);
+                }
+                
                 // Отправляем прогресс в главный поток
                 if (parentPort) {
                     parentPort.postMessage({
@@ -107,7 +117,11 @@ async function performOptionsDataUpdate() {
 • Пропущено: ${updateStats.skipped}
 • Время выполнения: ${duration}с`;
         
-        console.log(`✅ Options data update completed in ${duration}s:\n${summary}`);
+        console.log(`✅ [OPTIONS WORKER] Update completed in ${duration}s:`);
+        console.log(`   📊 Processed: ${updateStats.processed} / ${updateStats.total}`);
+        console.log(`   💾 Saved: ${updateStats.saved} options`);
+        console.log(`   ⚠️ Errors: ${updateStats.errors}`);
+        console.log(`   ⏭️ Skipped: ${updateStats.skipped}`);
         
         // Отправляем результат в главный поток
         if (parentPort) {
@@ -129,7 +143,9 @@ async function performOptionsDataUpdate() {
             duration: parseFloat(duration)
         };
     } catch (error) {
-        console.error('❌ Error in options data update worker:', error);
+        const duration = ((Date.now() - Date.now()) / 1000).toFixed(2);
+        console.error(`❌ [OPTIONS WORKER] Error after ${duration}s:`, error.message);
+        console.error('❌ [OPTIONS WORKER] Stack:', error.stack);
         
         // Отправляем ошибку в главный поток
         if (parentPort) {

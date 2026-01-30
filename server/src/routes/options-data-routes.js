@@ -6,86 +6,119 @@ import { validateQuery, validateParams, validationRules } from '../middleware/va
 import LoggerService from '../services/LoggerService.js';
 import CachedInstrument from '../models/CachedInstrument.js';
 import OptionsData from '../models/OptionsData.js';
+import { performOptionsDataUpdate } from '../utils/scheduler/optionsDataUpdateUtils.js';
 
 const router = express.Router();
 
 /**
  * POST /api/options-data/update-all
  * Массовое обновление опционов для всех активных инструментов
+ * Работает асинхронно через worker - отправляет ответ сразу и обрабатывает в фоне
  */
 router.post('/update-all', asyncHandler(async (req, res) => {
+    const startTime = Date.now();
     const { 
         delayMs = 2000, 
         forceUpdate = false,
-        limit = null // Ограничение количества инструментов для обработки
+        limit = null // Ограничение количества инструментов для обработки (не используется в worker, но оставляем для совместимости)
     } = req.body;
     
-    LoggerService.info('Received request to update options for all instruments', {
+    LoggerService.info('📊 [OPTIONS] Received request to update options for all instruments', {
         service: 'OptionsDataRoutes',
+        operation: 'update-all',
         delayMs,
         forceUpdate,
-        limit
+        limit,
+        timestamp: new Date().toISOString()
     });
     
-    // Получаем список активных инструментов
-    const instruments = await CachedInstrument.findAll({
-        where: { isActive: true },
-        limit: limit || undefined,
-        attributes: ['figi', 'ticker', 'name']
-    });
+    console.log(`📊 [OPTIONS] Starting options data update: delayMs=${delayMs}, forceUpdate=${forceUpdate}, limit=${limit || 'unlimited'}`);
     
-    if (instruments.length === 0) {
-        return res.json({
-            success: true,
-            message: 'No active instruments found',
-            data: {
-                processed: 0,
-                saved: 0,
-                errors: 0,
-                skipped: 0
-            }
-        });
-    }
-    
-    const stats = {
-        processed: 0,
-        saved: 0,
-        errors: 0,
-        skipped: 0,
-        total: instruments.length
-    };
-    
-    // Обрабатываем каждый инструмент с задержкой
-    for (const instrument of instruments) {
-        try {
-            const savedOptions = await OptionsDataService.fetchAndSaveOptions(
-                instrument.figi, 
-                forceUpdate
-            );
-            
-            stats.processed++;
-            stats.saved += savedOptions.length;
-            
-            // Задержка между запросами
-            if (delayMs > 0) {
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-            }
-        } catch (error) {
-            stats.errors++;
-            LoggerService.error('Error updating options for instrument', {
-                service: 'OptionsDataRoutes',
-                figi: instrument.figi,
-                ticker: instrument.ticker,
-                error: { message: error.message }
-            });
-        }
-    }
-    
+    // Отправляем ответ сразу
     res.json({
         success: true,
-        message: 'Mass update of options data completed',
-        data: stats
+        message: 'Обновление опционных данных запущено в фоновом режиме',
+        data: {
+            delayMs,
+            forceUpdate,
+            status: 'processing'
+        }
     });
+
+    // Запускаем обновление в фоне через worker
+    try {
+        const ServiceManager = (await import('../services/ServiceManager.js')).default;
+        const SchedulerService = (await import('../services/SchedulerService.js')).default;
+        
+        LoggerService.info('📊 [OPTIONS] Starting worker for options data update', {
+            service: 'OptionsDataRoutes',
+            operation: 'update-all-worker-start'
+        });
+        
+        const context = {
+            getWebSocketService: () => ServiceManager.getServiceSafe('WebSocketService'),
+            workersSet: SchedulerService.workers || new Set()
+        };
+        
+        const result = await performOptionsDataUpdate(context, {
+            delayMs: parseInt(delayMs),
+            forceUpdate: Boolean(forceUpdate)
+        });
+        
+        const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+        
+        LoggerService.info('✅ [OPTIONS] Options data update completed', {
+            service: 'OptionsDataRoutes',
+            operation: 'update-all-completed',
+            duration: `${duration}s`,
+            stats: result.stats || {},
+            summary: result.summary
+        });
+        
+        console.log(`✅ [OPTIONS] Update completed in ${duration}s:`, {
+            processed: result.stats?.processed || 0,
+            saved: result.stats?.saved || 0,
+            errors: result.stats?.errors || 0,
+            skipped: result.stats?.skipped || 0
+        });
+        
+        // Уведомляем через WebSocket
+        const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+        if (WebSocketService) {
+            WebSocketService.broadcast('options_data_update_completed', {
+                success: true,
+                result: result
+            });
+        }
+    } catch (updateError) {
+        const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+        
+        LoggerService.error('❌ [OPTIONS] Error in options data update', {
+            service: 'OptionsDataRoutes',
+            operation: 'update-all-error',
+            duration: `${duration}s`,
+            error: {
+                message: updateError.message,
+                stack: updateError.stack
+            }
+        });
+        
+        console.error(`❌ [OPTIONS] Update failed after ${duration}s:`, updateError.message);
+        
+        // Уведомляем через WebSocket об ошибке
+        try {
+            const ServiceManager = (await import('../services/ServiceManager.js')).default;
+            const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
+            if (WebSocketService) {
+                WebSocketService.broadcast('options_data_update_error', {
+                    success: false,
+                    error: updateError.message
+                });
+            }
+        } catch (wsError) {
+            console.warn('⚠️ [OPTIONS] Failed to send WebSocket error notification:', wsError.message);
+        }
+    }
 }));
 
 /**
@@ -97,20 +130,62 @@ router.post('/update/:figi',
         figi: validationRules.string({ required: true })
     }),
     asyncHandler(async (req, res) => {
+        const startTime = Date.now();
         const { figi } = req.params;
         const { forceUpdate = false } = req.body;
         
-        const savedOptions = await OptionsDataService.fetchAndSaveOptions(figi, forceUpdate);
+        LoggerService.info('📊 [OPTIONS] Received request to update options for instrument', {
+            service: 'OptionsDataRoutes',
+            operation: 'update-single',
+            figi,
+            forceUpdate,
+            timestamp: new Date().toISOString()
+        });
         
-        res.json({
-            success: true,
-            message: 'Options data updated',
-            data: {
+        console.log(`📊 [OPTIONS] Updating options for ${figi}, forceUpdate=${forceUpdate}`);
+        
+        try {
+            const savedOptions = await OptionsDataService.fetchAndSaveOptions(figi, forceUpdate);
+            
+            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+            
+            LoggerService.info('✅ [OPTIONS] Options data updated for instrument', {
+                service: 'OptionsDataRoutes',
+                operation: 'update-single-completed',
                 figi,
                 count: savedOptions.length,
-                options: savedOptions.slice(0, 10) // Первые 10 для примера
-            }
-        });
+                duration: `${duration}s`
+            });
+            
+            console.log(`✅ [OPTIONS] Updated ${savedOptions.length} options for ${figi} in ${duration}s`);
+            
+            res.json({
+                success: true,
+                message: 'Options data updated',
+                data: {
+                    figi,
+                    count: savedOptions.length,
+                    options: savedOptions.slice(0, 10) // Первые 10 для примера
+                }
+            });
+        } catch (error) {
+            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+            
+            LoggerService.error('❌ [OPTIONS] Error updating options for instrument', {
+                service: 'OptionsDataRoutes',
+                operation: 'update-single-error',
+                figi,
+                duration: `${duration}s`,
+                error: {
+                    message: error.message,
+                    stack: error.stack
+                }
+            });
+            
+            console.error(`❌ [OPTIONS] Failed to update options for ${figi} after ${duration}s:`, error.message);
+            
+            throw error;
+        }
     })
 );
 

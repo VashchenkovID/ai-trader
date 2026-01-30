@@ -209,16 +209,28 @@ class OptionsDataService {
      * @returns {Promise<Array>} - Массив сохраненных записей опционов
      */
     async fetchAndSaveOptions(baseFigi, forceUpdate = false) {
+        const startTime = Date.now();
         try {
+            if (LoggerService.isInitialized) {
+                LoggerService.info('📊 [OPTIONS] Starting fetch and save options', {
+                    service: 'OptionsDataService',
+                    operation: 'fetchAndSaveOptions',
+                    baseFigi,
+                    forceUpdate
+                });
+            }
+            console.log(`📊 [OPTIONS] Fetching options for ${baseFigi}, forceUpdate=${forceUpdate}`);
+            
             // Получаем asset_uid по FIGI
             const assetUid = await AssetSyncService.getAssetUidByFigi(baseFigi);
             if (!assetUid) {
                 if (LoggerService.isInitialized) {
-                    LoggerService.warn('Asset UID not found for FIGI', {
+                    LoggerService.warn('⚠️ [OPTIONS] Asset UID not found for FIGI', {
                         service: 'OptionsDataService',
                         baseFigi
                     });
                 }
+                console.warn(`⚠️ [OPTIONS] Asset UID not found for ${baseFigi}`);
                 return [];
             }
 
@@ -226,11 +238,12 @@ class OptionsDataService {
             const instrument = await CacheService.getInstrument(baseFigi, true);
             if (!instrument || !instrument.lastPrice) {
                 if (LoggerService.isInitialized) {
-                    LoggerService.warn('Instrument price not found', {
+                    LoggerService.warn('⚠️ [OPTIONS] Instrument price not found', {
                         service: 'OptionsDataService',
                         baseFigi
                     });
                 }
+                console.warn(`⚠️ [OPTIONS] Instrument price not found for ${baseFigi}`);
                 return [];
             }
 
@@ -241,14 +254,24 @@ class OptionsDataService {
             const historicalVolatility = await this.calculateHistoricalVolatility(baseFigi, 30);
 
             // Получаем опционы из API
+            console.log(`📊 [OPTIONS] Fetching options from API for ${baseFigi} (assetUid: ${assetUid})`);
             const options = await TinkoffApiService.getOptionsBy({
                 basicAssetUid: assetUid
             });
 
             if (!options || options.length === 0) {
-                // Убрали debug логирование для уменьшения шума в логах
+                console.log(`📊 [OPTIONS] No options found for ${baseFigi}`);
+                if (LoggerService.isInitialized) {
+                    LoggerService.debug('📊 [OPTIONS] No options found in API response', {
+                        service: 'OptionsDataService',
+                        baseFigi,
+                        assetUid
+                    });
+                }
                 return [];
             }
+            
+            console.log(`📊 [OPTIONS] Received ${options.length} options from API for ${baseFigi}`);
 
             // Получаем безрисковую ставку (можно получить из макро-данных или Settings)
             const riskFreeRate = this.defaultRiskFreeRate;
@@ -398,13 +421,19 @@ class OptionsDataService {
                 }
             }
 
+            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+            
             if (LoggerService.isInitialized) {
-                LoggerService.info('Options fetched and saved', {
+                LoggerService.info('✅ [OPTIONS] Options fetched and saved', {
                     service: 'OptionsDataService',
+                    operation: 'fetchAndSaveOptions-completed',
                     baseFigi,
-                    count: savedOptions.length
+                    count: savedOptions.length,
+                    duration: `${duration}s`
                 });
             }
+            
+            console.log(`✅ [OPTIONS] Saved ${savedOptions.length} options for ${baseFigi} in ${duration}s`);
 
             return savedOptions;
         } catch (error) {
@@ -590,6 +619,7 @@ class OptionsDataService {
      * @returns {Promise<Object>} - Статистика обновления
      */
     async updateOptionsForAllInstruments(options = {}) {
+        const startTime = Date.now();
         const {
             delayMs = 2000,
             forceUpdate = false,
@@ -616,22 +646,27 @@ class OptionsDataService {
 
             stats.total = instruments.length;
 
+            if (LoggerService.isInitialized) {
+                LoggerService.info('📊 [OPTIONS] Starting mass update of options for all instruments', {
+                    service: 'OptionsDataService',
+                    operation: 'updateOptionsForAllInstruments',
+                    delayMs,
+                    forceUpdate,
+                    limit,
+                    totalInstruments: instruments.length
+                });
+            }
+            console.log(`📊 [OPTIONS] Starting mass update: delayMs=${delayMs}, forceUpdate=${forceUpdate}, limit=${limit || 'unlimited'}`);
+            console.log(`📊 [OPTIONS] Found ${instruments.length} active instruments to process`);
+
             if (instruments.length === 0) {
+                console.log('📊 [OPTIONS] No active instruments found, skipping update');
                 if (LoggerService.isInitialized) {
-                    LoggerService.warn('No active instruments found for options update', {
+                    LoggerService.warn('⚠️ [OPTIONS] No active instruments found for options update', {
                         service: 'OptionsDataService'
                     });
                 }
                 return stats;
-            }
-
-            if (LoggerService.isInitialized) {
-                LoggerService.info('Starting mass options update', {
-                    service: 'OptionsDataService',
-                    totalInstruments: instruments.length,
-                    delayMs,
-                    forceUpdate
-                });
             }
 
             // Отправляем начальный прогресс
@@ -643,13 +678,19 @@ class OptionsDataService {
             for (let i = 0; i < instruments.length; i++) {
                 const instrument = instruments[i];
                 try {
+                    const instrumentStartTime = Date.now();
+                    console.log(`📊 [OPTIONS] Processing ${i + 1}/${instruments.length}: ${instrument.ticker || instrument.figi} (${instrument.figi})`);
+                    
                     const savedOptions = await this.fetchAndSaveOptions(
                         instrument.figi,
                         forceUpdate
                     );
 
+                    const instrumentDuration = ((Date.now() - instrumentStartTime) / 1000).toFixed(2);
                     stats.processed++;
                     stats.saved += savedOptions.length;
+
+                    console.log(`✅ [OPTIONS] Processed ${instrument.ticker || instrument.figi}: ${savedOptions.length} options saved in ${instrumentDuration}s`);
 
                     // Отправляем прогресс
                     if (onProgress) {
@@ -665,12 +706,17 @@ class OptionsDataService {
                     }
                 } catch (error) {
                     stats.errors++;
+                    console.error(`❌ [OPTIONS] Error processing ${instrument.ticker || instrument.figi} (${instrument.figi}):`, error.message);
                     if (LoggerService.isInitialized) {
-                        LoggerService.error('Error updating options for instrument', {
+                        LoggerService.error('❌ [OPTIONS] Error updating options for instrument', {
                             service: 'OptionsDataService',
+                            operation: 'updateOptionsForAllInstruments-error',
                             figi: instrument.figi,
                             ticker: instrument.ticker,
-                            error: { message: error.message }
+                            error: { 
+                                message: error.message,
+                                stack: error.stack
+                            }
                         });
                     }
                     
@@ -684,12 +730,22 @@ class OptionsDataService {
                 }
             }
 
+            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+            
             if (LoggerService.isInitialized) {
-                LoggerService.info('Mass options update completed', {
+                LoggerService.info('✅ [OPTIONS] Mass update of options completed', {
                     service: 'OptionsDataService',
-                    ...stats
+                    operation: 'updateOptionsForAllInstruments-completed',
+                    duration: `${duration}s`,
+                    stats: stats
                 });
             }
+            
+            console.log(`✅ [OPTIONS] Mass update completed in ${duration}s:`);
+            console.log(`   📊 Processed: ${stats.processed} / ${stats.total}`);
+            console.log(`   💾 Saved: ${stats.saved} options`);
+            console.log(`   ⚠️ Errors: ${stats.errors}`);
+            console.log(`   ⏭️ Skipped: ${stats.skipped}`);
 
             return stats;
         } catch (error) {
