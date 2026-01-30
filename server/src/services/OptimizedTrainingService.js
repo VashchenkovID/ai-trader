@@ -22,6 +22,7 @@ class OptimizedTrainingService {
         this.workers = new Set(); // Храним все worker'ы для завершения
         this.trainingFigiLocks = new Set(); // Лок на FIGI, чтобы не запускать дубликаты
         this.eventListeners = new Map(); // Хранилище обработчиков событий
+        this.isBatchTraining = false; // Флаг для защиты от повторного запуска batchTrainAll
     }
 
     /**
@@ -329,18 +330,27 @@ class OptimizedTrainingService {
         const errors = [];
         const maxConcurrent = 3; // Максимальное количество параллельных обучений
         let activeTrainings = 0;
-        let currentIndex = 0;
+        let currentIndex = 0; // Индекс следующего инструмента для обработки
+        const allPromises = []; // Массив всех промисов для отслеживания
 
         // Функция для обработки одного инструмента
         const processInstrument = async (instrument, index) => {
+            const figi = typeof instrument === 'string' ? instrument : instrument.figi;
+            const name = typeof instrument === 'string' ? figi : instrument.name;
+            
             try {
-                // Обрабатываем как строки FIGI или как объекты
-                const figi = typeof instrument === 'string' ? instrument : instrument.figi;
-                const name = typeof instrument === 'string' ? figi : instrument.name;
+                console.log(`📊 [TRAINING] Starting training ${index + 1}/${instruments.length}: ${name || figi.substring(0, 10)}`);
                 
                 const result = await this.trainInstrument(figi, options);
-                results.push(result);
-                this.trainingProgress.completedInstruments++;
+                
+                if (result.success) {
+                    results.push(result);
+                    this.trainingProgress.completedInstruments++;
+                    console.log(`✅ [TRAINING] Completed ${index + 1}/${instruments.length}: ${name || figi.substring(0, 10)} (accuracy: ${(result.accuracy * 100).toFixed(2)}%)`);
+                } else {
+                    errors.push({ figi, name, error: result.error || 'Training failed' });
+                    console.warn(`⚠️ [TRAINING] Failed ${index + 1}/${instruments.length}: ${name || figi.substring(0, 10)} - ${result.error}`);
+                }
                 
                 // Обновляем прогресс в TrainingStatusService
                 if (TrainingStatusService) {
@@ -350,12 +360,14 @@ class OptimizedTrainingService {
                 }
                 
                 // Уведомляем о прогрессе
-                this.broadcastProgress(name, result.accuracy);
+                if (result.success && result.accuracy) {
+                    this.broadcastProgress(name, result.accuracy);
+                }
                 
             } catch (error) {
-                const figi = typeof instrument === 'string' ? instrument : instrument.figi;
-                const name = typeof instrument === 'string' ? figi : instrument.name;
                 errors.push({ figi, name, error: error.message });
+                console.error(`❌ [TRAINING] Error training ${index + 1}/${instruments.length}: ${name || figi.substring(0, 10)} - ${error.message}`);
+                
                 if (LoggerService.isInitialized) {
                     LoggerService.error('Failed training for instrument', {
                         service: 'OptimizedTrainingService',
@@ -367,31 +379,50 @@ class OptimizedTrainingService {
                 }
             } finally {
                 activeTrainings--;
+                
                 // Запускаем следующий инструмент, если есть
+                // ВАЖНО: используем атомарную операцию для избежания race condition
                 if (currentIndex < instruments.length) {
-                    const nextInstrument = instruments[currentIndex++];
+                    const nextIndex = currentIndex++; // Атомарно получаем и инкрементируем
+                    const nextInstrument = instruments[nextIndex];
                     activeTrainings++;
-                    processInstrument(nextInstrument, currentIndex - 1).catch(err => {
-                        console.error('Error in parallel training:', err);
+                    
+                    // Запускаем следующий инструмент и добавляем промис в массив
+                    const nextPromise = processInstrument(nextInstrument, nextIndex);
+                    allPromises.push(nextPromise);
+                    nextPromise.catch(err => {
+                        console.error(`❌ [TRAINING] Error in parallel training for index ${nextIndex}:`, err.message);
                     });
                 }
             }
         };
 
         // Запускаем первые maxConcurrent обучений
-        const initialPromises = [];
+        console.log(`🚀 [TRAINING] Starting parallel training: ${Math.min(maxConcurrent, instruments.length)} concurrent, ${instruments.length} total`);
+        
         for (let i = 0; i < Math.min(maxConcurrent, instruments.length); i++) {
-            currentIndex = i + 1;
+            currentIndex = i + 1; // Следующий индекс после текущего
             activeTrainings++;
-            initialPromises.push(processInstrument(instruments[i], i));
+            const promise = processInstrument(instruments[i], i);
+            allPromises.push(promise);
         }
 
-        // Ждем завершения всех обучений
-        await Promise.all(initialPromises);
+        // Ждем завершения ВСЕХ промисов (включая те, что запускаются в finally)
+        console.log(`⏳ [TRAINING] Waiting for ${allPromises.length} training promises to complete...`);
+        await Promise.all(allPromises);
 
-        // Ждем завершения оставшихся активных обучений
-        while (activeTrainings > 0) {
+        // Дополнительная проверка на случай, если что-то осталось (защита от зацикливания)
+        let waitCount = 0;
+        const maxWait = 1000; // Максимум 100 секунд ожидания (100 * 100ms)
+        while (activeTrainings > 0 && waitCount < maxWait) {
             await new Promise(resolve => setTimeout(resolve, 100));
+            waitCount++;
+        }
+        
+        if (activeTrainings > 0) {
+            console.warn(`⚠️ [TRAINING] Warning: ${activeTrainings} active trainings still running after ${waitCount * 0.1}s timeout`);
+        } else {
+            console.log(`✅ [TRAINING] All trainings completed, activeTrainings=${activeTrainings}`);
         }
 
         const summary = {
@@ -403,6 +434,8 @@ class OptimizedTrainingService {
             results,
             errors
         };
+
+        console.log(`📊 [TRAINING] Training summary: ${results.length} successful, ${errors.length} failed out of ${instruments.length} total`);
 
         // Завершаем обучение в TrainingStatusService
         if (TrainingStatusService) {
@@ -1982,6 +2015,21 @@ class OptimizedTrainingService {
      * Пакетное обучение всех нейросетей
      */
     async batchTrainAll(epochs = 50, batchSize = 16) {
+        // Защита от повторного запуска
+        if (this.isBatchTraining) {
+            console.warn('⚠️ [TRAINING] Batch training already in progress, skipping duplicate request');
+            return {
+                success: false,
+                message: 'Batch training is already running',
+                isRunning: true
+            };
+        }
+
+        this.isBatchTraining = true;
+        const startTime = Date.now();
+        
+        console.log(`🚀 [TRAINING] Starting batch training: epochs=${epochs}, batchSize=${batchSize}`);
+        
         const TrainingStatusService = getService('TrainingStatusService');
         try {
             // Получаем все инструменты из кеша
@@ -1989,6 +2037,8 @@ class OptimizedTrainingService {
             if (!instruments || instruments.length === 0) {
                 throw new Error('No instruments available for training');
             }
+            
+            console.log(`📊 [TRAINING] Found ${instruments.length} instruments to train`);
             
             // Используем существующий метод trainMultipleInstruments
             // (статус обучения обновляется внутри trainMultipleInstruments)
@@ -2000,14 +2050,29 @@ class OptimizedTrainingService {
                 enableValidation: true
             });
             
+            const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
+            console.log(`✅ [TRAINING] Batch training completed in ${duration} minutes:`, {
+                total: result.total,
+                successful: result.successful,
+                failed: result.failed,
+                successRate: result.successRate.toFixed(2) + '%'
+            });
+            
             return result;
             
         } catch (error) {
+            const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
+            console.error(`❌ [TRAINING] Batch training failed after ${duration} minutes:`, error.message);
+            
             // Завершаем обучение с ошибкой
             if (TrainingStatusService) {
                 TrainingStatusService.completeTraining('neuralNetwork', false);
             }
             throw error;
+        } finally {
+            // Снимаем флаг обучения
+            this.isBatchTraining = false;
+            console.log('🔓 [TRAINING] Batch training lock released');
         }
     }
 
