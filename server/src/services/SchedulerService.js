@@ -133,12 +133,12 @@ class SchedulerService {
         const schedulerSettings = await SettingsService.getSchedulerSettings();
         const nnSettings = await SettingsService.getNeuralNetworkSettings();
         const notificationSettings = await SettingsService.getNotificationSettings();
-        // Инкрементальное обновление кеша раз в сутки (в 2:00)
-        const cacheSchedule = schedulerSettings.cache_update_interval || '0 2 * * *';
+        // Инкрементальное обновление кеша 3 раза в день (02:00, 10:00, 18:00)
+        const cacheSchedule = schedulerSettings.cache_update_interval || '0 2,10,18 * * *';
         // Полное обучение ночью в 03:00 (после обновления кеша в 02:00, последовательно: Базовая → Ансамбль → Мета-обучение → RL)
         const trainingSchedule = schedulerSettings.nn_training_schedule || '0 3 * * *';
-        // Быстрое обучение каждые 2 часа: 08:00, 10:00, 12:00, 14:00, 16:00, 18:00
-        const quickTrainingSchedule = schedulerSettings.nn_training_interval || '0 8,10,12,14,16,18 * * *';
+        // Быстрое обучение каждый час в торговые часы: 07:00, 08:00, 09:00, 10:00, 11:00, 12:00, 13:00, 14:00, 15:00, 16:00, 17:00, 18:00
+        const quickTrainingSchedule = schedulerSettings.nn_training_interval || '0 7,8,9,10,11,12,13,14,15,16,17,18 * * *';
         const newsCacheSchedule = notificationSettings.news_cache_update_interval || '0 */6 * * *';
         const newsDailyUpdateSchedule = notificationSettings.news_daily_update_schedule || '0 9 * * *'; // Каждый день в 9:00
         const newsWeeklyCleanupSchedule = notificationSettings.news_weekly_cleanup_schedule || '0 3 * * 0'; // Каждое воскресенье в 3:00
@@ -488,10 +488,10 @@ class SchedulerService {
             }
         );
 
-        // Задача 10: Автоматический анализ портфеля (каждый час)
+        // Задача 10: Автоматический анализ портфеля (каждые 2 часа)
         // Пропускаем первый запуск, так как он будет выполнен через 30 минут после старта
         this.portfolioAnalysisTask = SchedulerUtils.createScheduledTask(
-            '0 * * * *',
+            '0 */2 * * *',
             async () => {
                 await this.performPortfolioAnalysis();
             },
@@ -507,9 +507,9 @@ class SchedulerService {
             }
         );
 
-        // Задача 11: Обновление предсказаний в рекомендациях каждые 20 минут
+        // Задача 11: Обновление предсказаний в рекомендациях каждые 30 минут
         this.predictionsUpdateTask = SchedulerUtils.createScheduledTask(
-            '*/20 * * * *',
+            '*/30 * * * *',
             async () => {
                 await this.updateRecommendationsPredictions();
             },
