@@ -116,9 +116,9 @@ export async function performCacheUpdate(context) {
  * Выполняет полное обновление кеша (ТОЛЬКО РУЧНОЙ ЗАПУСК)
  * 
  * ВАЖНО: Это очень ресурсоемкая операция, которая:
- * - Приостанавливает ВСЕ процессы системы
  * - Может занять несколько часов
  * - Создает большую нагрузку на БД
+ * - Воркеры продолжают работать параллельно (не приостанавливаются)
  * 
  * @param {Object} context - Контекст выполнения
  * @param {boolean} force - Принудительное обновление
@@ -173,10 +173,11 @@ export async function performFullCacheUpdate(context, force = false) {
             setCurrentFullCacheUpdateWorker(null);
         }
 
-        // Приостанавливаем все процессы во время полного обновления
-        if (pauseAllProcesses) {
-            await pauseAllProcesses();
-        }
+        // НЕ приостанавливаем процессы - воркеры могут работать параллельно
+        // Это позволяет системе продолжать работу во время обновления кеша
+        // if (pauseAllProcesses) {
+        //     await pauseAllProcesses();
+        // }
 
         console.log('🔄 Starting FULL cache update in worker...');
         
@@ -405,10 +406,10 @@ export async function performFullCacheUpdate(context, force = false) {
         
         throw error;
     } finally {
-        // Возобновляем все процессы после завершения
-        if (resumeAllProcesses) {
-            await resumeAllProcesses();
-        }
+        // Процессы не были приостановлены, поэтому не нужно возобновлять
+        // if (resumeAllProcesses) {
+        //     await resumeAllProcesses();
+        // }
         
         // Сбрасываем флаг выполнения
         if (setFullCacheUpdateRunning) {

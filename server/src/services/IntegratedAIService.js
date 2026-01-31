@@ -599,8 +599,24 @@ class IntegratedAIService {
 
             // Отправляем сильные рекомендации в Telegram
             if (integratedRec.confidence > 0.8) {
+                // Загружаем информацию об инструменте из кеша
+                let ticker = null;
+                let name = null;
+                try {
+                    const CacheService = (await import('./CacheService.js')).default;
+                    const instrument = await CacheService.getInstrument(figi, true);
+                    if (instrument) {
+                        ticker = instrument.ticker;
+                        name = instrument.name;
+                    }
+                } catch (error) {
+                    // Игнорируем ошибки загрузки инструмента
+                }
+                
                 await OptimizedTelegramService.addStrongRecommendation({
                     figi,
+                    ticker,
+                    name,
                     recommendation: integratedRec.recommendation,
                     confidence: integratedRec.confidence,
                     score: integratedRec.score

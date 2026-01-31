@@ -444,8 +444,10 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
         if (!this.isInitialized || this.strongRecommendations.length === 0) return;
 
         try {
-            const message = this.formatStrongRecommendationsMessage();
-            await this.safeSendMessage(this.chatId, message, { parse_mode: 'HTML' });
+            const message = await this.formatStrongRecommendationsMessage();
+            if (message) {
+                await this.safeSendMessage(this.chatId, message, { parse_mode: 'HTML' });
+            }
             
             // Очищаем после отправки
             this.strongRecommendations = [];
@@ -454,18 +456,36 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
         }
     }
 
-    formatStrongRecommendationsMessage() {
+    async formatStrongRecommendationsMessage() {
         if (this.strongRecommendations.length === 0) return '';
 
         const buyRecommendations = this.strongRecommendations.filter(r => r.recommendation === 'BUY');
         const sellRecommendations = this.strongRecommendations.filter(r => r.recommendation === 'SELL');
+
+        // Загружаем информацию об инструментах из кеша
+        const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+        const allFigis = [...new Set(this.strongRecommendations.map(r => r.figi).filter(f => f))];
+        const instruments = await CachedInstrument.findAll({
+            where: { figi: allFigis },
+            attributes: ['figi', 'ticker', 'name']
+        });
+        
+        const instrumentMap = new Map();
+        instruments.forEach(instr => {
+            instrumentMap.set(instr.figi, {
+                ticker: instr.ticker,
+                name: instr.name
+            });
+        });
 
         let message = `🎯 <b>СИЛЬНЫЕ РЕКОМЕНДАЦИИ</b>\n\n`;
 
         if (buyRecommendations.length > 0) {
             message += `📈 <b>ПОКУПКИ (${buyRecommendations.length}):</b>\n`;
             buyRecommendations.slice(0, 5).forEach(rec => {
-                message += `• <b>${rec.figi}</b> - ${(rec.confidence * 100).toFixed(1)}% уверенности\n`;
+                const instrument = instrumentMap.get(rec.figi);
+                const displayName = rec.ticker || instrument?.ticker || rec.name || instrument?.name || rec.figi?.substring(0, 10) || 'Unknown';
+                message += `• <b>${displayName}</b> - ${(rec.confidence * 100).toFixed(1)}% уверенности\n`;
             });
             message += '\n';
         }
@@ -473,7 +493,9 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
         if (sellRecommendations.length > 0) {
             message += `📉 <b>ПРОДАЖИ (${sellRecommendations.length}):</b>\n`;
             sellRecommendations.slice(0, 5).forEach(rec => {
-                message += `• <b>${rec.figi}</b> - ${(rec.confidence * 100).toFixed(1)}% уверенности\n`;
+                const instrument = instrumentMap.get(rec.figi);
+                const displayName = rec.ticker || instrument?.ticker || rec.name || instrument?.name || rec.figi?.substring(0, 10) || 'Unknown';
+                message += `• <b>${displayName}</b> - ${(rec.confidence * 100).toFixed(1)}% уверенности\n`;
             });
             message += '\n';
         }

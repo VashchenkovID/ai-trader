@@ -733,6 +733,31 @@ class NewsAnalysisService {
 
         } catch (error) {
             console.error(`❌ Ошибка загрузки новостей для "${companyName}":`, error);
+            
+            // Для ошибок 500, 502, 503, 504 (внешние API недоступны или временные ошибки) возвращаем пустой массив
+            // вместо throw, чтобы не вызывать unhandledRejection
+            if (error.status === 500 || error.statusCode === 500 ||
+                error.status === 502 || error.statusCode === 502 || 
+                error.status === 503 || error.statusCode === 503 ||
+                error.status === 504 || error.statusCode === 504 ||
+                error.message?.includes('status: 500') ||
+                error.message?.includes('status: 502') ||
+                error.message?.includes('status: 503') ||
+                error.message?.includes('status: 504') ||
+                error.message?.includes('HTTP 500') ||
+                error.message?.includes('HTTP 502') ||
+                error.message?.includes('HTTP 503') ||
+                error.message?.includes('HTTP 504')) {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn(`⚠️ External News API error for "${companyName}": ${error.message}. Returning empty news.`, {
+                    service: 'NewsAnalysisService',
+                    operation: 'fetchNewsByCompanyNameAndPeriod',
+                    companyName,
+                    error: { message: error.message, stack: error.stack }
+                });
+                return [];
+            }
+            
             throw error;
         }
     }

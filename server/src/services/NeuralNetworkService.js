@@ -3039,6 +3039,8 @@ class NeuralNetworkService {
                 if (recommendation.prediction.score > 0.8) {
                     await OptimizedTelegramService.addStrongRecommendation({
                         figi: recommendation.instrument?.figi,
+                        ticker: recommendation.instrument?.ticker,
+                        name: recommendation.instrument?.name,
                         recommendation: 'BUY',
                         confidence: recommendation.prediction.score,
                         score: recommendation.prediction.score
@@ -3049,7 +3051,9 @@ class NeuralNetworkService {
             for (const recommendation of analysis.sellRecommendations || []) {
                 if (recommendation.prediction.score < 0.2) {
                     await OptimizedTelegramService.addStrongRecommendation({
-                        figi: recommendation.item?.figi,
+                        figi: recommendation.item?.figi || recommendation.instrument?.figi,
+                        ticker: recommendation.item?.ticker || recommendation.instrument?.ticker,
+                        name: recommendation.item?.name || recommendation.instrument?.name,
                         recommendation: 'SELL',
                         confidence: 1 - recommendation.prediction.score,
                         score: recommendation.prediction.score

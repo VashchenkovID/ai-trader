@@ -6,6 +6,8 @@ import { Op } from 'sequelize';
 /**
  * Сервис для быстрого обучения нейросетей
  * Обучает небольшие батчи инструментов каждые 2 часа
+ * Обучает все типы нейросетей: Базовая → Ансамбль → Мета-обучение → RL
+ * Использует оптимизированные параметры для скорости (меньше эпох, меньше данных)
  */
 class QuickTrainingService {
     constructor() {
@@ -126,24 +128,69 @@ class QuickTrainingService {
                 };
             }
 
+            // ПОСЛЕДОВАТЕЛЬНОЕ ОБУЧЕНИЕ ВСЕХ НЕЙРОСЕТЕЙ: Базовая → Ансамбль → Мета-обучение → RL
+            // Используем оптимизированные параметры для быстрого обучения
+            
             for (const instrument of instruments) {
+                let networksTrained = 0;
+                let networksFailed = 0;
+                
+                // Этап 1: Базовая нейросеть
                 try {
-
-                    // Быстрое обучение только базовой нейросети
-                    // Используем оптимизированные параметры: меньше эпох, меньше данных
-                    // Используем количество дней из настроек
                     await NeuralNetworkService.trainQuick(instrument.figi, {
                         epochs: 15, // Вместо стандартных 50-100
                         dataDays: trainingDays, // Используем настройку из БД
                         skipValidation: true // Пропускаем валидацию для скорости
                     });
-                    
-                    successCount++;
+                    networksTrained++;
                 } catch (error) {
-                    errorCount++;
-                    console.error(`❌ Quick training failed for ${instrument.ticker}:`, error.message);
-                    // Продолжаем обучение других инструментов
+                    networksFailed++;
+                    console.error(`❌ [Quick Base] Training failed for ${instrument.ticker}:`, error.message);
                 }
+                
+                // Этап 2: Ансамбль (с оптимизированными параметрами)
+                try {
+                    const EnsembleService = (await import('./EnsembleService.js')).default;
+                    await EnsembleService.trainEnsemble(instrument.figi, {
+                        days: trainingDays,
+                        epochs: 20 // Вместо стандартных 50
+                    });
+                    networksTrained++;
+                } catch (error) {
+                    networksFailed++;
+                    console.error(`❌ [Quick Ensemble] Training failed for ${instrument.ticker}:`, error.message);
+                }
+                
+                // Этап 3: Мета-обучение
+                try {
+                    const MetaLearningService = (await import('./MetaLearningService.js')).default;
+                    await MetaLearningService.train(instrument.figi, {
+                        days: trainingDays
+                    });
+                    networksTrained++;
+                } catch (error) {
+                    networksFailed++;
+                    console.error(`❌ [Quick Meta] Training failed for ${instrument.ticker}:`, error.message);
+                }
+                
+                // Этап 4: Обучение с подкреплением (с оптимизированными параметрами)
+                try {
+                    const ReinforcementLearningService = (await import('./ReinforcementLearningService.js')).default;
+                    await ReinforcementLearningService.train(instrument.figi, {
+                        days: trainingDays,
+                        episodes: 20 // Вместо стандартных 50
+                    });
+                    networksTrained++;
+                } catch (error) {
+                    networksFailed++;
+                    console.error(`❌ [Quick RL] Training failed for ${instrument.ticker}:`, error.message);
+                }
+                
+                // Считаем инструмент успешным, если хотя бы одна нейросеть обучилась
+                if (networksTrained > 0) {
+                    successCount++;
+                }
+                errorCount += networksFailed;
             }
 
             const executionTimeSeconds = (Date.now() - startTime) / 1000;
@@ -243,7 +290,7 @@ class QuickTrainingService {
             if (successful > 0) {
                 await OptimizedTelegramService.sendAlert(
                     'QUICK_TRAINING_COMPLETED',
-                    `⚡ <b>БЫСТРОЕ ОБУЧЕНИЕ ЗАВЕРШЕНО</b>\n\n📊 Результаты:\n• Успешно обучено: ${successful} инструментов\n• Ошибок: ${errors || 0}\n• Время выполнения: ${duration} секунд\n• Инструментов в очереди: ${totalInstruments}\n\n🧠 Нейросети обновлены и готовы к работе`,
+                    `⚡ <b>БЫСТРОЕ ОБУЧЕНИЕ ЗАВЕРШЕНО</b>\n\n📊 Результаты:\n• Успешно обучено: ${successful} инструментов\n• Ошибок: ${errors || 0}\n• Время выполнения: ${duration} секунд\n• Инструментов в очереди: ${totalInstruments}\n\n🧠 Обучены все типы нейросетей:\n• Базовая нейросеть\n• Ансамбль моделей\n• Мета-обучение\n• Обучение с подкреплением\n\n✅ Нейросети обновлены и готовы к работе`,
                     'success'
                 );
             }

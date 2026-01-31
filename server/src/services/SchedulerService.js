@@ -116,16 +116,18 @@ class SchedulerService {
     }
 
     async start() {
-        
-        // Загружаем время последнего обновления кеша, если оно еще не загружено
-        // Это гарантирует восстановление состояния после перезапуска сервиса
-        if (this.lastCacheUpdate === null || this.lastCacheUpdate === undefined) {
-            await this.loadLastCacheUpdateTime();
-        }
-        
         // Сохраняем время старта для предотвращения немедленного запуска задач
         // ВАЖНО: устанавливаем время старта ДО создания cron задач
         this.startTime = Date.now();
+        
+        // Загружаем время последнего обновления кеша, если оно еще не загружено
+        // Это гарантирует восстановление состояния после перезапуска сервиса
+        // Загружаем асинхронно, чтобы не блокировать создание cron задач
+        if (this.lastCacheUpdate === null || this.lastCacheUpdate === undefined) {
+            this.loadLastCacheUpdateTime().catch(error => {
+                console.error('Error loading last cache update time:', error);
+            });
+        }
 
         // Получаем настройки планировщика
         const schedulerSettings = await SettingsService.getSchedulerSettings();
@@ -286,8 +288,9 @@ class SchedulerService {
             }
         );
 
-        // Задача 4: Быстрое обучение нейросети (если включено)
+        // Задача 4: Быстрое обучение всех нейросетей (если включено)
         // Расписание: каждые 2 часа (08:00, 10:00, 12:00, 14:00, 16:00, 18:00) или из настроек
+        // Обучает: Базовая → Ансамбль → Мета-обучение → RL (с оптимизированными параметрами)
         if (quickTrainingEnabled) {
             this.quickTrainingTask = SchedulerUtils.createScheduledTask(
                 quickTrainingSchedule,
@@ -3312,7 +3315,17 @@ class SchedulerService {
             };
         } catch (error) {
             console.error('❌ Error during limited news update:', error);
-            throw error;
+            
+            // Не пробрасываем ошибку для некритичных операций с новостями
+            // Возвращаем результат с информацией об ошибке
+            return {
+                success: false,
+                updated: 0,
+                totalNews: 0,
+                nextIndex: 0,
+                error: error.message,
+                message: `News update failed: ${error.message}`
+            };
         }
     }
 

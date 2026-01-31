@@ -376,14 +376,34 @@ process.on('unhandledRejection', (reason, promise) => {
                        errorMessage.includes('ENOTFOUND') ||
                        errorMessage.includes('EACCES') && errorMessage.includes('database');
     
-    // Некритичные ошибки - новости, BERT модель, анализ тональности
+    // Некритичные ошибки - новости, BERT модель, анализ тональности, HTTP ошибки внешних API, макро-данные
     const isNonCritical = errorMessage.includes('news') ||
+                          errorMessage.includes('NewsAPI') ||
+                          errorMessage.includes('NewsApiService') ||
                           errorMessage.includes('sentiment') ||
                           errorMessage.includes('BERT') ||
                           errorMessage.includes('transformers') ||
                           errorMessage.includes('NewsAnalysis') ||
                           errorMessage.includes('loadFreshNews') ||
                           errorMessage.includes('performDailyNewsUpdate') ||
+                          errorMessage.includes('performLimitedNewsUpdate') ||
+                          errorMessage.includes('fetchNewsByCompanyName') ||
+                          errorMessage.includes('MacroData') ||
+                          errorMessage.includes('MacroDataService') ||
+                          errorMessage.includes('performMacroDataUpdate') ||
+                          errorMessage.includes('HTTP error! status: 500') ||
+                          errorMessage.includes('HTTP error! status: 502') ||
+                          errorMessage.includes('HTTP error! status: 503') ||
+                          errorMessage.includes('HTTP error! status: 504') ||
+                          errorMessage.includes('status: 500') ||
+                          errorMessage.includes('status: 502') ||
+                          errorMessage.includes('status: 503') ||
+                          errorMessage.includes('status: 504') ||
+                          errorMessage.includes('HTTP 500') ||
+                          errorMessage.includes('HTTP 502') ||
+                          errorMessage.includes('HTTP 503') ||
+                          errorMessage.includes('HTTP 504') ||
+                          (reason instanceof Error && (reason.status === 500 || reason.statusCode === 500 || reason.status === 502 || reason.statusCode === 502 || reason.status === 503 || reason.statusCode === 503 || reason.status === 504 || reason.statusCode === 504)) ||
                           errorName === 'TypeError' && errorMessage.includes('model');
     
     if (isCritical && !isNonCritical) {
