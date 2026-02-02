@@ -337,11 +337,18 @@ process.on('uncaughtException', (error) => {
     const errorName = error.name || '';
     
     // Не перезапускаем сервер для некритичных ошибок
+    // ONNX Runtime ошибки могут вызывать segmentation fault (код 139), но мы их обрабатываем как некритичные
     const isONNXError = errorMessage.includes('Ort::Exception') ||
                        errorMessage.includes('onnxruntime') ||
                        errorMessage.includes('transformers') ||
                        errorMessage.includes('BERT') ||
-                       error.name === 'Ort::Exception';
+                       errorMessage.includes('tensorflow') ||
+                       errorMessage.includes('TensorFlow') ||
+                       errorMessage.includes('model.predict') ||
+                       errorMessage.includes('predict') && errorMessage.includes('model') ||
+                       error.name === 'Ort::Exception' ||
+                       error.stack?.includes('onnxruntime') ||
+                       error.stack?.includes('tensorflow');
     
     // Ошибки новостей - некритичные, не перезапускаем сервер
     const isNewsError = errorMessage.includes('news') ||
@@ -420,7 +427,7 @@ process.on('unhandledRejection', (reason, promise) => {
                        errorMessage.includes('ENOTFOUND') ||
                        errorMessage.includes('EACCES') && errorMessage.includes('database');
     
-    // Некритичные ошибки - новости, BERT модель, анализ тональности, HTTP ошибки внешних API, макро-данные
+    // Некритичные ошибки - новости, BERT модель, анализ тональности, HTTP ошибки внешних API, макро-данные, ONNX/TensorFlow
     const isNonCritical = errorMessage.includes('news') ||
                           errorMessage.includes('NewsAPI') ||
                           errorMessage.includes('NewsApiService') ||
@@ -447,8 +454,15 @@ process.on('unhandledRejection', (reason, promise) => {
                           errorMessage.includes('HTTP 502') ||
                           errorMessage.includes('HTTP 503') ||
                           errorMessage.includes('HTTP 504') ||
+                          errorMessage.includes('Ort::Exception') ||
+                          errorMessage.includes('onnxruntime') ||
+                          errorMessage.includes('tensorflow') ||
+                          errorMessage.includes('TensorFlow') ||
+                          errorMessage.includes('model.predict') ||
+                          (errorMessage.includes('predict') && errorMessage.includes('model')) ||
                           (reason instanceof Error && (reason.status === 500 || reason.statusCode === 500 || reason.status === 502 || reason.statusCode === 502 || reason.status === 503 || reason.statusCode === 503 || reason.status === 504 || reason.statusCode === 504)) ||
-                          errorName === 'TypeError' && errorMessage.includes('model');
+                          errorName === 'TypeError' && errorMessage.includes('model') ||
+                          (reason instanceof Error && (reason.stack?.includes('onnxruntime') || reason.stack?.includes('tensorflow')));
     
     if (isCritical && !isNonCritical) {
         gracefulShutdown('unhandledRejection').catch(() => {

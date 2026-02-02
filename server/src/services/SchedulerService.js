@@ -2187,7 +2187,7 @@ class SchedulerService {
         
         // Отправляем уведомление о старте быстрого обучения
         try {
-            await OptimizedTelegramService.sendAlert(
+                await OptimizedTelegramService.sendAlert(
                 'QUICK_TRAINING_START',
                 `🚀 <b>Запущено быстрое обучение нейросетей</b>\n\n` +
                 `⏰ Время: ${new Date().toLocaleString('ru-RU')}\n` +
@@ -2196,8 +2196,8 @@ class SchedulerService {
             );
         } catch (telegramError) {
             console.warn('⚠️ Failed to send Telegram notification about quick training start:', telegramError.message);
-        }
-        
+            }
+
         try {
             // Используем QuickTrainingService, который обрабатывает только батч инструментов
             // Это предотвращает блокировку других воркеров на долгое время
@@ -3371,22 +3371,22 @@ class SchedulerService {
                     // Обрабатываем callback безопасно, чтобы не было необработанных промисов
                     try {
                         const logResult = LoggerService.info(`News update progress: ${progress.current}/${progress.total} - ${progress.ticker || progress.figi}`, {
-                            service: 'SchedulerService',
-                            operation: 'performDailyNewsUpdate',
-                            progress: {
-                                current: progress.current,
-                                total: progress.total,
-                                ticker: progress.ticker,
-                                figi: progress.figi,
-                                success: progress.success,
-                                count: progress.count
-                            }
+                        service: 'SchedulerService',
+                        operation: 'performDailyNewsUpdate',
+                        progress: {
+                            current: progress.current,
+                            total: progress.total,
+                            ticker: progress.ticker,
+                            figi: progress.figi,
+                            success: progress.success,
+                            count: progress.count
+                        }
                         });
                         // Если LoggerService.info возвращает промис, обрабатываем его
                         if (logResult && typeof logResult.catch === 'function') {
                             logResult.catch(err => {
                                 console.warn('⚠️ Error in onProgress logger:', err.message);
-                            });
+                    });
                         }
                     } catch (err) {
                         // Игнорируем ошибки в callback, чтобы не прерывать процесс
@@ -3421,14 +3421,14 @@ class SchedulerService {
             // Отправляем уведомление через Telegram (безопасно, чтобы не прерывать процесс)
             if (result.updated > 0) {
                 try {
-                    await OptimizedTelegramService.sendAlert(
-                        'NEWS_DAILY_UPDATE',
-                        `📰 Ежедневное обновление новостей завершено\n\n` +
-                        `Обновлено: ${result.updated} инструментов\n` +
-                        `Загружено новостей: ${result.totalNews}\n` +
-                        `Ошибок: ${result.errorCount || 0}`,
-                        'info'
-                    );
+                await OptimizedTelegramService.sendAlert(
+                    'NEWS_DAILY_UPDATE',
+                    `📰 Ежедневное обновление новостей завершено\n\n` +
+                    `Обновлено: ${result.updated} инструментов\n` +
+                    `Загружено новостей: ${result.totalNews}\n` +
+                    `Ошибок: ${result.errorCount || 0}`,
+                    'info'
+                );
                 } catch (telegramError) {
                     // Логируем ошибку, но не прерываем процесс
                     LoggerService.warn('Failed to send Telegram notification for news update', {
