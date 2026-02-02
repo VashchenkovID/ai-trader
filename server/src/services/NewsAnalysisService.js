@@ -11,13 +11,28 @@ class NewsAnalysisService {
         this.cacheTimeout = 30 * 60 * 1000; // 30 минут
         this.sentimentModel = null; // BERT модель для анализа тональности
         this.modelLoading = false; // Флаг загрузки модели
+        this.sentimentModelDisabled = false; // Флаг отключения модели при ошибках ONNX
     }
 
     async initialize() {
         try {
             this.isInitialized = true;
         } catch (error) {
-            console.error('❌ Error initializing NewsAnalysisService:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Error initializing NewsAnalysisService', {
+                    service: 'NewsAnalysisService',
+                    operation: 'initialize',
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Error initializing NewsAnalysisService:', error);
+            }
         }
     }
 
@@ -28,7 +43,7 @@ class NewsAnalysisService {
      */
     async loadSentimentModel() {
         // Проверяем, не отключен ли анализ тональности
-        if (process.env.DISABLE_SENTIMENT_ANALYSIS === 'true') {
+        if (process.env.DISABLE_SENTIMENT_ANALYSIS === 'true' || this.sentimentModelDisabled) {
             return null;
         }
         
@@ -86,9 +101,28 @@ class NewsAnalysisService {
                         // Если это ONNX ошибка, прекращаем попытки и отключаем анализ тональности
                         if (errorMsg.includes('Ort::Exception') || 
                             errorMsg.includes('onnxruntime') ||
-                            errorMsg.includes('No error information')) {
-                            console.warn('⚠️ ONNX Runtime error detected, disabling sentiment analysis');
+                            errorMsg.includes('No error information') ||
+                            errorMsg.includes('segmentation') ||
+                            errorMsg.includes('SIGSEGV')) {
+                            try {
+                                const LoggerService = (await import('./LoggerService.js')).default;
+                                LoggerService.warn('ONNX Runtime error detected, disabling sentiment analysis', {
+                                    service: 'NewsAnalysisService',
+                                    operation: 'loadSentimentModel',
+                                    modelName,
+                                    error: {
+                                        message: error.message,
+                                        stack: error.stack,
+                                        name: error.name,
+                                        code: error.code,
+                                        errorMsg
+                                    }
+                                });
+                            } catch (logError) {
+                                console.warn('⚠️ ONNX Runtime error detected, disabling sentiment analysis');
+                            }
                             this.sentimentModel = null;
+                            this.sentimentModelDisabled = true;
                             this.modelLoading = false;
                             return null;
                         }
@@ -102,9 +136,26 @@ class NewsAnalysisService {
             } catch (importError) {
                 // Если импорт @xenova/transformers вызывает ошибку, отключаем анализ тональности
                 if (importError.message && (importError.message.includes('Ort::Exception') || 
-                    importError.message.includes('onnxruntime'))) {
-                    console.warn('⚠️ ONNX Runtime error, sentiment analysis disabled');
+                    importError.message.includes('onnxruntime') ||
+                    importError.message.includes('segmentation') ||
+                    importError.message.includes('SIGSEGV'))) {
+                    try {
+                        const LoggerService = (await import('./LoggerService.js')).default;
+                        LoggerService.warn('ONNX Runtime error, sentiment analysis disabled', {
+                            service: 'NewsAnalysisService',
+                            operation: 'loadSentimentModel',
+                            error: {
+                                message: importError.message,
+                                stack: importError.stack,
+                                name: importError.name,
+                                code: importError.code
+                            }
+                        });
+                    } catch (logError) {
+                        console.warn('⚠️ ONNX Runtime error, sentiment analysis disabled');
+                    }
                     this.sentimentModel = null;
+                    this.sentimentModelDisabled = true;
                     this.modelLoading = false;
                     return null;
                 }
@@ -116,7 +167,21 @@ class NewsAnalysisService {
 
         } catch (error) {
             this.modelLoading = false;
-            console.error('❌ Ошибка загрузки BERT модели для анализа тональности:', error.message);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка загрузки BERT модели для анализа тональности', {
+                    service: 'NewsAnalysisService',
+                    operation: 'loadSentimentModel',
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка загрузки BERT модели для анализа тональности:', error.message);
+            }
             this.sentimentModel = null;
             return null;
         }
@@ -174,6 +239,14 @@ class NewsAnalysisService {
                 return 0;
             }
 
+            // Если модель отключена из-за ошибок ONNX, сразу используем fallback
+            if (this.sentimentModelDisabled) {
+                if (useFallback) {
+                    return this.analyzeSentimentFallback(text);
+                }
+                return 0;
+            }
+
             const model = await this.loadSentimentModel();
             
             if (model) {
@@ -184,10 +257,11 @@ class NewsAnalysisService {
                         : text;
 
                     // Обертка для защиты от segmentation fault в нативных модулях
+                    // Уменьшаем таймаут до 5 секунд для быстрого fallback
                     const result = await Promise.race([
                         model(truncatedText),
                         new Promise((_, reject) => 
-                            setTimeout(() => reject(new Error('BERT model timeout')), 10000)
+                            setTimeout(() => reject(new Error('BERT model timeout')), 5000)
                         )
                     ]);
                     const prediction = Array.isArray(result) ? result[0] : result;
@@ -223,6 +297,30 @@ class NewsAnalysisService {
                     return 0;
 
                 } catch (modelError) {
+                    const errorMsg = modelError.message || String(modelError);
+                    // Если это ONNX ошибка, отключаем модель и используем fallback
+                    if (errorMsg.includes('Ort::Exception') || 
+                        errorMsg.includes('onnxruntime') ||
+                        errorMsg.includes('segmentation') ||
+                        errorMsg.includes('SIGSEGV')) {
+                        try {
+                            const LoggerService = (await import('./LoggerService.js')).default;
+                            LoggerService.error('ONNX Runtime error detected in analyzeSentiment, disabling model', {
+                                service: 'NewsAnalysisService',
+                                operation: 'analyzeSentiment',
+                                error: {
+                                    message: modelError.message,
+                                    stack: modelError.stack,
+                                    name: modelError.name,
+                                    code: modelError.code,
+                                    errorMsg
+                                }
+                            });
+                        } catch (logError) {
+                            console.warn('⚠️ ONNX Runtime error detected in analyzeSentiment, disabling model');
+                        }
+                        this.sentimentModelDisabled = true;
+                    }
                     if (useFallback) {
                         return this.analyzeSentimentFallback(text);
                     }
@@ -236,7 +334,21 @@ class NewsAnalysisService {
             }
 
         } catch (error) {
-            console.error('❌ Ошибка анализа тональности:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка анализа тональности', {
+                    service: 'NewsAnalysisService',
+                    operation: 'analyzeSentiment',
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка анализа тональности:', error);
+            }
             if (useFallback) {
                 return this.analyzeSentimentFallback(text);
             }
@@ -304,7 +416,21 @@ class NewsAnalysisService {
                 .slice(0, limit);
                 
         } catch (error) {
-            console.error('❌ Error getting portfolio news:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Error getting portfolio news', {
+                    service: 'NewsAnalysisService',
+                    operation: 'getPortfolioNews',
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Error getting portfolio news:', error);
+            }
             return [];
         }
     }
@@ -317,7 +443,22 @@ class NewsAnalysisService {
             const cachedNews = await this.getCachedNews(figi, options.days || 7, options.limit || 10);
             return cachedNews || [];
         } catch (error) {
-            console.error('❌ Error getting news by FIGI:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Error getting news by FIGI', {
+                    service: 'NewsAnalysisService',
+                    operation: 'getNewsByFigi',
+                    figi,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Error getting news by FIGI:', error);
+            }
             return [];
         }
     }
@@ -342,7 +483,23 @@ class NewsAnalysisService {
             
             return impact;
         } catch (error) {
-            console.error('❌ Error analyzing news impact:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Error analyzing news impact', {
+                    service: 'NewsAnalysisService',
+                    operation: 'analyzeNewsImpact',
+                    figi,
+                    days,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Error analyzing news impact:', error);
+            }
             return {
                 totalNews: 0,
                 positiveNews: 0,
@@ -415,7 +572,24 @@ class NewsAnalysisService {
             });
 
         } catch (error) {
-            console.error('❌ Ошибка получения кешированных новостей:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка получения кешированных новостей', {
+                    service: 'NewsAnalysisService',
+                    operation: 'getCachedNews',
+                    figi,
+                    days,
+                    limit,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка получения кешированных новостей:', error);
+            }
             return [];
         }
     }
@@ -453,7 +627,22 @@ class NewsAnalysisService {
             };
 
         } catch (error) {
-            console.error('❌ Ошибка получения последней даты новостей:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка получения последней даты новостей', {
+                    service: 'NewsAnalysisService',
+                    operation: 'getLastNewsDate',
+                    figi,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка получения последней даты новостей:', error);
+            }
             return {
                 date: null,
                 figi: figi || null,
@@ -485,7 +674,22 @@ class NewsAnalysisService {
             return newsCount > 0;
 
         } catch (error) {
-            console.error(`❌ Ошибка проверки новостей за месяц для ${figi}:`, error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка проверки новостей за месяц', {
+                    service: 'NewsAnalysisService',
+                    operation: 'hasNewsForMonth',
+                    figi,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error(`❌ Ошибка проверки новостей за месяц для ${figi}:`, error);
+            }
             return false;
         }
     }
@@ -521,7 +725,21 @@ class NewsAnalysisService {
             return figisWithoutNews;
 
         } catch (error) {
-            console.error('❌ Ошибка получения списка FIGI без новостей:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка получения списка FIGI без новостей', {
+                    service: 'NewsAnalysisService',
+                    operation: 'getFigisWithoutMonthNews',
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка получения списка FIGI без новостей:', error);
+            }
             throw error;
         }
     }
@@ -568,7 +786,22 @@ class NewsAnalysisService {
             return status;
 
         } catch (error) {
-            console.error('❌ Ошибка проверки статуса исторических новостей:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка проверки статуса исторических новостей', {
+                    service: 'NewsAnalysisService',
+                    operation: 'checkHistoricalNewsStatus',
+                    year,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка проверки статуса исторических новостей:', error);
+            }
             throw error;
         }
     }
@@ -704,7 +937,15 @@ class NewsAnalysisService {
                             }
                         }
 
-                        const sentiment = await this.analyzeSentiment(newsTitle + ' ' + newsText);
+                        // Безопасный вызов analyzeSentiment с обработкой ошибок
+                        let sentiment = 0;
+                        try {
+                            sentiment = await this.analyzeSentiment(newsTitle + ' ' + newsText);
+                        } catch (sentimentError) {
+                            // Игнорируем ошибки анализа тональности, используем нейтральное значение
+                            console.warn(`⚠️ Sentiment analysis error for article: ${sentimentError.message}`);
+                            sentiment = 0;
+                        }
 
                         return {
                             title: newsTitle,
@@ -720,7 +961,23 @@ class NewsAnalysisService {
                             language: 'ru'
                         };
                     } catch (articleError) {
-                        console.warn(`⚠️ Ошибка обработки статьи:`, articleError.message);
+                        try {
+                            const LoggerService = (await import('./LoggerService.js')).default;
+                            LoggerService.warn('Ошибка обработки статьи', {
+                                service: 'NewsAnalysisService',
+                                operation: 'fetchNewsByCompanyNameAndPeriod',
+                                companyName,
+                                articleTitle: article.title || 'unknown',
+                                error: {
+                                    message: articleError.message,
+                                    stack: articleError.stack,
+                                    name: articleError.name,
+                                    code: articleError.code
+                                }
+                            });
+                        } catch (logError) {
+                            console.warn(`⚠️ Ошибка обработки статьи:`, articleError.message);
+                        }
                         return null;
                     }
                 });
@@ -732,7 +989,26 @@ class NewsAnalysisService {
             return processedNews;
 
         } catch (error) {
-            console.error(`❌ Ошибка загрузки новостей для "${companyName}":`, error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка загрузки новостей для компании', {
+                    service: 'NewsAnalysisService',
+                    operation: 'fetchNewsByCompanyNameAndPeriod',
+                    companyName,
+                    fromDate,
+                    toDate,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code,
+                        status: error.status,
+                        statusCode: error.statusCode
+                    }
+                });
+            } catch (logError) {
+                console.error(`❌ Ошибка загрузки новостей для "${companyName}":`, error);
+            }
             
             // Для ошибок 500, 502, 503, 504 (внешние API недоступны или временные ошибки) возвращаем пустой массив
             // вместо throw, чтобы не вызывать unhandledRejection
@@ -888,7 +1164,15 @@ class NewsAnalysisService {
                             }
                         }
 
-                        const sentiment = await this.analyzeSentiment(newsTitle + ' ' + newsText);
+                        // Безопасный вызов analyzeSentiment с обработкой ошибок
+                        let sentiment = 0;
+                        try {
+                            sentiment = await this.analyzeSentiment(newsTitle + ' ' + newsText);
+                        } catch (sentimentError) {
+                            // Игнорируем ошибки анализа тональности, используем нейтральное значение
+                            console.warn(`⚠️ Sentiment analysis error for article: ${sentimentError.message}`);
+                            sentiment = 0;
+                        }
 
                         return {
                             title: newsTitle,
@@ -903,7 +1187,23 @@ class NewsAnalysisService {
                             impact: this.calculateImpact({ title: newsTitle, description: newsText })
                         };
                     } catch (articleError) {
-                        console.error(`❌ Ошибка обработки статьи:`, articleError.message);
+                        try {
+                            const LoggerService = (await import('./LoggerService.js')).default;
+                            LoggerService.error('Ошибка обработки статьи', {
+                                service: 'NewsAnalysisService',
+                                operation: 'fetchNewsFromNewsApiByTicker',
+                                ticker,
+                                articleTitle: article.title || 'unknown',
+                                error: {
+                                    message: articleError.message,
+                                    stack: articleError.stack,
+                                    name: articleError.name,
+                                    code: articleError.code
+                                }
+                            });
+                        } catch (logError) {
+                            console.error(`❌ Ошибка обработки статьи:`, articleError.message);
+                        }
                         return null;
                     }
                 });
@@ -915,7 +1215,23 @@ class NewsAnalysisService {
                 try {
                     await this.cacheNews(instrument.figi, processedNews);
                 } catch (cacheError) {
-                    console.error(`❌ Ошибка сохранения новостей в БД для ${ticker}:`, cacheError.message);
+                    try {
+                        const LoggerService = (await import('./LoggerService.js')).default;
+                        LoggerService.error('Ошибка сохранения новостей в БД', {
+                            service: 'NewsAnalysisService',
+                            operation: 'fetchNewsFromNewsApiByTicker',
+                            ticker,
+                            figi: instrument.figi,
+                            error: {
+                                message: cacheError.message,
+                                stack: cacheError.stack,
+                                name: cacheError.name,
+                                code: cacheError.code
+                            }
+                        });
+                    } catch (logError) {
+                        console.error(`❌ Ошибка сохранения новостей в БД для ${ticker}:`, cacheError.message);
+                    }
                 }
             }
 
@@ -930,7 +1246,22 @@ class NewsAnalysisService {
             };
 
         } catch (error) {
-            console.error(`❌ Ошибка загрузки новостей для ${ticker}:`, error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка загрузки новостей для тикера', {
+                    service: 'NewsAnalysisService',
+                    operation: 'fetchNewsFromNewsApiByTicker',
+                    ticker,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error(`❌ Ошибка загрузки новостей для ${ticker}:`, error);
+            }
             
             if (error.message && (error.message.includes('too far in the past') || error.message.includes('Минимальная доступная дата'))) {
                 const friendlyMessage = `NewsAPI.org: Запрошенный период слишком далеко в прошлом. Используйте период не более 30 дней назад. ${error.message}`;
@@ -1024,7 +1355,23 @@ class NewsAnalysisService {
                     savedCount += newsToCache.length;
                 } catch (batchError) {
                     errorCount += batch.length;
-                    console.error(`❌ Ошибка сохранения батча новостей (${batch.length} шт.):`, batchError.message);
+                    try {
+                        const LoggerService = (await import('./LoggerService.js')).default;
+                        LoggerService.error('Ошибка сохранения батча новостей', {
+                            service: 'NewsAnalysisService',
+                            operation: 'cacheNews',
+                            figi,
+                            batchSize: batch.length,
+                            error: {
+                                message: batchError.message,
+                                stack: batchError.stack,
+                                name: batchError.name,
+                                code: batchError.code
+                            }
+                        });
+                    } catch (logError) {
+                        console.error(`❌ Ошибка сохранения батча новостей (${batch.length} шт.):`, batchError.message);
+                    }
                     
                     for (const article of batch) {
                         try {
@@ -1073,14 +1420,46 @@ class NewsAnalysisService {
                             savedCount++;
                             errorCount--;
                         } catch (itemError) {
-                            console.error(`❌ Ошибка сохранения отдельной новости:`, itemError.message);
+                            try {
+                                const LoggerService = (await import('./LoggerService.js')).default;
+                                LoggerService.error('Ошибка сохранения отдельной новости', {
+                                    service: 'NewsAnalysisService',
+                                    operation: 'cacheNews',
+                                    figi,
+                                    articleTitle: article.title || 'unknown',
+                                    error: {
+                                        message: itemError.message,
+                                        stack: itemError.stack,
+                                        name: itemError.name,
+                                        code: itemError.code
+                                    }
+                                });
+                            } catch (logError) {
+                                console.error(`❌ Ошибка сохранения отдельной новости:`, itemError.message);
+                            }
                         }
                     }
                 }
             }
 
         } catch (error) {
-            console.error('❌ Ошибка кеширования новостей:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка кеширования новостей', {
+                    service: 'NewsAnalysisService',
+                    operation: 'cacheNews',
+                    figi,
+                    newsCount: news?.length || 0,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка кеширования новостей:', error);
+            }
             throw error;
         }
     }
@@ -1102,7 +1481,21 @@ class NewsAnalysisService {
             return oldestNews ? oldestNews.publishedAt : null;
 
         } catch (error) {
-            console.error('❌ Ошибка получения самой старой новости:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка получения самой старой новости', {
+                    service: 'NewsAnalysisService',
+                    operation: 'getOldestNewsDate',
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка получения самой старой новости:', error);
+            }
             return null;
         }
     }
@@ -1156,7 +1549,21 @@ class NewsAnalysisService {
             }
 
         } catch (error) {
-            console.error('❌ Ошибка очистки кеша новостей:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка очистки кеша новостей', {
+                    service: 'NewsAnalysisService',
+                    operation: 'cleanExpiredNews',
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка очистки кеша новостей:', error);
+            }
             throw error;
         }
     }
@@ -1180,7 +1587,23 @@ class NewsAnalysisService {
             return newsByFigi;
 
         } catch (error) {
-            console.error(`❌ Ошибка загрузки новостей за год:`, error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка загрузки новостей за год', {
+                    service: 'NewsAnalysisService',
+                    operation: 'fetchNewsForYear',
+                    year,
+                    figisCount: figis?.length || 0,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error(`❌ Ошибка загрузки новостей за год:`, error);
+            }
             throw error;
         }
     }
@@ -1273,7 +1696,24 @@ class NewsAnalysisService {
 
                 } catch (error) {
                     errorCount++;
-                    console.error(`❌ Ошибка загрузки новостей для батча ${batchIndex + 1}:`, error.message);
+                    try {
+                        const LoggerService = (await import('./LoggerService.js')).default;
+                        LoggerService.error('Ошибка загрузки новостей для батча', {
+                            service: 'NewsAnalysisService',
+                            operation: 'loadHistoricalNewsForAllInstruments',
+                            batchIndex: batchIndex + 1,
+                            batchSize: batch.length,
+                            year,
+                            error: {
+                                message: error.message,
+                                stack: error.stack,
+                                name: error.name,
+                                code: error.code
+                            }
+                        });
+                    } catch (logError) {
+                        console.error(`❌ Ошибка загрузки новостей для батча ${batchIndex + 1}:`, error.message);
+                    }
                     
                     for (const figi of batch) {
                         results.push({ figi, success: false, error: error.message });
@@ -1300,7 +1740,22 @@ class NewsAnalysisService {
             };
 
         } catch (error) {
-            console.error('❌ Ошибка загрузки исторических новостей:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка загрузки исторических новостей', {
+                    service: 'NewsAnalysisService',
+                    operation: 'loadHistoricalNewsForAllInstruments',
+                    year: options.year,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка загрузки исторических новостей:', error);
+            }
             throw error;
         }
     }
@@ -1339,7 +1794,22 @@ class NewsAnalysisService {
             };
 
         } catch (error) {
-            console.error('❌ Ошибка проверки актуальности новостей:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка проверки актуальности новостей', {
+                    service: 'NewsAnalysisService',
+                    operation: 'checkNewsFreshness',
+                    figi,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка проверки актуальности новостей:', error);
+            }
             return {
                 hasFreshNews: false,
                 lastNewsDate: null,
@@ -1375,7 +1845,21 @@ class NewsAnalysisService {
             return freshnessResults;
 
         } catch (error) {
-            console.error('❌ Ошибка проверки актуальности новостей для всех инструментов:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка проверки актуальности новостей для всех инструментов', {
+                    service: 'NewsAnalysisService',
+                    operation: 'checkAllInstrumentsFreshness',
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка проверки актуальности новостей для всех инструментов:', error);
+            }
             return [];
         }
     }
@@ -1491,7 +1975,23 @@ class NewsAnalysisService {
                     await new Promise(resolve => setTimeout(resolve, 1000));
 
                 } catch (error) {
-                    console.error(`❌ Ошибка загрузки новостей для ${item.figi}:`, error.message);
+                    try {
+                        const LoggerService = (await import('./LoggerService.js')).default;
+                        LoggerService.error('Ошибка загрузки новостей для FIGI', {
+                            service: 'NewsAnalysisService',
+                            operation: 'initializeNewsData',
+                            figi: item.figi,
+                            ticker: item.ticker,
+                            error: {
+                                message: error.message,
+                                stack: error.stack,
+                                name: error.name,
+                                code: error.code
+                            }
+                        });
+                    } catch (logError) {
+                        console.error(`❌ Ошибка загрузки новостей для ${item.figi}:`, error.message);
+                    }
                     
                     // Если это ошибка лимита API, останавливаемся
                     if (error.message && (error.message.includes('rate limit') || error.message.includes('limit'))) {
@@ -1521,7 +2021,22 @@ class NewsAnalysisService {
             };
 
         } catch (error) {
-            console.error('❌ Ошибка инициализации данных новостей:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка инициализации данных новостей', {
+                    service: 'NewsAnalysisService',
+                    operation: 'initializeNewsData',
+                    maxRequestsPerDay: options.maxRequestsPerDay,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка инициализации данных новостей:', error);
+            }
             throw error;
         }
     }
@@ -2119,7 +2634,23 @@ class NewsAnalysisService {
                     .map(([category, data]) => ({ category, ...data }))
             };
         } catch (error) {
-            console.error('❌ Ошибка анализа feature importance новостей:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка анализа feature importance новостей', {
+                    service: 'NewsAnalysisService',
+                    operation: 'analyzeNewsFeatureImportance',
+                    figi,
+                    days,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка анализа feature importance новостей:', error);
+            }
             return {
                 featureImportance: {},
                 historicalImpact: {},
@@ -2175,7 +2706,24 @@ class NewsAnalysisService {
 
             return news.slice(0, limit);
         } catch (error) {
-            console.error('❌ Ошибка получения расширенных новостей:', error);
+            try {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Ошибка получения расширенных новостей', {
+                    service: 'NewsAnalysisService',
+                    operation: 'getEnhancedNews',
+                    figi,
+                    days,
+                    limit,
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    }
+                });
+            } catch (logError) {
+                console.error('❌ Ошибка получения расширенных новостей:', error);
+            }
             return [];
         }
     }

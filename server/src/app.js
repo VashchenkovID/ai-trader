@@ -346,9 +346,14 @@ process.on('uncaughtException', (error) => {
                        errorMessage.includes('TensorFlow') ||
                        errorMessage.includes('model.predict') ||
                        errorMessage.includes('predict') && errorMessage.includes('model') ||
+                       errorMessage.includes('segmentation') ||
+                       errorMessage.includes('SIGSEGV') ||
+                       errorMessage.includes('SIGABRT') ||
                        error.name === 'Ort::Exception' ||
                        error.stack?.includes('onnxruntime') ||
-                       error.stack?.includes('tensorflow');
+                       error.stack?.includes('tensorflow') ||
+                       error.stack?.includes('transformers') ||
+                       error.stack?.includes('@xenova');
     
     // Ошибки новостей - некритичные, не перезапускаем сервер
     const isNewsError = errorMessage.includes('news') ||
@@ -459,10 +464,13 @@ process.on('unhandledRejection', (reason, promise) => {
                           errorMessage.includes('tensorflow') ||
                           errorMessage.includes('TensorFlow') ||
                           errorMessage.includes('model.predict') ||
+                          errorMessage.includes('segmentation') ||
+                          errorMessage.includes('SIGSEGV') ||
+                          errorMessage.includes('SIGABRT') ||
                           (errorMessage.includes('predict') && errorMessage.includes('model')) ||
                           (reason instanceof Error && (reason.status === 500 || reason.statusCode === 500 || reason.status === 502 || reason.statusCode === 502 || reason.status === 503 || reason.statusCode === 503 || reason.status === 504 || reason.statusCode === 504)) ||
                           errorName === 'TypeError' && errorMessage.includes('model') ||
-                          (reason instanceof Error && (reason.stack?.includes('onnxruntime') || reason.stack?.includes('tensorflow')));
+                          (reason instanceof Error && (reason.stack?.includes('onnxruntime') || reason.stack?.includes('tensorflow') || reason.stack?.includes('transformers') || reason.stack?.includes('@xenova')));
     
     if (isCritical && !isNonCritical) {
         gracefulShutdown('unhandledRejection').catch(() => {
