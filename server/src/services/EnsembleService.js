@@ -415,14 +415,13 @@ class EnsembleService {
             
             // Адаптивная проверка данных
             // Минимальные требования для каждой модели:
-            // - LSTM: минимум 24 + 1 = 25 свечей (окно 24 часа)
-            // - CNN: минимум 30 + 1 = 31 свечей (окно 30 дней)
-            // - LSTM: минимум 24 (windowSize) + 2 = 26 свечей (окно 24 дня + 1 для лейбла + 1 для второго образца)
-            // - CNN: минимум 30 (windowSize) + 2 = 32 свечи
-            // - Transformer: минимум 84 + 2 = 86 свечей (окно 84 дня + 1 для лейбла + 1 для второго образца)
-            const minRequired = 26; // Минимум для LSTM (24 + 2)
-            const minForCNN = 32; // Минимум для CNN (30 + 2)
-            const minForTransformer = 86; // Минимум для Transformer (84 + 2)
+            // - LSTM: минимум 24 (windowSize) + 3 = 27 свечей (окно 24 дня + 1 для лейбла + 2 для минимум 2 образцов)
+            // - CNN: минимум 30 (windowSize) + 3 = 33 свечи (окно 30 дней + 1 для лейбла + 2 для минимум 2 образцов)
+            // - Transformer: минимум 84 + 3 = 87 свечей (окно 84 дня + 1 для лейбла + 2 для минимум 2 образцов)
+            // Нужно минимум 2 образца для обучения (train/validation split требует минимум 2 образца)
+            const minRequired = 27; // Минимум для LSTM (24 + 3)
+            const minForCNN = 33; // Минимум для CNN (30 + 3)
+            const minForTransformer = 87; // Минимум для Transformer (84 + 3)
             
             // Определяем, какие модели можем обучить
             const canTrainLSTM = candles.length >= minRequired;
@@ -822,20 +821,31 @@ class EnsembleService {
         }
 
         // Разделение на train/validation/test (Фаза 2, задача 2.4.1)
-        const { timeBasedSplit } = await import('../utils/dataSplitUtils.js');
-        const dataSplit = timeBasedSplit(features, labels, {
-            trainRatio: 0.7,
-            validationRatio: 0.15,
-            testRatio: 0.15
-        });
+        // Если образцов меньше 3, используем все данные для обучения (без разделения)
+        let validationFeatures, validationLabels, testFeatures, testLabels;
         
-        // Используем train для обучения, validation для валидации во время обучения
-        features = dataSplit.train.features;
-        labels = dataSplit.train.labels;
-        const validationFeatures = dataSplit.validation.features;
-        const validationLabels = dataSplit.validation.labels;
-        const testFeatures = dataSplit.test.features;
-        const testLabels = dataSplit.test.labels;
+        if (features.length < 3) {
+            // Для малого количества данных используем все для обучения
+            validationFeatures = [];
+            validationLabels = [];
+            testFeatures = [];
+            testLabels = [];
+        } else {
+            const { timeBasedSplit } = await import('../utils/dataSplitUtils.js');
+            const dataSplit = timeBasedSplit(features, labels, {
+                trainRatio: 0.7,
+                validationRatio: 0.15,
+                testRatio: 0.15
+            });
+            
+            // Используем train для обучения, validation для валидации во время обучения
+            features = dataSplit.train.features;
+            labels = dataSplit.train.labels;
+            validationFeatures = dataSplit.validation.features;
+            validationLabels = dataSplit.validation.labels;
+            testFeatures = dataSplit.test.features;
+            testLabels = dataSplit.test.labels;
+        }
         
         // Инициализируем сервис, если не инициализирован
         if (!this.isInitialized) {
@@ -955,30 +965,31 @@ class EnsembleService {
         }
 
         // Создаем тензоры для validation set (Фаза 2, задача 2.4.1)
-        // Проверяем структуру validation features
-        if (validationFeatures.length === 0) {
-            throw new Error('No validation features available');
+        // Если validation set пустой (мало данных), не используем его
+        let valXs, valYs;
+        let useValidation = false;
+        
+        if (validationFeatures.length > 0) {
+            const valFirstSample = validationFeatures[0];
+            if (!Array.isArray(valFirstSample) || valFirstSample.length === 0 || !Array.isArray(valFirstSample[0])) {
+                throw new Error('Invalid validation features structure: expected 3D array [samples, time_steps, features]');
+            }
+            
+            const valNumSamples = validationFeatures.length;
+            const valTimeSteps = valFirstSample.length;
+            const valFeaturesPerStep = valFirstSample[0].length;
+            const valShape = [valNumSamples, valTimeSteps, valFeaturesPerStep];
+            
+            valXs = tf.tensor3d(validationFeatures, valShape);
+            valYs = tf.tensor2d(validationLabels, [validationLabels.length, 1]);
+            useValidation = true;
         }
-        
-        const valFirstSample = validationFeatures[0];
-        if (!Array.isArray(valFirstSample) || valFirstSample.length === 0 || !Array.isArray(valFirstSample[0])) {
-            throw new Error('Invalid validation features structure: expected 3D array [samples, time_steps, features]');
-        }
-        
-        const valNumSamples = validationFeatures.length;
-        const valTimeSteps = valFirstSample.length;
-        const valFeaturesPerStep = valFirstSample[0].length;
-        const valShape = [valNumSamples, valTimeSteps, valFeaturesPerStep];
-        
-        const valXs = tf.tensor3d(validationFeatures, valShape);
-        const valYs = tf.tensor2d(validationLabels, [validationLabels.length, 1]);
 
-        const history = await model.fit(xs, ys, {
+        const fitOptions = {
             epochs,
             batchSize,
-            // sampleWeight не поддерживается в TensorFlow.js - используем взвешивание через дублирование данных
-            validationData: [valXs, valYs], // Используем явный validation set вместо validationSplit
             verbose: 0,
+            ...(useValidation && { validationData: [valXs, valYs] }),
             callbacks: {
                 onEpochEnd: async (epoch, logs) => {
                     this.broadcastProgress(modelType, epoch, logs);
@@ -1068,13 +1079,17 @@ class EnsembleService {
                     }
                 }
             }
-        });
+        };
+        
+        const history = await model.fit(xs, ys, fitOptions);
 
         // Очистка памяти
         xs.dispose();
         ys.dispose();
-        valXs.dispose();
-        valYs.dispose();
+        if (useValidation) {
+            valXs.dispose();
+            valYs.dispose();
+        }
 
         // Финальная оценка на test set (Фаза 2, задача 2.4.1)
         let testMetrics = null;
@@ -1167,9 +1182,11 @@ class EnsembleService {
         const labels = [];
 
         const windowSize = 24; // Фиксированный размер окна для LSTM
-        // Нужно минимум windowSize + 1 свечей (windowSize для окна + 1 для следующей свечи для лейбла)
-        // Но также нужно минимум 2 образца для обучения, поэтому windowSize + 2
-        if (candles.length < windowSize + 2) {
+        // Нужно минимум windowSize + 3 свечей:
+        // - windowSize для окна
+        // - 1 для следующей свечи для лейбла
+        // - 2 для минимум 2 образцов (нужно минимум 2 образца для train/validation split)
+        if (candles.length < windowSize + 3) {
             return { features, labels };
         }
         
@@ -1211,8 +1228,11 @@ class EnsembleService {
         const labels = [];
 
         const windowSize = 30; // Фиксированный размер окна для CNN
-        // Нужно минимум windowSize + 2 свечей (windowSize для окна + 1 для следующей свечи для лейбла + 1 для второго образца)
-        if (candles.length < windowSize + 2) {
+        // Нужно минимум windowSize + 3 свечей:
+        // - windowSize для окна
+        // - 1 для следующей свечи для лейбла
+        // - 2 для минимум 2 образцов (нужно минимум 2 образца для train/validation split)
+        if (candles.length < windowSize + 3) {
             return { features, labels };
         }
 
@@ -1281,8 +1301,11 @@ class EnsembleService {
         const labels = [];
 
         const windowSize = 84; // Фиксированный размер окна для Transformer
-        // Нужно минимум windowSize + 2 свечей (windowSize для окна + 1 для следующей свечи для лейбла + 1 для второго образца)
-        if (candles.length < windowSize + 2) {
+        // Нужно минимум windowSize + 3 свечей:
+        // - windowSize для окна
+        // - 1 для следующей свечи для лейбла
+        // - 2 для минимум 2 образцов (нужно минимум 2 образца для train/validation split)
+        if (candles.length < windowSize + 3) {
             return { features, labels };
         }
 
