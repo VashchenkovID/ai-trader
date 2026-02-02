@@ -211,10 +211,25 @@ class MetaLearningService {
                 throw new Error(`Insufficient data: ${candles.length} candles`);
             }
             
-            // Подготовим реальные фичи/метки для support-set
-            const { features, labels } = await OptimizedDataService.prepareTrainingData(candles, 20, 3, figi);
+            // Адаптивные параметры для малого количества данных
+            // OptimizedDataService.prepareTrainingData уже имеет встроенную адаптацию,
+            // но мы используем более консервативные параметры для мета-обучения
+            // Для 23 свечей: lookback = 11, horizon = 2 (минимум 13 свечей)
+            // Для 30 свечей: lookback = 20, horizon = 3 (минимум 23 свечи)
+            const adaptiveLookback = Math.max(5, Math.min(20, Math.floor(candles.length * 0.5)));
+            const adaptiveHorizon = Math.max(1, Math.min(3, Math.floor(candles.length / 10)));
+            
+            // Подготовим реальные фичи/метки для support-set с адаптивными параметрами
+            // OptimizedDataService автоматически адаптирует параметры, если данных недостаточно
+            const { features, labels } = await OptimizedDataService.prepareTrainingData(
+                candles, 
+                adaptiveLookback, 
+                adaptiveHorizon, 
+                figi
+            );
+            
             if (!features.length) {
-                throw new Error('No features prepared for meta-learning');
+                throw new Error(`No features prepared for meta-learning: insufficient data (${candles.length} candles, tried lookback=${adaptiveLookback}, horizon=${adaptiveHorizon})`);
             }
 
             const inputSize = features[0].length;
@@ -257,25 +272,60 @@ class MetaLearningService {
             };
             
         } catch (error) {
-            console.error(`❌ Meta-learning failed for ${figi}:`, error);
+            // Проверяем, является ли ошибка связанной с недостатком данных
+            const isInsufficientData = error.message && (
+                error.message.includes('Insufficient data') || 
+                error.message.includes('No features prepared') ||
+                error.message.includes('insufficient data')
+            );
+            
+            if (isInsufficientData) {
+                // Логируем информацию о пропуске обучения из-за недостатка данных
+                console.log(`ℹ️ [Meta-Learning] Skipping training for ${figi.substring(0, 10)}: ${error.message}`);
+            } else {
+                console.error(`❌ Meta-learning failed for ${figi}:`, error);
+            }
             
             // Завершаем обучение с ошибкой
             if (trainingStatusService) {
                 trainingStatusService.completeTraining('metaLearning', false);
             }
             
-            // Отправляем алерт в Telegram
-            try {
-                const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
-                if (OptimizedTelegramService.isInitialized) {
-                    await OptimizedTelegramService.sendAlert(
-                        'META_LEARNING_TRAINING_ERROR',
-                        `❌ <b>ОШИБКА META-LEARNING ОБУЧЕНИЯ</b>\n\n📈 Инструмент: <b>${figi}</b>\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
-                        'error'
-                    );
+            // Отправляем алерт только для критичных ошибок, не связанных с недостатком данных
+            if (!isInsufficientData) {
+                try {
+                    const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+                    if (OptimizedTelegramService.isInitialized) {
+                        // Получаем ticker для отображения
+                        let ticker = figi.substring(0, 10);
+                        try {
+                            const CacheService = (await import('./CacheService.js')).default;
+                            const instrument = await CacheService.getInstrument(figi, true);
+                            ticker = instrument?.ticker || ticker;
+                        } catch (e) {
+                            // Игнорируем ошибку получения ticker
+                        }
+                        
+                        await OptimizedTelegramService.sendAlert(
+                            'META_LEARNING_TRAINING_ERROR',
+                            `❌ <b>ОШИБКА META-LEARNING ОБУЧЕНИЯ</b>\n\n📈 Инструмент: <b>${ticker}</b>\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
+                            'error'
+                        );
+                    }
+                } catch (telegramError) {
+                    console.error('❌ Failed to send meta-learning training error alert:', telegramError.message);
                 }
-            } catch (telegramError) {
-                console.error('❌ Failed to send meta-learning training error alert:', telegramError.message);
+            }
+            
+            // Для ошибок недостаточных данных возвращаем успешный результат с пометкой о пропуске
+            // Это позволяет продолжить обучение других инструментов
+            if (isInsufficientData) {
+                return {
+                    success: false,
+                    figi,
+                    skipped: true,
+                    reason: error.message
+                };
             }
             
             throw error;

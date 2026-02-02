@@ -137,8 +137,8 @@ class SchedulerService {
         const cacheSchedule = schedulerSettings.cache_update_interval || '0 2,10,18 * * *';
         // Полное обучение ночью в 03:00 (после обновления кеша в 02:00, последовательно: Базовая → Ансамбль → Мета-обучение → RL)
         const trainingSchedule = schedulerSettings.nn_training_schedule || '0 3 * * *';
-        // Быстрое обучение каждый час в торговые часы: 07:00, 08:00, 09:00, 10:00, 11:00, 12:00, 13:00, 14:00, 15:00, 16:00, 17:00, 18:00
-        const quickTrainingSchedule = schedulerSettings.nn_training_interval || '0 7,8,9,10,11,12,13,14,15,16,17,18 * * *';
+        // Быстрое обучение каждые 2 часа в торговые часы: 08:00, 10:00, 12:00, 14:00, 16:00, 18:00
+        const quickTrainingSchedule = schedulerSettings.nn_training_interval || '0 8,10,12,14,16,18 * * *';
         const newsCacheSchedule = notificationSettings.news_cache_update_interval || '0 */6 * * *';
         const newsDailyUpdateSchedule = notificationSettings.news_daily_update_schedule || '0 9 * * *'; // Каждый день в 9:00
         const newsWeeklyCleanupSchedule = notificationSettings.news_weekly_cleanup_schedule || '0 3 * * 0'; // Каждое воскресенье в 3:00
@@ -2022,8 +2022,8 @@ class SchedulerService {
             return;
         }
         
-        // Проверяем, не идет ли уже обучение
-        if (this.isTraining) {
+        // Проверяем, не идет ли уже обучение или анализ
+        if (this.isTraining || this.isAnalyzing) {
             return;
         }
 
@@ -2038,6 +2038,8 @@ class SchedulerService {
             const shouldRetrain = await this.shouldRetrainModel();
             if (!shouldRetrain) {
                 // Уведомления о периодическом обучении теперь обрабатываются в IntegratedAIService
+                // ВАЖНО: сбрасываем флаг перед возвратом
+                this.isTraining = false;
                 return;
             }
 
@@ -2141,9 +2143,27 @@ class SchedulerService {
         } catch (error) {
             console.error('Scheduled training error:', error);
             const duration = Math.round((Date.now() - startTime) / 1000);
+            
+            // Логируем ошибку
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Scheduled training failed', {
+                    service: 'SchedulerService',
+                    operation: 'performScheduledTraining',
+                    error: {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name
+                    },
+                    duration: `${duration}s`,
+                    totalTrained,
+                    successes,
+                    failures
+                });
+            }
+            
             await OptimizedTelegramService.sendAlert(
                 'TRAINING_ERROR',
-                `🚨 <b>ОШИБКА ПОЛНОГО ОБУЧЕНИЯ</b>\n\n❌ ${error.message}\n\n⏱️ Время до ошибки: ${duration}с\n\n⚠️ Обучение прервано`,
+                `🚨 <b>ОШИБКА ПОЛНОГО ОБУЧЕНИЯ</b>\n\n❌ ${error.message}\n\n⏱️ Время до ошибки: ${duration}с\n\n📊 Прогресс:\n• Обработано: ${totalTrained}\n• ✅ Успешно: ${successes}\n• ❌ Ошибок: ${failures}\n\n⚠️ Обучение прервано`,
                 'critical'
             );
             throw error;
@@ -2593,8 +2613,8 @@ class SchedulerService {
             return;
         }
         
-        // Проверяем, не идет ли уже анализ
-        if (this.isAnalyzing) {
+        // Проверяем, не идет ли уже анализ или обучение
+        if (this.isAnalyzing || this.isTraining) {
             return;
         }
 

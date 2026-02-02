@@ -465,10 +465,17 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
         // Загружаем информацию об инструментах из кеша
         const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
         const allFigis = [...new Set(this.strongRecommendations.map(r => r.figi).filter(f => f))];
-        const instruments = await CachedInstrument.findAll({
-            where: { figi: allFigis },
-            attributes: ['figi', 'ticker', 'name']
-        });
+        
+        // Пытаемся загрузить инструменты из БД
+        let instruments = [];
+        try {
+            instruments = await CachedInstrument.findAll({
+                where: { figi: allFigis },
+                attributes: ['figi', 'ticker', 'name']
+            });
+        } catch (error) {
+            console.warn('⚠️ Failed to load instruments from DB for recommendations:', error.message);
+        }
         
         const instrumentMap = new Map();
         instruments.forEach(instr => {
@@ -483,8 +490,31 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
         if (buyRecommendations.length > 0) {
             message += `📈 <b>ПОКУПКИ (${buyRecommendations.length}):</b>\n`;
             buyRecommendations.slice(0, 5).forEach(rec => {
-                const instrument = instrumentMap.get(rec.figi);
-                const displayName = rec.ticker || instrument?.ticker || rec.name || instrument?.name || rec.figi?.substring(0, 10) || 'Unknown';
+                // Улучшенная логика получения имени инструмента
+                let displayName = 'Unknown';
+                
+                // Сначала проверяем данные из самой рекомендации
+                if (rec.ticker) {
+                    displayName = rec.ticker;
+                } else if (rec.name) {
+                    displayName = rec.name;
+                } else if (rec.instrument?.ticker) {
+                    displayName = rec.instrument.ticker;
+                } else if (rec.instrument?.name) {
+                    displayName = rec.instrument.name;
+                } else {
+                    // Затем проверяем кеш из БД
+                    const instrument = instrumentMap.get(rec.figi);
+                    if (instrument?.ticker) {
+                        displayName = instrument.ticker;
+                    } else if (instrument?.name) {
+                        displayName = instrument.name;
+                    } else if (rec.figi) {
+                        // В последнюю очередь используем FIGI
+                        displayName = rec.figi.substring(0, 10);
+                    }
+                }
+                
                 message += `• <b>${displayName}</b> - ${(rec.confidence * 100).toFixed(1)}% уверенности\n`;
             });
             message += '\n';
@@ -493,8 +523,31 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
         if (sellRecommendations.length > 0) {
             message += `📉 <b>ПРОДАЖИ (${sellRecommendations.length}):</b>\n`;
             sellRecommendations.slice(0, 5).forEach(rec => {
-                const instrument = instrumentMap.get(rec.figi);
-                const displayName = rec.ticker || instrument?.ticker || rec.name || instrument?.name || rec.figi?.substring(0, 10) || 'Unknown';
+                // Улучшенная логика получения имени инструмента
+                let displayName = 'Unknown';
+                
+                // Сначала проверяем данные из самой рекомендации
+                if (rec.ticker) {
+                    displayName = rec.ticker;
+                } else if (rec.name) {
+                    displayName = rec.name;
+                } else if (rec.instrument?.ticker) {
+                    displayName = rec.instrument.ticker;
+                } else if (rec.instrument?.name) {
+                    displayName = rec.instrument.name;
+                } else {
+                    // Затем проверяем кеш из БД
+                    const instrument = instrumentMap.get(rec.figi);
+                    if (instrument?.ticker) {
+                        displayName = instrument.ticker;
+                    } else if (instrument?.name) {
+                        displayName = instrument.name;
+                    } else if (rec.figi) {
+                        // В последнюю очередь используем FIGI
+                        displayName = rec.figi.substring(0, 10);
+                    }
+                }
+                
                 message += `• <b>${displayName}</b> - ${(rec.confidence * 100).toFixed(1)}% уверенности\n`;
             });
             message += '\n';

@@ -2727,7 +2727,7 @@ class NeuralNetworkService {
 
     // Запуск периодического анализа
     startPeriodicAnalysis() {
-        // Анализ каждые 30 минут
+        // Анализ каждый час
         this.analysisInterval = setInterval(async () => {
             try {
                 await this.performMarketAnalysis();
@@ -2756,7 +2756,7 @@ class NeuralNetworkService {
                 }
                 // Ошибки теперь обрабатываются в IntegratedAIService
             }
-        }, 30 * 60 * 1000); // 30 минут
+        }, 60 * 60 * 1000); // 60 минут (1 час)
 
     }
 
@@ -2772,6 +2772,17 @@ class NeuralNetworkService {
     async performMarketAnalysis() {
         if (!this.isActive) {
             return;
+        }
+
+        // Проверяем, не идет ли полное обновление кеша (блокируем только тяжелые операции)
+        // Анализ рынка может работать параллельно с обучением и анализом портфеля
+        try {
+            const SchedulerService = (await import('./SchedulerService.js')).default;
+            if (SchedulerService && SchedulerService.isFullCacheUpdateRunning) {
+                return;
+            }
+        } catch (e) {
+            // Игнорируем ошибку, если SchedulerService недоступен
         }
 
         // Регистрируем воркер для мониторинга

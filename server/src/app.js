@@ -413,6 +413,20 @@ process.on('unhandledRejection', (reason, promise) => {
     } else {
         // Логируем, но не перезапускаем сервер для некритичных ошибок
         console.error('⚠️ Non-critical unhandled rejection (server continues):', errorMessage);
+        
+        // Дополнительное логирование для ошибок новостей
+        if (isNonCritical && (errorMessage.includes('news') || errorMessage.includes('News'))) {
+            LoggerService.error('News processing error (non-critical, server continues)', {
+                service: 'app',
+                operation: 'unhandledRejection',
+                error: {
+                    message: errorMessage,
+                    name: errorName,
+                    stack: reason instanceof Error ? reason.stack : undefined
+                },
+                note: 'Server will continue running despite this error'
+            });
+        }
     }
 });
 

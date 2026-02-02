@@ -422,18 +422,14 @@ class EnsembleService {
             const minForCNN = 31;
             const minForTransformer = 85;
             
-            if (candles.length < minRequired) {
-                throw new Error(`Insufficient data: ${candles.length} candles (minimum ${minRequired} required for LSTM)`);
-            }
-            
             // Определяем, какие модели можем обучить
             const canTrainLSTM = candles.length >= minRequired;
             const canTrainCNN = candles.length >= minForCNN;
             const canTrainTransformer = candles.length >= minForTransformer;
             
-            
+            // Проверяем, что хотя бы одна модель может быть обучена
             if (!canTrainLSTM && !canTrainCNN && !canTrainTransformer) {
-                throw new Error(`Insufficient data: ${candles.length} candles (minimum ${minRequired} required)`);
+                throw new Error(`Insufficient data: ${candles.length} candles (minimum ${minRequired} required for any model)`);
             }
             
             // Проверяем, что данные реальные
@@ -469,16 +465,51 @@ class EnsembleService {
                         completedModels++;
                     }
                 } catch (error) {
+                    // Не отправляем алерт для ошибок недостаточных данных - это нормальная ситуация
+                    // если данных недостаточно для LSTM, но достаточно для других моделей
+                    const isInsufficientData = error.message && error.message.includes('Insufficient data');
+                    
                     if (LoggerService.isInitialized) {
                         LoggerService.error('LSTM training failed in ensemble', {
                             service: 'EnsembleService',
                             operation: 'trainEnsemble',
                             figi,
-                            error: { message: error.message, stack: error.stack }
+                            error: { message: error.message, stack: error.stack },
+                            isInsufficientData
                         });
+                    }
+                    
+                    // Отправляем алерт только для критичных ошибок, не связанных с недостатком данных
+                    if (!isInsufficientData) {
+                        try {
+                            const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+                            if (OptimizedTelegramService.isInitialized) {
+                                // Получаем ticker для отображения
+                                let ticker = figi.substring(0, 10);
+                                try {
+                                    const instrument = await CacheService.getInstrument(figi, true);
+                                    ticker = instrument?.ticker || ticker;
+                                } catch (e) {
+                                    // Игнорируем ошибку получения ticker
+                                }
+                                
+                                await OptimizedTelegramService.sendAlert(
+                                    'ENSEMBLE_TRAINING_ERROR',
+                                    `❌ <b>ОШИБКА ОБУЧЕНИЯ АНСАМБЛЯ</b>\n\n📈 Инструмент: <b>${ticker}</b>\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
+                                    'error'
+                                );
+                            }
+                        } catch (telegramError) {
+                            console.error('❌ Failed to send ensemble training error alert:', telegramError.message);
+                        }
+                    } else {
+                        // Логируем информацию о пропуске LSTM из-за недостатка данных
+                        console.log(`ℹ️ [Ensemble] Skipping LSTM training for ${figi.substring(0, 10)}: insufficient data (${candles.length} candles, need ${minRequired})`);
                     }
                 }
             } else {
+                // Логируем информацию о пропуске LSTM из-за недостатка данных
+                console.log(`ℹ️ [Ensemble] Skipping LSTM training for ${figi.substring(0, 10)}: insufficient data (${candles.length} candles, need ${minRequired})`);
             }
             
             if (canTrainCNN) {
@@ -507,13 +538,42 @@ class EnsembleService {
                         completedModels++;
                     }
                 } catch (error) {
+                    // Не отправляем алерт для ошибок недостаточных данных - это нормальная ситуация
+                    const isInsufficientData = error.message && error.message.includes('Insufficient data');
+                    
                     if (LoggerService.isInitialized) {
                         LoggerService.error('CNN training failed in ensemble', {
                             service: 'EnsembleService',
                             operation: 'trainEnsemble',
                             figi,
-                            error: { message: error.message, stack: error.stack }
+                            error: { message: error.message, stack: error.stack },
+                            isInsufficientData
                         });
+                    }
+                    
+                    // Отправляем алерт только для критичных ошибок, не связанных с недостатком данных
+                    if (!isInsufficientData) {
+                        try {
+                            const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+                            if (OptimizedTelegramService.isInitialized) {
+                                // Получаем ticker для отображения
+                                let ticker = figi.substring(0, 10);
+                                try {
+                                    const instrument = await CacheService.getInstrument(figi, true);
+                                    ticker = instrument?.ticker || ticker;
+                                } catch (e) {
+                                    // Игнорируем ошибку получения ticker
+                                }
+                                
+                                await OptimizedTelegramService.sendAlert(
+                                    'ENSEMBLE_TRAINING_ERROR',
+                                    `❌ <b>ОШИБКА ОБУЧЕНИЯ АНСАМБЛЯ</b>\n\n📈 Инструмент: <b>${ticker}</b>\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
+                                    'error'
+                                );
+                            }
+                        } catch (telegramError) {
+                            console.error('❌ Failed to send ensemble training error alert:', telegramError.message);
+                        }
                     }
                 }
             } else {
@@ -545,16 +605,47 @@ class EnsembleService {
                         completedModels++;
                     }
                 } catch (error) {
+                    // Не отправляем алерт для ошибок недостаточных данных - это нормальная ситуация
+                    const isInsufficientData = error.message && error.message.includes('Insufficient data');
+                    
                     if (LoggerService.isInitialized) {
                         LoggerService.error('Transformer training failed in ensemble', {
                             service: 'EnsembleService',
                             operation: 'trainEnsemble',
                             figi,
-                            error: { message: error.message, stack: error.stack }
+                            error: { message: error.message, stack: error.stack },
+                            isInsufficientData
                         });
+                    }
+                    
+                    // Отправляем алерт только для критичных ошибок, не связанных с недостатком данных
+                    if (!isInsufficientData) {
+                        try {
+                            const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+                            if (OptimizedTelegramService.isInitialized) {
+                                // Получаем ticker для отображения
+                                let ticker = figi.substring(0, 10);
+                                try {
+                                    const instrument = await CacheService.getInstrument(figi, true);
+                                    ticker = instrument?.ticker || ticker;
+                                } catch (e) {
+                                    // Игнорируем ошибку получения ticker
+                                }
+                                
+                                await OptimizedTelegramService.sendAlert(
+                                    'ENSEMBLE_TRAINING_ERROR',
+                                    `❌ <b>ОШИБКА ОБУЧЕНИЯ АНСАМБЛЯ</b>\n\n📈 Инструмент: <b>${ticker}</b>\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
+                                    'error'
+                                );
+                            }
+                        } catch (telegramError) {
+                            console.error('❌ Failed to send ensemble training error alert:', telegramError.message);
+                        }
                     }
                 }
             } else {
+                // Логируем информацию о пропуске Transformer из-за недостатка данных
+                console.log(`ℹ️ [Ensemble] Skipping Transformer training for ${figi.substring(0, 10)}: insufficient data (${candles.length} candles, need ${minForTransformer})`);
             }
             
             // Обновляем прогресс перед завершением
@@ -564,7 +655,35 @@ class EnsembleService {
             
             // Проверяем, что хотя бы одна модель обучилась
             if (Object.keys(results).length === 0) {
-                throw new Error(`Failed to train any model: insufficient data or training errors`);
+                // Формируем информативное сообщение об ошибке
+                const availableCandles = candles.length;
+                const errorMessage = `Failed to train any model: insufficient data (${availableCandles} candles available, need at least ${minRequired} for LSTM, ${minForCNN} for CNN, or ${minForTransformer} for Transformer)`;
+                const error = new Error(errorMessage);
+                
+                // Отправляем алерт в Telegram перед выбросом ошибки
+                try {
+                    const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+                    if (OptimizedTelegramService.isInitialized) {
+                        // Получаем ticker для отображения
+                        let ticker = figi.substring(0, 10);
+                        try {
+                            const instrument = await CacheService.getInstrument(figi, true);
+                            ticker = instrument?.ticker || ticker;
+                        } catch (e) {
+                            // Игнорируем ошибку получения ticker
+                        }
+                        
+                        await OptimizedTelegramService.sendAlert(
+                            'ENSEMBLE_TRAINING_ERROR',
+                            `❌ <b>ОШИБКА ОБУЧЕНИЯ АНСАМБЛЯ</b>\n\n📈 Инструмент: <b>${ticker}</b>\n🔍 Ошибка: Недостаточно данных для обучения\n📊 Доступно свечей: ${availableCandles}\n📋 Требуется: минимум ${minRequired} для LSTM\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
+                            'warning' // Используем warning вместо error, так как это не критичная ошибка
+                        );
+                    }
+                } catch (telegramError) {
+                    console.error('❌ Failed to send ensemble training error alert:', telegramError.message);
+                }
+                
+                throw error;
             }
 
             // Адаптивные веса на основе производительности
@@ -618,9 +737,18 @@ class EnsembleService {
             try {
                 const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
                 if (OptimizedTelegramService.isInitialized) {
+                    // Получаем ticker для отображения
+                    let ticker = figi.substring(0, 10);
+                    try {
+                        const instrument = await CacheService.getInstrument(figi, true);
+                        ticker = instrument?.ticker || ticker;
+                    } catch (e) {
+                        // Игнорируем ошибку получения ticker
+                    }
+                    
                     await OptimizedTelegramService.sendAlert(
                         'ENSEMBLE_TRAINING_ERROR',
-                        `❌ <b>ОШИБКА ОБУЧЕНИЯ АНСАМБЛЯ</b>\n\n📈 Инструмент: <b>${figi}</b>\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
+                        `❌ <b>ОШИБКА ОБУЧЕНИЯ АНСАМБЛЯ</b>\n\n📈 Инструмент: <b>${ticker}</b>\n🔍 Ошибка: ${error.message}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
                         'error'
                     );
                 }
