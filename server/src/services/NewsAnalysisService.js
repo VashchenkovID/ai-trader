@@ -42,7 +42,11 @@ class NewsAnalysisService {
      * @returns {Promise<object>} - Загруженная модель (pipeline)
      */
     async loadSentimentModel() {
-        // Проверяем, не отключен ли анализ тональности
+        // Полностью отключаем загрузку BERT модели для предотвращения segmentation fault
+        // Анализ тональности теперь использует только fallback метод
+        return null;
+        
+        /* Старый код полностью отключен для предотвращения segmentation fault:
         if (process.env.DISABLE_SENTIMENT_ANALYSIS === 'true' || this.sentimentModelDisabled) {
             return null;
         }
@@ -185,6 +189,7 @@ class NewsAnalysisService {
             this.sentimentModel = null;
             return null;
         }
+        */
     }
 
     /**
@@ -937,13 +942,14 @@ class NewsAnalysisService {
                             }
                         }
 
-                        // Безопасный вызов analyzeSentiment с обработкой ошибок
+                        // Отключаем анализ тональности через BERT модель для предотвращения segmentation fault
+                        // Используем только fallback метод, который безопасен
                         let sentiment = 0;
                         try {
-                            sentiment = await this.analyzeSentiment(newsTitle + ' ' + newsText);
+                            // Используем только fallback метод, не вызываем BERT модель
+                            sentiment = this.analyzeSentimentFallback(newsTitle + ' ' + newsText);
                         } catch (sentimentError) {
                             // Игнорируем ошибки анализа тональности, используем нейтральное значение
-                            console.warn(`⚠️ Sentiment analysis error for article: ${sentimentError.message}`);
                             sentiment = 0;
                         }
 
@@ -1164,13 +1170,14 @@ class NewsAnalysisService {
                             }
                         }
 
-                        // Безопасный вызов analyzeSentiment с обработкой ошибок
+                        // Отключаем анализ тональности через BERT модель для предотвращения segmentation fault
+                        // Используем только fallback метод, который безопасен
                         let sentiment = 0;
                         try {
-                            sentiment = await this.analyzeSentiment(newsTitle + ' ' + newsText);
+                            // Используем только fallback метод, не вызываем BERT модель
+                            sentiment = this.analyzeSentimentFallback(newsTitle + ' ' + newsText);
                         } catch (sentimentError) {
                             // Игнорируем ошибки анализа тональности, используем нейтральное значение
-                            console.warn(`⚠️ Sentiment analysis error for article: ${sentimentError.message}`);
                             sentiment = 0;
                         }
 

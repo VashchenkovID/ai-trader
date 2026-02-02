@@ -29,6 +29,75 @@ class LoggerService {
                 fs.mkdirSync(logDir, {recursive: true});
             }
 
+            // Функция для ограничения размера логируемых объектов
+            const sanitizeMeta = (obj, maxDepth = 3, maxSize = 10000) => {
+                if (!obj || typeof obj !== 'object') {
+                    return obj;
+                }
+
+                try {
+                    const jsonStr = JSON.stringify(obj);
+                    if (jsonStr.length <= maxSize) {
+                        return obj;
+                    }
+                } catch (e) {
+                    // Если не удалось сериализовать, возвращаем упрощенную версию
+                }
+
+                const sanitize = (value, depth = 0) => {
+                    if (depth > maxDepth) {
+                        return '[Max depth reached]';
+                    }
+
+                    if (value === null || value === undefined) {
+                        return value;
+                    }
+
+                    if (typeof value === 'string') {
+                        return value.length > 500 ? value.substring(0, 500) + '...[truncated]' : value;
+                    }
+
+                    if (typeof value !== 'object') {
+                        return value;
+                    }
+
+                    if (Array.isArray(value)) {
+                        if (value.length > 10) {
+                            return value.slice(0, 10).map(item => sanitize(item, depth + 1)).concat([`...[${value.length - 10} more items]`]);
+                        }
+                        return value.map(item => sanitize(item, depth + 1));
+                    }
+
+                    // Для объектов - фильтруем большие вложенные структуры
+                    const result = {};
+                    for (const key in value) {
+                        if (Object.prototype.hasOwnProperty.call(value, key)) {
+                            // Пропускаем большие объекты конфигурации моделей
+                            if (key === 'config' || key === 'architecture' || key === 'model' || key === 'weights' || 
+                                key === 'layers' || key === 'kernel_initializer' || key === 'bias_initializer' ||
+                                key === 'activity_regularizer' || key === 'class_name') {
+                                result[key] = '[Large object - skipped]';
+                                continue;
+                            }
+                            
+                            try {
+                                const jsonValue = JSON.stringify(value[key]);
+                                if (jsonValue.length > 1000) {
+                                    result[key] = '[Large value - truncated]';
+                                } else {
+                                    result[key] = sanitize(value[key], depth + 1);
+                                }
+                            } catch (e) {
+                                result[key] = '[Non-serializable]';
+                            }
+                        }
+                    }
+                    return result;
+                };
+
+                return sanitize(obj);
+            };
+
             // Настраиваем формат логов
             const logFormat = winston.format.combine(
                 winston.format.timestamp({format: 'YYYY-MM-DD HH:mm:ss.SSS'}),
@@ -38,12 +107,15 @@ class LoggerService {
                 winston.format.printf((info) => {
                     const {timestamp, level, message, ...meta} = info;
 
+                    // Очищаем метаданные от больших объектов
+                    const sanitizedMeta = sanitizeMeta(meta);
+
                     // Формируем базовый объект лога
                     const logEntry = {
                         timestamp,
                         level,
                         message,
-                        ...meta
+                        ...sanitizedMeta
                     };
 
                     // В production возвращаем JSON, в development - читаемый формат
@@ -52,8 +124,8 @@ class LoggerService {
                     } else {
                         // Читаемый формат для разработки
                         let output = `${timestamp} [${level.toUpperCase()}] ${message}`;
-                        if (Object.keys(meta).length > 0 && meta.constructor === Object) {
-                            const metaStr = JSON.stringify(meta, null, 2);
+                        if (Object.keys(sanitizedMeta).length > 0 && sanitizedMeta.constructor === Object) {
+                            const metaStr = JSON.stringify(sanitizedMeta, null, 2);
                             if (metaStr !== '{}') {
                                 output += `\n${metaStr}`;
                             }
@@ -108,14 +180,44 @@ class LoggerService {
                                 output = `[user:${meta.userId}] ${output}`;
                             }
 
-                            // Добавляем метаданные если есть
+                            // Добавляем метаданные если есть (с ограничением размера)
                             if (Object.keys(meta).length > 0) {
                                 const relevantMeta = {...meta};
                                 delete relevantMeta.requestId;
                                 delete relevantMeta.service;
                                 delete relevantMeta.userId;
-                                if (Object.keys(relevantMeta).length > 0) {
-                                    output += `\n${JSON.stringify(relevantMeta, null, 2)}`;
+                                
+                                // Фильтруем большие объекты
+                                const sanitizeMeta = (obj) => {
+                                    if (!obj || typeof obj !== 'object') return obj;
+                                    const result = {};
+                                    for (const key in obj) {
+                                        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                                            // Пропускаем большие объекты конфигурации моделей
+                                            if (key === 'config' || key === 'architecture' || key === 'model' || key === 'weights' || 
+                                                key === 'layers' || key === 'kernel_initializer' || key === 'bias_initializer' ||
+                                                key === 'activity_regularizer' || key === 'class_name') {
+                                                continue;
+                                            }
+                                            
+                                            try {
+                                                const jsonValue = JSON.stringify(obj[key]);
+                                                if (jsonValue.length > 1000) {
+                                                    result[key] = '[Large value - truncated]';
+                                                } else {
+                                                    result[key] = obj[key];
+                                                }
+                                            } catch (e) {
+                                                result[key] = '[Non-serializable]';
+                                            }
+                                        }
+                                    }
+                                    return result;
+                                };
+                                
+                                const sanitized = sanitizeMeta(relevantMeta);
+                                if (Object.keys(sanitized).length > 0) {
+                                    output += `\n${JSON.stringify(sanitized, null, 2)}`;
                                 }
                             }
 
