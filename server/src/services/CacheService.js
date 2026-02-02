@@ -535,9 +535,8 @@ class CacheService {
                 const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
                 if (toInsert.length > 0) {
                     try {
-                        // Используем ignoreDuplicates для предотвращения ошибок при race condition
+                        // Используем updateOnDuplicate для обновления при конфликте (нельзя использовать вместе с ignoreDuplicates)
                         await CachedCandle.bulkCreate(toInsert, {
-                            ignoreDuplicates: true,
                             updateOnDuplicate: ['open', 'close', 'high', 'low', 'volume', 'updatedAt']
                         });
                     } catch (bulkError) {

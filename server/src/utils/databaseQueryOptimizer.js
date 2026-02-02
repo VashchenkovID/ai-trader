@@ -141,11 +141,18 @@ class DatabaseQueryOptimizer {
         const results = [];
         for (const batch of batches) {
             try {
-                const created = await Model.bulkCreate(batch, {
-                    updateOnDuplicate: options.updateOnDuplicate || [],
-                    ignoreDuplicates: options.ignoreDuplicates !== false,
-                    ...options
-                });
+                // Нельзя использовать ignoreDuplicates и updateOnDuplicate одновременно
+                const bulkCreateOptions = { ...options };
+                if (options.updateOnDuplicate && options.updateOnDuplicate.length > 0) {
+                    // Если указан updateOnDuplicate, не используем ignoreDuplicates
+                    bulkCreateOptions.updateOnDuplicate = options.updateOnDuplicate;
+                    delete bulkCreateOptions.ignoreDuplicates;
+                } else if (options.ignoreDuplicates !== false) {
+                    // Если updateOnDuplicate не указан, используем ignoreDuplicates
+                    bulkCreateOptions.ignoreDuplicates = true;
+                }
+                
+                const created = await Model.bulkCreate(batch, bulkCreateOptions);
                 results.push(...created);
             } catch (error) {
                 console.error(`Error in batchBulkCreate for ${Model.name}:`, error);

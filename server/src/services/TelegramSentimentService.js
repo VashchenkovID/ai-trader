@@ -416,7 +416,6 @@ class TelegramSentimentService {
 
             if (sentimentsToCache.length > 0) {
                 await CachedTelegramSentiment.bulkCreate(sentimentsToCache, {
-                    ignoreDuplicates: true,
                     updateOnDuplicate: ['sentiment', 'confidence', 'messageCount', 'positiveMessages', 'negativeMessages', 'neutralMessages', 'keywords', 'analyzedAt', 'cachedAt', 'expiresAt']
                 });
 
