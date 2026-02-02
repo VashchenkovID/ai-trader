@@ -5,6 +5,52 @@
   transition: all 0.2s ease;
 }
 
+/* Responsive */
+@media (max-width: 768px) {
+  .recommendation-card-header {
+    flex-direction: column;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-3);
+  }
+
+  .recommendation-card-name {
+    font-size: 16px;
+  }
+
+  .recommendation-card-ticker {
+    font-size: 13px;
+  }
+
+  .recommendation-card-body {
+    gap: var(--spacing-3);
+  }
+
+  .recommendation-card-main-action {
+    padding: var(--spacing-3);
+    flex-direction: column;
+    gap: var(--spacing-2);
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 480px) {
+  .recommendation-card-name {
+    font-size: 15px;
+  }
+
+  .recommendation-card-ticker {
+    font-size: 12px;
+  }
+
+  .recommendation-card-body {
+    gap: var(--spacing-2);
+  }
+
+  .recommendation-card-main-action {
+    padding: var(--spacing-2);
+  }
+}
+
 .recommendation-card-header {
   display: flex;
   justify-content: space-between;

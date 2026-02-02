@@ -50,6 +50,46 @@
   }
 }
 
+@media (max-width: 768px) {
+  .recommendations-grid {
+    gap: var(--spacing-3);
+  }
+
+  .recommendations-empty {
+    padding: var(--spacing-6);
+  }
+
+  .recommendations-empty-icon {
+    font-size: 48px;
+  }
+
+  .recommendations-empty-content h3 {
+    font-size: 18px;
+  }
+
+  .recommendations-empty-content p {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .recommendations-grid {
+    gap: var(--spacing-2);
+  }
+
+  .recommendations-empty {
+    padding: var(--spacing-4);
+  }
+
+  .recommendations-empty-icon {
+    font-size: 40px;
+  }
+
+  .recommendations-empty-content h3 {
+    font-size: 16px;
+  }
+}
+
 /* На больших экранах всегда 2 столбца */
 @media (min-width: 1025px) {
   .recommendations-grid {

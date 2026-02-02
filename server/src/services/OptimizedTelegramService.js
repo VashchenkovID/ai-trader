@@ -464,6 +464,7 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
 
         // Загружаем информацию об инструментах из кеша
         const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+        const CacheService = (await import('./CacheService.js')).default;
         const allFigis = [...new Set(this.strongRecommendations.map(r => r.figi).filter(f => f))];
         
         // Пытаемся загрузить инструменты из БД
@@ -485,71 +486,73 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
             });
         });
 
+        // Функция для получения имени инструмента с fallback на CacheService
+        const getInstrumentDisplayName = async (rec) => {
+            // Сначала проверяем данные из самой рекомендации
+            if (rec.ticker) {
+                return rec.ticker;
+            }
+            if (rec.name) {
+                return rec.name;
+            }
+            if (rec.instrument?.ticker) {
+                return rec.instrument.ticker;
+            }
+            if (rec.instrument?.name) {
+                return rec.instrument.name;
+            }
+            
+            // Затем проверяем кеш из БД
+            const instrument = instrumentMap.get(rec.figi);
+            if (instrument?.ticker) {
+                return instrument.ticker;
+            }
+            if (instrument?.name) {
+                return instrument.name;
+            }
+            
+            // В последнюю очередь пытаемся загрузить из CacheService
+            if (rec.figi) {
+                try {
+                    const cachedInstrument = await CacheService.getInstrument(rec.figi, true);
+                    if (cachedInstrument?.ticker) {
+                        return cachedInstrument.ticker;
+                    }
+                    if (cachedInstrument?.name) {
+                        return cachedInstrument.name;
+                    }
+                } catch (error) {
+                    // Игнорируем ошибки загрузки
+                }
+                
+                // Если ничего не найдено, используем первые 10 символов FIGI
+                return rec.figi.substring(0, 10);
+            }
+            
+            return 'Unknown';
+        };
+
         let message = `🎯 <b>СИЛЬНЫЕ РЕКОМЕНДАЦИИ</b>\n\n`;
 
         if (buyRecommendations.length > 0) {
             message += `📈 <b>ПОКУПКИ (${buyRecommendations.length}):</b>\n`;
-            buyRecommendations.slice(0, 5).forEach(rec => {
-                // Улучшенная логика получения имени инструмента
-                let displayName = 'Unknown';
-                
-                // Сначала проверяем данные из самой рекомендации
-                if (rec.ticker) {
-                    displayName = rec.ticker;
-                } else if (rec.name) {
-                    displayName = rec.name;
-                } else if (rec.instrument?.ticker) {
-                    displayName = rec.instrument.ticker;
-                } else if (rec.instrument?.name) {
-                    displayName = rec.instrument.name;
-                } else {
-                    // Затем проверяем кеш из БД
-                    const instrument = instrumentMap.get(rec.figi);
-                    if (instrument?.ticker) {
-                        displayName = instrument.ticker;
-                    } else if (instrument?.name) {
-                        displayName = instrument.name;
-                    } else if (rec.figi) {
-                        // В последнюю очередь используем FIGI
-                        displayName = rec.figi.substring(0, 10);
-                    }
-                }
-                
+            
+            // Обрабатываем рекомендации последовательно для асинхронной загрузки данных
+            for (const rec of buyRecommendations.slice(0, 5)) {
+                const displayName = await getInstrumentDisplayName(rec);
                 message += `• <b>${displayName}</b> - ${(rec.confidence * 100).toFixed(1)}% уверенности\n`;
-            });
+            }
             message += '\n';
         }
 
         if (sellRecommendations.length > 0) {
             message += `📉 <b>ПРОДАЖИ (${sellRecommendations.length}):</b>\n`;
-            sellRecommendations.slice(0, 5).forEach(rec => {
-                // Улучшенная логика получения имени инструмента
-                let displayName = 'Unknown';
-                
-                // Сначала проверяем данные из самой рекомендации
-                if (rec.ticker) {
-                    displayName = rec.ticker;
-                } else if (rec.name) {
-                    displayName = rec.name;
-                } else if (rec.instrument?.ticker) {
-                    displayName = rec.instrument.ticker;
-                } else if (rec.instrument?.name) {
-                    displayName = rec.instrument.name;
-                } else {
-                    // Затем проверяем кеш из БД
-                    const instrument = instrumentMap.get(rec.figi);
-                    if (instrument?.ticker) {
-                        displayName = instrument.ticker;
-                    } else if (instrument?.name) {
-                        displayName = instrument.name;
-                    } else if (rec.figi) {
-                        // В последнюю очередь используем FIGI
-                        displayName = rec.figi.substring(0, 10);
-                    }
-                }
-                
+            
+            // Обрабатываем рекомендации последовательно для асинхронной загрузки данных
+            for (const rec of sellRecommendations.slice(0, 5)) {
+                const displayName = await getInstrumentDisplayName(rec);
                 message += `• <b>${displayName}</b> - ${(rec.confidence * 100).toFixed(1)}% уверенности\n`;
-            });
+            }
             message += '\n';
         }
 

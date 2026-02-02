@@ -40,9 +40,9 @@ function App() {
                 path="/*"
                 element={
                   <ProtectedRoute>
-                    <div className="app flex h-screen">
+                    <div className="app">
                       <Navigation />
-                      <main className="main-content flex-1 overflow-auto">
+                      <main className="main-content">
                         <Routes>
                           <Route path="/" element={<Dashboard />} />
                           <Route path="/settings" element={<Settings />} />

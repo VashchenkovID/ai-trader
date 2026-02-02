@@ -295,21 +295,15 @@ class SchedulerService {
             this.quickTrainingTask = SchedulerUtils.createScheduledTask(
                 quickTrainingSchedule,
                 async () => {
-                    try {
-                        const QuickTrainingService = (await import('./QuickTrainingService.js')).default;
-                        await QuickTrainingService.performQuickTraining();
-                    } catch (error) {
-                        console.error('❌ Error in quick training task:', error);
-                    }
+                    // Используем метод SchedulerService для синхронизации флагов
+                    await this.performQuickTraining();
                 },
                 {
                     taskName: 'quick-training',
                     sendAlerts: false, // Уведомления отправляются внутри QuickTrainingService
                     startTime: this.startTime,
                     minDelay: 60 * 1000,
-                    checkCacheStale: true,
-                    isCacheStaleFn: () => this.isCacheStale(),
-                    skipIfStale: true // Пропускаем если кеш устарел
+                    checkCacheStale: false // Не проверяем устаревание кеша - быстрое обучение может работать со слегка устаревшими данными
                 }
             );
         }
@@ -501,9 +495,7 @@ class SchedulerService {
                 alertType: 'warning',
                 startTime: this.startTime,
                 minDelay: 35 * 60 * 1000, // 35 минут (первый запуск через 30 минут после старта)
-                checkCacheStale: true,
-                isCacheStaleFn: () => this.isCacheStale(),
-                skipIfStale: true
+                checkCacheStale: false // Не проверяем устаревание кеша - анализ может работать со слегка устаревшими данными
             }
         );
 
@@ -520,9 +512,7 @@ class SchedulerService {
                 minDelay: 60 * 1000,
                 checkFlagFn: () => this.isFullCacheUpdateRunning,
                 flagName: 'full cache update',
-                checkCacheStale: true,
-                isCacheStaleFn: () => this.isCacheStale(),
-                skipIfStale: true
+                checkCacheStale: false // Не проверяем устаревание кеша - обновление предсказаний может работать со слегка устаревшими данными
             }
         );
 
@@ -2175,68 +2165,30 @@ class SchedulerService {
     async performQuickTraining() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
+            console.log('⏭️ [Quick Training] Skipped: full cache update is running');
             return;
         }
         
         // Проверяем, не идет ли уже обучение или анализ
         if (this.isTraining || this.isAnalyzing) {
+            console.log(`⏭️ [Quick Training] Skipped: isTraining=${this.isTraining}, isAnalyzing=${this.isAnalyzing}`);
             return;
         }
 
+        console.log('🚀 [Quick Training] Starting...');
         const startTime = Date.now();
         this.isTraining = true;
         
         try {
-            // Получаем настройки быстрого обучения
-            const nnSettings = await SettingsService.getNeuralNetworkSettings();
-            const quickTrainingDays = nnSettings.nn_quick_training_days || nnSettings.nn_retrain_days || 30;
-
-            // Получаем все инструменты для быстрого обучения
-            const instruments = await CacheService.getAllInstruments();
-            const selectedInstruments = instruments;
-
-            let successCount = 0;
-            let failCount = 0;
-
-            for (const instrument of selectedInstruments) {
-                try {
-                    // Используем частичное обучение через IntegratedAIService
-                    await IntegratedAIService.partialTraining(instrument.figi, {
-                        days: quickTrainingDays,
-                        epochs: 10,
-                        batchSize: 16
-                    });
-                    successCount++;
-                } catch (error) {
-                    failCount++;
-                    console.warn(`⚡ Quick training failed for ${instrument.ticker}:`, error.message);
-                }
-            }
-
-            const duration = Math.round((Date.now() - startTime) / 1000);
-
-            // Отправляем уведомление о завершении всего процесса быстрого обучения
-            if (successCount > 0) {
-                await OptimizedTelegramService.sendAlert(
-                    'QUICK_TRAINING_COMPLETED',
-                    `⚡ <b>БЫСТРОЕ ОБУЧЕНИЕ ЗАВЕРШЕНО</b>\n\n📊 Результаты:\n• Успешно обучено: ${successCount} инструментов\n• Ошибок: ${failCount}\n• Время выполнения: ${duration} секунд\n• Инструментов в очереди: ${selectedInstruments.length}\n\n🧠 Нейросети обновлены и готовы к работе`,
-                    'success'
-                );
-            }
-
-            // Отправляем уведомление только при критических ошибках
-            if (failCount > 5) { // Только если много ошибок
-                await OptimizedTelegramService.sendAlert(
-                    'QUICK_TRAINING_ERRORS',
-                    `Быстрое обучение завершено с ошибками:\n• Успешно: ${successCount}\n• Ошибок: ${failCount}\n• Время: ${duration}с`,
-                    'warning'
-                );
-            }
-
+            // Используем QuickTrainingService, который обрабатывает только батч инструментов
+            // Это предотвращает блокировку других воркеров на долгое время
+            const QuickTrainingService = (await import('./QuickTrainingService.js')).default;
+            await QuickTrainingService.performQuickTraining();
         } catch (error) {
-            console.error('Quick training error:', error);
+            console.error('❌ [Quick Training] Error:', error);
         } finally {
             this.isTraining = false;
+            console.log('✅ [Quick Training] Completed, isTraining flag reset');
         }
     }
 
@@ -2610,19 +2562,23 @@ class SchedulerService {
     async performPortfolioAnalysis() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
+            console.log('⏭️ [Portfolio Analysis] Skipped: full cache update is running');
             return;
         }
         
         // Проверяем, не идет ли уже анализ или обучение
         if (this.isAnalyzing || this.isTraining) {
+            console.log(`⏭️ [Portfolio Analysis] Skipped: isAnalyzing=${this.isAnalyzing}, isTraining=${this.isTraining}`);
             return;
         }
 
         // Проверяем, активна ли нейросеть
         if (!NeuralNetworkService.isActive) {
+            console.log('⏭️ [Portfolio Analysis] Skipped: NeuralNetworkService is not active');
             return;
         }
 
+        console.log('🚀 [Portfolio Analysis] Starting...');
         this.isAnalyzing = true;
         
         try {
@@ -2711,6 +2667,7 @@ class SchedulerService {
             throw error;
         } finally {
             this.isAnalyzing = false;
+            console.log('✅ [Portfolio Analysis] Completed, isAnalyzing flag reset');
         }
     }
 

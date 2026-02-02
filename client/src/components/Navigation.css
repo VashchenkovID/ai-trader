@@ -269,15 +269,103 @@
   justify-content: center;
 }
 
+/* Mobile Menu Button */
+.mobile-menu-button {
+  display: none;
+  position: fixed;
+  top: var(--spacing-4);
+  left: var(--spacing-4);
+  z-index: 1000;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-base);
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-default);
+  box-shadow: var(--shadow-md);
+}
+
+.mobile-menu-button:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-hover);
+  transform: scale(1.05);
+}
+
+.mobile-menu-button:active {
+  transform: scale(0.95);
+}
+
+.mobile-menu-button i {
+  font-size: 1.25rem;
+}
+
+/* Navigation Overlay */
+.navigation-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 999;
+  animation: fadeIn 0.2s ease-out;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
+  .mobile-menu-button {
+    display: flex;
+  }
+
+  .navigation-overlay {
+    display: block;
+  }
+
   .navigation-sidebar {
-    width: 240px;
-    min-width: 240px;
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    width: 280px;
+    min-width: 280px;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+  }
+
+  .navigation-sidebar.mobile-open {
+    transform: translateX(0);
   }
   
   .navigation-menu-item {
-    padding: var(--spacing-2) var(--spacing-3);
-    font-size: 0.8125rem;
+    padding: var(--spacing-3) var(--spacing-4);
+    font-size: 0.875rem;
+    min-height: 48px; /* Touch target */
+  }
+
+  .navigation-logo-text {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .navigation-sidebar {
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .mobile-menu-button {
+    width: 44px;
+    height: 44px;
+    top: var(--spacing-3);
+    left: var(--spacing-3);
   }
 }

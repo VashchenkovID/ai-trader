@@ -16,6 +16,7 @@ interface NavigationProps {
 const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
   const [systemStatus, setSystemStatus] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const toast = useRef<Toast>(null);
 
   // Загрузка статуса системы
@@ -71,9 +72,56 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  // Закрываем мобильное меню при навигации
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  // Закрываем мобильное меню при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (isMobileMenuOpen && !target.closest('.navigation-sidebar') && !target.closest('.mobile-menu-button')) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+
+    if (isMobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.body.style.overflow = 'hidden'; // Предотвращаем скролл фона
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.body.style.overflow = '';
+    };
+  }, [isMobileMenuOpen]);
+
   return (
-    <div className={`navigation-sidebar ${className}`}>
-      <Toast ref={toast} />
+    <>
+      {/* Мобильная кнопка меню */}
+      <button
+        className="mobile-menu-button"
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        aria-label="Открыть меню"
+        aria-expanded={isMobileMenuOpen}
+      >
+        <i className={`pi ${isMobileMenuOpen ? 'pi-times' : 'pi-bars'}`}></i>
+      </button>
+
+      {/* Overlay для мобильных */}
+      {isMobileMenuOpen && (
+        <div
+          className="navigation-overlay"
+          onClick={() => setIsMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <div className={`navigation-sidebar ${className} ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+        <Toast ref={toast} />
       
       {/* Заголовок */}
       <div className="navigation-header">
@@ -144,6 +192,7 @@ const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
         </Button>
       </div>
     </div>
+    </>
   );
 };
 

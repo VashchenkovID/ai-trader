@@ -104,12 +104,27 @@ class QuickTrainingService {
             };
         }
 
+        // Проверяем флаг в QuickTrainingService (локальный)
         if (this.isTraining) {
-            console.warn('⚠️ Quick training already in progress, skipping');
+            console.warn('⚠️ [QuickTrainingService] Training already in progress, skipping');
             return {
                 success: false,
                 message: 'Training already in progress'
             };
+        }
+
+        // Проверяем флаг в SchedulerService (глобальный)
+        try {
+            const SchedulerService = (await import('./SchedulerService.js')).default;
+            if (SchedulerService && (SchedulerService.isTraining || SchedulerService.isAnalyzing)) {
+                console.warn(`⚠️ [QuickTrainingService] Skipped: SchedulerService.isTraining=${SchedulerService.isTraining}, isAnalyzing=${SchedulerService.isAnalyzing}`);
+                return {
+                    success: false,
+                    message: 'SchedulerService training or analysis in progress'
+                };
+            }
+        } catch (e) {
+            // Игнорируем ошибку импорта
         }
 
         this.isTraining = true;

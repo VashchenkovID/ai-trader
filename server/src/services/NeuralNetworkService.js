@@ -3048,10 +3048,29 @@ class NeuralNetworkService {
             // Сильные рекомендации теперь отправляются через IntegratedAIService
             for (const recommendation of analysis.buyRecommendations || []) {
                 if (recommendation.prediction.score > 0.8) {
+                    const figi = recommendation.instrument?.figi || recommendation.figi;
+                    if (!figi) continue;
+                    
+                    // Загружаем данные об инструменте, если их нет в рекомендации
+                    let ticker = recommendation.instrument?.ticker;
+                    let name = recommendation.instrument?.name;
+                    
+                    if (!ticker || !name) {
+                        try {
+                            const instrument = await CacheService.getInstrument(figi, true);
+                            if (instrument) {
+                                ticker = ticker || instrument.ticker;
+                                name = name || instrument.name;
+                            }
+                        } catch (error) {
+                            // Игнорируем ошибки загрузки
+                        }
+                    }
+                    
                     await OptimizedTelegramService.addStrongRecommendation({
-                        figi: recommendation.instrument?.figi,
-                        ticker: recommendation.instrument?.ticker,
-                        name: recommendation.instrument?.name,
+                        figi,
+                        ticker,
+                        name,
                         recommendation: 'BUY',
                         confidence: recommendation.prediction.score,
                         score: recommendation.prediction.score
@@ -3061,10 +3080,29 @@ class NeuralNetworkService {
 
             for (const recommendation of analysis.sellRecommendations || []) {
                 if (recommendation.prediction.score < 0.2) {
+                    const figi = recommendation.item?.figi || recommendation.instrument?.figi || recommendation.figi;
+                    if (!figi) continue;
+                    
+                    // Загружаем данные об инструменте, если их нет в рекомендации
+                    let ticker = recommendation.item?.ticker || recommendation.instrument?.ticker;
+                    let name = recommendation.item?.name || recommendation.instrument?.name;
+                    
+                    if (!ticker || !name) {
+                        try {
+                            const instrument = await CacheService.getInstrument(figi, true);
+                            if (instrument) {
+                                ticker = ticker || instrument.ticker;
+                                name = name || instrument.name;
+                            }
+                        } catch (error) {
+                            // Игнорируем ошибки загрузки
+                        }
+                    }
+                    
                     await OptimizedTelegramService.addStrongRecommendation({
-                        figi: recommendation.item?.figi || recommendation.instrument?.figi,
-                        ticker: recommendation.item?.ticker || recommendation.instrument?.ticker,
-                        name: recommendation.item?.name || recommendation.instrument?.name,
+                        figi,
+                        ticker,
+                        name,
                         recommendation: 'SELL',
                         confidence: 1 - recommendation.prediction.score,
                         score: recommendation.prediction.score

@@ -60,3 +60,35 @@
   color: var(--color-text-primary) !important;
   box-shadow: var(--shadow-md) !important;
 }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .chart-wrapper {
+    min-height: 250px;
+    padding: var(--spacing-2);
+  }
+
+  /* Улучшенная читаемость легенды на мобильных */
+  .chart-wrapper .chartjs-legend {
+    font-size: 11px !important;
+    padding: var(--spacing-2) !important;
+  }
+
+  /* Увеличенный tooltip для touch */
+  .chart-wrapper .chartjs-tooltip {
+    font-size: 12px !important;
+    padding: var(--spacing-2) !important;
+    min-width: 120px;
+  }
+}
+
+@media (max-width: 480px) {
+  .chart-wrapper {
+    min-height: 200px;
+    padding: var(--spacing-1);
+  }
+
+  .chart-wrapper .chartjs-legend {
+    font-size: 10px !important;
+  }
+}

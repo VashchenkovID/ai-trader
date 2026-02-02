@@ -146,6 +146,20 @@ body::before {
   padding: var(--spacing-6);
 }
 
+@media (max-width: 768px) {
+  .main-content {
+    padding: var(--spacing-4) var(--spacing-3);
+    padding-top: calc(var(--spacing-4) + 60px);
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    padding: var(--spacing-3) var(--spacing-2);
+    padding-top: calc(var(--spacing-3) + 56px);
+  }
+}
+
 /* Переопределяем светлый фон из index.css */
 #root {
   background-color: transparent;
@@ -543,4 +557,120 @@ body::before {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* Мобильные улучшения */
+
+/* Минимальные размеры для touch targets */
+button,
+a,
+input[type="button"],
+input[type="submit"],
+input[type="checkbox"],
+input[type="radio"],
+select,
+[role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+@media (max-width: 768px) {
+  /* Улучшенная читаемость на мобильных */
+  body {
+    font-size: 16px; /* Предотвращает zoom на iOS */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Адаптивные размеры шрифтов */
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+  }
+
+  h4 {
+    font-size: 1.125rem;
+  }
+
+  /* Улучшенные отступы для карточек */
+  .card,
+  [class*="card"] {
+    margin-bottom: var(--spacing-3);
+  }
+
+  /* Адаптивные таблицы */
+  table {
+    font-size: 0.875rem;
+  }
+
+  /* Горизонтальная прокрутка для таблиц */
+  .table-wrapper,
+  [class*="table-wrapper"],
+  [class*="table-container"] {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Улучшенные модальные окна */
+  .p-dialog,
+  [class*="dialog"],
+  [class*="modal"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    max-height: 100vh !important;
+  }
+
+  .p-dialog-content {
+    padding: var(--spacing-3) !important;
+  }
+
+  .p-dialog-header {
+    padding: var(--spacing-3) !important;
+  }
+
+  .p-dialog-footer {
+    padding: var(--spacing-3) !important;
+  }
+
+  /* Адаптивные формы */
+  .p-inputtext,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px !important; /* Предотвращает zoom на iOS */
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Еще более компактные размеры для маленьких экранов */
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+  }
+
+  h3 {
+    font-size: 1.125rem;
+  }
+
+  /* Уменьшенные отступы */
+  .card,
+  [class*="card"] {
+    padding: var(--spacing-3) !important;
+    margin-bottom: var(--spacing-2);
+  }
 }

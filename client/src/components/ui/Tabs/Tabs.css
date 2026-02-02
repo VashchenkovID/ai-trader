@@ -145,12 +145,64 @@
 /* Адаптивность */
 @media (max-width: 768px) {
   .tabs {
-    flex-wrap: wrap;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-default) transparent;
+    /* Скрываем скроллбар, но оставляем функциональность */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
   }
 
   .tabs-item {
-    flex: 1;
-    min-width: 0;
+    flex: 0 0 auto; /* Не растягиваются, сохраняют свой размер */
+    min-width: max-content; /* Минимальная ширина по содержимому */
+    white-space: nowrap; /* Предотвращаем перенос текста */
+  }
+
+  /* Уменьшаем padding на очень маленьких экранах */
+  .tabs-sm .tabs-item {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .tabs-md .tabs-item {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .tabs-lg .tabs-item {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tabs {
+    gap: 2px;
+    padding: 2px;
+  }
+
+  .tabs-sm .tabs-item {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  .tabs-md .tabs-item {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .tabs-lg .tabs-item {
+    padding: 8px 12px;
+    font-size: 13px;
   }
 }
 

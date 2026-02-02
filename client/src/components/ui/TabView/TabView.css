@@ -6,3 +6,20 @@
   margin-top: 16px;
 }
 
+/* Адаптивность для TabView */
+@media (max-width: 768px) {
+  .tab-view {
+    overflow-x: hidden; /* Предотвращаем горизонтальный скролл всего TabView */
+  }
+
+  .tab-view-content {
+    margin-top: var(--spacing-3);
+  }
+}
+
+@media (max-width: 480px) {
+  .tab-view-content {
+    margin-top: var(--spacing-2);
+  }
+}
+
