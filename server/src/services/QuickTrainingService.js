@@ -104,45 +104,11 @@ class QuickTrainingService {
             };
         }
 
-        // Проверяем флаг в QuickTrainingService (локальный)
-        if (this.isTraining) {
-            console.warn('⚠️ [QuickTrainingService] Training already in progress, skipping');
-            return {
-                success: false,
-                message: 'Training already in progress'
-            };
-        }
-
-        // Проверяем флаг в SchedulerService (глобальный)
-        // Анализ не блокирует быстрое обучение, только другое обучение
-        try {
-            const SchedulerService = (await import('./SchedulerService.js')).default;
-            if (SchedulerService && SchedulerService.isTraining) {
-                console.warn(`⚠️ [QuickTrainingService] Skipped: SchedulerService.isTraining=${SchedulerService.isTraining}`);
-                return {
-                    success: false,
-                    message: 'SchedulerService training in progress'
-                };
-            }
-        } catch (e) {
-            // Игнорируем ошибку импорта
-        }
-
-        this.isTraining = true;
         const startTime = Date.now();
         let successCount = 0;
         let errorCount = 0;
 
         try {
-
-            // Проверяем, не идет ли полное обучение
-            const isFullTrainingActive = await this.isFullTrainingActive();
-            if (isFullTrainingActive) {
-                return {
-                    success: false,
-                    message: 'Full training is active'
-                };
-            }
 
             // ПОСЛЕДОВАТЕЛЬНОЕ ОБУЧЕНИЕ ВСЕХ НЕЙРОСЕТЕЙ: Базовая → Ансамбль → Мета-обучение → RL
             // Используем оптимизированные параметры для быстрого обучения
@@ -233,8 +199,6 @@ class QuickTrainingService {
                 success: false,
                 error: error.message
             };
-        } finally {
-            this.isTraining = false;
         }
     }
 

@@ -2169,21 +2169,8 @@ class SchedulerService {
     }
 
     async performQuickTraining() {
-        // Проверяем, не идет ли полное обновление кеша
-        if (this.isFullCacheUpdateRunning) {
-            console.log('⏭️ [Quick Training] Skipped: full cache update is running');
-            return;
-        }
-        
-        // Проверяем, не идет ли уже обучение (анализ не блокирует быстрое обучение)
-        if (this.isTraining) {
-            console.log(`⏭️ [Quick Training] Skipped: isTraining=${this.isTraining}`);
-            return;
-        }
-
         console.log('🚀 [Quick Training] Starting...');
         const startTime = Date.now();
-        this.isTraining = true;
         
         // Отправляем уведомление о старте быстрого обучения
         try {
@@ -2205,9 +2192,6 @@ class SchedulerService {
             await QuickTrainingService.performQuickTraining();
         } catch (error) {
             console.error('❌ [Quick Training] Error:', error);
-        } finally {
-            this.isTraining = false;
-            console.log('✅ [Quick Training] Completed, isTraining flag reset');
         }
     }
 
