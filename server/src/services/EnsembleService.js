@@ -1760,7 +1760,7 @@ class EnsembleService {
             };
 
         } catch (error) {
-            console.error('❌ Ensemble prediction failed:', error);
+            console.error('❌ Ensemble prediction failed:', error.message || error);
             return { score: 0, confidence: 0, error: error.message };
         }
     }
@@ -1779,7 +1779,7 @@ class EnsembleService {
         
         // Проверяем формат features
         if (!features || !Array.isArray(features)) {
-            console.error(`❌ Invalid features format for ${modelType}:`, typeof features, features);
+            console.error(`❌ Invalid features format for ${modelType}:`, typeof features, Array.isArray(features) ? `Array(${features.length})` : 'not an array');
             return 0.5;
         }
         
@@ -1950,7 +1950,7 @@ class EnsembleService {
             };
 
         } catch (error) {
-            console.error('❌ Simple ensemble prediction failed:', error);
+            console.error('❌ Simple ensemble prediction failed:', error.message || error);
             return { score: 0, confidence: 0, error: error.message };
         }
     }
@@ -2517,7 +2517,7 @@ class EnsembleService {
             );
             
         } catch (error) {
-            console.error('❌ Failed to save ensemble models:', error);
+            console.error('❌ Failed to save ensemble models:', error.message || error);
         }
     }
 
@@ -2618,7 +2618,7 @@ class EnsembleService {
             }
             
         } catch (error) {
-            console.error('❌ Failed to load ensemble models:', error);
+            console.error('❌ Failed to load ensemble models:', error.message || error);
         }
     }
 }

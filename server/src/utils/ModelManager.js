@@ -54,10 +54,7 @@ class ModelManager {
             } catch (chmodError) {
                 // Игнорируем ошибки chmod (может не работать в некоторых окружениях)
             }
-            
-            // Используем tf.io.fileSystem для Node.js
-            console.log(`💾 Saving model ${modelName} to ${modelPath}`);
-            console.log(`📊 Model info: layers=${model.layers?.length || 0}, trainable=${model.trainable}`);
+        
             
             // Сохраняем модель и веса отдельно для совместимости
             const modelJson = model.toJSON();
@@ -111,7 +108,6 @@ class ModelManager {
                 // Игнорируем ошибки chmod
             }
             
-            console.log(`✅ Model ${modelName} saved successfully`);
             return true;
             
         } catch (error) {
@@ -148,12 +144,10 @@ class ModelManager {
                     modelExists = true;
                     weightsPath = weightsJsonPath;
                 } catch {
-                    console.log(`📭 Model files not found for ${modelName}`);
                     return null;
                 }
             }
             
-            console.log(`📥 Loading model ${modelName} from ${jsonPath}`);
             
             // Загружаем манифест модели
             const manifestData = await fs.readFile(jsonPath, 'utf8');
@@ -163,9 +157,14 @@ class ModelManager {
                 manifest = JSON.parse(manifestData);
             } catch (error) {
                 // Если файл содержит JSON как строку, парсим его
-                console.log(`🔄 Parsing JSON string for ${modelName}`);
-                const parsedData = JSON.parse(manifestData);
-                manifest = JSON.parse(parsedData);
+                try {
+                    const parsedData = JSON.parse(manifestData);
+                    manifest = JSON.parse(parsedData);
+                } catch (parseError) {
+                    const errorMsg = parseError?.message || String(parseError);
+                    console.error(`❌ Failed to parse manifest JSON for ${modelName}:`, errorMsg);
+                    throw new Error(`Failed to parse manifest: ${errorMsg}`);
+                }
             }
             
             // Создаем модель из топологии
@@ -173,11 +172,23 @@ class ModelManager {
             
             // Если modelTopology сохранена как строка, парсим её
             if (typeof modelTopology === 'string') {
-                console.log(`🔄 Parsing modelTopology from string for ${modelName}`);
-                modelTopology = JSON.parse(modelTopology);
+                try {
+                    modelTopology = JSON.parse(modelTopology);
+                } catch (parseError) {
+                    const errorMsg = parseError?.message || String(parseError);
+                    console.error(`❌ Failed to parse modelTopology for ${modelName}:`, errorMsg);
+                    throw new Error(`Failed to parse modelTopology: ${errorMsg}`);
+                }
             }
             
-            const model = await tf.models.modelFromJSON(modelTopology);
+            let model;
+            try {
+                model = await tf.models.modelFromJSON(modelTopology);
+            } catch (modelError) {
+                const errorMsg = modelError?.message || String(modelError);
+                console.error(`❌ Failed to create model from JSON for ${modelName}:`, errorMsg);
+                throw new Error(`Failed to create model from JSON: ${errorMsg}`);
+            }
             
             // Загружаем веса в зависимости от формата
             let weightTensors = [];
@@ -229,7 +240,6 @@ class ModelManager {
             
             model.setWeights(weightTensors);
             
-            console.log(`✅ Model ${modelName} loaded successfully`);
             return model;
             
         } catch (error) {
@@ -283,7 +293,6 @@ class ModelManager {
             try {
                 await fs.unlink(jsonPath);
                 await fs.unlink(binPath);
-                console.log(`🗑️ Model ${modelName} deleted successfully`);
                 return true;
             } catch (error) {
                 if (error.code !== 'ENOENT') {
