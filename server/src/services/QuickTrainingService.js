@@ -174,11 +174,21 @@ class QuickTrainingService {
                 // Этап 2: Ансамбль (с оптимизированными параметрами)
                 try {
                     const EnsembleService = (await import('./EnsembleService.js')).default;
-                    await EnsembleService.trainEnsemble(instrument.figi, {
+                    const result = await EnsembleService.trainEnsemble(instrument.figi, {
                         days: trainingDays,
                         epochs: 20 // Вместо стандартных 50
                     });
-                    networksTrained++;
+                    
+                    // Проверяем, был ли инструмент пропущен из-за недостаточных данных
+                    if (result && result.skipped) {
+                        console.log(`ℹ️ [Quick Ensemble] Skipped ${instrument.ticker}: ${result.message || 'insufficient data'}`);
+                        // Не считаем это ошибкой, просто пропускаем
+                    } else if (result && result.success) {
+                        networksTrained++;
+                    } else {
+                        networksFailed++;
+                        console.warn(`⚠️ [Quick Ensemble] Training failed for ${instrument.ticker}: ${result?.message || 'unknown error'}`);
+                    }
                 } catch (error) {
                     networksFailed++;
                     console.error(`❌ [Quick Ensemble] Training failed for ${instrument.ticker}:`, error.message);

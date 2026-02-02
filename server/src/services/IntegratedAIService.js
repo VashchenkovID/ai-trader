@@ -1463,7 +1463,23 @@ class IntegratedAIService {
             // Обучение ансамбля
             if (this.activeNetworks.ensemble) {
                 try {
-                    results.ensemble = await EnsembleService.trainEnsemble(figi, options);
+                    const ensembleResult = await EnsembleService.trainEnsemble(figi, options);
+                    
+                    // Проверяем, был ли инструмент пропущен из-за недостаточных данных
+                    if (ensembleResult && ensembleResult.skipped) {
+                        if (LoggerService.isInitialized) {
+                            LoggerService.info('Ensemble training skipped', {
+                                service: 'IntegratedAIService',
+                                operation: 'trainAllNetworks',
+                                figi,
+                                reason: ensembleResult.reason,
+                                message: ensembleResult.message
+                            });
+                        }
+                        results.ensemble = ensembleResult; // Сохраняем результат с информацией о пропуске
+                    } else {
+                        results.ensemble = ensembleResult;
+                    }
                 } catch (error) {
                     if (LoggerService.isInitialized) {
                         LoggerService.error('Ensemble training failed', {

@@ -1700,14 +1700,86 @@ class SchedulerService {
      * Использует утилиту из priceUpdateUtils
      */
     async performActiveSignalsPricesUpdate() {
-        const context = {
-            getWebSocketService: () => this.getWebSocketService(),
-            workersSet: this.workers,
-            checkFullCacheUpdate: () => this.isFullCacheUpdateRunning,
-            handleTriggeredSignals: (signals) => this.handleTriggeredSignals(signals)
-        };
+        let workerId = null;
         
-        return await SchedulerUtils.performActiveSignalsPricesUpdate(context);
+        try {
+            // Регистрируем воркер в мониторинге
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            workerId = WorkerMonitoringService.registerWorker(
+                'active-signals-prices-update',
+                'Обновление цен активных сигналов',
+                {
+                    stage: 'initializing'
+                }
+            );
+        } catch (monitoringError) {
+            console.warn('⚠️ Failed to register active signals prices update worker:', monitoringError.message || monitoringError);
+        }
+        
+        try {
+            const context = {
+                getWebSocketService: () => this.getWebSocketService(),
+                workersSet: this.workers,
+                checkFullCacheUpdate: () => this.isFullCacheUpdateRunning,
+                handleTriggeredSignals: (signals) => this.handleTriggeredSignals(signals)
+            };
+            
+            // Обновляем статус - начало выполнения
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 10,
+                            metadata: {
+                                stage: 'updating'
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                }
+            }
+            
+            const result = await SchedulerUtils.performActiveSignalsPricesUpdate(context);
+            
+            // Обновляем статус - завершение
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            totalUpdated: result?.totalUpdated || 0,
+                            triggeredSignals: result?.triggeredSignals?.length || 0,
+                            skipped: result?.skipped || false
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                }
+            }
+            
+            return result;
+        } catch (error) {
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                        WorkerMonitoringService.completeWorker(workerId, false, {
+                            error: error.message || error
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                }
+            }
+            throw error;
+        }
     }
 
     /**
@@ -1856,20 +1928,91 @@ class SchedulerService {
      * Использует утилиту из priceUpdateUtils
      */
     async performTradingRequestsPricesUpdate() {
-        const context = {
-            getWebSocketService: () => this.getWebSocketService(),
-            workersSet: this.workers,
-            checkFullCacheUpdate: () => this.isFullCacheUpdateRunning
-        };
+        let workerId = null;
         
-        const result = await SchedulerUtils.performTradingRequestsPricesUpdate(context);
+        try {
+            // Регистрируем воркер в мониторинге
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            workerId = WorkerMonitoringService.registerWorker(
+                'trading-requests-prices-update',
+                'Обновление цен торговых заявок',
+                {
+                    stage: 'initializing'
+                }
+            );
+        } catch (monitoringError) {
+            console.warn('⚠️ Failed to register trading requests prices update worker:', monitoringError.message || monitoringError);
+        }
+        
+        try {
+            const context = {
+                getWebSocketService: () => this.getWebSocketService(),
+                workersSet: this.workers,
+                checkFullCacheUpdate: () => this.isFullCacheUpdateRunning
+            };
+            
+            // Обновляем статус - начало выполнения
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 10,
+                            metadata: {
+                                stage: 'updating'
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                }
+            }
+            
+            const result = await SchedulerUtils.performTradingRequestsPricesUpdate(context);
+            
+            // Обновляем статус - завершение
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            totalUpdated: result?.totalUpdated || 0,
+                            totalFailed: result?.totalFailed || 0,
+                            readyToExecute: result?.readyToExecute?.length || 0,
+                            skipped: result?.skipped || false
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                }
+            }
 
             // Обрабатываем заявки, готовые к исполнению
-        if (result && result.readyToExecute && result.readyToExecute.length > 0) {
+            if (result && result.readyToExecute && result.readyToExecute.length > 0) {
                 await this.handleReadyToExecuteRequests(result.readyToExecute);
             }
 
             return result;
+        } catch (error) {
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                        WorkerMonitoringService.completeWorker(workerId, false, {
+                            error: error.message || error
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                }
+            }
+            throw error;
+        }
     }
 
     /**
@@ -2081,11 +2224,22 @@ class SchedulerService {
             const EnsembleService = (await import('./EnsembleService.js')).default;
             for (const instrument of instruments) {
                 try {
-                    await EnsembleService.train(instrument.figi, {
+                    // Используем trainEnsemble
+                    const result = await EnsembleService.trainEnsemble(instrument.figi, {
                         days: trainingDays,
                         epochs: 50
                     });
-                    successes++;
+                    
+                    // Проверяем, был ли инструмент пропущен из-за недостаточных данных
+                    if (result && result.skipped) {
+                        console.log(`ℹ️ [Ensemble] Skipped ${instrument.ticker}: ${result.message || 'insufficient data'}`);
+                        // Не считаем это ошибкой, просто пропускаем
+                    } else if (result && result.success) {
+                        successes++;
+                    } else {
+                        console.warn(`⚠️ [Ensemble] Training failed for ${instrument.ticker}: ${result?.message || 'unknown error'}`);
+                        failures++;
+                    }
                 } catch (error) {
                     console.warn(`❌ [Ensemble] Training failed for ${instrument.ticker}:`, error.message);
                     failures++;
@@ -3152,18 +3306,97 @@ class SchedulerService {
     }
 
     async performNewsCacheCleanup() {
+        let workerId = null;
+        
         try {
+            // Регистрируем воркер в мониторинге
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            workerId = WorkerMonitoringService.registerWorker(
+                'news-cache-cleanup',
+                'Еженедельная очистка новостей',
+                {
+                    stage: 'initializing'
+                }
+            );
+        } catch (monitoringError) {
+            console.warn('⚠️ Failed to register news cache cleanup worker:', monitoringError.message || monitoringError);
+        }
+        
+        try {
+            // Обновляем статус - начало выполнения
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 20,
+                            metadata: {
+                                stage: 'cleaning_news'
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                }
+            }
 
             // Очистка кеша новостей
             const NewsAnalysisService = (await import('./NewsAnalysisService.js')).default;
             await NewsAnalysisService.cleanExpiredNews();
             
+            // Обновляем статус - очистка настроений
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 60,
+                            metadata: {
+                                stage: 'cleaning_sentiments'
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                }
+            }
+            
             // Очистка кеша настроений Telegram
             const TelegramSentimentService = (await import('./TelegramSentimentService.js')).default;
             await TelegramSentimentService.cleanExpiredSentiments();
             
+            // Завершаем воркер успешно
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            message: 'Очистка кеша новостей завершена'
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                }
+            }
 
         } catch (error) {
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                        WorkerMonitoringService.completeWorker(workerId, false, {
+                            error: error.message || error
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                }
+            }
             console.error('❌ Error during news cache cleanup:', error);
             throw error;
         }
@@ -3314,6 +3547,7 @@ class SchedulerService {
      */
     async performDailyNewsUpdate() {
         const LoggerService = (await import('./LoggerService.js')).default;
+        let workerId = null;
         
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
@@ -3322,6 +3556,23 @@ class SchedulerService {
                 operation: 'performDailyNewsUpdate'
             });
             return;
+        }
+        
+        try {
+            // Регистрируем воркер в мониторинге
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            workerId = WorkerMonitoringService.registerWorker(
+                'news-daily-update',
+                'Ежедневное обновление новостей',
+                {
+                    stage: 'initializing'
+                }
+            );
+        } catch (monitoringError) {
+            console.warn('⚠️ Failed to register daily news update worker:', monitoringError.message || monitoringError);
         }
         
         try {
@@ -3347,6 +3598,25 @@ class SchedulerService {
                 startIndex,
                 limit: 30
             });
+            
+            // Обновляем статус - начало выполнения
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 20,
+                            metadata: {
+                                stage: 'loading',
+                                startIndex,
+                                limit: 30
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                }
+            }
             
             const result = await NewsAnalysisService.loadFreshNewsForAllInstruments({
                 limit: 30, // Ограничиваем количество инструментов
@@ -3402,6 +3672,24 @@ class SchedulerService {
                 }
             });
             
+            // Завершаем воркер успешно
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            updated: result.updated || 0,
+                            totalNews: result.totalNews || 0,
+                            processed: result.processed || 0,
+                            total: result.total || 0,
+                            errorCount: result.errorCount || 0
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                }
+            }
+            
             // Отправляем уведомление через Telegram (безопасно, чтобы не прерывать процесс)
             if (result.updated > 0) {
                 try {
@@ -3429,6 +3717,21 @@ class SchedulerService {
             return result;
 
         } catch (error) {
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                        WorkerMonitoringService.completeWorker(workerId, false, {
+                            error: error.message || error
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                }
+            }
+            
             LoggerService.error('Error during daily news update', {
                 service: 'SchedulerService',
                 operation: 'performDailyNewsUpdate',
@@ -3805,7 +4108,42 @@ class SchedulerService {
     }
 
     async performTelegramCacheUpdate() {
+        let workerId = null;
+        
         try {
+            // Регистрируем воркер в мониторинге
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            workerId = WorkerMonitoringService.registerWorker(
+                'telegram-cache-update',
+                'Обновление кеша Telegram',
+                {
+                    stage: 'initializing'
+                }
+            );
+        } catch (monitoringError) {
+            console.warn('⚠️ Failed to register Telegram cache update worker:', monitoringError.message || monitoringError);
+        }
+        
+        try {
+            // Обновляем статус - начало выполнения
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 10,
+                            metadata: {
+                                stage: 'loading_instruments'
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                }
+            }
 
             // Получаем список активных инструментов для обновления настроений
             const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
@@ -3820,8 +4158,33 @@ class SchedulerService {
             
             const TelegramSentimentService = (await import('./TelegramSentimentService.js')).default;
             
+            let processed = 0;
+            let failed = 0;
+            
             // Обновляем настроения для каждого инструмента
-            for (const instrument of instruments) {
+            for (let i = 0; i < instruments.length; i++) {
+                const instrument = instruments[i];
+                
+                // Обновляем прогресс
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                progress: Math.round((i / instruments.length) * 80) + 10,
+                                metadata: {
+                                    stage: 'updating',
+                                    currentInstrument: instrument.ticker,
+                                    processed,
+                                    failed
+                                }
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    }
+                }
+                
                 try {
                     const sentiment = await TelegramSentimentService.analyzeTelegramSentiment(instrument.figi, {
                         days: 7,
@@ -3830,15 +4193,45 @@ class SchedulerService {
                     
                     // Кешируем результат
                     await TelegramSentimentService.cacheSentiment(instrument.figi, sentiment);
-                    
+                    processed++;
 
                 } catch (error) {
                     console.warn(`⚠️ Failed to update sentiment for ${instrument.ticker}:`, error.message);
+                    failed++;
                 }
             }
             
+            // Завершаем воркер успешно
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            processed,
+                            failed,
+                            total: instruments.length
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                }
+            }
 
         } catch (error) {
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                        WorkerMonitoringService.completeWorker(workerId, false, {
+                            error: error.message || error
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                }
+            }
             console.error('❌ Error during Telegram cache update:', error);
             throw error;
         }

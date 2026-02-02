@@ -415,13 +415,14 @@ class EnsembleService {
             
             // Адаптивная проверка данных
             // Минимальные требования для каждой модели:
-            // - LSTM: минимум 24 (windowSize) + 3 = 27 свечей (окно 24 дня + 1 для лейбла + 2 для минимум 2 образцов)
-            // - CNN: минимум 30 (windowSize) + 3 = 33 свечи (окно 30 дней + 1 для лейбла + 2 для минимум 2 образцов)
-            // - Transformer: минимум 84 + 3 = 87 свечей (окно 84 дня + 1 для лейбла + 2 для минимум 2 образцов)
-            // Нужно минимум 2 образца для обучения (train/validation split требует минимум 2 образца)
-            const minRequired = 27; // Минимум для LSTM (24 + 3)
-            const minForCNN = 33; // Минимум для CNN (30 + 3)
-            const minForTransformer = 87; // Минимум для Transformer (84 + 3)
+            // - LSTM: минимум 24 (windowSize) + 2 = 26 свечей (окно 24 дня + 1 для лейбла + 1 для создания хотя бы одного образца)
+            //   При 26 свечах создается 1 образец, обучение идет без валидации (trainModel обрабатывает это)
+            // - CNN: минимум 30 (windowSize) + 2 = 32 свечи (окно 30 дней + 1 для лейбла + 1 для создания хотя бы одного образца)
+            // - Transformer: минимум 84 + 2 = 86 свечей (окно 84 дня + 1 для лейбла + 1 для создания хотя бы одного образца)
+            // Для 2+ образцов нужно windowSize + 3, но для 1 образца достаточно windowSize + 2
+            const minRequired = 26; // Минимум для LSTM (24 + 2) - позволяет создать 1 образец
+            const minForCNN = 32; // Минимум для CNN (30 + 2) - позволяет создать 1 образец
+            const minForTransformer = 86; // Минимум для Transformer (84 + 2) - позволяет создать 1 образец
             
             // Определяем, какие модели можем обучить
             const canTrainLSTM = candles.length >= minRequired;
@@ -430,7 +431,28 @@ class EnsembleService {
             
             // Проверяем, что хотя бы одна модель может быть обучена
             if (!canTrainLSTM && !canTrainCNN && !canTrainTransformer) {
-                throw new Error(`Insufficient data: ${candles.length} candles (minimum ${minRequired} required for any model)`);
+                // Получаем ticker для логирования
+                let ticker = figi.substring(0, 10);
+                try {
+                    const instrument = await CacheService.getInstrument(figi, true);
+                    ticker = instrument?.ticker || ticker;
+                } catch (e) {
+                    // Игнорируем ошибку получения ticker
+                }
+                
+                console.log(`ℹ️ [Ensemble] Skipping training for ${ticker}: insufficient data (${candles.length} candles, minimum ${minRequired} required for any model)`);
+                
+                // Возвращаем результат с информацией о пропуске вместо выброса ошибки
+                return {
+                    success: false,
+                    skipped: true,
+                    reason: 'insufficient_data',
+                    message: `Insufficient data: ${candles.length} candles (minimum ${minRequired} required for any model)`,
+                    candles: candles.length,
+                    minRequired: minRequired,
+                    figi: figi,
+                    ticker: ticker
+                };
             }
             
             // Проверяем, что данные реальные
@@ -656,35 +678,33 @@ class EnsembleService {
             
             // Проверяем, что хотя бы одна модель обучилась
             if (Object.keys(results).length === 0) {
-                // Формируем информативное сообщение об ошибке
+                // Формируем информативное сообщение о пропуске
                 const availableCandles = candles.length;
-                const errorMessage = `Failed to train any model: insufficient data (${availableCandles} candles available, need at least ${minRequired} for LSTM, ${minForCNN} for CNN, or ${minForTransformer} for Transformer)`;
-                const error = new Error(errorMessage);
                 
-                // Отправляем алерт в Telegram перед выбросом ошибки
+                // Получаем ticker для логирования
+                let ticker = figi.substring(0, 10);
                 try {
-                    const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
-                    if (OptimizedTelegramService.isInitialized) {
-                        // Получаем ticker для отображения
-                        let ticker = figi.substring(0, 10);
-                        try {
-                            const instrument = await CacheService.getInstrument(figi, true);
-                            ticker = instrument?.ticker || ticker;
-                        } catch (e) {
-                            // Игнорируем ошибку получения ticker
-                        }
-                        
-                        await OptimizedTelegramService.sendAlert(
-                            'ENSEMBLE_TRAINING_ERROR',
-                            `❌ <b>ОШИБКА ОБУЧЕНИЯ АНСАМБЛЯ</b>\n\n📈 Инструмент: <b>${ticker}</b>\n🔍 Ошибка: Недостаточно данных для обучения\n📊 Доступно свечей: ${availableCandles}\n📋 Требуется: минимум ${minRequired} для LSTM\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
-                            'warning' // Используем warning вместо error, так как это не критичная ошибка
-                        );
-                    }
-                } catch (telegramError) {
-                    console.error('❌ Failed to send ensemble training error alert:', telegramError.message);
+                    const instrument = await CacheService.getInstrument(figi, true);
+                    ticker = instrument?.ticker || ticker;
+                } catch (e) {
+                    // Игнорируем ошибку получения ticker
                 }
                 
-                throw error;
+                console.log(`ℹ️ [Ensemble] Skipping training for ${ticker}: failed to train any model (${availableCandles} candles available, need at least ${minRequired} for LSTM, ${minForCNN} for CNN, or ${minForTransformer} for Transformer)`);
+                
+                // Возвращаем результат с информацией о пропуске вместо выброса ошибки
+                return {
+                    success: false,
+                    skipped: true,
+                    reason: 'no_models_trained',
+                    message: `Failed to train any model: insufficient data (${availableCandles} candles available, need at least ${minRequired} for LSTM, ${minForCNN} for CNN, or ${minForTransformer} for Transformer)`,
+                    candles: availableCandles,
+                    minRequired: minRequired,
+                    minForCNN: minForCNN,
+                    minForTransformer: minForTransformer,
+                    figi: figi,
+                    ticker: ticker
+                };
             }
 
             // Адаптивные веса на основе производительности
@@ -1182,11 +1202,12 @@ class EnsembleService {
         const labels = [];
 
         const windowSize = 24; // Фиксированный размер окна для LSTM
-        // Нужно минимум windowSize + 3 свечей:
+        // Нужно минимум windowSize + 2 свечей для создания хотя бы одного образца:
         // - windowSize для окна
         // - 1 для следующей свечи для лейбла
-        // - 2 для минимум 2 образцов (нужно минимум 2 образца для train/validation split)
-        if (candles.length < windowSize + 3) {
+        // - 1 для того, чтобы i мог быть windowSize (i начинается с windowSize и идет до candles.length - 2)
+        // При windowSize + 2 создается 1 образец, при windowSize + 3 создается 2 образца
+        if (candles.length < windowSize + 2) {
             return { features, labels };
         }
         
@@ -1228,11 +1249,12 @@ class EnsembleService {
         const labels = [];
 
         const windowSize = 30; // Фиксированный размер окна для CNN
-        // Нужно минимум windowSize + 3 свечей:
+        // Нужно минимум windowSize + 2 свечей для создания хотя бы одного образца:
         // - windowSize для окна
         // - 1 для следующей свечи для лейбла
-        // - 2 для минимум 2 образцов (нужно минимум 2 образца для train/validation split)
-        if (candles.length < windowSize + 3) {
+        // - 1 для того, чтобы i мог быть windowSize (i начинается с windowSize и идет до candles.length - 2)
+        // При windowSize + 2 создается 1 образец, при windowSize + 3 создается 2 образца
+        if (candles.length < windowSize + 2) {
             return { features, labels };
         }
 
@@ -1301,11 +1323,12 @@ class EnsembleService {
         const labels = [];
 
         const windowSize = 84; // Фиксированный размер окна для Transformer
-        // Нужно минимум windowSize + 3 свечей:
+        // Нужно минимум windowSize + 2 свечей для создания хотя бы одного образца:
         // - windowSize для окна
         // - 1 для следующей свечи для лейбла
-        // - 2 для минимум 2 образцов (нужно минимум 2 образца для train/validation split)
-        if (candles.length < windowSize + 3) {
+        // - 1 для того, чтобы i мог быть windowSize (i начинается с windowSize и идет до candles.length - 2)
+        // При windowSize + 2 создается 1 образец, при windowSize + 3 создается 2 образца
+        if (candles.length < windowSize + 2) {
             return { features, labels };
         }
 
