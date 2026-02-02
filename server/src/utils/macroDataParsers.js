@@ -992,24 +992,8 @@ export function parseMoexJson(jsonData) {
             return [];
         }
 
-        console.log(`📊 Обработка массива данных Мосбиржи, элементов: ${dataArray.length}`);
-        
-        // Детальная отладка первых элементов
-        if (dataArray.length > 0) {
-            console.log(`🔍 Первые 3 элемента для анализа:`);
-            for (let i = 0; i < Math.min(3, dataArray.length); i++) {
-                const item = dataArray[i];
-                console.log(`  [${i}] Тип: ${typeof item}, Является массивом: ${Array.isArray(item)}`);
-                if (Array.isArray(item)) {
-                    console.log(`  [${i}] Длина: ${item.length}, Содержимое:`, JSON.stringify(item));
-                } else if (typeof item === 'object' && item !== null) {
-                    console.log(`  [${i}] Ключи:`, Object.keys(item));
-                    console.log(`  [${i}] Содержимое:`, JSON.stringify(item, null, 2).substring(0, 300));
-                } else {
-                    console.log(`  [${i}] Значение:`, item);
-                }
-            }
-        }
+        // Убрано детальное логирование для предотвращения построчного вывода больших объектов
+        // console.log(`📊 Обработка массива данных Мосбиржи, элементов: ${dataArray.length}`);
 
         for (let i = 0; i < dataArray.length; i++) {
             const item = dataArray[i];

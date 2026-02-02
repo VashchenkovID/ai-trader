@@ -94,7 +94,7 @@ class QuickTrainingService {
     /**
      * Быстрое обучение батча инструментов
      */
-    async trainQuickBatch(instruments, trainingDays = 30) {
+    async trainQuickBatch(instruments, trainingDays = 30, workerId = null) {
         if (!instruments || instruments.length === 0) {
             return {
                 success: true,
@@ -109,11 +109,52 @@ class QuickTrainingService {
         let errorCount = 0;
 
         try {
+            // Обновляем прогресс воркера - начало обучения
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 0,
+                            metadata: {
+                                totalInstruments: instruments.length,
+                                currentInstrument: 0,
+                                stage: 'starting'
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message);
+                }
+            }
 
             // ПОСЛЕДОВАТЕЛЬНОЕ ОБУЧЕНИЕ ВСЕХ НЕЙРОСЕТЕЙ: Базовая → Ансамбль → Мета-обучение → RL
             // Используем оптимизированные параметры для быстрого обучения
             
-            for (const instrument of instruments) {
+            for (let instrumentIndex = 0; instrumentIndex < instruments.length; instrumentIndex++) {
+                const instrument = instruments[instrumentIndex];
+                
+                // Обновляем прогресс воркера
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            const progress = Math.floor((instrumentIndex / instruments.length) * 100);
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                progress,
+                                metadata: {
+                                    totalInstruments: instruments.length,
+                                    currentInstrument: instrumentIndex + 1,
+                                    currentTicker: instrument.ticker || instrument.figi?.substring(0, 10),
+                                    figi: instrument.figi,
+                                    stage: 'training'
+                                }
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to update worker status:', monitoringError.message);
+                    }
+                }
                 let networksTrained = 0;
                 let networksFailed = 0;
                 
@@ -185,6 +226,25 @@ class QuickTrainingService {
                 executionTimeSeconds
             });
 
+            // Обновляем прогресс воркера - завершение
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 100,
+                            metadata: {
+                                totalInstruments: instruments.length,
+                                successful: successCount,
+                                errors: errorCount,
+                                stage: 'completed'
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message);
+                }
+            }
 
             return {
                 success: true,
@@ -195,6 +255,19 @@ class QuickTrainingService {
             };
         } catch (error) {
             console.error('❌ Error in quick training batch:', error);
+            
+            // Обновляем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message);
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to report worker error:', monitoringError.message);
+                }
+            }
+            
             return {
                 success: false,
                 error: error.message
@@ -220,8 +293,27 @@ class QuickTrainingService {
      */
     async performQuickTraining() {
         const startTime = Date.now();
+        let workerId = null;
         
         try {
+            // Регистрируем воркер в мониторинге
+            try {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                if (!WorkerMonitoringService.isInitialized) {
+                    await WorkerMonitoringService.initialize();
+                }
+                workerId = WorkerMonitoringService.registerWorker(
+                    'quick-training',
+                    'Быстрое обучение нейросетей',
+                    {
+                        stage: 'initializing',
+                        totalInstruments: 0
+                    }
+                );
+            } catch (monitoringError) {
+                console.warn('⚠️ Failed to register quick training worker:', monitoringError.message);
+            }
+            
             // Получаем настройки из БД
             const SettingsService = (await import('./SettingsService.js')).default;
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
@@ -235,26 +327,105 @@ class QuickTrainingService {
             
             if (instruments.length === 0) {
                 console.warn('⚠️ No instruments available for quick training');
+                
+                // Завершаем воркер, если нет инструментов
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.completeWorker(workerId, true, {
+                                reason: 'no_instruments',
+                                message: 'No instruments available for training'
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to complete worker:', monitoringError.message);
+                    }
+                }
                 return;
             }
 
+            // Обновляем метаданные воркера с количеством инструментов
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            metadata: {
+                                totalInstruments: instruments.length,
+                                trainingDays,
+                                stage: 'preparing'
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message);
+                }
+            }
+
             // Обучаем батч с учетом настроек дней
-            const result = await this.trainQuickBatch(instruments, trainingDays);
+            const result = await this.trainQuickBatch(instruments, trainingDays, workerId);
             
             // Отправляем уведомление в Telegram
             if (result && result.success) {
                 const duration = Math.round((Date.now() - startTime) / 1000);
                 await this.sendTelegramNotification(result, duration, instruments.length);
+                
+                // Завершаем воркер успешно
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.completeWorker(workerId, true, {
+                                processed: result.processed,
+                                successful: result.successful,
+                                errors: result.errors,
+                                executionTime: result.executionTime
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to complete worker:', monitoringError.message);
+                    }
+                }
             } else if (result && !result.success) {
                 // Отправляем уведомление об ошибке
                 const duration = Math.round((Date.now() - startTime) / 1000);
                 await this.sendTelegramErrorNotification(result, duration);
+                
+                // Завершаем воркер с ошибкой
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.completeWorker(workerId, false, {
+                                error: result.error || result.message
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to complete worker:', monitoringError.message);
+                    }
+                }
             }
         } catch (error) {
             console.error('❌ Error performing quick training:', error);
             // Отправляем уведомление об ошибке
             const duration = Math.round((Date.now() - startTime) / 1000);
             await this.sendTelegramErrorNotification({ error: error.message }, duration);
+            
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message);
+                        WorkerMonitoringService.completeWorker(workerId, false, {
+                            error: error.message
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to report worker error:', monitoringError.message);
+                }
+            }
         }
     }
 

@@ -103,11 +103,11 @@ class LoggerService {
                 winston.format.timestamp({format: 'YYYY-MM-DD HH:mm:ss.SSS'}),
                 winston.format.errors({stack: true}),
                 winston.format.splat(),
-                winston.format.json(),
+                // Убираем winston.format.json() отсюда, чтобы очистка происходила до сериализации
                 winston.format.printf((info) => {
                     const {timestamp, level, message, ...meta} = info;
 
-                    // Очищаем метаданные от больших объектов
+                    // Очищаем метаданные от больших объектов ПЕРЕД сериализацией
                     const sanitizedMeta = sanitizeMeta(meta);
 
                     // Формируем базовый объект лога
@@ -120,14 +120,29 @@ class LoggerService {
 
                     // В production возвращаем JSON, в development - читаемый формат
                     if (process.env.NODE_ENV === 'production') {
-                        return JSON.stringify(logEntry);
+                        // Сериализуем только после очистки
+                        try {
+                            return JSON.stringify(logEntry);
+                        } catch (e) {
+                            // Если не удалось сериализовать, возвращаем упрощенную версию
+                            return JSON.stringify({
+                                timestamp,
+                                level,
+                                message,
+                                error: 'Failed to serialize log entry'
+                            });
+                        }
                     } else {
                         // Читаемый формат для разработки
                         let output = `${timestamp} [${level.toUpperCase()}] ${message}`;
                         if (Object.keys(sanitizedMeta).length > 0 && sanitizedMeta.constructor === Object) {
-                            const metaStr = JSON.stringify(sanitizedMeta, null, 2);
-                            if (metaStr !== '{}') {
-                                output += `\n${metaStr}`;
+                            try {
+                                const metaStr = JSON.stringify(sanitizedMeta, null, 2);
+                                if (metaStr !== '{}') {
+                                    output += `\n${metaStr}`;
+                                }
+                            } catch (e) {
+                                // Игнорируем ошибки сериализации
                             }
                         }
                         return output;

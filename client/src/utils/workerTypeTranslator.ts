@@ -3,6 +3,7 @@
  */
 
 const workerTypeTranslations: { [key: string]: string } = {
+  'quick-training': 'Быстрое обучение',
   // Обучение
   'training': 'Обучение модели',
   'optimized_training': 'Оптимизированное обучение',

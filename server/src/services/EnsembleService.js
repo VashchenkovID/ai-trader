@@ -417,10 +417,12 @@ class EnsembleService {
             // Минимальные требования для каждой модели:
             // - LSTM: минимум 24 + 1 = 25 свечей (окно 24 часа)
             // - CNN: минимум 30 + 1 = 31 свечей (окно 30 дней)
-            // - Transformer: минимум 84 + 1 = 85 свечей (окно 84 дня)
-            const minRequired = 25; // Минимум для LSTM
-            const minForCNN = 31;
-            const minForTransformer = 85;
+            // - LSTM: минимум 24 (windowSize) + 2 = 26 свечей (окно 24 дня + 1 для лейбла + 1 для второго образца)
+            // - CNN: минимум 30 (windowSize) + 2 = 32 свечи
+            // - Transformer: минимум 84 + 2 = 86 свечей (окно 84 дня + 1 для лейбла + 1 для второго образца)
+            const minRequired = 26; // Минимум для LSTM (24 + 2)
+            const minForCNN = 32; // Минимум для CNN (30 + 2)
+            const minForTransformer = 86; // Минимум для Transformer (84 + 2)
             
             // Определяем, какие модели можем обучить
             const canTrainLSTM = candles.length >= minRequired;
@@ -873,15 +875,42 @@ class EnsembleService {
         // Создаем тензоры с правильными размерностями
         let xs, ys;
         
-        if (modelType === 'transformer') {
-            // Transformer ожидает 3D данные [samples, time_steps, features]
-            // Модель имеет inputShape: [84, 10] и flatten слой, который преобразует [batch, 84, 10] в [batch, 840]
-            // Но входные данные должны быть 3D: [samples, 84, 10]
-            xs = tf.tensor3d(features);
-        } else {
-            // LSTM и CNN ожидают 3D данные [samples, time_steps, features]
-            xs = tf.tensor3d(features);
+        // Проверяем, что features не пустой и имеет правильную структуру
+        if (features.length === 0) {
+            throw new Error(`No features available for ${modelType} training`);
         }
+        
+        // Проверяем структуру features - должна быть 3D [samples, time_steps, features_per_step]
+        const firstSample = features[0];
+        if (!Array.isArray(firstSample) || firstSample.length === 0) {
+            throw new Error(`Invalid features structure for ${modelType}: expected 3D array [samples, time_steps, features]`);
+        }
+        
+        const firstTimeStep = firstSample[0];
+        if (!Array.isArray(firstTimeStep)) {
+            throw new Error(`Invalid features structure for ${modelType}: expected 3D array, got 2D or flat array`);
+        }
+        
+        // Определяем размерности
+        const numSamples = features.length;
+        const timeSteps = firstSample.length;
+        const featuresPerStep = firstTimeStep.length;
+        
+        // Проверяем, что все образцы имеют одинаковую структуру
+        for (let i = 0; i < features.length; i++) {
+            if (!Array.isArray(features[i]) || features[i].length !== timeSteps) {
+                throw new Error(`Inconsistent features structure at sample ${i}: expected ${timeSteps} time steps`);
+            }
+            for (let j = 0; j < features[i].length; j++) {
+                if (!Array.isArray(features[i][j]) || features[i][j].length !== featuresPerStep) {
+                    throw new Error(`Inconsistent features structure at sample ${i}, time step ${j}: expected ${featuresPerStep} features`);
+                }
+            }
+        }
+        
+        // Создаем тензор с явным указанием shape
+        const shape = [numSamples, timeSteps, featuresPerStep];
+        xs = tf.tensor3d(features, shape);
         
         ys = tf.tensor2d(labels, [labels.length, 1]);
 
@@ -926,7 +955,22 @@ class EnsembleService {
         }
 
         // Создаем тензоры для validation set (Фаза 2, задача 2.4.1)
-        const valXs = tf.tensor3d(validationFeatures);
+        // Проверяем структуру validation features
+        if (validationFeatures.length === 0) {
+            throw new Error('No validation features available');
+        }
+        
+        const valFirstSample = validationFeatures[0];
+        if (!Array.isArray(valFirstSample) || valFirstSample.length === 0 || !Array.isArray(valFirstSample[0])) {
+            throw new Error('Invalid validation features structure: expected 3D array [samples, time_steps, features]');
+        }
+        
+        const valNumSamples = validationFeatures.length;
+        const valTimeSteps = valFirstSample.length;
+        const valFeaturesPerStep = valFirstSample[0].length;
+        const valShape = [valNumSamples, valTimeSteps, valFeaturesPerStep];
+        
+        const valXs = tf.tensor3d(validationFeatures, valShape);
         const valYs = tf.tensor2d(validationLabels, [validationLabels.length, 1]);
 
         const history = await model.fit(xs, ys, {
@@ -1036,7 +1080,15 @@ class EnsembleService {
         let testMetrics = null;
         if (testFeatures.length > 0 && testLabels.length > 0) {
             try {
-                const testXs = tf.tensor3d(testFeatures);
+                // Проверяем структуру test features перед созданием тензора
+                if (!Array.isArray(testFeatures[0]) || !Array.isArray(testFeatures[0][0])) {
+                    throw new Error('Invalid test features structure: expected 3D array [samples, time_steps, features]');
+                }
+                const testNumSamples = testFeatures.length;
+                const testTimeSteps = testFeatures[0].length;
+                const testFeaturesPerStep = testFeatures[0][0].length;
+                const testShape = [testNumSamples, testTimeSteps, testFeaturesPerStep];
+                const testXs = tf.tensor3d(testFeatures, testShape);
                 const testYs = tf.tensor2d(testLabels, [testLabels.length, 1]);
                 const testPredictions = model.predict(testXs);
                 const testPredValues = await testPredictions.data();
@@ -1115,7 +1167,9 @@ class EnsembleService {
         const labels = [];
 
         const windowSize = 24; // Фиксированный размер окна для LSTM
-        if (candles.length < windowSize + 1) {
+        // Нужно минимум windowSize + 1 свечей (windowSize для окна + 1 для следующей свечи для лейбла)
+        // Но также нужно минимум 2 образца для обучения, поэтому windowSize + 2
+        if (candles.length < windowSize + 2) {
             return { features, labels };
         }
         
@@ -1157,7 +1211,8 @@ class EnsembleService {
         const labels = [];
 
         const windowSize = 30; // Фиксированный размер окна для CNN
-        if (candles.length < windowSize + 1) {
+        // Нужно минимум windowSize + 2 свечей (windowSize для окна + 1 для следующей свечи для лейбла + 1 для второго образца)
+        if (candles.length < windowSize + 2) {
             return { features, labels };
         }
 
@@ -1226,7 +1281,8 @@ class EnsembleService {
         const labels = [];
 
         const windowSize = 84; // Фиксированный размер окна для Transformer
-        if (candles.length < windowSize + 1) {
+        // Нужно минимум windowSize + 2 свечей (windowSize для окна + 1 для следующей свечи для лейбла + 1 для второго образца)
+        if (candles.length < windowSize + 2) {
             return { features, labels };
         }
 
