@@ -292,9 +292,12 @@ class SchedulerService {
         // Расписание: каждые 2 часа (08:00, 10:00, 12:00, 14:00, 16:00, 18:00) или из настроек
         // Обучает: Базовая → Ансамбль → Мета-обучение → RL (с оптимизированными параметрами)
         if (quickTrainingEnabled) {
+            console.log(`📅 [Quick Training] Schedule: ${quickTrainingSchedule}`);
+            console.log(`📅 [Quick Training] Enabled: ${quickTrainingEnabled}`);
             this.quickTrainingTask = SchedulerUtils.createScheduledTask(
                 quickTrainingSchedule,
                 async () => {
+                    console.log(`⏰ [Quick Training] Cron triggered at ${new Date().toLocaleString('ru-RU')}`);
                     // Используем метод SchedulerService для синхронизации флагов
                     await this.performQuickTraining();
                 },
@@ -306,6 +309,9 @@ class SchedulerService {
                     checkCacheStale: false // Не проверяем устаревание кеша - быстрое обучение может работать со слегка устаревшими данными
                 }
             );
+            console.log(`✅ [Quick Training] Task created and scheduled`);
+        } else {
+            console.log(`⚠️ [Quick Training] DISABLED in settings (nn_quick_training_enabled = false)`);
         }
 
         // Задача 5: Обновление кеша торговых часов
@@ -2178,6 +2184,19 @@ class SchedulerService {
         console.log('🚀 [Quick Training] Starting...');
         const startTime = Date.now();
         this.isTraining = true;
+        
+        // Отправляем уведомление о старте быстрого обучения
+        try {
+            await OptimizedTelegramService.sendAlert(
+                'QUICK_TRAINING_START',
+                `🚀 <b>Запущено быстрое обучение нейросетей</b>\n\n` +
+                `⏰ Время: ${new Date().toLocaleString('ru-RU')}\n` +
+                `📊 Статус: Обучение начато...`,
+                'info'
+            );
+        } catch (telegramError) {
+            console.warn('⚠️ Failed to send Telegram notification about quick training start:', telegramError.message);
+        }
         
         try {
             // Используем QuickTrainingService, который обрабатывает только батч инструментов
