@@ -2175,9 +2175,9 @@ class SchedulerService {
             return;
         }
         
-        // Проверяем, не идет ли уже обучение или анализ
-        if (this.isTraining || this.isAnalyzing) {
-            console.log(`⏭️ [Quick Training] Skipped: isTraining=${this.isTraining}, isAnalyzing=${this.isAnalyzing}`);
+        // Проверяем, не идет ли уже обучение (анализ не блокирует быстрое обучение)
+        if (this.isTraining) {
+            console.log(`⏭️ [Quick Training] Skipped: isTraining=${this.isTraining}`);
             return;
         }
 
@@ -3368,18 +3368,30 @@ class SchedulerService {
                 limit: 30, // Ограничиваем количество инструментов
                 startIndex: startIndex, // Начинаем с сохраненного индекса (ротация)
                 onProgress: (progress) => {
-                    LoggerService.info(`News update progress: ${progress.current}/${progress.total} - ${progress.ticker || progress.figi}`, {
-                        service: 'SchedulerService',
-                        operation: 'performDailyNewsUpdate',
-                        progress: {
-                            current: progress.current,
-                            total: progress.total,
-                            ticker: progress.ticker,
-                            figi: progress.figi,
-                            success: progress.success,
-                            count: progress.count
+                    // Обрабатываем callback безопасно, чтобы не было необработанных промисов
+                    try {
+                        const logResult = LoggerService.info(`News update progress: ${progress.current}/${progress.total} - ${progress.ticker || progress.figi}`, {
+                            service: 'SchedulerService',
+                            operation: 'performDailyNewsUpdate',
+                            progress: {
+                                current: progress.current,
+                                total: progress.total,
+                                ticker: progress.ticker,
+                                figi: progress.figi,
+                                success: progress.success,
+                                count: progress.count
+                            }
+                        });
+                        // Если LoggerService.info возвращает промис, обрабатываем его
+                        if (logResult && typeof logResult.catch === 'function') {
+                            logResult.catch(err => {
+                                console.warn('⚠️ Error in onProgress logger:', err.message);
+                            });
                         }
-                    });
+                    } catch (err) {
+                        // Игнорируем ошибки в callback, чтобы не прерывать процесс
+                        console.warn('⚠️ Error in onProgress callback:', err.message);
+                    }
                 }
             });
             
@@ -3406,16 +3418,28 @@ class SchedulerService {
                 }
             });
             
-            // Отправляем уведомление через Telegram
+            // Отправляем уведомление через Telegram (безопасно, чтобы не прерывать процесс)
             if (result.updated > 0) {
-                await OptimizedTelegramService.sendAlert(
-                    'NEWS_DAILY_UPDATE',
-                    `📰 Ежедневное обновление новостей завершено\n\n` +
-                    `Обновлено: ${result.updated} инструментов\n` +
-                    `Загружено новостей: ${result.totalNews}\n` +
-                    `Ошибок: ${result.errorCount || 0}`,
-                    'info'
-                );
+                try {
+                    await OptimizedTelegramService.sendAlert(
+                        'NEWS_DAILY_UPDATE',
+                        `📰 Ежедневное обновление новостей завершено\n\n` +
+                        `Обновлено: ${result.updated} инструментов\n` +
+                        `Загружено новостей: ${result.totalNews}\n` +
+                        `Ошибок: ${result.errorCount || 0}`,
+                        'info'
+                    );
+                } catch (telegramError) {
+                    // Логируем ошибку, но не прерываем процесс
+                    LoggerService.warn('Failed to send Telegram notification for news update', {
+                        service: 'SchedulerService',
+                        operation: 'performDailyNewsUpdate',
+                        error: {
+                            message: telegramError.message,
+                            stack: telegramError.stack
+                        }
+                    });
+                }
             }
 
             return result;

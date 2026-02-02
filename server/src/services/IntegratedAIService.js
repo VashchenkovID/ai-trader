@@ -749,9 +749,11 @@ class IntegratedAIService {
         try {
             if (StackingService && StackingService.isInitialized) {
                 // Проверяем, нужно ли переобучить модель
-                if (StackingService.shouldRetrain()) {
+                // shouldRetrain теперь async и проверяет данные ДО принятия решения
+                if (await StackingService.shouldRetrain()) {
                     LoggerService.info('🔄 Retraining stacking model...');
-                    await StackingService.trainMetaModel(figi);
+                    // Для stacking модели не передаем figi - используем все инструменты
+                    await StackingService.trainMetaModel(null);
                 }
                 
                 // Используем Stacking для объединения предсказаний

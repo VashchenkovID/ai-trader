@@ -24,6 +24,7 @@ class StackingService {
         this.modelPath = path.join(__dirname, '../../models');
         this.modelFile = path.join(this.modelPath, 'stacking-meta-model.json');
         this.weightsFile = path.join(this.modelPath, 'stacking-meta-weights.json');
+        this.isTraining = false; // Флаг для предотвращения одновременных попыток обучения
         
         this.settings = {
             // Минимальное количество исторических данных для обучения
@@ -270,17 +271,29 @@ class StackingService {
 
     /**
      * Обучение мета-модели
-     * @param {string} figi - FIGI инструмента (опционально)
+     * @param {string} figi - FIGI инструмента (опционально, но для stacking лучше null - все инструменты)
      */
     async trainMetaModel(figi = null) {
+        // Предотвращаем одновременные попытки обучения
+        if (this.isTraining) {
+            LoggerService.warn('⚠️ Stacking model training already in progress, skipping...');
+            return { success: false, reason: 'Training already in progress' };
+        }
+        
+        this.isTraining = true;
+        
         try {
             LoggerService.info('🧠 Training stacking meta-model...');
             
+            // Для stacking модели лучше использовать данные от всех инструментов, а не одного
+            // Это позволяет модели лучше обобщать
+            const trainingFigi = null; // Всегда используем все инструменты для stacking
+            
             // Собираем данные
-            const { features, labels } = await this.collectTrainingData(figi);
+            const { features, labels } = await this.collectTrainingData(trainingFigi);
             
             if (features.length < this.settings.minTrainingSamples) {
-                LoggerService.warn(`⚠️ Insufficient data for training: ${features.length} samples`);
+                LoggerService.warn(`⚠️ Insufficient data for training: ${features.length} samples (need ${this.settings.minTrainingSamples})`);
                 return { success: false, reason: 'Insufficient data' };
             }
             
@@ -330,6 +343,8 @@ class StackingService {
         } catch (error) {
             LoggerService.error('❌ Failed to train stacking meta-model:', error);
             return { success: false, error: error.message };
+        } finally {
+            this.isTraining = false;
         }
     }
 
@@ -490,14 +505,26 @@ class StackingService {
 
     /**
      * Проверка необходимости переобучения
+     * Проверяет не только время, но и наличие достаточных данных
      */
-    shouldRetrain() {
+    async shouldRetrain() {
         if (!this.settings.autoRetrain) {
             return false;
         }
         
+        // Если уже идет обучение, не запускаем еще одно
+        if (this.isTraining) {
+            return false;
+        }
+        
+        // Проверяем наличие достаточных данных ДО принятия решения о переобучении
+        const { features } = await this.collectTrainingData(null); // null = все инструменты
+        if (features.length < this.settings.minTrainingSamples) {
+            return false; // Недостаточно данных для обучения
+        }
+        
         if (!this.settings.lastTrainingDate) {
-            return true; // Никогда не обучалась
+            return true; // Никогда не обучалась, но данных достаточно
         }
         
         const daysSinceTraining = (Date.now() - new Date(this.settings.lastTrainingDate).getTime()) / (1000 * 60 * 60 * 24);
@@ -508,11 +535,24 @@ class StackingService {
      * Получение статуса
      */
     getStatus() {
+        // Синхронная проверка времени (без проверки данных)
+        let shouldRetrainByTime = false;
+        if (this.settings.autoRetrain) {
+            if (!this.settings.lastTrainingDate) {
+                shouldRetrainByTime = true;
+            } else {
+                const daysSinceTraining = (Date.now() - new Date(this.settings.lastTrainingDate).getTime()) / (1000 * 60 * 60 * 24);
+                shouldRetrainByTime = daysSinceTraining >= this.settings.retrainIntervalDays;
+            }
+        }
+        
         return {
             isInitialized: this.isInitialized,
             hasModel: this.metaModel !== null,
             lastTrainingDate: this.settings.lastTrainingDate,
-            shouldRetrain: this.shouldRetrain()
+            isTraining: this.isTraining,
+            shouldRetrainByTime: shouldRetrainByTime,
+            // Примечание: полная проверка shouldRetrain() теперь async и проверяет данные
         };
     }
 }

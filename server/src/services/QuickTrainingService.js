@@ -114,13 +114,14 @@ class QuickTrainingService {
         }
 
         // Проверяем флаг в SchedulerService (глобальный)
+        // Анализ не блокирует быстрое обучение, только другое обучение
         try {
             const SchedulerService = (await import('./SchedulerService.js')).default;
-            if (SchedulerService && (SchedulerService.isTraining || SchedulerService.isAnalyzing)) {
-                console.warn(`⚠️ [QuickTrainingService] Skipped: SchedulerService.isTraining=${SchedulerService.isTraining}, isAnalyzing=${SchedulerService.isAnalyzing}`);
+            if (SchedulerService && SchedulerService.isTraining) {
+                console.warn(`⚠️ [QuickTrainingService] Skipped: SchedulerService.isTraining=${SchedulerService.isTraining}`);
                 return {
                     success: false,
-                    message: 'SchedulerService training or analysis in progress'
+                    message: 'SchedulerService training in progress'
                 };
             }
         } catch (e) {

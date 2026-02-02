@@ -383,12 +383,23 @@ router.post('/update-daily', async (req, res) => {
                     }
                 });
 
-                // Отправляем результат через WebSocket
+                // Отправляем результат через WebSocket (безопасно, обрабатываем промис если есть)
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
-                    WebSocketService.broadcast({
-                        type: 'news_daily_update_completed',
-                        data: result
-                    });
+                    try {
+                        const broadcastResult = WebSocketService.broadcast({
+                            type: 'news_daily_update_completed',
+                            data: result
+                        });
+                        // Если broadcast возвращает промис, обрабатываем его
+                        if (broadcastResult && typeof broadcastResult.catch === 'function') {
+                            broadcastResult.catch(err => {
+                                console.warn('⚠️ Error in WebSocket broadcast:', err.message);
+                            });
+                        }
+                    } catch (wsError) {
+                        // Игнорируем ошибки WebSocket, чтобы не прерывать процесс
+                        console.warn('⚠️ Error in WebSocket broadcast:', wsError.message);
+                    }
                 }
 
             } catch (error) {
@@ -404,12 +415,23 @@ router.post('/update-daily', async (req, res) => {
                 
                 const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
-                    WebSocketService.broadcast({
-                        type: 'news_daily_update_error',
-                        data: {
-                            error: error.message
+                    try {
+                        const broadcastResult = WebSocketService.broadcast({
+                            type: 'news_daily_update_error',
+                            data: {
+                                error: error.message
+                            }
+                        });
+                        // Если broadcast возвращает промис, обрабатываем его
+                        if (broadcastResult && typeof broadcastResult.catch === 'function') {
+                            broadcastResult.catch(err => {
+                                console.warn('⚠️ Error in WebSocket error broadcast:', err.message);
+                            });
                         }
-                    });
+                    } catch (wsError) {
+                        // Игнорируем ошибки WebSocket, чтобы не прерывать процесс
+                        console.warn('⚠️ Error in WebSocket error broadcast:', wsError.message);
+                    }
                 }
             }
         })().catch(async error => {
