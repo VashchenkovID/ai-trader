@@ -333,16 +333,60 @@ process.on('uncaughtException', (error) => {
         }
     });
     
-    // Не перезапускаем сервер для ошибок ONNX Runtime / BERT модели
     const errorMessage = error.message || '';
+    const errorName = error.name || '';
+    
+    // Не перезапускаем сервер для некритичных ошибок
     const isONNXError = errorMessage.includes('Ort::Exception') ||
                        errorMessage.includes('onnxruntime') ||
                        errorMessage.includes('transformers') ||
                        errorMessage.includes('BERT') ||
                        error.name === 'Ort::Exception';
     
-    if (isONNXError) {
-        console.error('⚠️ ONNX Runtime error (non-critical, server continues):', errorMessage);
+    // Ошибки новостей - некритичные, не перезапускаем сервер
+    const isNewsError = errorMessage.includes('news') ||
+                       errorMessage.includes('NewsAPI') ||
+                       errorMessage.includes('NewsApiService') ||
+                       errorMessage.includes('NewsAnalysis') ||
+                       errorMessage.includes('loadFreshNews') ||
+                       errorMessage.includes('performDailyNewsUpdate') ||
+                       errorMessage.includes('performLimitedNewsUpdate') ||
+                       errorMessage.includes('fetchNewsByCompanyName') ||
+                       error.stack?.includes('NewsApiService') ||
+                       error.stack?.includes('NewsAnalysisService');
+    
+    // HTTP ошибки внешних API - некритичные
+    const isHTTPError = errorMessage.includes('HTTP error! status: 500') ||
+                       errorMessage.includes('HTTP error! status: 502') ||
+                       errorMessage.includes('HTTP error! status: 503') ||
+                       errorMessage.includes('HTTP error! status: 504') ||
+                       errorMessage.includes('status: 500') ||
+                       errorMessage.includes('status: 502') ||
+                       errorMessage.includes('status: 503') ||
+                       errorMessage.includes('status: 504') ||
+                       errorMessage.includes('HTTP 500') ||
+                       errorMessage.includes('HTTP 502') ||
+                       errorMessage.includes('HTTP 503') ||
+                       errorMessage.includes('HTTP 504');
+    
+    if (isONNXError || isNewsError || isHTTPError) {
+        const errorType = isONNXError ? 'ONNX Runtime' : (isNewsError ? 'News processing' : 'HTTP API');
+        console.error(`⚠️ ${errorType} error (non-critical, server continues):`, errorMessage);
+        
+        // Дополнительное логирование для ошибок новостей
+        if (isNewsError) {
+            LoggerService.error('News processing uncaught exception (non-critical, server continues)', {
+                service: 'app',
+                operation: 'uncaughtException',
+                error: {
+                    message: errorMessage,
+                    name: errorName,
+                    stack: error.stack
+                },
+                note: 'Server will continue running despite this error'
+            });
+        }
+        
         // Не перезапускаем сервер - это некритичная ошибка
         return;
     }

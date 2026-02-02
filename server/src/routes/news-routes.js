@@ -124,6 +124,18 @@ router.post('/load-historical', async (req, res) => {
             } catch (error) {
                 console.error('❌ Ошибка загрузки исторических новостей:', error);
                 
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Error loading historical news', {
+                        service: 'news-routes',
+                        operation: 'load-historical',
+                        error: {
+                            message: error.message,
+                            stack: error.stack
+                        }
+                    });
+                }
+                
                 const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
                 if (WebSocketService && typeof WebSocketService.broadcast === 'function') {
                     WebSocketService.broadcast({
@@ -134,7 +146,25 @@ router.post('/load-historical', async (req, res) => {
                     });
                 }
             }
-        })();
+        })().catch(async error => {
+            // Дополнительная защита от необработанных промисов
+            console.error('❌ Unhandled error in historical news load background task:', error);
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Unhandled error in historical news load', {
+                        service: 'news-routes',
+                        operation: 'load-historical-background',
+                        error: {
+                            message: error.message,
+                            stack: error.stack
+                        }
+                    });
+                }
+            } catch (logError) {
+                console.error('❌ Failed to log error:', logError);
+            }
+        });
 
     } catch (error) {
         console.error('Ошибка запуска загрузки исторических новостей:', error);
@@ -382,7 +412,25 @@ router.post('/update-daily', async (req, res) => {
                     });
                 }
             }
-        })();
+        })().catch(async error => {
+            // Дополнительная защита от необработанных промисов
+            console.error('❌ Unhandled error in daily news update background task:', error);
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Unhandled error in daily news update', {
+                        service: 'news-routes',
+                        operation: 'update-daily-background',
+                        error: {
+                            message: error.message,
+                            stack: error.stack
+                        }
+                    });
+                }
+            } catch (logError) {
+                console.error('❌ Failed to log error:', logError);
+            }
+        });
 
     } catch (error) {
         console.error('❌ Ошибка запуска обновления новостей:', error);
