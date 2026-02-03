@@ -355,6 +355,31 @@ class QuickTrainingService {
                 return;
             }
 
+            // Отправляем уведомление о начале обучения с информацией о том, что будет учиться
+            try {
+                const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+                // Формируем список всех инструментов
+                const allInstrumentNames = instruments.map(inst => inst.ticker || inst.figi?.substring(0, 10)).join(', ');
+                
+                await OptimizedTelegramService.sendAlert(
+                    'QUICK_TRAINING_START',
+                    `⚡ <b>БЫСТРОЕ ОБУЧЕНИЕ НАЧАЛОСЬ</b>\n\n` +
+                    `📊 <b>Будет обучаться:</b>\n` +
+                    `• Инструментов: ${instruments.length}\n` +
+                    `• Список инструментов: ${allInstrumentNames}\n` +
+                    `• Дней данных: ${trainingDays}\n\n` +
+                    `🧠 <b>Типы нейросетей:</b>\n` +
+                    `• Базовая нейросеть (15 эпох)\n` +
+                    `• Ансамбль моделей (20 эпох)\n` +
+                    `• Мета-обучение\n` +
+                    `• Обучение с подкреплением (20 эпизодов)\n\n` +
+                    `⏰ Время начала: ${new Date().toLocaleString('ru-RU')}`,
+                    'info'
+                );
+            } catch (telegramError) {
+                console.warn('⚠️ Failed to send Telegram notification about quick training start:', telegramError.message);
+            }
+
             // Обновляем метаданные воркера с количеством инструментов
             if (workerId) {
                 try {

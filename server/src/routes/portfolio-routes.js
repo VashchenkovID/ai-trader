@@ -605,15 +605,17 @@ router.get('/positions', async (req, res) => {
                     }
                     
                     try {
-                        // Получаем инструмент
-                        let instrument = await CacheService.getInstrument(figi, true);
+                        // Получаем инструмент с актуальными данными (skipUpdate = false)
+                        let instrument = await CacheService.getInstrument(figi, false);
                         if (!instrument) {
                             console.warn(`⚠️ Пропущена позиция ${figi}: инструмент не найден в кеше`);
                             continue;
                         }
                         
-                        // Получаем текущую цену
-                        let currentPrice = instrument.lastPrice || 0;
+                        // Получаем актуальную текущую цену через TradingEngine для синхронизации с расчетом PnL
+                        const TradingEngine = (await import('../services/TradingEngine.js')).default;
+                        const prices = await TradingEngine.getCurrentPrices([figi], false);
+                        let currentPrice = prices[figi] || instrument.lastPrice || 0;
                         
                         // Рассчитываем среднюю цену покупки для этой стратегии
                         let averagePrice = currentPrice || 0;
@@ -703,13 +705,16 @@ router.get('/positions', async (req, res) => {
             } else {
                 // Если нет стратегий, создаем одну позицию без стратегии
                 try {
-                    let instrument = await CacheService.getInstrument(figi, true);
+                    let instrument = await CacheService.getInstrument(figi, false);
                     if (!instrument) {
                         console.warn(`⚠️ Пропущена позиция ${figi}: инструмент не найден в кеше`);
                         continue;
                     }
                     
-                    const currentPrice = instrument.lastPrice || 0;
+                    // Получаем актуальную текущую цену через TradingEngine для синхронизации с расчетом PnL
+                    const TradingEngine = (await import('../services/TradingEngine.js')).default;
+                    const prices = await TradingEngine.getCurrentPrices([figi], false);
+                    const currentPrice = prices[figi] || instrument.lastPrice || 0;
                     const marketValue = currentPrice > 0 ? currentPrice * totalQuantityForFigi : 0;
                     
                     positions.push({

@@ -512,40 +512,55 @@ class PortfolioRebalancingService {
             const portfolioBefore = await TradingEngine.getPortfolioValue();
             const positionsBefore = await this.getDetailedPositions(portfolioBefore);
 
-            // Выполняем операции
+            // Создаем заявки вместо прямого выполнения
+            const TradingRequestService = (await import('./TradingRequestService.js')).default;
+            
             for (const operation of operations) {
                 try {
-                    const signal = {
-                        symbol: operation.figi,
-                        action: operation.action,
-                        quantity: operation.quantity,
-                        price: operation.currentPrice,
+                    // Для ребалансировки создаем заявки (TradingRequest) вместо прямого выполнения
+                    // Это особенно важно для продажи - заявки должны быть одобрены
+                    const recommendationData = {
+                        figi: operation.figi,
+                        ticker: operation.ticker,
+                        name: operation.name,
+                        recommendation: operation.action,
                         confidence: 1.0,
+                        score: 0,
+                        priceAtAnalysis: operation.currentPrice,
+                        price: operation.currentPrice
+                    };
+
+                    const options = {
+                        quantity: operation.quantity,
+                        comment: `Ребалансировка портфеля: ${operation.action === 'BUY' ? 'покупка' : 'продажа'} для выравнивания веса`,
+                        autoApprove: false, // Все операции ребалансировки требуют подтверждения
                         isRebalancing: true
                     };
 
-                    const result = await TradingEngine.executeOrder(signal);
+                    const tradingRequest = await TradingRequestService.createTradingRequestFromData(
+                        recommendationData,
+                        options
+                    );
 
-                    if (result && result.trade) {
+                    if (tradingRequest && tradingRequest.id) {
                         results.operationsExecuted++;
-                        results.totalCommission += result.trade.commission || 0;
                         results.operations.push({
                             ...operation,
                             executed: true,
-                            executionPrice: result.trade.price,
-                            actualCommission: result.trade.commission || 0,
-                            tradeId: result.trade.id
+                            tradingRequestId: tradingRequest.id,
+                            status: tradingRequest.status || 'pending',
+                            isRequest: true // Флаг, что это заявка, а не прямая сделка
                         });
                     } else {
                         results.operationsSkipped++;
                         results.operations.push({
                             ...operation,
                             executed: false,
-                            reason: 'Не удалось выполнить операцию'
+                            reason: 'Не удалось создать заявку'
                         });
                     }
                 } catch (error) {
-                    console.error(`❌ Ошибка выполнения операции ${operation.ticker} ${operation.action}:`, error);
+                    console.error(`❌ Ошибка создания заявки ${operation.ticker} ${operation.action}:`, error);
                     results.operationsFailed++;
                     results.errors.push({
                         operation: operation.ticker,

@@ -761,36 +761,47 @@ class RiskManagementService {
      * Обновление просадки
      */
     updateDrawdown() {
-        if (this.tradeHistory.length === 0) return;
+        if (this.tradeHistory.length === 0) {
+            this.stats.currentDrawdown = 0;
+            return;
+        }
         
-        // Находим пик портфеля
+        // Находим пик портфеля и текущую просадку
         let peak = 0;
         let currentDrawdown = 0;
-        
         let runningPnL = 0;
+        
         for (const trade of this.tradeHistory) {
             runningPnL += trade.pnl || 0;
             if (runningPnL > peak) {
                 peak = runningPnL;
+                // Когда достигаем нового пика, сбрасываем просадку
+                currentDrawdown = 0;
+            } else {
+                // Просадка = разница между пиком и текущим значением
+                currentDrawdown = Math.max(currentDrawdown, peak - runningPnL);
             }
-            currentDrawdown = Math.max(currentDrawdown, peak - runningPnL);
         }
         
-        // Рассчитываем просадку относительно пика или начального капитала
-        // Если peak <= 0, используем начальный капитал (1 000 000 по умолчанию для бумажной торговли)
-        const initialCapital = 1000000; // Начальный капитал по умолчанию
-        const referenceValue = peak > 0 ? peak : initialCapital;
+        // Рассчитываем просадку в процентах относительно пика
+        // Если пик <= 0, значит портфель никогда не был в прибыли
+        // В этом случае просадка = 0 (некорректно считать просадку от отрицательного значения)
+        let calculatedDrawdown = 0;
         
-        // Просадка не может быть больше 100% (1.0)
-        // Также ограничиваем максимальное значение разумным пределом (например, 2.0 = 200%)
-        let calculatedDrawdown = currentDrawdown / referenceValue;
+        if (peak > 0) {
+            // Просадка = (текущая просадка / пик) * 100%
+            calculatedDrawdown = currentDrawdown / peak;
+            
+            // Ограничиваем просадку максимум 100% (не может быть больше пика)
+            calculatedDrawdown = Math.min(calculatedDrawdown, 1.0);
+        } else if (peak === 0 && runningPnL < 0) {
+            // Если пик = 0 и текущий PnL отрицательный, это означает убытки с начала
+            // В этом случае просадка = 0, так как нет пика для сравнения
+            // Это корректно, так как просадка измеряется от пика, а не от нуля
+            calculatedDrawdown = 0;
+        }
         
-        // Ограничиваем просадку разумными пределами
-        // Если просадка больше 1.0 (100%), это означает, что убытки превысили пик/капитал
-        // В этом случае устанавливаем просадку в 1.0 (100%)
-        calculatedDrawdown = Math.min(calculatedDrawdown, 1.0);
-        
-        // Также проверяем на NaN и Infinity
+        // Проверяем на NaN и Infinity
         if (!isFinite(calculatedDrawdown) || isNaN(calculatedDrawdown)) {
             calculatedDrawdown = 0;
         }

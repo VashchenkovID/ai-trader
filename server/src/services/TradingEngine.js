@@ -780,9 +780,9 @@ class TradingEngine {
         for (const [symbol, quantity] of Object.entries(this.virtualPortfolio.positions || {})) {
             if (quantity > 0) {
                 try {
-                    // Получаем реальную цену
-                    // skipUpdate = true, чтобы не дергать API при обучении
-                    const prices = await this.getCurrentPrices([symbol], true);
+                    // Получаем актуальную цену (skipUpdate = false для обновления кеша)
+                    // Это важно для корректного расчета прибыли/убытка
+                    const prices = await this.getCurrentPrices([symbol], false);
                     const currentPrice = prices[symbol] || 0;
                     const positionValue = currentPrice * quantity;
                     positionsValue += positionValue;
@@ -795,6 +795,8 @@ class TradingEngine {
                     });
                     
                 } catch (error) {
+                    // Если не удалось получить актуальную цену, логируем предупреждение
+                    console.warn(`⚠️ Не удалось получить актуальную цену для ${symbol}:`, error.message);
                 }
             }
         }

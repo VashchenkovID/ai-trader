@@ -201,7 +201,35 @@ class PerformanceAnalyzer {
             });
 
             // Рассчитываем метрики
-            const totalProfit = periodTrades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+            // Используем PnLCalculationService для корректного расчета с актуальными ценами
+            let totalProfit = 0;
+            let realizedProfit = 0;
+            let unrealizedProfit = 0;
+            
+            try {
+                const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+                const portfolio = await TradingEngine.getPortfolioValue();
+                
+                const pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+                    tradingMode: portfolio?.mode || 'paper',
+                    includeTrades: true,
+                    includePositions: true,
+                    startDate: startDate,
+                    endDate: endDate
+                });
+                
+                // Используем данные из PnLCalculationService для точности
+                realizedProfit = pnlData.realized?.total || 0;
+                unrealizedProfit = pnlData.unrealized?.total || 0;
+                totalProfit = pnlData.total?.pnl || 0;
+            } catch (error) {
+                console.warn('⚠️ Не удалось получить PnL из PnLCalculationService, используем данные из trades:', error.message);
+                // Fallback: используем данные из trades
+                totalProfit = periodTrades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+                realizedProfit = totalProfit; // Для закрытых сделок весь PnL - реализованный
+                unrealizedProfit = 0;
+            }
+            
             const totalTrades = periodTrades.length;
             const profitableTrades = periodTrades.filter(trade => (trade.pnl || 0) > 0).length;
             const winRate = totalTrades > 0 ? profitableTrades / totalTrades : 0;
@@ -212,11 +240,25 @@ class PerformanceAnalyzer {
             // Анализ по времени
             const timeAnalysis = this.analyzeByTime(periodTrades);
 
-            // Анализ волатильности
-            const volatility = this.calculateVolatility(periodTrades.map(t => t.pnl || 0));
+            // Анализ волатильности - рассчитываем из процентных доходностей, а не из абсолютных значений
+            // Получаем начальный капитал для расчета процентных доходностей
+            const initialCapital = TradingEngine.virtualPortfolio?.initialCapital || 1000000;
+            const returns = [];
+            let runningCapital = initialCapital;
+            
+            for (const trade of periodTrades) {
+                const pnl = trade.pnl || 0;
+                if (runningCapital > 0) {
+                    const returnPercent = (pnl / runningCapital) * 100; // Доходность в процентах
+                    returns.push(returnPercent);
+                    runningCapital += pnl; // Обновляем капитал для следующей сделки
+                }
+            }
+            
+            const volatility = returns.length > 0 ? this.calculateVolatility(returns) : 0;
 
-            // Анализ максимальной просадки
-            const drawdown = this.calculateDrawdown(periodTrades);
+            // Анализ максимальной просадки - рассчитываем в процентах от капитала
+            const drawdown = this.calculateDrawdown(periodTrades, initialCapital);
 
             return {
                 totalProfit,
@@ -224,9 +266,9 @@ class PerformanceAnalyzer {
                 profitableTrades,
                 winRate,
                 averageProfit: totalTrades > 0 ? totalProfit / totalTrades : 0,
-                volatility,
-                maxDrawdown: drawdown.max,
-                currentDrawdown: drawdown.current,
+                volatility, // Теперь в процентах
+                maxDrawdown: drawdown.max, // Теперь в процентах
+                currentDrawdown: drawdown.current, // Теперь в процентах
                 symbolAnalysis,
                 timeAnalysis,
                 migrations: migrations.length,
@@ -649,32 +691,42 @@ class PerformanceAnalyzer {
         return hourlyStats;
     }
 
-    calculateVolatility(profits) {
-        if (profits.length < 2) return 0;
+    calculateVolatility(returns) {
+        // returns - массив процентных доходностей
+        if (returns.length < 2) return 0;
         
-        const mean = profits.reduce((sum, p) => sum + p, 0) / profits.length;
-        const variance = profits.reduce((sum, p) => sum + Math.pow(p - mean, 2), 0) / profits.length;
-        return Math.sqrt(variance);
+        const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+        const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
+        const volatility = Math.sqrt(variance);
+        
+        // Ограничиваем волатильность разумными пределами (максимум 1000%)
+        return Math.min(volatility, 1000);
     }
 
-    calculateDrawdown(trades) {
-        let maxDrawdown = 0;
-        let currentDrawdown = 0;
-        let peak = 0;
-        let runningTotal = 0;
+    calculateDrawdown(trades, initialCapital = 1000000) {
+        // Рассчитываем просадку в процентах от капитала
+        let maxDrawdownPercent = 0;
+        let currentDrawdownPercent = 0;
+        let peakCapital = initialCapital;
+        let runningCapital = initialCapital;
 
         trades.forEach(trade => {
-            runningTotal += trade.pnl || 0;
-            if (runningTotal > peak) {
-                peak = runningTotal;
-                currentDrawdown = 0;
-            } else {
-                currentDrawdown = peak - runningTotal;
-                maxDrawdown = Math.max(maxDrawdown, currentDrawdown);
+            runningCapital += trade.pnl || 0;
+            if (runningCapital > peakCapital) {
+                peakCapital = runningCapital;
+                currentDrawdownPercent = 0;
+            } else if (peakCapital > 0) {
+                // Просадка в процентах от пика
+                currentDrawdownPercent = ((peakCapital - runningCapital) / peakCapital) * 100;
+                maxDrawdownPercent = Math.max(maxDrawdownPercent, currentDrawdownPercent);
             }
         });
 
-        return { max: maxDrawdown, current: currentDrawdown };
+        // Ограничиваем просадку максимум 100%
+        return { 
+            max: Math.min(maxDrawdownPercent, 100), 
+            current: Math.min(currentDrawdownPercent, 100) 
+        };
     }
 
     async getPredictionData(days) {

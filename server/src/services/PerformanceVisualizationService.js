@@ -221,21 +221,32 @@ class PerformanceVisualizationService {
 
             const returnsData = await this.getReturnsChartData(days);
             const cumulativeReturns = returnsData.data?.cumulativeReturns || [];
+            
+            // Получаем начальный капитал для расчета просадки в процентах
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const initialCapital = TradingEngine.virtualPortfolio?.initialCapital || 1000000;
 
-            let peak = 0;
+            let peak = initialCapital; // Начинаем с начального капитала
             const drawdowns = [];
             const dates = returnsData.data?.labels || [];
 
             cumulativeReturns.forEach((cumReturn, index) => {
-                if (cumReturn > peak) {
-                    peak = cumReturn;
+                // cumReturn - это кумулятивная прибыль в рублях
+                // Рассчитываем текущий капитал = начальный капитал + кумулятивная прибыль
+                const currentCapital = initialCapital + cumReturn;
+                
+                if (currentCapital > peak) {
+                    peak = currentCapital;
                 }
-                const drawdown = peak - cumReturn;
+                
+                // Просадка в процентах от пика
+                const drawdownPercent = peak > 0 ? ((peak - currentCapital) / peak) * 100 : 0;
+                
                 drawdowns.push({
                     date: dates[index],
-                    drawdown: drawdown,
+                    drawdown: Math.min(drawdownPercent, 100), // Ограничиваем максимум 100%
                     peak: peak,
-                    current: cumReturn
+                    current: currentCapital
                 });
             });
 
@@ -250,8 +261,8 @@ class PerformanceVisualizationService {
                     current: drawdowns.map(d => d.current)
                 },
                 summary: {
-                    maxDrawdown: maxDrawdown,
-                    currentDrawdown: drawdowns[drawdowns.length - 1]?.drawdown || 0
+                    maxDrawdown: Math.min(maxDrawdown, 100), // Ограничиваем максимум 100%
+                    currentDrawdown: Math.min(drawdowns[drawdowns.length - 1]?.drawdown || 0, 100)
                 }
             };
 

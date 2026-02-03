@@ -207,12 +207,80 @@ class SchedulerService {
         this.partialExitCheckTask = SchedulerUtils.createScheduledTask(
             portfolioPricesUpdateSchedule,
             async () => {
-                const PartialExitService = (await import('./PartialExitService.js')).default;
-                if (!PartialExitService.isInitialized) {
-                    await PartialExitService.initialize();
+                let workerId = null;
+                try {
+                    // Регистрируем воркер в мониторинге
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (!WorkerMonitoringService.isInitialized) {
+                        await WorkerMonitoringService.initialize();
+                    }
+                    workerId = WorkerMonitoringService.registerWorker(
+                        'partial-exit-check',
+                        'Проверка частичного закрытия позиций',
+                        {
+                            stage: 'initializing'
+                        }
+                    );
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to register partial exit check worker:', monitoringError.message || monitoringError);
                 }
-                const result = await PartialExitService.checkAndExecutePartialExits();
-                // Partial exit check completed
+                
+                try {
+                    const PartialExitService = (await import('./PartialExitService.js')).default;
+                    if (!PartialExitService.isInitialized) {
+                        await PartialExitService.initialize();
+                    }
+                    
+                    // Обновляем статус - начало выполнения
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                    progress: 20,
+                                    metadata: {
+                                        stage: 'checking'
+                                    }
+                                });
+                            }
+                        } catch (monitoringError) {
+                            console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                        }
+                    }
+                    
+                    const result = await PartialExitService.checkAndExecutePartialExits();
+                    
+                    // Завершаем воркер успешно
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.completeWorker(workerId, true, {
+                                    executed: result?.executed || 0,
+                                    checked: result?.checked || 0
+                                });
+                            }
+                        } catch (monitoringError) {
+                            console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                        }
+                    }
+                } catch (error) {
+                    // Завершаем воркер с ошибкой
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                                WorkerMonitoringService.completeWorker(workerId, false, {
+                                    error: error.message || error
+                                });
+                            }
+                        } catch (monitoringError) {
+                            console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                        }
+                    }
+                    throw error;
+                }
             },
             {
                 taskName: 'partial-exit-check',
@@ -319,7 +387,35 @@ class SchedulerService {
         this.tradingHoursCacheTask = SchedulerUtils.createScheduledTask(
             tradingHoursSchedule,
             async () => {
-                await TradingHoursCacheService.updateTradingHoursCache();
+                let workerId = null;
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
+                    workerId = WorkerMonitoringService.registerWorker('trading-hours-cache-update', 'Обновление кеша торговых часов', { stage: 'initializing' });
+                } catch (e) { console.warn('⚠️ Failed to register trading hours cache update worker:', e.message); }
+                
+                try {
+                    await TradingHoursCacheService.updateTradingHoursCache();
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.completeWorker(workerId, true, { message: 'Кеш торговых часов обновлен' });
+                            }
+                        } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                    }
+                } catch (error) {
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                                WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
+                            }
+                        } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                    }
+                    throw error;
+                }
             },
             {
                 taskName: 'trading-hours-cache-update',
@@ -392,11 +488,79 @@ class SchedulerService {
         this.positionMonitoringTask = SchedulerUtils.createScheduledTask(
             '*/5 * * * *',
             async () => {
-                const PositionMonitoringService = (await import('./PositionMonitoringService.js')).default;
-                if (!PositionMonitoringService.isInitialized) {
-                    await PositionMonitoringService.initialize();
+                let workerId = null;
+                try {
+                    // Регистрируем воркер в мониторинге
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (!WorkerMonitoringService.isInitialized) {
+                        await WorkerMonitoringService.initialize();
+                    }
+                    workerId = WorkerMonitoringService.registerWorker(
+                        'position-monitoring',
+                        'Мониторинг позиций',
+                        {
+                            stage: 'initializing'
+                        }
+                    );
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to register position monitoring worker:', monitoringError.message || monitoringError);
                 }
-                await PositionMonitoringService.checkAllPositions();
+                
+                try {
+                    const PositionMonitoringService = (await import('./PositionMonitoringService.js')).default;
+                    if (!PositionMonitoringService.isInitialized) {
+                        await PositionMonitoringService.initialize();
+                    }
+                    
+                    // Обновляем статус - начало выполнения
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                    progress: 20,
+                                    metadata: {
+                                        stage: 'checking'
+                                    }
+                                });
+                            }
+                        } catch (monitoringError) {
+                            console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                        }
+                    }
+                    
+                    await PositionMonitoringService.checkAllPositions();
+                    
+                    // Завершаем воркер успешно
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.completeWorker(workerId, true, {
+                                    message: 'Проверка позиций завершена'
+                                });
+                            }
+                        } catch (monitoringError) {
+                            console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                        }
+                    }
+                } catch (error) {
+                    // Завершаем воркер с ошибкой
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                                WorkerMonitoringService.completeWorker(workerId, false, {
+                                    error: error.message || error
+                                });
+                            }
+                        } catch (monitoringError) {
+                            console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                        }
+                    }
+                    throw error;
+                }
             },
             {
                 taskName: 'position-monitoring',
@@ -413,12 +577,61 @@ class SchedulerService {
         this.dailyReportTask = SchedulerUtils.createScheduledTask(
             dailyReportSchedule,
             async () => {
-                const DailyReportService = (await import('./DailyReportService.js')).default;
-                if (!DailyReportService.isInitialized) {
-                    await DailyReportService.initialize();
+                let workerId = null;
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
+                    workerId = WorkerMonitoringService.registerWorker('daily-report', 'Ежедневный отчет', { stage: 'initializing' });
+                } catch (e) { console.warn('⚠️ Failed to register daily report worker:', e.message); }
+                
+                try {
+                    const DailyReportService = (await import('./DailyReportService.js')).default;
+                    if (!DailyReportService.isInitialized) {
+                        await DailyReportService.initialize();
+                    }
+                    
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.updateWorkerStatus(workerId, { progress: 30, metadata: { stage: 'generating' } });
+                            }
+                        } catch (e) { console.warn('⚠️ Failed to update worker status:', e.message); }
+                    }
+                    
+                    const report = await DailyReportService.generateDailyReport();
+                    
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.updateWorkerStatus(workerId, { progress: 80, metadata: { stage: 'sending' } });
+                            }
+                        } catch (e) { console.warn('⚠️ Failed to update worker status:', e.message); }
+                    }
+                    
+                    await DailyReportService.sendReportToTelegram(report);
+                    
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.completeWorker(workerId, true, { message: 'Ежедневный отчет отправлен' });
+                            }
+                        } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                    }
+                } catch (error) {
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                                WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
+                            }
+                        } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                    }
+                    throw error;
                 }
-                const report = await DailyReportService.generateDailyReport();
-                await DailyReportService.sendReportToTelegram(report);
             },
             {
                 taskName: 'daily-report',
@@ -440,9 +653,33 @@ class SchedulerService {
                 this.dataCleanupTask = SchedulerUtils.createScheduledTask(
                     cleanupSchedule,
                     async () => {
+                        let workerId = null;
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
+                            workerId = WorkerMonitoringService.registerWorker('data-cleanup', 'Автоматическая очистка данных', { stage: 'initializing' });
+                        } catch (e) { console.warn('⚠️ Failed to register data cleanup worker:', e.message); }
+                        
                         try {
                             await DataCleanupService.performCleanup();
+                            if (workerId) {
+                                try {
+                                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                                    if (WorkerMonitoringService.isInitialized) {
+                                        WorkerMonitoringService.completeWorker(workerId, true, { message: 'Очистка данных завершена' });
+                                    }
+                                } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                            }
                         } catch (error) {
+                            if (workerId) {
+                                try {
+                                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                                    if (WorkerMonitoringService.isInitialized) {
+                                        WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                                        WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
+                                    }
+                                } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                            }
                             console.error('❌ Error in scheduled data cleanup:', error);
                         }
                     },
@@ -462,7 +699,35 @@ class SchedulerService {
         this.tradingHoursTask = SchedulerUtils.createScheduledTask(
             '*/5 * * * *',
             async () => {
-                await TradingHoursService.checkAndSendNotifications();
+                let workerId = null;
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
+                    workerId = WorkerMonitoringService.registerWorker('trading-hours-check', 'Обновление торговых часов', { stage: 'initializing' });
+                } catch (e) { console.warn('⚠️ Failed to register trading hours check worker:', e.message); }
+                
+                try {
+                    await TradingHoursService.checkAndSendNotifications();
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.completeWorker(workerId, true, { message: 'Проверка торговых часов завершена' });
+                            }
+                        } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                    }
+                } catch (error) {
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                                WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
+                            }
+                        } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                    }
+                    throw error;
+                }
             },
             {
                 taskName: 'trading-hours-check',
@@ -559,9 +824,37 @@ class SchedulerService {
         this.strategyRebalanceTask = SchedulerUtils.createScheduledTask(
             '0 3 * * 0',
             async () => {
-                const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
-                await StrategyAllocationService.rebalanceStrategies();
-                await OptimizedTelegramService.sendAlert('STRATEGY_REBALANCE_COMPLETE', 'Стратегии перебалансированы', 'info');
+                let workerId = null;
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
+                    workerId = WorkerMonitoringService.registerWorker('strategy-rebalance', 'Перебалансировка стратегий', { stage: 'initializing' });
+                } catch (e) { console.warn('⚠️ Failed to register strategy rebalance worker:', e.message); }
+                
+                try {
+                    const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
+                    await StrategyAllocationService.rebalanceStrategies();
+                    await OptimizedTelegramService.sendAlert('STRATEGY_REBALANCE_COMPLETE', 'Стратегии перебалансированы', 'info');
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.completeWorker(workerId, true, { message: 'Стратегии перебалансированы' });
+                            }
+                        } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                    }
+                } catch (error) {
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            if (WorkerMonitoringService.isInitialized) {
+                                WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                                WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
+                            }
+                        } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                    }
+                    throw error;
+                }
             },
             {
                 taskName: 'strategy-rebalance',
@@ -2121,9 +2414,25 @@ class SchedulerService {
     }
 
     async performCleanup() {
+        let workerId = null;
+        try {
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
+            workerId = WorkerMonitoringService.registerWorker('cleanup', 'Очистка старых свечей', { stage: 'initializing' });
+        } catch (e) { console.warn('⚠️ Failed to register cleanup worker:', e.message); }
+        
         try {
             const { CachedCandle } = await import('../models/CachedCandle.js');
             const TriggeredSignal = (await import('../models/TriggeredSignal.js')).default;
+
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, { progress: 20, metadata: { stage: 'cleaning_candles' } });
+                    }
+                } catch (e) { console.warn('⚠️ Failed to update worker status:', e.message); }
+            }
 
             // Удаляем свечи старше 30 дней
             const thirtyDaysAgo = new Date();
@@ -2137,6 +2446,15 @@ class SchedulerService {
                 }
             });
 
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, { progress: 60, metadata: { stage: 'cleaning_signals' } });
+                    }
+                } catch (e) { console.warn('⚠️ Failed to update worker status:', e.message); }
+            }
+
             // Удаляем сработавшие сигналы старше 1 суток (24 часа)
             const oneDayAgo = new Date();
             oneDayAgo.setDate(oneDayAgo.getDate() - 1);
@@ -2149,7 +2467,25 @@ class SchedulerService {
                 }
             });
 
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.completeWorker(workerId, true, { deletedCandles: deletedCandlesCount, deletedSignals: deletedSignalsCount });
+                    }
+                } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+            }
+
         } catch (error) {
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                        WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
+                    }
+                } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+            }
             console.error('Cleanup error:', error);
             throw error;
         }
@@ -2176,11 +2512,21 @@ class SchedulerService {
             // Проверяем, нужно ли переобучение
             const shouldRetrain = await this.shouldRetrainModel();
             if (!shouldRetrain) {
-                // Уведомления о периодическом обучении теперь обрабатываются в IntegratedAIService
+                // Логируем причину, почему обучение не требуется
+                console.log('ℹ️ [Scheduled Training] Обучение не требуется по результатам проверки shouldRetrainModel');
+                if (LoggerService.isInitialized) {
+                    LoggerService.info('Scheduled training skipped - retraining not needed', {
+                        service: 'SchedulerService',
+                        operation: 'performScheduledTraining',
+                        reason: 'shouldRetrainModel returned false'
+                    });
+                }
                 // ВАЖНО: сбрасываем флаг перед возвратом
                 this.isTraining = false;
                 return;
             }
+            
+            console.log('✅ [Scheduled Training] Обучение требуется, начинаем полное обучение...');
 
 
             // Получаем настройки
@@ -2460,14 +2806,61 @@ class SchedulerService {
      * Проверка деградации и автоматическое восстановление best-модели для всех инструментов
      */
     async checkDegradationAndRestoreAll() {
+        let workerId = null;
+        
+        try {
+            // Регистрируем воркер в мониторинге
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            workerId = WorkerMonitoringService.registerWorker(
+                'degradation-check',
+                'Проверка деградации моделей',
+                {
+                    stage: 'initializing'
+                }
+            );
+        } catch (monitoringError) {
+            console.warn('⚠️ Failed to register degradation check worker:', monitoringError.message || monitoringError);
+        }
+        
         try {
             const OptimizedTrainingService = getService('OptimizedTrainingService');
             
             if (!OptimizedTrainingService) {
                 console.warn('⚠️ OptimizedTrainingService not available for degradation check');
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.completeWorker(workerId, false, {
+                                error: 'OptimizedTrainingService not available'
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                    }
+                }
                 return;
             }
 
+            // Обновляем статус - начало выполнения
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 10,
+                            metadata: {
+                                stage: 'loading_instruments'
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                }
+            }
 
             // Получаем все инструменты
             const instruments = await CacheService.getAllInstruments();
@@ -2501,6 +2894,23 @@ class SchedulerService {
                 }
             }
 
+            // Обновляем прогресс и завершаем воркер
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            checked,
+                            degraded,
+                            restored,
+                            total: instruments.length
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                }
+            }
+            
             if (degraded > 0 || restored > 0) {
                 // Отправляем уведомление о результатах проверки
                 await OptimizedTelegramService.sendAlert(
@@ -2510,6 +2920,20 @@ class SchedulerService {
                 );
             }
         } catch (error) {
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                        WorkerMonitoringService.completeWorker(workerId, false, {
+                            error: error.message || error
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                }
+            }
             console.error('❌ Error checking degradation for all instruments:', error);
         }
     }
@@ -2590,6 +3014,25 @@ class SchedulerService {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
             return;
+        }
+        
+        let workerId = null;
+        
+        try {
+            // Регистрируем воркер в мониторинге
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            workerId = WorkerMonitoringService.registerWorker(
+                'predictions-update',
+                'Обновление предсказаний в рекомендациях',
+                {
+                    stage: 'initializing'
+                }
+            );
+        } catch (monitoringError) {
+            console.warn('⚠️ Failed to register predictions update worker:', monitoringError.message || monitoringError);
         }
         
         try {
@@ -2709,8 +3152,38 @@ class SchedulerService {
                     }
                 });
             }
+            
+            // Завершаем воркер успешно
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            updated: updatedCount,
+                            errors: errorCount,
+                            total: recommendationsToUpdate.length
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                }
+            }
 
         } catch (error) {
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                        WorkerMonitoringService.completeWorker(workerId, false, {
+                            error: error.message || error
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                }
+            }
             console.error('❌ Error updating recommendations predictions:', error);
             throw error;
         }
@@ -3764,6 +4237,25 @@ class SchedulerService {
             return;
         }
         
+        let workerId = null;
+        
+        try {
+            // Регистрируем воркер в мониторинге
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            workerId = WorkerMonitoringService.registerWorker(
+                'trailing-stops-check',
+                'Проверка трейлинг-стопов',
+                {
+                    stage: 'initializing'
+                }
+            );
+        } catch (monitoringError) {
+            console.warn('⚠️ Failed to register trailing stops check worker:', monitoringError.message || monitoringError);
+        }
+        
         try {
             const RiskManagementService = (await import('./RiskManagementService.js')).default;
             const TradingEngine = (await import('./TradingEngine.js')).default;
@@ -3776,6 +4268,24 @@ class SchedulerService {
             const realTriggered = await RiskManagementService.checkAllTrailingStops('real');
 
             const allTriggered = [...virtualTriggered, ...realTriggered];
+            
+            // Обновляем статус - проверка завершена
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 50,
+                            metadata: {
+                                stage: 'processing',
+                                triggered: allTriggered.length
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                }
+            }
 
             if (allTriggered.length > 0) {
                 // Закрываем позиции для каждого сработавшего трейлинг-стопа
@@ -3832,6 +4342,41 @@ class SchedulerService {
                     }
                 }
             }
+            
+            // Завершаем воркер успешно
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            triggered: allTriggered.length,
+                            virtual: virtualTriggered.length,
+                            real: realTriggered.length
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                }
+            }
+        } catch (error) {
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                        WorkerMonitoringService.completeWorker(workerId, false, {
+                            error: error.message || error
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                }
+            }
+            console.error('❌ Error checking trailing stops:', error);
+            throw error;
+        }
+    }
         } catch (error) {
             console.error('❌ Ошибка проверки трейлинг-стопов:', error);
             throw error;
@@ -3845,6 +4390,13 @@ class SchedulerService {
      * Предварительный расчет корреляций для популярных инструментов
      */
     async performCorrelationPrecalculation() {
+        let workerId = null;
+        try {
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
+            workerId = WorkerMonitoringService.registerWorker('correlation-precalc', 'Предрасчет корреляций', { stage: 'initializing' });
+        } catch (e) { console.warn('⚠️ Failed to register correlation precalc worker:', e.message); }
+        
         try {
             const CorrelationService = (await import('./CorrelationService.js')).default;
             const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
@@ -3852,6 +4404,15 @@ class SchedulerService {
             // Инициализируем сервис, если нужно
             if (!CorrelationService.isInitialized) {
                 await CorrelationService.initialize();
+            }
+            
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, { progress: 10, metadata: { stage: 'loading_instruments' } });
+                    }
+                } catch (e) { console.warn('⚠️ Failed to update worker status:', e.message); }
             }
             
             // Получаем топ-50 инструментов по активности торгов
@@ -3922,7 +4483,29 @@ class SchedulerService {
             } else {
                 console.warn('⚠️ Недостаточно инструментов для предварительного расчета корреляций');
             }
+            
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.completeWorker(workerId, true, { 
+                            calculated: result?.calculated || 0,
+                            cached: result?.cached || 0,
+                            errors: result?.errors || 0
+                        });
+                    }
+                } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+            }
         } catch (error) {
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                        WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
+                    }
+                } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+            }
             console.error('Error in scheduled correlation precalculation:', error);
             await OptimizedTelegramService.sendAlert('CORRELATION_PRECALC_ERROR', error.message, 'warning');
             throw error;
@@ -3968,6 +4551,13 @@ class SchedulerService {
         if (this.isFullCacheUpdateRunning) {
             return;
         }
+        
+        let workerId = null;
+        try {
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
+            workerId = WorkerMonitoringService.registerWorker('signals-update', 'Обновление сигналов аналитиков', { stage: 'initializing' });
+        } catch (e) { console.warn('⚠️ Failed to register signals update worker:', e.message); }
         
         try {
 
@@ -4874,8 +5464,14 @@ class SchedulerService {
      * Выполнение автоматической ребалансировки портфеля
      */
     async performPortfolioRebalancing() {
+        let workerId = null;
         try {
-
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
+            workerId = WorkerMonitoringService.registerWorker('portfolio-rebalancing', 'Ребалансировка портфеля', { stage: 'initializing' });
+        } catch (e) { console.warn('⚠️ Failed to register portfolio rebalancing worker:', e.message); }
+        
+        try {
             const PortfolioRebalancingService = (await import('./PortfolioRebalancingService.js')).default;
             
             // Убеждаемся, что сервис инициализирован

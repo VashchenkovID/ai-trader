@@ -163,7 +163,7 @@ class FallbackService {
                 });
                 
                 // Создаем критический алерт
-                MonitoringService.createAlert(
+                const alert = MonitoringService.createAlert(
                     'external_api',
                     'high',
                     `Критическая ошибка: ${serviceName} недоступен и кеш пуст.`,
@@ -173,6 +173,16 @@ class FallbackService {
                         cacheError: cacheError.message
                     }
                 );
+                
+                // При ошибке MONITORING_EXTERNAL_API блокируем запросы на 5 минут
+                // Увеличиваем timeout circuit breaker до 5 минут (300000 мс)
+                RetryService.setCircuitBreakerTimeout(serviceName, 5 * 60 * 1000);
+                
+                LoggerService.warn(`Circuit breaker для ${serviceName} заблокирован на 5 минут из-за критической ошибки (API недоступен и кеш пуст)`, {
+                    service: 'FallbackService',
+                    serviceName,
+                    timeout: '5 minutes'
+                });
                 
                 // Возвращаем упрощенные данные или выбрасываем ошибку
                 return this.getSimplifiedData(serviceName, error);

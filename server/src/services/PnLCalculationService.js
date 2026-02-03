@@ -332,21 +332,39 @@ class PnLCalculationService {
                 }
             }
 
-            // Получаем текущие цены
+            // Получаем актуальные текущие цены (skipUpdate = false для обновления кеша)
+            // Это важно для корректного расчета прибыли/убытка
             const figis = Array.from(positionsByFigi.keys());
             const currentPrices = {};
 
-            for (const figi of figis) {
-                try {
-                    const instrument = await CacheService.getInstrument(figi, true);
-                    currentPrices[figi] = instrument?.lastPrice || 0;
-                } catch (error) {
-                    LoggerService.warn(`Could not get price for ${figi}`, {
-                        service: 'PnLCalculationService',
-                        operation: 'getOpenPositions',
-                        figi,
-                        error: { message: error.message }
-                    });
+            // Используем TradingEngine для получения актуальных цен
+            try {
+                const TradingEngine = (await import('./TradingEngine.js')).default;
+                const prices = await TradingEngine.getCurrentPrices(figis, false);
+                // Копируем цены в currentPrices
+                for (const figi of figis) {
+                    currentPrices[figi] = prices[figi] || 0;
+                }
+            } catch (error) {
+                // Fallback: используем кеш, если TradingEngine недоступен
+                LoggerService.warn('Could not get prices from TradingEngine, using cache', {
+                    service: 'PnLCalculationService',
+                    operation: 'getOpenPositions',
+                    error: { message: error.message }
+                });
+                
+                for (const figi of figis) {
+                    try {
+                        const instrument = await CacheService.getInstrument(figi, false); // Обновляем кеш
+                        currentPrices[figi] = instrument?.lastPrice || 0;
+                    } catch (cacheError) {
+                        LoggerService.warn(`Could not get price for ${figi}`, {
+                            service: 'PnLCalculationService',
+                            operation: 'getOpenPositions',
+                            figi,
+                            error: { message: cacheError.message }
+                        });
+                    }
                 }
             }
 

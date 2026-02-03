@@ -330,7 +330,7 @@ class RetryService {
             });
             
             // Создаем алерт
-            MonitoringService.createAlert(
+            const alert = MonitoringService.createAlert(
                 'external_api',
                 'high',
                 `Circuit breaker открыт для ${serviceName}. Сервис временно недоступен.`,
@@ -340,6 +340,11 @@ class RetryService {
                     threshold: breaker.failureThreshold
                 }
             );
+            
+            // При ошибке MONITORING_EXTERNAL_API блокируем запросы на 5 минут
+            // Увеличиваем timeout circuit breaker до 5 минут (300000 мс)
+            breaker.timeout = 5 * 60 * 1000; // 5 минут
+            breaker.openedAt = Date.now(); // Обновляем время открытия
         }
     }
     
@@ -416,6 +421,25 @@ class RetryService {
      */
     resetCircuitBreaker(serviceName) {
         this.circuitBreakers.delete(serviceName);
+    }
+    
+    /**
+     * Установка timeout для circuit breaker сервиса
+     * Используется для блокировки запросов на определенное время при критических ошибках
+     */
+    setCircuitBreakerTimeout(serviceName, timeoutMs) {
+        const breaker = this.circuitBreakers.get(serviceName);
+        if (breaker) {
+            breaker.timeout = timeoutMs;
+            if (breaker.state === 'open') {
+                breaker.openedAt = Date.now(); // Обновляем время открытия для применения нового timeout
+            }
+            LoggerService.info(`Circuit breaker timeout для ${serviceName} установлен на ${timeoutMs / 1000} секунд`, {
+                service: 'RetryService',
+                serviceName,
+                timeout: timeoutMs
+            });
+        }
     }
     
     /**

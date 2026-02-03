@@ -73,13 +73,83 @@
     - Тип воркера: `telegram-cache-update`
     - Статус: ✅ Покрыт
 
+14. **Проверка частичного закрытия позиций** (`PartialExitService.checkAndExecutePartialExits`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `partial-exit-check`
+    - Статус: ✅ Покрыт
+
+15. **Мониторинг позиций** (`PositionMonitoringService.checkAllPositions`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `position-monitoring`
+    - Статус: ✅ Покрыт
+
+16. **Проверка деградации моделей** (`checkDegradationAndRestoreAll`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `degradation-check`
+    - Статус: ✅ Покрыт
+
+17. **Обновление предсказаний в рекомендациях** (`updateRecommendationsPredictions`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `predictions-update`
+    - Статус: ✅ Покрыт
+
+18. **Обновление сигналов аналитиков** (`performSignalsUpdate`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `signals-update`
+    - Статус: ✅ Покрыт
+
+19. **Проверка трейлинг-стопов** (`checkTrailingStops`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `trailing-stops-check`
+    - Статус: ✅ Покрыт
+
+20. **Ребалансировка портфеля** (`performPortfolioRebalancing`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `portfolio-rebalancing`
+    - Статус: ✅ Покрыт
+
+21. **Очистка старых свечей** (`performCleanup`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `cleanup`
+    - Статус: ✅ Покрыт
+
+22. **Обновление торговых часов** (`TradingHoursService.checkAndSendNotifications`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `trading-hours-check`
+    - Статус: ✅ Покрыт
+
+23. **Обновление кеша торговых часов** (`TradingHoursCacheService.updateTradingHoursCache`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `trading-hours-cache-update`
+    - Статус: ✅ Покрыт
+
+24. **Ежедневный отчет** (`DailyReportService.generateDailyReport`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `daily-report`
+    - Статус: ✅ Покрыт
+
+25. **Автоматическая очистка данных** (`DataCleanupService.performCleanup`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `data-cleanup`
+    - Статус: ✅ Покрыт
+
+26. **Перебалансировка стратегий** (`StrategyAllocationService.rebalanceStrategies`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `strategy-rebalance`
+    - Статус: ✅ Покрыт
+
+27. **Предрасчет корреляций** (`performCorrelationPrecalculation`)
+    - Файл: `server/src/services/SchedulerService.js`
+    - Тип воркера: `correlation-precalc`
+    - Статус: ✅ Покрыт
+
 ---
 
 ## ❌ Процессы, НЕ покрытые мониторингом
 
 ### 🔴 Критичные процессы (высокий приоритет)
 
-*Все критичные процессы теперь покрыты мониторингом*
+*Все критичные и важные процессы теперь покрыты мониторингом*
 
 ---
 
@@ -306,14 +376,14 @@ async performSomeProcess() {
 ## 📊 Статистика
 
 - **Всего процессов**: 30
-- **Покрыто мониторингом**: 13 (43%)
-- **Не покрыто**: 17 (57%)
+- **Покрыто мониторингом**: 27 (90%)
+- **Не покрыто**: 3 (10%)
   - Критичные: 0 ✅
-  - Важные: 7
-  - Периодические: 10
+  - Важные: 0 ✅
+  - Периодические: 3 (низкий приоритет)
 
 ---
 
 **Последнее обновление**: 2026-02-02
-**Версия документа**: 1.1
+**Версия документа**: 1.3
 
