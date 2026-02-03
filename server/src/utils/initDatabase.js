@@ -40,14 +40,6 @@ if (!envLoaded) {
 
 // В Docker контейнере переменные окружения уже установлены через docker-compose.yml
 // Отладочный вывод для диагностики
-console.log('📝 Проверка переменных окружения:');
-console.log(`   USER_PASSWORD установлен: ${process.env.USER_PASSWORD ? 'Да (длина: ' + process.env.USER_PASSWORD.length + ')' : 'Нет'}`);
-console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'не установлен'}`);
-if (!process.env.USER_PASSWORD) {
-    console.warn('   ⚠️ USER_PASSWORD не найден в переменных окружения!');
-    console.warn('   ⚠️ Убедитесь, что USER_PASSWORD установлен в .env файле или docker-compose.yml');
-}
-
 import sequelize from '../config/database.js';
 import { Sequelize } from 'sequelize';
 import DatabaseConnectionManager from './DatabaseConnectionManager.js';
@@ -228,7 +220,6 @@ async function safeSyncModel(Model, modelName = null) {
                 // Таблица существует - НЕ используем sync, чтобы не изменять ENUM типы
                 // Просто проверяем и добавляем отсутствующие столбцы через ensureModelColumns
                 // (уже вызвано выше), и выходим
-                console.log(`✅ Таблица ${name} уже существует, пропускаем синхронизацию (ENUM типы не изменяются)`);
                 return;
             } else {
                 // Таблицы нет - создаем через alter: true
@@ -250,14 +241,12 @@ async function safeSyncModel(Model, modelName = null) {
             // Для моделей без ENUM используем alter: true
             await Model.sync({ alter: true });
         }
-        console.log(`✅ Таблица ${name} создана/обновлена`);
     } catch (syncError) {
         // Игнорируем ошибки создания ENUM типов, если они уже существуют
         if (syncError.name === 'SequelizeUniqueConstraintError' && 
             syncError.original && syncError.original.code === '23505' &&
             (syncError.message && syncError.message.includes('enum_') ||
              syncError.original.detail && syncError.original.detail.includes('enum_'))) {
-            console.log(`✅ Таблица ${name} уже существует`);
         } else if (syncError.message && (
             syncError.message.includes('USING') ||
             syncError.message.includes('syntax error at or near') ||
@@ -273,17 +262,14 @@ async function safeSyncModel(Model, modelName = null) {
             syncError.original.code === '42601' // PostgreSQL syntax error code
         ))) {
             // Ошибка изменения ENUM типа - это нормально, таблица уже существует
-            console.log(`⚠️ Таблица ${name} существует, но не удалось изменить ENUM типы (это нормально)`);
         } else if (syncError.name === 'TypeError' && syncError.message && syncError.message.includes('Cannot read properties of null')) {
             // Ошибка при чтении индексов - возможно, таблица в процессе создания
-            console.log(`⚠️ Таблица ${name} в процессе синхронизации, ошибка чтения индексов (это нормально)`);
         } else if (syncError.message && (
             syncError.message.includes('type "virtual" does not exist') ||
             syncError.message.includes('VIRTUAL') ||
             (syncError.original && syncError.original.message && syncError.original.message.includes('type "virtual" does not exist'))
         )) {
             // Ошибка с VIRTUAL типом - это нормально, виртуальные поля не должны быть в БД
-            console.log(`⚠️ Таблица ${name} содержит виртуальные поля (это нормально, они не синхронизируются)`);
         } else if (syncError.message && (
             syncError.message.includes('cache lookup failed') ||
             syncError.message.includes('cache lookup failed for attribute') ||
@@ -293,7 +279,6 @@ async function safeSyncModel(Model, modelName = null) {
             ))
         )) {
             // Ошибка с кешем индексов - поврежденный индекс, нужно пересоздать
-            console.log(`⚠️ Обнаружен поврежденный индекс в таблице ${name}, пытаемся исправить...`);
             try {
                 const tableName = Model.tableName || (typeof Model.getTableName === 'function' ? Model.getTableName() : name);
                 
@@ -343,7 +328,6 @@ async function safeSyncModel(Model, modelName = null) {
                 
                 // Синхронизируем модель заново для пересоздания индексов
                 await Model.sync({ alter: true });
-                console.log(`✅ Индексы таблицы ${name} пересозданы`);
             } catch (fixError) {
                 console.warn(`⚠️ Не удалось исправить индексы таблицы ${name}:`, fixError.message);
                 // Пробуем просто синхронизировать без alter
@@ -362,11 +346,6 @@ async function safeSyncModel(Model, modelName = null) {
             ))
         )) {
             // Ошибка с ограничениями/индексами - возможно, индекс уже существует или таблица в процессе изменения
-            console.log(`⚠️ Таблица ${name} имеет проблемы с ограничениями/индексами (это нормально, если таблица уже существует)`);
-        } else if (syncError.name === 'SequelizeValidationError' || 
-                   (syncError.message && syncError.message.includes('Validation error'))) {
-            // Ошибка валидации - часто возникает при синхронизации существующих таблиц с новыми ограничениями
-            console.log(`⚠️ Таблица ${name} имеет ошибки валидации при синхронизации (это нормально, если таблица уже существует)`);
         } else {
             console.error(`❌ Ошибка синхронизации таблицы ${name}:`, syncError.message);
             // Не прерываем инициализацию при ошибке синхронизации
@@ -469,7 +448,6 @@ async function ensureModelColumns(Model) {
                     }
                     
                     await sequelize.query(alterQuery);
-                    console.log(`   ✅ Столбец ${columnName} (${pgType}) добавлен в таблицу ${tableName}`);
                 } catch (error) {
                     // Игнорируем ошибки, если столбец уже существует
                     if (!error.message.includes('already exists') && 
@@ -539,7 +517,6 @@ async function ensureColumnsExist(tableName, columns) {
                 }
                 
                 await sequelize.query(alterQuery);
-                console.log(`   ✅ Столбец ${column.name} добавлен в таблицу ${tableName}`);
             }
         }
     } catch (error) {
@@ -573,7 +550,6 @@ async function ensureDatabaseExists() {
 
     try {
         await adminSequelize.authenticate();
-        console.log('✅ Подключение к PostgreSQL установлено');
 
         // Проверяем, существует ли БД
         // Используем параметризованный запрос для безопасности (хотя dbName из env)
@@ -585,12 +561,9 @@ async function ensureDatabaseExists() {
         );
 
         if (results.length === 0) {
-            console.log(`📦 Создание базы данных "${dbName}"...`);
             // CREATE DATABASE не поддерживает параметризацию, но dbName берется из env
             await adminSequelize.query(`CREATE DATABASE "${dbName.replace(/"/g, '""')}"`);
-            console.log(`✅ База данных "${dbName}" создана успешно`);
         } else {
-            console.log(`✅ База данных "${dbName}" уже существует`);
         }
 
         await adminSequelize.close();
@@ -622,10 +595,8 @@ async function ensureDatabaseExists() {
                     logging: false
                 });
                 await retrySequelize.authenticate();
-                console.log(`📦 Попытка создать базу данных "${dbName}"...`);
                 // CREATE DATABASE не поддерживает параметризацию, но dbName берется из env
                 await retrySequelize.query(`CREATE DATABASE "${dbName.replace(/"/g, '""')}"`);
-                console.log(`✅ База данных "${dbName}" создана успешно`);
                 await retrySequelize.close();
             } catch (createError) {
                 console.error(`❌ Ошибка создания базы данных:`, createError.message);
@@ -656,20 +627,16 @@ export async function initDatabase() {
 
         // ВАЖНО: Сначала создаем критически важные таблицы, которые используются сервисами при инициализации
         // Settings должна быть ПЕРВОЙ, так как многие сервисы обращаются к ней при инициализации
-        console.log('⚙️ Создание таблицы настроек (Settings) - ПРИОРИТЕТ #1...');
         try {
             await safeSyncModel(Settings, 'Settings');
-            console.log('✅ Таблица настроек создана/обновлена');
         } catch (syncError) {
             console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: Не удалось создать таблицу Settings:', syncError.message);
             throw syncError; // Это критическая ошибка, прерываем инициализацию
         }
         
         // TradingStrategy должна быть создана ПЕРЕД StrategyAllocationService
-        console.log('📈 Создание таблицы торговых стратегий (TradingStrategy) - ПРИОРИТЕТ #2...');
         try {
             await safeSyncModel(TradingStrategy, 'TradingStrategy');
-            console.log('✅ Таблица торговых стратегий создана/обновлена');
         } catch (syncError) {
             console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: Не удалось создать таблицу TradingStrategy:', syncError.message);
             throw syncError;
@@ -681,10 +648,8 @@ export async function initDatabase() {
         // Этот блок удален, так как все модели синхронизируются индивидуально ниже.
         
         // Создаем таблицу кешированных инструментов (CachedInstrument) - ДО добавления столбца instrumentType
-        console.log('📊 Создание таблицы кешированных инструментов...');
         try {
             await safeSyncModel(CachedInstrument, 'CachedInstrument');
-            console.log('✅ Таблица кешированных инструментов создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы кешированных инструментов:', syncError);
         }
@@ -695,7 +660,6 @@ export async function initDatabase() {
                 ALTER TABLE cached_instruments 
                 ADD COLUMN IF NOT EXISTS "instrumentType" VARCHAR(255);
             `);
-            console.log('✅ Столбец instrumentType проверен/добавлен');
             
             // Обновляем существующие записи: устанавливаем 'share' для всех существующих
             await sequelize.query(`
@@ -703,7 +667,6 @@ export async function initDatabase() {
                 SET "instrumentType" = 'share' 
                 WHERE "instrumentType" IS NULL;
             `);
-            console.log('✅ Существующие записи обновлены с instrumentType = share');
         } catch (error) {
             // Игнорируем ошибку, если столбец уже существует или таблицы нет
             if (!error.message.includes('не существует') && !error.message.includes('does not exist')) {

@@ -242,3 +242,111 @@ export async function calculatePositionsWithStrategies(portfolio, rawPositions, 
     return positionsByFigi;
 }
 
+/**
+ * Расчет P&L из позиций с учетом стратегий
+ * Используется в /api/portfolio и в сокете для согласованности
+ */
+export async function calculatePnLFromPositions(portfolio, positionsByFigi, rawPositions) {
+    const CacheService = (await import('../services/CacheService.js')).default;
+    const TradingEngine = (await import('../services/TradingEngine.js')).default;
+    const PnLCalculationService = (await import('../services/PnLCalculationService.js')).default;
+    
+    let calculatedPositionsValue = 0;
+    let totalUnrealizedPnL = 0;
+    const aggregatedPositions = {};
+    
+    // Рассчитываем детальные позиции с P&L (как в /api/portfolio/positions)
+    for (const [figi, figiData] of positionsByFigi.entries()) {
+        const totalQuantityForFigi = figiData.totalQuantity;
+        if (totalQuantityForFigi <= 0) continue;
+        
+        aggregatedPositions[figi] = totalQuantityForFigi;
+        
+        try {
+            const instrument = await CacheService.getInstrument(figi, false);
+            if (!instrument) continue;
+            
+            const prices = await TradingEngine.getCurrentPrices([figi], false);
+            const currentPrice = prices[figi] || instrument.lastPrice || 0;
+            
+            if (currentPrice > 0) {
+                calculatedPositionsValue += currentPrice * totalQuantityForFigi;
+            }
+            
+            // Рассчитываем P&L для каждой стратегии
+            if (figiData.strategies.length > 0) {
+                const totalCalculatedQty = figiData.strategies.reduce((sum, s) => sum + Math.max(0, s.calculatedQty), 0);
+                
+                for (const strategyData of figiData.strategies) {
+                    const { buyTrades, sellTrades, calculatedQty } = strategyData;
+                    
+                    let quantityForStrategy = 0;
+                    if (totalCalculatedQty > 0 && calculatedQty > 0) {
+                        quantityForStrategy = Math.round((calculatedQty / totalCalculatedQty) * totalQuantityForFigi);
+                    } else if (figiData.strategies.length === 1) {
+                        quantityForStrategy = totalQuantityForFigi;
+                    } else {
+                        quantityForStrategy = Math.round(totalQuantityForFigi / figiData.strategies.length);
+                    }
+                    
+                    quantityForStrategy = Math.max(0, Math.min(quantityForStrategy, totalQuantityForFigi));
+                    if (quantityForStrategy <= 0) continue;
+                    
+                    // Рассчитываем среднюю цену покупки для стратегии
+                    let averagePrice = currentPrice || 0;
+                    if (buyTrades.length > 0) {
+                        const totalCost = buyTrades.reduce((sum, t) => sum + (t.price * t.quantity), 0);
+                        const totalQuantity = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
+                        if (totalQuantity > 0) {
+                            averagePrice = totalCost / totalQuantity;
+                        }
+                    }
+                    
+                    // Рассчитываем unrealized P&L для этой стратегии
+                    if (currentPrice > 0 && averagePrice > 0) {
+                        const unrealizedPnL = (currentPrice - averagePrice) * quantityForStrategy;
+                        totalUnrealizedPnL += unrealizedPnL;
+                    }
+                }
+            }
+        } catch (error) {
+            // Пропускаем позиции с ошибками
+        }
+    }
+    
+    // Рассчитываем realized P&L из закрытых сделок
+    let realizedPnL = 0;
+    let winRate = 0;
+    let totalTrades = 0;
+    
+    try {
+        const pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+            tradingMode: portfolio?.mode || 'paper',
+            includeTrades: true,
+            includePositions: false // Не используем позиции, так как уже рассчитали unrealized
+        });
+        realizedPnL = pnlData.realized?.total || 0;
+        winRate = pnlData.summary?.winRate || 0;
+        totalTrades = pnlData.summary?.totalTrades || 0;
+    } catch (error) {
+        // Игнорируем ошибки
+    }
+    
+    const totalPnL = realizedPnL + totalUnrealizedPnL;
+    const initialCapital = portfolio?.initialCapital || 1000000;
+    const totalPnLPercent = initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
+    const realizedPnLPercent = initialCapital > 0 ? (realizedPnL / initialCapital) * 100 : 0;
+    
+    return {
+        positionsValue: calculatedPositionsValue,
+        aggregatedPositions,
+        totalPnL,
+        totalPnLPercent,
+        realizedPnL,
+        realizedPnLPercent,
+        unrealizedPnL: totalUnrealizedPnL,
+        winRate,
+        totalTrades
+    };
+}
+

@@ -9,8 +9,8 @@ import PnLCalculationService from '../services/PnLCalculationService.js';
 
 const router = express.Router();
 
-// Импортируем функцию расчета позиций из утилиты
-import { calculatePositionsWithStrategies } from '../utils/portfolioPositionsCalculator.js';
+// Импортируем функции расчета позиций и P&L из утилиты
+import { calculatePositionsWithStrategies, calculatePnLFromPositions } from '../utils/portfolioPositionsCalculator.js';
 
 /**
  * Общая информация о портфеле
@@ -21,84 +21,31 @@ router.get('/', async (req, res) => {
         const trades = portfolio?.trades || [];
         const rawPositions = portfolio?.positions || {};
         
-        // РАССЧИТЫВАЕМ ПОЗИЦИИ С УЧЕТОМ СТРАТЕГИЙ (как в /api/portfolio/positions)
+        // РАССЧИТЫВАЕМ ПОЗИЦИИ С УЧЕТОМ СТРАТЕГИЙ (используем функцию из утилиты)
         const positionsByFigi = await calculatePositionsWithStrategies(portfolio, rawPositions, trades);
         
-        // Пересчитываем positionsValue на основе позиций с учетом стратегий
-        let calculatedPositionsValue = 0;
-        const aggregatedPositions = {}; // Агрегированные позиции по FIGI для обратной совместимости
-        
-        for (const [figi, figiData] of positionsByFigi.entries()) {
-            const totalQuantityForFigi = figiData.totalQuantity;
-            if (totalQuantityForFigi > 0) {
-                aggregatedPositions[figi] = totalQuantityForFigi;
-                
-                try {
-                    const instrument = await CacheService.getInstrument(figi, false);
-                    const currentPrice = instrument?.lastPrice || 0;
-                    if (currentPrice > 0) {
-                        calculatedPositionsValue += currentPrice * totalQuantityForFigi;
-                    }
-                } catch (error) {
-                    LoggerService.warn('Не удалось получить цену для расчета positionsValue', {
-                        service: 'portfolio-routes',
-                        figi,
-                        error: { message: error.message }
-                    });
-                }
-            }
-        }
+        // РАССЧИТЫВАЕМ P&L ИЗ ПОЗИЦИЙ С УЧЕТОМ СТРАТЕГИЙ
+        const pnlResult = await calculatePnLFromPositions(portfolio, positionsByFigi, rawPositions);
         
         const cash = portfolio?.cash || 0;
-        const positionsValue = calculatedPositionsValue > 0 ? calculatedPositionsValue : (portfolio?.positionsValue || 0);
+        const positionsValue = pnlResult.positionsValue > 0 ? pnlResult.positionsValue : (portfolio?.positionsValue || 0);
         const totalValue = cash + positionsValue;
-        
-        // Рассчитываем PnL используя новый сервис (для виртуального портфеля тоже)
-        let pnlData = null;
-        try {
-            // Создаем обновленный объект портфеля с позициями с учетом стратегий
-            const updatedPortfolio = {
-                ...portfolio,
-                positions: aggregatedPositions, // Используем агрегированные позиции с учетом стратегий
-                positionsValue,
-                totalValue
-            };
-            
-            pnlData = await PnLCalculationService.calculateTotalPnL(updatedPortfolio, {
-                tradingMode: portfolio?.mode || 'paper',
-                includeTrades: true,
-                includePositions: true
-            });
-        } catch (error) {
-            LoggerService.error('Error calculating PnL', {
-                service: 'portfolio-routes',
-                operation: 'getPortfolio',
-                error: { message: error.message }
-            });
-            // Возвращаем нулевые значения в новой структуре
-            pnlData = {
-                total: { pnl: 0, percent: 0 },
-                realized: { total: 0, percent: 0 },
-                unrealized: { total: 0 },
-                summary: { winRate: 0, totalTrades: 0 }
-            };
-        }
         
         res.json({
             success: true,
             data: {
                 cash,
-                positions: aggregatedPositions, // Используем агрегированные позиции с учетом стратегий
+                positions: pnlResult.aggregatedPositions, // Используем агрегированные позиции с учетом стратегий
                 positionsValue,
                 totalValue,
                 pnl: {
-                    total: pnlData.total.pnl,
-                    totalPercent: pnlData.total.percent,
-                    realized: pnlData.realized.total,
-                    realizedPercent: pnlData.realized.percent,
-                    unrealized: pnlData.unrealized.total,
-                    winRate: pnlData.summary?.winRate || 0,
-                    totalTrades: pnlData.summary?.totalTrades || 0
+                    total: pnlResult.totalPnL,
+                    totalPercent: pnlResult.totalPnLPercent,
+                    realized: pnlResult.realizedPnL,
+                    realizedPercent: pnlResult.realizedPnLPercent,
+                    unrealized: pnlResult.unrealizedPnL,
+                    winRate: pnlResult.winRate,
+                    totalTrades: pnlResult.totalTrades
                 },
                 trades: trades,
                 mode: portfolio?.mode || 'paper',

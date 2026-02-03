@@ -1293,75 +1293,23 @@ class SchedulerService {
                 const rawPositions = portfolio?.positions || {};
                 
                 // РАССЧИТЫВАЕМ ПОЗИЦИИ С УЧЕТОМ СТРАТЕГИЙ (как в /api/portfolio)
-                const { calculatePositionsWithStrategies } = await import('../utils/portfolioPositionsCalculator.js');
+                const { calculatePositionsWithStrategies, calculatePnLFromPositions } = await import('../utils/portfolioPositionsCalculator.js');
                 const positionsByFigi = await calculatePositionsWithStrategies(portfolio, rawPositions, trades);
                 
-                // Пересчитываем positionsValue на основе позиций с учетом стратегий
-                const CacheService = (await import('./CacheService.js')).default;
-                let calculatedPositionsValue = 0;
-                const aggregatedPositions = {}; // Агрегированные позиции по FIGI
-                
-                for (const [figi, figiData] of positionsByFigi.entries()) {
-                    const totalQuantityForFigi = figiData.totalQuantity;
-                    if (totalQuantityForFigi > 0) {
-                        aggregatedPositions[figi] = totalQuantityForFigi;
-                        
-                        try {
-                            const instrument = await CacheService.getInstrument(figi, false);
-                            const currentPrice = instrument?.lastPrice || 0;
-                            if (currentPrice > 0) {
-                                calculatedPositionsValue += currentPrice * totalQuantityForFigi;
-                            }
-                        } catch (error) {
-                            // Пропускаем позиции с ошибками получения цены
-                        }
-                    }
-                }
+                // РАССЧИТЫВАЕМ P&L ИЗ ПОЗИЦИЙ С УЧЕТОМ СТРАТЕГИЙ
+                const pnlResult = await calculatePnLFromPositions(portfolio, positionsByFigi, rawPositions);
                 
                 const cash = portfolio?.cash || 0;
-                const positionsValue = calculatedPositionsValue > 0 ? calculatedPositionsValue : (portfolio?.positionsValue || 0);
+                const positionsValue = pnlResult.positionsValue > 0 ? pnlResult.positionsValue : (portfolio?.positionsValue || 0);
                 const totalValue = cash + positionsValue;
                 
-                // Создаем обновленный объект портфеля с позициями с учетом стратегий
-                const updatedPortfolio = {
-                    ...portfolio,
-                    positions: aggregatedPositions, // Используем агрегированные позиции с учетом стратегий
-                    positionsValue,
-                    totalValue
-                };
-
                 // Получаем топ-3 активные BUY-рекомендации - по одной для каждой стратегии
                 const Recommendation = (await import('../models/Recommendation.js')).default;
                 const topBuys = await Recommendation.getTopRecommendationsByStrategies();
-
-                // Используем новый расчет PnL на основе сделок с обновленным портфелем
-                const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
-                let pnlData = null;
-                try {
-                    pnlData = await PnLCalculationService.calculateTotalPnL(updatedPortfolio, {
-                        tradingMode: portfolio?.mode || 'paper',
-                        includeTrades: true,
-                        includePositions: true,
-                        includeCashFlow: true
-                    });
-                } catch (error) {
-                    const LoggerService = (await import('./LoggerService.js')).default;
-                    LoggerService.error('Error calculating PnL in SchedulerService', {
-                        service: 'SchedulerService',
-                        operation: 'tradingStatsTask',
-                        error: { message: error.message }
-                    });
-                    // Возвращаем нулевые значения в новой структуре
-                    pnlData = {
-                        total: { pnl: 0, percent: 0 },
-                        realized: { total: 0, percent: 0 },
-                        unrealized: { total: 0 },
-                        summary: { winRate: 0, totalTrades: 0 }
-                    };
-                }
+                
                 const initialCapital = portfolio?.initialCapital || 1000000;
-                const winRatePercent = pnlData.summary?.winRate || 0;
-                const totalTradesValue = pnlData.summary?.totalTrades || 0;
+                const winRatePercent = pnlResult.winRate || 0;
+                const totalTradesValue = pnlResult.totalTrades || 0;
                 const successfulTradesValue = Math.round(totalTradesValue * (winRatePercent / 100));
                 
                 // Логируем для отладки
@@ -1374,11 +1322,11 @@ class SchedulerService {
                         winRatePercent: winRatePercent,
                         successfulTrades: successfulTradesValue,
                         pnl: {
-                            total: pnlData.total.pnl,
-                            totalPercent: pnlData.total.percent,
-                            realized: pnlData.realized.total,
-                            realizedPercent: pnlData.realized.percent,
-                            unrealized: pnlData.unrealized?.total || 0
+                            total: pnlResult.totalPnL,
+                            totalPercent: pnlResult.totalPnLPercent,
+                            realized: pnlResult.realizedPnL,
+                            realizedPercent: pnlResult.realizedPnLPercent,
+                            unrealized: pnlResult.unrealizedPnL
                         }
                     });
                 }
@@ -1388,11 +1336,11 @@ class SchedulerService {
                     cash: cash, // Используем пересчитанный cash
                     positionsValue: positionsValue, // Добавляем positionsValue для полноты данных
                     pnl: {
-                        total: pnlData.total.pnl,
-                        totalPercent: pnlData.total.percent,
-                        realized: pnlData.realized.total,
-                        realizedPercent: pnlData.realized.percent,
-                        unrealized: pnlData.unrealized?.total || 0
+                        total: pnlResult.totalPnL,
+                        totalPercent: pnlResult.totalPnLPercent,
+                        realized: pnlResult.realizedPnL,
+                        realizedPercent: pnlResult.realizedPnLPercent,
+                        unrealized: pnlResult.unrealizedPnL
                     },
                     initialCapital: initialCapital,
                     winRate: winRatePercent,

@@ -516,40 +516,14 @@ export async function recalculatePortfolioValue(context) {
         const rawPositions = portfolio.positions || {};
         
         // РАССЧИТЫВАЕМ ПОЗИЦИИ С УЧЕТОМ СТРАТЕГИЙ (как в /api/portfolio)
-        const { calculatePositionsWithStrategies } = await import('../portfolioPositionsCalculator.js');
+        const { calculatePositionsWithStrategies, calculatePnLFromPositions } = await import('../portfolioPositionsCalculator.js');
         const positionsByFigi = await calculatePositionsWithStrategies(portfolio, rawPositions, trades);
         
-        // Пересчитываем positionsValue на основе позиций с учетом стратегий
-        let positionsValue = 0;
-        const aggregatedPositions = {};
-        const CacheService = (await import('../../services/CacheService.js')).default;
+        // РАССЧИТЫВАЕМ P&L ИЗ ПОЗИЦИЙ С УЧЕТОМ СТРАТЕГИЙ
+        const pnlResult = await calculatePnLFromPositions(portfolio, positionsByFigi, rawPositions);
         
-        for (const [figi, figiData] of positionsByFigi.entries()) {
-            const totalQuantityForFigi = figiData.totalQuantity;
-            if (totalQuantityForFigi > 0) {
-                aggregatedPositions[figi] = totalQuantityForFigi;
-                
-                try {
-                    const instrument = await CacheService.getInstrument(figi, false);
-                    const currentPrice = instrument?.lastPrice || 0;
-                    if (currentPrice > 0) {
-                        positionsValue += currentPrice * totalQuantityForFigi;
-                    }
-                } catch (error) {
-                    const LoggerService = (await import('../../services/LoggerService.js')).default;
-                    if (LoggerService.isInitialized) {
-                        LoggerService.warn('Error getting price for instrument', {
-                            service: 'priceUpdateUtils',
-                            operation: 'recalculatePortfolioValue',
-                            figi,
-                            error: { message: error.message }
-                        });
-                    } else {
-                        console.warn(`⚠️ Error getting price for ${figi}:`, error.message);
-                    }
-                }
-            }
-        }
+        const positionsValue = pnlResult.positionsValue > 0 ? pnlResult.positionsValue : (portfolio?.positionsValue || 0);
+        const aggregatedPositions = pnlResult.aggregatedPositions;
 
         const cash = portfolio.cash || 0;
         const totalValue = cash + positionsValue;
@@ -588,39 +562,7 @@ export async function recalculatePortfolioValue(context) {
         // Отправляем обновление через WebSocket
         const WebSocketService = await getWebSocketService();
         if (WebSocketService) {
-            // Создаем обновленный объект портфеля с позициями с учетом стратегий
-            const updatedPortfolio = {
-                ...portfolio,
-                positions: aggregatedPositions, // Используем агрегированные позиции с учетом стратегий
-                positionsValue,
-                totalValue
-            };
-            
-            // Используем новый расчет PnL с обновленным портфелем
-            const PnLCalculationService = (await import('../../services/PnLCalculationService.js')).default;
-            let pnlData = null;
-            try {
-                pnlData = await PnLCalculationService.calculateTotalPnL(updatedPortfolio, {
-                    tradingMode: portfolio?.mode || 'paper',
-                    includeTrades: true,
-                    includePositions: true,
-                    includeCashFlow: true
-                });
-            } catch (error) {
-                const LoggerService = (await import('../../services/LoggerService.js')).default;
-                LoggerService.error('Error calculating PnL in priceUpdateUtils', {
-                    service: 'priceUpdateUtils',
-                    operation: 'recalculatePortfolioValue',
-                    error: { message: error.message }
-                });
-                // Возвращаем нулевые значения в новой структуре
-                pnlData = {
-                    total: { pnl: 0, percent: 0 },
-                    realized: { total: 0, percent: 0 },
-                    unrealized: { total: 0 }
-                };
-            }
-
+            // Используем рассчитанные данные из pnlResult
             WebSocketService.broadcast({
                 type: 'portfolio_value_updated',
                 data: {
@@ -629,11 +571,11 @@ export async function recalculatePortfolioValue(context) {
                     totalValue,
                     initialCapital: portfolio.initialCapital || 1000000,
                     pnl: {
-                        total: pnlData.total.pnl,
-                        totalPercent: pnlData.total.percent,
-                        realized: pnlData.realized.total,
-                        realizedPercent: pnlData.realized.percent,
-                        unrealized: pnlData.unrealized?.total || 0
+                        total: pnlResult.totalPnL,
+                        totalPercent: pnlResult.totalPnLPercent,
+                        realized: pnlResult.realizedPnL,
+                        realizedPercent: pnlResult.realizedPnLPercent,
+                        unrealized: pnlResult.unrealizedPnL
                     },
                     timestamp: new Date().toISOString()
                 }

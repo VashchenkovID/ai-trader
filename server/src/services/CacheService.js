@@ -337,26 +337,35 @@ class CacheService {
             });
             const existingTimes = new Set(existing.map(e => new Date(e.time).getTime()));
 
-            const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
-            if (toInsert.length > 0) {
-                // Индивидуальная вставка с обработкой дубликатов
-                let insertedCount = 0;
-                for (const candle of toInsert) {
+                const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
+                if (toInsert.length > 0) {
+                    // Используем bulkCreate с ignoreDuplicates для предотвращения ошибок на уровне БД
                     try {
-                        await CachedCandle.create(candle);
-                        insertedCount++;
-                    } catch (createError) {
-                        // Игнорируем ошибки уникальности - это нормально, данные уже есть в БД
-                        if (createError.name !== 'SequelizeUniqueConstraintError' && 
-                            createError.code !== '23505' &&
-                            !createError.message?.includes('unique') &&
-                            !createError.message?.includes('уникальности')) {
-                            // Логируем только другие ошибки
-                            console.warn(`⚠️ Error inserting candle for ${figi} at ${candle.time}:`, createError.message);
-                        }
-                    }
-                }
-                if (insertedCount > 0) {
+                        await CachedCandle.bulkCreate(toInsert, {
+                            ignoreDuplicates: true // Игнорируем дубликаты на уровне БД, не логируем ошибки
+                        });
+                    } catch (bulkError) {
+                        // Если bulkCreate не поддерживает ignoreDuplicates, используем индивидуальную вставку
+                        if (bulkError.message?.includes('ignoreDuplicates') || 
+                            bulkError.message?.includes('not supported')) {
+                            // Fallback: индивидуальная вставка с обработкой дубликатов
+                            let insertedCount = 0;
+                            for (const candle of toInsert) {
+                                try {
+                                    await CachedCandle.create(candle);
+                                    insertedCount++;
+                                } catch (createError) {
+                                    // Игнорируем ошибки уникальности - это нормально, данные уже есть в БД
+                                    if (createError.name !== 'SequelizeUniqueConstraintError' && 
+                                        createError.code !== '23505' &&
+                                        !createError.message?.includes('unique') &&
+                                        !createError.message?.includes('уникальности')) {
+                                        // Логируем только другие ошибки
+                                        console.warn(`⚠️ Error inserting candle for ${figi} at ${candle.time}:`, createError.message);
+                                    }
+                                }
+                            }
+                            if (insertedCount > 0) {
 
                     // Фаза 3, задача 3.1.2: Инвалидация кеша индикаторов при обновлении данных
                     try {
@@ -534,19 +543,16 @@ class CacheService {
 
                 const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
                 if (toInsert.length > 0) {
+                    // Используем bulkCreate с ignoreDuplicates для предотвращения ошибок на уровне БД
                     try {
-                        // Используем updateOnDuplicate для обновления при конфликте (нельзя использовать вместе с ignoreDuplicates)
                         await CachedCandle.bulkCreate(toInsert, {
-                            updateOnDuplicate: ['open', 'close', 'high', 'low', 'volume', 'updatedAt']
+                            ignoreDuplicates: true // Игнорируем дубликаты на уровне БД, не логируем ошибки
                         });
                     } catch (bulkError) {
-                        // Если bulkCreate с ignoreDuplicates не поддерживается или произошла другая ошибка,
-                        // пробуем вставить по одной с обработкой дубликатов
-                        if (bulkError.name === 'SequelizeUniqueConstraintError' || 
-                            bulkError.code === '23505' ||
-                            bulkError.message?.includes('unique') ||
-                            bulkError.message?.includes('уникальности')) {
-                            // Пробуем вставить по одной
+                        // Если bulkCreate не поддерживает ignoreDuplicates, используем индивидуальную вставку
+                        if (bulkError.message?.includes('ignoreDuplicates') || 
+                            bulkError.message?.includes('not supported')) {
+                            // Fallback: индивидуальная вставка с обработкой дубликатов
                             let insertedCount = 0;
                             for (const candle of toInsert) {
                                 try {
@@ -566,6 +572,7 @@ class CacheService {
                                 console.debug(`✅ Inserted ${insertedCount} candles for ${figi} (${toInsert.length - insertedCount} duplicates skipped)`);
                             }
                         } else {
+                            // Если это не ошибка ignoreDuplicates, логируем
                             console.error(`❌ Error in bulkCreate for ${figi}:`, bulkError.message);
                         }
                     }
