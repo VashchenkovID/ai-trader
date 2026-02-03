@@ -28,53 +28,75 @@ router.use(applyHeavyLimiter);
  */
 router.post('/batch-train-all', async (req, res) => {
     try {
-        const { epochs = 10, batchSize = 32 } = req.body;
+        const { epochs = 10, batchSize = 32, force = false } = req.body;
+        
+        // Получаем SchedulerService для вызова унифицированной функции полного обучения
+        const SchedulerService = ServiceManager.getServiceSafe('SchedulerService');
+        if (!SchedulerService) {
+            return res.status(500).json({
+                success: false,
+                message: 'SchedulerService недоступен'
+            });
+        }
+        
+        // Проверяем, не идет ли уже обучение
+        if (SchedulerService.isTraining && !force) {
+            return res.status(409).json({
+                success: false,
+                message: 'Обучение уже запущено',
+                isRunning: true
+            });
+        }
         
         // Отправляем ответ сразу
         res.json({
             success: true,
-            message: 'Пакетное обучение всех нейросетей запущено',
-            data: { epochs, batchSize }
+            message: 'Полное обучение всех нейросетей запущено',
+            data: { epochs, batchSize, force }
         });
 
-        // Запускаем пакетное обучение в фоне
+        // Запускаем полное обучение в фоне (используем унифицированную функцию)
         try {
-            const result = await OptimizedTrainingService.batchTrainAll(epochs, batchSize);
-            console.log('Пакетное обучение всех нейросетей завершено:', result);
+            const result = await SchedulerService.performFullTraining({ 
+                skipChecks: true, // Пропускаем проверки, так как уже проверили выше
+                force: force 
+            });
+            
+            console.log('Полное обучение всех нейросетей завершено:', result);
             
             // Уведомляем через WebSocket
             const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
-                WebSocketService.broadcast('batch_training_all_completed', {
-                    success: true,
-                    result: result
+                WebSocketService.broadcast({
+                    type: 'batch_training_all_completed',
+                    data: {
+                        success: true,
+                        result: result,
+                        timestamp: new Date().toISOString()
+                    }
                 });
             }
         } catch (trainingError) {
-            console.error('Ошибка пакетного обучения всех нейросетей:', trainingError);
-            
-            // Отправляем ошибку в Telegram
-            if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
-                await OptimizedTelegramService.sendAlert(
-                    'Ошибка пакетного обучения всех нейросетей',
-                    `Ошибка: ${trainingError.message}\nСтек: ${trainingError.stack}`
-                );
-            }
+            console.error('Ошибка полного обучения всех нейросетей:', trainingError);
             
             // Уведомляем через WebSocket
             const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
-                WebSocketService.broadcast('batch_training_all_error', {
-                    success: false,
-                    error: trainingError.message
+                WebSocketService.broadcast({
+                    type: 'batch_training_all_error',
+                    data: {
+                        success: false,
+                        error: trainingError.message,
+                        timestamp: new Date().toISOString()
+                    }
                 });
             }
         }
     } catch (error) {
-        console.error('Ошибка запуска пакетного обучения всех нейросетей:', error);
+        console.error('Ошибка запуска полного обучения всех нейросетей:', error);
         res.status(500).json({
             success: false,
-            message: 'Ошибка запуска пакетного обучения всех нейросетей',
+            message: 'Ошибка запуска полного обучения всех нейросетей',
             error: error.message
         });
     }

@@ -2479,43 +2479,94 @@ class SchedulerService {
         }
     }
 
-    async performScheduledTraining() {
+    /**
+     * Унифицированная функция полного обучения всех нейросетей
+     * Используется как для планового обучения, так и для ручного запуска с фронтенда
+     * @param {Object} options - Опции обучения (skipChecks - пропустить проверки, force - принудительно)
+     * @returns {Promise<Object>} Результаты обучения
+     */
+    async performFullTraining(options = {}) {
+        const { skipChecks = false, force = false } = options;
+        
         // Проверяем, не идет ли полное обновление кеша
-        if (this.isFullCacheUpdateRunning) {
-            return;
+        if (!skipChecks && this.isFullCacheUpdateRunning) {
+            console.log('ℹ️ [Full Training] Пропущено: идет полное обновление кеша');
+            return { skipped: true, reason: 'cache_update_running' };
         }
         
         // Проверяем, не идет ли уже обучение или анализ
-        if (this.isTraining || this.isAnalyzing) {
-            return;
+        if (!skipChecks && !force && (this.isTraining || this.isAnalyzing)) {
+            console.log('ℹ️ [Full Training] Пропущено: уже идет обучение или анализ');
+            return { skipped: true, reason: 'training_or_analysis_running' };
         }
 
         const startTime = Date.now();
         this.isTraining = true;
         
+        // Регистрируем воркер для мониторинга
+        let workerId = null;
         try {
+            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+            if (!WorkerMonitoringService.isInitialized) {
+                await WorkerMonitoringService.initialize();
+            }
+            
+            workerId = WorkerMonitoringService.registerWorker(
+                'training',
+                'Полное обучение нейросетей',
+                {
+                    trainingType: 'full',
+                    stages: ['base', 'ensemble', 'meta', 'rl'],
+                    currentStage: 'initializing'
+                }
+            );
+        } catch (monitoringError) {
+            console.warn('⚠️ Failed to register worker in monitoring service:', monitoringError);
+        }
+        
+        try {
+            // Обновляем статус: проверка деградации
+            if (workerId) {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                    progress: 5,
+                    metadata: {
+                        currentStage: 'Проверка деградации моделей',
+                        stage: 'degradation_check'
+                    }
+                });
+            }
+            
             // Сначала проверяем деградацию и восстанавливаем best-модели
             await this.checkDegradationAndRestoreAll();
 
-            // Проверяем, нужно ли переобучение
-            const shouldRetrain = await this.shouldRetrainModel();
-            if (!shouldRetrain) {
-                // Логируем причину, почему обучение не требуется
-                console.log('ℹ️ [Scheduled Training] Обучение не требуется по результатам проверки shouldRetrainModel');
-                if (LoggerService.isInitialized) {
-                    LoggerService.info('Scheduled training skipped - retraining not needed', {
-                        service: 'SchedulerService',
-                        operation: 'performScheduledTraining',
-                        reason: 'shouldRetrainModel returned false'
-                    });
+            // Проверяем, нужно ли переобучение (если не принудительно)
+            if (!force) {
+                const shouldRetrain = await this.shouldRetrainModel();
+                if (!shouldRetrain) {
+                    console.log('ℹ️ [Full Training] Обучение не требуется по результатам проверки shouldRetrainModel');
+                    if (LoggerService.isInitialized) {
+                        LoggerService.info('Full training skipped - retraining not needed', {
+                            service: 'SchedulerService',
+                            operation: 'performFullTraining',
+                            reason: 'shouldRetrainModel returned false'
+                        });
+                    }
+                    
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            skipped: true,
+                            reason: 'retraining_not_needed'
+                        });
+                    }
+                    
+                    this.isTraining = false;
+                    return { skipped: true, reason: 'retraining_not_needed' };
                 }
-                // ВАЖНО: сбрасываем флаг перед возвратом
-                this.isTraining = false;
-                return;
             }
             
-            console.log('✅ [Scheduled Training] Обучение требуется, начинаем полное обучение...');
-
+            console.log('✅ [Full Training] Обучение требуется, начинаем полное обучение...');
 
             // Получаем настройки
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
@@ -2523,6 +2574,20 @@ class SchedulerService {
             
             // Получаем все инструменты для обучения
             const instruments = await CacheService.getAllInstruments();
+            
+            // Обновляем статус: подготовка
+            if (workerId) {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                    progress: 10,
+                    metadata: {
+                        currentStage: 'Подготовка к обучению',
+                        stage: 'preparation',
+                        totalInstruments: instruments.length,
+                        trainingDays
+                    }
+                });
+            }
             
             // Отправляем уведомление о начале обучения
             await OptimizedTelegramService.sendAlert(
@@ -2534,13 +2599,53 @@ class SchedulerService {
             let totalTrained = 0;
             let successes = 0;
             let failures = 0;
+            const totalStages = 4; // Базовая, Ансамбль, Мета, RL
+            const instrumentsPerStage = instruments.length;
+            const totalOperations = totalStages * instrumentsPerStage;
+            let currentOperation = 0;
             
             // ПОСЛЕДОВАТЕЛЬНОЕ ОБУЧЕНИЕ: Базовая → Ансамбль → Мета-обучение → RL
             // Этап 1: Базовая нейросеть для всех инструментов
-            for (const instrument of instruments) {
+            if (workerId) {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                    progress: 15,
+                    metadata: {
+                        currentStage: 'Этап 1/4: Базовая нейросеть',
+                        stage: 'base',
+                        trainingStage: 1,
+                        totalStages: 4,
+                        currentInstrument: 0,
+                        totalInstruments: instruments.length
+                    }
+                });
+            }
+            
+            for (let i = 0; i < instruments.length; i++) {
+                const instrument = instruments[i];
+                currentOperation++;
+                const progress = 15 + Math.floor((currentOperation / totalOperations) * 25); // 15-40%
+                
+                if (workerId) {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress,
+                        metadata: {
+                            currentStage: `Этап 1/4: Базовая нейросеть для ${instrument.ticker || instrument.figi?.substring(0, 10)}`,
+                            stage: 'base',
+                            trainingStage: 1,
+                            totalStages: 4,
+                            currentInstrument: i + 1,
+                            totalInstruments: instruments.length,
+                            currentTicker: instrument.ticker || instrument.figi?.substring(0, 10),
+                            figi: instrument.figi
+                        }
+                    });
+                }
+                
                 try {
                     const shouldRetrain = await this.shouldRetrainModel(instrument.figi);
-                    if (!shouldRetrain) {
+                    if (!shouldRetrain && !force) {
                         continue;
                     }
                     
@@ -2556,7 +2661,41 @@ class SchedulerService {
             
             // Этап 2: Ансамбль для всех инструментов
             const EnsembleService = (await import('./EnsembleService.js')).default;
-            for (const instrument of instruments) {
+            if (workerId) {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                    progress: 40,
+                    metadata: {
+                        currentStage: 'Этап 2/4: Ансамбль моделей',
+                        stage: 'ensemble',
+                        trainingStage: 2,
+                        totalStages: 4
+                    }
+                });
+            }
+            
+            for (let i = 0; i < instruments.length; i++) {
+                const instrument = instruments[i];
+                currentOperation++;
+                const progress = 40 + Math.floor((currentOperation / totalOperations) * 25); // 40-65%
+                
+                if (workerId) {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress,
+                        metadata: {
+                            currentStage: `Этап 2/4: Ансамбль для ${instrument.ticker || instrument.figi?.substring(0, 10)}`,
+                            stage: 'ensemble',
+                            trainingStage: 2,
+                            totalStages: 4,
+                            currentInstrument: i + 1,
+                            totalInstruments: instruments.length,
+                            currentTicker: instrument.ticker || instrument.figi?.substring(0, 10),
+                            figi: instrument.figi
+                        }
+                    });
+                }
+                
                 try {
                     // Используем trainEnsemble
                     const result = await EnsembleService.trainEnsemble(instrument.figi, {
@@ -2582,7 +2721,41 @@ class SchedulerService {
             
             // Этап 3: Мета-обучение для всех инструментов
             const MetaLearningService = (await import('./MetaLearningService.js')).default;
-            for (const instrument of instruments) {
+            if (workerId) {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                    progress: 65,
+                    metadata: {
+                        currentStage: 'Этап 3/4: Мета-обучение',
+                        stage: 'meta',
+                        trainingStage: 3,
+                        totalStages: 4
+                    }
+                });
+            }
+            
+            for (let i = 0; i < instruments.length; i++) {
+                const instrument = instruments[i];
+                currentOperation++;
+                const progress = 65 + Math.floor((currentOperation / totalOperations) * 25); // 65-90%
+                
+                if (workerId) {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress,
+                        metadata: {
+                            currentStage: `Этап 3/4: Мета-обучение для ${instrument.ticker || instrument.figi?.substring(0, 10)}`,
+                            stage: 'meta',
+                            trainingStage: 3,
+                            totalStages: 4,
+                            currentInstrument: i + 1,
+                            totalInstruments: instruments.length,
+                            currentTicker: instrument.ticker || instrument.figi?.substring(0, 10),
+                            figi: instrument.figi
+                        }
+                    });
+                }
+                
                 try {
                     await MetaLearningService.train(instrument.figi, {
                         days: trainingDays
@@ -2596,7 +2769,41 @@ class SchedulerService {
             
             // Этап 4: Обучение с подкреплением для всех инструментов
             const ReinforcementLearningService = (await import('./ReinforcementLearningService.js')).default;
-            for (const instrument of instruments) {
+            if (workerId) {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                    progress: 90,
+                    metadata: {
+                        currentStage: 'Этап 4/4: Обучение с подкреплением',
+                        stage: 'rl',
+                        trainingStage: 4,
+                        totalStages: 4
+                    }
+                });
+            }
+            
+            for (let i = 0; i < instruments.length; i++) {
+                const instrument = instruments[i];
+                currentOperation++;
+                const progress = 90 + Math.floor((currentOperation / totalOperations) * 10); // 90-100%
+                
+                if (workerId) {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress,
+                        metadata: {
+                            currentStage: `Этап 4/4: Обучение с подкреплением для ${instrument.ticker || instrument.figi?.substring(0, 10)}`,
+                            stage: 'rl',
+                            trainingStage: 4,
+                            totalStages: 4,
+                            currentInstrument: i + 1,
+                            totalInstruments: instruments.length,
+                            currentTicker: instrument.ticker || instrument.figi?.substring(0, 10),
+                            figi: instrument.figi
+                        }
+                    });
+                }
+                
                 try {
                     await ReinforcementLearningService.train(instrument.figi, {
                         days: trainingDays,
@@ -2617,43 +2824,78 @@ class SchedulerService {
                 ? `${durationHours}ч ${remainingMinutes}м` 
                 : `${durationMinutes}м`;
             
+            // Завершаем воркер успешно
+            if (workerId) {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.completeWorker(workerId, true, {
+                    totalTrained,
+                    successes,
+                    failures,
+                    duration,
+                    durationText
+                });
+            }
+            
             // Отправляем уведомление о завершении через оптимизированный сервис
             await OptimizedTelegramService.sendAlert(
                 'TRAINING_COMPLETED',
                 `✅ <b>ПОЛНОЕ ОБУЧЕНИЕ ЗАВЕРШЕНО</b>\n\n📊 Результаты:\n• Всего обработано: ${totalTrained} инструментов\n• ✅ Успешно: ${successes}\n• ❌ Ошибок: ${failures}\n• ⏱️ Время выполнения: ${durationText} (${duration}с)\n\n🧠 Все этапы обучения завершены:\n• Базовая нейросеть\n• Ансамбль моделей\n• Мета-обучение\n• Обучение с подкреплением`,
                 'success'
             );
+            
+            return {
+                success: true,
+                totalTrained,
+                successes,
+                failures,
+                duration,
+                durationText
+            };
 
         } catch (error) {
-            console.error('Scheduled training error:', error);
+            console.error('Full training error:', error);
             const duration = Math.round((Date.now() - startTime) / 1000);
+            
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.reportWorkerError(workerId, error.message);
+                WorkerMonitoringService.completeWorker(workerId, false, {
+                    error: error.message,
+                    duration
+                });
+            }
             
             // Логируем ошибку
             if (LoggerService.isInitialized) {
-                LoggerService.error('Scheduled training failed', {
+                LoggerService.error('Full training failed', {
                     service: 'SchedulerService',
-                    operation: 'performScheduledTraining',
+                    operation: 'performFullTraining',
                     error: {
                         message: error.message,
                         stack: error.stack,
                         name: error.name
                     },
-                    duration: `${duration}s`,
-                    totalTrained,
-                    successes,
-                    failures
+                    duration: `${duration}s`
                 });
             }
             
             await OptimizedTelegramService.sendAlert(
                 'TRAINING_ERROR',
-                `🚨 <b>ОШИБКА ПОЛНОГО ОБУЧЕНИЯ</b>\n\n❌ ${error.message}\n\n⏱️ Время до ошибки: ${duration}с\n\n📊 Прогресс:\n• Обработано: ${totalTrained}\n• ✅ Успешно: ${successes}\n• ❌ Ошибок: ${failures}\n\n⚠️ Обучение прервано`,
+                `🚨 <b>ОШИБКА ПОЛНОГО ОБУЧЕНИЯ</b>\n\n❌ ${error.message}\n\n⏱️ Время до ошибки: ${duration}с\n\n⚠️ Обучение прервано`,
                 'critical'
             );
             throw error;
         } finally {
             this.isTraining = false;
         }
+    }
+
+    /**
+     * Плановое обучение (вызывается по расписанию)
+     */
+    async performScheduledTraining() {
+        return await this.performFullTraining({ skipChecks: false, force: false });
     }
 
     async performQuickTraining() {

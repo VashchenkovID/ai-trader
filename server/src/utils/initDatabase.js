@@ -184,20 +184,53 @@ function getDefaultValue(attribute) {
  * @param {Object} Model - Модель Sequelize
  * @param {string} modelName - Имя модели для логирования (опционально)
  */
+/**
+ * Проверяет, является ли поле виртуальным
+ */
+function isVirtualField(attribute) {
+    if (!attribute) return false;
+    
+    // Проверяем тип
+    if (attribute.type) {
+        const typeName = attribute.type.constructor?.name;
+        const typeString = attribute.type.toString?.();
+        
+        if (typeName === 'VIRTUAL' || 
+            (typeString && typeString.includes('VIRTUAL')) ||
+            attribute.type === 'VIRTUAL') {
+            return true;
+        }
+    }
+    
+    // Проверяем флаг virtual
+    if (attribute.virtual === true) {
+        return true;
+    }
+    
+    // Поля только с getter без setter обычно виртуальные
+    if (attribute.get && !attribute.set && !attribute.allowNull && !attribute.defaultValue) {
+        return true;
+    }
+    
+    return false;
+}
+
 async function safeSyncModel(Model, modelName = null) {
     const name = modelName || Model.tableName || Model.name || 'Unknown';
     try {
-        // Сначала проверяем и добавляем отсутствующие столбцы
+        // Сначала проверяем и добавляем отсутствующие столбцы (VIRTUAL поля будут пропущены)
         await ensureModelColumns(Model);
+        
+        // Проверяем, есть ли в модели VIRTUAL поля
+        const hasVirtualFields = Object.values(Model.rawAttributes || {}).some(isVirtualField);
         
         // Проверяем, есть ли в модели ENUM типы
         const hasEnumTypes = Object.values(Model.rawAttributes || {}).some(
             attr => attr.type && attr.type.constructor && attr.type.constructor.name === 'ENUM'
         );
         
-        // Для моделей с ENUM используем специальную обработку
-        // чтобы избежать ошибок изменения типа ENUM в существующих таблицах
-        if (hasEnumTypes) {
+        // Для моделей с VIRTUAL полями или ENUM используем специальную обработку
+        if (hasVirtualFields || hasEnumTypes) {
             // Проверяем, существует ли таблица
             const tableName = Model.tableName || (typeof Model.getTableName === 'function' ? Model.getTableName() : name);
             const [tableExistsResult] = await sequelize.query(`
@@ -214,19 +247,21 @@ async function safeSyncModel(Model, modelName = null) {
             const tableExists = tableExistsResult && (tableExistsResult.exists === true || tableExistsResult.exists === 't');
             
             if (tableExists) {
-                // Таблица существует - НЕ используем sync, чтобы не изменять ENUM типы
+                // Таблица существует - НЕ используем sync, чтобы не изменять ENUM типы и не создавать VIRTUAL поля
                 // Просто проверяем и добавляем отсутствующие столбцы через ensureModelColumns
                 // (уже вызвано выше), и выходим
                 return;
             } else {
                 // Таблицы нет - создаем через alter: true
+                // Sequelize автоматически игнорирует VIRTUAL поля при sync
                 try {
                     await Model.sync({ alter: true });
                 } catch (enumError) {
                     // Если ошибка с ENUM при создании, пробуем без alter
                     if (enumError.message && (
                         enumError.message.includes('USING') ||
-                        enumError.message.includes('syntax error')
+                        enumError.message.includes('syntax error') ||
+                        enumError.message.includes('type "virtual" does not exist')
                     )) {
                         await Model.sync({ force: false });
                     } else {
@@ -235,7 +270,7 @@ async function safeSyncModel(Model, modelName = null) {
                 }
             }
         } else {
-            // Для моделей без ENUM используем alter: true
+            // Для моделей без ENUM и VIRTUAL используем alter: true
             await Model.sync({ alter: true });
         }
     } catch (syncError) {
@@ -398,15 +433,7 @@ async function ensureModelColumns(Model) {
             }
             
             // Пропускаем VIRTUAL поля - они не должны быть в БД
-            if (attribute.type && 
-                (attribute.type.constructor.name === 'VIRTUAL' || 
-                 attribute.type.toString().includes('VIRTUAL') ||
-                 attribute.type === 'VIRTUAL')) {
-                continue;
-            }
-            
-            // Пропускаем поля, помеченные как virtual
-            if (attribute.virtual === true) {
+            if (isVirtualField(attribute)) {
                 continue;
             }
             
@@ -688,7 +715,6 @@ export async function initDatabase() {
             `);
         } catch (error) {
             // Игнорируем ошибку, если столбец уже существует или таблицы нет
-            }
         }
         
         // Создаем таблицу виртуального портфеля
@@ -790,7 +816,6 @@ export async function initDatabase() {
                     `);
                 } catch (enumError) {
                     // Игнорируем ошибки, если ENUM еще не создан или значение уже существует
-                    }
                 }
             }
             
@@ -812,7 +837,6 @@ export async function initDatabase() {
                 `);
             } catch (migrationError) {
                 // Игнорируем ошибки, если столбец еще не создан или уже имеет нужный тип
-                }
             }
             
             await safeSyncModel(MacroIndicator, 'MacroIndicator');
@@ -1098,9 +1122,13 @@ export async function initDatabase() {
         // Показываем статистику
         await showDatabaseStats();
 
+        console.log('✅ Инициализация базы данных успешно завершена');
+        console.log('✅ Скрипт initDatabase выполнен успешно');
+
     } catch (error) {
         console.error('❌ Ошибка инициализации базы данных:', error);
         // Не завершаем процесс принудительно, даём вызывающей стороне обработать
+        throw error;
     }
 }
 
