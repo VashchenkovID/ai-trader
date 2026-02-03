@@ -337,46 +337,51 @@ class CacheService {
             });
             const existingTimes = new Set(existing.map(e => new Date(e.time).getTime()));
 
-                const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
-                if (toInsert.length > 0) {
-                    // Используем bulkCreate с ignoreDuplicates для предотвращения ошибок на уровне БД
-                    try {
-                        await CachedCandle.bulkCreate(toInsert, {
-                            ignoreDuplicates: true // Игнорируем дубликаты на уровне БД, не логируем ошибки
-                        });
-                    } catch (bulkError) {
-                        // Если bulkCreate не поддерживает ignoreDuplicates, используем индивидуальную вставку
-                        if (bulkError.message?.includes('ignoreDuplicates') || 
-                            bulkError.message?.includes('not supported')) {
-                            // Fallback: индивидуальная вставка с обработкой дубликатов
-                            let insertedCount = 0;
-                            for (const candle of toInsert) {
-                                try {
-                                    await CachedCandle.create(candle);
-                                    insertedCount++;
-                                } catch (createError) {
-                                    // Игнорируем ошибки уникальности - это нормально, данные уже есть в БД
-                                    if (createError.name !== 'SequelizeUniqueConstraintError' && 
-                                        createError.code !== '23505' &&
-                                        !createError.message?.includes('unique') &&
-                                        !createError.message?.includes('уникальности')) {
-                                        // Логируем только другие ошибки
-                                        console.warn(`⚠️ Error inserting candle for ${figi} at ${candle.time}:`, createError.message);
-                                    }
+            const toInsert = candleData.filter(c => !existingTimes.has(c.time.getTime()));
+            if (toInsert.length > 0) {
+                // Используем bulkCreate с ignoreDuplicates для предотвращения ошибок на уровне БД
+                try {
+                    await CachedCandle.bulkCreate(toInsert, {
+                        ignoreDuplicates: true // Игнорируем дубликаты на уровне БД, не логируем ошибки
+                    });
+                } catch (bulkError) {
+                    // Если bulkCreate не поддерживает ignoreDuplicates, используем индивидуальную вставку
+                    if (bulkError.message?.includes('ignoreDuplicates') || 
+                        bulkError.message?.includes('not supported')) {
+                        // Fallback: индивидуальная вставка с обработкой дубликатов
+                        let insertedCount = 0;
+                        for (const candle of toInsert) {
+                            try {
+                                await CachedCandle.create(candle);
+                                insertedCount++;
+                            } catch (createError) {
+                                // Игнорируем ошибки уникальности - это нормально, данные уже есть в БД
+                                if (createError.name !== 'SequelizeUniqueConstraintError' && 
+                                    createError.code !== '23505' &&
+                                    !createError.message?.includes('unique') &&
+                                    !createError.message?.includes('уникальности')) {
+                                    // Логируем только другие ошибки
+                                    console.warn(`⚠️ Error inserting candle for ${figi} at ${candle.time}:`, createError.message);
                                 }
                             }
-                            if (insertedCount > 0) {
-
-                    // Фаза 3, задача 3.1.2: Инвалидация кеша индикаторов при обновлении данных
-                    try {
-                        const OptimizedAnalysisService = (await import('./OptimizedAnalysisService.js')).default;
-                        if (OptimizedAnalysisService && OptimizedAnalysisService.invalidateIndicatorsCache) {
-                            OptimizedAnalysisService.invalidateIndicatorsCache(figi, interval);
                         }
-                    } catch (invalidateError) {
-                        // Игнорируем ошибки инвалидации кеша - это не критично
+                        if (insertedCount > 0) {
+                            console.debug(`✅ Inserted ${insertedCount} candles for ${figi} (${toInsert.length - insertedCount} duplicates skipped)`);
+                        }
+                    } else {
+                        console.error(`❌ Error in bulkCreate for ${figi}:`, bulkError.message);
                     }
-                } else if (toInsert.length > 0) {
+                }
+                
+                // Фаза 3, задача 3.1.2: Инвалидация кеша индикаторов при обновлении данных
+                // Инвалидируем кеш для всех обновленных инструментов
+                try {
+                    const OptimizedAnalysisService = (await import('./OptimizedAnalysisService.js')).default;
+                    if (OptimizedAnalysisService && OptimizedAnalysisService.invalidateIndicatorsCache) {
+                        OptimizedAnalysisService.invalidateIndicatorsCache(figi, interval);
+                    }
+                } catch (invalidateError) {
+                    // Игнорируем ошибки инвалидации кеша - это не критично
                 }
             }
 
