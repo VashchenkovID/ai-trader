@@ -221,7 +221,7 @@ class PerformanceVisualizationService {
 
             const returnsData = await this.getReturnsChartData(days);
             const cumulativeReturns = returnsData.data?.cumulativeReturns || [];
-            
+
             // Получаем начальный капитал для расчета просадки в процентах
             const TradingEngine = (await import('./TradingEngine.js')).default;
             const initialCapital = TradingEngine.virtualPortfolio?.initialCapital || 1000000;

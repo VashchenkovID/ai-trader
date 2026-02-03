@@ -1290,21 +1290,57 @@ class SchedulerService {
                 const portfolio = await TradingEngine.getPortfolioValue();
                 const stats = await TradingEngine.calculateTradingStats();
 
+                // ИСПОЛЬЗУЕМ rawPositions ИЗ ПОРТФЕЛЯ КАК ИСТОЧНИК ИСТИНЫ
+                // Это обеспечивает согласованность с /api/portfolio
+                const rawPositions = portfolio?.positions || {};
+                
+                // Пересчитываем positionsValue на основе rawPositions из портфеля
+                const CacheService = (await import('./CacheService.js')).default;
+                let calculatedPositionsValue = 0;
+                for (const [figi, quantity] of Object.entries(rawPositions)) {
+                    if (quantity > 0 && typeof quantity === 'number') {
+                        try {
+                            const instrument = await CacheService.getInstrument(figi, false);
+                            const currentPrice = instrument?.lastPrice || 0;
+                            if (currentPrice > 0) {
+                                calculatedPositionsValue += currentPrice * quantity;
+                            }
+                        } catch (error) {
+                            // Пропускаем позиции с ошибками получения цены
+                        }
+                    }
+                }
+                
+                const cash = portfolio?.cash || 0;
+                // Используем пересчитанный positionsValue, если он больше 0, иначе берем из портфеля
+                const positionsValue = calculatedPositionsValue > 0 ? calculatedPositionsValue : (portfolio?.positionsValue || 0);
+                // totalValue должен быть строго cash + positionsValue для согласованности
+                const totalValue = cash + positionsValue;
+                
+                // Создаем обновленный объект портфеля с правильными значениями
+                const updatedPortfolio = {
+                    ...portfolio,
+                    positions: rawPositions,
+                    positionsValue,
+                    totalValue
+                };
+
                 // Получаем топ-3 активные BUY-рекомендации - по одной для каждой стратегии
                 const Recommendation = (await import('../models/Recommendation.js')).default;
                 const topBuys = await Recommendation.getTopRecommendationsByStrategies();
 
-                // Используем новый расчет PnL на основе сделок
+                // Используем новый расчет PnL на основе сделок с обновленным портфелем
                 const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
                 let pnlData = null;
                 try {
-                    pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+                    pnlData = await PnLCalculationService.calculateTotalPnL(updatedPortfolio, {
                         tradingMode: portfolio?.mode || 'paper',
                         includeTrades: true,
                         includePositions: true,
                         includeCashFlow: true
                     });
                 } catch (error) {
+                    const LoggerService = (await import('./LoggerService.js')).default;
                     LoggerService.error('Error calculating PnL in SchedulerService', {
                         service: 'SchedulerService',
                         operation: 'tradingStatsTask',
@@ -1318,8 +1354,6 @@ class SchedulerService {
                         summary: { winRate: 0, totalTrades: 0 }
                     };
                 }
-
-                const totalValue = portfolio?.totalValue || 0;
                 const initialCapital = portfolio?.initialCapital || 1000000;
                 const winRatePercent = pnlData.summary?.winRate || 0;
                 const totalTradesValue = pnlData.summary?.totalTrades || 0;
@@ -1345,8 +1379,9 @@ class SchedulerService {
                 }
 
                 const tradingStats = {
-                    portfolioValue: totalValue,
-                    cash: portfolio?.cash || 0,
+                    portfolioValue: totalValue, // Используем пересчитанный totalValue = cash + positionsValue
+                    cash: cash, // Используем пересчитанный cash
+                    positionsValue: positionsValue, // Добавляем positionsValue для полноты данных
                     pnl: {
                         total: pnlData.total.pnl,
                         totalPercent: pnlData.total.percent,

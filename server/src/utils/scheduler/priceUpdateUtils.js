@@ -580,11 +580,19 @@ export async function recalculatePortfolioValue(context) {
         // Отправляем обновление через WebSocket
         const WebSocketService = await getWebSocketService();
         if (WebSocketService) {
-            // Используем новый расчет PnL
+            // Создаем обновленный объект портфеля с пересчитанными значениями
+            const updatedPortfolio = {
+                ...portfolio,
+                positions: positions, // Используем rawPositions из портфеля
+                positionsValue,
+                totalValue
+            };
+            
+            // Используем новый расчет PnL с обновленным портфелем
             const PnLCalculationService = (await import('../../services/PnLCalculationService.js')).default;
             let pnlData = null;
             try {
-                pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+                pnlData = await PnLCalculationService.calculateTotalPnL(updatedPortfolio, {
                     tradingMode: portfolio?.mode || 'paper',
                     includeTrades: true,
                     includePositions: true,

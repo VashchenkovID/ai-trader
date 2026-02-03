@@ -286,10 +286,15 @@ class PnLCalculationService {
                 tradingMode = portfolio.tradingMode;
             }
 
-            // Получаем все открытые BUY заявки
+            // ИСПОЛЬЗУЕМ ВСЕ ПОЗИЦИИ ИЗ ПОРТФЕЛЯ КАК ИСТОЧНИК ИСТИНЫ
+            // Сначала собираем все FIGI из portfolio.positions
+            const figisFromPortfolio = Object.keys(portfolioPositions).filter(figi => portfolioPositions[figi] > 0);
+            
+            // Получаем все открытые BUY заявки для этих FIGI
             const openBuyRequests = await TradingRequest.findAll({
                 where: {
                     action: 'BUY',
+                    figi: figisFromPortfolio.length > 0 ? { [Op.in]: figisFromPortfolio } : { [Op.ne]: null },
                     status: {
                         [Op.in]: ['EXECUTED', 'APPROVED']
                     },
@@ -301,23 +306,38 @@ class PnLCalculationService {
             // Группируем по FIGI и рассчитываем среднюю цену покупки
             const positionsByFigi = new Map();
 
+            // Сначала инициализируем позиции для всех FIGI из портфеля
+            for (const figi of figisFromPortfolio) {
+                const quantity = portfolioPositions[figi] || 0;
+                if (quantity > 0) {
+                    positionsByFigi.set(figi, {
+                        figi,
+                        ticker: null,
+                        name: null,
+                        buyTrades: [],
+                        totalQuantity: 0,
+                        totalCost: 0,
+                        portfolioQuantity: quantity // Сохраняем количество из портфеля
+                    });
+                }
+            }
+
+            // Затем обрабатываем заявки для расчета средней цены
             for (const request of openBuyRequests) {
                 const figi = request.figi;
                 const quantity = portfolioPositions[figi] || 0;
 
-                if (quantity > 0) {
-                    if (!positionsByFigi.has(figi)) {
-                        positionsByFigi.set(figi, {
-                            figi,
-                            ticker: request.ticker,
-                            name: request.name,
-                            buyTrades: [],
-                            totalQuantity: 0,
-                            totalCost: 0
-                        });
-                    }
-
+                if (quantity > 0 && positionsByFigi.has(figi)) {
                     const position = positionsByFigi.get(figi);
+                    
+                    // Обновляем ticker и name, если они есть
+                    if (!position.ticker && request.ticker) {
+                        position.ticker = request.ticker;
+                    }
+                    if (!position.name && request.name) {
+                        position.name = request.name;
+                    }
+                    
                     const entryPrice = request.actualPrice || request.priceAtRequest;
                     const tradeQuantity = Math.min(request.quantity, quantity - position.totalQuantity);
 
@@ -352,34 +372,62 @@ class PnLCalculationService {
                     operation: 'getOpenPositions',
                     error: { message: error.message }
                 });
-                
-                for (const figi of figis) {
-                    try {
+
+            for (const figi of figis) {
+                try {
                         const instrument = await CacheService.getInstrument(figi, false); // Обновляем кеш
-                        currentPrices[figi] = instrument?.lastPrice || 0;
+                    currentPrices[figi] = instrument?.lastPrice || 0;
                     } catch (cacheError) {
-                        LoggerService.warn(`Could not get price for ${figi}`, {
-                            service: 'PnLCalculationService',
-                            operation: 'getOpenPositions',
-                            figi,
+                    LoggerService.warn(`Could not get price for ${figi}`, {
+                        service: 'PnLCalculationService',
+                        operation: 'getOpenPositions',
+                        figi,
                             error: { message: cacheError.message }
-                        });
+                    });
                     }
                 }
             }
 
             // Формируем массив позиций
             for (const [figi, positionData] of positionsByFigi.entries()) {
-                const averagePrice = positionData.totalQuantity > 0
-                    ? positionData.totalCost / positionData.totalQuantity
-                    : 0;
+                // Используем количество из портфеля как источник истины
+                const quantity = positionData.portfolioQuantity || positionData.totalQuantity || 0;
+                
+                // Рассчитываем среднюю цену покупки
+                let averagePrice = 0;
+                if (positionData.totalQuantity > 0 && positionData.totalCost > 0) {
+                    // Если есть заявки, используем среднюю цену из них
+                    averagePrice = positionData.totalCost / positionData.totalQuantity;
+                } else {
+                    // Если нет заявок, пытаемся получить цену из кеша
+                    try {
+                        const instrument = await CacheService.getInstrument(figi, false);
+                        averagePrice = instrument?.lastPrice || currentPrices[figi] || 0;
+                    } catch (error) {
+                        averagePrice = currentPrices[figi] || 0;
+                    }
+                }
+                
                 const currentPrice = currentPrices[figi] || 0;
-                const quantity = positionData.totalQuantity;
+                
+                // Если нет ticker/name, получаем из кеша
+                let ticker = positionData.ticker;
+                let name = positionData.name;
+                if (!ticker || !name) {
+                    try {
+                        const instrument = await CacheService.getInstrument(figi, false);
+                        if (!ticker) ticker = instrument?.ticker || figi.substring(0, 10);
+                        if (!name) name = instrument?.name || 'Неизвестно';
+                    } catch (error) {
+                        if (!ticker) ticker = figi.substring(0, 10);
+                        if (!name) name = 'Неизвестно';
+                    }
+                }
 
                 positions.push({
                     figi,
-                    ticker: positionData.ticker,
-                    name: positionData.name,
+                    ticker,
+                    name,
                     entryPrice: averagePrice,
                     averagePrice,
                     currentPrice,

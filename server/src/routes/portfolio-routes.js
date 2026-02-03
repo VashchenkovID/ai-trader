@@ -17,53 +17,14 @@ router.get('/', async (req, res) => {
         const portfolio = await TradingEngine.getPortfolioValue();
         const trades = portfolio?.trades || [];
         
-        // Импортируем модели для расчета позиций по стратегиям
-        const TradingRequest = (await import('../models/TradingRequest.js')).default;
+        // ИСПОЛЬЗУЕМ rawPositions ИЗ ПОРТФЕЛЯ КАК ИСТОЧНИК ИСТИНЫ
+        // Это обеспечивает согласованность с /api/portfolio/positions
+        const rawPositions = portfolio?.positions || {};
         
-        // Пересчитываем позиции из сделок с учетом стратегий
-        // Это важно, так как позиции могут быть разделены по стратегиям
-        const positionsByStrategy = new Map(); // Ключ: `${figi}_${strategyId || 'null'}`
-        const positionsAggregated = {}; // Агрегированные позиции по FIGI для обратной совместимости
-        
-        // Обрабатываем все сделки для расчета позиций по стратегиям
-        for (const trade of trades) {
-            const figi = trade.figi || trade.symbol;
-            if (!figi) continue;
-            
-            const strategyId = trade.strategyId || null;
-            const key = `${figi}_${strategyId || 'null'}`;
-            
-            if (!positionsByStrategy.has(key)) {
-                positionsByStrategy.set(key, {
-                    figi,
-                    strategyId,
-                    quantity: 0
-                });
-            }
-            
-            const position = positionsByStrategy.get(key);
-            if (trade.action === 'BUY') {
-                position.quantity += trade.quantity || 0;
-            } else if (trade.action === 'SELL') {
-                position.quantity -= trade.quantity || 0;
-            }
-        }
-        
-        // Агрегируем позиции по FIGI (суммируем по всем стратегиям)
-        for (const [key, positionData] of positionsByStrategy.entries()) {
-            const { figi, quantity } = positionData;
-            if (quantity > 0) {
-                positionsAggregated[figi] = (positionsAggregated[figi] || 0) + quantity;
-            }
-        }
-        
-        // Используем пересчитанные позиции вместо rawPositions
-        const calculatedPositions = positionsAggregated;
-        
-        // Пересчитываем positionsValue на основе пересчитанных позиций
+        // Пересчитываем positionsValue на основе rawPositions из портфеля
         let calculatedPositionsValue = 0;
-        for (const [figi, quantity] of Object.entries(calculatedPositions)) {
-            if (quantity > 0) {
+        for (const [figi, quantity] of Object.entries(rawPositions)) {
+            if (quantity > 0 && typeof quantity === 'number') {
                 try {
                     const instrument = await CacheService.getInstrument(figi, false);
                     const currentPrice = instrument?.lastPrice || 0;
@@ -81,16 +42,18 @@ router.get('/', async (req, res) => {
         }
         
         const cash = portfolio?.cash || 0;
+        // Используем пересчитанный positionsValue, если он больше 0, иначе берем из портфеля
         const positionsValue = calculatedPositionsValue > 0 ? calculatedPositionsValue : (portfolio?.positionsValue || 0);
+        // totalValue должен быть строго cash + positionsValue для согласованности
         const totalValue = cash + positionsValue;
         
         // Рассчитываем PnL используя новый сервис (для виртуального портфеля тоже)
         let pnlData = null;
         try {
-            // Создаем обновленный объект портфеля с пересчитанными позициями
+            // Создаем обновленный объект портфеля с позициями из портфеля и пересчитанными значениями
             const updatedPortfolio = {
                 ...portfolio,
-                positions: calculatedPositions,
+                positions: rawPositions, // Используем rawPositions из портфеля
                 positionsValue,
                 totalValue
             };
@@ -119,7 +82,7 @@ router.get('/', async (req, res) => {
             success: true,
             data: {
                 cash,
-                positions: calculatedPositions,
+                positions: rawPositions, // Используем rawPositions из портфеля для согласованности
                 positionsValue,
                 totalValue,
                 pnl: {
