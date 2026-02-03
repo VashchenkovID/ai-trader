@@ -23,9 +23,6 @@ for (const envPath of envPaths) {
         const result = dotenv.config({ path: envPath });
         if (!result.error) {
             envLoaded = true;
-            if (process.env.NODE_ENV !== 'production') {
-                console.log(`📝 Загружен .env из: ${envPath}`);
-            }
             break;
         }
     } catch (error) {
@@ -314,7 +311,6 @@ async function safeSyncModel(Model, modelName = null) {
                 } catch (queryError) {
                     // Если не удалось получить список индексов (поврежденный индекс), 
                     // пытаемся удалить все индексы по известным именам из модели
-                    console.warn(`⚠️ Не удалось получить список индексов для ${name} (поврежденный индекс), пытаемся удалить по именам из модели`);
                     const indexes = Model.options?.indexes || [];
                     for (const index of indexes) {
                         try {
@@ -329,7 +325,6 @@ async function safeSyncModel(Model, modelName = null) {
                 // Синхронизируем модель заново для пересоздания индексов
                 await Model.sync({ alter: true });
             } catch (fixError) {
-                console.warn(`⚠️ Не удалось исправить индексы таблицы ${name}:`, fixError.message);
                 // Пробуем просто синхронизировать без alter
                 try {
                     await Model.sync({ alter: false });
@@ -453,7 +448,6 @@ async function ensureModelColumns(Model) {
                     if (!error.message.includes('already exists') && 
                         !error.message.includes('уже существует') &&
                         !error.message.includes('duplicate')) {
-                        console.warn(`   ⚠️ Не удалось добавить столбец ${columnName} в ${tableName}:`, error.message);
                     }
                 }
             }
@@ -462,7 +456,6 @@ async function ensureModelColumns(Model) {
         // Игнорируем ошибки, если таблицы нет
         if (!error.message.includes('не существует') && 
             !error.message.includes('does not exist')) {
-            console.warn(`   ⚠️ Предупреждение при проверке столбцов для ${Model.tableName || Model.name}:`, error.message);
         }
     }
 }
@@ -525,7 +518,6 @@ async function ensureColumnsExist(tableName, columns) {
             !error.message.includes('does not exist') &&
             !error.message.includes('already exists') &&
             !error.message.includes('уже существует')) {
-            console.warn(`   ⚠️ Предупреждение при проверке столбцов для ${tableName}:`, error.message);
         }
     }
 }
@@ -622,7 +614,6 @@ export async function initDatabase() {
         try {
             await DatabaseConnectionManager.initialize();
         } catch (e) {
-            console.warn('⚠️ Не удалось инициализировать менеджер соединений:', e.message);
         }
 
         // ВАЖНО: Сначала создаем критически важные таблицы, которые используются сервисами при инициализации
@@ -670,26 +661,21 @@ export async function initDatabase() {
         } catch (error) {
             // Игнорируем ошибку, если столбец уже существует или таблицы нет
             if (!error.message.includes('не существует') && !error.message.includes('does not exist')) {
-                console.warn('⚠️ Предупреждение при добавлении столбца instrumentType:', error.message);
             }
         }
         
         // Создаем новые таблицы для кеширования
-        console.log('📰 Создание таблиц кеширования новостей, настроений и торговых часов...');
         try {
             await safeSyncModel(CachedNews, 'CachedNews');
             await safeSyncModel(CachedTelegramSentiment, 'CachedTelegramSentiment');
             await safeSyncModel(CachedTradingHours, 'CachedTradingHours');
-            console.log('✅ Таблицы кеширования созданы/обновлены');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблиц кеширования:', syncError);
         }
         
         // Создаем таблицу торговых заявок
-        console.log('🎯 Создание таблицы торговых заявок...');
         try {
             await safeSyncModel(TradingRequest, 'TradingRequest');
-            console.log('✅ Таблица торговых заявок создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы торговых заявок:', syncError);
         }
@@ -700,111 +686,88 @@ export async function initDatabase() {
                 ALTER TABLE trading_requests 
                 ADD COLUMN IF NOT EXISTS "entryOptimization" JSONB;
             `);
-            console.log('✅ Столбец entryOptimization проверен/добавлен');
         } catch (error) {
             // Игнорируем ошибку, если столбец уже существует или таблицы нет
-            if (!error.message.includes('не существует') && !error.message.includes('does not exist')) {
-                console.warn('⚠️ Предупреждение при добавлении столбца entryOptimization:', error.message);
             }
         }
         
         // Создаем таблицу виртуального портфеля
-        console.log('💼 Создание таблицы виртуального портфеля...');
         try {
             await safeSyncModel(VirtualPortfolio, 'VirtualPortfolio');
-            console.log('✅ Таблица виртуального портфеля создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы виртуального портфеля:', syncError);
         }
         
         // Создаем таблицу реального портфеля
-        console.log('💼 Создание таблицы реального портфеля...');
         try {
             await safeSyncModel(RealPortfolio, 'RealPortfolio');
-            console.log('✅ Таблица реального портфеля создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы реального портфеля:', syncError);
         }
         
         // Создаем таблицу кэшированных сигналов
-        console.log('⚡ Создание таблицы кэшированных сигналов...');
         try {
             await safeSyncModel(CachedSignal, 'CachedSignal');
-            console.log('✅ Таблица кэшированных сигналов создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы кэшированных сигналов:', syncError);
         }
         
         // Создаем таблицу частичных закрытий позиций
-        console.log('📊 Создание таблицы частичных закрытий позиций...');
         try {
             await safeSyncModel(PositionExit, 'PositionExit');
-            console.log('✅ Таблица частичных закрытий позиций создана/обновлена');
         } catch (syncError) {
             // Игнорируем ошибки создания ENUM типов, если они уже существуют
             if (syncError.name === 'SequelizeUniqueConstraintError' && 
                 syncError.original && syncError.original.code === '23505' &&
                 (syncError.message && syncError.message.includes('enum_position_exits') ||
                  syncError.original.detail && syncError.original.detail.includes('enum_position_exits'))) {
-                console.log('✅ Таблица частичных закрытий позиций уже существует');
             } else {
                 console.error('❌ Ошибка синхронизации таблицы частичных закрытий позиций:', syncError);
             }
         }
         
         // Создаем таблицу сработавших сигналов
-        console.log('⚡ Создание таблицы сработавших сигналов...');
         try {
             await safeSyncModel(TriggeredSignal, 'TriggeredSignal');
-            console.log('✅ Таблица сработавших сигналов создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы сработавших сигналов:', syncError);
         }
         
         // Создаем таблицу состояния обучения
-        console.log('📊 Создание таблицы состояния обучения...');
         try {
             await safeSyncModel(TrainingState, 'TrainingState');
-            console.log('✅ Таблица состояния обучения создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы состояния обучения:', syncError);
         }
         
         // Создаем таблицы для стратегий торговли
         // TradingStrategy уже создана в начале, создаем только связанные таблицы
-        console.log('📈 Создание таблиц для стратегий торговли...');
         try {
             await safeSyncModel(PortfolioAllocation, 'PortfolioAllocation');
-            console.log('✅ Таблица распределения портфеля создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы распределения портфеля:', syncError);
         }
         try {
             await safeSyncModel(PositionStrategy, 'PositionStrategy');
-            console.log('✅ Таблица стратегий позиций создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы стратегий позиций:', syncError);
         }
         
         // Создаем таблицу результатов бэктестинга
-        console.log('📊 Создание таблицы результатов бэктестинга...');
         try {
             await safeSyncModel(BacktestResult, 'BacktestResult');
-            console.log('✅ Таблица результатов бэктестинга создана/обновлена');
         } catch (syncError) {
             // Игнорируем ошибки создания ENUM типов, если они уже существуют
             if (syncError.name === 'SequelizeUniqueConstraintError' && 
                 syncError.original && syncError.original.code === '23505' &&
                 (syncError.message && syncError.message.includes('enum_backtest_results') ||
                  syncError.original.detail && syncError.original.detail.includes('enum_backtest_results'))) {
-                console.log('✅ Таблица результатов бэктестинга уже существует');
             } else {
                 throw syncError;
             }
         }
         
         // Создаем таблицу макроиндикаторов
-        console.log('📊 Создание таблицы макроиндикаторов...');
         try {
             // Сначала добавляем новые значения в ENUM, если их еще нет
             const newEnumValues = ['industrial_production', 'retail_sales', 'investments', 'exports', 'imports', 'currency_rate'];
@@ -825,13 +788,8 @@ export async function initDatabase() {
                             END IF;
                         END $$;
                     `);
-                    console.log(`✅ Добавлено значение ${enumValue} в ENUM`);
                 } catch (enumError) {
                     // Игнорируем ошибки, если ENUM еще не создан или значение уже существует
-                    if (!enumError.message.includes('does not exist') && 
-                        !enumError.message.includes('already exists') &&
-                        !enumError.message.includes('не существует')) {
-                        console.warn(`⚠️ Не удалось добавить значение ${enumValue} в ENUM:`, enumError.message);
                     }
                 }
             }
@@ -852,26 +810,18 @@ export async function initDatabase() {
                         END IF;
                     END $$;
                 `);
-                console.log('✅ Тип столбца value изменен на DECIMAL(10, 2) для точности до сотых');
             } catch (migrationError) {
                 // Игнорируем ошибки, если столбец еще не создан или уже имеет нужный тип
-                if (!migrationError.message.includes('does not exist') && 
-                    !migrationError.message.includes('не существует') &&
-                    !migrationError.message.includes('column') &&
-                    !migrationError.message.includes('already')) {
-                    console.warn('⚠️ Не удалось изменить тип столбца value:', migrationError.message);
                 }
             }
             
             await safeSyncModel(MacroIndicator, 'MacroIndicator');
-            console.log('✅ Таблица макроиндикаторов создана/обновлена');
         } catch (syncError) {
             // Игнорируем ошибки создания ENUM типов, если они уже существуют
             if (syncError.name === 'SequelizeUniqueConstraintError' && 
                 syncError.original && syncError.original.code === '23505' &&
                 (syncError.message && syncError.message.includes('enum_macro_indicators') ||
                  syncError.original.detail && syncError.original.detail.includes('enum_macro_indicators'))) {
-                console.log('✅ Таблица макроиндикаторов уже существует');
             } else {
                 throw syncError;
             }
@@ -880,51 +830,41 @@ export async function initDatabase() {
         // Синхронизация таблицы истории ребалансировок портфеля
         try {
             await safeSyncModel(PortfolioRebalancing, 'PortfolioRebalancing');
-            console.log('✅ Таблица истории ребалансировок портфеля создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы истории ребалансировок:', syncError);
             // Не прерываем инициализацию при ошибке синхронизации
         }
         
         // Создаем таблицу настроек уведомлений
-        console.log('🔔 Создание таблицы настроек уведомлений...');
         try {
             await safeSyncModel(TradingNotificationSettings, 'TradingNotificationSettings');
-            console.log('✅ Таблица настроек уведомлений создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы настроек уведомлений:', syncError);
             // Не прерываем инициализацию при ошибке синхронизации
         }
         
         // Создаем таблицу статистики инструментов
-        console.log('📊 Создание таблицы статистики инструментов...');
         try {
             await safeSyncModel(InstrumentStats, 'InstrumentStats');
-            console.log('✅ Таблица статистики инструментов создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы статистики инструментов:', syncError);
         }
         
         // Создаем таблицу кеша корреляций
-        console.log('🔗 Создание таблицы кеша корреляций...');
         try {
             await safeSyncModel(CorrelationCache, 'CorrelationCache');
-            console.log('✅ Таблица кеша корреляций создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы кеша корреляций:', syncError);
         }
         
         // Создаем таблицу анализа портфеля
-        console.log('📈 Создание таблицы анализа портфеля...');
         try {
             await safeSyncModel(PortfolioAnalysis, 'PortfolioAnalysis');
-            console.log('✅ Таблица анализа портфеля создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы анализа портфеля:', syncError);
         }
         
         // Создаем таблицу активов
-        console.log('📊 Создание таблицы активов...');
         try {
             await safeSyncModel(Asset, 'Asset');
             // Создаем GIN индекс для JSONB поиска по apiData, если его еще нет
@@ -940,9 +880,6 @@ export async function initDatabase() {
                 await sequelize.query(`
                     CREATE INDEX IF NOT EXISTS assets_api_data_gin_idx ON assets USING gin ("apiData");
                 `);
-                console.log('✅ Таблица активов создана/обновлена');
-            } else {
-                console.warn('⚠️ Столбец apiData не найден в таблице assets, индекс не создан');
             }
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы активов:', syncError);
@@ -950,7 +887,6 @@ export async function initDatabase() {
         }
         
         // Создаем таблицу фундаментальных данных
-        console.log('📊 Создание таблицы фундаментальных данных...');
         try {
             // Сначала создаем ENUM для periodType, если его еще нет
             await sequelize.query(`
@@ -962,14 +898,12 @@ export async function initDatabase() {
                 END $$;
             `);
             await safeSyncModel(FundamentalData, 'FundamentalData');
-            console.log('✅ Таблица фундаментальных данных создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы фундаментальных данных:', syncError);
             // Не прерываем инициализацию при ошибке синхронизации
         }
         
         // Создаем таблицу опционных данных
-        console.log('📊 Создание таблицы опционных данных...');
         try {
             // Создаем ENUM тип для optionType, если его еще нет
             await sequelize.query(`
@@ -983,14 +917,12 @@ export async function initDatabase() {
             
             // Автоматически проверяем и добавляем все отсутствующие столбцы модели
             await safeSyncModel(OptionsData, 'OptionsData');
-            console.log('✅ Таблица опционных данных создана/обновлена');
         } catch (syncError) {
             // Игнорируем ошибки создания ENUM типов, если они уже существуют
             if (syncError.name === 'SequelizeUniqueConstraintError' && 
                 syncError.original && syncError.original.code === '23505' &&
                 (syncError.message && syncError.message.includes('enum_options_data') ||
                  syncError.original.detail && syncError.original.detail.includes('enum_options_data'))) {
-                console.log('✅ Таблица опционных данных уже существует');
             } else {
                 console.error('❌ Ошибка синхронизации таблицы опционных данных:', syncError);
                 // Не прерываем инициализацию при ошибке синхронизации
@@ -998,118 +930,92 @@ export async function initDatabase() {
         }
         
         // Создаем таблицу трейлинг-стопов
-        console.log('🛑 Создание таблицы трейлинг-стопов...');
         try {
             await safeSyncModel(TrailingStop, 'TrailingStop');
-            console.log('✅ Таблица трейлинг-стопов создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы трейлинг-стопов:', syncError);
         }
         
         // Создаем таблицу денежных потоков (CashFlow)
-        console.log('💰 Создание таблицы денежных потоков...');
         try {
             await safeSyncModel(CashFlow, 'CashFlow');
-            console.log('✅ Таблица денежных потоков создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы денежных потоков:', syncError);
         }
         
         // Создаем таблицу оптимизации входа (EntryOptimization)
-        console.log('⏰ Создание таблицы оптимизации входа...');
         try {
             await safeSyncModel(EntryOptimizationModel, 'EntryOptimization');
-            console.log('✅ Таблица оптимизации входа создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы оптимизации входа:', syncError);
         }
         
         // Создаем таблицу настроек синхронизации (SyncSettings)
-        console.log('🔄 Создание таблицы настроек синхронизации...');
         try {
             await safeSyncModel(SyncSettings, 'SyncSettings');
-            console.log('✅ Таблица настроек синхронизации создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы настроек синхронизации:', syncError);
         }
         
         // Создаем таблицу компаний (Company)
-        console.log('🏢 Создание таблицы компаний...');
         try {
             await safeSyncModel(Company, 'Company');
-            console.log('✅ Таблица компаний создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы компаний:', syncError);
         }
         
         // Создаем таблицу элементов портфеля (PortfolioItem)
-        console.log('📦 Создание таблицы элементов портфеля...');
         try {
             await safeSyncModel(PortfolioItem, 'PortfolioItem');
-            console.log('✅ Таблица элементов портфеля создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы элементов портфеля:', syncError);
         }
         
         // Создаем таблицу кешированных свечей (CachedCandle)
-        console.log('🕯️ Создание таблицы кешированных свечей...');
         try {
             await safeSyncModel(CachedCandle, 'CachedCandle');
-            console.log('✅ Таблица кешированных свечей создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы кешированных свечей:', syncError);
         }
         
         // Создаем таблицу рекомендаций (Recommendation)
-        console.log('💡 Создание таблицы рекомендаций...');
         try {
             await safeSyncModel(Recommendation, 'Recommendation');
-            console.log('✅ Таблица рекомендаций создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы рекомендаций:', syncError);
         }
         
         // Создаем таблицу пользователей (User)
-        console.log('👤 Создание таблицы пользователей...');
         try {
             await safeSyncModel(User, 'User');
-            console.log('✅ Таблица пользователей создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы пользователей:', syncError);
         }
         
         // Создаем таблицу пирамиды позиций (PositionPyramid)
-        console.log('🔺 Создание таблицы пирамиды позиций...');
         try {
             await safeSyncModel(PositionPyramid, 'PositionPyramid');
-            console.log('✅ Таблица пирамиды позиций создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы пирамиды позиций:', syncError);
         }
         
         // Создаем таблицу производительности моделей (ModelPerformance)
-        console.log('📈 Создание таблицы производительности моделей...');
         try {
             await safeSyncModel(ModelPerformance, 'ModelPerformance');
-            console.log('✅ Таблица производительности моделей создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы производительности моделей:', syncError);
         }
         
         // Создаем таблицу миграций БД (DatabaseMigration)
-        console.log('🔄 Создание таблицы миграций БД...');
         try {
             await safeSyncModel(DatabaseMigration, 'DatabaseMigration');
-            console.log('✅ Таблица миграций БД создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы миграций БД:', syncError);
         }
         
         // Создаем таблицу статуса миграций (MigrationStatus)
-        console.log('📋 Создание таблицы статуса миграций...');
         try {
             await safeSyncModel(MigrationStatus, 'MigrationStatus');
-            console.log('✅ Таблица статуса миграций создана/обновлена');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы статуса миграций:', syncError);
         }
@@ -1118,22 +1024,14 @@ export async function initDatabase() {
         await TradingStrategy.initializeDefaultStrategies();
         
         // Создаем дополнительные индексы для оптимизации
-        console.log('🔍 Создание дополнительных индексов для оптимизации...');
         try {
             const DatabaseOptimization = (await import('./databaseOptimization.js')).default;
-            const indexResults = await DatabaseOptimization.createRecommendedIndexes(false);
-            const createdCount = indexResults.created.length;
-            const skippedCount = indexResults.skipped.length;
-            if (createdCount > 0 || skippedCount > 0) {
-                console.log(`   ✅ Индексы проверены: создано ${createdCount}, пропущено ${skippedCount}`);
-            }
+            await DatabaseOptimization.createRecommendedIndexes(false);
         } catch (indexError) {
-            console.warn('⚠️ Предупреждение при создании индексов:', indexError.message);
             // Не прерываем инициализацию при ошибке создания индексов
         }
         
         // Устанавливаем ассоциации между моделями
-        console.log('🔗 Установка ассоциаций между моделями...');
         try {
             // Ассоциации для Recommendation
             Recommendation.belongsTo(TradingStrategy, {
@@ -1181,17 +1079,13 @@ export async function initDatabase() {
                 as: 'strategy'
             });
             
-            console.log('✅ Ассоциации установлены');
         } catch (assocError) {
-            console.warn('⚠️ Предупреждение при установке ассоциаций:', assocError.message);
         }
 
         // Инициализация настроек
-        console.log('\n🔧 Инициализация настроек...');
         await initializeRecommendedSettings();
         // Также инициализируем настройки по умолчанию из Settings (включая макро-данные и формулу Келли)
         await Settings.initializeDefaults();
-        console.log('✅ Настройки инициализированы (включая формулу Келли: включена по умолчанию)');
 
         // Инициализируем пользователя
         try {
@@ -1203,8 +1097,6 @@ export async function initDatabase() {
 
         // Показываем статистику
         await showDatabaseStats();
-
-        console.log('\n🎉 Инициализация базы данных завершена успешно!');
 
     } catch (error) {
         console.error('❌ Ошибка инициализации базы данных:', error);
@@ -1221,10 +1113,7 @@ async function initializeRecommendedSettings() {
         const existingCount = await Settings.count();
         
         if (existingCount > 0) {
-            console.log(`ℹ️ Найдено ${existingCount} существующих настроек`);
-            
-            // Спрашиваем пользователя, хочет ли он перезаписать настройки
-            console.log('🔄 Обновляем настройки до рекомендуемых...');
+            // Обновляем настройки до рекомендуемых
         }
 
         // Рекомендуемые настройки для Этапов 1-2
@@ -2987,13 +2876,6 @@ async function initializeRecommendedSettings() {
             }
         }
 
-        console.log(`   ✅ Добавлено: ${addedCount} настроек`);
-        console.log(`   🔄 Обновлено: ${updatedCount} настроек`);
-        console.log(`   📋 Всего настроек: ${recommendedSettings.length}`);
-        
-        // Проверяем, что настройки Келли инициализированы
-        const kellyEnabled = await Settings.getSetting('kelly_enabled', false);
-        console.log(`   📊 Формула Келли: ${kellyEnabled ? '✅ включена' : '❌ выключена'} (по умолчанию: включена)`);
 
     } catch (error) {
         console.error('❌ Ошибка инициализации настроек:', error);
@@ -3006,45 +2888,31 @@ async function initializeRecommendedSettings() {
  */
 async function initializeUser() {
     try {
-        console.log('\n👤 ИНИЦИАЛИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ:');
-        
         // Проверяем наличие пароля в переменных окружения
         // Важно: dotenv.config() должен быть вызван в начале файла
         const userPassword = process.env.USER_PASSWORD;
         
         if (!userPassword) {
-            console.warn('   ⚠️ USER_PASSWORD не установлен в .env файле');
-            console.warn('   ⚠️ Пользователь не будет создан');
-            console.warn('   ⚠️ Установите USER_PASSWORD в .env файле для создания пользователя');
             return; // Не создаем пользователя без пароля
         }
-        
-        console.log('   📝 Пароль из .env найден, длина:', userPassword.length);
         
         // Проверяем, существует ли уже пользователь
         const existingUser = await User.findOne({ where: { username: 'admin' } });
         
         if (existingUser) {
-            console.log('   ✅ Пользователь уже существует (id:', existingUser.id + ')');
-            
             // Проверяем, совпадает ли текущий пароль с паролем из .env
             const isPasswordMatch = await bcrypt.compare(userPassword, existingUser.passwordHash);
             
             if (!isPasswordMatch) {
-                console.log('   🔄 Пароль изменился, обновляю хэш пароля...');
                 // Обновляем пароль, если он изменился
                 const saltRounds = 10;
                 const newPasswordHash = await bcrypt.hash(userPassword, saltRounds);
                 await existingUser.update({ passwordHash: newPasswordHash });
-                console.log('   ✅ Пароль обновлен');
-            } else {
-                console.log('   ✅ Пароль совпадает, обновление не требуется');
             }
             
             // Убеждаемся, что пользователь активен
             if (!existingUser.isActive) {
                 await existingUser.update({ isActive: true });
-                console.log('   ✅ Пользователь активирован');
             }
             
             return;
@@ -3056,20 +2924,17 @@ async function initializeUser() {
         
         // Создаем пользователя с обработкой случая, когда он уже существует
         try {
-            const user = await User.create({
+            await User.create({
                 username: 'admin',
                 fullName: 'Иван Дмитриевич',
                 passwordHash: passwordHash,
                 isActive: true
             });
-            
-            console.log(`   ✅ Пользователь создан: ${user.fullName} (${user.username}, id: ${user.id})`);
         } catch (createError) {
             // Если пользователь уже существует - это нормально
             if (createError.name === 'SequelizeUniqueConstraintError' && 
                 createError.original && createError.original.code === '23505' &&
                 createError.fields && createError.fields.username === 'admin') {
-                console.log('   ✅ Пользователь уже существует (дубликат при создании)');
                 
                 // Попробуем найти и обновить существующего пользователя
                 const existingUser = await User.findOne({ where: { username: 'admin' } });
@@ -3080,13 +2945,11 @@ async function initializeUser() {
                         const saltRounds = 10;
                         const newPasswordHash = await bcrypt.hash(userPassword, saltRounds);
                         await existingUser.update({ passwordHash: newPasswordHash });
-                        console.log('   ✅ Пароль обновлен');
                     }
                     
                     // Убеждаемся, что пользователь активен
                     if (!existingUser.isActive) {
                         await existingUser.update({ isActive: true });
-                        console.log('   ✅ Пользователь активирован');
                     }
                 }
             } else {
@@ -3107,34 +2970,16 @@ async function initializeUser() {
  */
 async function showDatabaseStats() {
     try {
-        console.log('\n📊 СТАТИСТИКА БАЗЫ ДАННЫХ:');
-        
-        const usersCount = await User.count();
-        console.log(`   👤 Пользователи: ${usersCount}`);
-        
-        const settingsCount = await Settings.count();
-        console.log(`   ⚙️ Настройки: ${settingsCount}`);
-        
-        const migrationCount = await MigrationStatus.count();
-        console.log(`   🔄 Миграции: ${migrationCount}`);
-        
-        const instrumentsCount = await CachedInstrument.count();
-        console.log(`   📈 Инструменты: ${instrumentsCount}`);
-        
-        const candlesCount = await CachedCandle.count();
-        console.log(`   🕯️ Свечи: ${candlesCount}`);
-        
-        const companiesCount = await Company.count();
-        console.log(`   🏢 Компании: ${companiesCount}`);
-        
-        const portfolioCount = await PortfolioItem.count();
-        console.log(`   💼 Портфель: ${portfolioCount}`);
-        
-        const recommendationsCount = await Recommendation.count();
-        console.log(`   🎯 Рекомендации: ${recommendationsCount}`);
-        
-        const signalsCount = await CachedSignal.count();
-        console.log(`   ⚡ Сигналы: ${signalsCount}`);
+        // Статистика базы данных собирается, но не выводится
+        await User.count();
+        await Settings.count();
+        await MigrationStatus.count();
+        await CachedInstrument.count();
+        await CachedCandle.count();
+        await Company.count();
+        await PortfolioItem.count();
+        await Recommendation.count();
+        await CachedSignal.count();
 
         // Группировка настроек по категориям
         const settings = await Settings.findAll({
@@ -3142,10 +2987,8 @@ async function showDatabaseStats() {
             group: ['category']
         });
         
-        console.log('\n📂 Настройки по категориям:');
         for (const setting of settings) {
-            const count = await Settings.count({ where: { category: setting.category } });
-            console.log(`   ${setting.category}: ${count} настроек`);
+            await Settings.count({ where: { category: setting.category } });
         }
 
     } catch (error) {
