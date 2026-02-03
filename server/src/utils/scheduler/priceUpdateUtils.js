@@ -512,29 +512,37 @@ export async function recalculatePortfolioValue(context) {
             return;
         }
 
+        const trades = portfolio?.trades || [];
+        const rawPositions = portfolio.positions || {};
+        
+        // РАССЧИТЫВАЕМ ПОЗИЦИИ С УЧЕТОМ СТРАТЕГИЙ (как в /api/portfolio)
+        const { calculatePositionsWithStrategies } = await import('../portfolioPositionsCalculator.js');
+        const positionsByFigi = await calculatePositionsWithStrategies(portfolio, rawPositions, trades);
+        
+        // Пересчитываем positionsValue на основе позиций с учетом стратегий
         let positionsValue = 0;
-        const positions = portfolio.positions || {};
-        
-        // Получаем цены для всех позиций
+        const aggregatedPositions = {};
         const CacheService = (await import('../../services/CacheService.js')).default;
-        const CachedInstrument = (await import('../../models/CachedInstrument.js')).default;
         
-        for (const [figi, quantity] of Object.entries(positions)) {
-            if (quantity && typeof quantity === 'number' && quantity > 0) {
+        for (const [figi, figiData] of positionsByFigi.entries()) {
+            const totalQuantityForFigi = figiData.totalQuantity;
+            if (totalQuantityForFigi > 0) {
+                aggregatedPositions[figi] = totalQuantityForFigi;
+                
                 try {
-                    const instrument = await CachedInstrument.findOne({ where: { figi } });
-                    if (instrument && instrument.lastPrice && instrument.lastPrice > 0) {
-                        positionsValue += instrument.lastPrice * quantity;
+                    const instrument = await CacheService.getInstrument(figi, false);
+                    const currentPrice = instrument?.lastPrice || 0;
+                    if (currentPrice > 0) {
+                        positionsValue += currentPrice * totalQuantityForFigi;
                     }
                 } catch (error) {
+                    const LoggerService = (await import('../../services/LoggerService.js')).default;
                     if (LoggerService.isInitialized) {
                         LoggerService.warn('Error getting price for instrument', {
                             service: 'priceUpdateUtils',
                             operation: 'recalculatePortfolioValue',
                             figi,
-                            error: {
-                                message: error.message
-                            }
+                            error: { message: error.message }
                         });
                     } else {
                         console.warn(`⚠️ Error getting price for ${figi}:`, error.message);
@@ -580,10 +588,10 @@ export async function recalculatePortfolioValue(context) {
         // Отправляем обновление через WebSocket
         const WebSocketService = await getWebSocketService();
         if (WebSocketService) {
-            // Создаем обновленный объект портфеля с пересчитанными значениями
+            // Создаем обновленный объект портфеля с позициями с учетом стратегий
             const updatedPortfolio = {
                 ...portfolio,
-                positions: positions, // Используем rawPositions из портфеля
+                positions: aggregatedPositions, // Используем агрегированные позиции с учетом стратегий
                 positionsValue,
                 totalValue
             };

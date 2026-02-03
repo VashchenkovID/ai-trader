@@ -1289,21 +1289,28 @@ class SchedulerService {
                 // Получаем реальную торговую статистику и состояние портфеля
                 const portfolio = await TradingEngine.getPortfolioValue();
                 const stats = await TradingEngine.calculateTradingStats();
-
-                // ИСПОЛЬЗУЕМ rawPositions ИЗ ПОРТФЕЛЯ КАК ИСТОЧНИК ИСТИНЫ
-                // Это обеспечивает согласованность с /api/portfolio
+                const trades = portfolio?.trades || [];
                 const rawPositions = portfolio?.positions || {};
                 
-                // Пересчитываем positionsValue на основе rawPositions из портфеля
+                // РАССЧИТЫВАЕМ ПОЗИЦИИ С УЧЕТОМ СТРАТЕГИЙ (как в /api/portfolio)
+                const { calculatePositionsWithStrategies } = await import('../utils/portfolioPositionsCalculator.js');
+                const positionsByFigi = await calculatePositionsWithStrategies(portfolio, rawPositions, trades);
+                
+                // Пересчитываем positionsValue на основе позиций с учетом стратегий
                 const CacheService = (await import('./CacheService.js')).default;
                 let calculatedPositionsValue = 0;
-                for (const [figi, quantity] of Object.entries(rawPositions)) {
-                    if (quantity > 0 && typeof quantity === 'number') {
+                const aggregatedPositions = {}; // Агрегированные позиции по FIGI
+                
+                for (const [figi, figiData] of positionsByFigi.entries()) {
+                    const totalQuantityForFigi = figiData.totalQuantity;
+                    if (totalQuantityForFigi > 0) {
+                        aggregatedPositions[figi] = totalQuantityForFigi;
+                        
                         try {
                             const instrument = await CacheService.getInstrument(figi, false);
                             const currentPrice = instrument?.lastPrice || 0;
                             if (currentPrice > 0) {
-                                calculatedPositionsValue += currentPrice * quantity;
+                                calculatedPositionsValue += currentPrice * totalQuantityForFigi;
                             }
                         } catch (error) {
                             // Пропускаем позиции с ошибками получения цены
@@ -1312,15 +1319,13 @@ class SchedulerService {
                 }
                 
                 const cash = portfolio?.cash || 0;
-                // Используем пересчитанный positionsValue, если он больше 0, иначе берем из портфеля
                 const positionsValue = calculatedPositionsValue > 0 ? calculatedPositionsValue : (portfolio?.positionsValue || 0);
-                // totalValue должен быть строго cash + positionsValue для согласованности
                 const totalValue = cash + positionsValue;
                 
-                // Создаем обновленный объект портфеля с правильными значениями
+                // Создаем обновленный объект портфеля с позициями с учетом стратегий
                 const updatedPortfolio = {
                     ...portfolio,
-                    positions: rawPositions,
+                    positions: aggregatedPositions, // Используем агрегированные позиции с учетом стратегий
                     positionsValue,
                     totalValue
                 };

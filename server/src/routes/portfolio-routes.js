@@ -9,6 +9,9 @@ import PnLCalculationService from '../services/PnLCalculationService.js';
 
 const router = express.Router();
 
+// Импортируем функцию расчета позиций из утилиты
+import { calculatePositionsWithStrategies } from '../utils/portfolioPositionsCalculator.js';
+
 /**
  * Общая информация о портфеле
  */
@@ -16,20 +19,25 @@ router.get('/', async (req, res) => {
     try {
         const portfolio = await TradingEngine.getPortfolioValue();
         const trades = portfolio?.trades || [];
-        
-        // ИСПОЛЬЗУЕМ rawPositions ИЗ ПОРТФЕЛЯ КАК ИСТОЧНИК ИСТИНЫ
-        // Это обеспечивает согласованность с /api/portfolio/positions
         const rawPositions = portfolio?.positions || {};
         
-        // Пересчитываем positionsValue на основе rawPositions из портфеля
+        // РАССЧИТЫВАЕМ ПОЗИЦИИ С УЧЕТОМ СТРАТЕГИЙ (как в /api/portfolio/positions)
+        const positionsByFigi = await calculatePositionsWithStrategies(portfolio, rawPositions, trades);
+        
+        // Пересчитываем positionsValue на основе позиций с учетом стратегий
         let calculatedPositionsValue = 0;
-        for (const [figi, quantity] of Object.entries(rawPositions)) {
-            if (quantity > 0 && typeof quantity === 'number') {
+        const aggregatedPositions = {}; // Агрегированные позиции по FIGI для обратной совместимости
+        
+        for (const [figi, figiData] of positionsByFigi.entries()) {
+            const totalQuantityForFigi = figiData.totalQuantity;
+            if (totalQuantityForFigi > 0) {
+                aggregatedPositions[figi] = totalQuantityForFigi;
+                
                 try {
                     const instrument = await CacheService.getInstrument(figi, false);
                     const currentPrice = instrument?.lastPrice || 0;
                     if (currentPrice > 0) {
-                        calculatedPositionsValue += currentPrice * quantity;
+                        calculatedPositionsValue += currentPrice * totalQuantityForFigi;
                     }
                 } catch (error) {
                     LoggerService.warn('Не удалось получить цену для расчета positionsValue', {
@@ -42,18 +50,16 @@ router.get('/', async (req, res) => {
         }
         
         const cash = portfolio?.cash || 0;
-        // Используем пересчитанный positionsValue, если он больше 0, иначе берем из портфеля
         const positionsValue = calculatedPositionsValue > 0 ? calculatedPositionsValue : (portfolio?.positionsValue || 0);
-        // totalValue должен быть строго cash + positionsValue для согласованности
         const totalValue = cash + positionsValue;
         
         // Рассчитываем PnL используя новый сервис (для виртуального портфеля тоже)
         let pnlData = null;
         try {
-            // Создаем обновленный объект портфеля с позициями из портфеля и пересчитанными значениями
+            // Создаем обновленный объект портфеля с позициями с учетом стратегий
             const updatedPortfolio = {
                 ...portfolio,
-                positions: rawPositions, // Используем rawPositions из портфеля
+                positions: aggregatedPositions, // Используем агрегированные позиции с учетом стратегий
                 positionsValue,
                 totalValue
             };
@@ -82,7 +88,7 @@ router.get('/', async (req, res) => {
             success: true,
             data: {
                 cash,
-                positions: rawPositions, // Используем rawPositions из портфеля для согласованности
+                positions: aggregatedPositions, // Используем агрегированные позиции с учетом стратегий
                 positionsValue,
                 totalValue,
                 pnl: {
