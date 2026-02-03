@@ -15,18 +15,87 @@ const router = express.Router();
 router.get('/', async (req, res) => {
     try {
         const portfolio = await TradingEngine.getPortfolioValue();
+        const trades = portfolio?.trades || [];
         
-        // Используем значения из TradingEngine.getPortfolioValue() вместо пересчета
-        // Это гарантирует согласованность данных
+        // Импортируем модели для расчета позиций по стратегиям
+        const TradingRequest = (await import('../models/TradingRequest.js')).default;
+        
+        // Пересчитываем позиции из сделок с учетом стратегий
+        // Это важно, так как позиции могут быть разделены по стратегиям
+        const positionsByStrategy = new Map(); // Ключ: `${figi}_${strategyId || 'null'}`
+        const positionsAggregated = {}; // Агрегированные позиции по FIGI для обратной совместимости
+        
+        // Обрабатываем все сделки для расчета позиций по стратегиям
+        for (const trade of trades) {
+            const figi = trade.figi || trade.symbol;
+            if (!figi) continue;
+            
+            const strategyId = trade.strategyId || null;
+            const key = `${figi}_${strategyId || 'null'}`;
+            
+            if (!positionsByStrategy.has(key)) {
+                positionsByStrategy.set(key, {
+                    figi,
+                    strategyId,
+                    quantity: 0
+                });
+            }
+            
+            const position = positionsByStrategy.get(key);
+            if (trade.action === 'BUY') {
+                position.quantity += trade.quantity || 0;
+            } else if (trade.action === 'SELL') {
+                position.quantity -= trade.quantity || 0;
+            }
+        }
+        
+        // Агрегируем позиции по FIGI (суммируем по всем стратегиям)
+        for (const [key, positionData] of positionsByStrategy.entries()) {
+            const { figi, quantity } = positionData;
+            if (quantity > 0) {
+                positionsAggregated[figi] = (positionsAggregated[figi] || 0) + quantity;
+            }
+        }
+        
+        // Используем пересчитанные позиции вместо rawPositions
+        const calculatedPositions = positionsAggregated;
+        
+        // Пересчитываем positionsValue на основе пересчитанных позиций
+        let calculatedPositionsValue = 0;
+        for (const [figi, quantity] of Object.entries(calculatedPositions)) {
+            if (quantity > 0) {
+                try {
+                    const instrument = await CacheService.getInstrument(figi, false);
+                    const currentPrice = instrument?.lastPrice || 0;
+                    if (currentPrice > 0) {
+                        calculatedPositionsValue += currentPrice * quantity;
+                    }
+                } catch (error) {
+                    LoggerService.warn('Не удалось получить цену для расчета positionsValue', {
+                        service: 'portfolio-routes',
+                        figi,
+                        error: { message: error.message }
+                    });
+                }
+            }
+        }
+        
         const cash = portfolio?.cash || 0;
-        const positionsValue = portfolio?.positionsValue || 0;
-        const totalValue = portfolio?.totalValue || (cash + positionsValue);
-        const rawPositions = portfolio?.positions || {};
+        const positionsValue = calculatedPositionsValue > 0 ? calculatedPositionsValue : (portfolio?.positionsValue || 0);
+        const totalValue = cash + positionsValue;
         
         // Рассчитываем PnL используя новый сервис (для виртуального портфеля тоже)
         let pnlData = null;
         try {
-            pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+            // Создаем обновленный объект портфеля с пересчитанными позициями
+            const updatedPortfolio = {
+                ...portfolio,
+                positions: calculatedPositions,
+                positionsValue,
+                totalValue
+            };
+            
+            pnlData = await PnLCalculationService.calculateTotalPnL(updatedPortfolio, {
                 tradingMode: portfolio?.mode || 'paper',
                 includeTrades: true,
                 includePositions: true
@@ -50,7 +119,7 @@ router.get('/', async (req, res) => {
             success: true,
             data: {
                 cash,
-                positions: rawPositions,
+                positions: calculatedPositions,
                 positionsValue,
                 totalValue,
                 pnl: {
@@ -62,7 +131,7 @@ router.get('/', async (req, res) => {
                     winRate: pnlData.summary?.winRate || 0,
                     totalTrades: pnlData.summary?.totalTrades || 0
                 },
-                trades: portfolio?.trades || [],
+                trades: trades,
                 mode: portfolio?.mode || 'paper',
                 initialCapital: portfolio?.initialCapital || 1000000
             },

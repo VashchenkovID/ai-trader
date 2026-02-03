@@ -210,8 +210,11 @@ class PerformanceAnalyzer {
                 const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
                 const portfolio = await TradingEngine.getPortfolioValue();
                 
-                const pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
-                    tradingMode: portfolio?.mode || 'paper',
+                // Пересчитываем позиции из сделок с учетом стратегий
+                const recalculatedPortfolio = await this.recalculatePortfolioPositions(portfolio);
+                
+                const pnlData = await PnLCalculationService.calculateTotalPnL(recalculatedPortfolio, {
+                    tradingMode: recalculatedPortfolio?.mode || 'paper',
                     includeTrades: true,
                     includePositions: true,
                     startDate: startDate,
@@ -1380,7 +1383,11 @@ class PerformanceAnalyzer {
     async getTotalPortfolioValue() {
         try {
             const portfolio = await TradingEngine.getPortfolioValue();
-            return portfolio?.totalValue || portfolio?.cash || 1000000;
+            
+            // Пересчитываем позиции из сделок с учетом стратегий
+            const recalculatedPortfolio = await this.recalculatePortfolioPositions(portfolio);
+            
+            return recalculatedPortfolio?.totalValue || recalculatedPortfolio?.cash || 1000000;
         } catch (error) {
             return 1000000;
         }
@@ -1393,22 +1400,112 @@ class PerformanceAnalyzer {
     async getSectorPortfolioValue(figis) {
         try {
             const portfolio = await TradingEngine.getPortfolioValue();
-            const positions = portfolio?.positions || {};
-            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+            
+            // Пересчитываем позиции из сделок с учетом стратегий
+            const recalculatedPortfolio = await this.recalculatePortfolioPositions(portfolio);
+            const positions = recalculatedPortfolio?.positions || {};
+            
+            const CacheService = (await import('./CacheService.js')).default;
             
             let sectorValue = 0;
             for (const figi of figis) {
                 const quantity = positions[figi] || 0;
                 if (quantity > 0) {
-                    const instrument = await CachedInstrument.findOne({ where: { figi } });
-                    const price = instrument?.lastPrice || 0;
-                    sectorValue += quantity * price;
+                    try {
+                        const instrument = await CacheService.getInstrument(figi, false);
+                        const price = instrument?.lastPrice || 0;
+                        if (price > 0) {
+                            sectorValue += quantity * price;
+                        }
+                    } catch (error) {
+                        // Пропускаем позиции с ошибками получения цены
+                    }
                 }
             }
             
             return sectorValue;
         } catch (error) {
             return 0;
+        }
+    }
+
+    /**
+     * Пересчет позиций портфеля из сделок с учетом стратегий
+     * Аналогично логике в /api/portfolio
+     * @private
+     */
+    async recalculatePortfolioPositions(portfolio) {
+        try {
+            const trades = portfolio?.trades || [];
+            
+            // Пересчитываем позиции из сделок с учетом стратегий
+            const positionsByStrategy = new Map(); // Ключ: `${figi}_${strategyId || 'null'}`
+            const positionsAggregated = {}; // Агрегированные позиции по FIGI
+            
+            // Обрабатываем все сделки для расчета позиций по стратегиям
+            for (const trade of trades) {
+                const figi = trade.figi || trade.symbol;
+                if (!figi) continue;
+                
+                const strategyId = trade.strategyId || null;
+                const key = `${figi}_${strategyId || 'null'}`;
+                
+                if (!positionsByStrategy.has(key)) {
+                    positionsByStrategy.set(key, {
+                        figi,
+                        strategyId,
+                        quantity: 0
+                    });
+                }
+                
+                const position = positionsByStrategy.get(key);
+                if (trade.action === 'BUY') {
+                    position.quantity += trade.quantity || 0;
+                } else if (trade.action === 'SELL') {
+                    position.quantity -= trade.quantity || 0;
+                }
+            }
+            
+            // Агрегируем позиции по FIGI (суммируем по всем стратегиям)
+            for (const [key, positionData] of positionsByStrategy.entries()) {
+                const { figi, quantity } = positionData;
+                if (quantity > 0) {
+                    positionsAggregated[figi] = (positionsAggregated[figi] || 0) + quantity;
+                }
+            }
+            
+            // Пересчитываем positionsValue на основе пересчитанных позиций
+            const CacheService = (await import('./CacheService.js')).default;
+            let calculatedPositionsValue = 0;
+            for (const [figi, quantity] of Object.entries(positionsAggregated)) {
+                if (quantity > 0) {
+                    try {
+                        const instrument = await CacheService.getInstrument(figi, false);
+                        const currentPrice = instrument?.lastPrice || 0;
+                        if (currentPrice > 0) {
+                            calculatedPositionsValue += currentPrice * quantity;
+                        }
+                    } catch (error) {
+                        // Пропускаем позиции с ошибками получения цены
+                    }
+                }
+            }
+            
+            const cash = portfolio?.cash || 0;
+            const positionsValue = calculatedPositionsValue > 0 ? calculatedPositionsValue : (portfolio?.positionsValue || 0);
+            const totalValue = cash + positionsValue;
+            
+            // Возвращаем обновленный портфель с пересчитанными позициями
+            return {
+                ...portfolio,
+                positions: positionsAggregated,
+                positionsValue,
+                totalValue
+            };
+        } catch (error) {
+            console.warn('⚠️ Ошибка пересчета позиций портфеля, используем исходные данные:', error.message);
+            // В случае ошибки возвращаем исходный портфель
+            return portfolio;
         }
     }
 }
