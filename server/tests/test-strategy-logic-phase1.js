@@ -5,11 +5,11 @@
  * Запуск: node test-strategy-logic-phase1.js
  */
 
-import TradingStrategy from './src/models/TradingStrategy.js';
-import RiskManagementService from './src/services/RiskManagementService.js';
-import InstrumentStats from './src/models/InstrumentStats.js';
-import CacheService from './src/services/CacheService.js';
-import sequelize from './src/config/database.js';
+import TradingStrategy from '../src/models/TradingStrategy.js';
+import RiskManagementService from '../src/services/RiskManagementService.js';
+import InstrumentStats from '../src/models/InstrumentStats.js';
+import CacheService from '../src/services/CacheService.js';
+import sequelize from '../src/config/database.js';
 
 // Подавляем вывод ошибок консоли для тестовых FIGI
 const originalConsoleError = console.error;

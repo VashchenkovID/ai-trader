@@ -7,14 +7,14 @@
  * - 2.5.3: Улучшенный расчет размера позиции (confidence, волатильность, корреляция)
  */
 
-import StrategyAllocationService from './src/services/StrategyAllocationService.js';
-import TradingStrategy from './src/models/TradingStrategy.js';
-import PortfolioAllocation from './src/models/PortfolioAllocation.js';
-import InstrumentStats from './src/models/InstrumentStats.js';
-import CorrelationService from './src/services/CorrelationService.js';
-import AdaptiveThresholdService from './src/services/AdaptiveThresholdService.js';
-import ProfitabilityTracker from './src/services/ProfitabilityTracker.js';
-import SettingsService from './src/services/SettingsService.js';
+import StrategyAllocationService from '../src/services/StrategyAllocationService.js';
+import TradingStrategy from '../src/models/TradingStrategy.js';
+import PortfolioAllocation from '../src/models/PortfolioAllocation.js';
+import InstrumentStats from '../src/models/InstrumentStats.js';
+import CorrelationService from '../src/services/CorrelationService.js';
+import AdaptiveThresholdService from '../src/services/AdaptiveThresholdService.js';
+import ProfitabilityTracker from '../src/services/ProfitabilityTracker.js';
+import SettingsService from '../src/services/SettingsService.js';
 
 let testsPassed = 0;
 let testsFailed = 0;

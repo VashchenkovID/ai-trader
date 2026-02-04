@@ -2,8 +2,8 @@
  * Скрипт для загрузки всех макро-данных
  */
 
-import sequelize from './src/config/database.js';
-import MacroDataService from './src/services/MacroDataService.js';
+import sequelize from '../src/config/database.js';
+import MacroDataService from '../src/services/MacroDataService.js';
 
 async function loadMacroData() {
     try {

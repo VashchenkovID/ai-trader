@@ -1133,6 +1133,9 @@ const TradingRequestManager: React.FC = () => {
                     <li>Всего: <strong>{cleanupStats.total}</strong></li>
                     <li>Одобренных: <strong>{cleanupStats.approved}</strong></li>
                     <li>Отклоненных: <strong>{cleanupStats.rejected}</strong></li>
+                    {cleanupStats.expired !== undefined && (
+                      <li>Истекших: <strong>{cleanupStats.expired}</strong></li>
+                    )}
                     {cleanupStats.oldestDate && (
                       <li>Самая старая: {new Date(cleanupStats.oldestDate).toLocaleDateString('ru-RU')}</li>
                     )}
@@ -1159,7 +1162,7 @@ const TradingRequestManager: React.FC = () => {
               style={{ width: '100%' }}
             />
             <small style={{ color: 'var(--color-text-secondary)', display: 'block', marginTop: '4px' }}>
-              Оставьте пустым, чтобы удалить все завершенные заявки (одобренные и отклоненные)
+              Оставьте пустым, чтобы удалить все завершенные заявки (одобренные, отклоненные и истекшие)
             </small>
           </div>
 
@@ -1169,6 +1172,7 @@ const TradingRequestManager: React.FC = () => {
               <ul style={{ marginTop: '8px', marginBottom: 0, paddingLeft: '16px' }}>
                 <li>APPROVED (Одобренные)</li>
                 <li>REJECTED (Отклоненные)</li>
+                <li>EXPIRED (Истекшие)</li>
               </ul>
             </div>
           </Alert>

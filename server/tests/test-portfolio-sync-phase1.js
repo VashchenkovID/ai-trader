@@ -5,11 +5,11 @@
  * Запуск: node test-portfolio-sync-phase1.js
  */
 
-import PortfolioSyncService from './src/services/PortfolioSyncService.js';
-import TradingRequest from './src/models/TradingRequest.js';
-import PositionStrategy from './src/models/PositionStrategy.js';
-import RealPortfolio from './src/models/RealPortfolio.js';
-import TradingEngine from './src/services/TradingEngine.js';
+import PortfolioSyncService from '../src/services/PortfolioSyncService.js';
+import TradingRequest from '../src/models/TradingRequest.js';
+import PositionStrategy from '../src/models/PositionStrategy.js';
+import RealPortfolio from '../src/models/RealPortfolio.js';
+import TradingEngine from '../src/services/TradingEngine.js';
 
 // Цвета для консоли
 const colors = {

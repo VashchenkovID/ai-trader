@@ -7,7 +7,7 @@
 global.process = global.process || { env: {} };
 
 // Импортируем сервис
-import('./src/services/WorkerMonitoringService.js')
+import('../src/services/WorkerMonitoringService.js')
     .then(async (module) => {
         const WorkerMonitoringService = module.default;
 

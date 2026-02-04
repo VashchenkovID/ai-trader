@@ -232,7 +232,17 @@ class LoggerService {
                                 
                                 const sanitized = sanitizeMeta(relevantMeta);
                                 if (Object.keys(sanitized).length > 0) {
-                                    output += `\n${JSON.stringify(sanitized, null, 2)}`;
+                                    try {
+                                        const metaStr = JSON.stringify(sanitized, null, 2);
+                                        // Ограничиваем общую длину вывода метаданных в консоль
+                                        const maxMetaLength = 2000;
+                                        const truncatedMetaStr = metaStr.length > maxMetaLength 
+                                            ? metaStr.substring(0, maxMetaLength) + '\n...[truncated]' 
+                                            : metaStr;
+                                        output += `\n${truncatedMetaStr}`;
+                                    } catch (e) {
+                                        output += '\n[Failed to serialize meta]';
+                                    }
                                 }
                             }
 
@@ -334,9 +344,57 @@ class LoggerService {
     }
 
     /**
+     * Ограничивает длину строки
+     */
+    _truncateString(str, maxLength = 500) {
+        if (typeof str !== 'string') return str;
+        if (str.length <= maxLength) return str;
+        return str.substring(0, maxLength) + '...[truncated]';
+    }
+
+    /**
+     * Ограничивает размер объекта ошибки
+     */
+    _sanitizeError(error) {
+        if (!error) return error;
+        
+        const maxMessageLength = 500;
+        const maxStackLength = 1000;
+        
+        const sanitized = {
+            name: error.name,
+            message: this._truncateString(error.message || String(error), maxMessageLength),
+        };
+        
+        if (error.stack) {
+            sanitized.stack = this._truncateString(error.stack, maxStackLength);
+        }
+        
+        // Добавляем другие свойства ошибки, но ограничиваем их размер
+        for (const key in error) {
+            if (key !== 'name' && key !== 'message' && key !== 'stack') {
+                const value = error[key];
+                if (typeof value === 'string') {
+                    sanitized[key] = this._truncateString(value, 200);
+                } else {
+                    sanitized[key] = value;
+                }
+            }
+        }
+        
+        return sanitized;
+    }
+
+    /**
      * Логирование с автоматическим добавлением контекста и маскированием секретов
      */
     async _log(level, message, meta = {}) {
+        // Ограничиваем длину сообщения
+        const maxMessageLength = 1000;
+        if (typeof message === 'string' && message.length > maxMessageLength) {
+            message = message.substring(0, maxMessageLength) + '...[truncated]';
+        }
+        
         if (!this.isInitialized) {
             // Fallback на console если сервис не инициализирован
             const consoleMethod = level === 'error' ? console.error : undefined
@@ -351,6 +409,12 @@ class LoggerService {
             } catch (error) {
                 // Игнорируем ошибки при маскировании в fallback режиме
             }
+            
+            // Обрабатываем ошибки в meta
+            if (meta.error) {
+                meta.error = this._sanitizeError(meta.error);
+            }
+            
             if (!!consoleMethod) {
                 consoleMethod(`[${level.toUpperCase()}] ${message}`, meta);
             }
@@ -362,6 +426,44 @@ class LoggerService {
             const context = this.getContext(meta.requestId);
             meta = {...context, ...meta};
         }
+
+        // Обрабатываем ошибки в meta - ограничиваем их размер
+        if (meta.error) {
+            meta.error = this._sanitizeError(meta.error);
+        }
+        
+        // Обрабатываем все строковые значения в meta - ограничиваем их размер
+        const sanitizeMetaValues = (obj, maxLength = 500) => {
+            if (!obj || typeof obj !== 'object') return obj;
+            const result = {};
+            for (const key in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                    if (key === 'error') {
+                        // Ошибки уже обработаны выше
+                        result[key] = obj[key];
+                    } else if (typeof obj[key] === 'string') {
+                        result[key] = this._truncateString(obj[key], maxLength);
+                    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                        // Рекурсивно обрабатываем вложенные объекты, но ограничиваем глубину
+                        try {
+                            const jsonStr = JSON.stringify(obj[key]);
+                            if (jsonStr.length > 1000) {
+                                result[key] = '[Large object - truncated]';
+                            } else {
+                                result[key] = sanitizeMetaValues(obj[key], maxLength);
+                            }
+                        } catch (e) {
+                            result[key] = '[Non-serializable]';
+                        }
+                    } else {
+                        result[key] = obj[key];
+                    }
+                }
+            }
+            return result;
+        };
+        
+        meta = sanitizeMetaValues(meta);
 
         // Маскируем секреты перед логированием
         try {
@@ -486,13 +588,27 @@ class LoggerService {
         const method = req.method;
         const path = req.path || req.url;
 
+        // Ограничиваем длину сообщения об ошибке
+        const maxMessageLength = 500;
+        const maxStackLength = 1000;
+        
+        const errorMessage = error.message || String(error);
+        const truncatedMessage = errorMessage.length > maxMessageLength 
+            ? errorMessage.substring(0, maxMessageLength) + '...[truncated]' 
+            : errorMessage;
+        
+        const errorStack = error.stack || '';
+        const truncatedStack = errorStack.length > maxStackLength 
+            ? errorStack.substring(0, maxStackLength) + '...[truncated]' 
+            : errorStack;
+
         this.error(`Request error: ${method} ${path}`, {
             requestId,
             method,
             path,
             error: {
-                message: error.message,
-                stack: error.stack,
+                message: truncatedMessage,
+                stack: truncatedStack || undefined,
                 name: error.name
             },
             ...(req.user?.id && {userId: req.user.id})

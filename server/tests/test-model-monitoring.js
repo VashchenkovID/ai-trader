@@ -3,9 +3,9 @@
  * Запуск: node test-model-monitoring.js
  */
 
-import { trainValidationTestSplit, stratifiedSplit, timeBasedSplit } from './src/utils/dataSplitUtils.js';
-import { kFoldSplit, performCrossValidation } from './src/utils/crossValidationUtils.js';
-import ModelMonitoringService from './src/services/ModelMonitoringService.js';
+import { trainValidationTestSplit, stratifiedSplit, timeBasedSplit } from '../src/utils/dataSplitUtils.js';
+import { kFoldSplit, performCrossValidation } from '../src/utils/crossValidationUtils.js';
+import ModelMonitoringService from '../src/services/ModelMonitoringService.js';
 
 async function testDataSplitUtils() {
     console.log('🧪 Тестирование dataSplitUtils...\n');

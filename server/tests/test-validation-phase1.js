@@ -5,9 +5,9 @@
  * Запуск: node test-validation-phase1.js
  */
 
-import TradingRequestService from './src/services/TradingRequestService.js';
-import RiskManagementService from './src/services/RiskManagementService.js';
-import TradingModeManager from './src/services/TradingModeManager.js';
+import TradingRequestService from '../src/services/TradingRequestService.js';
+import RiskManagementService from '../src/services/RiskManagementService.js';
+import TradingModeManager from '../src/services/TradingModeManager.js';
 
 // Цвета для консоли
 const colors = {

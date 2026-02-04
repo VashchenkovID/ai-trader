@@ -5,8 +5,8 @@
  * - Генерация отчета
  */
 
-import DatabaseOptimization from './src/utils/databaseOptimization.js';
-import LoggerService from './src/services/LoggerService.js';
+import DatabaseOptimization from '../src/utils/databaseOptimization.js';
+import LoggerService from '../src/services/LoggerService.js';
 
 const colors = {
     reset: '\x1b[0m',

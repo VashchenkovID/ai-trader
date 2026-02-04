@@ -2,12 +2,12 @@
  * Тестовый скрипт для проверки всех оптимизаций
  */
 
-import sequelize from './src/config/database.js';
-import { SchedulerService } from './src/services/SchedulerService.js';
-import CacheServiceInstance from './src/services/CacheService.js';
-import ApiRequestQueue from './src/services/ApiRequestQueue.js';
-import WorkerPriorityManager from './src/utils/scheduler/WorkerPriorityManager.js';
-import DatabaseQueryOptimizer from './src/utils/databaseQueryOptimizer.js';
+import sequelize from '../src/config/database.js';
+import { SchedulerService } from '../src/services/SchedulerService.js';
+import CacheServiceInstance from '../src/services/CacheService.js';
+import ApiRequestQueue from '../src/services/ApiRequestQueue.js';
+import WorkerPriorityManager from '../src/utils/scheduler/WorkerPriorityManager.js';
+import DatabaseQueryOptimizer from '../src/utils/databaseQueryOptimizer.js';
 
 console.log('🧪 Тестирование всех оптимизаций...\n');
 

@@ -1283,7 +1283,7 @@ class TradingRequestService {
 
             let whereClause = {
                 status: {
-                    [Op.in]: ['APPROVED', 'REJECTED']
+                    [Op.in]: ['APPROVED', 'REJECTED', 'EXPIRED']
                 }
             };
 
@@ -1411,7 +1411,7 @@ class TradingRequestService {
         try {
             let whereClause = {
                 status: {
-                    [Op.in]: ['APPROVED', 'REJECTED']
+                    [Op.in]: ['APPROVED', 'REJECTED', 'EXPIRED']
                 }
             };
 
@@ -1419,12 +1419,15 @@ class TradingRequestService {
                 whereClause.tradingMode = tradingMode;
             }
 
-            const [approvedCount, rejectedCount, totalCount] = await Promise.all([
+            const [approvedCount, rejectedCount, expiredCount, totalCount] = await Promise.all([
                 TradingRequest.count({
                     where: { ...whereClause, status: 'APPROVED' }
                 }),
                 TradingRequest.count({
                     where: { ...whereClause, status: 'REJECTED' }
+                }),
+                TradingRequest.count({
+                    where: { ...whereClause, status: 'EXPIRED' }
                 }),
                 TradingRequest.count({
                     where: whereClause
@@ -1448,6 +1451,7 @@ class TradingRequestService {
                 total: totalCount,
                 approved: approvedCount,
                 rejected: rejectedCount,
+                expired: expiredCount,
                 oldestDate: oldestRequest?.updatedAt || null,
                 newestDate: newestRequest?.updatedAt || null
             };

@@ -3,9 +3,9 @@
  * Запуск: node test-stacking-modernization.js
  */
 
-import StackingService from './src/services/StackingService.js';
-import ModelWeightingService from './src/services/ModelWeightingService.js';
-import IntegratedAIService from './src/services/IntegratedAIService.js';
+import StackingService from '../src/services/StackingService.js';
+import ModelWeightingService from '../src/services/ModelWeightingService.js';
+import IntegratedAIService from '../src/services/IntegratedAIService.js';
 
 async function testStackingService() {
     console.log('🧪 Тестирование StackingService...\n');

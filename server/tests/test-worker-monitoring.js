@@ -1,6 +1,6 @@
-import WorkerMonitoringService from './src/services/WorkerMonitoringService.js';
-import ServiceManager from './src/services/ServiceManager.js';
-import { setGlobalServiceManager } from './src/services/GlobalServiceManager.js';
+import WorkerMonitoringService from '../src/services/WorkerMonitoringService.js';
+import ServiceManager from '../src/services/ServiceManager.js';
+import { setGlobalServiceManager } from '../src/services/GlobalServiceManager.js';
 
 // Устанавливаем глобальный ServiceManager
 setGlobalServiceManager(ServiceManager);

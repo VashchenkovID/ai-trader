@@ -20,8 +20,8 @@ async function testPnLCalculation() {
 
     try {
         // Импортируем сервисы
-        const PnLCalculationService = (await import('./src/services/PnLCalculationService.js')).default;
-        const CashFlow = (await import('./src/models/CashFlow.js')).default;
+        const PnLCalculationService = (await import('../src/services/PnLCalculationService.js')).default;
+        const CashFlow = (await import('../src/models/CashFlow.js')).default;
 
         // Инициализируем сервис
         await PnLCalculationService.initialize();
@@ -91,7 +91,7 @@ async function testPnLCalculation() {
         console.log('📊 Тест 3: Работа с CashFlow');
         try {
             // Проверяем, доступна ли БД
-            const sequelize = (await import('./src/config/database.js')).default;
+            const sequelize = (await import('../src/config/database.js')).default;
             await sequelize.authenticate();
             console.log('✅ Подключение к БД установлено');
 

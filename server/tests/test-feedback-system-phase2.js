@@ -5,14 +5,14 @@
  * Запуск: node test-feedback-system-phase2.js
  */
 
-import FeedbackService from './src/services/FeedbackService.js';
-import AdaptiveThresholdService from './src/services/AdaptiveThresholdService.js';
-import ModelWeightingService from './src/services/ModelWeightingService.js';
-import IntegratedAIService from './src/services/IntegratedAIService.js';
-import TradingRequest from './src/models/TradingRequest.js';
-import Recommendation from './src/models/Recommendation.js';
-import ModelPerformance from './src/models/ModelPerformance.js';
-import sequelize from './src/config/database.js';
+import FeedbackService from '../src/services/FeedbackService.js';
+import AdaptiveThresholdService from '../src/services/AdaptiveThresholdService.js';
+import ModelWeightingService from '../src/services/ModelWeightingService.js';
+import IntegratedAIService from '../src/services/IntegratedAIService.js';
+import TradingRequest from '../src/models/TradingRequest.js';
+import Recommendation from '../src/models/Recommendation.js';
+import ModelPerformance from '../src/models/ModelPerformance.js';
+import sequelize from '../src/config/database.js';
 
 // Подавляем вывод ошибок консоли для тестовых данных
 const originalConsoleError = console.error;

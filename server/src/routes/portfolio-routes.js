@@ -181,14 +181,6 @@ router.get('/positions', async (req, res) => {
         // Собираем все уникальные FIGI из rawPositions (это уже правильные количества!)
         const allFigis = Object.keys(rawPositions).filter(figi => rawPositions[figi] > 0);
         
-        // Отладочная информация
-        console.log(`🔍 Portfolio positions debug:`, {
-            rawPositionsCount: Object.keys(rawPositions).length,
-            allFigisCount: allFigis.length,
-            allFigis: allFigis.slice(0, 5),
-            tradesCount: trades.length,
-            rawPositions: Object.fromEntries(allFigis.map(f => [f, rawPositions[f]]))
-        });
         
         for (const figi of allFigis) {
             // ИСПОЛЬЗУЕМ КОЛИЧЕСТВО ИЗ ПОРТФЕЛЯ КАК ИСТОЧНИК ИСТИНЫ

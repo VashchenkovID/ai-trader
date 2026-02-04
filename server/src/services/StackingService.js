@@ -369,9 +369,17 @@ class StackingService {
             // Подготавливаем фичи для мета-модели
             const features = [];
             
-            // Извлекаем score и confidence от каждого источника
-            const sources = ['ensemble', 'traditional', 'reinforcement', 'signals', 'news'];
+            // Определяем ожидаемый размер входных данных модели
+            let expectedInputSize = 10; // По умолчанию 5 источников * 2 (score + confidence)
+            if (this.metaModel && this.metaModel.inputs && this.metaModel.inputs[0] && this.metaModel.inputs[0].shape) {
+                expectedInputSize = this.metaModel.inputs[0].shape[1];
+            }
             
+            // Определяем количество источников на основе размера модели
+            const numSources = expectedInputSize / 2; // Каждый источник дает 2 признака (score + confidence)
+            const sources = ['ensemble', 'traditional', 'reinforcement', 'signals', 'news'].slice(0, numSources);
+            
+            // Извлекаем score и confidence от каждого источника
             for (const source of sources) {
                 const pred = basePredictions.find(p => p.source === source);
                 features.push(pred ? (pred.score || 0.5) : 0.5);
@@ -390,8 +398,8 @@ class StackingService {
             }
             
             // Проверяем размерность входных данных
-            if (features.length !== 10) { // 5 источников * 2 (score + confidence)
-                throw new Error(`Invalid features length: expected 10, got ${features.length}`);
+            if (features.length !== expectedInputSize) {
+                throw new Error(`Invalid features length: expected ${expectedInputSize}, got ${features.length}`);
             }
             
             const inputTensor = tf.tensor2d([features]);

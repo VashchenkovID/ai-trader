@@ -51,7 +51,7 @@ async function testBackupFunctionality() {
     // 2. Проверка инициализации BackupService
     console.log('\n2️⃣ Проверка BackupService...');
     try {
-        const BackupService = (await import('./src/services/BackupService.js')).default;
+        const BackupService = (await import('../src/services/BackupService.js')).default;
         
         if (!BackupService.isInitialized) {
             console.log('   ⚠️ BackupService не инициализирован, инициализируем...');

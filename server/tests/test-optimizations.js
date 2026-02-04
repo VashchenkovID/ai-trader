@@ -2,9 +2,9 @@
  * Тестовый скрипт для проверки оптимизаций
  */
 
-import sequelize from './src/config/database.js';
-import { SchedulerService } from './src/services/SchedulerService.js';
-import CacheServiceInstance from './src/services/CacheService.js';
+import sequelize from '../src/config/database.js';
+import { SchedulerService } from '../src/services/SchedulerService.js';
+import CacheServiceInstance from '../src/services/CacheService.js';
 
 console.log('🧪 Тестирование оптимизаций...\n');
 

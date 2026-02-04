@@ -493,6 +493,86 @@ class EntryOptimizationService {
     }
 
     /**
+     * Анализ точки входа (комплексный анализ для создания торговой заявки)
+     * @param {Object} signal - Торговый сигнал
+     * @param {Object} options - Опции анализа
+     * @returns {Promise<Object>} Результат анализа точки входа
+     */
+    async analyzeEntry(signal, options = {}) {
+        try {
+            if (!this.isInitialized) {
+                await this.initialize();
+            }
+
+            if (!signal || !signal.figi) {
+                return {
+                    recommendation: 'error',
+                    reason: 'Invalid signal: missing figi'
+                };
+            }
+
+            const { figi, price, action } = signal;
+
+            // Получаем рекомендацию по времени входа
+            const entryTimeAnalysis = await this.predictOptimalEntryTime(figi, options);
+            
+            // Получаем рекомендацию по типу ордера
+            const orderTypeAnalysis = await this.recommendOrderType(figi, signal, options);
+
+            // Определяем общую рекомендацию
+            let recommendation = 'limit_order'; // По умолчанию
+            let recommendedPrice = price;
+            let reason = '';
+
+            if (entryTimeAnalysis.success) {
+                if (entryTimeAnalysis.optimalTime === 'now' || entryTimeAnalysis.optimalTime === 'soon') {
+                    recommendation = orderTypeAnalysis.orderType === 'MARKET' ? 'market_order' : 'limit_order';
+                    recommendedPrice = orderTypeAnalysis.recommendedPrice || price;
+                    reason = `Оптимальное время входа: ${entryTimeAnalysis.optimalTime}. ${orderTypeAnalysis.reasoning || ''}`;
+                } else if (entryTimeAnalysis.optimalTime === 'wait') {
+                    recommendation = 'wait';
+                    reason = `Рекомендуется подождать: ${entryTimeAnalysis.reason || 'Неблагоприятные условия для входа'}`;
+                } else {
+                    recommendation = 'avoid';
+                    reason = `Вход не рекомендуется: ${entryTimeAnalysis.reason || 'Плохие условия для входа'}`;
+                }
+            } else {
+                // Если анализ не удался, используем рекомендацию по типу ордера
+                recommendation = orderTypeAnalysis.orderType === 'MARKET' ? 'market_order' : 'limit_order';
+                recommendedPrice = orderTypeAnalysis.recommendedPrice || price;
+                reason = orderTypeAnalysis.reasoning || 'Анализ времени входа недоступен, используем рекомендацию по типу ордера';
+            }
+
+            return {
+                recommendation,
+                recommendedPrice,
+                orderType: orderTypeAnalysis.orderType,
+                confidence: Math.min(entryTimeAnalysis.confidence || 0.5, orderTypeAnalysis.confidence || 0.5),
+                reason,
+                entryTime: entryTimeAnalysis.optimalTime,
+                spread: orderTypeAnalysis.spread,
+                indicators: {
+                    rsi: entryTimeAnalysis.features?.rsi,
+                    macd: entryTimeAnalysis.features?.macd,
+                    volatility: entryTimeAnalysis.features?.volatility
+                }
+            };
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error analyzing entry', {
+                    service: 'EntryOptimizationService',
+                    operation: 'analyzeEntry',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
+            return {
+                recommendation: 'error',
+                reason: error.message || 'Failed to analyze entry point'
+            };
+        }
+    }
+
+    /**
      * Эвристическое предсказание входа (fallback, если модель не обучена)
      * @private
      */

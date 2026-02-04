@@ -3,8 +3,8 @@
  * Запуск: node test-data-quality.js
  */
 
-import DataQualityService from './src/services/DataQualityService.js';
-import OptimizedAnalysisService from './src/services/OptimizedAnalysisService.js';
+import DataQualityService from '../src/services/DataQualityService.js';
+import OptimizedAnalysisService from '../src/services/OptimizedAnalysisService.js';
 
 async function testDataQualityService() {
     console.log('🧪 Тестирование DataQualityService...\n');
