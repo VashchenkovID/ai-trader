@@ -2579,10 +2579,11 @@ class SchedulerService {
             if (workerId) {
                 const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
                 WorkerMonitoringService.updateWorkerStatus(workerId, {
-                    progress: 5,
+                    progress: 2,
                     metadata: {
                         currentStage: 'Проверка деградации моделей',
-                        stage: 'degradation_check'
+                        stage: 'degradation_check',
+                        substage: 'starting'
                     }
                 });
             }
@@ -2590,10 +2591,23 @@ class SchedulerService {
             // Сначала проверяем деградацию и восстанавливаем best-модели
             await this.checkDegradationAndRestoreAll();
 
+            // Обновляем статус: проверка необходимости переобучения
+            if (workerId) {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                    progress: 5,
+                    metadata: {
+                        currentStage: 'Проверка необходимости переобучения',
+                        stage: 'retrain_check',
+                        substage: 'checking_models'
+                    }
+                });
+            }
+
             // Проверяем, нужно ли переобучение
             if (!force) {
                 // Для ручного запуска: пропускаем обучение, если не требуется
-                const shouldRetrain = await this.shouldRetrainModel();
+                const shouldRetrain = await this.shouldRetrainModel(null, workerId);
                 if (!shouldRetrain) {
                     console.log('ℹ️ [Full Training] Обучение не требуется по результатам проверки shouldRetrainModel');
                     if (LoggerService.isInitialized) {
@@ -2629,7 +2643,7 @@ class SchedulerService {
             } else {
                 // Для планового обучения (force: true): проверяем, но не прерываем процесс
                 // Отправляем предупреждение, если переобучение не обязательно, но продолжаем обучение
-                const shouldRetrain = await this.shouldRetrainModel();
+                const shouldRetrain = await this.shouldRetrainModel(null, workerId);
                 if (!shouldRetrain) {
                     console.log('⚠️ [Full Training] Плановое обучение: переобучение не обязательно, но продолжаем (force: true)');
                     // Отправляем предупреждение в Telegram, но не прерываем процесс
@@ -2649,23 +2663,52 @@ class SchedulerService {
             
             console.log('✅ [Full Training] Обучение требуется, начинаем полное обучение...');
 
+            // Обновляем статус: получение настроек
+            if (workerId) {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                    progress: 8,
+                    metadata: {
+                        currentStage: 'Получение настроек обучения',
+                        stage: 'preparation',
+                        substage: 'loading_settings'
+                    }
+                });
+            }
+
             // Получаем настройки
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
             const trainingDays = nnSettings.nn_retrain_days || parseInt(process.env.NN_TRAINING_DAYS) || 180;
             
+            // Обновляем статус: получение списка инструментов
+            if (workerId) {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.updateWorkerStatus(workerId, {
+                    progress: 9,
+                    metadata: {
+                        currentStage: 'Получение списка инструментов',
+                        stage: 'preparation',
+                        substage: 'loading_instruments',
+                        trainingDays
+                    }
+                });
+            }
+
             // Получаем все инструменты для обучения
             const instruments = await CacheService.getAllInstruments();
             
-            // Обновляем статус: подготовка
+            // Обновляем статус: подготовка завершена
             if (workerId) {
                 const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
                 WorkerMonitoringService.updateWorkerStatus(workerId, {
                     progress: 10,
                     metadata: {
-                        currentStage: 'Подготовка к обучению',
+                        currentStage: 'Подготовка к обучению завершена',
                         stage: 'preparation',
+                        substage: 'ready',
                         totalInstruments: instruments.length,
-                        trainingDays
+                        trainingDays,
+                        estimatedTimeMinutes: Math.round(instruments.length * 2)
                     }
                 });
             }
@@ -2729,7 +2772,7 @@ class SchedulerService {
                 }
                 
                 try {
-                    const shouldRetrain = await this.shouldRetrainModel(instrument.figi);
+                    const shouldRetrain = await this.shouldRetrainModel(instrument.figi, null, workerId);
                     if (!shouldRetrain && !force) {
                         continue;
                     }
@@ -3025,18 +3068,55 @@ class SchedulerService {
         }
     }
 
-    async shouldRetrainModel(figi = null) {
+    async shouldRetrainModel(figi = null, workerId = null) {
         try {
             const OptimizedTrainingService = getService('OptimizedTrainingService');
             
             // Если указан FIGI, проверяем per-FIGI модель
             if (figi && OptimizedTrainingService) {
-                return await this.shouldRetrainModelForFigi(figi, OptimizedTrainingService);
+                return await this.shouldRetrainModelForFigi(figi, OptimizedTrainingService, workerId);
+            }
+
+            // Обновляем статус для глобальной проверки
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 5,
+                            metadata: {
+                                stage: 'retrain_check',
+                                substage: 'checking_global_model',
+                                checkType: 'global'
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                }
             }
 
             // Проверяем, есть ли сохраненная модель
             const modelExists = NeuralNetworkService.model !== null;
             if (!modelExists) {
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                progress: 6,
+                                metadata: {
+                                    stage: 'retrain_check',
+                                    substage: 'model_not_found',
+                                    result: 'retrain_required',
+                                    reason: 'model_not_exists'
+                                }
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    }
+                }
                 return true;
             }
 
@@ -3057,12 +3137,52 @@ class SchedulerService {
                 const stats = await fs.stat(fullModelPath);
                 const ageInDays = (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24);
                 
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                progress: 7,
+                                metadata: {
+                                    stage: 'retrain_check',
+                                    substage: 'age_check',
+                                    modelAgeDays: Math.round(ageInDays * 100) / 100,
+                                    maxAgeDays: modelAge,
+                                    result: ageInDays > modelAge ? 'retrain_required' : 'retrain_not_needed',
+                                    reason: ageInDays > modelAge ? 'model_too_old' : 'model_fresh'
+                                }
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    }
+                }
+                
                 if (ageInDays > modelAge) {
                     return true;
                 }
                 
                 return false;
             } catch (error) {
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                progress: 7,
+                                metadata: {
+                                    stage: 'retrain_check',
+                                    substage: 'error',
+                                    result: 'retrain_required',
+                                    reason: 'check_failed',
+                                    error: error.message
+                                }
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    }
+                }
                 return true;
             }
         } catch (error) {
@@ -3074,7 +3194,7 @@ class SchedulerService {
     /**
      * Проверка необходимости переобучения для конкретного FIGI с учетом деградации
      */
-    async shouldRetrainModelForFigi(figi, OptimizedTrainingService) {
+    async shouldRetrainModelForFigi(figi, OptimizedTrainingService, workerId = null) {
         try {
             // 1. Проверяем возраст модели
             const fs = await import('fs/promises');
@@ -3093,15 +3213,70 @@ class SchedulerService {
                 const nnSettings = await SettingsService.getNeuralNetworkSettings();
                 const modelAge = nnSettings.nn_model_max_age_days || 7;
                 
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                metadata: {
+                                    stage: 'retrain_check',
+                                    substage: 'checking_age',
+                                    figi,
+                                    modelAgeDays: Math.round(ageInDays * 100) / 100,
+                                    maxAgeDays: modelAge,
+                                    ageCheckResult: ageInDays > modelAge ? 'too_old' : 'fresh'
+                                }
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    }
+                }
+                
                 if (ageInDays > modelAge) {
                     return true;
                 }
             } catch (error) {
                 // Модель не найдена - нужно обучить
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                metadata: {
+                                    stage: 'retrain_check',
+                                    substage: 'model_not_found',
+                                    figi,
+                                    result: 'retrain_required',
+                                    reason: 'model_file_not_found'
+                                }
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    }
+                }
                 return true;
             }
 
             // 2. Проверяем деградацию модели
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            metadata: {
+                                stage: 'retrain_check',
+                                substage: 'checking_degradation',
+                                figi
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                }
+            }
+
             try {
                 const bestMeta = await OptimizedTrainingService.loadBestMeta(figi);
                 if (bestMeta && bestMeta.bestAccuracy) {
@@ -3114,6 +3289,30 @@ class SchedulerService {
                             const degradation = bestMeta.bestAccuracy - currentMetrics.accuracy;
                             const degradationThreshold = 0.05; // 5% деградация
                             
+                            if (workerId) {
+                                try {
+                                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                                    if (WorkerMonitoringService.isInitialized) {
+                                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                            metadata: {
+                                                stage: 'retrain_check',
+                                                substage: 'degradation_checked',
+                                                figi,
+                                                bestAccuracy: bestMeta.bestAccuracy,
+                                                currentAccuracy: currentMetrics.accuracy,
+                                                degradation: Math.round(degradation * 10000) / 100,
+                                                degradationThreshold: degradationThreshold * 100,
+                                                degradationCheckResult: degradation > degradationThreshold ? 'degraded' : 'ok',
+                                                result: degradation > degradationThreshold ? 'retrain_required' : 'retrain_not_needed',
+                                                reason: degradation > degradationThreshold ? 'accuracy_degraded' : 'accuracy_ok'
+                                            }
+                                        });
+                                    }
+                                } catch (monitoringError) {
+                                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                                }
+                            }
+                            
                             if (degradation > degradationThreshold) {
                                 return true;
                             }
@@ -3123,6 +3322,24 @@ class SchedulerService {
             } catch (error) {
                 console.warn(`⚠️ Error checking degradation for ${figi}:`, error.message);
                 // В случае ошибки проверки деградации, проверяем только возраст
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                metadata: {
+                                    stage: 'retrain_check',
+                                    substage: 'degradation_check_error',
+                                    figi,
+                                    error: error.message,
+                                    fallback: 'age_check_only'
+                                }
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    }
+                }
             }
 
             return false;
@@ -3197,8 +3414,57 @@ class SchedulerService {
             let checked = 0;
             let degraded = 0;
             let restored = 0;
+            const totalInstruments = instruments.length;
 
-            for (const instrument of instruments) {
+            // Обновляем статус - получение списка инструментов
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 15,
+                            metadata: {
+                                stage: 'checking_degradation',
+                                totalInstruments,
+                                checked: 0,
+                                degraded: 0,
+                                restored: 0
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                }
+            }
+
+            for (let i = 0; i < instruments.length; i++) {
+                const instrument = instruments[i];
+                const progress = 15 + Math.floor((i / totalInstruments) * 80); // 15-95%
+                
+                // Обновляем прогресс для каждого инструмента
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                progress,
+                                metadata: {
+                                    stage: 'checking_degradation',
+                                    currentInstrument: i + 1,
+                                    totalInstruments,
+                                    currentTicker: instrument.ticker || instrument.figi?.substring(0, 10),
+                                    figi: instrument.figi,
+                                    checked,
+                                    degraded,
+                                    restored
+                                }
+                            });
+                        }
+                    } catch (monitoringError) {
+                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    }
+                }
+
                 try {
                     const model = await OptimizedTrainingService.loadModel(instrument.figi);
                     if (model) {
