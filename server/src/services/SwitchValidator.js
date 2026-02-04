@@ -772,6 +772,28 @@ class SwitchValidator {
                 });
             }
             
+            // Обновляем консистентность на основе обновленной истории сделок (даже если новых сделок не было)
+            if (riskStats.tradeHistory && riskStats.tradeHistory.length > 0) {
+                const consistency = this.calculateConsistency(riskStats);
+                if (consistency !== undefined && !isNaN(consistency) && isFinite(consistency)) {
+                    riskStats.stats.consistency = consistency;
+                    try {
+                        const LoggerService = (await import('./LoggerService.js')).default;
+                        if (LoggerService && LoggerService.isInitialized) {
+                            LoggerService.debug(`✅ Консистентность обновлена: ${(consistency * 100).toFixed(1)}% (сделок: ${riskStats.tradeHistory.length})`);
+                        }
+                    } catch (logError) {
+                        // Игнорируем ошибки логирования
+                    }
+                } else {
+                    // Консистентность не рассчитана
+                    riskStats.stats.consistency = 0;
+                }
+            } else {
+                // Если нет истории сделок, консистентность = 0
+                riskStats.stats.consistency = 0;
+            }
+            
         } catch (error) {
             console.warn('⚠️ Не удалось обновить статистику из портфеля для валидации:', error.message);
             // Продолжаем с существующими данными из RiskManagementService
