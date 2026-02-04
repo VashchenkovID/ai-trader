@@ -43,8 +43,8 @@ class QuickTrainingService {
             
             const startIndex = state.lastProcessedIndex;
             const selectedInstruments = [];
-            const ModelManager = (await import('../utils/ModelManager.js')).default;
-            const modelManager = new ModelManager();
+            // ModelManager экспортируется как синглтон (экземпляр), не как класс
+            const modelManager = (await import('../utils/ModelManager.js')).default;
             
             // Циклически проходим по списку инструментов
             for (let i = 0; i < allInstruments.length && selectedInstruments.length < batchSize; i++) {

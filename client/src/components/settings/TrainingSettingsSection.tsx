@@ -10,6 +10,7 @@ import { Select } from '../ui/Select/Select';
 import { apiService } from '../../services/apiService';
 import { Toast } from 'primereact/toast';
 import { Skeleton } from '../ui/Skeleton/Skeleton';
+import { workerMonitoringApi, Worker } from '../../services/workerMonitoringApi';
 import './TrainingSettingsSection.css';
 
 interface TrainingSettings {
@@ -92,6 +93,7 @@ const TrainingSettingsSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [startingTraining, setStartingTraining] = useState(false);
+  const [fullTrainingWorker, setFullTrainingWorker] = useState<Worker | null>(null);
   const toast = useRef<Toast>(null);
 
   useEffect(() => {
@@ -99,9 +101,27 @@ const TrainingSettingsSection: React.FC = () => {
     // Обновляем статус обучения каждые 10 секунд
     const interval = setInterval(() => {
       loadTrainingStatus();
+      loadFullTrainingWorker();
     }, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  // Загрузка информации о воркере полного обучения
+  const loadFullTrainingWorker = async () => {
+    try {
+      const data = await workerMonitoringApi.getWorkersStatus();
+      // Ищем воркер полного обучения (тип 'training' с trainingType: 'full')
+      const fullTraining = data.workers.find(
+        (w: Worker) => w.type === 'training' && 
+        w.status === 'running' && 
+        w.metadata?.trainingType === 'full'
+      );
+      setFullTrainingWorker(fullTraining || null);
+    } catch (error) {
+      // Игнорируем ошибки загрузки воркера
+      console.warn('Failed to load full training worker:', error);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -566,7 +586,43 @@ const TrainingSettingsSection: React.FC = () => {
           <Divider />
           
           <div className="training-settings-form">
-            {trainingStatus?.isTraining && (
+            {/* Отображение стадии полного обучения */}
+            {fullTrainingWorker && (
+              <Alert variant="info">
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>Полное обучение нейросетей</strong>
+                </div>
+                {fullTrainingWorker.metadata?.currentStage && (
+                  <div style={{ marginBottom: '4px', fontWeight: 600, color: 'var(--color-primary)' }}>
+                    Стадия: {fullTrainingWorker.metadata.currentStage}
+                  </div>
+                )}
+                {fullTrainingWorker.metadata?.trainingStage && fullTrainingWorker.metadata?.totalStages && (
+                  <div style={{ marginBottom: '4px' }}>
+                    Этап: {fullTrainingWorker.metadata.trainingStage} / {fullTrainingWorker.metadata.totalStages}
+                  </div>
+                )}
+                {fullTrainingWorker.metadata?.currentTicker && (
+                  <div style={{ marginBottom: '4px' }}>
+                    Инструмент: {fullTrainingWorker.metadata.currentTicker}
+                  </div>
+                )}
+                {fullTrainingWorker.metadata?.currentInstrument !== undefined && fullTrainingWorker.metadata?.totalInstruments !== undefined && (
+                  <div style={{ marginBottom: '4px' }}>
+                    Прогресс: {fullTrainingWorker.metadata.currentInstrument} / {fullTrainingWorker.metadata.totalInstruments} инструментов
+                  </div>
+                )}
+                {fullTrainingWorker.metadata?.remainingOperations !== undefined && (
+                  <div style={{ marginBottom: '4px' }}>
+                    Осталось операций: {fullTrainingWorker.metadata.remainingOperations}
+                  </div>
+                )}
+                <div>
+                  Прогресс: {Math.round(fullTrainingWorker.progress)}%
+                </div>
+              </Alert>
+            )}
+            {trainingStatus?.isTraining && !fullTrainingWorker && (
               <Alert variant="info">
                 {trainingStatus.currentInstrument 
                   ? `Обучение для ${trainingStatus.currentInstrument}...` 

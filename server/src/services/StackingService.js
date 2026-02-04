@@ -384,7 +384,27 @@ class StackingService {
             }
             
             // Предсказание
+            // Проверяем, что модель валидна и имеет правильную структуру
+            if (!this.metaModel || typeof this.metaModel.predict !== 'function') {
+                throw new Error('Meta model is not initialized or invalid');
+            }
+            
+            // Проверяем размерность входных данных
+            if (features.length !== 10) { // 5 источников * 2 (score + confidence)
+                throw new Error(`Invalid features length: expected 10, got ${features.length}`);
+            }
+            
             const inputTensor = tf.tensor2d([features]);
+            
+            // Проверяем совместимость размерности с моделью
+            if (this.metaModel.inputs && this.metaModel.inputs[0] && this.metaModel.inputs[0].shape) {
+                const expectedInputShape = this.metaModel.inputs[0].shape[1];
+                if (expectedInputShape !== features.length) {
+                    inputTensor.dispose();
+                    throw new Error(`Input shape mismatch: model expects ${expectedInputShape}, got ${features.length}`);
+                }
+            }
+            
             const prediction = this.metaModel.predict(inputTensor);
             const predictionValue = await prediction.data();
             inputTensor.dispose();
@@ -407,7 +427,20 @@ class StackingService {
             };
             
         } catch (error) {
-            LoggerService.error('❌ Failed to predict with stacking model:', error);
+            // Детальное логирование ошибки
+            LoggerService.error('❌ Failed to predict with stacking model', {
+                service: 'StackingService',
+                operation: 'predict',
+                error: {
+                    message: error.message,
+                    stack: error.stack,
+                    name: error.name
+                },
+                metaModelExists: !!this.metaModel,
+                basePredictionsCount: basePredictions?.length || 0,
+                basePredictions: basePredictions?.map(p => ({ source: p.source, score: p.score, confidence: p.confidence })) || []
+            });
+            
             // Fallback на простое среднее
             const avgScore = basePredictions.reduce((sum, p) => sum + (p.score || 0.5), 0) / basePredictions.length;
             const avgConfidence = basePredictions.reduce((sum, p) => sum + (p.confidence || 0.5), 0) / basePredictions.length;

@@ -293,6 +293,45 @@ export const WorkerStatusDashboard: React.FC<WorkerStatusDashboardProps> = ({ cl
                 )}
 
                 <div className="worker-details">
+                  {/* Стадия обучения - приоритетная информация для полного обучения */}
+                  {worker?.metadata?.currentStage && (
+                    <div className="detail-item highlight">
+                      <span className="detail-label">Стадия:</span>
+                      <span className="detail-value stage-value">{worker.metadata.currentStage}</span>
+                    </div>
+                  )}
+                  {/* Информация о прогрессе для полного обучения */}
+                  {worker.metadata.trainingStage && worker.metadata.totalStages && (
+                    <div className="detail-item">
+                      <span className="detail-label">Этап обучения:</span>
+                      <span className="detail-value">
+                        {worker.metadata.trainingStage} / {worker.metadata.totalStages}
+                      </span>
+                    </div>
+                  )}
+                  {/* Текущий инструмент */}
+                  {worker.metadata.currentTicker && (
+                    <div className="detail-item">
+                      <span className="detail-label">Инструмент:</span>
+                      <span className="detail-value">{worker.metadata.currentTicker}</span>
+                    </div>
+                  )}
+                  {/* Прогресс по инструментам */}
+                  {worker.metadata.currentInstrument !== undefined && worker.metadata.totalInstruments !== undefined && (
+                    <div className="detail-item">
+                      <span className="detail-label">Прогресс:</span>
+                      <span className="detail-value">
+                        {worker.metadata.currentInstrument} / {worker.metadata.totalInstruments} инструментов
+                      </span>
+                    </div>
+                  )}
+                  {/* Оставшиеся операции */}
+                  {worker.metadata.remainingOperations !== undefined && (
+                    <div className="detail-item">
+                      <span className="detail-label">Осталось операций:</span>
+                      <span className="detail-value">{worker.metadata.remainingOperations}</span>
+                    </div>
+                  )}
                   {worker.metadata.figi && (
                     <div className="detail-item">
                       <span className="detail-label">FIGI:</span>

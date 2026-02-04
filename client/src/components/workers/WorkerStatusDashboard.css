@@ -150,6 +150,14 @@
   color: var(--color-error);
 }
 
+.detail-item.highlight {
+  background: var(--color-surface-elevated);
+  padding: var(--spacing-2);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-primary);
+  font-weight: 600;
+}
+
 .detail-label {
   color: var(--color-text-secondary);
   font-weight: 500;
@@ -158,6 +166,12 @@
 
 .detail-value {
   color: var(--color-text-primary);
+}
+
+.detail-value.stage-value {
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 0.9375rem;
 }
 
 .error-message {

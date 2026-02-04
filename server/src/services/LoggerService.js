@@ -119,7 +119,7 @@ class LoggerService {
                     };
 
                     // В production возвращаем JSON, в development - читаемый формат
-                    if (process.env.NODE_ENV === 'production') {
+                    if (process.env.NODE_ENV !== 'production') {
                         // Сериализуем только после очистки
                         try {
                             return JSON.stringify(logEntry);
@@ -244,7 +244,7 @@ class LoggerService {
 
             // Создаем логгер
             this.logger = winston.createLogger({
-                level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
+                level: process.env.LOG_LEVEL || (process.env.NODE_ENV !== 'production' ? 'info' : 'debug'),
                 format: logFormat,
                 defaultMeta: {
                     service: 'ai-trader',
