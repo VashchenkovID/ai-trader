@@ -98,6 +98,28 @@ class SwitchValidator {
             await this.updateStatsFromPortfolio(riskStats);
             const checks = await this.performValidationChecks(riskStats, this.fullTradingCriteria);
             
+            // Логируем обновленные данные для отладки
+            const LoggerService = (await import('./LoggerService.js')).default;
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.debug('SwitchValidator.canSwitchToFull: обновленные данные', {
+                    service: 'SwitchValidator',
+                    operation: 'canSwitchToFull',
+                    stats: {
+                        winRate: riskStats.stats.winRate,
+                        totalTrades: riskStats.stats.totalTrades,
+                        sharpeRatio: riskStats.stats.sharpeRatio,
+                        profitFactor: riskStats.stats.profitFactor,
+                        maxDrawdown: riskStats.stats.maxDrawdown,
+                        totalPnL: riskStats.stats.totalPnL
+                    },
+                    checks: {
+                        profitability: checks.profitability?.details,
+                        consistency: checks.consistency?.details,
+                        riskMetrics: checks.riskMetrics?.details
+                    }
+                });
+            }
+            
             const validation = {
                 canSwitch: checks.allPassed,
                 targetMode: 'full',
@@ -142,8 +164,14 @@ class SwitchValidator {
      */
     checkProfitability(stats, criteria) {
         const profitableMonths = this.calculateProfitableMonths(stats);
-        const winRate = stats.stats.winRate || 0;
-        const profitFactor = stats.stats.profitFactor || 0;
+        // Используем обновленный win rate из портфеля
+        const winRate = stats.stats.winRate !== undefined && stats.stats.winRate !== null 
+            ? stats.stats.winRate 
+            : 0;
+        // Используем обновленный profitFactor из портфеля
+        const profitFactor = (stats.stats.profitFactor !== undefined && stats.stats.profitFactor !== null && isFinite(stats.stats.profitFactor))
+            ? stats.stats.profitFactor
+            : 0;
         
         const checks = {
             profitableMonths: {
@@ -222,7 +250,10 @@ class SwitchValidator {
     checkRiskMetrics(stats, criteria) {
         const currentDrawdown = stats.stats.currentDrawdown || 0;
         const maxDrawdown = stats.stats.maxDrawdown || 0;
-        const sharpeRatio = this.calculateSharpeRatio(stats);
+        // Используем sharpeRatio из обновленных данных портфеля, если доступен
+        const sharpeRatio = (stats.stats.sharpeRatio !== undefined && stats.stats.sharpeRatio !== null && !isNaN(stats.stats.sharpeRatio)) 
+            ? stats.stats.sharpeRatio 
+            : this.calculateSharpeRatio(stats);
         
         const checks = {
             currentDrawdown: {
@@ -563,9 +594,13 @@ class SwitchValidator {
             const pnlResult = await calculatePnLFromPositions(portfolio, positionsByFigi, rawPositions);
             
             // Обновляем win rate из актуальных данных портфеля
-            if (pnlResult.winRate !== undefined && pnlResult.winRate !== null) {
+            // Win rate должен рассчитываться только при достаточном количестве сделок
+            if (pnlResult.winRate !== undefined && pnlResult.winRate !== null && pnlResult.totalTrades >= 3) {
                 // winRate уже в диапазоне 0-1 из calculatePnLFromPositions
                 riskStats.stats.winRate = pnlResult.winRate;
+            } else if (pnlResult.totalTrades < 3) {
+                // При малом количестве сделок win rate не считается надежным
+                riskStats.stats.winRate = 0;
             }
             
             // Обновляем totalTrades из актуальных данных
@@ -574,13 +609,167 @@ class SwitchValidator {
             }
             
             // Обновляем Sharpe ratio если доступен
-            if (pnlResult.sharpeRatio !== undefined && pnlResult.sharpeRatio !== null) {
+            if (pnlResult.sharpeRatio !== undefined && pnlResult.sharpeRatio !== null && !isNaN(pnlResult.sharpeRatio) && isFinite(pnlResult.sharpeRatio)) {
                 riskStats.stats.sharpeRatio = pnlResult.sharpeRatio;
             }
             
             // Обновляем totalPnL
             if (pnlResult.totalPnL !== undefined && pnlResult.totalPnL !== null) {
                 riskStats.stats.totalPnL = pnlResult.totalPnL;
+            }
+            
+            // Обновляем profitFactor из актуальных данных
+            // profitFactor = (сумма прибыльных сделок) / (сумма убыточных сделок)
+            if (pnlResult.totalTrades > 0) {
+                // Получаем закрытые сделки для расчета profitFactor
+                const closedTrades = [];
+                for (const [figi, figiData] of positionsByFigi.entries()) {
+                    if (figiData.strategies.length === 0) continue;
+                    for (const strategyData of figiData.strategies) {
+                        const { buyTrades, sellTrades } = strategyData;
+                        if (sellTrades.length === 0) continue;
+                        
+                        const availableBuys = buyTrades.map(t => ({
+                            quantity: t.quantity,
+                            price: t.price,
+                            executedAt: t.executedAt,
+                            used: 0
+                        }));
+                        
+                        for (const sellTrade of sellTrades) {
+                            const sellQuantity = sellTrade.quantity || 0;
+                            const sellPrice = sellTrade.price || 0;
+                            let remainingSellQty = sellQuantity;
+                            
+                            if (sellQuantity <= 0 || sellPrice <= 0) continue;
+                            
+                            availableBuys.sort((a, b) => new Date(a.executedAt) - new Date(b.executedAt));
+                            
+                            for (const buyTrade of availableBuys) {
+                                if (remainingSellQty <= 0) break;
+                                const availableQty = buyTrade.quantity - buyTrade.used;
+                                if (availableQty <= 0) continue;
+                                
+                                const qtyToSell = Math.min(remainingSellQty, availableQty);
+                                const buyPrice = buyTrade.price || 0;
+                                
+                                if (buyPrice > 0) {
+                                    const tradePnL = (sellPrice - buyPrice) * qtyToSell;
+                                    if (!isNaN(tradePnL) && isFinite(tradePnL)) {
+                                        closedTrades.push({ pnl: tradePnL });
+                                    }
+                                }
+                                
+                                buyTrade.used += qtyToSell;
+                                remainingSellQty -= qtyToSell;
+                            }
+                        }
+                    }
+                }
+                
+                // Рассчитываем profitFactor
+                const totalWins = closedTrades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
+                const totalLosses = Math.abs(closedTrades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
+                if (totalLosses > 0) {
+                    riskStats.stats.profitFactor = totalWins / totalLosses;
+                } else if (totalWins > 0) {
+                    riskStats.stats.profitFactor = Infinity; // Все сделки прибыльные
+                } else {
+                    riskStats.stats.profitFactor = 0;
+                }
+            }
+            
+            // Обновляем maxDrawdown из актуальных данных портфеля
+            // Рассчитываем просадку на основе unrealizedPnL и realizedPnL
+            const initialCapital = portfolio?.initialCapital || 1000000;
+            if (initialCapital > 0 && pnlResult.totalPnL !== undefined) {
+                const currentValue = initialCapital + pnlResult.totalPnL;
+                // Просадка = (initialCapital - currentValue) / initialCapital, если currentValue < initialCapital
+                if (currentValue < initialCapital) {
+                    const drawdown = (initialCapital - currentValue) / initialCapital;
+                    riskStats.stats.maxDrawdown = Math.max(riskStats.stats.maxDrawdown || 0, drawdown);
+                    riskStats.stats.currentDrawdown = drawdown;
+                } else {
+                    riskStats.stats.currentDrawdown = 0;
+                }
+            }
+            
+            // Обновляем tradeHistory для расчета confidence и consistency
+            // Собираем закрытые сделки из портфеля
+            const closedTradesForHistory = [];
+            for (const [figi, figiData] of positionsByFigi.entries()) {
+                if (figiData.strategies.length === 0) continue;
+                for (const strategyData of figiData.strategies) {
+                    const { buyTrades, sellTrades } = strategyData;
+                    if (sellTrades.length === 0) continue;
+                    
+                    const availableBuys = buyTrades.map(t => ({
+                        quantity: t.quantity,
+                        price: t.price,
+                        executedAt: t.executedAt,
+                        used: 0
+                    }));
+                    
+                    for (const sellTrade of sellTrades) {
+                        const sellQuantity = sellTrade.quantity || 0;
+                        const sellPrice = sellTrade.price || 0;
+                        let remainingSellQty = sellQuantity;
+                        
+                        if (sellQuantity <= 0 || sellPrice <= 0) continue;
+                        
+                        availableBuys.sort((a, b) => new Date(a.executedAt) - new Date(b.executedAt));
+                        
+                        for (const buyTrade of availableBuys) {
+                            if (remainingSellQty <= 0) break;
+                            const availableQty = buyTrade.quantity - buyTrade.used;
+                            if (availableQty <= 0) continue;
+                            
+                            const qtyToSell = Math.min(remainingSellQty, availableQty);
+                            const buyPrice = buyTrade.price || 0;
+                            
+                            if (buyPrice > 0) {
+                                const tradePnL = (sellPrice - buyPrice) * qtyToSell;
+                                if (!isNaN(tradePnL) && isFinite(tradePnL)) {
+                                    closedTradesForHistory.push({
+                                        pnl: tradePnL,
+                                        confidence: 0.5, // По умолчанию, если нет данных о confidence
+                                        executedAt: sellTrade.executedAt || new Date()
+                                    });
+                                }
+                            }
+                            
+                            buyTrade.used += qtyToSell;
+                            remainingSellQty -= qtyToSell;
+                        }
+                    }
+                }
+            }
+            
+            // Обновляем tradeHistory для расчета confidence и consistency
+            if (closedTradesForHistory.length > 0) {
+                // Объединяем с существующей историей, убирая дубликаты
+                const existingHistory = riskStats.tradeHistory || [];
+                const historyMap = new Map();
+                
+                // Добавляем существующие сделки
+                existingHistory.forEach(trade => {
+                    const key = `${trade.executedAt || trade.timestamp || Date.now()}_${trade.pnl || 0}`;
+                    historyMap.set(key, trade);
+                });
+                
+                // Добавляем новые сделки
+                closedTradesForHistory.forEach(trade => {
+                    const key = `${trade.executedAt || Date.now()}_${trade.pnl || 0}`;
+                    if (!historyMap.has(key)) {
+                        historyMap.set(key, trade);
+                    }
+                });
+                
+                riskStats.tradeHistory = Array.from(historyMap.values()).sort((a, b) => {
+                    const dateA = new Date(a.executedAt || a.timestamp || 0);
+                    const dateB = new Date(b.executedAt || b.timestamp || 0);
+                    return dateA - dateB;
+                });
             }
             
         } catch (error) {
