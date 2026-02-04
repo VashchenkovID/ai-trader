@@ -34,9 +34,9 @@ class ApiRequestQueue {
         // Rate limiting настройки
         this.rateLimiter = {
             // Token bucket для rate limiting
-            tokens: 20, // Текущее количество токенов
-            maxTokens: 20, // Максимальное количество токенов
-            refillRate: 10, // Токенов в секунду
+            tokens: 50, // Текущее количество токенов (увеличено для более плавной работы)
+            maxTokens: 50, // Максимальное количество токенов (увеличено)
+            refillRate: 20, // Токенов в секунду (увеличено для более быстрого пополнения)
             lastRefill: Date.now()
         };
         
@@ -314,8 +314,8 @@ class ApiRequestQueue {
                         this.rateLimiter.tokens++;
                         nextRequest.priority = Math.max(10, nextRequest.priority - 20);
                         this.queue.unshift(nextRequest); // Добавляем в начало для повторной обработки
-                        // Увеличиваем задержку перед следующей попыткой
-                        setTimeout(() => this.processQueue(), 5000);
+                        // Увеличиваем задержку перед следующей попыткой (смягчено с 5000ms до 2000ms)
+                        setTimeout(() => this.processQueue(), 2000);
                     } else {
                         nextRequest.reject(error);
                     }

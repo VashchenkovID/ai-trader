@@ -97,6 +97,9 @@ class SchedulerService {
 
     async initialize() {
         try {
+            // Сбрасываем флаги при инициализации (защита от зависших состояний после рестарта)
+            this.isTraining = false;
+            this.isAnalyzing = false;
             
             // Загружаем время последнего обновления кеша из настроек
             await this.loadLastCacheUpdateTime();

@@ -12,7 +12,7 @@ class TinkoffApiService {
     constructor() {
         this.baseUrl = process.env.TINKOFF_API_URL || 'https://invest-public-api.tinkoff.ru/rest';
         this.token = process.env.TINKOFF_TOKEN || 't.1234567890abcdef';
-        this.requestDelay = 1000; // Задержка между запросами в мс (увеличено для избежания rate limiting)
+        this.requestDelay = 500; // Задержка между запросами в мс (смягчено для более быстрого обновления цен)
         this.maxRetries = 5; // Увеличено количество повторов
         this.retryDelay = 2000; // Задержка перед повтором в мс (увеличено)
         this.lastRequestTime = 0;
@@ -155,9 +155,9 @@ class TinkoffApiService {
             }
         }, {
             maxRetries: this.maxRetries,
-            initialDelay: 2000,
-            maxDelay: 30000,
-            exponentialBase: 2,
+            initialDelay: 1000, // Смягчено с 2000ms до 1000ms для более быстрого восстановления
+            maxDelay: 15000, // Смягчено с 30000ms до 15000ms для более быстрого восстановления
+            exponentialBase: 1.5, // Смягчено с 2 до 1.5 для более плавного увеличения задержки
             jitter: true,
             retryableStatusCodes: [429, 500, 502, 503, 504],
             retryableErrors: ['ECONNRESET', 'ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'timeout', 'AbortError'],

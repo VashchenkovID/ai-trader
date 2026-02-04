@@ -63,7 +63,7 @@ class QuickTrainingService {
                 // Проверяем базовую модель (основная модель для инструмента)
                 let canTrain = true;
                 try {
-                    const modelName = `neural-network/${instrument.figi}`;
+                    const modelName = `neural/${instrument.figi}`;
                     const modelInfo = await modelManager.getModelInfo(modelName);
                     
                     if (modelInfo && modelInfo.modified) {

@@ -71,6 +71,16 @@ class StackingService {
             // Пытаемся загрузить существующую модель
             await this.loadModel();
             
+            // Если модель не загружена, создаем новую с дефолтными параметрами
+            // Модель будет обучена позже, когда накопится достаточно данных
+            if (!this.metaModel) {
+                LoggerService.info('📚 No existing stacking model found, creating new model structure');
+                // Создаем модель с дефолтным размером входа (10 фичей: 5 источников * 2)
+                const defaultInputSize = 10; // 5 источников (ensemble, traditional, reinforcement, signals, news) * 2 (score + confidence)
+                this.metaModel = this.createMetaModel(defaultInputSize);
+                LoggerService.info('✅ New stacking model structure created (will be trained when data is available)');
+            }
+            
             this.isInitialized = true;
             LoggerService.info('✅ Stacking Service initialized');
         } catch (error) {
@@ -539,7 +549,14 @@ class StackingService {
             LoggerService.info('✅ Stacking model loaded');
             
         } catch (error) {
-            LoggerService.warn('⚠️ Failed to load stacking model:', error.message);
+            LoggerService.warn('⚠️ Failed to load stacking model:', {
+                service: 'StackingService',
+                operation: 'loadModel',
+                error: {
+                    message: error?.message || String(error),
+                    name: error?.name
+                }
+            });
             // Продолжаем без модели, будет использован fallback
         }
     }

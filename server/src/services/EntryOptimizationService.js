@@ -2,6 +2,9 @@ import * as tf from '@tensorflow/tfjs';
 import OptimizedAnalysisService from './OptimizedAnalysisService.js';
 import CacheService from './CacheService.js';
 import LoggerService from './LoggerService.js';
+import ModelManager from '../utils/ModelManager.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Фаза 4, задача 4.2: ML для Entry Optimization
@@ -9,11 +12,14 @@ import LoggerService from './LoggerService.js';
  * Сервис для оптимизации точек входа в позиции с использованием машинного обучения.
  * Предсказывает оптимальное время входа, размер ордера и тип ордера.
  */
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 class EntryOptimizationService {
     constructor() {
         this.isInitialized = false;
         this.model = null;
-        this.modelPath = './models/entry_optimization_model.json';
+        this.modelPath = path.join(__dirname, '../../models');
         this.isTraining = false;
         this.featureCache = new Map(); // Кеш для features
     }
@@ -703,13 +709,35 @@ class EntryOptimizationService {
      */
     async loadModel() {
         try {
-            // В реальной системе здесь была бы загрузка сохраненной модели
-            // Для упрощения модель создается при первом обучении
-            this.model = null;
+            // Пытаемся загрузить модель через ModelManager
+            const model = await ModelManager.loadModel('entry_optimization/entry_model');
+            
+            if (model) {
+                // Компилируем модель, если она не скомпилирована
+                if (!model.optimizer) {
+                    model.compile({
+                        optimizer: 'adam',
+                        loss: 'binaryCrossentropy',
+                        metrics: ['accuracy']
+                    });
+                }
+                
+                this.model = model;
+                
+                if (LoggerService.isInitialized) {
+                    LoggerService.info('Entry optimization model loaded', {
+                        service: 'EntryOptimizationService'
+                    });
+                }
+            } else {
+                // Модель не найдена - это нормально, будет создана при первом обучении
+                this.model = null;
+            }
         } catch (error) {
             if (LoggerService.isInitialized) {
                 LoggerService.warn('Model not found, will train on first use', {
-                    service: 'EntryOptimizationService'
+                    service: 'EntryOptimizationService',
+                    error: { message: error.message }
                 });
             }
             this.model = null;
@@ -723,14 +751,26 @@ class EntryOptimizationService {
     async saveModel() {
         try {
             if (this.model) {
-                // В реальной системе здесь было бы сохранение модели
-                // await this.model.save(`file://${this.modelPath}`);
+                const success = await ModelManager.saveModel(this.model, 'entry_optimization/entry_model');
+                if (success) {
+                    if (LoggerService.isInitialized) {
+                        LoggerService.info('Entry optimization model saved', {
+                            service: 'EntryOptimizationService'
+                        });
+                    }
+                } else {
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('Failed to save entry optimization model', {
+                            service: 'EntryOptimizationService'
+                        });
+                    }
+                }
             }
         } catch (error) {
             if (LoggerService.isInitialized) {
                 LoggerService.error('Error saving model', {
                     service: 'EntryOptimizationService',
-                    error: { message: error.message }
+                    error: { message: error.message, stack: error.stack }
                 });
             }
         }
