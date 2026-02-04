@@ -153,12 +153,14 @@ class LoggerService {
             // Создаем транспорты с ротацией по размеру
             const transports = [
                 // Все логи с ротацией по размеру
+                // В production: только warn и error
+                // В development: info и выше
                 new winston.transports.File({
                     filename: path.join(logDir, 'combined.log'),
                     maxsize: 20 * 1024 * 1024, // 20MB
                     maxFiles: 14, // Хранить 14 файлов (14 дней при 20MB в день)
                     format: logFormat,
-                    level: 'info',
+                    level: process.env.NODE_ENV === 'production' ? 'warn' : 'info',
                     tailable: true // Старые файлы переименовываются в combined.log.1, combined.log.2 и т.д.
                 }),
 
@@ -174,10 +176,11 @@ class LoggerService {
             ];
 
             // В консоль выводим только предупреждения и ошибки (warn, error)
-            // Информационные логи (info, debug) идут только в файлы
+            // В production: только warn и error в консоль
+            // В development: warn и error в консоль, info и debug только в файлы
             transports.push(
                 new winston.transports.Console({
-                    level: 'warn', // Только warn и error в консоль
+                    level: 'warn', // Только warn и error в консоль (всегда)
                     format: winston.format.combine(
                         winston.format.colorize(),
                         winston.format.printf((info) => {
@@ -252,9 +255,15 @@ class LoggerService {
                 })
             );
 
+            // Определяем уровень логирования
+            // В production: только warn и error (в консоль и файлы)
+            // В development: info и выше (в файлы), warn и error (в консоль)
+            const isProduction = process.env.NODE_ENV === 'production';
+            const logLevel = process.env.LOG_LEVEL || (isProduction ? 'warn' : 'info');
+            
             // Создаем логгер
             this.logger = winston.createLogger({
-                level: process.env.LOG_LEVEL || (process.env.NODE_ENV !== 'production' ? 'info' : 'debug'),
+                level: logLevel,
                 format: logFormat,
                 defaultMeta: {
                     service: 'ai-trader',
@@ -541,8 +550,16 @@ class LoggerService {
         const ip = req.ip || req.connection?.remoteAddress || 'unknown';
         const userAgent = req.get('user-agent') || 'unknown';
 
+        // В production логируем только ошибки и предупреждения
+        // В development логируем все запросы
+        const isProduction = process.env.NODE_ENV === 'production';
         const level = statusCode >= 500 ? 'error' :
-            statusCode >= 400 ? 'warn' : 'info';
+            statusCode >= 400 ? 'warn' : (isProduction ? null : 'info');
+        
+        // В production пропускаем успешные запросы (info)
+        if (isProduction && level === null) {
+            return;
+        }
 
         // Используем замаскированные данные если они доступны (через middleware secretMasking)
         const body = req._maskedBody !== undefined ? req._maskedBody : req.body;
@@ -652,7 +669,15 @@ class LoggerService {
     logApiCall(service, endpoint, method, duration = null, meta = {}) {
         if (!this.isInitialized) return;
 
-        const level = duration && duration > 5000 ? 'warn' : 'info';
+        // В production логируем только медленные запросы (warn) и ошибки
+        // В development логируем все запросы
+        const isProduction = process.env.NODE_ENV === 'production';
+        const level = duration && duration > 5000 ? 'warn' : (isProduction ? null : 'info');
+        
+        // В production пропускаем быстрые успешные запросы (info)
+        if (isProduction && level === null) {
+            return;
+        }
 
         this._log(level, `API call: ${service} ${method} ${endpoint}`, {
             service: 'ExternalAPI',

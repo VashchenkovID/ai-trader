@@ -3017,7 +3017,16 @@ class NeuralNetworkService {
                 // Импортируем OptimizedTelegramService, если еще не импортирован
                 const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
                 if (OptimizedTelegramService && OptimizedTelegramService.isInitialized) {
-                    const buyCount = analysis.buyRecommendations?.length || 0;
+                    // Разделяем рекомендации на покупку и удержание
+                    const buyRecommendations = analysis.buyRecommendations || [];
+                    const buyCount = buyRecommendations.filter(rec => {
+                        const recommendation = rec.prediction?.recommendation || rec.recommendation || 'BUY';
+                        return recommendation === 'BUY';
+                    }).length;
+                    const holdCount = buyRecommendations.filter(rec => {
+                        const recommendation = rec.prediction?.recommendation || rec.recommendation || 'BUY';
+                        return recommendation === 'HOLD';
+                    }).length;
                     const sellCount = analysis.sellRecommendations?.length || 0;
                     const portfolioValue = analysis.portfolioValue || 0;
                     const availableBudget = analysis.availableBudget || 0;
@@ -3025,10 +3034,11 @@ class NeuralNetworkService {
                     let message = `✅ <b>Анализ рынка завершен</b>\n\n`;
                     message += `📊 <b>Результаты:</b>\n`;
                     message += `• Рекомендаций на покупку: ${buyCount}\n`;
+                    message += `• Рекомендаций на удержание: ${holdCount}\n`;
                     message += `• Рекомендаций на продажу: ${sellCount}\n`;
                     message += `• Стоимость портфеля: ${portfolioValue.toFixed(2)} ₽\n`;
                     message += `• Доступный бюджет: ${availableBudget.toFixed(2)} ₽\n`;
-                    message += `\nВремя: ${new Date().toLocaleString('ru-RU')}`;
+
                     
                     await OptimizedTelegramService.sendAlert('MARKET_ANALYSIS_COMPLETE', message);
                 }
