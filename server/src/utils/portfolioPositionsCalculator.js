@@ -249,7 +249,6 @@ export async function calculatePositionsWithStrategies(portfolio, rawPositions, 
 export async function calculatePnLFromPositions(portfolio, positionsByFigi, rawPositions) {
     const CacheService = (await import('../services/CacheService.js')).default;
     const TradingEngine = (await import('../services/TradingEngine.js')).default;
-    const PnLCalculationService = (await import('../services/PnLCalculationService.js')).default;
     
     let calculatedPositionsValue = 0;
     let totalUnrealizedPnL = 0;
@@ -314,26 +313,82 @@ export async function calculatePnLFromPositions(portfolio, positionsByFigi, rawP
         }
     }
     
-    // Рассчитываем realized P&L из закрытых сделок
+    // Рассчитываем realized P&L напрямую из позиций (закрытых сделок)
     let realizedPnL = 0;
     let winRate = 0;
     let totalTrades = 0;
     let sharpeRatio = 0;
+    const closedTrades = []; // Массив закрытых сделок для расчета win rate и Sharpe ratio
     
-    try {
-        const pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
-            tradingMode: portfolio?.mode || 'paper',
-            includeTrades: true,
-            includePositions: false // Не используем позиции, так как уже рассчитали unrealized
-        });
-        realizedPnL = pnlData.realized?.total || 0;
-        // winRate из calculateRealizedPnL возвращается в процентах (0-100), конвертируем в диапазон 0-1
-        const winRatePercent = pnlData.summary?.winRate || 0;
-        winRate = winRatePercent / 100; // Конвертируем из процентов в диапазон 0-1
-        totalTrades = pnlData.summary?.totalTrades || 0;
+    // Проходим по всем позициям и считаем realized P&L из закрытых сделок
+    for (const [figi, figiData] of positionsByFigi.entries()) {
+        if (figiData.strategies.length === 0) continue;
+        
+        for (const strategyData of figiData.strategies) {
+            const { buyTrades, sellTrades } = strategyData;
+            
+            if (sellTrades.length === 0) continue;
+            
+            // Создаем копию buyTrades для FIFO списания
+            const availableBuys = buyTrades.map(t => ({
+                quantity: t.quantity,
+                price: t.price,
+                executedAt: t.executedAt,
+                used: 0 // Сколько уже использовано из этой покупки
+            }));
+            
+            // Обрабатываем каждую продажу (FIFO)
+            for (const sellTrade of sellTrades) {
+                const sellQuantity = sellTrade.quantity || 0;
+                const sellPrice = sellTrade.price || 0;
+                let remainingSellQty = sellQuantity;
+                
+                if (sellQuantity <= 0 || sellPrice <= 0) continue;
+                
+                // Сортируем покупки по дате (FIFO)
+                availableBuys.sort((a, b) => new Date(a.executedAt) - new Date(b.executedAt));
+                
+                // Списываем по FIFO
+                for (const buyTrade of availableBuys) {
+                    if (remainingSellQty <= 0) break;
+                    
+                    const availableQty = buyTrade.quantity - buyTrade.used;
+                    if (availableQty <= 0) continue;
+                    
+                    const qtyToSell = Math.min(remainingSellQty, availableQty);
+                    const buyPrice = buyTrade.price || 0;
+                    
+                    if (buyPrice > 0) {
+                        // Рассчитываем P&L для этой части сделки
+                        const tradePnL = (sellPrice - buyPrice) * qtyToSell;
+                        if (!isNaN(tradePnL) && isFinite(tradePnL)) {
+                            realizedPnL += tradePnL;
+                            
+                            // Сохраняем закрытую сделку для расчета win rate и Sharpe ratio
+                            closedTrades.push({
+                                pnl: tradePnL,
+                                quantity: qtyToSell,
+                                buyPrice,
+                                sellPrice,
+                                executedAt: sellTrade.executedAt || new Date()
+                            });
+                        }
+                    }
+                    
+                    buyTrade.used += qtyToSell;
+                    remainingSellQty -= qtyToSell;
+                }
+            }
+        }
+    }
+    
+    // Рассчитываем win rate и total trades
+    if (closedTrades.length > 0) {
+        totalTrades = closedTrades.length;
+        const profitableTrades = closedTrades.filter(t => t.pnl > 0).length;
+        winRate = profitableTrades / totalTrades; // В диапазоне 0-1
         
         // Рассчитываем Sharpe Ratio из закрытых сделок
-        const closedTrades = pnlData.realized?.trades || [];
         if (closedTrades.length > 1) {
             const initialCapital = portfolio?.initialCapital || 1000000;
             const returns = [];
@@ -341,8 +396,8 @@ export async function calculatePnLFromPositions(portfolio, positionsByFigi, rawP
             
             // Сортируем сделки по дате
             const sortedTrades = closedTrades.sort((a, b) => {
-                const dateA = new Date(a.exitDate || a.executedAt || 0);
-                const dateB = new Date(b.exitDate || b.executedAt || 0);
+                const dateA = new Date(a.executedAt || 0);
+                const dateB = new Date(b.executedAt || 0);
                 return dateA - dateB;
             });
             
@@ -370,8 +425,6 @@ export async function calculatePnLFromPositions(portfolio, positionsByFigi, rawP
                 }
             }
         }
-    } catch (error) {
-        // Игнорируем ошибки
     }
     
     const totalPnL = realizedPnL + totalUnrealizedPnL;
