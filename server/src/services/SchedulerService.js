@@ -138,8 +138,8 @@ class SchedulerService {
         const notificationSettings = await SettingsService.getNotificationSettings();
         // Инкрементальное обновление кеша 3 раза в день (02:00, 10:00, 18:00)
         const cacheSchedule = schedulerSettings.cache_update_interval || '0 2,10,18 * * *';
-        // Полное обучение ночью в 03:00 (после обновления кеша в 02:00, последовательно: Базовая → Ансамбль → Мета-обучение → RL)
-        const trainingSchedule = schedulerSettings.nn_training_schedule || '0 3 * * *';
+        // Полное обучение ночью в 03:00 понедельника (после обновления кеша в 02:00, последовательно: Базовая → Ансамбль → Мета-обучение → RL)
+        const trainingSchedule = schedulerSettings.nn_training_schedule || '0 3 * * 1';
         // Быстрое обучение каждые 2 часа в торговые часы: 08:00, 10:00, 12:00, 14:00, 16:00, 18:00
         const quickTrainingSchedule = schedulerSettings.nn_training_interval || '0 8,10,12,14,16,18 * * *';
         const newsCacheSchedule = notificationSettings.news_cache_update_interval || '0 */6 * * *';
