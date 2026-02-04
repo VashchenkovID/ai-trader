@@ -1153,11 +1153,14 @@ class TradingEngine {
         
         for (const trade of trades) {
             // Win Rate считаем только по SELL сделкам (закрытым позициям)
-            if (trade.action === 'SELL') {
+            // Проверяем и trade.action (для виртуальной торговли), и trade.type (для совместимости)
+            const isSell = trade.action === 'SELL' || trade.type === 'SELL';
+            
+            if (isSell) {
                 let tradePnL = null;
                 
                 // Используем уже рассчитанный PnL из сделки (учитывает комиссии)
-                if (trade.pnl !== undefined && trade.pnl !== null) {
+                if (trade.pnl !== undefined && trade.pnl !== null && !isNaN(trade.pnl) && isFinite(trade.pnl)) {
                     tradePnL = trade.pnl;
                 } else {
                     // Fallback: если PnL не рассчитан, рассчитываем с учетом комиссии
@@ -1166,7 +1169,9 @@ class TradingEngine {
                     const tradeFigi = trade.figi || trade.symbol || '';
                     
                     const buyTrades = trades.filter(t => {
-                        if (t.action !== 'BUY') return false;
+                        // Проверяем и action, и type для совместимости
+                        const isBuy = (t.action === 'BUY' || t.type === 'BUY');
+                        if (!isBuy) return false;
                         
                         // Проверяем совпадение по времени (BUY должен быть раньше SELL)
                         const buyTime = t.timestamp ? new Date(t.timestamp).getTime() : 0;
@@ -1191,8 +1196,8 @@ class TradingEngine {
                     }
                 }
                 
-                // Если PnL рассчитан, добавляем в статистику
-                if (tradePnL !== null && tradePnL !== undefined) {
+                // Если PnL рассчитан и валиден, добавляем в статистику
+                if (tradePnL !== null && tradePnL !== undefined && !isNaN(tradePnL) && isFinite(tradePnL)) {
                     totalReturn += tradePnL;
                     processedTrades++;
                     if (tradePnL > 0) {
@@ -1207,6 +1212,20 @@ class TradingEngine {
         // Win Rate считаем только по закрытым сделкам (с PnL)
         const winRate = processedTrades > 0 ? profitableTrades / processedTrades : 0;
         const averageTrade = processedTrades > 0 ? totalReturn / processedTrades : 0;
+
+        // Логируем для отладки
+        const LoggerService = (await import('./LoggerService.js')).default;
+        if (LoggerService && LoggerService.isInitialized && processedTrades > 0) {
+            LoggerService.debug('TradingEngine.calculateTradingStats: расчет статистики', {
+                service: 'TradingEngine',
+                mode,
+                totalTrades: trades.length,
+                processedTrades,
+                profitableTrades,
+                winRate: (winRate * 100).toFixed(2) + '%',
+                totalReturn: totalReturn.toFixed(2)
+            });
+        }
 
         return {
             totalTrades: processedTrades, // Возвращаем количество обработанных сделок

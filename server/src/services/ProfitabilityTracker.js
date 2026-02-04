@@ -569,11 +569,17 @@ class ProfitabilityTracker {
             
             const periodTrades = trades.filter(trade => {
                 const tradeDate = new Date(trade.timestamp || trade.date || trade.createdAt);
+                const hasValidPnL = trade.pnl !== null && 
+                                    trade.pnl !== undefined && 
+                                    !isNaN(trade.pnl) && 
+                                    isFinite(trade.pnl);
+                const isSell = (trade.action === 'SELL' || trade.type === 'SELL');
+                const isNotBuy = (trade.action !== 'BUY' && trade.type !== 'BUY');
+                
                 return tradeDate >= statsStartDate && 
                        tradeDate <= statsEndDate &&
-                       trade.pnl !== null && 
-                       trade.pnl !== undefined &&
-                       trade.type !== 'BUY';
+                       hasValidPnL &&
+                       (isSell || isNotBuy);
             }).sort((a, b) => {
                 const dateA = new Date(a.timestamp || a.date || a.createdAt);
                 const dateB = new Date(b.timestamp || b.date || b.createdAt);

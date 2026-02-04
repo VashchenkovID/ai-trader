@@ -53,16 +53,6 @@ const TradingModeSection: React.FC<TradingModeSectionProps> = ({ className = '' 
       requiresActivation: false
     },
     {
-      mode: 'micro',
-      name: '🔬 Микро-капитал',
-      description: 'Реальная торговля с минимальными суммами. Требует явной активации после переключения.',
-      icon: 'pi pi-flask',
-      riskLevel: 'Средний',
-      status: 'available',
-      canSwitch: true,
-      requiresActivation: true
-    },
-    {
       mode: 'real',
       name: '💰 Полная торговля',
       description: 'Полноценная реальная торговля. Требует явной активации и проверки готовности.',
@@ -196,23 +186,23 @@ const TradingModeSection: React.FC<TradingModeSectionProps> = ({ className = '' 
             setLoading(false);
           }
         });
-      } else {
-        if (newMode === 'micro' || newMode === 'real') {
-          confirmDialog({
-            message: `Вы уверены, что хотите переключиться на режим ${newMode.toUpperCase()}? Это активирует реальную торговлю.`,
-            header: 'Подтверждение переключения режима',
-            icon: 'pi pi-exclamation-triangle',
-            accept: async () => {
-              await performSwitch(newMode);
-            },
-            reject: () => {
-              setLoading(false);
-            }
-          });
         } else {
-          await performSwitch(newMode);
+          if (newMode === 'real') {
+            confirmDialog({
+              message: `Вы уверены, что хотите переключиться на режим REAL? Это активирует реальную торговлю.`,
+              header: 'Подтверждение переключения режима',
+              icon: 'pi pi-exclamation-triangle',
+              accept: async () => {
+                await performSwitch(newMode);
+              },
+              reject: () => {
+                setLoading(false);
+              }
+            });
+          } else {
+            await performSwitch(newMode);
+          }
         }
-      }
     } catch (error) {
       console.error('Error switching trading mode:', error);
       toast.current?.show({

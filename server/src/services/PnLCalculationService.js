@@ -185,6 +185,72 @@ class PnLCalculationService {
      */
     async getClosedTrades(tradingMode = 'real', startDate = null, endDate = null) {
         try {
+            // Для виртуальной торговли получаем сделки из TradingEngine
+            if (tradingMode === 'paper') {
+                const TradingEngine = (await import('./TradingEngine.js')).default;
+                const trades = await TradingEngine.getTradeHistory(10000); // Получаем все сделки
+                
+                // Фильтруем только SELL сделки с валидным PnL (закрытые позиции)
+                // В виртуальной торговле используется trade.action, а не trade.type
+                const closedTrades = trades.filter(trade => {
+                    const hasPnL = trade.pnl !== undefined && 
+                                   trade.pnl !== null && 
+                                   !isNaN(trade.pnl) && 
+                                   isFinite(trade.pnl);
+                    const isSell = (trade.action === 'SELL' || trade.type === 'SELL');
+                    const isNotBuy = (trade.action !== 'BUY' && trade.type !== 'BUY');
+                    
+                    // Фильтруем по дате, если указана
+                    let inDateRange = true;
+                    if (startDate || endDate) {
+                        const tradeDate = new Date(trade.timestamp || trade.date || trade.createdAt);
+                        if (startDate && tradeDate < new Date(startDate)) inDateRange = false;
+                        if (endDate && tradeDate > new Date(endDate)) inDateRange = false;
+                    }
+                    
+                    return hasPnL && (isSell || isNotBuy) && inDateRange;
+                });
+                
+                // Преобразуем в формат для расчета PnL
+                return closedTrades.map(trade => {
+                    // Находим соответствующую BUY сделку для расчета entryPrice
+                    const buyTrades = trades.filter(t => {
+                        const isBuy = (t.action === 'BUY' || t.type === 'BUY');
+                        const sameInstrument = (t.figi === trade.figi || t.symbol === trade.symbol || 
+                                               t.figi === trade.symbol || t.symbol === trade.figi);
+                        const buyTime = t.timestamp ? new Date(t.timestamp).getTime() : 0;
+                        const sellTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0;
+                        return isBuy && sameInstrument && buyTime < sellTime;
+                    });
+                    
+                    let entryPrice = trade.price; // Fallback
+                    if (buyTrades.length > 0) {
+                        const totalCost = buyTrades.reduce((sum, t) => 
+                            sum + (t.price * t.quantity) + (t.commission || 0), 0
+                        );
+                        const totalQuantity = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
+                        entryPrice = totalQuantity > 0 ? totalCost / totalQuantity : trade.price;
+                    }
+                    
+                    return {
+                        figi: trade.figi || trade.symbol,
+                        ticker: trade.ticker || trade.symbol,
+                        name: trade.name || trade.ticker || trade.symbol,
+                        entryPrice: entryPrice,
+                        exitPrice: trade.price,
+                        exitQuantity: trade.quantity,
+                        quantity: trade.quantity,
+                        commission: trade.commission || 0,
+                        realizedProfit: trade.pnl, // Используем уже рассчитанный PnL
+                        exitDate: trade.timestamp || trade.date || trade.createdAt,
+                        executedAt: trade.timestamp || trade.date || trade.createdAt,
+                        actualPrice: trade.price,
+                        priceAtRequest: trade.price
+                    };
+                });
+            }
+            
+            // Для реальной торговли используем PositionExit
             const PositionExit = (await import('../models/PositionExit.js')).default;
             const TradingRequest = (await import('../models/TradingRequest.js')).default;
 

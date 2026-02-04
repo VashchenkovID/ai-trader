@@ -473,10 +473,17 @@ router.get('/summary', async (req, res) => {
             // Для sharpeRatio нужны доходности, попробуем рассчитать из сделок
             const trades = await TradingEngine.getTradeHistory(1000);
             if (trades.length > 0) {
-                // Фильтруем только закрытые сделки с PnL
-                const closedTrades = trades.filter(trade => 
-                    trade.pnl !== undefined && trade.pnl !== null && trade.type !== 'BUY'
-                ).sort((a, b) => {
+                // Фильтруем только закрытые сделки с PnL (SELL сделки)
+                // В виртуальной торговле используется trade.action, а не trade.type
+                const closedTrades = trades.filter(trade => {
+                    const hasPnL = trade.pnl !== undefined && 
+                                  trade.pnl !== null && 
+                                  !isNaN(trade.pnl) && 
+                                  isFinite(trade.pnl);
+                    const isSell = (trade.action === 'SELL' || trade.type === 'SELL');
+                    const isNotBuy = (trade.action !== 'BUY' && trade.type !== 'BUY');
+                    return hasPnL && (isSell || isNotBuy);
+                }).sort((a, b) => {
                     const dateA = new Date(a.timestamp || a.date || a.createdAt);
                     const dateB = new Date(b.timestamp || b.date || b.createdAt);
                     return dateA - dateB;
@@ -490,11 +497,14 @@ router.get('/summary', async (req, res) => {
                     
                     // Рассчитываем относительные доходности (в процентах) от текущего капитала
                     for (const trade of closedTrades) {
-                        if (runningCapital > 0) {
+                        const pnl = trade.pnl || 0;
+                        if (runningCapital > 0 && !isNaN(pnl) && isFinite(pnl)) {
                             // Относительная доходность от текущего капитала
-                            const returnPercent = (trade.pnl / runningCapital) * 100;
-                            returns.push(returnPercent);
-                            runningCapital += trade.pnl; // Обновляем капитал для следующей сделки
+                            const returnPercent = (pnl / runningCapital) * 100;
+                            if (!isNaN(returnPercent) && isFinite(returnPercent)) {
+                                returns.push(returnPercent);
+                                runningCapital += pnl; // Обновляем капитал для следующей сделки
+                            }
                         }
                     }
                     
@@ -506,13 +516,42 @@ router.get('/summary', async (req, res) => {
                         // Sharpe Ratio: (Average Return - Risk-Free Rate) / Volatility
                         // Безрисковая ставка = 0 для упрощения
                         // Если средняя доходность отрицательная, Sharpe Ratio будет отрицательным (это нормально)
-                        baseMetrics.sharpeRatio = volatility > 0 ? avgReturn / volatility : 0;
+                        if (volatility > 0 && !isNaN(avgReturn) && isFinite(avgReturn)) {
+                            baseMetrics.sharpeRatio = avgReturn / volatility;
+                        } else {
+                            baseMetrics.sharpeRatio = 0;
+                        }
+                        
+                        // Логируем для отладки
+                        if (LoggerService && LoggerService.isInitialized) {
+                            LoggerService.debug('advanced-metrics/summary: расчет Sharpe Ratio', {
+                                service: 'advanced-metrics-routes',
+                                closedTradesCount: closedTrades.length,
+                                returnsCount: returns.length,
+                                avgReturn: avgReturn.toFixed(4),
+                                volatility: volatility.toFixed(4),
+                                sharpeRatio: baseMetrics.sharpeRatio.toFixed(4)
+                            });
+                        }
                     } else {
                         baseMetrics.sharpeRatio = 0;
+                        if (LoggerService && LoggerService.isInitialized) {
+                            LoggerService.debug('advanced-metrics/summary: недостаточно доходностей для Sharpe Ratio', {
+                                service: 'advanced-metrics-routes',
+                                closedTradesCount: closedTrades.length,
+                                returnsCount: returns.length
+                            });
+                        }
                     }
                 } else {
                     // Недостаточно данных для расчета
                     baseMetrics.sharpeRatio = 0;
+                    if (LoggerService && LoggerService.isInitialized) {
+                        LoggerService.debug('advanced-metrics/summary: недостаточно закрытых сделок для Sharpe Ratio', {
+                            service: 'advanced-metrics-routes',
+                            closedTradesCount: closedTrades.length
+                        });
+                    }
                 }
             }
         }

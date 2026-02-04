@@ -32,6 +32,10 @@ class FallbackService {
             TinkoffAPI: { total: 0, cacheHits: 0, failures: 0 },
             NewsAPI: { total: 0, cacheHits: 0, failures: 0 }
         };
+        
+        // Cooldown для алертов (чтобы не спамить)
+        this.alertCooldown = new Map(); // serviceName -> timestamp последнего алерта
+        this.alertCooldownMinutes = 5; // Минимум 5 минут между одинаковыми алертами
     }
     
     /**
@@ -72,6 +76,56 @@ class FallbackService {
             this.stats[serviceName] = { total: 0, cacheHits: 0, failures: 0 };
         }
         this.stats[serviceName].total++;
+        
+        // ПРОВЕРЯЕМ CIRCUIT BREAKER ДО попытки API запроса
+        const circuitState = RetryService.getCircuitBreakerState(serviceName);
+        if (circuitState.state === 'open') {
+            // Circuit breaker открыт - сразу идем к кешу, не пытаемся делать API запрос
+            LoggerService.warn(`Circuit breaker открыт для ${serviceName}, используем кеш без попытки API запроса`, {
+                service: 'FallbackService',
+                serviceName,
+                circuitState: 'open'
+            });
+            
+            // Пытаемся получить данные из кеша
+            try {
+                const cachedData = await cacheCall();
+                
+                if (cachedData) {
+                    const cacheAge = this.getCacheAge(cachedData);
+                    
+                    if (cacheAge <= maxCacheAge) {
+                        this.stats[serviceName].cacheHits++;
+                        return {
+                            ...cachedData,
+                            _fromCache: true,
+                            _cacheAge: cacheAge,
+                            _circuitBreakerOpen: true
+                        };
+                    }
+                }
+                
+                // Кеша нет или он устарел - это нормальная ситуация, не ошибка
+                LoggerService.info(`Кеш для ${serviceName} недоступен или устарел (circuit breaker открыт)`, {
+                    service: 'FallbackService',
+                    serviceName,
+                    hasCache: !!cachedData,
+                    cacheAge: cachedData ? this.getCacheAge(cachedData) : null
+                });
+                
+                // Возвращаем упрощенные данные без создания критического алерта
+                return this.getSimplifiedData(serviceName, { message: 'Circuit breaker open, no cache available' });
+            } catch (cacheError) {
+                // Ошибка при получении кеша - тоже не критично
+                LoggerService.info(`Не удалось получить кеш для ${serviceName} (circuit breaker открыт)`, {
+                    service: 'FallbackService',
+                    serviceName,
+                    error: cacheError.message
+                });
+                
+                return this.getSimplifiedData(serviceName, { message: 'Circuit breaker open, cache unavailable' });
+            }
+        }
         
         try {
             // Сначала пытаемся выполнить API запрос (с retry если включено)
@@ -152,39 +206,38 @@ class FallbackService {
                     throw new Error('No cached data available');
                 }
             } catch (cacheError) {
-                // Кеш тоже не помог
-                LoggerService.error(`Fallback на кеш не удался для ${serviceName}`, {
+                // Кеш недоступен - это НЕ ошибка, а нормальная ситуация
+                // Не создаем критический алерт, просто логируем
+                LoggerService.info(`Кеш для ${serviceName} недоступен (это нормально, если кеш пуст)`, {
                     service: 'FallbackService',
                     serviceName,
-                    error: {
-                        message: cacheError.message,
-                        stack: cacheError.stack
-                    }
+                    apiError: error.message,
+                    cacheError: cacheError.message
                 });
                 
-                // Создаем критический алерт
-                const alert = MonitoringService.createAlert(
-                    'external_api',
-                    'high',
-                    `Критическая ошибка: ${serviceName} недоступен и кеш пуст.`,
-                    {
-                        service: serviceName,
-                        apiError: error.message,
-                        cacheError: cacheError.message
-                    }
-                );
+                // Создаем алерт только если прошло достаточно времени с последнего алерта (cooldown)
+                const lastAlertTime = this.alertCooldown.get(serviceName) || 0;
+                const now = Date.now();
+                const cooldownMs = this.alertCooldownMinutes * 60 * 1000;
                 
-                // При ошибке MONITORING_EXTERNAL_API блокируем запросы на 5 минут
-                // Увеличиваем timeout circuit breaker до 5 минут (300000 мс)
-                RetryService.setCircuitBreakerTimeout(serviceName, 5 * 60 * 1000);
+                if (now - lastAlertTime > cooldownMs) {
+                    // Создаем информационный алерт (не критический)
+                    MonitoringService.createAlert(
+                        'external_api',
+                        'medium', // Изменено с 'high' на 'medium'
+                        `${serviceName} недоступен и кеш пуст. Используются упрощенные данные.`,
+                        {
+                            service: serviceName,
+                            apiError: error.message,
+                            cacheError: cacheError.message
+                        }
+                    );
+                    
+                    // Обновляем время последнего алерта
+                    this.alertCooldown.set(serviceName, now);
+                }
                 
-                LoggerService.warn(`Circuit breaker для ${serviceName} заблокирован на 5 минут из-за критической ошибки (API недоступен и кеш пуст)`, {
-                    service: 'FallbackService',
-                    serviceName,
-                    timeout: '5 minutes'
-                });
-                
-                // Возвращаем упрощенные данные или выбрасываем ошибку
+                // Возвращаем упрощенные данные без выбрасывания ошибки
                 return this.getSimplifiedData(serviceName, error);
             }
         }

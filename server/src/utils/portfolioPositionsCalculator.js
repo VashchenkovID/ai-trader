@@ -318,6 +318,7 @@ export async function calculatePnLFromPositions(portfolio, positionsByFigi, rawP
     let realizedPnL = 0;
     let winRate = 0;
     let totalTrades = 0;
+    let sharpeRatio = 0;
     
     try {
         const pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
@@ -326,8 +327,49 @@ export async function calculatePnLFromPositions(portfolio, positionsByFigi, rawP
             includePositions: false // Не используем позиции, так как уже рассчитали unrealized
         });
         realizedPnL = pnlData.realized?.total || 0;
-        winRate = pnlData.summary?.winRate || 0;
+        // winRate из calculateRealizedPnL возвращается в процентах (0-100), конвертируем в диапазон 0-1
+        const winRatePercent = pnlData.summary?.winRate || 0;
+        winRate = winRatePercent / 100; // Конвертируем из процентов в диапазон 0-1
         totalTrades = pnlData.summary?.totalTrades || 0;
+        
+        // Рассчитываем Sharpe Ratio из закрытых сделок
+        const closedTrades = pnlData.realized?.trades || [];
+        if (closedTrades.length > 1) {
+            const initialCapital = portfolio?.initialCapital || 1000000;
+            const returns = [];
+            let runningCapital = initialCapital;
+            
+            // Сортируем сделки по дате
+            const sortedTrades = closedTrades.sort((a, b) => {
+                const dateA = new Date(a.exitDate || a.executedAt || 0);
+                const dateB = new Date(b.exitDate || b.executedAt || 0);
+                return dateA - dateB;
+            });
+            
+            // Рассчитываем относительные доходности
+            for (const trade of sortedTrades) {
+                const pnl = trade.pnl || 0;
+                if (runningCapital > 0 && !isNaN(pnl) && isFinite(pnl)) {
+                    const returnPercent = (pnl / runningCapital) * 100;
+                    if (!isNaN(returnPercent) && isFinite(returnPercent)) {
+                        returns.push(returnPercent);
+                        runningCapital += pnl;
+                    }
+                }
+            }
+            
+            if (returns.length > 1) {
+                const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+                const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+                const volatility = Math.sqrt(variance);
+                
+                // Sharpe Ratio: (Average Return - Risk-Free Rate) / Volatility
+                // Безрисковая ставка = 0 для упрощения
+                if (volatility > 0 && !isNaN(avgReturn) && isFinite(avgReturn)) {
+                    sharpeRatio = avgReturn / volatility;
+                }
+            }
+        }
     } catch (error) {
         // Игнорируем ошибки
     }
@@ -346,7 +388,8 @@ export async function calculatePnLFromPositions(portfolio, positionsByFigi, rawP
         realizedPnLPercent,
         unrealizedPnL: totalUnrealizedPnL,
         winRate,
-        totalTrades
+        totalTrades,
+        sharpeRatio
     };
 }
 

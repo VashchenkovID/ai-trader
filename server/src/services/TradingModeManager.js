@@ -45,7 +45,7 @@ class TradingModeManager {
                 await this.initialize();
             }
 
-            const validModes = ['paper', 'micro', 'real'];
+            const validModes = ['paper', 'real'];
             if (!validModes.includes(newMode)) {
                 throw new Error(`Недопустимый режим торговли: ${newMode}`);
             }
@@ -68,7 +68,7 @@ class TradingModeManager {
                 };
             }
 
-            // Для micro и real режимов проверяем валидацию
+            // Для real режима проверяем валидацию
             const canSwitch = await this.canSwitchTo(newMode);
             if (!canSwitch.canSwitch) {
                 throw new Error(canSwitch.reason || 'Система не готова к переходу на этот режим. Проверьте валидацию.');
@@ -158,7 +158,7 @@ class TradingModeManager {
                 await this.initialize();
             }
 
-            const validModes = ['paper', 'micro', 'real'];
+            const validModes = ['paper', 'real'];
             if (!validModes.includes(mode)) {
                 return {
                     canSwitch: false,
@@ -174,7 +174,7 @@ class TradingModeManager {
                 };
             }
 
-            // Для micro и real режимов используем SwitchValidator для детальной проверки
+            // Для real режима используем SwitchValidator для детальной проверки
             try {
                 const { getService } = await import('./GlobalServiceManager.js');
                 const SwitchValidator = getService('SwitchValidator');
@@ -182,15 +182,13 @@ class TradingModeManager {
                 if (!SwitchValidator) {
                     console.warn('⚠️ SwitchValidator не найден, используем базовую проверку');
                     return {
-                        canSwitch: mode === 'micro' || mode === 'real',
+                        canSwitch: mode === 'real',
                         warnings: mode === 'real' ? ['Режим реальной торговли требует особой осторожности'] : []
                     };
                 }
 
                 let validationResult;
-                if (mode === 'micro') {
-                    validationResult = await SwitchValidator.canSwitchToMicro();
-                } else if (mode === 'real') {
+                if (mode === 'real') {
                     validationResult = await SwitchValidator.canSwitchToFull();
                 } else {
                     validationResult = { canSwitch: true, warnings: [] };

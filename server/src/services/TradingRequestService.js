@@ -1617,27 +1617,15 @@ class TradingRequestService {
                     }
                     break;
                     
-                case 'micro':
-                    // Micro режим - средние ограничения только для покупок
-                    // Снижено с 70% до 60% (Фаза 1, задача 1.1.1)
-                    // < 60% → warning, < 40% → блокировка (Фаза 1, задача 1.1.2)
-                    if (recommendation.confidence < 0.4) {
-                        throw new Error(`Micro режим: уверенность ${(recommendation.confidence * 100).toFixed(0)}% слишком низкая (минимум 40%)`);
-                    } else if (recommendation.confidence < modeSettings.settings.minConfidence) {
-                        validationResult.warnings.push(`Micro режим: уверенность ${(recommendation.confidence * 100).toFixed(0)}% ниже рекомендуемого минимума ${(modeSettings.settings.minConfidence * 100).toFixed(0)}%`);
-                    }
-                    break;
-                    
                 case 'real':
                     // Real режим - строгие ограничения только для покупок
-                    // Снижено с 80% до 70%, убрано требование score (Фаза 1, задача 1.1.1)
-                    // < 70% → warning, < 40% → блокировка (Фаза 1, задача 1.1.2)
+                    // Минимум 40% для блокировки, минимум 70% для предупреждения
+                    // Убрано требование score >= 0.7 для Real режима (Фаза 1, задача 1.1.1)
                     if (recommendation.confidence < 0.4) {
                         throw new Error(`Real режим: уверенность ${(recommendation.confidence * 100).toFixed(0)}% слишком низкая (минимум 40%)`);
                     } else if (recommendation.confidence < modeSettings.settings.minConfidence) {
                         validationResult.warnings.push(`Real режим: уверенность ${(recommendation.confidence * 100).toFixed(0)}% ниже рекомендуемого минимума ${(modeSettings.settings.minConfidence * 100).toFixed(0)}%`);
                     }
-                    // Убрано требование score >= 0.7 для Real режима (Фаза 1, задача 1.1.1)
                     break;
                     
                 default:

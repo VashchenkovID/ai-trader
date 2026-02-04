@@ -5,27 +5,11 @@ import { Button } from '../ui/Button/Button';
 import { Select } from '../ui/Select/Select';
 import { Chart } from '../ui/Chart/Chart';
 import { workerMonitoringApi, WorkerTimelineEvent } from '../../services/workerMonitoringApi';
-import { translateWorkerType } from '../../utils/workerTypeTranslator';
 import './WorkerTimelineChart.css';
 
 interface WorkerTimelineChartProps {
   className?: string;
 }
-
-const getStatusColor = (status: string): string => {
-  switch (status) {
-    case 'running':
-      return '#10B981'; // Зеленый
-    case 'paused':
-      return '#F59E0B'; // Желтый
-    case 'completed':
-      return '#3B82F6'; // Синий
-    case 'error':
-      return '#EF4444'; // Красный
-    default:
-      return '#6B7280'; // Серый
-  }
-};
 
 export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ className = '' }) => {
   const [timeline, setTimeline] = useState<WorkerTimelineEvent[]>([]);
@@ -95,21 +79,13 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
     }
   };
 
-  // Группируем события по типам для графика
+  // Группируем события для более информативных графиков
   const chartData = useMemo(() => {
     if (timeline.length === 0) {
-      console.log('📊 WorkerTimelineChart: Нет данных для графика');
       return null;
     }
 
-    console.log(`📊 WorkerTimelineChart: Обработка ${timeline.length} событий`);
-    console.log('📊 WorkerTimelineChart: Первые 3 события:', timeline.slice(0, 3));
-
-    // Группируем по типам воркеров
-    const types = Array.from(new Set(timeline.map(e => e.type)));
-    console.log(`📊 WorkerTimelineChart: Найдено ${types.length} типов воркеров:`, types);
-
-    // Функция для нормализации даты в строку (используем одинаковый формат везде)
+    // Функция для нормализации даты в строку
     const formatTimeLabel = (date: Date): string => {
       const month = date.toLocaleString('ru-RU', { month: 'short' });
       const day = date.getDate();
@@ -118,66 +94,125 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
       return `${day} ${month}, ${hours}:${minutes}`;
     };
 
-    // Создаем уникальные метки времени из всех событий
-    const allLabels = Array.from(new Set(
-      timeline.map(e => {
-        const date = new Date(e.startTime);
-        return formatTimeLabel(date);
-      })
-    )).sort();
+    // Создаем временные интервалы (группируем по часам для больших периодов, по минутам для малых)
+    const intervalMinutes = period === '1h' ? 5 : period === '24h' ? 30 : period === '7d' ? 4 * 60 : 24 * 60;
+    
+    // Создаем метки времени с интервалами
+    const startDate = new Date(Math.min(...timeline.map(e => new Date(e.startTime).getTime())));
+    const endDate = new Date(Math.max(...timeline.map(e => {
+      const end = e.endTime ? new Date(e.endTime) : new Date(e.startTime);
+      return end.getTime();
+    })));
+    
+    // Создаем массив временных точек
+    const timePoints: Date[] = [];
+    const currentTime = new Date(startDate);
+    while (currentTime <= endDate) {
+      timePoints.push(new Date(currentTime));
+      currentTime.setMinutes(currentTime.getMinutes() + intervalMinutes);
+    }
+    
+    const allLabels = timePoints.map(t => formatTimeLabel(t));
 
-    console.log(`📊 WorkerTimelineChart: Создано ${allLabels.length} меток времени:`, allLabels.slice(0, 5));
-
-    // Создаем датасеты для каждого типа воркера
-    const datasets = types.map(type => {
-      const events = timeline.filter(e => e.type === type);
-      const typeLabel = translateWorkerType(type);
+    // График 1: Количество активных воркеров по времени
+    const activeWorkersData = timePoints.map((labelTime) => {
+      const intervalEnd = new Date(labelTime.getTime() + intervalMinutes * 60 * 1000);
       
-      console.log(`📊 WorkerTimelineChart: Тип ${typeLabel}: ${events.length} событий`);
+      // Считаем воркеры, которые были активны в этом интервале
+      const activeInInterval = timeline.filter(e => {
+        const start = new Date(e.startTime);
+        const end = e.endTime ? new Date(e.endTime) : new Date();
+        return start <= intervalEnd && end >= labelTime;
+      }).length;
+      
+      return activeInInterval;
+    });
 
-      // Создаем массив данных для каждой метки времени
-      const data = allLabels.map((label) => {
-        // Находим событие этого типа, которое соответствует метке времени
-        const event = events.find(e => {
-          const date = new Date(e.startTime);
-          const eventLabel = formatTimeLabel(date);
-          return eventLabel === label;
-        });
-        
-        const duration = event ? event.duration / 1000 / 60 : 0; // Длительность в минутах
-        return duration;
+    // График 2: Успешные vs неуспешные задачи
+    const successfulData = timePoints.map((labelTime) => {
+      const intervalEnd = new Date(labelTime.getTime() + intervalMinutes * 60 * 1000);
+      
+      const completed = timeline.filter(e => {
+        const start = new Date(e.startTime);
+        return start >= labelTime && start < intervalEnd && e.status === 'completed';
+      }).length;
+      
+      return completed;
+    });
+
+    const failedData = timePoints.map((labelTime) => {
+      const intervalEnd = new Date(labelTime.getTime() + intervalMinutes * 60 * 1000);
+      
+      const failed = timeline.filter(e => {
+        const start = new Date(e.startTime);
+        return start >= labelTime && start < intervalEnd && e.status === 'error';
+      }).length;
+      
+      return failed;
+    });
+
+    // График 3: Средняя длительность выполнения
+    const avgDurationData = timePoints.map((labelTime) => {
+      const intervalEnd = new Date(labelTime.getTime() + intervalMinutes * 60 * 1000);
+      
+      const eventsInInterval = timeline.filter(e => {
+        const start = new Date(e.startTime);
+        return start >= labelTime && start < intervalEnd;
       });
-
-      const totalDuration = data.reduce((sum, val) => sum + val, 0);
-      console.log(`📊 WorkerTimelineChart: Датасет ${typeLabel}: общая длительность ${totalDuration.toFixed(2)} минут, ненулевых значений: ${data.filter(v => v > 0).length}`);
-
-      return {
-        label: typeLabel,
-        data: data,
-        backgroundColor: getStatusColor(events[0]?.status || 'running'),
-        borderColor: getStatusColor(events[0]?.status || 'running'),
-        borderWidth: 2,
-      };
+      
+      if (eventsInInterval.length === 0) return 0;
+      
+      const avgDuration = eventsInInterval.reduce((sum, e) => sum + e.duration, 0) / eventsInInterval.length;
+      return avgDuration / 1000 / 60; // В минутах
     });
 
-    const result = {
+    return {
       labels: allLabels,
-      datasets: datasets
+      datasets: [
+        {
+          label: 'Активных воркеров',
+          data: activeWorkersData,
+          backgroundColor: 'rgba(59, 130, 246, 0.6)',
+          borderColor: '#3B82F6',
+          borderWidth: 2,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Успешных задач',
+          data: successfulData,
+          backgroundColor: 'rgba(16, 185, 129, 0.6)',
+          borderColor: '#10B981',
+          borderWidth: 2,
+          yAxisID: 'y1',
+        },
+        {
+          label: 'Неудачных задач',
+          data: failedData,
+          backgroundColor: 'rgba(239, 68, 68, 0.6)',
+          borderColor: '#EF4444',
+          borderWidth: 2,
+          yAxisID: 'y1',
+        },
+        {
+          label: 'Средняя длительность (мин)',
+          data: avgDurationData,
+          backgroundColor: 'rgba(245, 158, 11, 0.6)',
+          borderColor: '#F59E0B',
+          borderWidth: 2,
+          type: 'line' as const,
+          yAxisID: 'y2',
+        },
+      ]
     };
-
-    console.log(`📊 WorkerTimelineChart: Данные графика подготовлены:`, {
-      labelsCount: allLabels.length,
-      datasetsCount: datasets.length,
-      totalDataPoints: datasets.reduce((sum, ds) => sum + ds.data.length, 0),
-      sampleData: datasets[0]?.data.slice(0, 5)
-    });
-
-    return result;
-  }, [timeline]);
+  }, [timeline, period]);
 
   const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
     plugins: {
       legend: {
         position: 'bottom' as const,
@@ -201,10 +236,19 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
         cornerRadius: 8,
         callbacks: {
           label: function(context: any) {
-            const minutes = context.parsed.y;
-            const hours = Math.floor(minutes / 60);
-            const mins = Math.round(minutes % 60);
-            return `${context.dataset.label}: ${hours > 0 ? `${hours}ч ` : ''}${mins}м`;
+            const value = context.parsed.y;
+            const label = context.dataset.label;
+            
+            if (label.includes('длительность')) {
+              const minutes = Math.round(value);
+              const hours = Math.floor(minutes / 60);
+              const mins = minutes % 60;
+              return `${label}: ${hours > 0 ? `${hours}ч ` : ''}${mins}м`;
+            } else if (label.includes('воркеров')) {
+              return `${label}: ${value}`;
+            } else {
+              return `${label}: ${value} задач`;
+            }
           }
         }
       },
@@ -214,10 +258,11 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
         ticks: {
           color: '#FFFFFF',
           font: {
-            size: 11,
+            size: 10,
           },
           maxRotation: 45,
           minRotation: 45,
+          maxTicksLimit: 20,
         },
         grid: {
           color: 'var(--color-border-default)',
@@ -232,24 +277,73 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
         },
       },
       y: {
+        type: 'linear' as const,
+        display: true,
+        position: 'left' as const,
         ticks: {
           color: '#FFFFFF',
           font: {
             size: 11,
           },
-          callback: function(value: any) {
-            const minutes = value;
-            const hours = Math.floor(minutes / 60);
-            const mins = Math.round(minutes % 60);
-            return hours > 0 ? `${hours}ч ${mins}м` : `${mins}м`;
-          },
+          stepSize: 1,
         },
         grid: {
           color: 'var(--color-border-default)',
         },
         title: {
           display: true,
-          text: 'Длительность работы',
+          text: 'Количество активных воркеров',
+          color: '#FFFFFF',
+          font: {
+            size: 12,
+          },
+        },
+      },
+      y1: {
+        type: 'linear' as const,
+        display: true,
+        position: 'right' as const,
+        ticks: {
+          color: '#FFFFFF',
+          font: {
+            size: 11,
+          },
+          stepSize: 1,
+        },
+        grid: {
+          drawOnChartArea: false,
+        },
+        title: {
+          display: true,
+          text: 'Количество задач',
+          color: '#FFFFFF',
+          font: {
+            size: 12,
+          },
+        },
+      },
+      y2: {
+        type: 'linear' as const,
+        display: true,
+        position: 'right' as const,
+        ticks: {
+          color: '#FFFFFF',
+          font: {
+            size: 11,
+          },
+          callback: function(value: any) {
+            const minutes = Math.round(value);
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            return hours > 0 ? `${hours}ч ${mins}м` : `${mins}м`;
+          },
+        },
+        grid: {
+          drawOnChartArea: false,
+        },
+        title: {
+          display: true,
+          text: 'Средняя длительность (мин)',
           color: '#FFFFFF',
           font: {
             size: 12,
@@ -303,14 +397,87 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
         </div>
 
         {chartData && timeline.length > 0 ? (
-          <div className="timeline-chart-container">
-            <Chart
-              type="bar"
-              data={chartData}
-              options={chartOptions}
-              height={400}
-            />
-          </div>
+          <>
+            <div className="timeline-chart-container">
+              <Chart
+                type="bar"
+                data={chartData}
+                options={chartOptions}
+                height={450}
+              />
+            </div>
+            
+            {/* Сводная статистика */}
+            <div className="timeline-summary">
+              <div className="summary-section">
+                <h4 className="summary-title">Сводная статистика</h4>
+                <div className="summary-grid">
+                  <div className="summary-item">
+                    <span className="summary-label">Всего задач:</span>
+                    <span className="summary-value">{timeline.length}</span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">Успешных:</span>
+                    <span className="summary-value success">
+                      {timeline.filter(e => e.status === 'completed').length}
+                    </span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">С ошибками:</span>
+                    <span className="summary-value error">
+                      {timeline.filter(e => e.status === 'error').length}
+                    </span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">Успешность:</span>
+                    <span className="summary-value">
+                      {timeline.length > 0
+                        ? ((timeline.filter(e => e.status === 'completed').length / timeline.length) * 100).toFixed(1)
+                        : '0'}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="summary-section">
+                <h4 className="summary-title">Производительность</h4>
+                <div className="summary-grid">
+                  <div className="summary-item">
+                    <span className="summary-label">Средняя длительность:</span>
+                    <span className="summary-value">
+                      {timeline.length > 0
+                        ? formatDuration(
+                            timeline.reduce((sum, e) => sum + e.duration, 0) / timeline.length
+                          )
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">Максимальная длительность:</span>
+                    <span className="summary-value">
+                      {timeline.length > 0
+                        ? formatDuration(Math.max(...timeline.map(e => e.duration)))
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">Минимальная длительность:</span>
+                    <span className="summary-value">
+                      {timeline.length > 0
+                        ? formatDuration(Math.min(...timeline.map(e => e.duration)))
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="summary-item">
+                    <span className="summary-label">Типов воркеров:</span>
+                    <span className="summary-value">
+                      {Array.from(new Set(timeline.map(e => e.type))).length}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
         ) : timeline.length === 0 ? (
           <div className="empty-state">
             <p>Нет данных за выбранный период</p>
@@ -318,34 +485,8 @@ export const WorkerTimelineChart: React.FC<WorkerTimelineChartProps> = ({ classN
         ) : (
           <div className="empty-state">
             <p>Ошибка подготовки данных графика</p>
-            <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '8px' }}>
-              Событий: {timeline.length}, chartData: {chartData ? 'есть' : 'нет'}
-            </p>
           </div>
         )}
-
-        <div className="timeline-stats">
-          <div className="stat-item">
-            <span className="stat-label">Всего событий:</span>
-            <span className="stat-value">{timeline.length}</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">Типов воркеров:</span>
-            <span className="stat-value">
-              {Array.from(new Set(timeline.map(e => e.type))).length}
-            </span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">Средняя длительность:</span>
-            <span className="stat-value">
-              {timeline.length > 0
-                ? formatDuration(
-                    timeline.reduce((sum, e) => sum + e.duration, 0) / timeline.length
-                  )
-                : '—'}
-            </span>
-          </div>
-        </div>
       </Card>
     </div>
   );

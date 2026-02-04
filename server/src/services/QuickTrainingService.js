@@ -13,7 +13,7 @@ class QuickTrainingService {
     constructor() {
         this.isTraining = false;
         this.batchSize = 10; // Количество инструментов за один запуск (по умолчанию)
-        this.minHoursSinceLastTraining = 24; // Минимальное время между обучениями одного инструмента (24 часа = 1 раз в сутки)
+        this.minHoursSinceLastTraining = 24; // Минимальное время между обучениями одного инструмента (не используется, проверка идет по началу суток)
     }
 
     /**
@@ -35,8 +35,10 @@ class QuickTrainingService {
             // Получаем состояние обучения
             const state = await TrainingState.getOrCreateState('quick');
             
-            // Фильтруем инструменты: исключаем те, что были обучены менее 24 часов назад (не более раза в сутки)
-            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            // Фильтруем инструменты: исключаем те, что были обучены сегодня (не более раза в сутки)
+            // Вычисляем начало текущих суток (00:00:00 сегодня)
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
             
             // Получаем список инструментов, которые были обучены недавно
             // Для этого проверяем время последнего обучения через ModelManager
@@ -68,8 +70,9 @@ class QuickTrainingService {
                     
                     if (modelInfo && modelInfo.modified) {
                         const lastTrainingTime = new Date(modelInfo.modified);
-                        if (lastTrainingTime > oneDayAgo) {
-                            // Модель обучалась менее 24 часов назад - пропускаем
+                        // Проверяем, была ли модель обучена сегодня (с начала текущих суток)
+                        if (lastTrainingTime >= todayStart) {
+                            // Модель уже была обучена сегодня - пропускаем
                             canTrain = false;
                         }
                     }

@@ -75,7 +75,6 @@ const TradingRequestManager: React.FC = () => {
   const modeOptions = [
     { label: 'Все режимы', value: 'all' },
     { label: 'Paper Trading', value: 'paper' },
-    { label: 'Micro Trading', value: 'micro' },
     { label: 'Real Trading', value: 'real' }
   ];
 

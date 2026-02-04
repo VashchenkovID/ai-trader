@@ -71,11 +71,56 @@ class RiskManagementService {
             // Загружаем настройки формулы Келли
             await this.loadKellySettings();
             
+            // Загружаем лимиты из TradingModeManager для текущего режима
+            await this.loadLimitsFromTradingMode();
+            
             this.isInitialized = true;
 
         } catch (error) {
             console.error('❌ Ошибка инициализации RiskManagementService:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Загрузить лимиты из TradingModeManager для текущего режима торговли
+     */
+    async loadLimitsFromTradingMode() {
+        try {
+            const TradingModeManager = (await import('./TradingModeManager.js')).default;
+            const modeSettings = await TradingModeManager.getModeSettings();
+            
+            if (modeSettings && modeSettings.settings) {
+                const settings = modeSettings.settings;
+                
+                // Обновляем лимиты для real режима с более строгими параметрами
+                if (modeSettings.mode === 'real') {
+                    this.limits = {
+                        maxPositionSize: settings.maxPositionSize || 0.01, // 1% для real режима
+                        maxTotalExposure: 0.20, // 20% для real режима (более консервативно)
+                        maxDrawdown: settings.maxDrawdown || 0.03, // 3% для real режима
+                        maxConsecutiveLosses: 5, // 5 для real режима (более строго)
+                        maxDailyLoss: 0.05, // 5% для real режима (более строго)
+                        minConfidence: settings.minConfidence || 0.7, // 70% для real режима
+                        maxVolatility: 0.25 // 25% для real режима (более консервативно)
+                    };
+                } else {
+                    // Для paper режима используем более мягкие лимиты
+                    this.limits = {
+                        maxPositionSize: settings.maxPositionSize || 0.05, // 5% для paper режима
+                        maxTotalExposure: 0.40, // 40% для paper режима
+                        maxDrawdown: settings.maxDrawdown || 0.15, // 15% для paper режима
+                        maxConsecutiveLosses: 10, // 10 для paper режима
+                        maxDailyLoss: 0.10, // 10% для paper режима
+                        minConfidence: settings.minConfidence || 0.6, // 60% для paper режима
+                        maxVolatility: 0.30 // 30% для paper режима
+                    };
+                }
+                
+                console.log(`✅ Лимиты риск-менеджмента загружены для режима ${modeSettings.mode}:`, this.limits);
+            }
+        } catch (error) {
+            console.warn('⚠️ Не удалось загрузить лимиты из TradingModeManager, используем значения по умолчанию:', error.message);
         }
     }
 

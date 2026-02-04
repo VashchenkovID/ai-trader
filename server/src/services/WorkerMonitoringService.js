@@ -14,6 +14,12 @@ class WorkerMonitoringService {
         this.workerHistory = [];
         // Максимальный размер истории в памяти
         this.maxHistorySize = 1000;
+        // Максимальный возраст записей в истории (7 дней)
+        this.maxHistoryAge = 7 * 24 * 60 * 60 * 1000;
+        // Интервал автоматической очистки (каждые 6 часов)
+        this.cleanupInterval = 6 * 60 * 60 * 1000;
+        // Таймер для периодической очистки
+        this.cleanupTimer = null;
         // Счетчик для генерации уникальных ID
         this.workerIdCounter = 0;
         // WebSocket сервис для отправки событий
@@ -34,11 +40,20 @@ class WorkerMonitoringService {
             this.webSocketService = null;
             this.tryGetWebSocketService();
             
+            // Выполняем начальную очистку истории
+            this.cleanupHistory(this.maxHistoryAge);
+            
+            // Запускаем периодическую очистку истории
+            this.startPeriodicCleanup();
+            
             this.isInitialized = true;
             
             if (LoggerService.isInitialized) {
                 LoggerService.info('WorkerMonitoringService initialized', {
-                    service: 'WorkerMonitoringService'
+                    service: 'WorkerMonitoringService',
+                    maxHistorySize: this.maxHistorySize,
+                    maxHistoryAge: `${this.maxHistoryAge / (24 * 60 * 60 * 1000)} days`,
+                    cleanupInterval: `${this.cleanupInterval / (60 * 60 * 1000)} hours`
                 });
             } else {
                 console.log('✅ WorkerMonitoringService initialized');
@@ -208,9 +223,14 @@ class WorkerMonitoringService {
         const historyEntry = { ...worker };
         this.workerHistory.unshift(historyEntry);
         
-        // Ограничиваем размер истории
+        // Ограничиваем размер истории (удаляем самые старые записи)
         if (this.workerHistory.length > this.maxHistorySize) {
             this.workerHistory = this.workerHistory.slice(0, this.maxHistorySize);
+        }
+        
+        // Периодически очищаем старые записи (каждые 100 добавлений)
+        if (this.workerHistory.length % 100 === 0) {
+            this.cleanupHistory(this.maxHistoryAge);
         }
 
         // Удаляем из активных
@@ -618,23 +638,120 @@ class WorkerMonitoringService {
     }
 
     /**
-     * Очистка старых записей из истории
+     * Получить статистику о размере истории
+     * @returns {Object} Статистика истории
      */
-    cleanupHistory(maxAge = 7 * 24 * 60 * 60 * 1000) { // 7 дней по умолчанию
-        const cutoffTime = new Date(Date.now() - maxAge);
+    getHistoryStats() {
+        const now = Date.now();
+        const oneDayAgo = now - 24 * 60 * 60 * 1000;
+        const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+        
+        const historyInLastDay = this.workerHistory.filter(w => {
+            const startTime = w.startTime instanceof Date ? w.startTime.getTime() : new Date(w.startTime).getTime();
+            return startTime >= oneDayAgo;
+        }).length;
+        
+        const historyInLastWeek = this.workerHistory.filter(w => {
+            const startTime = w.startTime instanceof Date ? w.startTime.getTime() : new Date(w.startTime).getTime();
+            return startTime >= sevenDaysAgo;
+        }).length;
+        
+        return {
+            total: this.workerHistory.length,
+            maxSize: this.maxHistorySize,
+            maxAge: this.maxHistoryAge,
+            inLastDay: historyInLastDay,
+            inLastWeek: historyInLastWeek,
+            oldestEntry: this.workerHistory.length > 0 
+                ? (this.workerHistory[this.workerHistory.length - 1].startTime instanceof Date 
+                    ? this.workerHistory[this.workerHistory.length - 1].startTime.toISOString()
+                    : new Date(this.workerHistory[this.workerHistory.length - 1].startTime).toISOString())
+                : null,
+            newestEntry: this.workerHistory.length > 0
+                ? (this.workerHistory[0].startTime instanceof Date
+                    ? this.workerHistory[0].startTime.toISOString()
+                    : new Date(this.workerHistory[0].startTime).toISOString())
+                : null
+        };
+    }
+    
+    /**
+     * Запуск периодической очистки истории
+     * @private
+     */
+    startPeriodicCleanup() {
+        // Останавливаем предыдущий таймер, если есть
+        if (this.cleanupTimer) {
+            clearInterval(this.cleanupTimer);
+        }
+        
+        // Запускаем периодическую очистку
+        this.cleanupTimer = setInterval(() => {
+            this.cleanupHistory(this.maxHistoryAge);
+        }, this.cleanupInterval);
+        
+        // Очищаем таймер при выходе из процесса (если возможно)
+        if (typeof process !== 'undefined' && process.on) {
+            process.on('SIGTERM', () => {
+                this.stopPeriodicCleanup();
+            });
+            process.on('SIGINT', () => {
+                this.stopPeriodicCleanup();
+            });
+        }
+    }
+    
+    /**
+     * Остановка периодической очистки
+     * @private
+     */
+    stopPeriodicCleanup() {
+        if (this.cleanupTimer) {
+            clearInterval(this.cleanupTimer);
+            this.cleanupTimer = null;
+        }
+    }
+    
+    /**
+     * Очистка старых записей из истории
+     * @param {number} maxAge - Максимальный возраст записей в миллисекундах (по умолчанию 7 дней)
+     */
+    cleanupHistory(maxAge = null) {
+        const ageToUse = maxAge !== null ? maxAge : this.maxHistoryAge;
+        const cutoffTime = new Date(Date.now() - ageToUse);
         const initialLength = this.workerHistory.length;
         
-        this.workerHistory = this.workerHistory.filter(
-            w => w.startTime >= cutoffTime
-        );
+        // Фильтруем записи, старше cutoffTime
+        this.workerHistory = this.workerHistory.filter(w => {
+            const startTime = w.startTime instanceof Date ? w.startTime : new Date(w.startTime);
+            return startTime >= cutoffTime;
+        });
 
         const removed = initialLength - this.workerHistory.length;
-        if (removed > 0 && LoggerService.isInitialized) {
-            LoggerService.info('Worker history cleaned up', {
-                service: 'WorkerMonitoringService',
-                removed,
-                remaining: this.workerHistory.length
-            });
+        if (removed > 0) {
+            if (LoggerService.isInitialized) {
+                LoggerService.info('Worker history cleaned up', {
+                    service: 'WorkerMonitoringService',
+                    removed,
+                    remaining: this.workerHistory.length,
+                    maxAge: `${ageToUse / (24 * 60 * 60 * 1000)} days`
+                });
+            } else {
+                console.log(`🧹 Worker history cleaned: removed ${removed} old entries, ${this.workerHistory.length} remaining`);
+            }
+        }
+        
+        // Дополнительно ограничиваем размер, если после очистки по возрасту все еще слишком много
+        if (this.workerHistory.length > this.maxHistorySize) {
+            const additionalRemoved = this.workerHistory.length - this.maxHistorySize;
+            this.workerHistory = this.workerHistory.slice(0, this.maxHistorySize);
+            if (LoggerService.isInitialized) {
+                LoggerService.info('Worker history trimmed by size limit', {
+                    service: 'WorkerMonitoringService',
+                    additionalRemoved,
+                    finalSize: this.workerHistory.length
+                });
+            }
         }
     }
 }

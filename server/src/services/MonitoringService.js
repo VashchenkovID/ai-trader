@@ -319,6 +319,29 @@ class MonitoringService {
      * Создание алерта
      */
     createAlert(category, severity, message, details = null) {
+        // Проверяем на дубликаты (cooldown для одинаковых алертов)
+        const alertKey = `${category}_${severity}_${message}`;
+        const lastAlertTime = this.lastAlertTimes?.get(alertKey) || 0;
+        const now = Date.now();
+        const cooldownMs = 5 * 60 * 1000; // 5 минут cooldown для одинаковых алертов
+        
+        // Если такой же алерт был недавно, не создаем новый
+        if (now - lastAlertTime < cooldownMs && (severity === 'high' || severity === 'critical')) {
+            LoggerService.debug(`Алерт пропущен (cooldown): ${message}`, {
+                service: 'MonitoringService',
+                category,
+                severity,
+                lastAlertTime: new Date(lastAlertTime).toISOString(),
+                cooldownMinutes: 5
+            });
+            return null;
+        }
+        
+        // Инициализируем Map для хранения времени последних алертов
+        if (!this.lastAlertTimes) {
+            this.lastAlertTimes = new Map();
+        }
+        
         const alert = {
             id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             category, // 'application', 'database', 'neural_network', 'system', 'cache', 'websocket', 'scheduler'
@@ -329,6 +352,16 @@ class MonitoringService {
             resolved: false,
             resolvedAt: null
         };
+        
+        // Сохраняем время создания алерта
+        this.lastAlertTimes.set(alertKey, now);
+        
+        // Очищаем старые записи (старше 1 часа)
+        for (const [key, time] of this.lastAlertTimes.entries()) {
+            if (now - time > 60 * 60 * 1000) {
+                this.lastAlertTimes.delete(key);
+            }
+        }
         
         // Добавляем алерт в список
         this.alerts.unshift(alert);

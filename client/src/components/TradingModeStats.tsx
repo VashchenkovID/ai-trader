@@ -20,7 +20,6 @@ interface ModeStats {
 
 interface StatsByMode {
   paper: ModeStats;
-  micro: ModeStats;
   real: ModeStats;
 }
 
@@ -65,12 +64,12 @@ const TradingModeStats: React.FC = () => {
 
     // Данные для круговой диаграммы по режимам
     const pieData = {
-      labels: ['Paper Trading', 'Micro Trading', 'Real Trading'],
+      labels: ['Paper Trading', 'Real Trading'],
       datasets: [
         {
-          data: [stats.paper.total, stats.micro.total, stats.real.total],
-          backgroundColor: ['#3B82F6', '#F59E0B', '#EF4444'],
-          hoverBackgroundColor: ['#2563EB', '#D97706', '#DC2626']
+          data: [stats.paper.total, stats.real.total],
+          backgroundColor: ['#3B82F6', '#EF4444'],
+          hoverBackgroundColor: ['#2563EB', '#DC2626']
         }
       ]
     };
@@ -83,11 +82,6 @@ const TradingModeStats: React.FC = () => {
           label: 'Paper',
           data: [stats.paper.pending, stats.paper.approved, stats.paper.executed, stats.paper.rejected],
           backgroundColor: '#3B82F6'
-        },
-        {
-          label: 'Micro',
-          data: [stats.micro.pending, stats.micro.approved, stats.micro.executed, stats.micro.rejected],
-          backgroundColor: '#F59E0B'
         },
         {
           label: 'Real',
@@ -188,8 +182,8 @@ const TradingModeStats: React.FC = () => {
     return (
       <div className="trading-mode-stats">
         <div className="grid">
-          {[1, 2, 3].map((item) => (
-            <div key={item} className="col-12 md:col-4">
+          {[1, 2].map((item) => (
+            <div key={item} className="col-12 md:col-6">
               <Card className="h-full">
                 <div className="flex align-items-center gap-2 mb-3">
                   <Skeleton width="2rem" height="2rem" />
@@ -238,13 +232,10 @@ const TradingModeStats: React.FC = () => {
 
       {/* Карточки по режимам */}
       <div className="grid mb-4">
-        <div className="col-12 md:col-4">
+        <div className="col-12 md:col-6">
           {getModeCard('paper', 'Paper Trading', '📝', 'info')}
         </div>
-        <div className="col-12 md:col-4">
-          {getModeCard('micro', 'Micro Trading', '🔬', 'warning')}
-        </div>
-        <div className="col-12 md:col-4">
+        <div className="col-12 md:col-6">
           {getModeCard('real', 'Real Trading', '💰', 'danger')}
         </div>
       </div>
@@ -294,7 +285,7 @@ const TradingModeStats: React.FC = () => {
             <div className="col-12 md:col-3">
               <div className="text-center p-3">
                 <div className="text-3xl font-bold text-primary mb-2">
-                  {stats.paper.total + stats.micro.total + stats.real.total}
+                  {stats.paper.total + stats.real.total}
                 </div>
                 <div className="text-600">Всего заявок</div>
               </div>
@@ -303,7 +294,7 @@ const TradingModeStats: React.FC = () => {
             <div className="col-12 md:col-3">
               <div className="text-center p-3">
                 <div className="text-3xl font-bold text-orange-500 mb-2">
-                  {stats.paper.pending + stats.micro.pending + stats.real.pending}
+                  {stats.paper.pending + stats.real.pending}
                 </div>
                 <div className="text-600">Ожидают решения</div>
               </div>
@@ -312,7 +303,7 @@ const TradingModeStats: React.FC = () => {
             <div className="col-12 md:col-3">
               <div className="text-center p-3">
                 <div className="text-3xl font-bold text-green-500 mb-2">
-                  {stats.paper.executed + stats.micro.executed + stats.real.executed}
+                  {stats.paper.executed + stats.real.executed}
                 </div>
                 <div className="text-600">Исполнено</div>
               </div>
@@ -322,8 +313,8 @@ const TradingModeStats: React.FC = () => {
               <div className="text-center p-3">
                 <div className="text-3xl font-bold text-blue-500 mb-2">
                   {(() => {
-                    const total = stats.paper.total + stats.micro.total + stats.real.total;
-                    const executed = stats.paper.executed + stats.micro.executed + stats.real.executed;
+                    const total = stats.paper.total + stats.real.total;
+                    const executed = stats.paper.executed + stats.real.executed;
                     return total > 0 ? ((executed / total) * 100).toFixed(1) : '0.0';
                   })()}%
                 </div>
