@@ -490,8 +490,8 @@ class StackingService {
                 return;
             }
             
-            // Сохраняем архитектуру модели
-            const modelJson = this.metaModel.toJSON();
+            // Сохраняем архитектуру модели (используем toJSON(null, false) для совместимости)
+            const modelJson = this.metaModel.toJSON(null, false);
             await fs.writeFile(this.modelFile, JSON.stringify(modelJson, null, 2));
             
             // Сохраняем веса
@@ -528,8 +528,14 @@ class StackingService {
             // Загружаем архитектуру
             const modelJson = JSON.parse(await fs.readFile(this.modelFile, 'utf-8'));
             
+            // modelFromJSON принимает объект модели напрямую (результат toJSON(null, false))
+            // Если файл был сохранен в старом формате с modelTopology, извлекаем его
+            const modelTopology = (modelJson && 'modelTopology' in modelJson) 
+                ? modelJson.modelTopology 
+                : modelJson;
+            
             // Создаем модель из JSON
-            this.metaModel = await tf.models.modelFromJSON(modelJson);
+            this.metaModel = await tf.models.modelFromJSON(modelTopology);
             
             // Загружаем веса
             const weightsData = JSON.parse(await fs.readFile(this.weightsFile, 'utf-8'));
