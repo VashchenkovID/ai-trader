@@ -525,23 +525,30 @@ class StackingService {
                 return;
             }
             
-            // Загружаем архитектуру
-            const modelJson = JSON.parse(await fs.readFile(this.modelFile, 'utf-8'));
+            // Загружаем архитектуру (как в OptimizedTrainingService и NeuralNetworkService)
+            const archRaw = await fs.readFile(this.modelFile, 'utf-8');
+            const arch = JSON.parse(archRaw);
             
-            // modelFromJSON принимает объект модели напрямую (результат toJSON(null, false))
-            // Если файл был сохранен в старом формате с modelTopology, извлекаем его
-            const modelTopology = (modelJson && 'modelTopology' in modelJson) 
-                ? modelJson.modelTopology 
-                : modelJson;
+            // Используем tf.models.modelFromJSON для автоматической обработки структуры
+            // (как в OptimizedTrainingService.js:1956 и NeuralNetworkService.js:560)
+            this.metaModel = await tf.models.modelFromJSON(arch);
             
-            // Создаем модель из JSON
-            this.metaModel = await tf.models.modelFromJSON(modelTopology);
-            
-            // Загружаем веса
+            // Загружаем веса (адаптируем формат под существующий)
             const weightsData = JSON.parse(await fs.readFile(this.weightsFile, 'utf-8'));
-            const weights = weightsData.weights.map((w, i) => 
-                tf.tensor(w, weightsData.shapes[i])
-            );
+            
+            // Поддерживаем оба формата: новый (specs) и старый (weights + shapes)
+            let weights;
+            if (weightsData.specs && Array.isArray(weightsData.specs)) {
+                // Новый формат (как в других сервисах)
+                weights = weightsData.specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
+            } else if (weightsData.weights && Array.isArray(weightsData.weights) && weightsData.shapes) {
+                // Старый формат (текущий в StackingService)
+                weights = weightsData.weights.map((w, i) => 
+                    tf.tensor(w, weightsData.shapes[i])
+                );
+            } else {
+                throw new Error('Invalid weights format: missing specs or weights+shapes');
+            }
             
             this.metaModel.setWeights(weights);
             

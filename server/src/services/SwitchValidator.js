@@ -60,6 +60,8 @@ class SwitchValidator {
 
         try {
             const riskStats = RiskManagementService.getDetailedStats();
+            // Обновляем win rate из актуальных данных портфеля
+            await this.updateStatsFromPortfolio(riskStats);
             const checks = await this.performValidationChecks(riskStats, this.microCapitalCriteria);
             
             const validation = {
@@ -92,6 +94,8 @@ class SwitchValidator {
 
         try {
             const riskStats = RiskManagementService.getDetailedStats();
+            // Обновляем win rate из актуальных данных портфеля
+            await this.updateStatsFromPortfolio(riskStats);
             const checks = await this.performValidationChecks(riskStats, this.fullTradingCriteria);
             
             const validation = {
@@ -540,6 +544,48 @@ class SwitchValidator {
         } catch (error) {
             console.error('❌ Ошибка проверки мониторинга:', error);
             return false;
+        }
+    }
+
+    /**
+     * Обновление статистики из актуальных данных портфеля
+     */
+    async updateStatsFromPortfolio(riskStats) {
+        try {
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const portfolio = await TradingEngine.getPortfolioValue();
+            const trades = portfolio?.trades || [];
+            const rawPositions = portfolio?.positions || {};
+            
+            // Рассчитываем позиции и P&L из портфеля (как в /api/portfolio)
+            const { calculatePositionsWithStrategies, calculatePnLFromPositions } = await import('../utils/portfolioPositionsCalculator.js');
+            const positionsByFigi = await calculatePositionsWithStrategies(portfolio, rawPositions, trades);
+            const pnlResult = await calculatePnLFromPositions(portfolio, positionsByFigi, rawPositions);
+            
+            // Обновляем win rate из актуальных данных портфеля
+            if (pnlResult.winRate !== undefined && pnlResult.winRate !== null) {
+                // winRate уже в диапазоне 0-1 из calculatePnLFromPositions
+                riskStats.stats.winRate = pnlResult.winRate;
+            }
+            
+            // Обновляем totalTrades из актуальных данных
+            if (pnlResult.totalTrades !== undefined && pnlResult.totalTrades !== null) {
+                riskStats.stats.totalTrades = pnlResult.totalTrades;
+            }
+            
+            // Обновляем Sharpe ratio если доступен
+            if (pnlResult.sharpeRatio !== undefined && pnlResult.sharpeRatio !== null) {
+                riskStats.stats.sharpeRatio = pnlResult.sharpeRatio;
+            }
+            
+            // Обновляем totalPnL
+            if (pnlResult.totalPnL !== undefined && pnlResult.totalPnL !== null) {
+                riskStats.stats.totalPnL = pnlResult.totalPnL;
+            }
+            
+        } catch (error) {
+            console.warn('⚠️ Не удалось обновить статистику из портфеля для валидации:', error.message);
+            // Продолжаем с существующими данными из RiskManagementService
         }
     }
 }
