@@ -37,9 +37,13 @@ class PerformanceVisualizationService {
             const endDate = new Date();
             const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
 
+            // Фильтруем только закрытые сделки с рассчитанным PnL (исключаем открытые позиции BUY)
             const periodTrades = trades.filter(trade => {
                 const tradeDate = new Date(trade.timestamp || trade.date || trade.createdAt);
                 return tradeDate >= startDate && tradeDate <= endDate;
+            }).filter(trade => {
+                // Учитываем только сделки с рассчитанным PnL (закрытые позиции)
+                return (trade.pnl !== null && trade.pnl !== undefined) || (trade.profit !== null && trade.profit !== undefined);
             }).sort((a, b) => {
                 const dateA = new Date(a.timestamp || a.date || a.createdAt);
                 const dateB = new Date(b.timestamp || b.date || b.createdAt);

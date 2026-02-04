@@ -969,8 +969,8 @@ class SchedulerService {
         );
 
         // Задача 20: Автоматическая ребалансировка портфеля
-        // Расписание из настроек (по умолчанию: ежедневно в 2:00)
-        const portfolioRebalancingSchedule = await SettingsService.getSetting('portfolio_rebalancing_check_interval', '0 2 * * *');
+        // Расписание из настроек (по умолчанию: ежедневно в 10:00 утра, когда торги открыты)
+        const portfolioRebalancingSchedule = await SettingsService.getSetting('portfolio_rebalancing_check_interval', '0 10 * * *');
         this.portfolioRebalancingTask = SchedulerUtils.createScheduledTask(
             portfolioRebalancingSchedule,
             async () => {
@@ -2628,6 +2628,7 @@ class SchedulerService {
                 
                 if (workerId) {
                     const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    const remainingOperations = totalOperations - currentOperation;
                     WorkerMonitoringService.updateWorkerStatus(workerId, {
                         progress,
                         metadata: {
@@ -2638,7 +2639,10 @@ class SchedulerService {
                             currentInstrument: i + 1,
                             totalInstruments: instruments.length,
                             currentTicker: instrument.ticker || instrument.figi?.substring(0, 10),
-                            figi: instrument.figi
+                            figi: instrument.figi,
+                            currentOperation,
+                            totalOperations,
+                            remainingOperations
                         }
                     });
                 }
@@ -2681,6 +2685,7 @@ class SchedulerService {
                 
                 if (workerId) {
                     const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    const remainingOperations = totalOperations - currentOperation;
                     WorkerMonitoringService.updateWorkerStatus(workerId, {
                         progress,
                         metadata: {
@@ -2691,7 +2696,10 @@ class SchedulerService {
                             currentInstrument: i + 1,
                             totalInstruments: instruments.length,
                             currentTicker: instrument.ticker || instrument.figi?.substring(0, 10),
-                            figi: instrument.figi
+                            figi: instrument.figi,
+                            currentOperation,
+                            totalOperations,
+                            remainingOperations
                         }
                     });
                 }
@@ -2741,6 +2749,7 @@ class SchedulerService {
                 
                 if (workerId) {
                     const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    const remainingOperations = totalOperations - currentOperation;
                     WorkerMonitoringService.updateWorkerStatus(workerId, {
                         progress,
                         metadata: {
@@ -2751,7 +2760,10 @@ class SchedulerService {
                             currentInstrument: i + 1,
                             totalInstruments: instruments.length,
                             currentTicker: instrument.ticker || instrument.figi?.substring(0, 10),
-                            figi: instrument.figi
+                            figi: instrument.figi,
+                            currentOperation,
+                            totalOperations,
+                            remainingOperations
                         }
                     });
                 }
@@ -2789,6 +2801,7 @@ class SchedulerService {
                 
                 if (workerId) {
                     const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    const remainingOperations = totalOperations - currentOperation;
                     WorkerMonitoringService.updateWorkerStatus(workerId, {
                         progress,
                         metadata: {
@@ -2799,7 +2812,10 @@ class SchedulerService {
                             currentInstrument: i + 1,
                             totalInstruments: instruments.length,
                             currentTicker: instrument.ticker || instrument.figi?.substring(0, 10),
-                            figi: instrument.figi
+                            figi: instrument.figi,
+                            currentOperation,
+                            totalOperations,
+                            remainingOperations
                         }
                     });
                 }

@@ -13,7 +13,7 @@ class QuickTrainingService {
     constructor() {
         this.isTraining = false;
         this.batchSize = 10; // Количество инструментов за один запуск (по умолчанию)
-        this.minHoursSinceLastTraining = 2; // Минимальное время между обучениями одного инструмента
+        this.minHoursSinceLastTraining = 24; // Минимальное время между обучениями одного инструмента (24 часа = 1 раз в сутки)
     }
 
     /**
@@ -35,15 +35,16 @@ class QuickTrainingService {
             // Получаем состояние обучения
             const state = await TrainingState.getOrCreateState('quick');
             
-            // Фильтруем инструменты: исключаем те, что были обучены менее 2 часов назад
-            const twoHoursAgo = new Date(Date.now() - this.minHoursSinceLastTraining * 60 * 60 * 1000);
+            // Фильтруем инструменты: исключаем те, что были обучены менее 24 часов назад (не более раза в сутки)
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
             
             // Получаем список инструментов, которые были обучены недавно
-            // Для этого можно использовать информацию из моделей или БД
-            // Пока используем простую логику: берем инструменты начиная с lastProcessedIndex
+            // Для этого проверяем время последнего обучения через ModelManager
             
             const startIndex = state.lastProcessedIndex;
             const selectedInstruments = [];
+            const ModelManager = (await import('../utils/ModelManager.js')).default;
+            const modelManager = new ModelManager();
             
             // Циклически проходим по списку инструментов
             for (let i = 0; i < allInstruments.length && selectedInstruments.length < batchSize; i++) {
@@ -54,7 +55,30 @@ class QuickTrainingService {
                 // Минимум нужно 30 дней данных
                 const hasEnoughData = await this.hasEnoughData(instrument.figi);
                 
-                if (hasEnoughData) {
+                if (!hasEnoughData) {
+                    continue;
+                }
+                
+                // Проверяем, когда последний раз обучалась модель для этого инструмента
+                // Проверяем базовую модель (основная модель для инструмента)
+                let canTrain = true;
+                try {
+                    const modelName = `neural-network/${instrument.figi}`;
+                    const modelInfo = await modelManager.getModelInfo(modelName);
+                    
+                    if (modelInfo && modelInfo.modified) {
+                        const lastTrainingTime = new Date(modelInfo.modified);
+                        if (lastTrainingTime > oneDayAgo) {
+                            // Модель обучалась менее 24 часов назад - пропускаем
+                            canTrain = false;
+                        }
+                    }
+                } catch (error) {
+                    // Если не удалось получить информацию о модели, считаем что можно обучать
+                    // (модель может не существовать, что нормально для новых инструментов)
+                }
+                
+                if (canTrain) {
                     selectedInstruments.push(instrument);
                 }
             }

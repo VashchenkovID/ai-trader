@@ -7,6 +7,7 @@ services:
     image: postgres:15-alpine
     container_name: ai-trader-db
     environment:
+      TZ: Europe/Moscow
       POSTGRES_DB: ${DB_NAME:-smart_exchange}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -32,6 +33,7 @@ services:
       dockerfile: Dockerfile
     container_name: ai-trader-server
     environment:
+      TZ: Europe/Moscow
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 3001
       DB_HOST: postgres

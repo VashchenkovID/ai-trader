@@ -335,6 +335,22 @@ class ProfitabilityTracker {
     }
 
     /**
+     * Получение даты из строки недели (формат: "2024-W01")
+     */
+    getDateFromWeek(weekString) {
+        try {
+            const [year, week] = weekString.split('-W');
+            const firstDayOfYear = new Date(parseInt(year), 0, 1);
+            const daysOffset = (parseInt(week) - 1) * 7;
+            const weekStart = new Date(firstDayOfYear);
+            weekStart.setDate(firstDayOfYear.getDate() + daysOffset - firstDayOfYear.getDay());
+            return weekStart;
+        } catch (error) {
+            return new Date();
+        }
+    }
+
+    /**
      * Анализ прибыльности за период
      */
     async analyzeProfitability(period = 'month', days = 30) {
@@ -358,7 +374,7 @@ class ProfitabilityTracker {
             }
 
             // Рассчитываем метрики
-            const metrics = this.calculateMetrics(stats, period);
+            const metrics = await this.calculateMetrics(stats, period);
             
             // Анализируем тренды
             const trends = this.analyzeTrends(stats, period);
@@ -446,7 +462,7 @@ class ProfitabilityTracker {
     /**
      * Расчет метрик прибыльности
      */
-    calculateMetrics(stats, period) {
+    async calculateMetrics(stats, period) {
         if (stats.length === 0) {
             return {
                 totalProfit: 0,
@@ -468,14 +484,135 @@ class ProfitabilityTracker {
         const winRate = totalTrades > 0 ? profitableTrades / totalTrades : 0;
         const averageDailyProfit = totalProfit / stats.length;
         
-        // Расчет волатильности
-        const profits = stats.map(stat => stat.totalProfit);
-        const avgProfit = profits.reduce((sum, p) => sum + p, 0) / profits.length;
-        const variance = profits.reduce((sum, p) => sum + Math.pow(p - avgProfit, 2), 0) / profits.length;
-        const volatility = Math.sqrt(variance);
+        // Для расчета Sharpe Ratio используем относительные доходности, а не абсолютные прибыли
+        // Разделяем расчет для реального и виртуального портфеля
+        let volatility = 0;
+        let sharpeRatio = 0;
         
-        // Расчет коэффициента Шарпа (упрощенный)
-        const sharpeRatio = volatility > 0 ? averageDailyProfit / volatility : 0;
+        try {
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const TradingModeManager = (await import('./TradingModeManager.js')).default;
+            
+            // Получаем текущий режим торговли
+            const currentMode = TradingModeManager.getCurrentMode();
+            const mode = currentMode?.mode || currentMode || 'paper';
+            
+            // Получаем портфель для текущего режима
+            let portfolio;
+            let initialCapital = 1000000; // Значение по умолчанию
+            
+            if (mode === 'paper') {
+                // Виртуальный портфель
+                portfolio = await TradingEngine.getVirtualPortfolioValue();
+                initialCapital = portfolio?.initialCapital || initialCapital;
+            } else {
+                // Реальный портфель
+                try {
+                    portfolio = await TradingEngine.getRealPortfolioValue();
+                    initialCapital = portfolio?.initialCapital || initialCapital;
+                } catch (error) {
+                    // Если не удалось получить реальный портфель, используем виртуальный
+                    portfolio = await TradingEngine.getVirtualPortfolioValue();
+                    initialCapital = portfolio?.initialCapital || initialCapital;
+                }
+            }
+            
+            // Получаем сделки для текущего режима
+            let trades = [];
+            if (mode === 'paper') {
+                // Виртуальные сделки
+                trades = TradingEngine.virtualPortfolio?.trades || [];
+            } else {
+                // Реальные сделки - получаем из БД
+                try {
+                    const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+                    const closedTrades = await PnLCalculationService.getClosedTrades('real');
+                    trades = closedTrades || [];
+                } catch (error) {
+                    // Если не удалось получить реальные сделки, используем виртуальные
+                    trades = TradingEngine.virtualPortfolio?.trades || [];
+                }
+            }
+            
+            // Фильтруем сделки по периоду статистики и только закрытые сделки с PnL
+            // Определяем даты начала и конца периода из stats
+            let statsStartDate = new Date();
+            let statsEndDate = new Date();
+            
+            if (stats.length > 0) {
+                // Для дневной статистики используем date
+                if (stats[0].date) {
+                    statsStartDate = new Date(stats[0].date);
+                    statsEndDate = new Date(stats[stats.length - 1].date);
+                } 
+                // Для недельной статистики используем week (формат: "2024-W01")
+                else if (stats[0].week) {
+                    const firstWeek = stats[0].week;
+                    const lastWeek = stats[stats.length - 1].week;
+                    // Преобразуем неделю в дату (первый день недели)
+                    statsStartDate = this.getDateFromWeek(firstWeek);
+                    statsEndDate = this.getDateFromWeek(lastWeek);
+                    // Добавляем 6 дней к конечной дате, чтобы получить последний день недели
+                    statsEndDate = new Date(statsEndDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+                }
+                // Для месячной статистики используем month (формат: "2024-01")
+                else if (stats[0].month) {
+                    statsStartDate = new Date(stats[0].month + '-01');
+                    const lastMonth = stats[stats.length - 1].month;
+                    // Получаем последний день месяца
+                    const lastMonthDate = new Date(lastMonth + '-01');
+                    lastMonthDate.setMonth(lastMonthDate.getMonth() + 1);
+                    lastMonthDate.setDate(0);
+                    statsEndDate = lastMonthDate;
+                }
+            }
+            
+            const periodTrades = trades.filter(trade => {
+                const tradeDate = new Date(trade.timestamp || trade.date || trade.createdAt);
+                return tradeDate >= statsStartDate && 
+                       tradeDate <= statsEndDate &&
+                       trade.pnl !== null && 
+                       trade.pnl !== undefined &&
+                       trade.type !== 'BUY';
+            }).sort((a, b) => {
+                const dateA = new Date(a.timestamp || a.date || a.createdAt);
+                const dateB = new Date(b.timestamp || b.date || b.createdAt);
+                return dateA - dateB;
+            });
+            
+            // Рассчитываем относительные доходности (в процентах) от капитала
+            const returns = [];
+            let runningCapital = initialCapital;
+            
+            for (const trade of periodTrades) {
+                if (runningCapital > 0) {
+                    // Относительная доходность от текущего капитала
+                    const returnPercent = (trade.pnl / runningCapital) * 100;
+                    returns.push(returnPercent);
+                    runningCapital += trade.pnl; // Обновляем капитал для следующей сделки
+                }
+            }
+            
+            // Расчет волатильности из относительных доходностей
+            if (returns.length > 1) {
+                const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+                const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+                volatility = Math.sqrt(variance);
+                
+                // Sharpe Ratio: (Average Return - Risk-Free Rate) / Volatility
+                // Безрисковая ставка = 0 для упрощения
+                sharpeRatio = volatility > 0 ? avgReturn / volatility : 0;
+            } else if (returns.length === 1) {
+                // Если только одна сделка, волатильность = 0, Sharpe Ratio = 0
+                volatility = 0;
+                sharpeRatio = 0;
+            }
+        } catch (error) {
+            console.warn('⚠️ Ошибка расчета Sharpe Ratio:', error.message);
+            // Используем значения по умолчанию
+            volatility = 0;
+            sharpeRatio = 0;
+        }
         
         // Расчет фактора прибыли
         const grossProfit = stats.reduce((sum, stat) => sum + Math.max(0, stat.totalProfit), 0);

@@ -233,15 +233,21 @@ class PerformanceAnalyzer {
                 unrealizedProfit = 0;
             }
             
-            const totalTrades = periodTrades.length;
-            const profitableTrades = periodTrades.filter(trade => (trade.pnl || 0) > 0).length;
+            // Фильтруем только закрытые сделки с рассчитанным PnL (исключаем открытые позиции BUY)
+            const closedTrades = periodTrades.filter(trade => {
+                // Учитываем только сделки с рассчитанным PnL (закрытые позиции)
+                return trade.pnl !== null && trade.pnl !== undefined && trade.type !== 'BUY';
+            });
+            
+            const totalTrades = closedTrades.length;
+            const profitableTrades = closedTrades.filter(trade => (trade.pnl || 0) > 0).length;
             const winRate = totalTrades > 0 ? profitableTrades / totalTrades : 0;
 
-            // Анализ по символам
-            const symbolAnalysis = this.analyzeBySymbols(periodTrades);
+            // Анализ по символам (только закрытые сделки)
+            const symbolAnalysis = this.analyzeBySymbols(closedTrades);
 
-            // Анализ по времени
-            const timeAnalysis = this.analyzeByTime(periodTrades);
+            // Анализ по времени (только закрытые сделки)
+            const timeAnalysis = this.analyzeByTime(closedTrades);
 
             // Анализ волатильности - рассчитываем из процентных доходностей, а не из абсолютных значений
             // Получаем начальный капитал для расчета процентных доходностей
@@ -249,7 +255,8 @@ class PerformanceAnalyzer {
             const returns = [];
             let runningCapital = initialCapital;
             
-            for (const trade of periodTrades) {
+            // Используем только закрытые сделки для расчета волатильности
+            for (const trade of closedTrades) {
                 const pnl = trade.pnl || 0;
                 if (runningCapital > 0) {
                     const returnPercent = (pnl / runningCapital) * 100; // Доходность в процентах
@@ -260,8 +267,8 @@ class PerformanceAnalyzer {
             
             const volatility = returns.length > 0 ? this.calculateVolatility(returns) : 0;
 
-            // Анализ максимальной просадки - рассчитываем в процентах от капитала
-            const drawdown = this.calculateDrawdown(periodTrades, initialCapital);
+            // Анализ максимальной просадки - рассчитываем в процентах от капитала (только закрытые сделки)
+            const drawdown = this.calculateDrawdown(closedTrades, initialCapital);
 
             return {
                 totalProfit,

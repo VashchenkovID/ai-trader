@@ -473,26 +473,45 @@ router.get('/summary', async (req, res) => {
             // Для sharpeRatio нужны доходности, попробуем рассчитать из сделок
             const trades = await TradingEngine.getTradeHistory(1000);
             if (trades.length > 0) {
-                const returns = [];
-                const portfolio = await TradingEngine.getPortfolioValue();
-                const initialCapital = portfolio?.initialCapital || 1000000;
+                // Фильтруем только закрытые сделки с PnL
+                const closedTrades = trades.filter(trade => 
+                    trade.pnl !== undefined && trade.pnl !== null && trade.type !== 'BUY'
+                ).sort((a, b) => {
+                    const dateA = new Date(a.timestamp || a.date || a.createdAt);
+                    const dateB = new Date(b.timestamp || b.date || b.createdAt);
+                    return dateA - dateB;
+                });
                 
-                // Собираем доходности только от закрытых сделок (с PnL)
-                for (const trade of trades) {
-                    if (trade.pnl !== undefined && trade.pnl !== null && initialCapital > 0) {
-                        // Рассчитываем доходность как процент от начального капитала
-                        const returnPercent = (trade.pnl / initialCapital) * 100;
-                        returns.push(returnPercent);
+                if (closedTrades.length > 1) {
+                    const portfolio = await TradingEngine.getPortfolioValue();
+                    const initialCapital = portfolio?.initialCapital || 1000000;
+                    const returns = [];
+                    let runningCapital = initialCapital;
+                    
+                    // Рассчитываем относительные доходности (в процентах) от текущего капитала
+                    for (const trade of closedTrades) {
+                        if (runningCapital > 0) {
+                            // Относительная доходность от текущего капитала
+                            const returnPercent = (trade.pnl / runningCapital) * 100;
+                            returns.push(returnPercent);
+                            runningCapital += trade.pnl; // Обновляем капитал для следующей сделки
+                        }
                     }
-                }
-                
-                if (returns.length > 1) { // Нужно минимум 2 точки для расчета волатильности
-                    const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-                    const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
-                    const volatility = Math.sqrt(variance);
-                    baseMetrics.sharpeRatio = volatility > 0 ? avgReturn / volatility : 0;
-                } else if (returns.length === 1) {
-                    // Если только одна сделка, sharpeRatio = 0 (недостаточно данных)
+                    
+                    if (returns.length > 1) {
+                        const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+                        const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+                        const volatility = Math.sqrt(variance);
+                        
+                        // Sharpe Ratio: (Average Return - Risk-Free Rate) / Volatility
+                        // Безрисковая ставка = 0 для упрощения
+                        // Если средняя доходность отрицательная, Sharpe Ratio будет отрицательным (это нормально)
+                        baseMetrics.sharpeRatio = volatility > 0 ? avgReturn / volatility : 0;
+                    } else {
+                        baseMetrics.sharpeRatio = 0;
+                    }
+                } else {
+                    // Недостаточно данных для расчета
                     baseMetrics.sharpeRatio = 0;
                 }
             }

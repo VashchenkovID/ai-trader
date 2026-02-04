@@ -18,11 +18,15 @@ FROM node:22.15.0-alpine
 # Установка необходимых системных зависимостей
 # Добавляем glibc для onnxruntime-node (требует glibc вместо musl)
 # Добавляем su-exec для переключения пользователя
+# Добавляем tzdata для настройки часового пояса (Москва)
 RUN apk add --no-cache \
     postgresql-client \
     gcompat \
     su-exec \
-    && rm -rf /var/cache/apk/*
+    tzdata \
+    && rm -rf /var/cache/apk/* \
+    && cp /usr/share/zoneinfo/Europe/Moscow /etc/localtime \
+    && echo "Europe/Moscow" > /etc/timezone
 
 # Альтернативный способ: установка glibc через wget (если gcompat недостаточно)
 # RUN apk add --no-cache wget && \
