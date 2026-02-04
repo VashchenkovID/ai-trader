@@ -339,20 +339,25 @@ class SchedulerService {
         );
 
         // Задача 3: Периодическое обучение нейросети
+        // ВАЖНО: Это основная операция, должна запускаться строго по расписанию без пропусков
         this.trainingTask = SchedulerUtils.createScheduledTask(
             trainingSchedule,
             async () => {
+                console.log(`⏰ [Full Training] Cron triggered at ${new Date().toLocaleString('ru-RU')}`);
+                // Для планового обучения используем force: true, чтобы оно всегда запускалось
                 await this.performScheduledTraining();
             },
             {
                 taskName: 'training',
                 sendAlerts: true,
                 alertType: 'critical',
-                startTime: this.startTime,
-                minDelay: 60 * 1000,
-                checkCacheStale: true,
-                isCacheStaleFn: () => this.isCacheStale(),
-                skipIfStale: false // Ждем обновления кеша
+                // НЕ используем startTime и minDelay для полного обучения - оно должно запускаться строго по расписанию
+                // даже если сервер только что запустился
+                startTime: null,
+                minDelay: 0,
+                checkCacheStale: false, // Не проверяем устаревание кеша - полное обучение должно запускаться строго по расписанию
+                skipIfStale: false, // Не пропускаем даже если кеш устарел
+                // НЕ используем checkFlagFn - полное обучение должно запускаться независимо от других операций
             }
         );
 
@@ -2488,16 +2493,47 @@ class SchedulerService {
     async performFullTraining(options = {}) {
         const { skipChecks = false, force = false } = options;
         
-        // Проверяем, не идет ли полное обновление кеша
-        if (!skipChecks && this.isFullCacheUpdateRunning) {
-            console.log('ℹ️ [Full Training] Пропущено: идет полное обновление кеша');
-            return { skipped: true, reason: 'cache_update_running' };
-        }
-        
-        // Проверяем, не идет ли уже обучение или анализ
-        if (!skipChecks && !force && (this.isTraining || this.isAnalyzing)) {
-            console.log('ℹ️ [Full Training] Пропущено: уже идет обучение или анализ');
-            return { skipped: true, reason: 'training_or_analysis_running' };
+        // Для планового обучения (force: true) пропускаем все проверки
+        // Это основная операция, которая должна запускаться строго по расписанию
+        if (!skipChecks && !force) {
+            // Проверяем, не идет ли полное обновление кеша (только для ручного запуска)
+            if (this.isFullCacheUpdateRunning) {
+                console.log('ℹ️ [Full Training] Пропущено: идет полное обновление кеша');
+                // Отправляем уведомление в Telegram
+                try {
+                    await OptimizedTelegramService.sendAlert(
+                        'TRAINING_SKIPPED',
+                        `⏸️ <b>ПОЛНОЕ ОБУЧЕНИЕ ПРОПУЩЕНО</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n📊 Причина: Идет полное обновление кеша\n\n🔄 Обучение будет выполнено после завершения обновления кеша`,
+                        'warning'
+                    );
+                } catch (telegramError) {
+                    console.warn('⚠️ Failed to send Telegram notification about training skip:', telegramError.message);
+                }
+                return { skipped: true, reason: 'cache_update_running' };
+            }
+            
+            // Проверяем, не идет ли уже обучение или анализ (только для ручного запуска)
+            if (this.isTraining || this.isAnalyzing) {
+                console.log('ℹ️ [Full Training] Пропущено: уже идет обучение или анализ');
+                return { skipped: true, reason: 'training_or_analysis_running' };
+            }
+        } else if (force) {
+            // Для планового обучения (force: true) логируем, что запускаем принудительно
+            console.log('✅ [Full Training] Принудительный запуск по расписанию (force: true) - пропускаем все проверки');
+            // Если уже идет обучение, логируем предупреждение, но продолжаем
+            if (this.isTraining || this.isAnalyzing) {
+                console.warn('⚠️ [Full Training] ВНИМАНИЕ: Обучение уже запущено, но продолжаем плановый запуск (force: true)');
+                // Отправляем уведомление в Telegram
+                try {
+                    await OptimizedTelegramService.sendAlert(
+                        'TRAINING_CONFLICT',
+                        `⚠️ <b>КОНФЛИКТ ОБУЧЕНИЯ</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n📊 Статус: Обучение уже запущено\n\n🔄 Продолжаем плановый запуск (force: true)\n\n⚠️ Внимание: Возможно параллельное выполнение обучения`,
+                        'warning'
+                    );
+                } catch (telegramError) {
+                    console.warn('⚠️ Failed to send Telegram notification about training conflict:', telegramError.message);
+                }
+            }
         }
 
         const startTime = Date.now();
@@ -2524,6 +2560,17 @@ class SchedulerService {
             console.warn('⚠️ Failed to register worker in monitoring service:', monitoringError);
         }
         
+        // Отправляем уведомление о запуске полного обучения (даже если оно потом может быть пропущено)
+        try {
+            await OptimizedTelegramService.sendAlert(
+                'TRAINING_STARTED',
+                `🧠 <b>ЗАПУСК ПОЛНОГО ОБУЧЕНИЯ</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n📊 Статус: Инициализация...\n\n🔄 Проверка необходимости обучения...`,
+                'info'
+            );
+        } catch (telegramError) {
+            console.warn('⚠️ Failed to send Telegram notification about training start:', telegramError.message);
+        }
+        
         try {
             // Обновляем статус: проверка деградации
             if (workerId) {
@@ -2540,8 +2587,9 @@ class SchedulerService {
             // Сначала проверяем деградацию и восстанавливаем best-модели
             await this.checkDegradationAndRestoreAll();
 
-            // Проверяем, нужно ли переобучение (если не принудительно)
+            // Проверяем, нужно ли переобучение
             if (!force) {
+                // Для ручного запуска: пропускаем обучение, если не требуется
                 const shouldRetrain = await this.shouldRetrainModel();
                 if (!shouldRetrain) {
                     console.log('ℹ️ [Full Training] Обучение не требуется по результатам проверки shouldRetrainModel');
@@ -2551,6 +2599,17 @@ class SchedulerService {
                             operation: 'performFullTraining',
                             reason: 'shouldRetrainModel returned false'
                         });
+                    }
+                    
+                    // Отправляем уведомление о том, что обучение пропущено
+                    try {
+                        await OptimizedTelegramService.sendAlert(
+                            'TRAINING_SKIPPED',
+                            `ℹ️ <b>ПОЛНОЕ ОБУЧЕНИЕ ПРОПУЩЕНО</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n📊 Причина: Обучение не требуется\n\n✅ Модели актуальны, переобучение не нужно`,
+                            'info'
+                        );
+                    } catch (telegramError) {
+                        console.warn('⚠️ Failed to send Telegram notification about training skip:', telegramError.message);
                     }
                     
                     if (workerId) {
@@ -2563,6 +2622,25 @@ class SchedulerService {
                     
                     this.isTraining = false;
                     return { skipped: true, reason: 'retraining_not_needed' };
+                }
+            } else {
+                // Для планового обучения (force: true): проверяем, но не прерываем процесс
+                // Отправляем предупреждение, если переобучение не обязательно, но продолжаем обучение
+                const shouldRetrain = await this.shouldRetrainModel();
+                if (!shouldRetrain) {
+                    console.log('⚠️ [Full Training] Плановое обучение: переобучение не обязательно, но продолжаем (force: true)');
+                    // Отправляем предупреждение в Telegram, но не прерываем процесс
+                    try {
+                        await OptimizedTelegramService.sendAlert(
+                            'TRAINING_WARNING',
+                            `⚠️ <b>ПРЕДУПРЕЖДЕНИЕ: ПЕРЕОБУЧЕНИЕ НЕ ОБЯЗАТЕЛЬНО</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n📊 Статус: Плановое обучение\n\nℹ️ Модели актуальны, переобучение не обязательно\n\n✅ Продолжаем обучение по расписанию (force: true)`,
+                            'warning'
+                        );
+                    } catch (telegramError) {
+                        console.warn('⚠️ Failed to send Telegram notification about training warning:', telegramError.message);
+                    }
+                } else {
+                    console.log('✅ [Full Training] Плановое обучение: переобучение требуется, продолжаем (force: true)');
                 }
             }
             
@@ -2909,9 +2987,12 @@ class SchedulerService {
 
     /**
      * Плановое обучение (вызывается по расписанию)
+     * ВАЖНО: Это основная операция, должна запускаться строго по расписанию без пропусков
      */
     async performScheduledTraining() {
-        return await this.performFullTraining({ skipChecks: false, force: false });
+        // Для планового обучения используем force: true, чтобы оно всегда запускалось
+        // skipChecks: true - пропускаем проверки на уже идущее обучение, так как это плановый запуск
+        return await this.performFullTraining({ skipChecks: true, force: true });
     }
 
     async performQuickTraining() {
