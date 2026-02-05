@@ -246,6 +246,18 @@ class StackingService {
                         basePredictions.push(0.5);
                     }
                     
+                    if (details.signals) {
+                        basePredictions.push(details.signals.confidence || 0.5);
+                    } else {
+                        basePredictions.push(0.5);
+                    }
+                    
+                    if (details.news) {
+                        basePredictions.push(details.news.confidence || 0.5);
+                    } else {
+                        basePredictions.push(0.5);
+                    }
+                    
                     // Метка: была ли рекомендация правильной
                     // Для этого нужно проверить фактический результат
                     // Пока используем score как приближение (если score > 0.5 и recommendation = BUY, то label = 1)
@@ -353,9 +365,17 @@ class StackingService {
                 return { success: false, reason: 'Features and labels mismatch' };
             }
             
-            // Создаем модель, если её нет
+            // Создаем модель, если её нет, или пересоздаем если размер входа не совпадает
             if (!this.metaModel) {
                 this.metaModel = this.createMetaModel(inputSize);
+            } else {
+                // Проверяем, что размер входа модели соответствует данным
+                const modelInputSize = this.metaModel.inputs?.[0]?.shape?.[1];
+                if (modelInputSize !== inputSize) {
+                    LoggerService.warn(`⚠️ Model input size mismatch (${modelInputSize} vs ${inputSize}), recreating model...`);
+                    this.metaModel.dispose();
+                    this.metaModel = this.createMetaModel(inputSize);
+                }
             }
             
             // Конвертируем в тензоры
