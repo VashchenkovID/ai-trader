@@ -642,6 +642,12 @@ class TinkoffApiService {
     // Получение торговых часов для инструмента
     async getTradingHours(figi) {
         try {
+            // Проверяем circuit breaker перед запросом
+            if (RetryService.isCircuitOpen('TinkoffAPI getTradingHours')) {
+                console.warn('⚠️ Circuit breaker is OPEN for TinkoffAPI. Cannot get trading hours.');
+                return null;
+            }
+
             const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.InstrumentsService/TradingSchedules', {
                 exchange: 'MOEX',
                 from: new Date().toISOString(),
@@ -660,6 +666,11 @@ class TinkoffApiService {
 
             return null;
         } catch (error) {
+            // Обрабатываем ошибку circuit breaker отдельно
+            if (error.message && error.message.includes('Circuit breaker is OPEN')) {
+                console.warn('⚠️ Circuit breaker is OPEN for TinkoffAPI. Cannot get trading hours.');
+                return null;
+            }
             console.error('Error getting trading hours:', error);
             return null;
         }
@@ -909,10 +920,33 @@ class TinkoffApiService {
      */
     async isTradingAvailable() {
         try {
+            // Проверяем circuit breaker перед запросом
+            if (RetryService.isCircuitOpen('TinkoffAPI isTradingAvailable')) {
+                console.warn('⚠️ Circuit breaker is OPEN for TinkoffAPI. Assuming trading is not available.');
+                return false;
+            }
+
             const now = new Date();
             const tradingHours = await this.getTradingHours('BBG004730N88'); // SBER как пример
             
             if (!tradingHours) {
+                // Если не удалось получить торговые часы, используем эвристику:
+                // В будние дни с 10:00 до 18:45 по московскому времени - вероятно торги идут
+                const moscowTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
+                const dayOfWeek = moscowTime.getDay(); // 0 = воскресенье, 6 = суббота
+                const hours = moscowTime.getHours();
+                const minutes = moscowTime.getMinutes();
+                
+                // Будние дни (понедельник-пятница) с 10:00 до 18:45
+                const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+                const isWithinTradingHours = (hours > 10 || (hours === 10 && minutes >= 0)) && 
+                                           (hours < 18 || (hours === 18 && minutes <= 45));
+                
+                if (isWeekday && isWithinTradingHours) {
+                    console.warn('⚠️ Cannot get trading hours from API, using heuristic: trading likely available');
+                    return true;
+                }
+                
                 return false;
             }
 
@@ -922,7 +956,29 @@ class TinkoffApiService {
 
             return isTradingDay && isWithinHours;
         } catch (error) {
+            // Обрабатываем ошибку circuit breaker отдельно
+            if (error.message && error.message.includes('Circuit breaker is OPEN')) {
+                console.warn('⚠️ Circuit breaker is OPEN for TinkoffAPI. Assuming trading is not available.');
+                return false;
+            }
             console.error('❌ Ошибка проверки доступности торговли:', error);
+            
+            // Fallback: используем эвристику на основе времени
+            const now = new Date();
+            const moscowTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
+            const dayOfWeek = moscowTime.getDay();
+            const hours = moscowTime.getHours();
+            const minutes = moscowTime.getMinutes();
+            
+            const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+            const isWithinTradingHours = (hours > 10 || (hours === 10 && minutes >= 0)) && 
+                                       (hours < 18 || (hours === 18 && minutes <= 45));
+            
+            if (isWeekday && isWithinTradingHours) {
+                console.warn('⚠️ Error checking trading availability, using heuristic: trading likely available');
+                return true;
+            }
+            
             return false;
         }
     }

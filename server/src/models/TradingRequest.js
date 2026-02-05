@@ -380,9 +380,24 @@ TradingRequest.addHook('afterFind', (instances) => {
     const requests = Array.isArray(instances) ? instances : [instances];
     
     requests.forEach(async (request) => {
-        if (request.status === 'PENDING' && request.getIsExpired()) {
-            request.status = 'EXPIRED';
-            await request.save();
+        if (!request || request.status !== 'PENDING') return;
+        
+        // Проверяем, что это экземпляр модели и метод доступен
+        if (typeof request.getIsExpired === 'function' && typeof request.save === 'function') {
+            // Это экземпляр модели - используем метод
+            if (request.getIsExpired()) {
+                request.status = 'EXPIRED';
+                await request.save();
+            }
+        } else if (request.expiresAt) {
+            // Это plain object (raw: true) - проверяем напрямую
+            // Не сохраняем, так как это plain object и save() недоступен
+            // Это нормально для бэкапов и экспорта
+            const isExpired = new Date() > new Date(request.expiresAt);
+            if (isExpired) {
+                request.status = 'EXPIRED';
+                // Не вызываем save() для plain objects
+            }
         }
     });
 });

@@ -302,59 +302,170 @@ class StackingService {
             // Собираем данные
             const { features, labels } = await this.collectTrainingData(trainingFigi);
             
+            if (!Array.isArray(features) || !Array.isArray(labels)) {
+                LoggerService.error('❌ Invalid training data format:', { 
+                    featuresType: typeof features, 
+                    labelsType: typeof labels,
+                    featuresIsArray: Array.isArray(features),
+                    labelsIsArray: Array.isArray(labels)
+                });
+                return { success: false, reason: 'Invalid data format' };
+            }
+            
             if (features.length < this.settings.minTrainingSamples) {
                 LoggerService.warn(`⚠️ Insufficient data for training: ${features.length} samples (need ${this.settings.minTrainingSamples})`);
                 return { success: false, reason: 'Insufficient data' };
             }
             
-            // Создаем модель, если её нет
+            if (features.length === 0) {
+                LoggerService.warn('⚠️ No training data collected');
+                return { success: false, reason: 'No training data' };
+            }
+            
+            // Проверяем, что features[0] существует и является массивом
+            if (!features[0] || !Array.isArray(features[0])) {
+                LoggerService.error('❌ Invalid features format:', {
+                    featuresLength: features.length,
+                    firstFeatureType: typeof features[0],
+                    firstFeatureIsArray: Array.isArray(features[0])
+                });
+                return { success: false, reason: 'Invalid features format' };
+            }
+            
+            // Проверяем, что все features имеют одинаковую длину
             const inputSize = features[0].length;
+            const inconsistentFeatures = features.find((f, idx) => !Array.isArray(f) || f.length !== inputSize);
+            if (inconsistentFeatures) {
+                LoggerService.error('❌ Inconsistent feature sizes:', {
+                    expectedSize: inputSize,
+                    inconsistentIndex: features.indexOf(inconsistentFeatures),
+                    inconsistentSize: inconsistentFeatures.length
+                });
+                return { success: false, reason: 'Inconsistent feature sizes' };
+            }
+            
+            // Проверяем, что labels соответствуют features
+            if (labels.length !== features.length) {
+                LoggerService.error('❌ Mismatch between features and labels:', {
+                    featuresLength: features.length,
+                    labelsLength: labels.length
+                });
+                return { success: false, reason: 'Features and labels mismatch' };
+            }
+            
+            // Создаем модель, если её нет
             if (!this.metaModel) {
                 this.metaModel = this.createMetaModel(inputSize);
             }
             
             // Конвертируем в тензоры
-            const xs = tf.tensor2d(features);
-            const ys = tf.tensor1d(labels);
+            let xs, ys;
+            try {
+                xs = tf.tensor2d(features);
+                ys = tf.tensor1d(labels);
+            } catch (tensorError) {
+                LoggerService.error('❌ Failed to create tensors:', {
+                    error: tensorError.message,
+                    featuresLength: features.length,
+                    labelsLength: labels.length,
+                    inputSize: inputSize
+                });
+                return { success: false, reason: 'Tensor creation failed', error: tensorError.message };
+            }
             
             // Обучение
-            const history = await this.metaModel.fit(xs, ys, {
-                epochs: this.settings.epochs,
-                batchSize: this.settings.batchSize,
-                validationSplit: this.settings.validationSplit,
-                verbose: 0,
-                callbacks: {
-                    onEpochEnd: (epoch, logs) => {
-                        if (epoch % 10 === 0) {
-                            LoggerService.info(`   Epoch ${epoch + 1}/${this.settings.epochs} - loss: ${logs.loss.toFixed(4)}, acc: ${logs.acc.toFixed(4)}`);
+            let history;
+            try {
+                history = await this.metaModel.fit(xs, ys, {
+                    epochs: this.settings.epochs,
+                    batchSize: this.settings.batchSize,
+                    validationSplit: this.settings.validationSplit,
+                    verbose: 0,
+                    callbacks: {
+                        onEpochEnd: (epoch, logs) => {
+                            if (epoch % 10 === 0) {
+                                const loss = logs?.loss || logs?.val_loss || 0;
+                                const acc = logs?.acc || logs?.accuracy || logs?.val_acc || logs?.val_accuracy || 0;
+                                LoggerService.info(`   Epoch ${epoch + 1}/${this.settings.epochs} - loss: ${loss.toFixed(4)}, acc: ${acc.toFixed(4)}`);
+                            }
                         }
                     }
-                }
-            });
+                });
+            } catch (fitError) {
+                LoggerService.error('❌ Failed during model.fit:', {
+                    error: {
+                        message: fitError.message,
+                        stack: fitError.stack,
+                        name: fitError.name
+                    },
+                    samples: features.length,
+                    inputSize: inputSize,
+                    batchSize: this.settings.batchSize
+                });
+                // Освобождаем память перед выходом
+                if (xs) xs.dispose();
+                if (ys) ys.dispose();
+                throw fitError;
+            }
             
-            // Освобождаем память
-            xs.dispose();
-            ys.dispose();
+            // Освобождаем память после успешного обучения
+            if (xs) xs.dispose();
+            if (ys) ys.dispose();
             
             // Сохраняем модель
-            await this.saveModel();
+            try {
+                await this.saveModel();
+            } catch (saveError) {
+                LoggerService.error('❌ Failed to save stacking model after training:', {
+                    error: {
+                        message: saveError.message,
+                        stack: saveError.stack
+                    }
+                });
+                // Не прерываем выполнение, модель все равно обучена в памяти
+            }
             
             this.settings.lastTrainingDate = new Date();
             
             LoggerService.info('✅ Stacking meta-model training completed');
             
+            // Проверяем наличие истории обучения
+            const finalLoss = history.history?.loss?.length > 0 
+                ? history.history.loss[history.history.loss.length - 1] 
+                : null;
+            const finalAccuracy = history.history?.acc?.length > 0 
+                ? history.history.acc[history.history.acc.length - 1] 
+                : (history.history?.accuracy?.length > 0 
+                    ? history.history.accuracy[history.history.accuracy.length - 1] 
+                    : null);
+            
             return {
                 success: true,
                 samples: features.length,
-                finalLoss: history.history.loss[history.history.loss.length - 1],
-                finalAccuracy: history.history.acc[history.history.acc.length - 1]
+                finalLoss: finalLoss,
+                finalAccuracy: finalAccuracy
             };
             
         } catch (error) {
-            LoggerService.error('❌ Failed to train stacking meta-model:', error);
+            LoggerService.error('❌ Failed to train stacking meta-model:', {
+                error: {
+                    message: error.message,
+                    stack: error.stack,
+                    name: error.name
+                },
+                service: 'ai-trader',
+                environment: process.env.NODE_ENV || 'production'
+            });
             return { success: false, error: error.message };
         } finally {
             this.isTraining = false;
+            // Освобождаем память TensorFlow, если тензоры были созданы
+            try {
+                if (typeof xs !== 'undefined' && xs) xs.dispose();
+                if (typeof ys !== 'undefined' && ys) ys.dispose();
+            } catch (disposeError) {
+                // Игнорируем ошибки при освобождении памяти
+            }
         }
     }
 

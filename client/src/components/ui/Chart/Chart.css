@@ -3,21 +3,31 @@
 .chart-wrapper {
   position: relative;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 200px;
   background: transparent;
   border-radius: var(--radius-base);
   padding: var(--spacing-2);
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* Переопределение стилей Chart.js для темной темы */
 .chart-wrapper canvas {
   background: transparent !important;
   display: block;
+  max-width: 100% !important;
+  width: 100% !important;
+  height: auto !important;
 }
 
 /* Стили для контейнера Chart.js */
 .chart-wrapper > div {
   background: transparent !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow: hidden;
 }
 
 /* Стили для легенды и подписей - используем цвета дизайн-системы */

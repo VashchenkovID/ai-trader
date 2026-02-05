@@ -9,7 +9,18 @@
   grid-template-columns: repeat(2, 1fr);
   gap: 20px;
   width: 100%;
+  max-width: 100%;
   align-items: start; /* Выравнивание по верху для карточек разной высоты */
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.recommendations-grid > * {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .recommendations-empty {

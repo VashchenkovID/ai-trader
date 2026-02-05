@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../ui';
 import { Badge } from '../ui';
 import './RecommendationsSummary.css';
@@ -36,6 +37,12 @@ export const RecommendationsSummary: React.FC<RecommendationsSummaryProps> = ({
   topBuyRecommendations,
   topSellRecommendations,
 }) => {
+  const navigate = useNavigate();
+
+  const handleItemClick = (figi: string) => {
+    navigate(`/stock/${figi}`);
+  };
+
   const getAgreementVariant = (score: number): 'success' | 'warning' | 'error' => {
     if (score >= 0.7) return 'success';
     if (score >= 0.5) return 'warning';
@@ -126,7 +133,11 @@ export const RecommendationsSummary: React.FC<RecommendationsSummaryProps> = ({
                 {topBuyRecommendations.length > 0 ? (
                   <div className="recommendations-summary-top-list">
                     {topBuyRecommendations.slice(0, 3).map((rec) => (
-                      <div key={rec.figi} className="recommendations-summary-top-item">
+                      <div 
+                        key={rec.figi} 
+                        className="recommendations-summary-top-item"
+                        onClick={() => handleItemClick(rec.figi)}
+                      >
                         <span className="recommendations-summary-top-ticker">{rec.ticker}</span>
                         <span className="recommendations-summary-top-name">{rec.name}</span>
                         <Badge variant="success" size="sm">
@@ -150,7 +161,11 @@ export const RecommendationsSummary: React.FC<RecommendationsSummaryProps> = ({
                 {topSellRecommendations.length > 0 ? (
                   <div className="recommendations-summary-top-list">
                     {topSellRecommendations.slice(0, 3).map((rec) => (
-                      <div key={rec.figi} className="recommendations-summary-top-item">
+                      <div 
+                        key={rec.figi} 
+                        className="recommendations-summary-top-item"
+                        onClick={() => handleItemClick(rec.figi)}
+                      >
                         <span className="recommendations-summary-top-ticker">{rec.ticker}</span>
                         <span className="recommendations-summary-top-name">{rec.name}</span>
                         <Badge variant="error" size="sm">

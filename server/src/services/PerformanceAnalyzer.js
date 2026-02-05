@@ -618,6 +618,9 @@ class PerformanceAnalyzer {
             summary.keyMetrics.profit = analysis.trading.totalProfit;
             summary.keyMetrics.winRate = analysis.trading.winRate;
             summary.keyMetrics.trades = analysis.trading.totalTrades;
+            summary.keyMetrics.sharpeRatio = analysis.trading.sharpeRatio || 0;
+            summary.keyMetrics.volatility = analysis.trading.volatility || 0;
+            summary.keyMetrics.maxDrawdown = analysis.trading.maxDrawdown || 0;
         }
 
         if (analysis.ai) {
@@ -837,18 +840,26 @@ class PerformanceAnalyzer {
     async analyzeLimitCompliance(days) {
         try {
             // Анализируем соблюдение лимитов на основе торговых данных
-            const trades = await this.getTradingData(days);
+            const tradingData = await this.getTradingData(days);
             const riskSettings = await this.getRiskSettings();
             
+            // getTradingData возвращает объект с полем trades, а не массив напрямую
+            const trades = Array.isArray(tradingData) ? tradingData : (tradingData?.trades || []);
+            
+            if (!Array.isArray(trades)) {
+                console.warn('⚠️ trades is not an array:', typeof trades, trades);
+                return { compliance: 0.95, violations: 0, totalTrades: 0 };
+            }
+            
             let violations = 0;
-            let totalTrades = trades.length;
+            const totalTrades = trades.length;
             
             for (const trade of trades) {
                 // Проверяем лимиты
-                if (trade.positionSize > riskSettings.maxPositionSize) {
+                if (trade.positionSize && trade.positionSize > riskSettings.maxPositionSize) {
                     violations++;
                 }
-                if (trade.risk > riskSettings.maxRiskPerTrade) {
+                if (trade.risk && trade.risk > riskSettings.maxRiskPerTrade) {
                     violations++;
                 }
             }

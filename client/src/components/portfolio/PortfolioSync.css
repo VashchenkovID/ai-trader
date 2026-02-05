@@ -282,6 +282,10 @@
     padding: var(--spacing-3);
   }
 
+  .portfolio-sync-title {
+    font-size: 1.125rem;
+  }
+
   .portfolio-sync-actions {
     grid-template-columns: 1fr;
     gap: var(--spacing-2);
@@ -315,5 +319,19 @@
   .mismatches-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .portfolio-sync-card {
+    padding: var(--spacing-2);
+  }
+
+  .portfolio-sync-title {
+    font-size: 1rem;
+  }
+
+  .portfolio-sync-action-group {
+    padding: var(--spacing-2);
   }
 }

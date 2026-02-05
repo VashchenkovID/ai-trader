@@ -60,6 +60,7 @@
 
   .recommendations-layout-filters {
     order: 2;
+    display: none;
   }
 
   .recommendations-layout-content {
@@ -73,8 +74,173 @@
 
 @media (max-width: 768px) {
   .recommendations-layout {
-    padding: 12px;
-    gap: 16px;
+    padding: var(--spacing-2);
+    gap: var(--spacing-2);
+  }
+
+  .recommendations-layout-main {
+    gap: var(--spacing-2);
+  }
+}
+
+@media (max-width: 480px) {
+  .recommendations-layout {
+    padding: var(--spacing-2);
+    gap: var(--spacing-2);
+  }
+}
+
+/* Кнопка открытия фильтров для мобильных */
+.recommendations-filters-toggle {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-surface-default);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 1rem;
+  width: 100%;
+  justify-content: center;
+}
+
+.recommendations-filters-toggle:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-hover);
+}
+
+.recommendations-filters-toggle i {
+  font-size: 1.125rem;
+}
+
+/* Overlay для мобильных */
+.recommendations-filters-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 999;
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Сайдбар фильтров */
+.recommendations-filters-sidebar {
+  width: 100%;
+  height: 100%;
+}
+
+.recommendations-filters-sidebar-header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-surface-default);
+}
+
+.recommendations-filters-sidebar-header h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.recommendations-filters-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.recommendations-filters-close:hover {
+  background: var(--color-surface-hover);
+}
+
+.recommendations-filters-close i {
+  font-size: 1.25rem;
+}
+
+.recommendations-filters-content {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* Мобильная версия */
+@media (max-width: 768px) {
+  .recommendations-filters-toggle {
+    display: flex;
+  }
+
+  .recommendations-filters-overlay {
+    display: block;
+  }
+
+  .recommendations-layout-filters {
+    display: block;
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    width: 320px;
+    max-width: 85vw;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+    background: var(--color-bg-primary);
+    overflow: hidden;
+  }
+
+  .recommendations-layout-filters.mobile-open {
+    transform: translateX(0);
+  }
+
+  .recommendations-filters-sidebar-header {
+    display: flex;
+  }
+
+  .recommendations-filters-content {
+    padding: 0;
+  }
+
+  .recommendations-filters-content .recommendations-filters-extended {
+    border-radius: 0;
+    border: none;
+    height: 100%;
+    box-shadow: none;
+  }
+
+  .recommendations-filters-content .recommendations-filters-extended .card-body {
+    padding: 1rem !important;
+    height: calc(100vh - 64px);
+    overflow-y: auto;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 

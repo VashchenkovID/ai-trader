@@ -86,7 +86,11 @@ class RetryService {
                 if (!shouldRetry) {
                     // Не повторяем - записываем неудачу
                     if (circuitBreaker) {
-                        this.recordFailure(serviceName);
+                        const errorInfo = {
+                            error: error,
+                            endpoint: error.config?.url || error.request?.path || error.url || null
+                        };
+                        this.recordFailure(serviceName, errorInfo);
                     }
                     this.recordAttempt(serviceName, false, attempt - 1);
                     throw error;
@@ -95,7 +99,11 @@ class RetryService {
                 // Если это последняя попытка, не повторяем
                 if (attempt > maxRetries) {
                     if (circuitBreaker) {
-                        this.recordFailure(serviceName);
+                        const errorInfo = {
+                            error: error,
+                            endpoint: error.config?.url || error.request?.path || error.url || null
+                        };
+                        this.recordFailure(serviceName, errorInfo);
                     }
                     this.recordAttempt(serviceName, false, attempt - 1);
                     throw error;
@@ -127,7 +135,11 @@ class RetryService {
         
         // Если дошли сюда, все попытки исчерпаны
         if (circuitBreaker) {
-            this.recordFailure(serviceName);
+            const errorInfo = {
+                error: lastError,
+                endpoint: lastError?.config?.url || lastError?.request?.path || lastError?.url || null
+            };
+            this.recordFailure(serviceName, errorInfo);
         }
         this.recordAttempt(serviceName, false, attempt - 1);
         throw lastError;
@@ -287,7 +299,7 @@ class RetryService {
     /**
      * Circuit Breaker: запись неудачного запроса
      */
-    recordFailure(serviceName) {
+    recordFailure(serviceName, errorInfo = null) {
         let breaker = this.circuitBreakers.get(serviceName);
         
         if (!breaker) {
@@ -299,13 +311,21 @@ class RetryService {
                 openedAt: null,
                 timeout: 60000,
                 failureThreshold: 5,
-                halfOpenAttempts: 0
+                halfOpenAttempts: 0,
+                lastError: null,
+                lastEndpoint: null
             };
             this.circuitBreakers.set(serviceName, breaker);
         }
         
         breaker.failures++;
         breaker.lastFailure = Date.now();
+        
+        // Сохраняем информацию об ошибке и эндпоинте
+        if (errorInfo) {
+            breaker.lastError = errorInfo.error?.message || errorInfo.error?.toString() || 'Unknown error';
+            breaker.lastEndpoint = errorInfo.endpoint || errorInfo.url || null;
+        }
         
         if (breaker.state === 'half-open') {
             // Неудача в полуоткрытом состоянии - снова открываем
@@ -315,7 +335,9 @@ class RetryService {
                 service: 'RetryService',
                 serviceName,
                 state: 'open',
-                reason: 'half-open-failure'
+                reason: 'half-open-failure',
+                endpoint: breaker.lastEndpoint,
+                error: breaker.lastError
             });
         } else if (breaker.failures >= breaker.failureThreshold) {
             // Превышен порог ошибок - открываем circuit
@@ -326,19 +348,31 @@ class RetryService {
                 serviceName,
                 state: 'open',
                 failures: breaker.failures,
-                threshold: breaker.failureThreshold
+                threshold: breaker.failureThreshold,
+                endpoint: breaker.lastEndpoint,
+                error: breaker.lastError
             });
             
-            // Создаем алерт
+            // Создаем алерт с информацией об эндпоинте и ошибке
+            const alertDetails = {
+                service: serviceName,
+                failures: breaker.failures,
+                threshold: breaker.failureThreshold
+            };
+            
+            if (breaker.lastEndpoint) {
+                alertDetails.endpoint = breaker.lastEndpoint;
+            }
+            
+            if (breaker.lastError) {
+                alertDetails.error = breaker.lastError;
+            }
+            
             const alert = MonitoringService.createAlert(
                 'external_api',
                 'high',
                 `Circuit breaker открыт для ${serviceName}. Сервис временно недоступен.`,
-                {
-                    service: serviceName,
-                    failures: breaker.failures,
-                    threshold: breaker.failureThreshold
-                }
+                alertDetails
             );
             
             // При ошибке MONITORING_EXTERNAL_API блокируем запросы на 5 минут

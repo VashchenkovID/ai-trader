@@ -329,7 +329,8 @@ Settings.initializeDefaults = async function() {
                 { value: '*/15 * * * *', label: 'Каждые 15 минут' },
                 { value: '*/30 * * * *', label: 'Каждые 30 минут' },
                 { value: '0 */1 * * *', label: 'Каждый час' },
-                { value: '0 */2 * * *', label: 'Каждые 2 часа' }
+                { value: '0 */2 * * *', label: 'Каждые 2 часа' },
+                { value: '0 */12 * * *', label: 'Каждые 12 часов' }
             ]
         },
         {
@@ -748,7 +749,7 @@ Settings.initializeDefaults = async function() {
         },
         {
             key: 'portfolio_rebalancing_check_interval',
-            value: '0 2 * * *',
+            value: '0 14 * * *',
             description: 'Интервал проверки необходимости ребалансировки (cron)',
             category: 'scheduler',
             dataType: 'string'

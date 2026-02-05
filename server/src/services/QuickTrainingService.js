@@ -35,7 +35,7 @@ class QuickTrainingService {
             // Получаем состояние обучения
             const state = await TrainingState.getOrCreateState('quick');
             
-            // Фильтруем инструменты: исключаем те, что были обучены сегодня (не более раза в сутки)
+            // Фильтруем инструменты: исключаем те, что были обучены 2 раза сегодня (максимум 2 раза в сутки)
             // Вычисляем начало текущих суток (00:00:00 сегодня)
             const now = new Date();
             const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
@@ -47,6 +47,9 @@ class QuickTrainingService {
             const selectedInstruments = [];
             // ModelManager экспортируется как синглтон (экземпляр), не как класс
             const modelManager = (await import('../utils/ModelManager.js')).default;
+            
+            // Получаем историю обучений за сегодня из TrainingState metadata
+            const trainingHistory = (state.metadata && state.metadata.trainingHistory) || {}; // { figi: [timestamp1, timestamp2, ...] }
             
             // Циклически проходим по списку инструментов
             for (let i = 0; i < allInstruments.length && selectedInstruments.length < batchSize; i++) {
@@ -61,24 +64,41 @@ class QuickTrainingService {
                     continue;
                 }
                 
-                // Проверяем, когда последний раз обучалась модель для этого инструмента
-                // Проверяем базовую модель (основная модель для инструмента)
+                // Проверяем количество обучений за сегодня для этого инструмента
                 let canTrain = true;
-                try {
-                    const modelName = `neural/${instrument.figi}`;
-                    const modelInfo = await modelManager.getModelInfo(modelName);
-                    
-                    if (modelInfo && modelInfo.modified) {
-                        const lastTrainingTime = new Date(modelInfo.modified);
-                        // Проверяем, была ли модель обучена сегодня (с начала текущих суток)
-                        if (lastTrainingTime >= todayStart) {
-                            // Модель уже была обучена сегодня - пропускаем
-                            canTrain = false;
+                const figi = instrument.figi;
+                const todayTrainings = (trainingHistory[figi] || []).filter(timestamp => {
+                    const trainingDate = new Date(timestamp);
+                    return trainingDate >= todayStart;
+                });
+                
+                // Если инструмент уже был обучен 2 раза сегодня, пропускаем
+                if (todayTrainings.length >= 2) {
+                    canTrain = false;
+                } else {
+                    // Дополнительная проверка через ModelManager (на случай если история не синхронизирована)
+                    try {
+                        const modelName = `neural/${figi}`;
+                        const modelInfo = await modelManager.getModelInfo(modelName);
+                        
+                        if (modelInfo && modelInfo.modified) {
+                            const lastTrainingTime = new Date(modelInfo.modified);
+                            // Если модель была обучена сегодня, считаем это как одно обучение
+                            if (lastTrainingTime >= todayStart && todayTrainings.length === 0) {
+                                // Это первое обучение сегодня (по ModelManager), но не в истории
+                                // Разрешаем обучение, но после обучения нужно будет обновить историю
+                            } else if (lastTrainingTime >= todayStart && todayTrainings.length >= 1) {
+                                // Модель уже была обучена сегодня и есть запись в истории
+                                // Проверяем, не превышен ли лимит
+                                if (todayTrainings.length >= 2) {
+                                    canTrain = false;
+                                }
+                            }
                         }
+                    } catch (error) {
+                        // Если не удалось получить информацию о модели, считаем что можно обучать
+                        // (модель может не существовать, что нормально для новых инструментов)
                     }
-                } catch (error) {
-                    // Если не удалось получить информацию о модели, считаем что можно обучать
-                    // (модель может не существовать, что нормально для новых инструментов)
                 }
                 
                 if (canTrain) {
@@ -249,6 +269,31 @@ class QuickTrainingService {
                 // Считаем инструмент успешным, если хотя бы одна нейросеть обучилась
                 if (networksTrained > 0) {
                     successCount++;
+                    
+                    // Обновляем историю обучений для этого инструмента
+                    const trainingState = await TrainingState.getOrCreateState('quick');
+                    const metadata = trainingState.metadata || {};
+                    const trainingHistory = metadata.trainingHistory || {};
+                    
+                    if (!trainingHistory[instrument.figi]) {
+                        trainingHistory[instrument.figi] = [];
+                    }
+                    
+                    // Добавляем текущее время обучения
+                    const trainingTimestamp = new Date().toISOString();
+                    trainingHistory[instrument.figi].push(trainingTimestamp);
+                    
+                    // Очищаем старые записи (старше текущих суток)
+                    const now = new Date();
+                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                    trainingHistory[instrument.figi] = trainingHistory[instrument.figi].filter(timestamp => {
+                        return new Date(timestamp) >= todayStart;
+                    });
+                    
+                    // Сохраняем обновленную историю
+                    metadata.trainingHistory = trainingHistory;
+                    trainingState.metadata = metadata;
+                    await trainingState.save();
                 }
                 errorCount += networksFailed;
             }

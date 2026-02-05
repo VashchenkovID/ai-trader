@@ -290,14 +290,54 @@
 @media (max-width: 768px) {
   .portfolio-summary-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: var(--spacing-3);
+    gap: var(--spacing-2);
   }
 
   .portfolio-summary-metric-value {
     font-size: 1.5rem;
   }
 
+  .portfolio-summary-metric-label {
+    font-size: 0.8125rem;
+  }
+
   .portfolio-summary-strategies-grid {
     grid-template-columns: 1fr;
+    gap: var(--spacing-3);
+  }
+
+  .portfolio-summary-strategy-card {
+    padding: var(--spacing-3);
+  }
+}
+
+@media (max-width: 480px) {
+  .portfolio-summary-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-2);
+  }
+
+  .portfolio-summary-metric-value {
+    font-size: 1.25rem;
+  }
+
+  .portfolio-summary-metric-label {
+    font-size: 0.75rem;
+  }
+
+  .portfolio-summary-metric-subtext {
+    font-size: 0.6875rem;
+  }
+
+  .portfolio-summary-strategies-title {
+    font-size: 1rem;
+  }
+
+  .portfolio-summary-strategy-card {
+    padding: var(--spacing-2);
+  }
+
+  .portfolio-summary-strategy-amount {
+    font-size: 1rem;
   }
 }

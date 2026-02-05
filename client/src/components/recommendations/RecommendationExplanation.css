@@ -133,14 +133,90 @@
 }
 
 @media (max-width: 768px) {
+  .recommendation-explanation {
+    padding: var(--spacing-3);
+    gap: var(--spacing-3);
+  }
+
   .explanation-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: var(--spacing-2);
+  }
+
+  .explanation-title {
+    font-size: 1.125rem;
+  }
+
+  .explanation-badges {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .explanation-section {
+    gap: var(--spacing-3);
+  }
+
+  .section-title {
+    font-size: 0.9375rem;
+  }
+
+  .chart-container {
+    padding: var(--spacing-2);
+  }
+
+  .factor-item {
+    padding: var(--spacing-2);
+  }
+
+  .factor-name {
+    font-size: 0.9375rem;
+  }
+
+  .factor-value {
+    font-size: 0.8125rem;
+  }
+
+  .factor-explanation {
+    font-size: 0.8125rem;
+  }
+
+  .reasoning-text {
+    padding: var(--spacing-2);
+  }
+
+  .reasoning-text p {
+    font-size: 0.8125rem;
   }
 
   .factor-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: var(--spacing-1);
+  }
+}
+
+@media (max-width: 480px) {
+  .recommendation-explanation {
+    padding: var(--spacing-2);
+    gap: var(--spacing-2);
+  }
+
+  .explanation-title {
+    font-size: 1rem;
+  }
+
+  .section-title {
+    font-size: 0.875rem;
+  }
+
+  .factor-name {
+    font-size: 0.875rem;
+  }
+
+  .factor-value,
+  .factor-explanation {
+    font-size: 0.75rem;
   }
 }
 

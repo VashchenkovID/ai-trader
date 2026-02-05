@@ -86,6 +86,19 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.recommendations-summary-top-buy,
+.recommendations-summary-top-sell {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .recommendations-summary-top-title {
@@ -108,17 +121,29 @@
   padding: 12px;
   background: var(--color-surface-hover);
   border-radius: 8px;
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.2s;
+  min-width: 0; /* Предотвращает переполнение */
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  cursor: pointer;
 }
 
 .recommendations-summary-top-item:hover {
   background: var(--color-surface-active);
+  transform: translateX(4px);
 }
 
 .recommendations-summary-top-ticker {
   font-weight: 600;
   color: var(--color-text-primary);
-  min-width: 60px;
+  min-width: 50px;
+  max-width: 80px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .recommendations-summary-top-name {
@@ -128,18 +153,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0; /* Позволяет элементу сжиматься */
 }
 
 .recommendations-summary-top-profit {
   font-size: 14px;
   color: var(--color-accent-success);
   font-weight: 600;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .recommendations-summary-top-loss {
   font-size: 14px;
   color: var(--color-accent-error);
   font-weight: 600;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .recommendations-summary-top-empty {
@@ -150,17 +180,115 @@
 }
 
 @media (max-width: 768px) {
+  .recommendations-summary-card {
+    padding: var(--spacing-3);
+  }
+
+  .recommendations-summary-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-2);
+  }
+
+  .recommendations-summary-title {
+    font-size: 1.25rem;
+  }
+
+  .recommendations-summary-stats {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .recommendations-summary-content {
+    gap: var(--spacing-3);
+  }
+
+  .recommendations-summary-section {
+    padding: var(--spacing-2);
+  }
+
   .recommendations-summary-top {
     grid-template-columns: 1fr;
+    gap: var(--spacing-3);
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .recommendations-summary-top-list {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .recommendations-summary-top-item {
+    gap: var(--spacing-2);
+    padding: var(--spacing-2);
+    flex-wrap: wrap;
+  }
+
+  .recommendations-summary-top-ticker {
+    min-width: 45px;
+    max-width: 70px;
+  }
+
+  .recommendations-summary-top-name {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .recommendations-summary-breakdown {
     grid-template-columns: 1fr;
+    gap: var(--spacing-2);
   }
 
   .recommendations-summary-overall {
     flex-direction: column;
     align-items: flex-start;
+    gap: var(--spacing-2);
+  }
+}
+
+@media (max-width: 480px) {
+  .recommendations-summary-card {
+    padding: var(--spacing-2);
+  }
+
+  .recommendations-summary-title {
+    font-size: 1.125rem;
+  }
+
+  .recommendations-summary-section {
+    padding: var(--spacing-2);
+  }
+
+  .recommendations-summary-top-title {
+    font-size: 0.9375rem;
+  }
+
+  .recommendations-summary-top-item {
+    padding: var(--spacing-1);
+    gap: var(--spacing-1);
+    flex-wrap: wrap;
+  }
+
+  .recommendations-summary-top-ticker {
+    font-size: 0.8125rem;
+    min-width: 40px;
+    max-width: 60px;
+  }
+
+  .recommendations-summary-top-name {
+    font-size: 0.75rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: calc(100% - 120px);
+  }
+
+  .recommendations-summary-top-profit,
+  .recommendations-summary-top-loss {
+    font-size: 0.75rem;
+    flex-shrink: 0;
   }
 }
 

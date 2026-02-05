@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../ui/Card/Card';
 import { Table, TableColumn } from '../ui/Table/Table';
@@ -68,7 +68,19 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
   const [showSellDialog, setShowSellDialog] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
   const [sellQuantity, setSellQuantity] = useState<number>(0);
+  const [isMobile, setIsMobile] = useState(false);
   const toast = React.useRef<Toast>(null);
+
+  // Определяем, является ли устройство мобильным
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   const formatCurrency = (amount: number, currency: string = 'RUB') => {
     // Проверяем, что amount - это валидное число
     if (typeof amount !== 'number' || isNaN(amount) || !isFinite(amount)) {
@@ -596,6 +608,74 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
 
         {loading ? (
           <div className="portfolio-positions-loading">Загрузка...</div>
+        ) : isMobile ? (
+          /* Карточный вид для мобильных устройств */
+          <div className="portfolio-positions-cards">
+            {positions.length === 0 ? (
+              <div className="portfolio-positions-empty">Нет позиций в портфеле</div>
+            ) : (
+              positions.map((position, index) => (
+                <Card key={position.figi || index} className="portfolio-positions-card-item">
+                  <div className="portfolio-positions-card-header">
+                    <div className="portfolio-positions-ticker">
+                      <div className="portfolio-positions-ticker-name">{position.ticker}</div>
+                      <div className="portfolio-positions-ticker-symbol">{position.name}</div>
+                    </div>
+                    {position.prediction && (
+                      <Badge
+                        variant={position.prediction.recommendation === 'BUY' ? 'success' : 
+                                position.prediction.recommendation === 'SELL' ? 'error' : 'info'}
+                        size="sm"
+                      >
+                        {translateRecommendation(position.prediction.recommendation)}
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <div className="portfolio-positions-card-body">
+                    <div className="portfolio-positions-card-row">
+                      <span className="portfolio-positions-card-label">Количество:</span>
+                      <span className="portfolio-positions-value">{position.quantity} шт.</span>
+                    </div>
+                    <div className="portfolio-positions-card-row">
+                      <span className="portfolio-positions-card-label">Текущая цена:</span>
+                      <span className="portfolio-positions-value">{formatCurrency(position.currentPrice, position.currency)}</span>
+                    </div>
+                    <div className="portfolio-positions-card-row">
+                      <span className="portfolio-positions-card-label">Рыночная стоимость:</span>
+                      <span className="portfolio-positions-value">{formatCurrency(position.marketValue, position.currency)}</span>
+                    </div>
+                    <div className="portfolio-positions-card-row">
+                      <span className="portfolio-positions-card-label">P&L:</span>
+                      <span className={`portfolio-positions-value ${position.unrealizedPnL >= 0 ? 'portfolio-positions-positive' : 'portfolio-positions-negative'}`}>
+                        {formatCurrency(position.unrealizedPnL, position.currency)} ({position.unrealizedPnLPercent >= 0 ? '+' : ''}{position.unrealizedPnLPercent.toFixed(2)}%)
+                      </span>
+                    </div>
+                    {position.strategy && (
+                      <div className="portfolio-positions-card-row">
+                        <span className="portfolio-positions-card-label">Стратегия:</span>
+                        <span className="portfolio-positions-value">{position.strategy.name}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="portfolio-positions-card-footer">
+                    <Button
+                      variant="error"
+                      size="sm"
+                      icon={<i className="pi pi-arrow-down"></i>}
+                      onClick={() => handleSellClick(position)}
+                      disabled={!position.quantity || position.quantity <= 0 || sellingFigi === position.figi}
+                      loading={sellingFigi === position.figi}
+                      fullWidth
+                    >
+                      Продать
+                    </Button>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
         ) : (
           <Table<Position>
             data={positions}

@@ -233,3 +233,58 @@
   }
 }
 
+@media (max-width: 768px) {
+  .recommendations-sidebar-section {
+    padding: var(--spacing-2);
+  }
+
+  .recommendations-sidebar-section-title {
+    font-size: 0.9375rem;
+  }
+
+  .recommendations-sidebar-position,
+  .recommendations-sidebar-recommendation,
+  .recommendations-sidebar-change {
+    padding: var(--spacing-2);
+  }
+
+  .recommendations-sidebar-position-ticker,
+  .recommendations-sidebar-recommendation-ticker,
+  .recommendations-sidebar-change-ticker {
+    font-size: 0.8125rem;
+  }
+
+  .recommendations-sidebar-position-name,
+  .recommendations-sidebar-recommendation-name {
+    font-size: 0.75rem;
+  }
+
+  .recommendations-sidebar-alert {
+    padding: var(--spacing-2);
+  }
+
+  .recommendations-sidebar-alert-message {
+    font-size: 0.8125rem;
+  }
+
+  .recommendations-sidebar-statistic-label {
+    font-size: 0.8125rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .recommendations-sidebar-section {
+    padding: var(--spacing-2);
+  }
+
+  .recommendations-sidebar-section-title {
+    font-size: 0.875rem;
+  }
+
+  .recommendations-sidebar-position-header,
+  .recommendations-sidebar-recommendation-info {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+

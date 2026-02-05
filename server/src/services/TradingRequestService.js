@@ -909,7 +909,52 @@ class TradingRequestService {
                 throw new Error(`Trading request not found: ${requestId}`);
             }
 
+            // Для SELL заявок проверяем, что позиции не изменяются при отклонении
+            if (request.action === 'SELL' && (request.tradingMode === 'real' || request.tradingMode === 'micro')) {
+                try {
+                    const TradingEngine = (await import('./TradingEngine.js')).default;
+                    const portfolio = await TradingEngine.getRealPortfolioValue();
+                    const positions = portfolio?.positions || {};
+                    const currentQuantity = positions[request.figi] || 0;
+                    
+                    console.log(`📊 [Reject SELL] Проверка позиции перед отклонением:`, {
+                        figi: request.figi,
+                        ticker: request.ticker,
+                        requestQuantity: request.quantity,
+                        currentPortfolioQuantity: currentQuantity,
+                        requestId: request.id
+                    });
+                    
+                    // Если позиция меньше запрошенного количества, это может быть проблемой
+                    if (currentQuantity < request.quantity) {
+                        console.warn(`⚠️ [Reject SELL] ВНИМАНИЕ: Позиция ${request.ticker} (${currentQuantity} шт.) меньше запрошенного количества (${request.quantity} шт.) при отклонении заявки. Возможно, акции были проданы вручную или через другую заявку.`);
+                    }
+                } catch (portfolioError) {
+                    console.warn('⚠️ Не удалось проверить позицию при отклонении заявки:', portfolioError.message);
+                }
+            }
+
             await request.reject(reason);
+
+            // Для SELL заявок проверяем позиции после отклонения
+            if (request.action === 'SELL' && (request.tradingMode === 'real' || request.tradingMode === 'micro')) {
+                try {
+                    const TradingEngine = (await import('./TradingEngine.js')).default;
+                    const portfolio = await TradingEngine.getRealPortfolioValue();
+                    const positions = portfolio?.positions || {};
+                    const currentQuantity = positions[request.figi] || 0;
+                    
+                    console.log(`📊 [Reject SELL] Позиция после отклонения:`, {
+                        figi: request.figi,
+                        ticker: request.ticker,
+                        currentPortfolioQuantity: currentQuantity,
+                        requestId: request.id,
+                        status: 'REJECTED'
+                    });
+                } catch (portfolioError) {
+                    console.warn('⚠️ Не удалось проверить позицию после отклонения заявки:', portfolioError.message);
+                }
+            }
 
             // Уведомляем через WebSocket (если доступен)
             try {

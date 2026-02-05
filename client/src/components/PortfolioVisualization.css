@@ -41,6 +41,9 @@
 
 .portfolio-visualization-charts {
   min-width: 0; /* Для правильной работы grid */
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .portfolio-visualization-stats {
@@ -56,16 +59,39 @@
 
 @media (max-width: 768px) {
   .portfolio-visualization {
-    padding: var(--spacing-3);
-    gap: var(--spacing-3);
+    padding: var(--spacing-2);
+    gap: var(--spacing-2);
   }
 
   .portfolio-visualization-section {
-    margin-bottom: var(--spacing-3);
+    margin-bottom: var(--spacing-2);
   }
 
   .portfolio-visualization-strategies-title {
-    font-size: 1.25rem;
-    margin-bottom: var(--spacing-3);
+    font-size: 1.125rem;
+    margin-bottom: var(--spacing-2);
+  }
+
+  .portfolio-visualization-strategies {
+    gap: var(--spacing-2);
+  }
+
+  .portfolio-visualization-strategy-item {
+    margin-bottom: var(--spacing-2);
+  }
+
+  .portfolio-visualization-analytics {
+    gap: var(--spacing-2);
+  }
+}
+
+@media (max-width: 480px) {
+  .portfolio-visualization {
+    padding: var(--spacing-2);
+    gap: var(--spacing-2);
+  }
+
+  .portfolio-visualization-strategies-title {
+    font-size: 1rem;
   }
 }

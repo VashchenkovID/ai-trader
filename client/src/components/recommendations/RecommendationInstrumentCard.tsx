@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../ui';
 import { Button } from '../ui';
 import { Badge } from '../ui';
@@ -221,6 +221,122 @@ export const RecommendationInstrumentCard: React.FC<RecommendationInstrumentCard
       onWatchlist(recommendation.figi);
     }
   };
+
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Компактная мобильная версия
+  if (isMobile) {
+    return (
+      <Card
+        variant="interactive"
+        hover
+        className={`recommendation-instrument-card recommendation-instrument-card-mobile ${recommendation.priority ? `priority-${recommendation.priority}` : ''}`}
+        onClick={handleToggleExpand}
+      >
+        <div className="recommendation-mobile-header">
+          <div className="recommendation-mobile-title">
+            <h3 className="recommendation-mobile-name">{recommendation.name}</h3>
+            <span className="recommendation-mobile-ticker">{recommendation.ticker}</span>
+          </div>
+          <div className="recommendation-mobile-badges">
+            {recommendation.priority && (
+              <Badge variant={getPriorityVariant(recommendation.priority)} size="sm">
+                {recommendation.priority === 'medium' && 'Средний'}
+                {recommendation.priority === 'high' && 'Высокий'}
+                {recommendation.priority === 'critical' && 'Критический'}
+                {recommendation.priority === 'low' && 'Низкий'}
+              </Badge>
+            )}
+            {recommendation.sector && (
+              <Badge variant="info" size="sm">{recommendation.sector}</Badge>
+            )}
+          </div>
+        </div>
+
+        <div className="recommendation-mobile-main">
+          <div className="recommendation-mobile-action-row">
+            <Badge variant={getRecommendationVariant(recommendation.recommendation)} size="md">
+              {recommendation.recommendation === 'BUY' && '💰 Покупать'}
+              {recommendation.recommendation === 'SELL' && '💸 Продавать'}
+              {recommendation.recommendation === 'HOLD' && '⏸️ Держать'}
+            </Badge>
+            <Badge variant={getConfidenceVariant(recommendation.confidence)} size="sm">
+              {Math.round(recommendation.confidence * 100)}%
+            </Badge>
+          </div>
+
+          <div className="recommendation-mobile-price-row">
+            <span className="recommendation-mobile-price">{formatPrice(recommendation.priceAtAnalysis)}</span>
+            {priceChange !== null && (
+              <span className={`recommendation-mobile-price-change ${priceChange >= 0 ? 'positive' : 'negative'}`}>
+                {formatPercent(priceChange)}
+              </span>
+            )}
+            {recommendation.takeProfit && (
+              <span className="recommendation-mobile-take-profit">
+                🎯 {formatPrice(recommendation.takeProfit)}
+              </span>
+            )}
+          </div>
+
+          {recommendation.risk && (
+            <div className="recommendation-mobile-risk">
+              <Badge variant={getRiskVariant(recommendation.risk.level)} size="sm">
+                Риск: {recommendation.risk.level === 'low' ? 'Низкий' : recommendation.risk.level === 'medium' ? 'Средний' : 'Высокий'}
+              </Badge>
+            </div>
+          )}
+
+          {recommendation.explanation && (recommendation.explanation as any)?.details?.ensemble?.horizons && (() => {
+            const horizons = (recommendation.explanation as any).details.ensemble.horizons;
+            const mainHorizon = horizons.mediumTerm || horizons.shortTerm || horizons.longTerm;
+            if (!mainHorizon?.strategies) return null;
+            const strategies = mainHorizon.strategies;
+            const moderateStrategy = strategies.moderate;
+            if (moderateStrategy && moderateStrategy.recommendation) {
+              const recVariant = moderateStrategy.recommendation === 'BUY' ? 'success' : 
+                                moderateStrategy.recommendation === 'SELL' ? 'error' : 'neutral';
+              const confidence = moderateStrategy.strategyConfidence ?? moderateStrategy.confidence ?? 0;
+              return (
+                <div className="recommendation-mobile-strategy">
+                  <Badge variant="warning" size="sm">Умеренная</Badge>
+                  <Badge variant={recVariant} size="sm">
+                    {translateRecommendation(moderateStrategy.recommendation)}
+                  </Badge>
+                  <span className="recommendation-mobile-strategy-confidence">{Math.round(confidence * 100)}%</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
+        </div>
+
+        <div className="recommendation-mobile-footer">
+          {onBuy && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onBuy(recommendation.figi);
+              }}
+            >
+              Купить
+            </Button>
+          )}
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card

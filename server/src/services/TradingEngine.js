@@ -1125,93 +1125,130 @@ class TradingEngine {
      * Расчет статистики торговли
      */
     async calculateTradingStats() {
-        const trades = await this.getTradeHistory();
         const modeInfo = this.modeManager.getCurrentMode();
         const mode = modeInfo.mode || modeInfo; // Поддержка старого формата
         
-        if (trades.length === 0) {
-            return {
-                totalTrades: 0,
-                winRate: 0,
-                totalReturn: 0,
-                maxDrawdown: 0,
-                averageTrade: 0,
-                mode
-            };
-        }
-
+        let trades = [];
+        let closedTrades = [];
         let profitableTrades = 0;
         let totalReturn = 0;
-        let maxValue = 0;
-        let maxDrawdown = 0;
-        let processedTrades = 0; // Считаем только сделки с PnL
+        let processedTrades = 0;
 
-        // Фильтруем только закрытые сделки (SELL)
-        // Для Win Rate нужны только закрытые позиции, где можно определить прибыль/убыток
-        // НЕ считаем открытые позиции (BUY с нереализованным PnL)
-        const closedTrades = [];
-        
-        for (const trade of trades) {
-            // Win Rate считаем только по SELL сделкам (закрытым позициям)
-            // Проверяем и trade.action (для виртуальной торговли), и trade.type (для совместимости)
-            const isSell = trade.action === 'SELL' || trade.type === 'SELL';
-            
-            if (isSell) {
-                let tradePnL = null;
+        // Для реального режима получаем закрытые сделки из портфеля
+        if (mode === 'real' || mode === 'micro') {
+            try {
+                const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+                const closedTradesFromPortfolio = await PnLCalculationService.getClosedTrades(mode);
                 
-                // Используем уже рассчитанный PnL из сделки (учитывает комиссии)
-                if (trade.pnl !== undefined && trade.pnl !== null && !isNaN(trade.pnl) && isFinite(trade.pnl)) {
-                    tradePnL = trade.pnl;
-                } else {
-                    // Fallback: если PnL не рассчитан, рассчитываем с учетом комиссии
-                    // Улучшенная логика сопоставления: проверяем и symbol, и figi
-                    const tradeSymbol = trade.symbol || trade.figi || '';
-                    const tradeFigi = trade.figi || trade.symbol || '';
-                    
-                    const buyTrades = trades.filter(t => {
-                        // Проверяем и action, и type для совместимости
-                        const isBuy = (t.action === 'BUY' || t.type === 'BUY');
-                        if (!isBuy) return false;
-                        
-                        // Проверяем совпадение по времени (BUY должен быть раньше SELL)
-                        const buyTime = t.timestamp ? new Date(t.timestamp).getTime() : 0;
-                        const sellTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0;
-                        if (buyTime >= sellTime) return false;
-                        
-                        // Проверяем совпадение по инструменту (symbol или figi)
-                        const tSymbol = t.symbol || t.figi || '';
-                        const tFigi = t.figi || t.symbol || '';
-                        
-                        return (tSymbol && (tSymbol === tradeSymbol || tSymbol === tradeFigi)) ||
-                               (tFigi && (tFigi === tradeSymbol || tFigi === tradeFigi));
-                    });
-                    
-                    if (buyTrades.length > 0) {
-                        const totalCost = buyTrades.reduce((sum, t) => 
-                            sum + (t.price * t.quantity) + (t.commission || 0), 0
-                        );
-                        const totalQuantity = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
-                        const averageBuyPrice = totalQuantity > 0 ? totalCost / totalQuantity : trade.price;
-                        tradePnL = (trade.price - averageBuyPrice) * trade.quantity - (trade.commission || 0);
-                    }
-                }
-                
-                // Если PnL рассчитан и валиден, добавляем в статистику
-                if (tradePnL !== null && tradePnL !== undefined && !isNaN(tradePnL) && isFinite(tradePnL)) {
-                    totalReturn += tradePnL;
-                    processedTrades++;
-                    if (tradePnL > 0) {
-                        profitableTrades++;
-                    }
-                    closedTrades.push({ ...trade, pnl: tradePnL });
-                }
+                // Преобразуем формат для совместимости
+                closedTrades = closedTradesFromPortfolio.map(trade => ({
+                    action: 'SELL',
+                    type: 'SELL',
+                    figi: trade.figi,
+                    symbol: trade.ticker,
+                    ticker: trade.ticker,
+                    price: trade.exitPrice,
+                    quantity: trade.exitQuantity || trade.quantity,
+                    commission: trade.commission || 0,
+                    pnl: trade.realizedProfit || ((trade.exitPrice - trade.entryPrice) * (trade.exitQuantity || trade.quantity) - (trade.commission || 0)),
+                    timestamp: trade.executedAt || trade.exitDate,
+                    executedAt: trade.executedAt || trade.exitDate
+                }));
+            } catch (error) {
+                console.warn('⚠️ Не удалось получить закрытые сделки из портфеля:', error.message);
+                // Fallback на обычный метод
+                trades = await this.getTradeHistory();
             }
-            // Игнорируем BUY сделки для расчета Win Rate (это открытые позиции)
+        }
+        
+        // Если не получили закрытые сделки из портфеля, используем обычный метод
+        if (closedTrades.length === 0) {
+            trades = await this.getTradeHistory();
+            
+            if (trades.length === 0) {
+                return {
+                    totalTrades: 0,
+                    winRate: 0,
+                    totalReturn: 0,
+                    maxDrawdown: 0,
+                    averageTrade: 0,
+                    mode
+                };
+            }
+
+            // Фильтруем только закрытые сделки (SELL)
+            // Для Win Rate нужны только закрытые позиции, где можно определить прибыль/убыток
+            // НЕ считаем открытые позиции (BUY с нереализованным PnL)
+            for (const trade of trades) {
+                // Win Rate считаем только по SELL сделкам (закрытым позициям)
+                // Проверяем и trade.action (для виртуальной торговли), и trade.type (для совместимости)
+                const isSell = trade.action === 'SELL' || trade.type === 'SELL';
+                
+                if (isSell) {
+                    let tradePnL = null;
+                    
+                    // Используем уже рассчитанный PnL из сделки (учитывает комиссии)
+                    if (trade.pnl !== undefined && trade.pnl !== null && !isNaN(trade.pnl) && isFinite(trade.pnl)) {
+                        tradePnL = trade.pnl;
+                    } else {
+                        // Fallback: если PnL не рассчитан, рассчитываем с учетом комиссии
+                        // Улучшенная логика сопоставления: проверяем и symbol, и figi
+                        const tradeSymbol = trade.symbol || trade.figi || '';
+                        const tradeFigi = trade.figi || trade.symbol || '';
+                        
+                        const buyTrades = trades.filter(t => {
+                            // Проверяем и action, и type для совместимости
+                            const isBuy = (t.action === 'BUY' || t.type === 'BUY');
+                            if (!isBuy) return false;
+                            
+                            // Проверяем совпадение по времени (BUY должен быть раньше SELL)
+                            const buyTime = t.timestamp ? new Date(t.timestamp).getTime() : 0;
+                            const sellTime = trade.timestamp ? new Date(trade.timestamp).getTime() : 0;
+                            if (buyTime >= sellTime) return false;
+                            
+                            // Проверяем совпадение по инструменту (symbol или figi)
+                            const tSymbol = t.symbol || t.figi || '';
+                            const tFigi = t.figi || t.symbol || '';
+                            
+                            return (tSymbol && (tSymbol === tradeSymbol || tSymbol === tradeFigi)) ||
+                                   (tFigi && (tFigi === tradeSymbol || tFigi === tradeFigi));
+                        });
+                        
+                        if (buyTrades.length > 0) {
+                            const totalCost = buyTrades.reduce((sum, t) => 
+                                sum + (t.price * t.quantity) + (t.commission || 0), 0
+                            );
+                            const totalQuantity = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
+                            const averageBuyPrice = totalQuantity > 0 ? totalCost / totalQuantity : trade.price;
+                            tradePnL = (trade.price - averageBuyPrice) * trade.quantity - (trade.commission || 0);
+                        }
+                    }
+                    
+                    // Если PnL рассчитан и валиден, добавляем в статистику
+                    if (tradePnL !== null && tradePnL !== undefined && !isNaN(tradePnL) && isFinite(tradePnL)) {
+                        closedTrades.push({ ...trade, pnl: tradePnL });
+                    }
+                }
+                // Игнорируем BUY сделки для расчета Win Rate (это открытые позиции)
+            }
         }
 
-        // Win Rate считаем только по закрытым сделкам (с PnL)
+        // Рассчитываем статистику из закрытых сделок
+        for (const trade of closedTrades) {
+            const tradePnL = trade.pnl;
+            if (tradePnL !== null && tradePnL !== undefined && !isNaN(tradePnL) && isFinite(tradePnL)) {
+                totalReturn += tradePnL;
+                processedTrades++;
+                if (tradePnL > 0) {
+                    profitableTrades++;
+                }
+            }
+        }
+
+        // Win Rate считаем только по закрытым сделкам (с PnL), включая сделки из портфеля
         const winRate = processedTrades > 0 ? profitableTrades / processedTrades : 0;
         const averageTrade = processedTrades > 0 ? totalReturn / processedTrades : 0;
+        const maxDrawdown = 0; // TODO: рассчитать maxDrawdown из закрытых сделок
 
         // Логируем для отладки
         const LoggerService = (await import('./LoggerService.js')).default;

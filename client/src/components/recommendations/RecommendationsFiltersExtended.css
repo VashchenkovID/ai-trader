@@ -64,3 +64,45 @@
   background: var(--color-border-hover);
 }
 
+/* Адаптивность */
+@media (max-width: 1024px) {
+  .recommendations-filters-extended {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .recommendations-filters-extended-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-2);
+  }
+
+  .recommendations-filters-extended-title {
+    font-size: 1rem;
+  }
+
+  .recommendations-filters-extended-content {
+    gap: var(--spacing-2);
+  }
+
+  .recommendations-filters-extended-group {
+    gap: var(--spacing-1);
+  }
+
+  .recommendations-filters-extended-label {
+    font-size: 0.8125rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .recommendations-filters-extended-title {
+    font-size: 0.9375rem;
+  }
+
+  .recommendations-filters-extended-label {
+    font-size: 0.75rem;
+  }
+}
+

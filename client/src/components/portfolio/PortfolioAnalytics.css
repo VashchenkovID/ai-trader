@@ -98,11 +98,46 @@
 
 /* Responsive */
 @media (max-width: 768px) {
+  .portfolio-analytics-title {
+    font-size: 1rem;
+  }
+
   .portfolio-analytics-metrics {
-    gap: var(--spacing-3);
+    gap: var(--spacing-2);
   }
 
   .portfolio-analytics-metric-value {
     font-size: 1.25rem;
+  }
+
+  .portfolio-analytics-metric-label {
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .portfolio-analytics-title {
+    font-size: 0.9375rem;
+  }
+
+  .portfolio-analytics-metrics {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-2);
+  }
+
+  .portfolio-analytics-metric-value {
+    font-size: 1.125rem;
+  }
+
+  .portfolio-analytics-metric-label {
+    font-size: 0.6875rem;
+  }
+
+  .portfolio-analytics-label {
+    font-size: 0.8125rem;
+  }
+
+  .portfolio-analytics-position-ticker {
+    font-size: 0.8125rem;
   }
 }
