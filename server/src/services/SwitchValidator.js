@@ -145,9 +145,9 @@ class SwitchValidator {
      */
     async performValidationChecks(stats, criteria) {
         const checks = {
-            profitability: this.checkProfitability(stats, criteria),
+            profitability: await this.checkProfitability(stats, criteria),
             consistency: this.checkConsistency(stats, criteria),
-            riskMetrics: this.checkRiskMetrics(stats, criteria),
+            riskMetrics: await this.checkRiskMetrics(stats, criteria),
             technicalReadiness: await this.checkTechnicalReadiness(),
             allPassed: false
         };
@@ -162,8 +162,8 @@ class SwitchValidator {
     /**
      * Проверка прибыльности
      */
-    checkProfitability(stats, criteria) {
-        const profitableMonths = this.calculateProfitableMonths(stats);
+    async checkProfitability(stats, criteria) {
+        const profitableMonths = await this.calculateProfitableMonths(stats);
         // Используем обновленный win rate из портфеля
         const winRate = stats.stats.winRate !== undefined && stats.stats.winRate !== null 
             ? stats.stats.winRate 
@@ -247,13 +247,13 @@ class SwitchValidator {
     /**
      * Проверка рисков
      */
-    checkRiskMetrics(stats, criteria) {
+    async checkRiskMetrics(stats, criteria) {
         const currentDrawdown = stats.stats.currentDrawdown || 0;
         const maxDrawdown = stats.stats.maxDrawdown || 0;
         // Используем sharpeRatio из обновленных данных портфеля, если доступен
         const sharpeRatio = (stats.stats.sharpeRatio !== undefined && stats.stats.sharpeRatio !== null && !isNaN(stats.stats.sharpeRatio)) 
             ? stats.stats.sharpeRatio 
-            : this.calculateSharpeRatio(stats);
+            : await this.calculateSharpeRatio(stats);
         
         const checks = {
             currentDrawdown: {
@@ -353,18 +353,57 @@ class SwitchValidator {
     }
 
     /**
-     * Расчет прибыльных месяцев
+     * Расчет прибыльных месяцев из закрытых сделок
      */
-    calculateProfitableMonths(stats) {
-        // Упрощенный расчет - в реальной системе здесь был бы анализ по месяцам
-        const totalPnL = stats.stats.totalPnL || 0;
-        const totalTrades = stats.stats.totalTrades || 0;
-        
-        if (totalTrades < 20) return 0;
-        
-        // Примерная оценка: если общий PnL положительный и есть достаточно сделок
-        const estimatedMonths = Math.floor(totalTrades / 20); // Примерно 20 сделок в месяц
-        return totalPnL > 0 ? estimatedMonths : 0;
+    async calculateProfitableMonths(stats) {
+        try {
+            // Получаем закрытые сделки из портфеля
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+            const portfolio = await TradingEngine.getPortfolioValue();
+            
+            if (!portfolio) return 0;
+            
+            const closedTrades = await PnLCalculationService.getClosedTrades(portfolio?.mode || 'paper');
+            
+            if (closedTrades.length === 0) return 0;
+            
+            // Группируем сделки по месяцам
+            const monthlyPnL = new Map(); // key: "YYYY-MM", value: {totalPnL, count}
+            
+            for (const trade of closedTrades) {
+                const tradeDate = new Date(trade.executedAt || trade.exitDate || trade.timestamp);
+                const monthKey = `${tradeDate.getFullYear()}-${String(tradeDate.getMonth() + 1).padStart(2, '0')}`;
+                
+                const pnl = trade.realizedProfit || 0;
+                
+                if (!monthlyPnL.has(monthKey)) {
+                    monthlyPnL.set(monthKey, { totalPnL: 0, count: 0 });
+                }
+                
+                const monthData = monthlyPnL.get(monthKey);
+                monthData.totalPnL += pnl;
+                monthData.count += 1;
+            }
+            
+            // Считаем прибыльные месяцы (месяцы с положительным PnL)
+            let profitableMonths = 0;
+            for (const [monthKey, monthData] of monthlyPnL.entries()) {
+                if (monthData.totalPnL > 0 && monthData.count > 0) {
+                    profitableMonths++;
+                }
+            }
+            
+            return profitableMonths;
+        } catch (error) {
+            console.warn('⚠️ Ошибка расчета прибыльных месяцев:', error.message);
+            // Fallback на упрощенный расчет
+            const totalPnL = stats.stats.totalPnL || 0;
+            const totalTrades = stats.stats.totalTrades || 0;
+            if (totalTrades < 20) return 0;
+            const estimatedMonths = Math.floor(totalTrades / 20);
+            return totalPnL > 0 ? estimatedMonths : 0;
+        }
     }
 
     /**
@@ -400,18 +439,48 @@ class SwitchValidator {
     }
 
     /**
-     * Расчет коэффициента Шарпа
+     * Расчет коэффициента Шарпа из закрытых сделок
      */
-    calculateSharpeRatio(stats) {
-        if (!stats.tradeHistory || stats.tradeHistory.length < 10) return 0;
-        
-        const pnls = stats.tradeHistory.map(trade => trade.pnl || 0);
-        const mean = pnls.reduce((sum, pnl) => sum + pnl, 0) / pnls.length;
-        const variance = pnls.reduce((sum, pnl) => sum + Math.pow(pnl - mean, 2), 0) / pnls.length;
-        const stdDev = Math.sqrt(variance);
-        
-        // Безрисковая ставка = 0 (для упрощения)
-        return stdDev > 0 ? mean / stdDev : 0;
+    async calculateSharpeRatio(stats) {
+        try {
+            // Используем единую функцию из PnLCalculationService
+            const TradingEngine = (await import('./TradingEngine.js')).default;
+            const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+            const portfolio = await TradingEngine.getPortfolioValue();
+            
+            if (!portfolio) {
+                // Fallback на tradeHistory если нет портфеля
+                if (!stats.tradeHistory || stats.tradeHistory.length < 10) return 0;
+                const pnls = stats.tradeHistory.map(trade => trade.pnl || 0);
+                const mean = pnls.reduce((sum, pnl) => sum + pnl, 0) / pnls.length;
+                const variance = pnls.reduce((sum, pnl) => sum + Math.pow(pnl - mean, 2), 0) / pnls.length;
+                const stdDev = Math.sqrt(variance);
+                return stdDev > 0 ? mean / stdDev : 0;
+            }
+            
+            const closedTrades = await PnLCalculationService.getClosedTrades(portfolio?.mode || 'paper');
+            const initialCapital = portfolio?.initialCapital || 1000000;
+            
+            if (closedTrades.length < 2) return 0;
+            
+            // Преобразуем в формат для единой функции
+            const tradesForMetrics = closedTrades.map(trade => ({
+                pnl: trade.realizedProfit || 0,
+                executedAt: trade.executedAt || trade.exitDate || trade.timestamp
+            }));
+            
+            const metrics = PnLCalculationService.calculateMetricsFromClosedTrades(tradesForMetrics, initialCapital);
+            return metrics.sharpeRatio || 0;
+        } catch (error) {
+            console.warn('⚠️ Ошибка расчета Sharpe Ratio:', error.message);
+            // Fallback на tradeHistory
+            if (!stats.tradeHistory || stats.tradeHistory.length < 10) return 0;
+            const pnls = stats.tradeHistory.map(trade => trade.pnl || 0);
+            const mean = pnls.reduce((sum, pnl) => sum + pnl, 0) / pnls.length;
+            const variance = pnls.reduce((sum, pnl) => sum + Math.pow(pnl - mean, 2), 0) / pnls.length;
+            const stdDev = Math.sqrt(variance);
+            return stdDev > 0 ? mean / stdDev : 0;
+        }
     }
 
     /**
@@ -618,64 +687,32 @@ class SwitchValidator {
                 riskStats.stats.totalPnL = pnlResult.totalPnL;
             }
             
-            // Обновляем profitFactor из актуальных данных
-            // profitFactor = (сумма прибыльных сделок) / (сумма убыточных сделок)
+            // Обновляем profitFactor из актуальных данных используя единую функцию
+            // Получаем закрытые сделки из PnLCalculationService
             if (pnlResult.totalTrades > 0) {
-                // Получаем закрытые сделки для расчета profitFactor
-                const closedTrades = [];
-                for (const [figi, figiData] of positionsByFigi.entries()) {
-                    if (figiData.strategies.length === 0) continue;
-                    for (const strategyData of figiData.strategies) {
-                        const { buyTrades, sellTrades } = strategyData;
-                        if (sellTrades.length === 0) continue;
+                try {
+                    const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+                    const closedTrades = await PnLCalculationService.getClosedTrades(portfolio?.mode || 'paper');
+                    
+                    if (closedTrades.length > 0) {
+                        // Рассчитываем profitFactor из закрытых сделок
+                        const totalWins = closedTrades
+                            .filter(t => (t.realizedProfit || 0) > 0)
+                            .reduce((sum, t) => sum + (t.realizedProfit || 0), 0);
+                        const totalLosses = Math.abs(closedTrades
+                            .filter(t => (t.realizedProfit || 0) < 0)
+                            .reduce((sum, t) => sum + (t.realizedProfit || 0), 0));
                         
-                        const availableBuys = buyTrades.map(t => ({
-                            quantity: t.quantity,
-                            price: t.price,
-                            executedAt: t.executedAt,
-                            used: 0
-                        }));
-                        
-                        for (const sellTrade of sellTrades) {
-                            const sellQuantity = sellTrade.quantity || 0;
-                            const sellPrice = sellTrade.price || 0;
-                            let remainingSellQty = sellQuantity;
-                            
-                            if (sellQuantity <= 0 || sellPrice <= 0) continue;
-                            
-                            availableBuys.sort((a, b) => new Date(a.executedAt) - new Date(b.executedAt));
-                            
-                            for (const buyTrade of availableBuys) {
-                                if (remainingSellQty <= 0) break;
-                                const availableQty = buyTrade.quantity - buyTrade.used;
-                                if (availableQty <= 0) continue;
-                                
-                                const qtyToSell = Math.min(remainingSellQty, availableQty);
-                                const buyPrice = buyTrade.price || 0;
-                                
-                                if (buyPrice > 0) {
-                                    const tradePnL = (sellPrice - buyPrice) * qtyToSell;
-                                    if (!isNaN(tradePnL) && isFinite(tradePnL)) {
-                                        closedTrades.push({ pnl: tradePnL });
-                                    }
-                                }
-                                
-                                buyTrade.used += qtyToSell;
-                                remainingSellQty -= qtyToSell;
-                            }
+                        if (totalLosses > 0) {
+                            riskStats.stats.profitFactor = totalWins / totalLosses;
+                        } else if (totalWins > 0) {
+                            riskStats.stats.profitFactor = Infinity; // Все сделки прибыльные
+                        } else {
+                            riskStats.stats.profitFactor = 0;
                         }
                     }
-                }
-                
-                // Рассчитываем profitFactor
-                const totalWins = closedTrades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
-                const totalLosses = Math.abs(closedTrades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
-                if (totalLosses > 0) {
-                    riskStats.stats.profitFactor = totalWins / totalLosses;
-                } else if (totalWins > 0) {
-                    riskStats.stats.profitFactor = Infinity; // Все сделки прибыльные
-                } else {
-                    riskStats.stats.profitFactor = 0;
+                } catch (error) {
+                    console.warn('⚠️ Не удалось рассчитать profitFactor из закрытых сделок:', error.message);
                 }
             }
             
@@ -694,82 +731,67 @@ class SwitchValidator {
                 }
             }
             
-            // Обновляем tradeHistory для расчета confidence и consistency
-            // Собираем закрытые сделки из портфеля
-            const closedTradesForHistory = [];
-            for (const [figi, figiData] of positionsByFigi.entries()) {
-                if (figiData.strategies.length === 0) continue;
-                for (const strategyData of figiData.strategies) {
-                    const { buyTrades, sellTrades } = strategyData;
-                    if (sellTrades.length === 0) continue;
+            // Обновляем tradeHistory для расчета confidence и consistency из закрытых сделок
+            try {
+                const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+                const closedTrades = await PnLCalculationService.getClosedTrades(portfolio?.mode || 'paper');
+                
+                if (closedTrades.length > 0) {
+                    // Получаем confidence из TradingRequest для каждой сделки
+                    const TradingRequest = (await import('../models/TradingRequest.js')).default;
+                    const closedTradesForHistory = [];
                     
-                    const availableBuys = buyTrades.map(t => ({
-                        quantity: t.quantity,
-                        price: t.price,
-                        executedAt: t.executedAt,
-                        used: 0
-                    }));
-                    
-                    for (const sellTrade of sellTrades) {
-                        const sellQuantity = sellTrade.quantity || 0;
-                        const sellPrice = sellTrade.price || 0;
-                        let remainingSellQty = sellQuantity;
+                    for (const trade of closedTrades) {
+                        let confidence = 0.5; // По умолчанию
                         
-                        if (sellQuantity <= 0 || sellPrice <= 0) continue;
-                        
-                        availableBuys.sort((a, b) => new Date(a.executedAt) - new Date(b.executedAt));
-                        
-                        for (const buyTrade of availableBuys) {
-                            if (remainingSellQty <= 0) break;
-                            const availableQty = buyTrade.quantity - buyTrade.used;
-                            if (availableQty <= 0) continue;
-                            
-                            const qtyToSell = Math.min(remainingSellQty, availableQty);
-                            const buyPrice = buyTrade.price || 0;
-                            
-                            if (buyPrice > 0) {
-                                const tradePnL = (sellPrice - buyPrice) * qtyToSell;
-                                if (!isNaN(tradePnL) && isFinite(tradePnL)) {
-                                    closedTradesForHistory.push({
-                                        pnl: tradePnL,
-                                        confidence: 0.5, // По умолчанию, если нет данных о confidence
-                                        executedAt: sellTrade.executedAt || new Date()
-                                    });
+                        // Пытаемся получить confidence из TradingRequest
+                        if (trade.tradingRequestId) {
+                            try {
+                                const tradingRequest = await TradingRequest.findByPk(trade.tradingRequestId);
+                                if (tradingRequest && tradingRequest.confidence !== undefined) {
+                                    confidence = tradingRequest.confidence;
                                 }
+                            } catch (error) {
+                                // Игнорируем ошибки получения confidence
                             }
-                            
-                            buyTrade.used += qtyToSell;
-                            remainingSellQty -= qtyToSell;
+                        }
+                        
+                        closedTradesForHistory.push({
+                            pnl: trade.realizedProfit || 0,
+                            confidence: confidence,
+                            executedAt: trade.executedAt || trade.exitDate || trade.timestamp
+                        });
+                    }
+                    
+                    // Сортируем по дате
+                    closedTradesForHistory.sort((a, b) => {
+                        const dateA = new Date(a.executedAt || 0);
+                        const dateB = new Date(b.executedAt || 0);
+                        return dateA - dateB;
+                    });
+                    
+                    // Обновляем tradeHistory (только закрытые сделки)
+                    riskStats.tradeHistory = closedTradesForHistory;
+                    
+                    // Рассчитываем consecutiveLosses из закрытых сделок
+                    let maxConsecutiveLosses = 0;
+                    let currentConsecutiveLosses = 0;
+                    
+                    for (const trade of closedTradesForHistory) {
+                        if (trade.pnl < 0) {
+                            currentConsecutiveLosses++;
+                            maxConsecutiveLosses = Math.max(maxConsecutiveLosses, currentConsecutiveLosses);
+                        } else {
+                            currentConsecutiveLosses = 0;
                         }
                     }
+                    
+                    // Обновляем текущие последовательные убытки (последние сделки)
+                    riskStats.stats.consecutiveLosses = currentConsecutiveLosses;
+                    riskStats.stats.maxConsecutiveLosses = maxConsecutiveLosses;
                 }
-            }
-            
-            // Обновляем tradeHistory для расчета confidence и consistency
-            if (closedTradesForHistory.length > 0) {
-                // Объединяем с существующей историей, убирая дубликаты
-                const existingHistory = riskStats.tradeHistory || [];
-                const historyMap = new Map();
-                
-                // Добавляем существующие сделки
-                existingHistory.forEach(trade => {
-                    const key = `${trade.executedAt || trade.timestamp || Date.now()}_${trade.pnl || 0}`;
-                    historyMap.set(key, trade);
-                });
-                
-                // Добавляем новые сделки
-                closedTradesForHistory.forEach(trade => {
-                    const key = `${trade.executedAt || Date.now()}_${trade.pnl || 0}`;
-                    if (!historyMap.has(key)) {
-                        historyMap.set(key, trade);
-                    }
-                });
-                
-                riskStats.tradeHistory = Array.from(historyMap.values()).sort((a, b) => {
-                    const dateA = new Date(a.executedAt || a.timestamp || 0);
-                    const dateB = new Date(b.executedAt || b.timestamp || 0);
-                    return dateA - dateB;
-                });
+            } catch (error) {
+                console.warn('⚠️ Не удалось обновить tradeHistory из закрытых сделок:', error.message);
             }
             
             // Обновляем консистентность на основе обновленной истории сделок (даже если новых сделок не было)
