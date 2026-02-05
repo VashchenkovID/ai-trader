@@ -616,7 +616,7 @@ class PerformanceAnalyzer {
         // Ключевые метрики
         if (analysis.trading) {
             summary.keyMetrics.profit = analysis.trading.totalProfit;
-            summary.keyMetrics.winRate = analysis.trading.winRate;
+            summary.keyMetrics.winRate = (analysis.trading.winRate || 0) * 100; // Конвертируем в проценты (0-100)
             summary.keyMetrics.trades = analysis.trading.totalTrades;
             summary.keyMetrics.sharpeRatio = analysis.trading.sharpeRatio || 0;
             summary.keyMetrics.volatility = analysis.trading.volatility || 0;

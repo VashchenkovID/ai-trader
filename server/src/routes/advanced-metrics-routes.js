@@ -23,6 +23,20 @@ function validateDate(dateString) {
 }
 
 /**
+ * Конвертация даты в ISO строку для передачи на фронт
+ */
+function dateToString(date) {
+    if (!date) return null;
+    if (date instanceof Date) {
+        return date.toISOString();
+    }
+    if (typeof date === 'string') {
+        return date;
+    }
+    return null;
+}
+
+/**
  * GET /api/advanced-metrics
  * Получение всех продвинутых метрик
  * Query параметры:
@@ -72,8 +86,8 @@ router.get('/', async (req, res) => {
             data: {
                 period: period,
                 days: days,
-                startDate: analysis.startDate,
-                endDate: analysis.endDate,
+                startDate: dateToString(analysis.startDate),
+                endDate: dateToString(analysis.endDate),
                 baseMetrics: analysis.metrics,
                 advancedMetrics: advancedMetrics,
                 stats: analysis.stats,
@@ -136,8 +150,8 @@ router.get('/sortino-ratio', async (req, res) => {
                 period: period,
                 days: days,
                 riskFreeRate: riskFreeRate || ProfitabilityTracker.trackingSettings?.riskFreeRate || 8,
-                startDate: analysis.startDate,
-                endDate: analysis.endDate
+                startDate: dateToString(analysis.startDate),
+                endDate: dateToString(analysis.endDate)
             }
         });
     } catch (error) {
@@ -194,8 +208,8 @@ router.get('/calmar-ratio', async (req, res) => {
                 days: days,
                 annualReturn: analysis.metrics?.totalReturn || 0,
                 maxDrawdown: analysis.metrics?.maxDrawdown || 0,
-                startDate: analysis.startDate,
-                endDate: analysis.endDate
+                startDate: dateToString(analysis.startDate),
+                endDate: dateToString(analysis.endDate)
             }
         });
     } catch (error) {
@@ -254,8 +268,8 @@ router.get('/information-ratio', async (req, res) => {
                 message: advancedMetrics.informationRatio === null ? 
                     'Information Ratio требует данные бенчмарка (пока не реализовано)' : 
                     'Information Ratio рассчитан успешно',
-                startDate: analysis.startDate,
-                endDate: analysis.endDate
+                startDate: dateToString(analysis.startDate),
+                endDate: dateToString(analysis.endDate)
             }
         });
     } catch (error) {
@@ -383,9 +397,18 @@ router.get('/period-analysis', async (req, res) => {
             });
         }
 
+        // Конвертируем даты в строки, если они есть
+        const analysisData = { ...analysis };
+        if (analysisData.startDate) {
+            analysisData.startDate = dateToString(analysisData.startDate);
+        }
+        if (analysisData.endDate) {
+            analysisData.endDate = dateToString(analysisData.endDate);
+        }
+
         res.json({
             success: true,
-            data: analysis
+            data: analysisData
         });
     } catch (error) {
         console.error('Ошибка получения анализа по периодам:', error);
@@ -429,9 +452,10 @@ router.get('/summary', async (req, res) => {
         );
 
         // Если нет данных в ProfitabilityTracker, пытаемся получить данные из TradingEngine
+        // Винрейт из ProfitabilityTracker уже в диапазоне 0-1, конвертируем в проценты (0-100) для фронта
         let baseMetrics = {
             totalReturn: analysis.metrics?.totalReturn || 0,
-            winRate: analysis.metrics?.winRate || 0,
+            winRate: (analysis.metrics?.winRate || 0) * 100, // Конвертируем в проценты (0-100)
             sharpeRatio: analysis.metrics?.sharpeRatio || 0,
             maxDrawdown: analysis.metrics?.maxDrawdown || 0,
             averageDailyProfit: analysis.metrics?.averageDailyProfit || 0
@@ -455,104 +479,39 @@ router.get('/summary', async (req, res) => {
         }
         
         if (hasEmptyStats || hasZeroMetrics) {
+            // Используем единый источник данных из PnLCalculationService
+            const PnLCalculationService = (await import('../services/PnLCalculationService.js')).default;
             const TradingEngine = (await import('../services/TradingEngine.js')).default;
-            const tradingStats = await TradingEngine.calculateTradingStats();
             
-            // Используем winRate из TradingEngine (уже в диапазоне 0-1)
-            if (tradingStats.winRate !== undefined) {
-                baseMetrics.winRate = tradingStats.winRate;
-                if (LoggerService && LoggerService.isInitialized) {
-                    LoggerService.info('advanced-metrics/summary: используем winRate из TradingEngine', {
-                        service: 'advanced-metrics-routes',
-                        winRate: tradingStats.winRate,
-                        totalTrades: tradingStats.totalTrades
-                    });
-                }
-            }
-            
-            // Для sharpeRatio нужны доходности, попробуем рассчитать из сделок
-            const trades = await TradingEngine.getTradeHistory(1000);
-            if (trades.length > 0) {
-                // Фильтруем только закрытые сделки с PnL (SELL сделки)
-                // В виртуальной торговле используется trade.action, а не trade.type
-                const closedTrades = trades.filter(trade => {
-                    const hasPnL = trade.pnl !== undefined && 
-                                  trade.pnl !== null && 
-                                  !isNaN(trade.pnl) && 
-                                  isFinite(trade.pnl);
-                    const isSell = (trade.action === 'SELL' || trade.type === 'SELL');
-                    const isNotBuy = (trade.action !== 'BUY' && trade.type !== 'BUY');
-                    return hasPnL && (isSell || isNotBuy);
-                }).sort((a, b) => {
-                    const dateA = new Date(a.timestamp || a.date || a.createdAt);
-                    const dateB = new Date(b.timestamp || b.date || b.createdAt);
-                    return dateA - dateB;
+            try {
+                const portfolio = await TradingEngine.getPortfolioValue();
+                const pnlData = await PnLCalculationService.calculateTotalPnL(portfolio, {
+                    tradingMode: portfolio?.mode || 'paper',
+                    includeTrades: true,
+                    includePositions: false
                 });
                 
-                if (closedTrades.length > 1) {
-                    const portfolio = await TradingEngine.getPortfolioValue();
-                    const initialCapital = portfolio?.initialCapital || 1000000;
-                    const returns = [];
-                    let runningCapital = initialCapital;
-                    
-                    // Рассчитываем относительные доходности (в процентах) от текущего капитала
-                    for (const trade of closedTrades) {
-                        const pnl = trade.pnl || 0;
-                        if (runningCapital > 0 && !isNaN(pnl) && isFinite(pnl)) {
-                            // Относительная доходность от текущего капитала
-                            const returnPercent = (pnl / runningCapital) * 100;
-                            if (!isNaN(returnPercent) && isFinite(returnPercent)) {
-                                returns.push(returnPercent);
-                                runningCapital += pnl; // Обновляем капитал для следующей сделки
-                            }
-                        }
-                    }
-                    
-                    if (returns.length > 1) {
-                        const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-                        const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
-                        const volatility = Math.sqrt(variance);
-                        
-                        // Sharpe Ratio: (Average Return - Risk-Free Rate) / Volatility
-                        // Безрисковая ставка = 0 для упрощения
-                        // Если средняя доходность отрицательная, Sharpe Ratio будет отрицательным (это нормально)
-                        if (volatility > 0 && !isNaN(avgReturn) && isFinite(avgReturn)) {
-                            baseMetrics.sharpeRatio = avgReturn / volatility;
-                        } else {
-                            baseMetrics.sharpeRatio = 0;
-                        }
-                        
-                        // Логируем для отладки
-                        if (LoggerService && LoggerService.isInitialized) {
-                            LoggerService.debug('advanced-metrics/summary: расчет Sharpe Ratio', {
-                                service: 'advanced-metrics-routes',
-                                closedTradesCount: closedTrades.length,
-                                returnsCount: returns.length,
-                                avgReturn: avgReturn.toFixed(4),
-                                volatility: volatility.toFixed(4),
-                                sharpeRatio: baseMetrics.sharpeRatio.toFixed(4)
-                            });
-                        }
-                    } else {
-                        baseMetrics.sharpeRatio = 0;
-                        if (LoggerService && LoggerService.isInitialized) {
-                            LoggerService.debug('advanced-metrics/summary: недостаточно доходностей для Sharpe Ratio', {
-                                service: 'advanced-metrics-routes',
-                                closedTradesCount: closedTrades.length,
-                                returnsCount: returns.length
-                            });
-                        }
-                    }
-                } else {
-                    // Недостаточно данных для расчета
-                    baseMetrics.sharpeRatio = 0;
-                    if (LoggerService && LoggerService.isInitialized) {
-                        LoggerService.debug('advanced-metrics/summary: недостаточно закрытых сделок для Sharpe Ratio', {
-                            service: 'advanced-metrics-routes',
-                            closedTradesCount: closedTrades.length
-                        });
-                    }
+                // Используем метрики из единого источника (в диапазоне 0-1)
+                if (pnlData.summary?.winRate !== undefined) {
+                    baseMetrics.winRate = pnlData.summary.winRate * 100; // Конвертируем в проценты (0-100)
                 }
+                if (pnlData.summary?.sharpeRatio !== undefined) {
+                    baseMetrics.sharpeRatio = pnlData.summary.sharpeRatio;
+                }
+                
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.info('advanced-metrics/summary: используем метрики из PnLCalculationService', {
+                        service: 'advanced-metrics-routes',
+                        winRate: pnlData.summary?.winRate,
+                        sharpeRatio: pnlData.summary?.sharpeRatio,
+                        totalTrades: pnlData.summary?.totalTrades
+                    });
+                }
+            } catch (error) {
+                LoggerService.warn('advanced-metrics/summary: не удалось получить метрики из PnLCalculationService', {
+                    service: 'advanced-metrics-routes',
+                    error: error.message
+                });
             }
         }
 
@@ -570,13 +529,39 @@ router.get('/summary', async (req, res) => {
             analysis.endDate
         );
 
+        // Конвертируем даты в строки
+        const startDateStr = dateToString(analysis.startDate);
+        const endDateStr = dateToString(analysis.endDate);
+
+        // Подготавливаем periodAnalysis с конвертированными датами
+        let periodAnalysisData = null;
+        if (periodAnalysis.success) {
+            periodAnalysisData = {
+                byDayOfWeek: periodAnalysis.byDayOfWeek,
+                byMonth: periodAnalysis.byMonth,
+                bestDay: periodAnalysis.bestDay,
+                worstDay: periodAnalysis.worstDay,
+                bestMonth: periodAnalysis.bestMonth,
+                worstMonth: periodAnalysis.worstMonth,
+                summary: periodAnalysis.summary
+            };
+            
+            // Конвертируем даты в periodAnalysis, если они есть
+            if (periodAnalysis.startDate) {
+                periodAnalysisData.startDate = dateToString(periodAnalysis.startDate);
+            }
+            if (periodAnalysis.endDate) {
+                periodAnalysisData.endDate = dateToString(periodAnalysis.endDate);
+            }
+        }
+
         res.json({
             success: true,
             data: {
                 period: period,
                 days: days,
-                startDate: analysis.startDate,
-                endDate: analysis.endDate,
+                startDate: startDateStr,
+                endDate: endDateStr,
                 baseMetrics: baseMetrics,
                 advancedMetrics: {
                     sortinoRatio: advancedMetrics.sortinoRatio || 0,
@@ -586,15 +571,7 @@ router.get('/summary', async (req, res) => {
                     mfe: advancedMetrics.mfe || 0,
                     maeMfeAvailable: advancedMetrics.maeMfeAvailable || false
                 },
-                periodAnalysis: periodAnalysis.success ? {
-                    byDayOfWeek: periodAnalysis.byDayOfWeek,
-                    byMonth: periodAnalysis.byMonth,
-                    bestDay: periodAnalysis.bestDay,
-                    worstDay: periodAnalysis.worstDay,
-                    bestMonth: periodAnalysis.bestMonth,
-                    worstMonth: periodAnalysis.worstMonth,
-                    summary: periodAnalysis.summary
-                } : null
+                periodAnalysis: periodAnalysisData
             }
         });
     } catch (error) {

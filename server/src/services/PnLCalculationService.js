@@ -107,8 +107,86 @@ class PnLCalculationService {
             unprofitable: unprofitableCount,
             averageProfit: profitableCount > 0 ? totalProfit / profitableCount : 0,
             averageLoss: unprofitableCount > 0 ? totalLoss / unprofitableCount : 0,
-            winRate: trades.length > 0 ? (profitableCount / trades.length) * 100 : 0,
+            winRate: trades.length > 0 ? profitableCount / trades.length : 0, // В диапазоне 0-1 для единообразия
             trades
+        };
+    }
+
+    /**
+     * Единая функция расчета винрейта и Sharpe Ratio из закрытых сделок
+     * @param {Array} closedTrades - Массив закрытых сделок с полем pnl
+     * @param {number} initialCapital - Начальный капитал для расчета Sharpe Ratio
+     * @returns {Object} - {winRate: 0-1, sharpeRatio: number, totalTrades: number}
+     */
+    calculateMetricsFromClosedTrades(closedTrades, initialCapital = 1000000) {
+        if (!closedTrades || closedTrades.length === 0) {
+            return {
+                winRate: 0,
+                sharpeRatio: 0,
+                totalTrades: 0
+            };
+        }
+
+        // Фильтруем только сделки с валидным PnL
+        const validTrades = closedTrades.filter(trade => {
+            const pnl = trade.pnl;
+            return pnl !== null && pnl !== undefined && !isNaN(pnl) && isFinite(pnl);
+        });
+
+        if (validTrades.length === 0) {
+            return {
+                winRate: 0,
+                sharpeRatio: 0,
+                totalTrades: 0
+            };
+        }
+
+        // Рассчитываем винрейт (в диапазоне 0-1)
+        const profitableTrades = validTrades.filter(t => t.pnl > 0).length;
+        const winRate = validTrades.length > 0 ? profitableTrades / validTrades.length : 0;
+
+        // Рассчитываем Sharpe Ratio из относительных доходностей
+        let sharpeRatio = 0;
+        if (validTrades.length > 1) {
+            const returns = [];
+            let runningCapital = initialCapital;
+
+            // Сортируем сделки по дате
+            const sortedTrades = [...validTrades].sort((a, b) => {
+                const dateA = new Date(a.executedAt || a.exitDate || a.timestamp || 0);
+                const dateB = new Date(b.executedAt || b.exitDate || b.timestamp || 0);
+                return dateA - dateB;
+            });
+
+            // Рассчитываем относительные доходности
+            for (const trade of sortedTrades) {
+                const pnl = trade.pnl || 0;
+                if (runningCapital > 0 && !isNaN(pnl) && isFinite(pnl)) {
+                    const returnPercent = (pnl / runningCapital) * 100;
+                    if (!isNaN(returnPercent) && isFinite(returnPercent)) {
+                        returns.push(returnPercent);
+                        runningCapital += pnl;
+                    }
+                }
+            }
+
+            if (returns.length > 1) {
+                const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+                const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+                const volatility = Math.sqrt(variance);
+
+                // Sharpe Ratio: (Average Return - Risk-Free Rate) / Volatility
+                // Безрисковая ставка = 0 для упрощения
+                if (volatility > 0 && !isNaN(avgReturn) && isFinite(avgReturn)) {
+                    sharpeRatio = avgReturn / volatility;
+                }
+            }
+        }
+
+        return {
+            winRate, // В диапазоне 0-1
+            sharpeRatio,
+            totalTrades: validTrades.length
         };
     }
 
@@ -577,6 +655,11 @@ class PnLCalculationService {
                 }
             }
 
+            // Рассчитываем метрики из закрытых сделок (винрейт и Sharpe Ratio)
+            const defaultInitialCapital = tradingMode === 'paper' ? 1000000 : 0;
+            const initialCapital = portfolio.initialCapital || defaultInitialCapital;
+            const metrics = this.calculateMetricsFromClosedTrades(closedTrades, initialCapital);
+
             // Общий PnL
             let totalPnL = realizedPnL.total + unrealizedPnL.total;
 
@@ -584,16 +667,13 @@ class PnLCalculationService {
             // Это важно для бумажной торговли, где может не быть закрытых сделок
             if (totalPnL === 0 && realizedPnL.count === 0 && unrealizedPnL.count === 0) {
                 const totalValue = portfolio.totalValue || 0;
-                const initialCapital = portfolio.initialCapital || (tradingMode === 'paper' ? 1000000 : 0);
                 if (totalValue > 0 && initialCapital > 0) {
                     totalPnL = totalValue - initialCapital;
                 }
             }
 
             // Получаем данные о вводах/выводах средств (если нужно)
-            // Для бумажной торговли используем 1 000 000 по умолчанию, если initialCapital не задан
-            const defaultInitialCapital = tradingMode === 'paper' ? 1000000 : 0;
-            let adjustedCapital = portfolio.initialCapital || defaultInitialCapital;
+            let adjustedCapital = initialCapital;
             let cashFlowData = null;
 
             if (includeCashFlow) {
@@ -657,9 +737,10 @@ class PnLCalculationService {
                 },
                 cashFlow: cashFlowData || null,
                 summary: {
-                    totalTrades: realizedPnL.count,
+                    totalTrades: metrics.totalTrades,
                     totalPositions: unrealizedPnL.count,
-                    winRate: realizedPnL.winRate || 0,
+                    winRate: metrics.winRate, // В диапазоне 0-1
+                    sharpeRatio: metrics.sharpeRatio,
                     averageProfit: realizedPnL.averageProfit || 0,
                     averageLoss: realizedPnL.averageLoss || 0
                 }

@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
                     realized: pnlResult.realizedPnL,
                     realizedPercent: pnlResult.realizedPnLPercent,
                     unrealized: pnlResult.unrealizedPnL,
-                    winRate: pnlResult.winRate, // В диапазоне 0-1
+                    winRate: (pnlResult.winRate || 0) * 100, // Конвертируем в проценты (0-100) для единообразия
                     totalTrades: pnlResult.totalTrades,
                     sharpeRatio: pnlResult.sharpeRatio || 0
                 },
@@ -139,9 +139,9 @@ router.get('/real', async (req, res) => {
                     realized: pnlData.realized.total,
                     realizedPercent: pnlData.realized.percent,
                     unrealized: pnlData.unrealized.total,
-                    winRate: (pnlData.summary?.winRate || 0) / 100, // Конвертируем из процентов (0-100) в диапазон 0-1
+                    winRate: pnlData.summary?.winRate || 0, // Уже в диапазоне 0-1
                     totalTrades: pnlData.summary?.totalTrades || 0,
-                    sharpeRatio: 0 // Для реальной торговли пока не рассчитываем
+                    sharpeRatio: pnlData.summary?.sharpeRatio || 0 // Sharpe Ratio из закрытых сделок
                 },
                 trades: portfolio?.trades || [],
                 mode: 'real',

@@ -133,7 +133,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({ clas
         <Card variant="glass" className="metric-card">
           <div className="metric-label">Win Rate</div>
           <div className="metric-value number-success">
-            {summary ? formatPercent(summary.winRate * 100, 1) : '—'}
+            {summary ? formatPercent(summary.winRate, 1) : '—'}
           </div>
         </Card>
 

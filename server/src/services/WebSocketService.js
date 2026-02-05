@@ -462,9 +462,11 @@ class WebSocketService {
 
                     const totalValue = portfolio?.totalValue || 0;
                     const initialCapital = portfolio?.initialCapital || 1000000;
-                    const winRatePercent = pnlData.summary?.winRate || 0;
+                    // winRate из PnLCalculationService в диапазоне 0-1, конвертируем в проценты для фронта
+                    const winRate = pnlData.summary?.winRate || 0; // В диапазоне 0-1
+                    const winRatePercent = winRate * 100; // Конвертируем в проценты (0-100)
                     const totalTradesValue = pnlData.summary?.totalTrades || 0;
-                    const successfulTradesValue = Math.round(totalTradesValue * (winRatePercent / 100));
+                    const successfulTradesValue = Math.round(totalTradesValue * winRate);
 
                     const tradingStats = {
                         portfolioValue: totalValue,

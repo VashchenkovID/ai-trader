@@ -1316,9 +1316,11 @@ class SchedulerService {
                 const topBuys = await Recommendation.getTopRecommendationsByStrategies();
                 
                 const initialCapital = portfolio?.initialCapital || 1000000;
-                const winRatePercent = pnlResult.winRate || 0;
+                // winRate из calculatePnLFromPositions в диапазоне 0-1, конвертируем в проценты для фронта
+                const winRate = pnlResult.winRate || 0; // В диапазоне 0-1
+                const winRatePercent = winRate * 100; // Конвертируем в проценты (0-100)
                 const totalTradesValue = pnlResult.totalTrades || 0;
-                const successfulTradesValue = Math.round(totalTradesValue * (winRatePercent / 100));
+                const successfulTradesValue = Math.round(totalTradesValue * winRate);
                 
                 // Логируем для отладки
                 const LoggerService = (await import('./LoggerService.js')).default;
@@ -1326,8 +1328,8 @@ class SchedulerService {
                     LoggerService.info('tradingStatsTask: статистика торговли', {
                         service: 'SchedulerService',
                         totalTrades: totalTradesValue,
-                        winRate: winRatePercent / 100,
-                        winRatePercent: winRatePercent,
+                        winRate: winRate, // В диапазоне 0-1
+                        winRatePercent: winRatePercent, // В процентах 0-100
                         successfulTrades: successfulTradesValue,
                         pnl: {
                             total: pnlResult.totalPnL,

@@ -382,53 +382,15 @@ export async function calculatePnLFromPositions(portfolio, positionsByFigi, rawP
         }
     }
     
-    // Рассчитываем win rate и total trades
-    if (closedTrades.length > 0) {
-        totalTrades = closedTrades.length;
-        const profitableTrades = closedTrades.filter(t => t.pnl > 0).length;
-        winRate = profitableTrades / totalTrades; // В диапазоне 0-1
-        
-        // Рассчитываем Sharpe Ratio из закрытых сделок
-        if (closedTrades.length > 1) {
-            const initialCapital = portfolio?.initialCapital || 1000000;
-            const returns = [];
-            let runningCapital = initialCapital;
-            
-            // Сортируем сделки по дате
-            const sortedTrades = closedTrades.sort((a, b) => {
-                const dateA = new Date(a.executedAt || 0);
-                const dateB = new Date(b.executedAt || 0);
-                return dateA - dateB;
-            });
-            
-            // Рассчитываем относительные доходности
-            for (const trade of sortedTrades) {
-                const pnl = trade.pnl || 0;
-                if (runningCapital > 0 && !isNaN(pnl) && isFinite(pnl)) {
-                    const returnPercent = (pnl / runningCapital) * 100;
-                    if (!isNaN(returnPercent) && isFinite(returnPercent)) {
-                        returns.push(returnPercent);
-                        runningCapital += pnl;
-                    }
-                }
-            }
-            
-            if (returns.length > 1) {
-                const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-                const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
-                const volatility = Math.sqrt(variance);
-                
-                // Sharpe Ratio: (Average Return - Risk-Free Rate) / Volatility
-                // Безрисковая ставка = 0 для упрощения
-                if (volatility > 0 && !isNaN(avgReturn) && isFinite(avgReturn)) {
-                    sharpeRatio = avgReturn / volatility;
-                }
-            }
-        }
-    }
+    // Рассчитываем метрики из закрытых сделок используя единую функцию
+    const PnLCalculationService = (await import('../services/PnLCalculationService.js')).default;
+    const initialCapital = portfolio?.initialCapital || 1000000;
+    const metrics = PnLCalculationService.calculateMetricsFromClosedTrades(closedTrades, initialCapital);
+    winRate = metrics.winRate; // В диапазоне 0-1
+    sharpeRatio = metrics.sharpeRatio;
+    totalTrades = metrics.totalTrades;
     
     const totalPnL = realizedPnL + totalUnrealizedPnL;
-    const initialCapital = portfolio?.initialCapital || 1000000;
     const totalPnLPercent = initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
     const realizedPnLPercent = initialCapital > 0 ? (realizedPnL / initialCapital) * 100 : 0;
     
