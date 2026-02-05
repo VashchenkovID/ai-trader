@@ -332,6 +332,54 @@ class RetryService {
             breaker.lastEndpoint = errorInfo.endpoint || errorInfo.url || null;
             breaker.lastRequestData = errorInfo.requestData || null;
         }
+
+        // Для TinkoffAPI: любая ошибка сразу открывает circuit на 5 минут
+        if (serviceName === 'TinkoffAPI') {
+            // Открываем circuit только если он еще не открыт,
+            // чтобы не дублировать алерты на каждую ошибку
+            if (breaker.state !== 'open') {
+                breaker.state = 'open';
+                breaker.openedAt = Date.now();
+                breaker.timeout = 5 * 60 * 1000; // 5 минут
+
+                LoggerService.warn(`Circuit breaker для ${serviceName} открыт после первой ошибки (TinkoffAPI)`, {
+                    service: 'RetryService',
+                    serviceName,
+                    state: breaker.state,
+                    failures: breaker.failures,
+                    timeoutMs: breaker.timeout,
+                    endpoint: breaker.lastEndpoint,
+                    error: breaker.lastError
+                });
+
+                const alertDetails = {
+                    service: serviceName,
+                    failures: breaker.failures,
+                    threshold: breaker.failureThreshold
+                };
+
+                if (breaker.lastEndpoint) {
+                    alertDetails.endpoint = breaker.lastEndpoint;
+                }
+
+                if (breaker.lastRequestData) {
+                    alertDetails.requestData = breaker.lastRequestData;
+                }
+
+                if (breaker.lastError) {
+                    alertDetails.error = breaker.lastError;
+                }
+
+                MonitoringService.createAlert(
+                    'external_api',
+                    'high',
+                    `Circuit breaker открыт для ${serviceName}. Сервис временно недоступен (TinkoffAPI).`,
+                    alertDetails
+                );
+            }
+
+            return;
+        }
         
         if (breaker.state === 'half-open') {
             // Неудача в полуоткрытом состоянии - снова открываем
@@ -378,7 +426,7 @@ class RetryService {
                 alertDetails.error = breaker.lastError;
             }
             
-            const alert = MonitoringService.createAlert(
+            MonitoringService.createAlert(
                 'external_api',
                 'high',
                 `Circuit breaker открыт для ${serviceName}. Сервис временно недоступен.`,
