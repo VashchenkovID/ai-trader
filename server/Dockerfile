@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     tzdata \
     ca-certificates \
+    gosu \
     && rm -rf /var/lib/apt/lists/* \
     && cp /usr/share/zoneinfo/Europe/Moscow /etc/localtime \
     && echo "Europe/Moscow" > /etc/timezone
@@ -46,7 +47,9 @@ RUN groupadd -g 1001 nodejs && \
 RUN mkdir -p logs models backups/database backups/settings backups/models backups/full backups/exports backups/uploads && \
     chown -R nodejs:nodejs /app && \
     chmod -R 755 /app/logs /app/backups && \
-    chmod -R 777 /app/models /app/backups/full /app/backups/database /app/backups/settings /app/backups/models /app/backups/exports /app/backups/uploads
+    chmod -R 777 /app/models /app/backups/full /app/backups/database /app/backups/settings /app/backups/models /app/backups/exports /app/backups/uploads && \
+    chmod -R 755 /app/src && \
+    find /app/src -type f -name "*.js" -exec chmod 644 {} \;
 
 # Копируем entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/

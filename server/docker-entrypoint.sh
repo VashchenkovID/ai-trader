@@ -10,6 +10,9 @@ echo "🔧 Установка прав доступа на папки..."
 # Создаем папки, если их нет
 mkdir -p /app/models /app/logs /app/backups/database /app/backups/settings /app/backups/models /app/backups/full /app/backups/exports /app/backups/uploads
 
+# Устанавливаем владельца на весь /app (включая исходный код)
+chown -R nodejs:nodejs /app
+
 # Устанавливаем полные права на папку models и все её содержимое (рекурсивно)
 chmod -R 777 /app/models
 
@@ -17,18 +20,22 @@ chmod -R 777 /app/models
 chmod -R 755 /app/logs
 chmod -R 777 /app/backups
 
-# Устанавливаем владельца
-chown -R nodejs:nodejs /app/models /app/logs /app/backups
+# Устанавливаем права на исходный код (чтение и выполнение)
+chmod -R 755 /app/src
+find /app/src -type f -name "*.js" -exec chmod 644 {} \;
 
 echo "✅ Права доступа установлены"
 
 # Переключаемся на пользователя nodejs и запускаем основную команду
-# В Debian используем su вместо su-exec (Alpine)
-if command -v su-exec >/dev/null 2>&1; then
-    # Если su-exec доступен (Alpine)
+# Используем gosu (установлен в Debian) или su-exec (Alpine) или su (fallback)
+if command -v gosu >/dev/null 2>&1; then
+    # gosu - стандартный инструмент для переключения пользователей в Docker
+    exec gosu nodejs "$@"
+elif command -v su-exec >/dev/null 2>&1; then
+    # su-exec для Alpine
     exec su-exec nodejs "$@"
 else
-    # Используем su для Debian
-    exec su -s /bin/sh nodejs -c "exec \"\$@\"" -- "$@"
+    # fallback на su для Debian (если gosu не установлен)
+    exec su -s /bin/sh -c "exec \"\$@\"" nodejs -- "$@"
 fi
 
