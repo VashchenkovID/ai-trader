@@ -1,8 +1,13 @@
 # Multi-stage build для оптимизации размера образа
-FROM node:22.15.0-alpine AS builder
+# Используем Debian-based образ для поддержки ONNX Runtime и @xenova/transformers
+FROM node:22.15.0-slim AS builder
 
 # Установка зависимостей для сборки
-RUN apk add --no-cache python3 make g++
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -13,28 +18,17 @@ COPY package*.json ./
 RUN npm ci --only=production && npm cache clean --force
 
 # Production образ
-FROM node:22.15.0-alpine
+FROM node:22.15.0-slim
 
 # Установка необходимых системных зависимостей
-# Добавляем glibc для onnxruntime-node (требует glibc вместо musl)
-# Добавляем su-exec для переключения пользователя
-# Добавляем tzdata для настройки часового пояса (Москва)
-RUN apk add --no-cache \
+# Debian-based образ уже имеет glibc, что необходимо для ONNX Runtime
+RUN apt-get update && apt-get install -y \
     postgresql-client \
-    gcompat \
-    su-exec \
     tzdata \
-    && rm -rf /var/cache/apk/* \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
     && cp /usr/share/zoneinfo/Europe/Moscow /etc/localtime \
     && echo "Europe/Moscow" > /etc/timezone
-
-# Альтернативный способ: установка glibc через wget (если gcompat недостаточно)
-# RUN apk add --no-cache wget && \
-#     wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub && \
-#     wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.35-r1/glibc-2.35-r1.apk && \
-#     apk add --no-cache glibc-2.35-r1.apk && \
-#     rm glibc-2.35-r1.apk && \
-#     apk del wget
 
 WORKDIR /app
 
@@ -45,8 +39,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY . .
 
 # Создаем непривилегированного пользователя
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -r -u 1001 -g nodejs nodejs
 
 # Создаем директории для логов, бэкапов и моделей с правильными правами
 RUN mkdir -p logs models backups/database backups/settings backups/models backups/full backups/exports backups/uploads && \

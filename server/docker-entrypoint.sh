@@ -23,5 +23,12 @@ chown -R nodejs:nodejs /app/models /app/logs /app/backups
 echo "✅ Права доступа установлены"
 
 # Переключаемся на пользователя nodejs и запускаем основную команду
-exec su-exec nodejs "$@"
+# В Debian используем su вместо su-exec (Alpine)
+if command -v su-exec >/dev/null 2>&1; then
+    # Если su-exec доступен (Alpine)
+    exec su-exec nodejs "$@"
+else
+    # Используем su для Debian
+    exec su -s /bin/sh nodejs -c "exec \"\$@\"" -- "$@"
+fi
 

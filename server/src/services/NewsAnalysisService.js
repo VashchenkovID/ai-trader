@@ -42,11 +42,10 @@ class NewsAnalysisService {
      * @returns {Promise<object>} - Загруженная модель (pipeline)
      */
     async loadSentimentModel() {
-        // Полностью отключаем загрузку BERT модели для предотвращения segmentation fault
-        // Анализ тональности теперь использует только fallback метод
-        return null;
+        // Ленивая загрузка BERT модели для анализа тональности
+        // Использует @xenova/transformers, пробует несколько моделей по порядку
+        // Теперь работает в Debian-based Docker образе с поддержкой glibc
         
-        /* Старый код полностью отключен для предотвращения segmentation fault:
         if (process.env.DISABLE_SENTIMENT_ANALYSIS === 'true' || this.sentimentModelDisabled) {
             return null;
         }
@@ -85,7 +84,7 @@ class NewsAnalysisService {
                     }
                     
                     try {
-                        // Добавляем timeout для защиты от зависания и segmentation fault
+                        // Добавляем timeout для защиты от зависания
                         this.sentimentModel = await Promise.race([
                             pipeline(
                                 'sentiment-analysis',
@@ -189,7 +188,6 @@ class NewsAnalysisService {
             this.sentimentModel = null;
             return null;
         }
-        */
     }
 
     /**
