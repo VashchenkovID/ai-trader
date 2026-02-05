@@ -259,15 +259,59 @@ class FeedbackService {
                 const sampleCount = stats.samples.length;
                 if (sampleCount === 0) continue;
 
-                // Средние значения
+                // Win Rate рассчитываем из агрегированных данных (правильно)
                 stats.winRate = stats.totalTrades > 0 
                     ? stats.profitableTrades / stats.totalTrades 
                     : 0;
                 
+                // Средние значения для других метрик
                 stats.averageReturn = stats.samples.reduce((sum, s) => sum + (s.averageReturn || 0), 0) / sampleCount;
-                stats.sharpeRatio = stats.samples.reduce((sum, s) => sum + (s.sharpeRatio || 0), 0) / sampleCount;
                 stats.accuracy = stats.samples.reduce((sum, s) => sum + (s.accuracy || 0), 0) / sampleCount;
                 stats.f1Score = stats.samples.reduce((sum, s) => sum + (s.f1Score || 0), 0) / sampleCount;
+
+                // Sharpe Ratio рассчитываем из всех закрытых сделок за период
+                // Используем единый метод PnLCalculationService для корректности
+                // Примечание: точное связывание сделок с моделями сложно, поэтому используем общий sharpeRatio
+                // Это обеспечивает консистентность расчета, хотя и не специфично для модели
+                let sharpeRatio = 0;
+                try {
+                    const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+                    const Portfolio = (await import('../models/Portfolio.js')).default;
+                    const portfolio = await Portfolio.findOne();
+                    const tradingMode = portfolio?.mode || 'paper';
+                    const initialCapital = portfolio?.initialCapital || 1000000;
+                    
+                    // Получаем все закрытые сделки за период
+                    const closedTrades = await PnLCalculationService.getClosedTrades(
+                        tradingMode,
+                        periodStart.toISOString(),
+                        new Date().toISOString()
+                    );
+                    
+                    // Фильтруем сделки по figi, если указан
+                    let filteredTrades = closedTrades;
+                    if (figi) {
+                        filteredTrades = closedTrades.filter(t => t.figi === figi);
+                    }
+                    
+                    // Рассчитываем sharpeRatio из закрытых сделок используя единый метод
+                    if (filteredTrades.length > 1) {
+                        const metrics = PnLCalculationService.calculateMetricsFromClosedTrades(
+                            filteredTrades,
+                            initialCapital
+                        );
+                        sharpeRatio = metrics.sharpeRatio || 0;
+                    }
+                } catch (error) {
+                    // Fallback: усредняем sharpeRatio из samples (если есть валидные значения)
+                    const sharpeRatios = stats.samples
+                        .map(s => s.sharpeRatio)
+                        .filter(sr => sr !== null && sr !== undefined && !isNaN(sr) && isFinite(sr));
+                    if (sharpeRatios.length > 0) {
+                        sharpeRatio = sharpeRatios.reduce((sum, r) => sum + r, 0) / sharpeRatios.length;
+                    }
+                }
+                stats.sharpeRatio = sharpeRatio;
 
                 // Максимальная просадка
                 stats.maxDrawdown = Math.max(...stats.samples.map(s => {
@@ -564,16 +608,52 @@ class FeedbackService {
             aggregated.samples++;
         }
 
+        // Win Rate рассчитываем из агрегированных данных (правильно)
+        const winRate = aggregated.totalTrades > 0 
+            ? aggregated.profitableTrades / aggregated.totalTrades 
+            : 0;
+        
+        // Average Return
+        const averageReturn = aggregated.totalTrades > 0
+            ? aggregated.totalReturn / aggregated.totalTrades
+            : 0;
+        
+        // Sharpe Ratio рассчитываем из всех закрытых сделок комбинации за период
+        // Используем единый метод PnLCalculationService для корректности
+        let sharpeRatio = 0;
+        try {
+            const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+            const Portfolio = (await import('../models/Portfolio.js')).default;
+            const portfolio = await Portfolio.findOne();
+            const tradingMode = portfolio?.mode || 'paper';
+            const initialCapital = portfolio?.initialCapital || 1000000;
+            
+            // Получаем все закрытые сделки за период
+            const closedTrades = await PnLCalculationService.getClosedTrades(
+                tradingMode,
+                periodStart.toISOString(),
+                new Date().toISOString()
+            );
+            
+            // Рассчитываем sharpeRatio из закрытых сделок
+            if (closedTrades.length > 1) {
+                const metrics = PnLCalculationService.calculateMetricsFromClosedTrades(
+                    closedTrades,
+                    initialCapital
+                );
+                sharpeRatio = metrics.sharpeRatio || 0;
+            }
+        } catch (error) {
+            // Fallback: усредняем sharpeRatio из performances (если есть)
+            if (aggregated.sharpeRatios.length > 0) {
+                sharpeRatio = aggregated.sharpeRatios.reduce((sum, r) => sum + r, 0) / aggregated.sharpeRatios.length;
+            }
+        }
+
         return {
-            winRate: aggregated.totalTrades > 0 
-                ? aggregated.profitableTrades / aggregated.totalTrades 
-                : 0,
-            averageReturn: aggregated.totalTrades > 0
-                ? aggregated.totalReturn / aggregated.totalTrades
-                : 0,
-            sharpeRatio: aggregated.sharpeRatios.length > 0
-                ? aggregated.sharpeRatios.reduce((sum, r) => sum + r, 0) / aggregated.sharpeRatios.length
-                : 0,
+            winRate,
+            averageReturn,
+            sharpeRatio,
             totalTrades: aggregated.totalTrades,
             profitableTrades: aggregated.profitableTrades,
             losingTrades: aggregated.losingTrades

@@ -51,7 +51,8 @@ class RetryService {
             retryableStatusCodes = [429, 500, 502, 503, 504], // HTTP коды для retry
             onRetry = null,              // Callback при повторе
             serviceName = 'unknown',     // Имя сервиса для статистики
-            circuitBreaker = true        // Использовать circuit breaker
+            circuitBreaker = true,       // Использовать circuit breaker
+            requestData = null           // Данные запроса (path, body) для логирования
         } = options;
         
         let lastError = null;
@@ -88,7 +89,8 @@ class RetryService {
                     if (circuitBreaker) {
                         const errorInfo = {
                             error: error,
-                            endpoint: error.config?.url || error.request?.path || error.url || null
+                            endpoint: error.config?.url || error.request?.path || error.url || requestData?.path || null,
+                            requestData: requestData || null
                         };
                         this.recordFailure(serviceName, errorInfo);
                     }
@@ -101,7 +103,8 @@ class RetryService {
                     if (circuitBreaker) {
                         const errorInfo = {
                             error: error,
-                            endpoint: error.config?.url || error.request?.path || error.url || null
+                            endpoint: error.config?.url || error.request?.path || error.url || requestData?.path || null,
+                            requestData: requestData || null
                         };
                         this.recordFailure(serviceName, errorInfo);
                     }
@@ -137,7 +140,8 @@ class RetryService {
         if (circuitBreaker) {
             const errorInfo = {
                 error: lastError,
-                endpoint: lastError?.config?.url || lastError?.request?.path || lastError?.url || null
+                endpoint: lastError?.config?.url || lastError?.request?.path || lastError?.url || requestData?.path || null,
+                requestData: requestData || null
             };
             this.recordFailure(serviceName, errorInfo);
         }
@@ -313,7 +317,8 @@ class RetryService {
                 failureThreshold: 5,
                 halfOpenAttempts: 0,
                 lastError: null,
-                lastEndpoint: null
+                lastEndpoint: null,
+                lastRequestData: null
             };
             this.circuitBreakers.set(serviceName, breaker);
         }
@@ -321,10 +326,11 @@ class RetryService {
         breaker.failures++;
         breaker.lastFailure = Date.now();
         
-        // Сохраняем информацию об ошибке и эндпоинте
+        // Сохраняем информацию об ошибке, эндпоинте и данных запроса
         if (errorInfo) {
             breaker.lastError = errorInfo.error?.message || errorInfo.error?.toString() || 'Unknown error';
             breaker.lastEndpoint = errorInfo.endpoint || errorInfo.url || null;
+            breaker.lastRequestData = errorInfo.requestData || null;
         }
         
         if (breaker.state === 'half-open') {
@@ -353,7 +359,7 @@ class RetryService {
                 error: breaker.lastError
             });
             
-            // Создаем алерт с информацией об эндпоинте и ошибке
+            // Создаем алерт с информацией об эндпоинте, данных запроса и ошибке
             const alertDetails = {
                 service: serviceName,
                 failures: breaker.failures,
@@ -362,6 +368,10 @@ class RetryService {
             
             if (breaker.lastEndpoint) {
                 alertDetails.endpoint = breaker.lastEndpoint;
+            }
+            
+            if (breaker.lastRequestData) {
+                alertDetails.requestData = breaker.lastRequestData;
             }
             
             if (breaker.lastError) {

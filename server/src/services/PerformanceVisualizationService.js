@@ -389,6 +389,7 @@ class PerformanceVisualizationService {
             }
 
             const analysis = await PerformanceAnalyzer.analyzePerformance('medium', period);
+            
             const returnsChart = await this.getReturnsChartData(period);
             const pnlDistribution = await this.getPnLDistributionData(period);
             const drawdownChart = await this.getDrawdownChartData(period);
@@ -396,14 +397,41 @@ class PerformanceVisualizationService {
             const sectorAnalysis = await PerformanceAnalyzer.analyzeSectorPerformance(period);
 
             // Трансформируем summary для фронтенда
+            // winRate уже в процентах (0-100) из generateSummary
+            // maxDrawdown уже в процентах (0-100) из getDrawdownChartData
             const transformedSummary = {
                 totalProfit: analysis.summary?.keyMetrics?.profit ?? 0,
                 totalTrades: analysis.summary?.keyMetrics?.trades ?? 0,
-                winRate: analysis.summary?.keyMetrics?.winRate ?? 0,
+                winRate: analysis.summary?.keyMetrics?.winRate ?? 0, // Уже в процентах (0-100)
                 sharpeRatio: analysis.summary?.keyMetrics?.sharpeRatio ?? 0,
-                maxDrawdown: drawdownChart?.summary?.maxDrawdown ?? 0,
-                volatility: analysis.trading?.volatility ?? 0
+                maxDrawdown: drawdownChart?.summary?.maxDrawdown ?? 0, // Уже в процентах (0-100)
+                volatility: analysis.trading?.volatility ?? 0, // В процентах
+                profitFactor: analysis.summary?.keyMetrics?.profitFactor ?? 0,
+                consistency: analysis.summary?.keyMetrics?.consistency ?? 0
             };
+            
+            // Загружаем минимальные значения из настроек для отображения на фронте
+            try {
+                const Settings = (await import('../models/Settings.js')).default;
+                const minWinRate = await Settings.getSetting('minWinRate', 0.55); // 55% по умолчанию
+                const minTotalTrades = await Settings.getSetting('minTotalTrades', 10);
+                const minProfitFactor = await Settings.getSetting('minProfitFactor', 1.2);
+                const minSharpeRatio = await Settings.getSetting('minSharpeRatio', 0.8);
+                const minConsistency = await Settings.getSetting('minConsistency', 0.6);
+                
+                // Добавляем минимальные значения в summary для фронтенда
+                transformedSummary.minWinRate = minWinRate * 100; // Конвертируем в проценты
+                transformedSummary.minTotalTrades = minTotalTrades;
+                transformedSummary.minProfitFactor = minProfitFactor;
+                transformedSummary.minSharpeRatio = minSharpeRatio;
+                transformedSummary.minConsistency = minConsistency;
+            } catch (error) {
+                console.warn('⚠️ Не удалось загрузить минимальные значения из настроек:', error.message);
+                LoggerService.warn('Не удалось загрузить минимальные значения', {
+                    service: 'PerformanceVisualizationService',
+                    error: error.message
+                });
+            }
             
             const result = {
                 period,
@@ -428,7 +456,7 @@ class PerformanceVisualizationService {
         } catch (error) {
             LoggerService.error('Error getting dashboard data', {
                 service: 'PerformanceVisualizationService',
-                error: { message: error.message }
+                error: { message: error.message, stack: error.stack }
             });
             return { error: error.message };
         }

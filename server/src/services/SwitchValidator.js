@@ -15,7 +15,6 @@ class SwitchValidator {
             minWinRate: 0.55,              // 55%+ win rate
             maxDrawdown: 0.12,             // Максимум 12% просадка
             minTotalTrades: 50,            // Минимум 50 сделок
-            minProfitFactor: 1.3,          // Минимум 1.3 profit factor
             maxConsecutiveLosses: 4,       // Максимум 4 убытка подряд
             minConfidence: 0.65,           // 65%+ средняя уверенность
             minSharpeRatio: 0.8            // Минимум 0.8 коэффициент Шарпа
@@ -27,11 +26,9 @@ class SwitchValidator {
             minWinRate: 0.60,              // 60%+ win rate
             maxDrawdown: 0.10,             // Максимум 10% просадка
             minTotalTrades: 100,           // Минимум 100 сделок
-            minProfitFactor: 1.5,          // Минимум 1.5 profit factor
             maxConsecutiveLosses: 3,       // Максимум 3 убытка подряд
             minConfidence: 0.70,           // 70%+ средняя уверенность
-            minSharpeRatio: 1.0,           // Минимум 1.0 коэффициент Шарпа
-            minConsistency: 0.8             // 80%+ консистентность
+            minSharpeRatio: 1.0            // Минимум 1.0 коэффициент Шарпа
         };
         
         // История проверок
@@ -168,10 +165,6 @@ class SwitchValidator {
         const winRate = stats.stats.winRate !== undefined && stats.stats.winRate !== null 
             ? stats.stats.winRate 
             : 0;
-        // Используем обновленный profitFactor из портфеля
-        const profitFactor = (stats.stats.profitFactor !== undefined && stats.stats.profitFactor !== null && isFinite(stats.stats.profitFactor))
-            ? stats.stats.profitFactor
-            : 0;
         
         const checks = {
             profitableMonths: {
@@ -185,12 +178,6 @@ class SwitchValidator {
                 value: winRate,
                 threshold: criteria.minWinRate,
                 message: `Win rate: ${(winRate * 100).toFixed(1)}%/${(criteria.minWinRate * 100)}%`
-            },
-            profitFactor: {
-                passed: profitFactor >= criteria.minProfitFactor,
-                value: profitFactor,
-                threshold: criteria.minProfitFactor,
-                message: `Profit factor: ${profitFactor.toFixed(2)}/${criteria.minProfitFactor}`
             }
         };
 
@@ -208,7 +195,6 @@ class SwitchValidator {
         const totalTrades = stats.stats.totalTrades || 0;
         const consecutiveLosses = stats.stats.consecutiveLosses || 0;
         const averageConfidence = this.calculateAverageConfidence(stats);
-        const consistency = this.calculateConsistency(stats);
         
         const checks = {
             totalTrades: {
@@ -228,12 +214,6 @@ class SwitchValidator {
                 value: averageConfidence,
                 threshold: criteria.minConfidence,
                 message: `Средняя уверенность: ${(averageConfidence * 100).toFixed(1)}%/${(criteria.minConfidence * 100)}%`
-            },
-            consistency: {
-                passed: criteria.minConsistency ? consistency >= criteria.minConsistency : true,
-                value: consistency,
-                threshold: criteria.minConsistency || 0,
-                message: `Консистентность: ${(consistency * 100).toFixed(1)}%/${((criteria.minConsistency || 0) * 100)}%`
             }
         };
 
@@ -463,13 +443,8 @@ class SwitchValidator {
             
             if (closedTrades.length < 2) return 0;
             
-            // Преобразуем в формат для единой функции
-            const tradesForMetrics = closedTrades.map(trade => ({
-                pnl: trade.realizedProfit || 0,
-                executedAt: trade.executedAt || trade.exitDate || trade.timestamp
-            }));
-            
-            const metrics = PnLCalculationService.calculateMetricsFromClosedTrades(tradesForMetrics, initialCapital);
+            // getClosedTrades теперь возвращает сделки с полем pnl, можно использовать напрямую
+            const metrics = PnLCalculationService.calculateMetricsFromClosedTrades(closedTrades, initialCapital);
             return metrics.sharpeRatio || 0;
         } catch (error) {
             console.warn('⚠️ Ошибка расчета Sharpe Ratio:', error.message);
@@ -677,9 +652,31 @@ class SwitchValidator {
                 riskStats.stats.totalTrades = pnlResult.totalTrades;
             }
             
-            // Обновляем Sharpe ratio если доступен
-            if (pnlResult.sharpeRatio !== undefined && pnlResult.sharpeRatio !== null && !isNaN(pnlResult.sharpeRatio) && isFinite(pnlResult.sharpeRatio)) {
-                riskStats.stats.sharpeRatio = pnlResult.sharpeRatio;
+            // Обновляем Sharpe ratio используя единый метод расчета из PnLCalculationService
+            // Это обеспечивает синхронизацию с дашбордом производительности
+            try {
+                const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+                const closedTrades = await PnLCalculationService.getClosedTrades(portfolio?.mode || 'paper');
+                const initialCapital = portfolio?.initialCapital || 1000000;
+                
+                if (closedTrades.length > 0) {
+                    // getClosedTrades теперь возвращает сделки с полем pnl, можно использовать напрямую
+                    const metrics = PnLCalculationService.calculateMetricsFromClosedTrades(closedTrades, initialCapital);
+                    if (metrics.sharpeRatio !== undefined && metrics.sharpeRatio !== null && !isNaN(metrics.sharpeRatio) && isFinite(metrics.sharpeRatio)) {
+                        riskStats.stats.sharpeRatio = metrics.sharpeRatio;
+                    }
+                } else {
+                    // Если нет закрытых сделок, используем значение из pnlResult как fallback
+                    if (pnlResult.sharpeRatio !== undefined && pnlResult.sharpeRatio !== null && !isNaN(pnlResult.sharpeRatio) && isFinite(pnlResult.sharpeRatio)) {
+                        riskStats.stats.sharpeRatio = pnlResult.sharpeRatio;
+                    }
+                }
+            } catch (error) {
+                console.warn('⚠️ Не удалось обновить Sharpe ratio из PnLCalculationService, используем значение из pnlResult:', error.message);
+                // Fallback на значение из pnlResult
+                if (pnlResult.sharpeRatio !== undefined && pnlResult.sharpeRatio !== null && !isNaN(pnlResult.sharpeRatio) && isFinite(pnlResult.sharpeRatio)) {
+                    riskStats.stats.sharpeRatio = pnlResult.sharpeRatio;
+                }
             }
             
             // Обновляем totalPnL

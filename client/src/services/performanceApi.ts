@@ -83,6 +83,14 @@ export interface DashboardData {
     sharpeRatio: number;
     maxDrawdown: number;
     volatility: number;
+    profitFactor?: number;
+    consistency?: number;
+    // Минимальные значения для отображения
+    minWinRate?: number;
+    minTotalTrades?: number;
+    minProfitFactor?: number;
+    minSharpeRatio?: number;
+    minConsistency?: number;
   };
   returns: ReturnsChartData;
   pnlDistribution: PnLDistributionData;

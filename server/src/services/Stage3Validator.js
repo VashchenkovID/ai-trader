@@ -335,10 +335,9 @@ class Stage3Validator {
                 criteria.volatility = analysis.trading.volatility || 0;
                 criteria.score += criteria.volatility <= this.validationSettings.maxVolatility ? 5 : 0;
 
-                // Консистентность (упрощенная)
+                // Консистентность (упрощенная) - убрана из валидации
                 const winRate = analysis.trading.winRate || 0;
                 criteria.consistency = winRate;
-                criteria.score += criteria.consistency >= this.validationSettings.minConsistency ? 5 : 0;
             }
 
             // Максимальные последовательные убытки
@@ -347,9 +346,8 @@ class Stage3Validator {
             criteria.consecutiveLosses = this.calculateMaxConsecutiveLosses(trades);
             criteria.score += criteria.consecutiveLosses <= this.validationSettings.maxConsecutiveLosses ? 5 : 0;
 
-            // Общая стабильность
-            criteria.score += criteria.volatility <= this.validationSettings.maxVolatility && 
-                            criteria.consistency >= this.validationSettings.minConsistency ? 5 : 0;
+            // Общая стабильность (убрана проверка консистентности)
+            criteria.score += criteria.volatility <= this.validationSettings.maxVolatility ? 5 : 0;
 
             return criteria;
 

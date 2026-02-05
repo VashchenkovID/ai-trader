@@ -163,6 +163,10 @@ class TinkoffApiService {
             retryableErrors: ['ECONNRESET', 'ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'timeout', 'AbortError'],
             serviceName: 'TinkoffAPI',
             circuitBreaker: true,
+            requestData: {
+                path: path,
+                body: body
+            },
             onRetry: (attempt, delay, error) => {
                 if (error.status === 429 || error.statusCode === 429) {
                     console.warn(`⚠️ Rate limit exceeded. Retrying in ${Math.round(delay/1000)}s... (attempt ${attempt}/${this.maxRetries})`);

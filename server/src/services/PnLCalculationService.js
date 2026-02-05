@@ -320,6 +320,7 @@ class PnLCalculationService {
                         quantity: trade.quantity,
                         commission: trade.commission || 0,
                         realizedProfit: trade.pnl, // Используем уже рассчитанный PnL
+                        pnl: trade.pnl, // Добавляем pnl для единообразия с calculateMetricsFromClosedTrades
                         exitDate: trade.timestamp || trade.date || trade.createdAt,
                         executedAt: trade.timestamp || trade.date || trade.createdAt,
                         actualPrice: trade.price,
@@ -370,6 +371,7 @@ class PnLCalculationService {
             // Преобразуем PositionExit в формат для расчета PnL
             return exits.map(exit => {
                 const tradingRequest = tradingRequestsMap.get(exit.tradingRequestId) || {};
+                const realizedProfit = exit.realizedProfit || 0;
                 return {
                     figi: exit.figi,
                     ticker: exit.ticker,
@@ -379,7 +381,8 @@ class PnLCalculationService {
                     exitQuantity: exit.exitQuantity,
                     quantity: exit.exitQuantity,
                     commission: exit.commission || 0,
-                    realizedProfit: exit.realizedProfit || 0,
+                    realizedProfit: realizedProfit,
+                    pnl: realizedProfit, // Добавляем pnl для единообразия с calculateMetricsFromClosedTrades
                     exitDate: exit.executedAt,
                     executedAt: exit.executedAt,
                     tradingRequestId: exit.tradingRequestId,
@@ -616,7 +619,10 @@ class PnLCalculationService {
             let realizedPnL = { total: 0, count: 0, profitable: 0, unprofitable: 0, trades: [] };
 
             if (includeTrades) {
-                closedTrades = await this.getClosedTrades(tradingMode, startDate, endDate);
+                // Преобразуем даты в ISO строки, если они объекты Date
+                const startDateStr = startDate ? (startDate instanceof Date ? startDate.toISOString() : startDate) : null;
+                const endDateStr = endDate ? (endDate instanceof Date ? endDate.toISOString() : endDate) : null;
+                closedTrades = await this.getClosedTrades(tradingMode, startDateStr, endDateStr);
                 realizedPnL = this.calculateRealizedPnL(closedTrades);
             }
 

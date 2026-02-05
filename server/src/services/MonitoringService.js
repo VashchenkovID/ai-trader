@@ -395,13 +395,48 @@ class MonitoringService {
                     critical: '🚨'
                 }[alert.severity] || '⚠️';
                 
-                await OptimizedTelegramService.sendAlert(
-                    `MONITORING_${alert.category.toUpperCase()}`,
-                    `${emoji} <b>АЛЕРТ: ${alert.category}</b>\n\n` +
+                let message = `${emoji} <b>АЛЕРТ: ${alert.category}</b>\n\n` +
                     `📝 ${alert.message}\n` +
                     `⚠️ Уровень: ${alert.severity}\n` +
-                    `⏰ Время: ${new Date(alert.timestamp).toLocaleString('ru-RU')}` +
-                    (alert.details ? `\n\n📊 Детали:\n${JSON.stringify(alert.details, null, 2)}` : ''),
+                    `⏰ Время: ${new Date(alert.timestamp).toLocaleString('ru-RU')}`;
+                
+                // Специальное форматирование для external_api алертов
+                if (alert.category === 'external_api' && alert.details) {
+                    // Определяем endpoint: сначала из details.endpoint, затем из requestData.path
+                    const endpoint = alert.details.endpoint || alert.details.requestData?.path || 'N/A';
+                    message += `\n\n🔗 <b>Эндпоинт:</b> ${endpoint}`;
+                    
+                    if (alert.details.requestData) {
+                        // Если endpoint был взят из requestData.path, не дублируем
+                        if (alert.details.requestData.path && alert.details.endpoint !== alert.details.requestData.path) {
+                            message += `\n📍 <b>Путь:</b> ${alert.details.requestData.path}`;
+                        }
+                        if (alert.details.requestData.body && Object.keys(alert.details.requestData.body).length > 0) {
+                            // Форматируем body для читаемости, скрывая чувствительные данные
+                            const sanitizedBody = { ...alert.details.requestData.body };
+                            // Удаляем токены и другие чувствительные данные
+                            if (sanitizedBody.token) delete sanitizedBody.token;
+                            if (sanitizedBody.apiKey) delete sanitizedBody.apiKey;
+                            
+                            message += `\n📦 <b>Данные запроса:</b>\n<code>${JSON.stringify(sanitizedBody, null, 2)}</code>`;
+                        }
+                    }
+                    
+                    if (alert.details.error) {
+                        message += `\n❌ <b>Ошибка:</b> ${alert.details.error}`;
+                    }
+                    
+                    if (alert.details.failures !== undefined) {
+                        message += `\n📊 <b>Ошибок подряд:</b> ${alert.details.failures}/${alert.details.threshold || 5}`;
+                    }
+                } else if (alert.details) {
+                    // Для других типов алертов используем стандартное форматирование
+                    message += `\n\n📊 <b>Детали:</b>\n<code>${JSON.stringify(alert.details, null, 2)}</code>`;
+                }
+                
+                await OptimizedTelegramService.sendAlert(
+                    `MONITORING_${alert.category.toUpperCase()}`,
+                    message,
                     alert.severity
                 );
             }

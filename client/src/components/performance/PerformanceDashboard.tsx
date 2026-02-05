@@ -124,22 +124,37 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({ clas
         </Card>
 
         <Card variant="glass" className="metric-card">
-          <div className="metric-label">Всего сделок</div>
-          <div className="metric-value number-text-primary">
+          <div className="metric-label">
+            Всего сделок
+            {summary?.minTotalTrades && (
+              <span className="metric-min-value"> (мин: {summary.minTotalTrades})</span>
+            )}
+          </div>
+          <div className={`metric-value number-text-primary ${summary?.minTotalTrades && summary.totalTrades < summary.minTotalTrades ? 'metric-below-min' : ''}`}>
             {summary?.totalTrades ?? '—'}
           </div>
         </Card>
 
         <Card variant="glass" className="metric-card">
-          <div className="metric-label">Win Rate</div>
-          <div className="metric-value number-success">
+          <div className="metric-label">
+            Win Rate
+            {summary?.minWinRate && (
+              <span className="metric-min-value"> (мин: {formatPercent(summary.minWinRate, 1)})</span>
+            )}
+          </div>
+          <div className={`metric-value number-success ${summary?.minWinRate && summary.winRate < summary.minWinRate ? 'metric-below-min' : ''}`}>
             {summary ? formatPercent(summary.winRate, 1) : '—'}
           </div>
         </Card>
 
         <Card variant="glass" className="metric-card">
-          <div className="metric-label">Sharpe Ratio</div>
-          <div className="metric-value number-primary">
+          <div className="metric-label">
+            Sharpe Ratio
+            {summary?.minSharpeRatio && (
+              <span className="metric-min-value"> (мин: {formatNumber(summary.minSharpeRatio, 2)})</span>
+            )}
+          </div>
+          <div className={`metric-value number-primary ${summary?.minSharpeRatio && summary.sharpeRatio < summary.minSharpeRatio ? 'metric-below-min' : ''}`}>
             {summary ? formatNumber(summary.sharpeRatio, 2) : '—'}
           </div>
         </Card>
@@ -147,7 +162,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({ clas
         <Card variant="glass" className="metric-card">
           <div className="metric-label">Макс. просадка</div>
           <div className="metric-value number-error">
-            {summary ? formatPercent(summary.maxDrawdown * 100, 2) : '—'}
+            {summary ? formatPercent(summary.maxDrawdown, 2) : '—'}
           </div>
         </Card>
 
@@ -155,6 +170,30 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({ clas
           <div className="metric-label">Волатильность</div>
           <div className="metric-value number-warning">
             {summary ? formatPercent(summary.volatility * 100, 2) : '—'}
+          </div>
+        </Card>
+
+        <Card variant="glass" className="metric-card">
+          <div className="metric-label">
+            Profit Factor
+            {summary?.minProfitFactor && (
+              <span className="metric-min-value"> (мин: {formatNumber(summary.minProfitFactor, 2)})</span>
+            )}
+          </div>
+          <div className={`metric-value number-primary ${summary?.minProfitFactor && (summary.profitFactor || 0) < summary.minProfitFactor ? 'metric-below-min' : ''}`}>
+            {summary?.profitFactor !== undefined ? formatNumber(summary.profitFactor, 2) : '—'}
+          </div>
+        </Card>
+
+        <Card variant="glass" className="metric-card">
+          <div className="metric-label">
+            Консистентность
+            {summary?.minConsistency && (
+              <span className="metric-min-value"> (мин: {formatPercent(summary.minConsistency * 100, 1)})</span>
+            )}
+          </div>
+          <div className={`metric-value number-success ${summary?.minConsistency && (summary.consistency || 0) < summary.minConsistency ? 'metric-below-min' : ''}`}>
+            {summary?.consistency !== undefined ? formatPercent(summary.consistency * 100, 1) : '—'}
           </div>
         </Card>
       </div>

@@ -145,13 +145,14 @@ router.get('/visualization/dashboard', async (req, res) => {
             strategy: req.query.strategy || null,
             sector: req.query.sector || null
         };
+        
         const data = await PerformanceVisualizationService.getDashboardData(filters);
+        
         res.json({
             success: true,
             data: data
         });
     } catch (error) {
-        console.error('Error getting dashboard data:', error);
         res.status(500).json({
             success: false,
             message: 'Error getting dashboard data',

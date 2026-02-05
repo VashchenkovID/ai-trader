@@ -183,10 +183,10 @@ class PerformanceAnalyzer {
             const endDate = new Date();
             const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
 
-            // Получаем данные из TradingEngine
-            const trades = TradingEngine.virtualPortfolio?.trades || [];
-            const periodTrades = trades.filter(trade => {
-                const tradeDate = new Date(trade.timestamp);
+            // Получаем данные из TradingEngine через getTradeHistory для загрузки из БД
+            const allTrades = await TradingEngine.getTradeHistory(10000);
+            const periodTrades = allTrades.filter(trade => {
+                const tradeDate = new Date(trade.timestamp || trade.date || trade.createdAt);
                 return tradeDate >= startDate && tradeDate <= endDate;
             });
 
@@ -200,11 +200,13 @@ class PerformanceAnalyzer {
                 }
             });
 
-            // Рассчитываем метрики
-            // Используем PnLCalculationService для корректного расчета с актуальными ценами
+            // Рассчитываем метрики используя PnLCalculationService для единообразия
             let totalProfit = 0;
             let realizedProfit = 0;
             let unrealizedProfit = 0;
+            let winRate = 0;
+            let sharpeRatio = 0;
+            let totalTrades = 0;
             
             try {
                 const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
@@ -225,43 +227,82 @@ class PerformanceAnalyzer {
                 realizedProfit = pnlData.realized?.total || 0;
                 unrealizedProfit = pnlData.unrealized?.total || 0;
                 totalProfit = pnlData.total?.pnl || 0;
+                
+                // Получаем закрытые сделки для расчета метрик с правильными параметрами
+                const closedTrades = await PnLCalculationService.getClosedTrades(
+                    recalculatedPortfolio?.mode || 'paper',
+                    startDate.toISOString(),
+                    endDate.toISOString()
+                );
+                
+                // getClosedTrades уже фильтрует по дате, но для надежности оставляем фильтр
+                const periodClosedTrades = closedTrades.filter(trade => {
+                    const tradeDate = new Date(trade.executedAt || trade.exitDate || trade.date);
+                    return tradeDate >= startDate && tradeDate <= endDate;
+                });
+                
+                // Используем централизованный расчет метрик из PnLCalculationService
+                const initialCapital = recalculatedPortfolio?.initialCapital || portfolio?.initialCapital || 1000000;
+                const metrics = PnLCalculationService.calculateMetricsFromClosedTrades(periodClosedTrades, initialCapital);
+                
+                winRate = metrics.winRate; // В диапазоне 0-1
+                sharpeRatio = metrics.sharpeRatio;
+                totalTrades = metrics.totalTrades;
+                
             } catch (error) {
-                console.warn('⚠️ Не удалось получить PnL из PnLCalculationService, используем данные из trades:', error.message);
+                console.warn('⚠️ Не удалось получить метрики из PnLCalculationService, используем данные из trades:', error.message);
                 // Fallback: используем данные из trades
-                totalProfit = periodTrades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
-                realizedProfit = totalProfit; // Для закрытых сделок весь PnL - реализованный
+                const closedTrades = periodTrades.filter(trade => {
+                    const hasPnL = trade.pnl !== null && trade.pnl !== undefined && !isNaN(trade.pnl);
+                    const isSell = (trade.action === 'SELL' || trade.type === 'SELL');
+                    return hasPnL && isSell;
+                });
+                
+                totalTrades = closedTrades.length;
+                const profitableTrades = closedTrades.filter(trade => (trade.pnl || 0) > 0).length;
+                winRate = totalTrades > 0 ? profitableTrades / totalTrades : 0;
+                totalProfit = closedTrades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+                realizedProfit = totalProfit;
                 unrealizedProfit = 0;
             }
-            
-            // Фильтруем только закрытые сделки с рассчитанным PnL (исключаем открытые позиции BUY)
-            // В виртуальной торговле используется trade.action, а не trade.type
-            const closedTrades = periodTrades.filter(trade => {
-                const hasPnL = trade.pnl !== null && trade.pnl !== undefined && !isNaN(trade.pnl);
-                const isSell = (trade.action === 'SELL' || trade.type === 'SELL');
-                const isNotBuy = (trade.action !== 'BUY' && trade.type !== 'BUY');
-                // Учитываем только сделки с рассчитанным PnL (закрытые позиции SELL)
-                return hasPnL && (isSell || isNotBuy);
-            });
-            
-            const totalTrades = closedTrades.length;
-            const profitableTrades = closedTrades.filter(trade => (trade.pnl || 0) > 0).length;
-            const winRate = totalTrades > 0 ? profitableTrades / totalTrades : 0;
+
+            // Получаем закрытые сделки для анализа по символам и времени
+            let closedTradesForAnalysis = [];
+            try {
+                const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+                const portfolio = await TradingEngine.getPortfolioValue();
+                const recalculatedPortfolio = await this.recalculatePortfolioPositions(portfolio);
+                closedTradesForAnalysis = await PnLCalculationService.getClosedTrades(
+                    recalculatedPortfolio?.mode || 'paper',
+                    startDate.toISOString(),
+                    endDate.toISOString()
+                );
+            } catch (error) {
+                // Fallback: используем periodTrades
+                closedTradesForAnalysis = periodTrades.filter(trade => {
+                    const hasPnL = trade.pnl !== null && trade.pnl !== undefined && !isNaN(trade.pnl);
+                    const isSell = (trade.action === 'SELL' || trade.type === 'SELL');
+                    return hasPnL && isSell;
+                });
+            }
 
             // Анализ по символам (только закрытые сделки)
-            const symbolAnalysis = this.analyzeBySymbols(closedTrades);
+            const symbolAnalysis = this.analyzeBySymbols(closedTradesForAnalysis);
 
             // Анализ по времени (только закрытые сделки)
-            const timeAnalysis = this.analyzeByTime(closedTrades);
+            const timeAnalysis = this.analyzeByTime(closedTradesForAnalysis);
 
             // Анализ волатильности - рассчитываем из процентных доходностей, а не из абсолютных значений
             // Получаем начальный капитал для расчета процентных доходностей
-            const initialCapital = TradingEngine.virtualPortfolio?.initialCapital || 1000000;
+            const portfolio = await TradingEngine.getPortfolioValue();
+            const recalculatedPortfolio = await this.recalculatePortfolioPositions(portfolio);
+            const initialCapital = recalculatedPortfolio?.initialCapital || portfolio?.initialCapital || TradingEngine.virtualPortfolio?.initialCapital || 1000000;
             const returns = [];
             let runningCapital = initialCapital;
             
             // Используем только закрытые сделки для расчета волатильности
-            for (const trade of closedTrades) {
-                const pnl = trade.pnl || 0;
+            for (const trade of closedTradesForAnalysis) {
+                const pnl = trade.pnl || trade.realizedProfit || 0;
                 if (runningCapital > 0) {
                     const returnPercent = (pnl / runningCapital) * 100; // Доходность в процентах
                     returns.push(returnPercent);
@@ -271,28 +312,85 @@ class PerformanceAnalyzer {
             
             const volatility = returns.length > 0 ? this.calculateVolatility(returns) : 0;
 
-            // Расчет Sharpe Ratio из доходностей закрытых сделок
-            let sharpeRatio = 0;
-            if (returns.length > 1) {
+            // Sharpe Ratio уже рассчитан в метриках выше, используем его
+            // Если не был рассчитан, рассчитываем из доходностей
+            if (sharpeRatio === 0 && returns.length > 1) {
                 const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-                // Sharpe Ratio: (Average Return - Risk-Free Rate) / Volatility
-                // Безрисковая ставка = 0 для упрощения
                 if (volatility > 0 && !isNaN(avgReturn) && isFinite(avgReturn)) {
                     sharpeRatio = avgReturn / volatility;
                 }
             }
 
+            // Расчет Profit Factor из закрытых сделок
+            let profitFactor = 0;
+            if (closedTradesForAnalysis.length > 0) {
+                const totalWins = closedTradesForAnalysis
+                    .filter(t => {
+                        const pnl = t.pnl || t.realizedProfit || 0;
+                        return pnl > 0;
+                    })
+                    .reduce((sum, t) => {
+                        const pnl = t.pnl || t.realizedProfit || 0;
+                        return sum + pnl;
+                    }, 0);
+                
+                const totalLosses = Math.abs(closedTradesForAnalysis
+                    .filter(t => {
+                        const pnl = t.pnl || t.realizedProfit || 0;
+                        return pnl < 0;
+                    })
+                    .reduce((sum, t) => {
+                        const pnl = t.pnl || t.realizedProfit || 0;
+                        return sum + pnl;
+                    }, 0));
+                
+                if (totalLosses > 0) {
+                    profitFactor = totalWins / totalLosses;
+                } else if (totalWins > 0) {
+                    profitFactor = Infinity; // Все сделки прибыльные
+                } else {
+                    profitFactor = 0;
+                }
+                
+                // Ограничиваем Infinity для передачи на фронт
+                if (!isFinite(profitFactor)) {
+                    profitFactor = 999; // Большое число вместо Infinity
+                }
+            }
+
+            // Расчет консистентности торговых результатов (стабильность доходности)
+            let consistency = 0;
+            if (returns.length > 1) {
+                // Консистентность = 1 - коэффициент вариации доходностей
+                const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+                const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+                const stdDev = Math.sqrt(variance);
+                
+                if (avgReturn !== 0) {
+                    const coefficientOfVariation = Math.abs(stdDev / avgReturn);
+                    consistency = Math.max(0, Math.min(1, 1 - coefficientOfVariation));
+                } else if (stdDev === 0) {
+                    consistency = 1; // Идеальная консистентность при нулевой волатильности
+                } else {
+                    consistency = 0; // Нулевая консистентность при нулевой доходности и ненулевой волатильности
+                }
+            } else if (returns.length === 1) {
+                consistency = 1; // Одна сделка = 100% консистентность
+            }
+
             // Анализ максимальной просадки - рассчитываем в процентах от капитала (только закрытые сделки)
-            const drawdown = this.calculateDrawdown(closedTrades, initialCapital);
+            const drawdown = this.calculateDrawdown(closedTradesForAnalysis, initialCapital);
 
             return {
                 totalProfit,
                 totalTrades,
-                profitableTrades,
+                profitableTrades: totalTrades > 0 ? Math.round(totalTrades * winRate) : 0,
                 winRate,
                 averageProfit: totalTrades > 0 ? totalProfit / totalTrades : 0,
                 volatility, // Теперь в процентах
-                sharpeRatio, // Добавлен расчет Sharpe Ratio
+                sharpeRatio, // Используем рассчитанный Sharpe Ratio
+                profitFactor, // Добавлен Profit Factor
+                consistency, // Добавлена консистентность
                 maxDrawdown: drawdown.max, // Теперь в процентах
                 currentDrawdown: drawdown.current, // Теперь в процентах
                 symbolAnalysis,
@@ -621,6 +719,8 @@ class PerformanceAnalyzer {
             summary.keyMetrics.sharpeRatio = analysis.trading.sharpeRatio || 0;
             summary.keyMetrics.volatility = analysis.trading.volatility || 0;
             summary.keyMetrics.maxDrawdown = analysis.trading.maxDrawdown || 0;
+            summary.keyMetrics.profitFactor = analysis.trading.profitFactor || 0;
+            summary.keyMetrics.consistency = analysis.trading.consistency || 0;
         }
 
         if (analysis.ai) {
@@ -898,47 +998,27 @@ class PerformanceAnalyzer {
             // Рассчитываем общий PnL
             const totalPnL = closedTrades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
             
-            // Рассчитываем метрики
-            const totalTrades = closedTrades.length;
-            const profitableTrades = closedTrades.filter(trade => (trade.pnl || 0) > 0).length;
-            const winRate = totalTrades > 0 ? profitableTrades / totalTrades : 0;
+            // Используем единый метод PnLCalculationService для расчета метрик
+            // Это обеспечивает консистентность с остальным приложением
+            const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
+            const Portfolio = (await import('../models/Portfolio.js')).default;
+            const portfolio = await Portfolio.findOne();
+            const initialCapital = portfolio?.initialCapital || 1000000;
             
-            // Рассчитываем Sharpe Ratio
-            let sharpeRatio = 0;
-            if (closedTrades.length > 1) {
-                const initialCapital = TradingEngine.virtualPortfolio?.initialCapital || 1000000;
-                const returns = [];
-                let runningCapital = initialCapital;
-                
-                // Сортируем сделки по дате
-                const sortedTrades = closedTrades.sort((a, b) => {
-                    const dateA = new Date(a.timestamp || a.date || a.createdAt || 0);
-                    const dateB = new Date(b.timestamp || b.date || b.createdAt || 0);
-                    return dateA - dateB;
-                });
-                
-                // Рассчитываем относительные доходности
-                for (const trade of sortedTrades) {
-                    const pnl = trade.pnl || 0;
-                    if (runningCapital > 0 && !isNaN(pnl) && isFinite(pnl)) {
-                        const returnPercent = (pnl / runningCapital) * 100;
-                        if (!isNaN(returnPercent) && isFinite(returnPercent)) {
-                            returns.push(returnPercent);
-                            runningCapital += pnl;
-                        }
-                    }
-                }
-                
-                if (returns.length > 1) {
-                    const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-                    const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
-                    const volatility = Math.sqrt(variance);
-                    
-                    if (volatility > 0 && !isNaN(avgReturn) && isFinite(avgReturn)) {
-                        sharpeRatio = avgReturn / volatility;
-                    }
-                }
-            }
+            // Убеждаемся, что у всех сделок есть поле pnl
+            const tradesWithPnL = closedTrades.map(trade => ({
+                ...trade,
+                pnl: trade.pnl || trade.realizedProfit || 0
+            }));
+            
+            const metrics = PnLCalculationService.calculateMetricsFromClosedTrades(
+                tradesWithPnL,
+                initialCapital
+            );
+            
+            const winRate = metrics.winRate; // В диапазоне 0-1
+            const sharpeRatio = metrics.sharpeRatio;
+            const totalTrades = metrics.totalTrades;
             
             return {
                 trades: closedTrades.map(trade => ({
