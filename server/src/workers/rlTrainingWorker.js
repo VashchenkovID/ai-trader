@@ -1,5 +1,6 @@
 import { parentPort, workerData } from 'worker_threads';
-import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+// Импортируем ServiceInitializationTracker динамически, чтобы избежать проблем с инициализацией в worker'е
+let ServiceInitializationTracker = null;
 
 // Устанавливаем флаг воркера
 process.env.WORKER = 'true';
@@ -14,15 +15,40 @@ async function run() {
         // Если сервисы не переданы, импортируем их
         if (!ReinforcementLearningService) {
             const { default: RLService } = await import('../services/ReinforcementLearningService.js');
+            const LoggerService = (await import('../services/LoggerService.js')).default;
             
-            // Проверяем, не инициализирован ли сервис глобально
-            const isGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ReinforcementLearningService');
+            // Проверяем, не инициализирован ли сервис глобально (динамический импорт)
+            let isGlobal = false;
+            try {
+                if (!ServiceInitializationTracker) {
+                    ServiceInitializationTracker = (await import('../utils/ServiceInitializationTracker.js')).default;
+                }
+                if (ServiceInitializationTracker && typeof ServiceInitializationTracker.isServiceInitializedGlobally === 'function') {
+                    isGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ReinforcementLearningService');
+                }
+            } catch (trackerError) {
+                // Игнорируем ошибки трекера - это не критично
+            }
             
             if (!isGlobal && !RLService.isInitialized) {
-                console.log('🔧 ReinforcementLearningService not initialized globally, initializing in worker...');
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.info('ReinforcementLearningService not initialized globally, initializing in worker', {
+                        service: 'rlTrainingWorker',
+                        operation: 'run'
+                    });
+                } else {
+                    console.log('🔧 ReinforcementLearningService not initialized globally, initializing in worker...');
+                }
                 await RLService.initialize();
             } else if (isGlobal) {
-                console.log('ℹ️ ReinforcementLearningService already initialized globally, using lightweight initialization');
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.info('ReinforcementLearningService already initialized globally, using lightweight initialization', {
+                        service: 'rlTrainingWorker',
+                        operation: 'run'
+                    });
+                } else {
+                    console.log('ℹ️ ReinforcementLearningService already initialized globally, using lightweight initialization');
+                }
                 if (!RLService.isInitialized) {
                     if (typeof RLService.initializeLightweight === 'function') {
                         await RLService.initializeLightweight();
@@ -37,8 +63,18 @@ async function run() {
             return;
         }
         
-        // Проверяем, инициализирован ли сервис
-        const isGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ReinforcementLearningService');
+        // Проверяем, инициализирован ли сервис (динамический импорт)
+        let isGlobal = false;
+        try {
+            if (!ServiceInitializationTracker) {
+                ServiceInitializationTracker = (await import('../utils/ServiceInitializationTracker.js')).default;
+            }
+            if (ServiceInitializationTracker && typeof ServiceInitializationTracker.isServiceInitializedGlobally === 'function') {
+                isGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ReinforcementLearningService');
+            }
+        } catch (trackerError) {
+            // Игнорируем ошибки трекера - это не критично
+        }
         
         if (!isGlobal && !ReinforcementLearningService.isInitialized) {
             console.log('🔧 ReinforcementLearningService not initialized globally, initializing in worker...');

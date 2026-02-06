@@ -2,7 +2,8 @@ import * as tf from '@tensorflow/tfjs';
 import { parentPort, workerData } from 'worker_threads';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+// Импортируем ServiceInitializationTracker динамически, чтобы избежать проблем с инициализацией в worker'е
+let ServiceInitializationTracker = null;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -597,7 +598,17 @@ class StandaloneTrainingWorker {
                 const OptimizedTelegramService = (await import('../services/OptimizedTelegramService.js')).default;
                 
                 // Проверяем глобальную инициализацию перед использованием
-                const isTelegramGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('OptimizedTelegramService');
+                let isTelegramGlobal = false;
+                try {
+                    if (!ServiceInitializationTracker) {
+                        ServiceInitializationTracker = (await import('../utils/ServiceInitializationTracker.js')).default;
+                    }
+                    if (ServiceInitializationTracker && typeof ServiceInitializationTracker.isServiceInitializedGlobally === 'function') {
+                        isTelegramGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('OptimizedTelegramService');
+                    }
+                } catch (trackerError) {
+                    // Игнорируем ошибки трекера - это не критично
+                }
                 
                 if (isTelegramGlobal || OptimizedTelegramService.isInitialized) {
                     await OptimizedTelegramService.sendAlert(

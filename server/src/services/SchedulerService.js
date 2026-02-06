@@ -55,6 +55,7 @@ class SchedulerService {
         this.isAnalyzing = false;
         this.lastCacheUpdate = null; // Время последнего обновления кеша
         this.lastPriceUpdate = null; // Время последнего обновления цен
+        this.lastTrainingTime = null; // Время последнего обучения (для адаптивного расписания)
         this.cacheUpdateInterval = 4 * 60 * 60 * 1000; // 4 часа в миллисекундах
         this.priceUpdateInterval = 60 * 60 * 1000; // 1 час в миллисекундах (оптимизировано для низкой нагрузки)
         this.intervals = new Set(); // Храним все интервалы для очистки
@@ -128,7 +129,11 @@ class SchedulerService {
         // Загружаем асинхронно, чтобы не блокировать создание cron задач
         if (this.lastCacheUpdate === null || this.lastCacheUpdate === undefined) {
             this.loadLastCacheUpdateTime().catch(error => {
-                console.error('Error loading last cache update time:', error);
+                LoggerService.error('Error loading last cache update time', {
+                    service: 'SchedulerService',
+                    operation: 'loadLastCacheUpdateTime',
+                    error: { message: error.message, stack: error.stack }
+                });
             });
         }
 
@@ -225,7 +230,11 @@ class SchedulerService {
                         }
                     );
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to register partial exit check worker:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to register partial exit check worker', {
+                        service: 'SchedulerService',
+                        operation: 'registerPartialExitCheckWorker',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
                 
                 try {
@@ -247,7 +256,11 @@ class SchedulerService {
                                 });
                             }
                         } catch (monitoringError) {
-                            console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                            LoggerService.warn('Failed to update worker status', {
+                                service: 'SchedulerService',
+                                operation: 'updateWorkerStatus',
+                                error: { message: monitoringError.message || String(monitoringError) }
+                            });
                         }
                     }
                     
@@ -264,7 +277,11 @@ class SchedulerService {
                                 });
                             }
                         } catch (monitoringError) {
-                            console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                            LoggerService.warn('Failed to complete worker', {
+                                service: 'SchedulerService',
+                                operation: 'completeWorker',
+                                error: { message: monitoringError.message || String(monitoringError) }
+                            });
                         }
                     }
                 } catch (error) {
@@ -279,7 +296,11 @@ class SchedulerService {
                                 });
                             }
                         } catch (monitoringError) {
-                            console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                            LoggerService.warn('Failed to report worker error', {
+                                service: 'SchedulerService',
+                                operation: 'reportWorkerError',
+                                error: { message: monitoringError.message || String(monitoringError) }
+                            });
                         }
                     }
                     throw error;
@@ -341,14 +362,16 @@ class SchedulerService {
             }
         );
 
-        // Задача 3: Периодическое обучение нейросети
+        // Задача 3: Периодическое обучение нейросети с адаптивным расписанием
         // ВАЖНО: Это основная операция, должна запускаться строго по расписанию без пропусков
+        // Расписание адаптируется на основе волатильности инструментов
         this.trainingTask = SchedulerUtils.createScheduledTask(
             trainingSchedule,
             async () => {
-                console.log(`⏰ [Full Training] Cron triggered at ${new Date().toLocaleString('ru-RU')}`);
+                // Логирование удалено согласно рефакторингу (было console.log)
                 // Для планового обучения используем force: true, чтобы оно всегда запускалось
-                await this.performScheduledTraining();
+                // Проверяем волатильность и адаптируем частоту обучения
+                await this.performScheduledTrainingWithAdaptiveSchedule();
             },
             {
                 taskName: 'training',
@@ -368,12 +391,11 @@ class SchedulerService {
         // Расписание: каждые 2 часа (08:00, 10:00, 12:00, 14:00, 16:00, 18:00) или из настроек
         // Обучает: Базовая → Ансамбль → Мета-обучение → RL (с оптимизированными параметрами)
         if (quickTrainingEnabled) {
-            console.log(`📅 [Quick Training] Schedule: ${quickTrainingSchedule}`);
-            console.log(`📅 [Quick Training] Enabled: ${quickTrainingEnabled}`);
+            // Логирование удалено согласно рефакторингу (было console.log)
             this.quickTrainingTask = SchedulerUtils.createScheduledTask(
                 quickTrainingSchedule,
                 async () => {
-                    console.log(`⏰ [Quick Training] Cron triggered at ${new Date().toLocaleString('ru-RU')}`);
+                    // Логирование удалено согласно рефакторингу (было console.log)
                     // Используем метод SchedulerService для синхронизации флагов
                     await this.performQuickTraining();
                 },
@@ -385,9 +407,9 @@ class SchedulerService {
                     checkCacheStale: false // Не проверяем устаревание кеша - быстрое обучение может работать со слегка устаревшими данными
                 }
             );
-            console.log(`✅ [Quick Training] Task created and scheduled`);
+            // Логирование удалено согласно рефакторингу (было console.log)
         } else {
-            console.log(`⚠️ [Quick Training] DISABLED in settings (nn_quick_training_enabled = false)`);
+            // Логирование удалено согласно рефакторингу (было console.log)
         }
 
         // Задача 5: Обновление кеша торговых часов
@@ -400,7 +422,13 @@ class SchedulerService {
                     const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
                     if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
                     workerId = WorkerMonitoringService.registerWorker('trading-hours-cache-update', 'Обновление кеша торговых часов', { stage: 'initializing' });
-                } catch (e) { console.warn('⚠️ Failed to register trading hours cache update worker:', e.message); }
+                } catch (e) {
+                    LoggerService.warn('Failed to register trading hours cache update worker', {
+                        service: 'SchedulerService',
+                        operation: 'registerTradingHoursCacheUpdateWorker',
+                        error: { message: e.message }
+                    });
+                }
                 
                 try {
                     await TradingHoursCacheService.updateTradingHoursCache();
@@ -410,7 +438,13 @@ class SchedulerService {
                             if (WorkerMonitoringService.isInitialized) {
                                 WorkerMonitoringService.completeWorker(workerId, true, { message: 'Кеш торговых часов обновлен' });
                             }
-                        } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to complete worker', {
+                                service: 'SchedulerService',
+                                operation: 'completeWorker',
+                                error: { message: e.message }
+                            });
+                        }
                     }
                 } catch (error) {
                     if (workerId) {
@@ -420,7 +454,13 @@ class SchedulerService {
                                 WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
                                 WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
                             }
-                        } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to report worker error', {
+                                service: 'SchedulerService',
+                                operation: 'reportWorkerError',
+                                error: { message: e.message }
+                            });
+                        }
                     }
                     throw error;
                 }
@@ -511,7 +551,11 @@ class SchedulerService {
                         }
                     );
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to register position monitoring worker:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to register position monitoring worker', {
+                        service: 'SchedulerService',
+                        operation: 'registerPositionMonitoringWorker',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
                 
                 try {
@@ -533,7 +577,11 @@ class SchedulerService {
                                 });
                             }
                         } catch (monitoringError) {
-                            console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                            LoggerService.warn('Failed to update worker status', {
+                                service: 'SchedulerService',
+                                operation: 'updateWorkerStatus',
+                                error: { message: monitoringError.message || String(monitoringError) }
+                            });
                         }
                     }
                     
@@ -549,7 +597,11 @@ class SchedulerService {
                                 });
                             }
                         } catch (monitoringError) {
-                            console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                            LoggerService.warn('Failed to complete worker', {
+                                service: 'SchedulerService',
+                                operation: 'completeWorker',
+                                error: { message: monitoringError.message || String(monitoringError) }
+                            });
                         }
                     }
                 } catch (error) {
@@ -564,7 +616,11 @@ class SchedulerService {
                                 });
                             }
                         } catch (monitoringError) {
-                            console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                            LoggerService.warn('Failed to report worker error', {
+                                service: 'SchedulerService',
+                                operation: 'reportWorkerError',
+                                error: { message: monitoringError.message || String(monitoringError) }
+                            });
                         }
                     }
                     throw error;
@@ -590,7 +646,13 @@ class SchedulerService {
                     const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
                     if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
                     workerId = WorkerMonitoringService.registerWorker('daily-report', 'Ежедневный отчет', { stage: 'initializing' });
-                } catch (e) { console.warn('⚠️ Failed to register daily report worker:', e.message); }
+                } catch (e) {
+                    LoggerService.warn('Failed to register daily report worker', {
+                        service: 'SchedulerService',
+                        operation: 'registerDailyReportWorker',
+                        error: { message: e.message }
+                    });
+                }
                 
                 try {
                     const DailyReportService = (await import('./DailyReportService.js')).default;
@@ -604,7 +666,13 @@ class SchedulerService {
                             if (WorkerMonitoringService.isInitialized) {
                                 WorkerMonitoringService.updateWorkerStatus(workerId, { progress: 30, metadata: { stage: 'generating' } });
                             }
-                        } catch (e) { console.warn('⚠️ Failed to update worker status:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to update worker status', {
+                                service: 'SchedulerService',
+                                operation: 'updateWorkerStatus',
+                                error: { message: e.message }
+                            });
+                        }
                     }
                     
                     const report = await DailyReportService.generateDailyReport();
@@ -615,7 +683,13 @@ class SchedulerService {
                             if (WorkerMonitoringService.isInitialized) {
                                 WorkerMonitoringService.updateWorkerStatus(workerId, { progress: 80, metadata: { stage: 'sending' } });
                             }
-                        } catch (e) { console.warn('⚠️ Failed to update worker status:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to update worker status', {
+                                service: 'SchedulerService',
+                                operation: 'updateWorkerStatus',
+                                error: { message: e.message }
+                            });
+                        }
                     }
                     
                     await DailyReportService.sendReportToTelegram(report);
@@ -626,7 +700,13 @@ class SchedulerService {
                             if (WorkerMonitoringService.isInitialized) {
                                 WorkerMonitoringService.completeWorker(workerId, true, { message: 'Ежедневный отчет отправлен' });
                             }
-                        } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to complete worker', {
+                                service: 'SchedulerService',
+                                operation: 'completeWorker',
+                                error: { message: e.message }
+                            });
+                        }
                     }
                 } catch (error) {
                     if (workerId) {
@@ -636,7 +716,13 @@ class SchedulerService {
                                 WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
                                 WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
                             }
-                        } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to report worker error', {
+                                service: 'SchedulerService',
+                                operation: 'reportWorkerError',
+                                error: { message: e.message }
+                            });
+                        }
                     }
                     throw error;
                 }
@@ -666,7 +752,13 @@ class SchedulerService {
                             const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
                             if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
                             workerId = WorkerMonitoringService.registerWorker('data-cleanup', 'Автоматическая очистка данных', { stage: 'initializing' });
-                        } catch (e) { console.warn('⚠️ Failed to register data cleanup worker:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to register data cleanup worker', {
+                                service: 'SchedulerService',
+                                operation: 'registerDataCleanupWorker',
+                                error: { message: e.message }
+                            });
+                        }
                         
                         try {
                             await DataCleanupService.performCleanup();
@@ -676,7 +768,13 @@ class SchedulerService {
                                     if (WorkerMonitoringService.isInitialized) {
                                         WorkerMonitoringService.completeWorker(workerId, true, { message: 'Очистка данных завершена' });
                                     }
-                                } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                                } catch (e) {
+                            LoggerService.warn('Failed to complete worker', {
+                                service: 'SchedulerService',
+                                operation: 'completeWorker',
+                                error: { message: e.message }
+                            });
+                        }
                             }
                         } catch (error) {
                             if (workerId) {
@@ -686,9 +784,19 @@ class SchedulerService {
                                         WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
                                         WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
                                     }
-                                } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                                } catch (e) {
+                            LoggerService.warn('Failed to report worker error', {
+                                service: 'SchedulerService',
+                                operation: 'reportWorkerError',
+                                error: { message: e.message }
+                            });
+                        }
                             }
-                            console.error('❌ Error in scheduled data cleanup:', error);
+                            LoggerService.error('Error in scheduled data cleanup', {
+                                service: 'SchedulerService',
+                                operation: 'scheduledDataCleanup',
+                                error: { message: error.message, stack: error.stack }
+                            });
                         }
                     },
                     {
@@ -700,7 +808,11 @@ class SchedulerService {
                 );
             }
         } catch (error) {
-            console.warn('⚠️ Could not initialize data cleanup task:', error.message);
+            LoggerService.warn('Could not initialize data cleanup task', {
+                service: 'SchedulerService',
+                operation: 'initializeDataCleanupTask',
+                error: { message: error.message }
+            });
         }
 
         // Задача 8: Проверка торговых часов и уведомлений (каждые 5 минут)
@@ -712,7 +824,13 @@ class SchedulerService {
                     const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
                     if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
                     workerId = WorkerMonitoringService.registerWorker('trading-hours-check', 'Обновление торговых часов', { stage: 'initializing' });
-                } catch (e) { console.warn('⚠️ Failed to register trading hours check worker:', e.message); }
+                } catch (e) {
+                    LoggerService.warn('Failed to register trading hours check worker', {
+                        service: 'SchedulerService',
+                        operation: 'registerTradingHoursCheckWorker',
+                        error: { message: e.message }
+                    });
+                }
                 
                 try {
                     await TradingHoursService.checkAndSendNotifications();
@@ -722,7 +840,13 @@ class SchedulerService {
                             if (WorkerMonitoringService.isInitialized) {
                                 WorkerMonitoringService.completeWorker(workerId, true, { message: 'Проверка торговых часов завершена' });
                             }
-                        } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to complete worker', {
+                                service: 'SchedulerService',
+                                operation: 'completeWorker',
+                                error: { message: e.message }
+                            });
+                        }
                     }
                 } catch (error) {
                     if (workerId) {
@@ -732,7 +856,13 @@ class SchedulerService {
                                 WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
                                 WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
                             }
-                        } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to report worker error', {
+                                service: 'SchedulerService',
+                                operation: 'reportWorkerError',
+                                error: { message: e.message }
+                            });
+                        }
                     }
                     throw error;
                 }
@@ -837,7 +967,13 @@ class SchedulerService {
                     const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
                     if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
                     workerId = WorkerMonitoringService.registerWorker('strategy-rebalance', 'Перебалансировка стратегий', { stage: 'initializing' });
-                } catch (e) { console.warn('⚠️ Failed to register strategy rebalance worker:', e.message); }
+                } catch (e) {
+                    LoggerService.warn('Failed to register strategy rebalance worker', {
+                        service: 'SchedulerService',
+                        operation: 'registerStrategyRebalanceWorker',
+                        error: { message: e.message }
+                    });
+                }
                 
                 try {
                     const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
@@ -849,7 +985,13 @@ class SchedulerService {
                             if (WorkerMonitoringService.isInitialized) {
                                 WorkerMonitoringService.completeWorker(workerId, true, { message: 'Стратегии перебалансированы' });
                             }
-                        } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to complete worker', {
+                                service: 'SchedulerService',
+                                operation: 'completeWorker',
+                                error: { message: e.message }
+                            });
+                        }
                     }
                 } catch (error) {
                     if (workerId) {
@@ -859,7 +1001,13 @@ class SchedulerService {
                                 WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
                                 WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
                             }
-                        } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to report worker error', {
+                                service: 'SchedulerService',
+                                operation: 'reportWorkerError',
+                                error: { message: e.message }
+                            });
+                        }
                     }
                     throw error;
                 }
@@ -992,6 +1140,38 @@ class SchedulerService {
                 minDelay: 60 * 60 * 1000 // 1 час
             }
         );
+
+        // Задача 21: Регулярная оптимизация гиперпараметров (раз в месяц)
+        // Расписание: первое число каждого месяца в 4:00
+        this.hyperparameterOptimizationTask = SchedulerUtils.createScheduledTask(
+            '0 4 1 * *', // Первое число каждого месяца в 4:00
+            async () => {
+                await this.performHyperparameterOptimization();
+            },
+            {
+                taskName: 'hyperparameter-optimization',
+                sendAlerts: true,
+                alertType: 'info',
+                startTime: this.startTime,
+                minDelay: 25 * 24 * 60 * 60 * 1000 // 25 дней (раз в месяц)
+            }
+        );
+
+        // Задача 22: Проверка дрейфа данных и триггерное обучение (ежедневно)
+        // Расписание: каждый день в 2:00 (после обновления данных)
+        this.dataDriftCheckTask = SchedulerUtils.createScheduledTask(
+            '0 2 * * *', // Каждый день в 2:00
+            async () => {
+                await this.performDataDriftCheck();
+            },
+            {
+                taskName: 'data-drift-check',
+                sendAlerts: true,
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 20 * 60 * 60 * 1000 // 20 часов (раз в день)
+            }
+        );
         
         // Запускаем периодическую отправку данных через WebSocket
         this.startWebSocketBroadcasts();
@@ -1007,7 +1187,11 @@ class SchedulerService {
                 
                 await this.performPortfolioAnalysis();
             } catch (error) {
-                console.error('Error in initial portfolio analysis:', error);
+                LoggerService.error('Error in initial portfolio analysis', {
+                    service: 'SchedulerService',
+                    operation: 'initialPortfolioAnalysis',
+                    error: { message: error.message, stack: error.stack }
+                });
                 await OptimizedTelegramService.sendAlert('PORTFOLIO_ANALYSIS_ERROR', error.message, 'warning');
             }
         }, 30 * 60 * 1000); // 30 минут = 30 * 60 * 1000 миллисекунд
@@ -1076,7 +1260,11 @@ class SchedulerService {
                     });
                 }
             } catch (error) {
-                console.error('❌ Error broadcasting cache status:', error);
+                LoggerService.error('Error broadcasting cache status', {
+                    service: 'SchedulerService',
+                    operation: 'broadcastCacheStatus',
+                    error: { message: error.message, stack: error.stack }
+                });
             }
         }, { scheduled: false });
         this.intervals.add(cacheTask);
@@ -1121,7 +1309,11 @@ class SchedulerService {
                     });
                 }
             } catch (error) {
-                console.error('❌ Error broadcasting system resources:', error);
+                LoggerService.error('Error broadcasting system resources', {
+                    service: 'SchedulerService',
+                    operation: 'broadcastSystemResources',
+                    error: { message: error.message, stack: error.stack }
+                });
             }
         }, { scheduled: false });
         this.intervals.add(resourcesTask);
@@ -1172,7 +1364,11 @@ class SchedulerService {
                         // Используем getModelStatus() для получения полных данных
                         neuralNetworkStatus = NeuralNetworkService.getModelStatus();
                     } catch (error) {
-                        console.warn('Error getting neural network status in scheduler:', error);
+                        LoggerService.warn('Error getting neural network status in scheduler', {
+                            service: 'SchedulerService',
+                            operation: 'getNeuralNetworkStatus',
+                            error: { message: error.message, stack: error.stack }
+                        });
                         // Fallback к базовому статусу
                         neuralNetworkStatus = {
                             status: NeuralNetworkService.isTraining ? 'training' : (NeuralNetworkService.isActive ? 'active' : 'off'),
@@ -1197,7 +1393,11 @@ class SchedulerService {
                             status: isInitialized ? (isTraining ? 'training' : 'active') : 'inactive'
                         };
                     } catch (error) {
-                        console.warn('Error getting ensemble status in scheduler:', error);
+                        LoggerService.warn('Error getting ensemble status in scheduler', {
+                            service: 'SchedulerService',
+                            operation: 'getEnsembleStatus',
+                            error: { message: error.message, stack: error.stack }
+                        });
                         const isInitialized = EnsembleService.isInitialized || false;
                         const isTraining = EnsembleService.isTraining || false;
                         ensembleStatus = {
@@ -1248,7 +1448,11 @@ class SchedulerService {
                 // Не логируем ошибки получения сервисов, чтобы не засорять консоль
                 // Только логируем критические ошибки
                 if (error.message && !error.message.includes('not found')) {
-                    console.error('❌ Error broadcasting system status:', error);
+                    LoggerService.error('Error broadcasting system status', {
+                        service: 'SchedulerService',
+                        operation: 'broadcastSystemStatus',
+                        error: { message: error.message, stack: error.stack }
+                    });
                 }
             }
         }, { scheduled: false });
@@ -1324,22 +1528,8 @@ class SchedulerService {
                 
                 // Логируем для отладки
                 const LoggerService = (await import('./LoggerService.js')).default;
-                if (LoggerService && LoggerService.isInitialized && totalTradesValue > 0) {
-                    LoggerService.info('tradingStatsTask: статистика торговли', {
-                        service: 'SchedulerService',
-                        totalTrades: totalTradesValue,
-                        winRate: winRate, // В диапазоне 0-1
-                        winRatePercent: winRatePercent, // В процентах 0-100
-                        successfulTrades: successfulTradesValue,
-                        pnl: {
-                            total: pnlResult.totalPnL,
-                            totalPercent: pnlResult.totalPnLPercent,
-                            realized: pnlResult.realizedPnL,
-                            realizedPercent: pnlResult.realizedPnLPercent,
-                            unrealized: pnlResult.unrealizedPnL
-                        }
-                    });
-                }
+                // Логирование удалено согласно рефакторингу (было LoggerService.info)
+                // if (LoggerService && LoggerService.isInitialized && totalTradesValue > 0) { ... }
 
                 const tradingStats = {
                     portfolioValue: totalValue, // Используем пересчитанный totalValue = cash + positionsValue
@@ -1373,7 +1563,11 @@ class SchedulerService {
                 // Не логируем ошибки получения сервисов, чтобы не засорять консоль
                 // Только логируем критические ошибки
                 if (error.message && !error.message.includes('not found')) {
-                    console.error('❌ Error broadcasting trading stats:', error);
+                    LoggerService.error('Error broadcasting trading stats', {
+                        service: 'SchedulerService',
+                        operation: 'broadcastTradingStats',
+                        error: { message: error.message, stack: error.stack }
+                    });
                 }
             }
         }, { scheduled: false });
@@ -1418,7 +1612,11 @@ class SchedulerService {
                 // Не логируем ошибки получения сервисов, чтобы не засорять консоль
                 // Только логируем критические ошибки
                 if (error.message && !error.message.includes('not found')) {
-                    console.error('❌ Error broadcasting training status:', error);
+                    LoggerService.error('Error broadcasting training status', {
+                        service: 'SchedulerService',
+                        operation: 'broadcastTrainingStatus',
+                        error: { message: error.message, stack: error.stack }
+                    });
                 }
             }
         }, { scheduled: false });
@@ -1489,16 +1687,29 @@ class SchedulerService {
                                         });
                                     }
                                 } catch (error) {
-                                    console.warn(`Error getting metrics for ${instrument.figi}:`, error.message);
+                                    LoggerService.warn('Error getting metrics for instrument', {
+                                        service: 'SchedulerService',
+                                        operation: 'getMetrics',
+                                        figi: instrument.figi,
+                                        error: { message: error.message }
+                                    });
                                 }
                             }
                         }
                     }
                 } catch (error) {
-                    console.error('❌ Error broadcasting model metrics:', error);
+                    LoggerService.error('Error broadcasting model metrics', {
+                        service: 'SchedulerService',
+                        operation: 'broadcastModelMetrics',
+                        error: { message: error.message, stack: error.stack }
+                    });
                 }
             } catch (error) {
-                console.error('❌ Error in model metrics task:', error);
+                LoggerService.error('Error in model metrics task', {
+                    service: 'SchedulerService',
+                    operation: 'modelMetricsTask',
+                    error: { message: error.message, stack: error.stack }
+                });
             }
         }, { scheduled: false });
         this.intervals.add(modelMetricsTask);
@@ -1518,7 +1729,11 @@ class SchedulerService {
                     await this.performCacheUpdate();
                 }
             } catch (error) {
-                console.error('❌ Error in cache check:', error);
+                LoggerService.error('Error in cache check', {
+                    service: 'SchedulerService',
+                    operation: 'cacheCheck',
+                    error: { message: error.message, stack: error.stack }
+                });
             }
         }, { scheduled: true, timezone: "Europe/Moscow" });
         this.intervals.add(cacheCheckTask);
@@ -1556,7 +1771,11 @@ class SchedulerService {
             await this.saveLastCacheUpdateTime();
             return true;
         } catch (error) {
-            console.error('❌ Error forcing cache update time:', error);
+            LoggerService.error('Error forcing cache update time', {
+                service: 'SchedulerService',
+                operation: 'forceCacheUpdateTime',
+                error: { message: error.message, stack: error.stack }
+            });
             return false;
         }
     }
@@ -1689,7 +1908,11 @@ class SchedulerService {
             this.isInitialized = false;
             
         } catch (error) {
-            console.error('❌ Error stopping Scheduler Service:', error);
+            LoggerService.error('Error stopping Scheduler Service', {
+                service: 'SchedulerService',
+                operation: 'stop',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -2007,7 +2230,11 @@ class SchedulerService {
                 }
             );
         } catch (monitoringError) {
-            console.warn('⚠️ Failed to register active signals prices update worker:', monitoringError.message || monitoringError);
+            LoggerService.warn('Failed to register active signals prices update worker', {
+                service: 'SchedulerService',
+                operation: 'registerActiveSignalsPricesUpdateWorker',
+                error: { message: monitoringError.message || String(monitoringError) }
+            });
         }
         
         try {
@@ -2031,7 +2258,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
             
@@ -2049,7 +2280,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to complete worker', {
+                        service: 'SchedulerService',
+                        operation: 'completeWorker',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
             
@@ -2066,7 +2301,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to report worker error', {
+                        service: 'SchedulerService',
+                        operation: 'reportWorkerError',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
             throw error;
@@ -2173,7 +2412,11 @@ class SchedulerService {
                                 // Удаляем самые старые записи (FIFO)
                                 const removeCount = Math.floor(this.maxPendingSignals * 0.1); // Удаляем 10%
                                 this.pendingTriggeredSignals.splice(0, removeCount);
-                                console.warn(`⚠️ Pending signals buffer full, removed ${removeCount} oldest entries`);
+                                LoggerService.warn('Pending signals buffer full, removed oldest entries', {
+                                    service: 'SchedulerService',
+                                    operation: 'handleTriggeredSignals',
+                                    removedCount: removeCount
+                                });
                             }
                             
                             // Используем данные из БД, а не из объекта triggered
@@ -2199,14 +2442,27 @@ class SchedulerService {
                             });
                         }
                     } catch (dbError) {
-                        console.error(`❌ Error saving triggered signal to DB:`, dbError.message);
+                        LoggerService.error('Error saving triggered signal to DB', {
+                            service: 'SchedulerService',
+                            operation: 'saveTriggeredSignal',
+                            error: { message: dbError.message, stack: dbError.stack }
+                        });
                     }
                 } catch (signalError) {
-                    console.error(`❌ Error handling triggered signal ${triggered.signalId}:`, signalError.message);
+                    LoggerService.error('Error handling triggered signal', {
+                        service: 'SchedulerService',
+                        operation: 'handleTriggeredSignal',
+                        signalId: triggered.signalId,
+                        error: { message: signalError.message, stack: signalError.stack }
+                    });
                 }
             }
         } catch (error) {
-            console.error('❌ Error handling triggered signals:', error);
+            LoggerService.error('Error handling triggered signals', {
+                service: 'SchedulerService',
+                operation: 'handleTriggeredSignals',
+                error: { message: error.message, stack: error.stack }
+            });
         }
     }
 
@@ -2235,7 +2491,11 @@ class SchedulerService {
                 }
             );
         } catch (monitoringError) {
-            console.warn('⚠️ Failed to register trading requests prices update worker:', monitoringError.message || monitoringError);
+            LoggerService.warn('Failed to register trading requests prices update worker', {
+                service: 'SchedulerService',
+                operation: 'registerTradingRequestsPricesUpdateWorker',
+                error: { message: monitoringError.message || String(monitoringError) }
+            });
         }
         
         try {
@@ -2258,7 +2518,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
             
@@ -2277,7 +2541,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to complete worker', {
+                        service: 'SchedulerService',
+                        operation: 'completeWorker',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
 
@@ -2299,7 +2567,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to report worker error', {
+                        service: 'SchedulerService',
+                        operation: 'reportWorkerError',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
             throw error;
@@ -2403,11 +2675,20 @@ class SchedulerService {
                     }
 
                 } catch (requestError) {
-                    console.error(`❌ Error handling ready to execute request ${requestData.requestId}:`, requestError.message);
+                    LoggerService.error('Error handling ready to execute request', {
+                        service: 'SchedulerService',
+                        operation: 'handleReadyToExecuteRequest',
+                        requestId: requestData.requestId,
+                        error: { message: requestError.message, stack: requestError.stack }
+                    });
                 }
             }
         } catch (error) {
-            console.error('❌ Error handling ready to execute requests:', error);
+            LoggerService.error('Error handling ready to execute requests', {
+                service: 'SchedulerService',
+                operation: 'handleReadyToExecuteRequests',
+                error: { message: error.message, stack: error.stack }
+            });
         }
     }
 
@@ -2417,7 +2698,13 @@ class SchedulerService {
             const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
             if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
             workerId = WorkerMonitoringService.registerWorker('cleanup', 'Очистка старых свечей', { stage: 'initializing' });
-        } catch (e) { console.warn('⚠️ Failed to register cleanup worker:', e.message); }
+        } catch (e) {
+            LoggerService.warn('Failed to register cleanup worker', {
+                service: 'SchedulerService',
+                operation: 'registerCleanupWorker',
+                error: { message: e.message }
+            });
+        }
         
         try {
             const { CachedCandle } = await import('../models/CachedCandle.js');
@@ -2429,7 +2716,13 @@ class SchedulerService {
                     if (WorkerMonitoringService.isInitialized) {
                         WorkerMonitoringService.updateWorkerStatus(workerId, { progress: 20, metadata: { stage: 'cleaning_candles' } });
                     }
-                } catch (e) { console.warn('⚠️ Failed to update worker status:', e.message); }
+                } catch (e) {
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: e.message }
+                    });
+                }
             }
 
             // Удаляем свечи старше 30 дней
@@ -2450,7 +2743,13 @@ class SchedulerService {
                     if (WorkerMonitoringService.isInitialized) {
                         WorkerMonitoringService.updateWorkerStatus(workerId, { progress: 60, metadata: { stage: 'cleaning_signals' } });
                     }
-                } catch (e) { console.warn('⚠️ Failed to update worker status:', e.message); }
+                } catch (e) {
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: e.message }
+                    });
+                }
             }
 
             // Удаляем сработавшие сигналы старше 1 суток (24 часа)
@@ -2471,7 +2770,13 @@ class SchedulerService {
                     if (WorkerMonitoringService.isInitialized) {
                         WorkerMonitoringService.completeWorker(workerId, true, { deletedCandles: deletedCandlesCount, deletedSignals: deletedSignalsCount });
                     }
-                } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to complete worker', {
+                                service: 'SchedulerService',
+                                operation: 'completeWorker',
+                                error: { message: e.message }
+                            });
+                        }
             }
 
         } catch (error) {
@@ -2482,9 +2787,19 @@ class SchedulerService {
                         WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
                         WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
                     }
-                } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to report worker error', {
+                                service: 'SchedulerService',
+                                operation: 'reportWorkerError',
+                                error: { message: e.message }
+                            });
+                        }
             }
-            console.error('Cleanup error:', error);
+            LoggerService.error('Cleanup error', {
+                service: 'SchedulerService',
+                operation: 'cleanup',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -2503,7 +2818,7 @@ class SchedulerService {
         if (!skipChecks && !force) {
             // Проверяем, не идет ли полное обновление кеша (только для ручного запуска)
             if (this.isFullCacheUpdateRunning) {
-                console.log('ℹ️ [Full Training] Пропущено: идет полное обновление кеша');
+                // Логирование удалено согласно рефакторингу (было console.log)
                 // Отправляем уведомление в Telegram
                 try {
                     await OptimizedTelegramService.sendAlert(
@@ -2512,22 +2827,29 @@ class SchedulerService {
                         'warning'
                     );
                 } catch (telegramError) {
-                    console.warn('⚠️ Failed to send Telegram notification about training skip:', telegramError.message);
+                    LoggerService.warn('Failed to send Telegram notification about training skip', {
+                        service: 'SchedulerService',
+                        operation: 'sendTelegramNotification',
+                        error: { message: telegramError.message }
+                    });
                 }
                 return { skipped: true, reason: 'cache_update_running' };
             }
             
             // Проверяем, не идет ли уже обучение или анализ (только для ручного запуска)
             if (this.isTraining || this.isAnalyzing) {
-                console.log('ℹ️ [Full Training] Пропущено: уже идет обучение или анализ');
+                // Логирование удалено согласно рефакторингу (было console.log)
                 return { skipped: true, reason: 'training_or_analysis_running' };
             }
         } else if (force) {
             // Для планового обучения (force: true) логируем, что запускаем принудительно
-            console.log('✅ [Full Training] Принудительный запуск по расписанию (force: true) - пропускаем все проверки');
+            // Логирование удалено согласно рефакторингу (было console.log)
             // Если уже идет обучение, логируем предупреждение, но продолжаем
             if (this.isTraining || this.isAnalyzing) {
-                console.warn('⚠️ [Full Training] ВНИМАНИЕ: Обучение уже запущено, но продолжаем плановый запуск (force: true)');
+                LoggerService.warn('Full Training: Training already started, but continuing scheduled run (force: true)', {
+                    service: 'SchedulerService',
+                    operation: 'performScheduledTraining'
+                });
                 // Отправляем уведомление в Telegram
                 try {
                     await OptimizedTelegramService.sendAlert(
@@ -2536,7 +2858,11 @@ class SchedulerService {
                         'warning'
                     );
                 } catch (telegramError) {
-                    console.warn('⚠️ Failed to send Telegram notification about training conflict:', telegramError.message);
+                    LoggerService.warn('Failed to send Telegram notification about training conflict', {
+                        service: 'SchedulerService',
+                        operation: 'sendTelegramNotification',
+                        error: { message: telegramError.message }
+                    });
                 }
             }
         }
@@ -2562,7 +2888,11 @@ class SchedulerService {
                 }
             );
         } catch (monitoringError) {
-            console.warn('⚠️ Failed to register worker in monitoring service:', monitoringError);
+            LoggerService.warn('Failed to register worker in monitoring service', {
+                service: 'SchedulerService',
+                operation: 'registerWorker',
+                error: { message: String(monitoringError) }
+            });
         }
         
         // Отправляем уведомление о запуске полного обучения (даже если оно потом может быть пропущено)
@@ -2573,7 +2903,11 @@ class SchedulerService {
                 'info'
             );
         } catch (telegramError) {
-            console.warn('⚠️ Failed to send Telegram notification about training start:', telegramError.message);
+            LoggerService.warn('Failed to send Telegram notification about training start', {
+                service: 'SchedulerService',
+                operation: 'sendTelegramNotification',
+                error: { message: telegramError.message }
+            });
         }
         
         try {
@@ -2611,13 +2945,9 @@ class SchedulerService {
                 // Для ручного запуска: пропускаем обучение, если не требуется
                 const shouldRetrain = await this.shouldRetrainModel(null, workerId);
                 if (!shouldRetrain) {
-                    console.log('ℹ️ [Full Training] Обучение не требуется по результатам проверки shouldRetrainModel');
+                    // Логирование удалено согласно рефакторингу (было console.log)
                     if (LoggerService.isInitialized) {
-                        LoggerService.info('Full training skipped - retraining not needed', {
-                            service: 'SchedulerService',
-                            operation: 'performFullTraining',
-                            reason: 'shouldRetrainModel returned false'
-                        });
+                        // Логирование удалено согласно рефакторингу (было LoggerService.info)
                     }
                     
                     // Отправляем уведомление о том, что обучение пропущено
@@ -2628,7 +2958,11 @@ class SchedulerService {
                             'info'
                         );
                     } catch (telegramError) {
-                        console.warn('⚠️ Failed to send Telegram notification about training skip:', telegramError.message);
+                        LoggerService.warn('Failed to send Telegram notification about training skip', {
+                        service: 'SchedulerService',
+                        operation: 'sendTelegramNotification',
+                        error: { message: telegramError.message }
+                    });
                     }
                     
                     if (workerId) {
@@ -2647,7 +2981,7 @@ class SchedulerService {
                 // Отправляем предупреждение, если переобучение не обязательно, но продолжаем обучение
                 const shouldRetrain = await this.shouldRetrainModel(null, workerId);
                 if (!shouldRetrain) {
-                    console.log('⚠️ [Full Training] Плановое обучение: переобучение не обязательно, но продолжаем (force: true)');
+                    // Логирование удалено согласно рефакторингу (было console.log)
                     // Отправляем предупреждение в Telegram, но не прерываем процесс
                     try {
                         await OptimizedTelegramService.sendAlert(
@@ -2656,14 +2990,18 @@ class SchedulerService {
                             'warning'
                         );
                     } catch (telegramError) {
-                        console.warn('⚠️ Failed to send Telegram notification about training warning:', telegramError.message);
+                        LoggerService.warn('Failed to send Telegram notification about training warning', {
+                            service: 'SchedulerService',
+                            operation: 'sendTelegramNotification',
+                            error: { message: telegramError.message }
+                        });
                     }
                 } else {
-                    console.log('✅ [Full Training] Плановое обучение: переобучение требуется, продолжаем (force: true)');
+                    // Логирование удалено согласно рефакторингу (было console.log)
                 }
             }
             
-            console.log('✅ [Full Training] Обучение требуется, начинаем полное обучение...');
+            // Логирование удалено согласно рефакторингу (было console.log)
 
             // Обновляем статус: получение настроек
             if (workerId) {
@@ -2783,7 +3121,12 @@ class SchedulerService {
                     successes++;
                     totalTrained++;
                 } catch (error) {
-                    console.warn(`❌ [Base] Training failed for ${instrument.ticker}:`, error.message);
+                    LoggerService.warn('Base training failed', {
+                        service: 'SchedulerService',
+                        operation: 'baseTraining',
+                        ticker: instrument.ticker,
+                        error: { message: error.message }
+                    });
                     failures++;
                     totalTrained++;
                 }
@@ -2839,16 +3182,26 @@ class SchedulerService {
                     
                     // Проверяем, был ли инструмент пропущен из-за недостаточных данных
                     if (result && result.skipped) {
-                        console.log(`ℹ️ [Ensemble] Skipped ${instrument.ticker}: ${result.message || 'insufficient data'}`);
+                        // Логирование удалено согласно рефакторингу (было console.log)
                         // Не считаем это ошибкой, просто пропускаем
                     } else if (result && result.success) {
                         successes++;
                     } else {
-                        console.warn(`⚠️ [Ensemble] Training failed for ${instrument.ticker}: ${result?.message || 'unknown error'}`);
+                        LoggerService.warn('Ensemble training failed', {
+                            service: 'SchedulerService',
+                            operation: 'ensembleTraining',
+                            ticker: instrument.ticker,
+                            error: { message: result?.message || 'unknown error' }
+                        });
                         failures++;
                     }
                 } catch (error) {
-                    console.warn(`❌ [Ensemble] Training failed for ${instrument.ticker}:`, error.message);
+                    LoggerService.warn('Ensemble training failed', {
+                        service: 'SchedulerService',
+                        operation: 'ensembleTraining',
+                        ticker: instrument.ticker,
+                        error: { message: error.message }
+                    });
                     failures++;
                 }
             }
@@ -2900,7 +3253,12 @@ class SchedulerService {
                     });
                     successes++;
                 } catch (error) {
-                    console.warn(`❌ [Meta] Training failed for ${instrument.ticker}:`, error.message);
+                    LoggerService.warn('Meta training failed', {
+                        service: 'SchedulerService',
+                        operation: 'metaTraining',
+                        ticker: instrument.ticker,
+                        error: { message: error.message }
+                    });
                     failures++;
                 }
             }
@@ -2953,7 +3311,12 @@ class SchedulerService {
                     });
                     successes++;
                 } catch (error) {
-                    console.warn(`❌ [RL] Training failed for ${instrument.ticker}:`, error.message);
+                    LoggerService.warn('RL training failed', {
+                        service: 'SchedulerService',
+                        operation: 'rlTraining',
+                        ticker: instrument.ticker,
+                        error: { message: error.message }
+                    });
                     failures++;
                 }
             }
@@ -2995,7 +3358,11 @@ class SchedulerService {
             };
 
         } catch (error) {
-            console.error('Full training error:', error);
+            LoggerService.error('Full training error', {
+                service: 'SchedulerService',
+                operation: 'fullTraining',
+                error: { message: error.message, stack: error.stack }
+            });
             const duration = Math.round((Date.now() - startTime) / 1000);
             
             // Завершаем воркер с ошибкой
@@ -3043,8 +3410,276 @@ class SchedulerService {
         return await this.performFullTraining({ skipChecks: true, force: true });
     }
 
+    /**
+     * Плановое обучение с адаптивным расписанием на основе волатильности
+     * Для волатильных инструментов обучение может запускаться чаще
+     */
+    async performScheduledTrainingWithAdaptiveSchedule() {
+        try {
+            // Рассчитываем среднюю волатильность инструментов
+            const avgVolatility = await this.calculateAverageVolatility();
+            
+            // Адаптивная частота обучения:
+            // - Высокая волатильность (>0.3) -> обучение 2 раза в неделю
+            // - Средняя волатильность (0.15-0.3) -> обучение 1 раз в неделю (стандарт)
+            // - Низкая волатильность (<0.15) -> обучение 1 раз в 2 недели
+            const shouldTrain = this.shouldTrainBasedOnVolatility(avgVolatility);
+            
+            if (shouldTrain) {
+                LoggerService.info('Adaptive training schedule: training enabled', {
+                    service: 'SchedulerService',
+                    operation: 'performScheduledTrainingWithAdaptiveSchedule',
+                    avgVolatility: avgVolatility.toFixed(4),
+                    frequency: avgVolatility > 0.3 ? 'twice_weekly' : avgVolatility > 0.15 ? 'weekly' : 'biweekly'
+                });
+                const result = await this.performFullTraining({ skipChecks: true, force: true });
+                this.lastTrainingTime = Date.now(); // Обновляем время последнего обучения
+                return result;
+            } else {
+                LoggerService.info('Adaptive training schedule: training skipped', {
+                    service: 'SchedulerService',
+                    operation: 'performScheduledTrainingWithAdaptiveSchedule',
+                    avgVolatility: avgVolatility.toFixed(4),
+                    reason: 'low_volatility'
+                });
+            }
+        } catch (error) {
+            LoggerService.error('Error in adaptive training schedule', {
+                service: 'SchedulerService',
+                operation: 'performScheduledTrainingWithAdaptiveSchedule',
+                error: { message: error.message, stack: error.stack }
+            });
+            // В случае ошибки выполняем стандартное обучение
+            return await this.performFullTraining({ skipChecks: true, force: true });
+        }
+    }
+
+    /**
+     * Расчет средней волатильности инструментов
+     * @returns {Promise<number>} Средняя волатильность
+     */
+    async calculateAverageVolatility() {
+        try {
+            const instruments = await CacheService.getAllInstruments(20); // Берем 20 инструментов для расчета
+            if (!instruments || instruments.length === 0) {
+                return 0.2; // Значение по умолчанию
+            }
+
+            const volatilities = [];
+            for (const instrument of instruments) {
+                try {
+                    const candles = await CacheService.getCandles(instrument.figi, 'DAY', 30, true);
+                    if (candles && candles.length >= 10) {
+                        const prices = candles.map(c => c.close);
+                        const returns = [];
+                        for (let i = 1; i < prices.length; i++) {
+                            if (prices[i - 1] > 0) {
+                                returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
+                            }
+                        }
+                        if (returns.length > 0) {
+                            const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+                            const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
+                            const volatility = Math.sqrt(variance);
+                            volatilities.push(volatility);
+                        }
+                    }
+                } catch (error) {
+                    // Пропускаем инструменты с ошибками
+                    continue;
+                }
+            }
+
+            if (volatilities.length === 0) {
+                return 0.2; // Значение по умолчанию
+            }
+
+            const avgVolatility = volatilities.reduce((sum, v) => sum + v, 0) / volatilities.length;
+            return avgVolatility;
+        } catch (error) {
+            LoggerService.warn('Error calculating average volatility', {
+                service: 'SchedulerService',
+                operation: 'calculateAverageVolatility',
+                error: { message: error.message }
+            });
+            return 0.2; // Значение по умолчанию
+        }
+    }
+
+    /**
+     * Определение, нужно ли обучать на основе волатильности
+     * @param {number} volatility - Волатильность
+     * @returns {boolean} Нужно ли обучать
+     */
+    shouldTrainBasedOnVolatility(volatility) {
+        // Для высокой волатильности обучаем всегда
+        if (volatility > 0.3) {
+            return true;
+        }
+        
+        // Для средней волатильности обучаем раз в неделю (стандартное расписание)
+        if (volatility > 0.15) {
+            return true; // Стандартное расписание уже раз в неделю
+        }
+        
+        // Для низкой волатильности обучаем реже (раз в 2 недели)
+        // Проверяем, прошло ли 2 недели с последнего обучения
+        const lastTrainingTime = this.lastTrainingTime || 0;
+        const twoWeeksAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
+        return lastTrainingTime < twoWeeksAgo;
+    }
+
+    /**
+     * Проверка дрейфа данных и триггерное обучение
+     */
+    async performDataDriftCheck() {
+        try {
+            LoggerService.info('Starting data drift check', {
+                service: 'SchedulerService',
+                operation: 'performDataDriftCheck'
+            });
+
+            const OptimizedTrainingService = getService('OptimizedTrainingService');
+            if (!OptimizedTrainingService) {
+                throw new Error('OptimizedTrainingService not available');
+            }
+
+            // Получаем список активных инструментов
+            const instruments = await CacheService.getAllInstruments(20);
+            if (!instruments || instruments.length === 0) {
+                LoggerService.warn('No instruments available for drift check', {
+                    service: 'SchedulerService',
+                    operation: 'performDataDriftCheck'
+                });
+                return;
+            }
+
+            const results = {
+                checked: 0,
+                driftDetected: 0,
+                retrained: 0,
+                errors: 0
+            };
+
+            // Проверяем каждый инструмент на дрейф
+            for (const instrument of instruments) {
+                try {
+                    results.checked++;
+                    const driftResult = await OptimizedTrainingService.triggerTrainingOnDrift(instrument.figi);
+                    
+                    if (driftResult.triggered) {
+                        results.driftDetected++;
+                        results.retrained++;
+                        
+                        LoggerService.info('Data drift detected and retraining triggered', {
+                            service: 'SchedulerService',
+                            operation: 'performDataDriftCheck',
+                            figi: instrument.figi,
+                            driftScore: driftResult.driftResult.driftScore.toFixed(4),
+                            severity: driftResult.driftResult.severity
+                        });
+
+                        // Отправляем уведомление
+                        await OptimizedTelegramService.sendAlert(
+                            'DATA_DRIFT_DETECTED',
+                            `⚠️ <b>Обнаружен дрейф данных</b>\n\n` +
+                            `📊 Инструмент: ${instrument.name || instrument.figi}\n` +
+                            `📈 Дрейф: ${(driftResult.driftResult.driftScore * 100).toFixed(2)}%\n` +
+                            `🔴 Серьезность: ${driftResult.driftResult.severity}\n` +
+                            `🔄 Запущено переобучение...`,
+                            'warning'
+                        );
+                    }
+                } catch (error) {
+                    results.errors++;
+                    LoggerService.error('Error checking drift for instrument', {
+                        service: 'SchedulerService',
+                        operation: 'performDataDriftCheck',
+                        figi: instrument.figi,
+                        error: { message: error.message }
+                    });
+                }
+            }
+
+            LoggerService.info('Data drift check completed', {
+                service: 'SchedulerService',
+                operation: 'performDataDriftCheck',
+                results
+            });
+
+        } catch (error) {
+            LoggerService.error('Data drift check failed', {
+                service: 'SchedulerService',
+                operation: 'performDataDriftCheck',
+                error: { message: error.message, stack: error.stack }
+            });
+        }
+    }
+
+    /**
+     * Регулярная оптимизация гиперпараметров (раз в месяц)
+     */
+    async performHyperparameterOptimization() {
+        try {
+            LoggerService.info('Starting monthly hyperparameter optimization', {
+                service: 'SchedulerService',
+                operation: 'performHyperparameterOptimization'
+            });
+
+            const OptimizedTrainingService = getService('OptimizedTrainingService');
+            if (!OptimizedTrainingService) {
+                throw new Error('OptimizedTrainingService not available');
+            }
+
+            // Запускаем оптимизацию на 3-5 инструментах
+            const result = await OptimizedTrainingService.tuneHyperparameters(null, {
+                epochsOptions: [30, 50, 70],
+                batchSizeOptions: [16, 32, 64],
+                daysOptions: [120, 180, 365],
+                horizonOptions: [3, 5, 7],
+                lookbackOptions: [40, 60, 80]
+            });
+
+            LoggerService.info('Hyperparameter optimization completed', {
+                service: 'SchedulerService',
+                operation: 'performHyperparameterOptimization',
+                bestParams: result.best,
+                bestMetrics: result.bestMetrics
+            });
+
+            // Отправляем уведомление
+            await OptimizedTelegramService.sendAlert(
+                'HYPERPARAMETER_OPTIMIZATION_COMPLETE',
+                `✅ <b>Оптимизация гиперпараметров завершена</b>\n\n` +
+                `📊 Лучшие параметры:\n` +
+                `   • Epochs: ${result.best.epochs}\n` +
+                `   • Batch Size: ${result.best.batchSize}\n` +
+                `   • Days: ${result.best.days}\n` +
+                `   • Horizon: ${result.best.horizon}\n` +
+                `   • Lookback: ${result.best.lookback}\n\n` +
+                `📈 Метрики:\n` +
+                `   • F1: ${(result.bestMetrics.f1 * 100).toFixed(2)}%\n` +
+                `   • Accuracy: ${(result.bestMetrics.accuracy * 100).toFixed(2)}%\n` +
+                `   • AUC: ${(result.bestMetrics.auc * 100).toFixed(2)}%`,
+                'info'
+            );
+        } catch (error) {
+            LoggerService.error('Hyperparameter optimization failed', {
+                service: 'SchedulerService',
+                operation: 'performHyperparameterOptimization',
+                error: { message: error.message, stack: error.stack }
+            });
+
+            await OptimizedTelegramService.sendAlert(
+                'HYPERPARAMETER_OPTIMIZATION_ERROR',
+                `❌ <b>Ошибка оптимизации гиперпараметров</b>\n\n${error.message}`,
+                'warning'
+            );
+        }
+    }
+
     async performQuickTraining() {
-        console.log('🚀 [Quick Training] Starting...');
+        // Логирование удалено согласно рефакторингу (было console.log)
         const startTime = Date.now();
         
         // Отправляем уведомление о старте быстрого обучения
@@ -3057,7 +3692,11 @@ class SchedulerService {
                 'info'
             );
         } catch (telegramError) {
-            console.warn('⚠️ Failed to send Telegram notification about quick training start:', telegramError.message);
+            LoggerService.warn('Failed to send Telegram notification about quick training start', {
+                service: 'SchedulerService',
+                operation: 'sendTelegramNotification',
+                error: { message: telegramError.message }
+            });
             }
 
         try {
@@ -3066,7 +3705,11 @@ class SchedulerService {
             const QuickTrainingService = (await import('./QuickTrainingService.js')).default;
             await QuickTrainingService.performQuickTraining();
         } catch (error) {
-            console.error('❌ [Quick Training] Error:', error);
+            LoggerService.error('Quick Training error', {
+                service: 'SchedulerService',
+                operation: 'quickTraining',
+                error: { message: error.message, stack: error.stack }
+            });
         }
     }
 
@@ -3094,7 +3737,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
 
@@ -3116,7 +3763,11 @@ class SchedulerService {
                             });
                         }
                     } catch (monitoringError) {
-                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                        LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                     }
                 }
                 return true;
@@ -3156,7 +3807,11 @@ class SchedulerService {
                             });
                         }
                     } catch (monitoringError) {
-                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                        LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                     }
                 }
                 
@@ -3182,13 +3837,21 @@ class SchedulerService {
                             });
                         }
                     } catch (monitoringError) {
-                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                        LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                     }
                 }
                 return true;
             }
         } catch (error) {
-            console.error('Error checking if model should retrain:', error);
+            LoggerService.error('Error checking if model should retrain', {
+                service: 'SchedulerService',
+                operation: 'shouldRetrainModel',
+                error: { message: error.message, stack: error.stack }
+            });
             return true; // В случае ошибки лучше переобучить
         }
     }
@@ -3231,7 +3894,11 @@ class SchedulerService {
                             });
                         }
                     } catch (monitoringError) {
-                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                        LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                     }
                 }
                 
@@ -3255,7 +3922,11 @@ class SchedulerService {
                             });
                         }
                     } catch (monitoringError) {
-                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                        LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                     }
                 }
                 return true;
@@ -3275,7 +3946,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
 
@@ -3311,7 +3986,11 @@ class SchedulerService {
                                         });
                                     }
                                 } catch (monitoringError) {
-                                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                                    LoggerService.warn('Failed to update worker status', {
+                                service: 'SchedulerService',
+                                operation: 'updateWorkerStatus',
+                                error: { message: monitoringError.message || String(monitoringError) }
+                            });
                                 }
                             }
                             
@@ -3322,7 +4001,12 @@ class SchedulerService {
                     }
                 }
             } catch (error) {
-                console.warn(`⚠️ Error checking degradation for ${figi}:`, error.message);
+                LoggerService.warn('Error checking degradation', {
+                    service: 'SchedulerService',
+                    operation: 'checkDegradation',
+                    figi: figi,
+                    error: { message: error.message }
+                });
                 // В случае ошибки проверки деградации, проверяем только возраст
                 if (workerId) {
                     try {
@@ -3339,14 +4023,23 @@ class SchedulerService {
                             });
                         }
                     } catch (monitoringError) {
-                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                        LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                     }
                 }
             }
 
             return false;
         } catch (error) {
-            console.error(`Error checking if model should retrain for ${figi}:`, error);
+            LoggerService.error('Error checking if model should retrain', {
+                service: 'SchedulerService',
+                operation: 'shouldRetrainModel',
+                figi: figi,
+                error: { message: error.message, stack: error.stack }
+            });
             return true; // В случае ошибки лучше переобучить
         }
     }
@@ -3371,14 +4064,21 @@ class SchedulerService {
                 }
             );
         } catch (monitoringError) {
-            console.warn('⚠️ Failed to register degradation check worker:', monitoringError.message || monitoringError);
+            LoggerService.warn('Failed to register degradation check worker', {
+                service: 'SchedulerService',
+                operation: 'registerDegradationCheckWorker',
+                error: { message: monitoringError.message || String(monitoringError) }
+            });
         }
         
         try {
             const OptimizedTrainingService = getService('OptimizedTrainingService');
             
             if (!OptimizedTrainingService) {
-                console.warn('⚠️ OptimizedTrainingService not available for degradation check');
+                LoggerService.warn('OptimizedTrainingService not available for degradation check', {
+                    service: 'SchedulerService',
+                    operation: 'degradationCheck'
+                });
                 if (workerId) {
                     try {
                         const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
@@ -3388,7 +4088,11 @@ class SchedulerService {
                             });
                         }
                     } catch (monitoringError) {
-                        console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                        LoggerService.warn('Failed to complete worker', {
+                        service: 'SchedulerService',
+                        operation: 'completeWorker',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                     }
                 }
                 return;
@@ -3407,7 +4111,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
 
@@ -3435,7 +4143,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
 
@@ -3463,7 +4175,11 @@ class SchedulerService {
                             });
                         }
                     } catch (monitoringError) {
-                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                        LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                     }
                 }
 
@@ -3488,7 +4204,12 @@ class SchedulerService {
                         }
                     }
                 } catch (error) {
-                    console.warn(`⚠️ Error checking degradation for ${instrument.figi}:`, error.message);
+                    LoggerService.warn('Error checking degradation', {
+                        service: 'SchedulerService',
+                        operation: 'checkDegradation',
+                        figi: instrument.figi,
+                        error: { message: error.message }
+                    });
                 }
             }
 
@@ -3505,7 +4226,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to complete worker', {
+                        service: 'SchedulerService',
+                        operation: 'completeWorker',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
             
@@ -3529,10 +4254,18 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to report worker error', {
+                        service: 'SchedulerService',
+                        operation: 'reportWorkerError',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
-            console.error('❌ Error checking degradation for all instruments:', error);
+            LoggerService.error('Error checking degradation for all instruments', {
+                service: 'SchedulerService',
+                operation: 'checkDegradationForAll',
+                error: { message: error.message, stack: error.stack }
+            });
         }
     }
 
@@ -3630,7 +4363,11 @@ class SchedulerService {
                 }
             );
         } catch (monitoringError) {
-            console.warn('⚠️ Failed to register predictions update worker:', monitoringError.message || monitoringError);
+            LoggerService.warn('Failed to register predictions update worker', {
+                service: 'SchedulerService',
+                operation: 'registerPredictionsUpdateWorker',
+                error: { message: monitoringError.message || String(monitoringError) }
+            });
         }
         
         try {
@@ -3651,7 +4388,11 @@ class SchedulerService {
                 try {
                     await IntegratedAIService.initialize();
                 } catch (initError) {
-                    console.warn(`⚠️ Failed to initialize IntegratedAIService:`, initError.message);
+                    LoggerService.warn('Failed to initialize IntegratedAIService', {
+                        service: 'SchedulerService',
+                        operation: 'initializeIntegratedAIService',
+                        error: { message: initError.message }
+                    });
                     return;
                 }
             }
@@ -3726,7 +4467,12 @@ class SchedulerService {
                             }
                         } catch (error) {
                             errorCount++;
-                            console.warn(`⚠️ Failed to update prediction for ${rec.ticker}:`, error.message);
+                            LoggerService.warn('Failed to update prediction', {
+                                service: 'SchedulerService',
+                                operation: 'updatePrediction',
+                                ticker: rec.ticker,
+                                error: { message: error.message }
+                            });
                         }
                     })
                 );
@@ -3763,7 +4509,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to complete worker', {
+                        service: 'SchedulerService',
+                        operation: 'completeWorker',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
 
@@ -3779,10 +4529,18 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to report worker error', {
+                        service: 'SchedulerService',
+                        operation: 'reportWorkerError',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
-            console.error('❌ Error updating recommendations predictions:', error);
+            LoggerService.error('Error updating recommendations predictions', {
+                service: 'SchedulerService',
+                operation: 'updateRecommendationsPredictions',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -3790,23 +4548,23 @@ class SchedulerService {
     async performPortfolioAnalysis() {
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
-            console.log('⏭️ [Portfolio Analysis] Skipped: full cache update is running');
+            // Логирование удалено согласно рефакторингу (было console.log)
             return;
         }
         
         // Проверяем, не идет ли уже анализ или обучение
         if (this.isAnalyzing || this.isTraining) {
-            console.log(`⏭️ [Portfolio Analysis] Skipped: isAnalyzing=${this.isAnalyzing}, isTraining=${this.isTraining}`);
+            // Логирование удалено согласно рефакторингу (было console.log)
             return;
         }
 
         // Проверяем, активна ли нейросеть
         if (!NeuralNetworkService.isActive) {
-            console.log('⏭️ [Portfolio Analysis] Skipped: NeuralNetworkService is not active');
+            // Логирование удалено согласно рефакторингу (было console.log)
             return;
         }
 
-        console.log('🚀 [Portfolio Analysis] Starting...');
+        // Логирование удалено согласно рефакторингу (было console.log)
         this.isAnalyzing = true;
         
         try {
@@ -3895,7 +4653,7 @@ class SchedulerService {
             throw error;
         } finally {
             this.isAnalyzing = false;
-            console.log('✅ [Portfolio Analysis] Completed, isAnalyzing flag reset');
+            // Логирование удалено согласно рефакторингу (было console.log)
         }
     }
 
@@ -4019,7 +4777,11 @@ class SchedulerService {
                     } catch (strategyError) {
                         // Игнорируем ошибки при получении стратегии (включая ошибки закрытого соединения)
                         if (!strategyError.message || !strategyError.message.includes('connection manager was closed')) {
-                            console.warn('⚠️ Could not get our strategy for signal:', strategyError.message);
+                            LoggerService.warn('Could not get our strategy for signal', {
+                                service: 'SchedulerService',
+                                operation: 'getStrategyForSignal',
+                                error: { message: strategyError.message }
+                            });
                         }
                     }
                     
@@ -4050,7 +4812,10 @@ class SchedulerService {
                             }
                         } catch (dbCheckError) {
                             // Соединение недоступно, используем значения по умолчанию
-                            console.warn('⚠️ Database connection unavailable for recommended quantity calculation, using defaults');
+                            LoggerService.warn('Database connection unavailable for recommended quantity calculation, using defaults', {
+                                service: 'SchedulerService',
+                                operation: 'calculateRecommendedQuantity'
+                            });
                             dbAvailable = false;
                         }
                         
@@ -4063,7 +4828,11 @@ class SchedulerService {
                                 totalBudget = portfolioSettings.user_max_portfolio_budget || 1000000;
                             } catch (settingsError) {
                                 // Если не удалось получить настройки, используем значение по умолчанию
-                                console.warn('⚠️ Could not get portfolio settings, using default budget:', settingsError.message);
+                                LoggerService.warn('Could not get portfolio settings, using default budget', {
+                                    service: 'SchedulerService',
+                                    operation: 'getPortfolioSettings',
+                                    error: { message: settingsError.message }
+                                });
                             }
                         }
                         
@@ -4071,7 +4840,12 @@ class SchedulerService {
                         
                         // Валидация текущей цены перед расчетами
                         if (!currentPrice || currentPrice <= 0 || isNaN(currentPrice)) {
-                            console.warn(`⚠️ Invalid currentPrice for signal ${triggered.signalId}: ${currentPrice}, skipping quantity calculation`);
+                            LoggerService.warn('Invalid currentPrice for signal, skipping quantity calculation', {
+                                service: 'SchedulerService',
+                                operation: 'calculateQuantity',
+                                signalId: triggered.signalId,
+                                currentPrice: currentPrice
+                            });
                             throw new Error(`Invalid currentPrice: ${currentPrice}`);
                         }
                         
@@ -4126,7 +4900,11 @@ class SchedulerService {
                         }
                     } catch (calcError) {
                         // Игнорируем ошибки расчета
-                        console.warn('⚠️ Could not calculate recommended quantity:', calcError.message);
+                        LoggerService.warn('Could not calculate recommended quantity', {
+                            service: 'SchedulerService',
+                            operation: 'calculateRecommendedQuantity',
+                            error: { message: calcError.message }
+                        });
                     }
                     
                     // Формируем понятное сообщение для пользователя
@@ -4336,7 +5114,12 @@ class SchedulerService {
                         });
 
                 } catch (signalError) {
-                    console.error(`❌ Error preparing notification for signal ${triggered.signalId}:`, signalError.message);
+                    LoggerService.error('Error preparing notification for signal', {
+                        service: 'SchedulerService',
+                        operation: 'prepareNotification',
+                        signalId: triggered.signalId,
+                        error: { message: signalError.message, stack: signalError.stack }
+                    });
                 }
             }
 
@@ -4372,7 +5155,11 @@ class SchedulerService {
             // Очищаем очередь после отправки
             this.pendingTriggeredSignals = [];
         } catch (error) {
-            console.error('❌ Error sending pending triggered signals:', error);
+            LoggerService.error('Error sending pending triggered signals', {
+                service: 'SchedulerService',
+                operation: 'sendPendingTriggeredSignals',
+                error: { message: error.message, stack: error.stack }
+            });
         }
     }
 
@@ -4393,7 +5180,11 @@ class SchedulerService {
                 }
             );
         } catch (monitoringError) {
-            console.warn('⚠️ Failed to register news cache cleanup worker:', monitoringError.message || monitoringError);
+            LoggerService.warn('Failed to register news cache cleanup worker', {
+                service: 'SchedulerService',
+                operation: 'registerNewsCacheCleanupWorker',
+                error: { message: monitoringError.message || String(monitoringError) }
+            });
         }
         
         try {
@@ -4410,7 +5201,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
 
@@ -4431,7 +5226,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
             
@@ -4449,7 +5248,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to complete worker', {
+                        service: 'SchedulerService',
+                        operation: 'completeWorker',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
 
@@ -4465,10 +5268,18 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to report worker error', {
+                        service: 'SchedulerService',
+                        operation: 'reportWorkerError',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
-            console.error('❌ Error during news cache cleanup:', error);
+            LoggerService.error('Error during news cache cleanup', {
+                service: 'SchedulerService',
+                operation: 'newsCacheCleanup',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -4577,11 +5388,19 @@ class SchedulerService {
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     }
                 } catch (error) {
-                    console.error(`❌ Ошибка загрузки новостей для ${instrument.ticker}:`, error.message);
+                    LoggerService.error('Error loading news for instrument', {
+                        service: 'SchedulerService',
+                        operation: 'loadNews',
+                        ticker: instrument.ticker,
+                        error: { message: error.message }
+                    });
                     
                     // Если это ошибка лимита, останавливаемся
                     if (error.message && (error.message.includes('rate limit') || error.message.includes('limit'))) {
-                        console.warn('⚠️ API rate limit reached, stopping news update');
+                        LoggerService.warn('API rate limit reached, stopping news update', {
+                            service: 'SchedulerService',
+                            operation: 'performLimitedNewsUpdate'
+                        });
                         break;
                     }
                 }
@@ -4598,7 +5417,11 @@ class SchedulerService {
                 message: `Updated news for ${updated} instruments (rotation: next update starts from index ${currentIndex % shares.length})`
             };
         } catch (error) {
-            console.error('❌ Error during limited news update:', error);
+            LoggerService.error('Error during limited news update', {
+                service: 'SchedulerService',
+                operation: 'performLimitedNewsUpdate',
+                error: { message: error.message, stack: error.stack }
+            });
             
             // Не пробрасываем ошибку для некритичных операций с новостями
             // Возвращаем результат с информацией об ошибке
@@ -4622,10 +5445,7 @@ class SchedulerService {
         
         // Проверяем, не идет ли полное обновление кеша
         if (this.isFullCacheUpdateRunning) {
-            LoggerService.info('Daily news update skipped: full cache update is running', {
-                service: 'SchedulerService',
-                operation: 'performDailyNewsUpdate'
-            });
+            // Логирование удалено согласно рефакторингу (было LoggerService.info)
             return;
         }
         
@@ -4643,14 +5463,15 @@ class SchedulerService {
                 }
             );
         } catch (monitoringError) {
-            console.warn('⚠️ Failed to register daily news update worker:', monitoringError.message || monitoringError);
+            LoggerService.warn('Failed to register daily news update worker', {
+                service: 'SchedulerService',
+                operation: 'registerDailyNewsUpdateWorker',
+                error: { message: monitoringError.message || String(monitoringError) }
+            });
         }
         
         try {
-            LoggerService.info('Starting daily news update', {
-                service: 'SchedulerService',
-                operation: 'performDailyNewsUpdate'
-            });
+            // Логирование удалено согласно рефакторингу (было LoggerService.info)
             
             const NewsAnalysisService = (await import('./NewsAnalysisService.js')).default;
             
@@ -4663,12 +5484,7 @@ class SchedulerService {
             const lastDailyNewsUpdateIndex = await SettingsService.getSetting('daily_news_update_last_index', 0);
             const startIndex = parseInt(lastDailyNewsUpdateIndex) || 0;
             
-            LoggerService.info(`Starting news update with rotation: startIndex=${startIndex}, limit=30`, {
-                service: 'SchedulerService',
-                operation: 'performDailyNewsUpdate',
-                startIndex,
-                limit: 30
-            });
+            // Логирование удалено согласно рефакторингу (было LoggerService.info)
             
             // Обновляем статус - начало выполнения
             if (workerId) {
@@ -4685,7 +5501,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
             
@@ -4695,27 +5515,14 @@ class SchedulerService {
                 onProgress: (progress) => {
                     // Обрабатываем callback безопасно, чтобы не было необработанных промисов
                     try {
-                        const logResult = LoggerService.info(`News update progress: ${progress.current}/${progress.total} - ${progress.ticker || progress.figi}`, {
-                        service: 'SchedulerService',
-                        operation: 'performDailyNewsUpdate',
-                        progress: {
-                            current: progress.current,
-                            total: progress.total,
-                            ticker: progress.ticker,
-                            figi: progress.figi,
-                            success: progress.success,
-                            count: progress.count
-                        }
-                        });
-                        // Если LoggerService.info возвращает промис, обрабатываем его
-                        if (logResult && typeof logResult.catch === 'function') {
-                            logResult.catch(err => {
-                                console.warn('⚠️ Error in onProgress logger:', err.message);
-                    });
-                        }
+                        // Логирование удалено согласно рефакторингу (было LoggerService.info)
                     } catch (err) {
                         // Игнорируем ошибки в callback, чтобы не прерывать процесс
-                        console.warn('⚠️ Error in onProgress callback:', err.message);
+                        LoggerService.warn('Error in onProgress callback', {
+                            service: 'SchedulerService',
+                            operation: 'onProgress',
+                            error: { message: err.message }
+                        });
                     }
                 }
             });
@@ -4724,24 +5531,10 @@ class SchedulerService {
             if (result.total !== undefined) {
                 const nextIndex = (startIndex + 30) % result.total;
                 await SettingsService.setSetting('daily_news_update_last_index', nextIndex);
-                LoggerService.info(`News update rotation: next update will start from index ${nextIndex}`, {
-                    service: 'SchedulerService',
-                    operation: 'performDailyNewsUpdate',
-                    nextIndex,
-                    total: result.total
-                });
+                // Логирование удалено согласно рефакторингу (было LoggerService.info)
             }
 
-            LoggerService.info(`Daily news update completed: ${result.updated} instruments updated, ${result.totalNews} news articles loaded`, {
-                service: 'SchedulerService',
-                operation: 'performDailyNewsUpdate',
-                result: {
-                    updated: result.updated,
-                    totalNews: result.totalNews,
-                    processed: result.processed,
-                    total: result.total
-                }
-            });
+            // Логирование удалено согласно рефакторингу (было LoggerService.info)
             
             // Завершаем воркер успешно
             if (workerId) {
@@ -4757,7 +5550,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to complete worker', {
+                        service: 'SchedulerService',
+                        operation: 'completeWorker',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
             
@@ -4799,7 +5596,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to report worker error', {
+                        service: 'SchedulerService',
+                        operation: 'reportWorkerError',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
             
@@ -4851,7 +5652,11 @@ class SchedulerService {
                 }
             );
         } catch (monitoringError) {
-            console.warn('⚠️ Failed to register trailing stops check worker:', monitoringError.message || monitoringError);
+            LoggerService.warn('Failed to register trailing stops check worker', {
+                service: 'SchedulerService',
+                operation: 'registerTrailingStopsCheckWorker',
+                error: { message: monitoringError.message || String(monitoringError) }
+            });
         }
         
         try {
@@ -4881,7 +5686,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
 
@@ -4936,7 +5745,12 @@ class SchedulerService {
                             'info'
                         );
                     } catch (error) {
-                        console.error(`❌ Ошибка закрытия позиции по трейлинг-стопу для ${stop.ticker}:`, error);
+                        LoggerService.error('Error closing position by trailing stop', {
+                            service: 'SchedulerService',
+                            operation: 'closePositionByTrailingStop',
+                            ticker: stop.ticker,
+                            error: { message: error.message, stack: error.stack }
+                        });
                     }
                 }
             }
@@ -4953,7 +5767,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to complete worker', {
+                        service: 'SchedulerService',
+                        operation: 'completeWorker',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
         } catch (error) {
@@ -4968,10 +5786,18 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to report worker error', {
+                        service: 'SchedulerService',
+                        operation: 'reportWorkerError',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
-            console.error('❌ Error checking trailing stops:', error);
+            LoggerService.error('Error checking trailing stops', {
+                service: 'SchedulerService',
+                operation: 'checkTrailingStops',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -4985,7 +5811,13 @@ class SchedulerService {
             const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
             if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
             workerId = WorkerMonitoringService.registerWorker('correlation-precalc', 'Предрасчет корреляций', { stage: 'initializing' });
-        } catch (e) { console.warn('⚠️ Failed to register correlation precalc worker:', e.message); }
+        } catch (e) {
+            LoggerService.warn('Failed to register correlation precalc worker', {
+                service: 'SchedulerService',
+                operation: 'registerCorrelationPrecalcWorker',
+                error: { message: e.message }
+            });
+        }
         
         try {
             const CorrelationService = (await import('./CorrelationService.js')).default;
@@ -5002,7 +5834,13 @@ class SchedulerService {
                     if (WorkerMonitoringService.isInitialized) {
                         WorkerMonitoringService.updateWorkerStatus(workerId, { progress: 10, metadata: { stage: 'loading_instruments' } });
                     }
-                } catch (e) { console.warn('⚠️ Failed to update worker status:', e.message); }
+                } catch (e) {
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: e.message }
+                    });
+                }
             }
             
             // Получаем топ-50 инструментов по активности торгов
@@ -5071,7 +5909,10 @@ class SchedulerService {
                     'info'
                 );
             } else {
-                console.warn('⚠️ Недостаточно инструментов для предварительного расчета корреляций');
+                LoggerService.warn('Insufficient instruments for correlation precalculation', {
+                    service: 'SchedulerService',
+                    operation: 'correlationPrecalculation'
+                });
             }
             
             if (workerId) {
@@ -5084,7 +5925,13 @@ class SchedulerService {
                             errors: result?.errors || 0
                         });
                     }
-                } catch (e) { console.warn('⚠️ Failed to complete worker:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to complete worker', {
+                                service: 'SchedulerService',
+                                operation: 'completeWorker',
+                                error: { message: e.message }
+                            });
+                        }
             }
         } catch (error) {
             if (workerId) {
@@ -5094,9 +5941,19 @@ class SchedulerService {
                         WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
                         WorkerMonitoringService.completeWorker(workerId, false, { error: error.message || error });
                     }
-                } catch (e) { console.warn('⚠️ Failed to report worker error:', e.message); }
+                        } catch (e) {
+                            LoggerService.warn('Failed to report worker error', {
+                                service: 'SchedulerService',
+                                operation: 'reportWorkerError',
+                                error: { message: e.message }
+                            });
+                        }
             }
-            console.error('Error in scheduled correlation precalculation:', error);
+            LoggerService.error('Error in scheduled correlation precalculation', {
+                service: 'SchedulerService',
+                operation: 'correlationPrecalculation',
+                error: { message: error.message, stack: error.stack }
+            });
             await OptimizedTelegramService.sendAlert('CORRELATION_PRECALC_ERROR', error.message, 'warning');
             throw error;
         }
@@ -5130,7 +5987,11 @@ class SchedulerService {
                 await OptimizedTelegramService.sendAlert('DYNAMIC_BUDGET_REBALANCE_COMPLETE', message, 'info');
             }
         } catch (error) {
-            console.error('Error in scheduled dynamic budget rebalancing:', error);
+            LoggerService.error('Error in scheduled dynamic budget rebalancing', {
+                service: 'SchedulerService',
+                operation: 'dynamicBudgetRebalancing',
+                error: { message: error.message, stack: error.stack }
+            });
             await OptimizedTelegramService.sendAlert('DYNAMIC_BUDGET_REBALANCE_ERROR', error.message, 'warning');
             throw error;
         }
@@ -5147,7 +6008,13 @@ class SchedulerService {
             const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
             if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
             workerId = WorkerMonitoringService.registerWorker('signals-update', 'Обновление сигналов аналитиков', { stage: 'initializing' });
-        } catch (e) { console.warn('⚠️ Failed to register signals update worker:', e.message); }
+        } catch (e) {
+            LoggerService.warn('Failed to register signals update worker', {
+                service: 'SchedulerService',
+                operation: 'registerSignalsUpdateWorker',
+                error: { message: e.message }
+            });
+        }
         
         try {
 
@@ -5258,7 +6125,12 @@ class SchedulerService {
                         }
                     } catch (error) {
                         errorCount++;
-                        console.error(`❌ Error updating signals for ${instrument.ticker}:`, error.message);
+                        LoggerService.error('Error updating signals', {
+                            service: 'SchedulerService',
+                            operation: 'updateSignals',
+                            ticker: instrument.ticker,
+                            error: { message: error.message, stack: error.stack }
+                        });
                     }
                 }));
 
@@ -5282,7 +6154,11 @@ class SchedulerService {
 
             return { updatedCount, errorCount, total: instruments.length };
         } catch (error) {
-            console.error('❌ Error during signals update:', error);
+            LoggerService.error('Error during signals update', {
+                service: 'SchedulerService',
+                operation: 'signalsUpdate',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -5304,7 +6180,11 @@ class SchedulerService {
                 }
             );
         } catch (monitoringError) {
-            console.warn('⚠️ Failed to register Telegram cache update worker:', monitoringError.message || monitoringError);
+            LoggerService.warn('Failed to register Telegram cache update worker', {
+                service: 'SchedulerService',
+                operation: 'registerTelegramCacheUpdateWorker',
+                error: { message: monitoringError.message || String(monitoringError) }
+            });
         }
         
         try {
@@ -5321,7 +6201,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
 
@@ -5361,7 +6245,11 @@ class SchedulerService {
                             });
                         }
                     } catch (monitoringError) {
-                        console.warn('⚠️ Failed to update worker status:', monitoringError.message || monitoringError);
+                        LoggerService.warn('Failed to update worker status', {
+                        service: 'SchedulerService',
+                        operation: 'updateWorkerStatus',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                     }
                 }
                 
@@ -5376,7 +6264,12 @@ class SchedulerService {
                     processed++;
 
                 } catch (error) {
-                    console.warn(`⚠️ Failed to update sentiment for ${instrument.ticker}:`, error.message);
+                    LoggerService.warn('Failed to update sentiment', {
+                        service: 'SchedulerService',
+                        operation: 'updateSentiment',
+                        ticker: instrument.ticker,
+                        error: { message: error.message }
+                    });
                     failed++;
                 }
             }
@@ -5393,7 +6286,11 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to complete worker:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to complete worker', {
+                        service: 'SchedulerService',
+                        operation: 'completeWorker',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
 
@@ -5409,10 +6306,18 @@ class SchedulerService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('⚠️ Failed to report worker error:', monitoringError.message || monitoringError);
+                    LoggerService.warn('Failed to report worker error', {
+                        service: 'SchedulerService',
+                        operation: 'reportWorkerError',
+                        error: { message: monitoringError.message || String(monitoringError) }
+                    });
                 }
             }
-            console.error('❌ Error during Telegram cache update:', error);
+            LoggerService.error('Error during Telegram cache update', {
+                service: 'SchedulerService',
+                operation: 'telegramCacheUpdate',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -5473,7 +6378,11 @@ class SchedulerService {
             this.isInitialized = false;
 
         } catch (error) {
-            console.error('❌ Error stopping Scheduler Service:', error);
+            LoggerService.error('Error stopping Scheduler Service', {
+                service: 'SchedulerService',
+                operation: 'stop',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -5496,7 +6405,10 @@ class SchedulerService {
             const portfolioData = await TradingEngine.getRealPortfolioValue();
             
             if (!portfolioData) {
-                console.warn('⚠️ No portfolio data received from Tinkoff API');
+                LoggerService.warn('No portfolio data received from Tinkoff API', {
+                    service: 'SchedulerService',
+                    operation: 'syncRealPortfolio'
+                });
                 return;
             }
             
@@ -5520,7 +6432,12 @@ class SchedulerService {
                                 calculatedPositionsValue += currentPrice * quantity;
                             }
                         } catch (error) {
-                            console.warn(`⚠️ Не удалось получить цену для ${figi}:`, error.message);
+                            LoggerService.warn('Failed to get price for figi', {
+                                service: 'SchedulerService',
+                                operation: 'getPrice',
+                                figi: figi,
+                                error: { message: error.message }
+                            });
                         }
                     }
                 }
@@ -5546,11 +6463,19 @@ class SchedulerService {
                 const StrategyAllocationService = (await import('./StrategyAllocationService.js')).default;
                 await StrategyAllocationService.updateAllocationsFromPortfolioValue(finalTotalValue);
             } catch (error) {
-                console.warn('⚠️ Failed to update strategy allocations:', error.message);
+                LoggerService.warn('Failed to update strategy allocations', {
+                    service: 'SchedulerService',
+                    operation: 'updateStrategyAllocations',
+                    error: { message: error.message }
+                });
             }
             
         } catch (error) {
-            console.error('❌ Error syncing real portfolio:', error);
+            LoggerService.error('Error syncing real portfolio', {
+                service: 'SchedulerService',
+                operation: 'syncRealPortfolio',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -5654,7 +6579,12 @@ class SchedulerService {
                     }
 
                 } catch (error) {
-                    console.error(`❌ Error backtesting strategy ${strategy.id}:`, error);
+                    LoggerService.error('Error backtesting strategy', {
+                        service: 'SchedulerService',
+                        operation: 'backtestStrategy',
+                        strategyId: strategy.id,
+                        error: { message: error.message, stack: error.stack }
+                    });
                     await OptimizedTelegramService.sendAlert(
                         'BACKTEST_ERROR',
                         `Ошибка при бэктестинге стратегии "${strategy.name}": ${error.message}`,
@@ -5717,12 +6647,20 @@ class SchedulerService {
                 try {
                     await StrategyAllocationService.rebalanceBudgetByPerformance(30, 0);
                 } catch (error) {
-                    console.error('❌ Error updating budget allocation:', error);
+                    LoggerService.error('Error updating budget allocation', {
+                        service: 'SchedulerService',
+                        operation: 'updateBudgetAllocation',
+                        error: { message: error.message, stack: error.stack }
+                    });
                 }
             }
 
         } catch (error) {
-            console.error('❌ Error in performWeeklyBacktesting:', error);
+            LoggerService.error('Error in performWeeklyBacktesting', {
+                service: 'SchedulerService',
+                operation: 'performWeeklyBacktesting',
+                error: { message: error.message, stack: error.stack }
+            });
             await OptimizedTelegramService.sendAlert(
                 'WEEKLY_BACKTEST_ERROR',
                 `Ошибка при выполнении еженедельного бэктестинга: ${error.message}`,
@@ -5871,7 +6809,11 @@ class SchedulerService {
             }
             
         } catch (error) {
-            console.error('❌ Error in performMacroDataUpdate:', error);
+            LoggerService.error('Error in performMacroDataUpdate', {
+                service: 'SchedulerService',
+                operation: 'performMacroDataUpdate',
+                error: { message: error.message, stack: error.stack }
+            });
             await OptimizedTelegramService.sendAlert(
                 'MACRO_DATA_UPDATE_ERROR',
                 `❌ Ошибка при обновлении макроэкономических данных:\n${error.message}`,
@@ -5924,7 +6866,11 @@ class SchedulerService {
                 summary
             };
         } catch (error) {
-            console.error('❌ Error in performMarketIndicesLoad:', error);
+            LoggerService.error('Error in performMarketIndicesLoad', {
+                service: 'SchedulerService',
+                operation: 'performMarketIndicesLoad',
+                error: { message: error.message, stack: error.stack }
+            });
             await OptimizedTelegramService.sendAlert(
                 'MARKET_INDICES_LOAD_ERROR',
                 `❌ Ошибка при загрузке рыночных индексов:\n${error.message}`,
@@ -5953,7 +6899,11 @@ class SchedulerService {
                     { startTime: new Date().toISOString() }
                 );
             } catch (monitoringError) {
-                console.warn('Failed to register worker in monitoring service:', monitoringError);
+                LoggerService.warn('Failed to register worker in monitoring service', {
+                    service: 'SchedulerService',
+                    operation: 'registerWorker',
+                    error: { message: String(monitoringError) }
+                });
             }
 
             const FundamentalDataService = (await import('./FundamentalDataService.js')).default;
@@ -6004,7 +6954,11 @@ class SchedulerService {
                         stats: stats
                     });
                 } catch (monitoringError) {
-                    console.warn('Failed to complete worker in monitoring service:', monitoringError);
+                    LoggerService.warn('Failed to complete worker in monitoring service', {
+                        service: 'SchedulerService',
+                        operation: 'completeWorker',
+                        error: { message: String(monitoringError) }
+                    });
                 }
             }
 
@@ -6014,7 +6968,11 @@ class SchedulerService {
                 summary
             };
         } catch (error) {
-            console.error('❌ Error in performFundamentalDataUpdate:', error);
+            LoggerService.error('Error in performFundamentalDataUpdate', {
+                service: 'SchedulerService',
+                operation: 'performFundamentalDataUpdate',
+                error: { message: error.message, stack: error.stack }
+            });
             
             // Сообщаем об ошибке воркеру
             if (workerId) {
@@ -6022,7 +6980,11 @@ class SchedulerService {
                     const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
                     await WorkerMonitoringService.reportWorkerError(workerId, error.message);
                 } catch (monitoringError) {
-                    console.warn('Failed to report worker error in monitoring service:', monitoringError);
+                    LoggerService.warn('Failed to report worker error in monitoring service', {
+                        service: 'SchedulerService',
+                        operation: 'reportWorkerError',
+                        error: { message: String(monitoringError) }
+                    });
                 }
             }
 
@@ -6059,7 +7021,13 @@ class SchedulerService {
             const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
             if (!WorkerMonitoringService.isInitialized) await WorkerMonitoringService.initialize();
             workerId = WorkerMonitoringService.registerWorker('portfolio-rebalancing', 'Ребалансировка портфеля', { stage: 'initializing' });
-        } catch (e) { console.warn('⚠️ Failed to register portfolio rebalancing worker:', e.message); }
+        } catch (e) {
+            LoggerService.warn('Failed to register portfolio rebalancing worker', {
+                service: 'SchedulerService',
+                operation: 'registerPortfolioRebalancingWorker',
+                error: { message: e.message }
+            });
+        }
         
         try {
             const PortfolioRebalancingService = (await import('./PortfolioRebalancingService.js')).default;
@@ -6095,7 +7063,11 @@ class SchedulerService {
                     );
                 }
             } else {
-                console.warn('⚠️ Portfolio rebalancing completed with warnings:', result.error || 'Unknown error');
+                LoggerService.warn('Portfolio rebalancing completed with warnings', {
+                    service: 'SchedulerService',
+                    operation: 'portfolioRebalancing',
+                    error: result.error || 'Unknown error'
+                });
                 await OptimizedTelegramService.sendAlert(
                     'PORTFOLIO_REBALANCING_WARNING',
                     `Ребалансировка портфеля: ${result.error || 'Неизвестная ошибка'}`,
@@ -6104,7 +7076,11 @@ class SchedulerService {
             }
             
         } catch (error) {
-            console.error('❌ Error performing portfolio rebalancing:', error);
+            LoggerService.error('Error performing portfolio rebalancing', {
+                service: 'SchedulerService',
+                operation: 'portfolioRebalancing',
+                error: { message: error.message, stack: error.stack }
+            });
             await OptimizedTelegramService.sendAlert('PORTFOLIO_REBALANCING_ERROR', error.message, 'error');
         }
     }
@@ -6126,7 +7102,10 @@ class SchedulerService {
             const savedPortfolio = await VirtualPortfolio.getCurrent();
             
             if (!savedPortfolio) {
-                console.warn('⚠️ No virtual portfolio found in DB, skipping update');
+                LoggerService.warn('No virtual portfolio found in DB, skipping update', {
+                    service: 'SchedulerService',
+                    operation: 'updateVirtualPortfolio'
+                });
                 return;
             }
             
@@ -6151,11 +7130,19 @@ class SchedulerService {
                     await StrategyAllocationService.updateAllocationsFromPortfolioValue(portfolioValue.totalValue);
                 }
             } catch (error) {
-                console.warn('⚠️ Failed to update strategy allocations:', error.message);
+                LoggerService.warn('Failed to update strategy allocations', {
+                    service: 'SchedulerService',
+                    operation: 'updateStrategyAllocations',
+                    error: { message: error.message }
+                });
             }
             
         } catch (error) {
-            console.error('❌ Error updating virtual portfolio:', error);
+            LoggerService.error('Error updating virtual portfolio', {
+                service: 'SchedulerService',
+                operation: 'updateVirtualPortfolio',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -6201,7 +7188,11 @@ class SchedulerService {
                 timestamp: new Date().toISOString()
             };
         } catch (error) {
-            console.error('Error getting scheduler status:', error);
+            LoggerService.error('Error getting scheduler status', {
+                service: 'SchedulerService',
+                operation: 'getStatus',
+                error: { message: error.message, stack: error.stack }
+            });
             return {
                 isInitialized: false,
                 error: error.message,

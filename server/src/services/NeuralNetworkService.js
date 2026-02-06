@@ -66,15 +66,14 @@ class NeuralNetworkService {
     // Создание архитектуры модели
     async createModel(inputShape, sequenceLength = 60) {
         try {
-            console.log(`🧠 Создание модели нейросети (NeuralNetworkService)...`);
-            console.log(`   📊 Входной размер: ${inputShape}, Длина последовательности: ${sequenceLength}`);
+            // Логирование удалено согласно рефакторингу (было console.log)
             
             // Получаем настройки из базы данных
             const nnSettings = await SettingsService.getNeuralNetworkSettings();
             const dropoutRate = nnSettings.nn_dropout_rate || 0.2;
             const learningRate = nnSettings.nn_learning_rate || 0.0005;
             
-            console.log(`   ⚙️  Параметры: dropout=${dropoutRate}, learningRate=${learningRate}`);
+            // Логирование удалено согласно рефакторингу (было console.log)
             
             const model = tf.sequential();
 
@@ -1250,7 +1249,11 @@ class NeuralNetworkService {
             // Используем новый метод с дивидендами
             const { features } = await OptimizedDataService.prepareTrainingData(candles, 60, 5, figi);
             if (!features || features.length === 0) {
-                console.error(`❌ No features prepared for PredictFromCandles (FIGI: ${figi})`);
+                LoggerService.error('No features prepared for PredictFromCandles', {
+                    service: 'NeuralNetworkService',
+                    operation: 'predictFromCandles',
+                    figi: figi
+                });
                 return { score: 0, confidence: 0, error: 'No features prepared for prediction' };
             }
             const featureVector = features[features.length - 1];
@@ -1296,7 +1299,11 @@ class NeuralNetworkService {
                 explanation: explanation
             };
         } catch (error) {
-            console.error('❌ Error in predictFromCandles:', error);
+            LoggerService.error('Error in predictFromCandles', {
+                service: 'NeuralNetworkService',
+                operation: 'predictFromCandles',
+                error: { message: error.message, stack: error.stack }
+            });
             return { score: 0, confidence: 0, error: error.message };
         }
     }
@@ -1355,7 +1362,11 @@ class NeuralNetworkService {
                     }
                 );
             } catch (monitoringError) {
-                console.warn('Failed to register portfolio analysis worker:', monitoringError);
+                LoggerService.warn('Failed to register portfolio analysis worker', {
+                    service: 'NeuralNetworkService',
+                    operation: 'registerWorker',
+                    error: { message: String(monitoringError) }
+                });
             }
 
             const worker = new Worker(workerPath, {
@@ -1383,7 +1394,11 @@ class NeuralNetworkService {
                                     recommendationsCount: msg.data.analysis?.buyRecommendations?.length || 0
                                 });
                             } catch (monitoringError) {
-                                console.warn('Failed to complete worker:', monitoringError);
+                                LoggerService.warn('Failed to complete worker', {
+                                    service: 'NeuralNetworkService',
+                                    operation: 'completeWorker',
+                                    error: { message: String(monitoringError) }
+                                });
                             }
                         }
                         resolve(msg.data.analysis);
@@ -1395,7 +1410,11 @@ class NeuralNetworkService {
                                 WorkerMonitoringService.reportWorkerError(workerId, new Error(msg.data.error));
                                 WorkerMonitoringService.completeWorker(workerId, false, { error: msg.data.error });
                             } catch (monitoringError) {
-                                console.warn('Failed to report worker error:', monitoringError);
+                                LoggerService.warn('Failed to report worker error', {
+                                    service: 'NeuralNetworkService',
+                                    operation: 'reportWorkerError',
+                                    error: { message: String(monitoringError) }
+                                });
                             }
                         }
                         reject(new Error(msg.data.error));
@@ -1409,7 +1428,11 @@ class NeuralNetworkService {
                                     metadata: { stage: msg.data.stage || 'Обработка' }
                                 });
                             } catch (monitoringError) {
-                                console.warn('Failed to update worker progress:', monitoringError);
+                                LoggerService.warn('Failed to update worker progress', {
+                                    service: 'NeuralNetworkService',
+                                    operation: 'updateWorkerProgress',
+                                    error: { message: String(monitoringError) }
+                                });
                             }
                         }
                         // Отправляем прогресс через WebSocket
@@ -1425,7 +1448,11 @@ class NeuralNetworkService {
                 });
                 
                 worker.on('error', async (error) => {
-                    console.error('❌ [Worker] Error:', error);
+                    LoggerService.error('Worker error', {
+                        service: 'NeuralNetworkService',
+                        operation: 'portfolioAnalysisWorker',
+                        error: { message: error.message, stack: error.stack }
+                    });
                     // Завершаем воркер с ошибкой
                     if (workerId) {
                         try {
@@ -1433,7 +1460,11 @@ class NeuralNetworkService {
                             WorkerMonitoringService.reportWorkerError(workerId, error);
                             WorkerMonitoringService.completeWorker(workerId, false, { error: error.message });
                         } catch (monitoringError) {
-                            console.warn('Failed to report worker error:', monitoringError);
+                            LoggerService.warn('Failed to report worker error', {
+                                service: 'NeuralNetworkService',
+                                operation: 'reportWorkerError',
+                                error: { message: String(monitoringError) }
+                            });
                         }
                     }
                     reject(error);
@@ -1450,7 +1481,11 @@ class NeuralNetworkService {
                                 WorkerMonitoringService.completeWorker(workerId, code === 0, { exitCode: code });
                             }
                         } catch (monitoringError) {
-                            console.warn('Failed to complete worker on exit:', monitoringError);
+                            LoggerService.warn('Failed to complete worker on exit', {
+                                service: 'NeuralNetworkService',
+                                operation: 'completeWorker',
+                                error: { message: String(monitoringError) }
+                            });
                         }
                     }
                     // Не считаем ошибкой завершение worker'а при остановке сервиса
@@ -1467,7 +1502,11 @@ class NeuralNetworkService {
             return result;
             
         } catch (error) {
-            console.error('❌ [Worker] Portfolio analysis failed:', error);
+            LoggerService.error('Portfolio analysis failed', {
+                service: 'NeuralNetworkService',
+                operation: 'portfolioAnalysisWorker',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         } finally {
             this.isAnalyzing = false;
@@ -1494,7 +1533,11 @@ class NeuralNetworkService {
                         }
                     }
                 } catch (err) {
-                    console.warn('Could not load model from OptimizedTrainingService:', err.message);
+                    LoggerService.warn('Could not load model from OptimizedTrainingService', {
+                        service: 'NeuralNetworkService',
+                        operation: 'loadModel',
+                        error: { message: err.message }
+                    });
                 }
             }
             
@@ -1553,7 +1596,11 @@ class NeuralNetworkService {
                         try {
                             await IntegratedAIService.initialize();
                         } catch (initError) {
-                            console.warn(`⚠️ Failed to initialize IntegratedAIService:`, initError.message);
+                            LoggerService.warn('Failed to initialize IntegratedAIService', {
+                                service: 'NeuralNetworkService',
+                                operation: 'initializeIntegratedAIService',
+                                error: { message: initError.message }
+                            });
                         }
                     }
                     
@@ -1600,7 +1647,12 @@ class NeuralNetworkService {
                     }
                 } catch (integratedError) {
                     // Fallback к обычному предсказанию при ошибке
-                    console.warn(`⚠️ IntegratedAI failed for ${instrument.ticker}, using NeuralNetwork:`, integratedError.message);
+                    LoggerService.warn('IntegratedAI failed, using NeuralNetwork', {
+                        service: 'NeuralNetworkService',
+                        operation: 'analyzeInstrument',
+                        ticker: instrument.ticker,
+                        error: { message: integratedError.message }
+                    });
                     prediction = await this.predict(instrument.figi, instrument.dividendYield);
                 }
 
@@ -1622,7 +1674,12 @@ class NeuralNetworkService {
                             );
                         }
                     } catch (priceError) {
-                        console.warn(`⚠️ [HOLD] Could not fetch price for ${instrument.ticker}:`, priceError.message);
+                        LoggerService.warn('Could not fetch price for HOLD recommendation', {
+                            service: 'NeuralNetworkService',
+                            operation: 'analyzeInstrument',
+                            ticker: instrument.ticker,
+                            error: { message: priceError.message }
+                        });
                     }
                 }
                 
@@ -1694,7 +1751,12 @@ class NeuralNetworkService {
                     });
                 }
             } catch (error) {
-                console.warn(`Could not analyze ${instrument.ticker}:`, error.message);
+                LoggerService.warn('Could not analyze instrument', {
+                    service: 'NeuralNetworkService',
+                    operation: 'analyzeInstrument',
+                    ticker: instrument.ticker,
+                    error: { message: error.message }
+                });
             }
         }
 
@@ -1716,7 +1778,11 @@ class NeuralNetworkService {
             const { ensureAssociations } = await import('../utils/ensureAssociations.js');
             await ensureAssociations();
         } catch (assocError) {
-            console.warn('⚠️ Could not ensure associations in analyzePortfolio:', assocError.message);
+            LoggerService.warn('Could not ensure associations in analyzePortfolio', {
+                service: 'NeuralNetworkService',
+                operation: 'analyzePortfolio',
+                error: { message: assocError.message }
+            });
         }
         
         // Загружаем все BUY заявки для всех FIGI одним запросом
@@ -1805,7 +1871,12 @@ class NeuralNetworkService {
                         }
                     }
                 } catch (strategyError) {
-                    console.warn(`⚠️ Could not load strategy for ${item.ticker}:`, strategyError.message);
+                    LoggerService.warn('Could not load strategy', {
+                        service: 'NeuralNetworkService',
+                        operation: 'analyzePortfolio',
+                        ticker: item.ticker,
+                        error: { message: strategyError.message }
+                    });
                 }
 
                 // Используем IntegratedAIService для получения актуального предсказания (как на странице нейросетей)
@@ -1819,7 +1890,11 @@ class NeuralNetworkService {
                         try {
                             await IntegratedAIService.initialize();
                         } catch (initError) {
-                            console.warn(`⚠️ Failed to initialize IntegratedAIService:`, initError.message);
+                            LoggerService.warn('Failed to initialize IntegratedAIService', {
+                                service: 'NeuralNetworkService',
+                                operation: 'initializeIntegratedAIService',
+                                error: { message: initError.message }
+                            });
                         }
                     }
                     
@@ -1866,7 +1941,12 @@ class NeuralNetworkService {
                     }
                 } catch (integratedError) {
                     // Fallback к обычному предсказанию при ошибке
-                    console.warn(`⚠️ IntegratedAI failed for portfolio ${item.ticker}, using NeuralNetwork:`, integratedError.message);
+                    LoggerService.warn('IntegratedAI failed for portfolio, using NeuralNetwork', {
+                        service: 'NeuralNetworkService',
+                        operation: 'analyzePortfolio',
+                        ticker: item.ticker,
+                        error: { message: integratedError.message }
+                    });
                     prediction = await this.predict(item.figi);
                 }
 
@@ -1894,7 +1974,12 @@ class NeuralNetworkService {
                             positionValue: currentPrice * item.quantity
                         };
                     } catch (budgetError) {
-                        console.warn(`⚠️ Could not get budget info for strategy ${strategyInfo.id}:`, budgetError.message);
+                        LoggerService.warn('Could not get budget info for strategy', {
+                            service: 'NeuralNetworkService',
+                            operation: 'analyzePortfolio',
+                            strategyId: strategyInfo.id,
+                            error: { message: budgetError.message }
+                        });
                     }
                 }
 
@@ -1944,7 +2029,12 @@ class NeuralNetworkService {
                 analysis.portfolioValue += currentPrice * item.quantity;
 
             } catch (error) {
-                console.warn(`Could not analyze portfolio item ${item.ticker}:`, error.message);
+                LoggerService.warn('Could not analyze portfolio item', {
+                    service: 'NeuralNetworkService',
+                    operation: 'analyzePortfolio',
+                    ticker: item.ticker,
+                    error: { message: error.message }
+                });
             }
         }
 
@@ -2016,7 +2106,12 @@ class NeuralNetworkService {
                                     });
                                 }
                             } catch (error) {
-                                console.warn(`Could not get instrument info for ${position.figi}:`, error.message);
+                                LoggerService.warn('Could not get instrument info for position', {
+                                    service: 'NeuralNetworkService',
+                                    operation: 'analyzePortfolio',
+                                    figi: position.figi,
+                                    error: { message: error.message }
+                                });
                             }
                         }
                     }
@@ -2041,7 +2136,12 @@ class NeuralNetworkService {
                                     });
                                 }
                             } catch (error) {
-                                console.warn(`Could not get instrument info for ${figi}:`, error.message);
+                                LoggerService.warn('Could not get instrument info', {
+                                    service: 'NeuralNetworkService',
+                                    operation: 'analyzePortfolio',
+                                    figi: figi,
+                                    error: { message: error.message }
+                                });
                             }
                         }
                     }
@@ -2063,7 +2163,11 @@ class NeuralNetworkService {
                 try {
                     await IntegratedAIService.initialize();
                 } catch (initError) {
-                    console.error('❌ Failed to initialize IntegratedAIService:', initError);
+                    LoggerService.error('Failed to initialize IntegratedAIService', {
+                        service: 'NeuralNetworkService',
+                        operation: 'initializeIntegratedAIService',
+                        error: { message: initError.message, stack: initError.stack }
+                    });
                     throw new Error(`Cannot perform analysis: IntegratedAIService initialization failed: ${initError.message}`);
                 }
             }
@@ -2135,14 +2239,23 @@ class NeuralNetworkService {
             try {
                 await this.saveRecommendationsToDatabase(analysis.buyRecommendations || [], analysis.sellRecommendations || []);
             } catch (recErr) {
-                console.warn('⚠️ Failed to save recommendations to Recommendations table:', recErr.message);
+                LoggerService.warn('Failed to save recommendations to Recommendations table', {
+                    service: 'NeuralNetworkService',
+                    operation: 'saveRecommendations',
+                    error: { message: recErr.message }
+                });
                 // Не прерываем выполнение, анализ сохранен в PortfolioAnalysis
             }
 
             return analysisRecord;
 
         } catch (error) {
-            console.error(`❌ Error analyzing ${portfolioType} portfolio:`, error);
+            LoggerService.error('Error analyzing portfolio', {
+                service: 'NeuralNetworkService',
+                operation: 'analyzePortfolio',
+                portfolioType: portfolioType,
+                error: { message: error.message, stack: error.stack }
+            });
             
             // Обновляем запись с ошибкой
             if (analysisRecord) {
@@ -2153,7 +2266,11 @@ class NeuralNetworkService {
                         processingTime: Date.now() - startTime
                     });
                 } catch (updateError) {
-                    console.error('Failed to update analysis record with error:', updateError);
+                    LoggerService.error('Failed to update analysis record with error', {
+                        service: 'NeuralNetworkService',
+                        operation: 'updateAnalysisRecord',
+                        error: { message: updateError.message, stack: updateError.stack }
+                    });
                 }
             }
 
@@ -2191,7 +2308,12 @@ class NeuralNetworkService {
                                     });
                                 }
                             } catch (error) {
-                                console.warn(`Could not get instrument info for ${position.figi}:`, error.message);
+                                LoggerService.warn('Could not get instrument info for position', {
+                                    service: 'NeuralNetworkService',
+                                    operation: 'analyzePortfolio',
+                                    figi: position.figi,
+                                    error: { message: error.message }
+                                });
                             }
                         }
                     }
@@ -2214,14 +2336,23 @@ class NeuralNetworkService {
                                     });
                                 }
                             } catch (error) {
-                                console.warn(`Could not get instrument info for ${figi}:`, error.message);
+                                LoggerService.warn('Could not get instrument info', {
+                                    service: 'NeuralNetworkService',
+                                    operation: 'analyzePortfolio',
+                                    figi: figi,
+                                    error: { message: error.message }
+                                });
                             }
                         }
                     }
                 }
             }
         } catch (err) {
-            console.error('❌ Failed to load portfolio positions:', err);
+            LoggerService.error('Failed to load portfolio positions', {
+                service: 'NeuralNetworkService',
+                operation: 'loadPortfolioPositions',
+                error: { message: err.message, stack: err.stack }
+            });
             throw err;
         }
 
@@ -2239,7 +2370,11 @@ class NeuralNetworkService {
             try {
                 await this.saveRecommendationsToDatabase([], result.sellRecommendations);
             } catch (dbErr) {
-                console.error('❌ [POSITIONS-ONLY] Failed to save position recommendations:', dbErr);
+                LoggerService.error('Failed to save position recommendations', {
+                    service: 'NeuralNetworkService',
+                    operation: 'savePositionRecommendations',
+                    error: { message: dbErr.message, stack: dbErr.stack }
+                });
                 throw dbErr;
             }
         }
@@ -2294,7 +2429,12 @@ class NeuralNetworkService {
                         }
                     }
                 } catch (strategyError) {
-                    console.warn(`⚠️ Could not load strategy for ${item.ticker}:`, strategyError.message);
+                    LoggerService.warn('Could not load strategy', {
+                        service: 'NeuralNetworkService',
+                        operation: 'analyzePortfolio',
+                        ticker: item.ticker,
+                        error: { message: strategyError.message }
+                    });
                 }
 
                 // Используем IntegratedAIService для получения актуального предсказания (как на странице нейросетей)
@@ -2308,7 +2448,11 @@ class NeuralNetworkService {
                         try {
                             await IntegratedAIService.initialize();
                         } catch (initError) {
-                            console.warn(`⚠️ Failed to initialize IntegratedAIService:`, initError.message);
+                            LoggerService.warn('Failed to initialize IntegratedAIService', {
+                                service: 'NeuralNetworkService',
+                                operation: 'initializeIntegratedAIService',
+                                error: { message: initError.message }
+                            });
                         }
                     }
                     
@@ -2355,7 +2499,12 @@ class NeuralNetworkService {
                     }
                 } catch (integratedError) {
                     // Fallback к обычному предсказанию при ошибке
-                    console.warn(`⚠️ IntegratedAI failed for ${item.ticker}, using NeuralNetwork:`, integratedError.message);
+                    LoggerService.warn('IntegratedAI failed, using NeuralNetwork', {
+                        service: 'NeuralNetworkService',
+                        operation: 'analyzePositionsOnly',
+                        ticker: item.ticker,
+                        error: { message: integratedError.message }
+                    });
                     prediction = await this.predict(item.figi);
                 }
                 
@@ -2385,7 +2534,12 @@ class NeuralNetworkService {
                             positionValue: currentPrice * item.quantity
                         };
                     } catch (budgetError) {
-                        console.warn(`⚠️ Could not get budget info for strategy ${strategyInfo.id}:`, budgetError.message);
+                        LoggerService.warn('Could not get budget info for strategy', {
+                            service: 'NeuralNetworkService',
+                            operation: 'analyzePortfolio',
+                            strategyId: strategyInfo.id,
+                            error: { message: budgetError.message }
+                        });
                     }
                 }
 
@@ -2429,7 +2583,12 @@ class NeuralNetworkService {
                 }
 
             } catch (err) {
-                console.warn(`Could not analyze ${item.ticker}:`, err.message);
+                LoggerService.warn('Could not analyze item', {
+                    service: 'NeuralNetworkService',
+                    operation: 'analyzePositionsOnly',
+                    ticker: item.ticker,
+                    error: { message: err.message }
+                });
             }
         }
 
@@ -2464,7 +2623,11 @@ class NeuralNetworkService {
             try {
                 await this.saveRecommendationsToDatabase([], sellRecommendations);
             } catch (dbErr) {
-                console.error('❌ [POSITIONS-ONLY] Failed to save position recommendations:', dbErr);
+                LoggerService.error('Failed to save position recommendations', {
+                    service: 'NeuralNetworkService',
+                    operation: 'savePositionRecommendations',
+                    error: { message: dbErr.message, stack: dbErr.stack }
+                });
                 throw dbErr; // Пробрасываем ошибку, чтобы пользователь знал о проблеме
             }
         }
@@ -2547,7 +2710,11 @@ class NeuralNetworkService {
                 }
             };
         } catch (error) {
-            console.error('Error getting neural network metrics:', error);
+            LoggerService.error('Error getting neural network metrics', {
+                service: 'NeuralNetworkService',
+                operation: 'getMetrics',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -2672,7 +2839,11 @@ class NeuralNetworkService {
             };
 
         } catch (error) {
-            console.error('Error getting feature importance:', error);
+            LoggerService.error('Error getting feature importance', {
+                service: 'NeuralNetworkService',
+                operation: 'getFeatureImportance',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -2712,7 +2883,11 @@ class NeuralNetworkService {
                 webSocketService.broadcastStatus();
             }
         } catch (error) {
-            console.warn('Failed to broadcast neural network status:', error.message);
+            LoggerService.warn('Failed to broadcast neural network status', {
+                service: 'NeuralNetworkService',
+                operation: 'broadcastStatus',
+                error: { message: error.message }
+            });
         }
 
         // Уведомления о смене статуса теперь обрабатываются в IntegratedAIService
@@ -2798,7 +2973,11 @@ class NeuralNetworkService {
                 { startTime: new Date().toISOString() }
             );
         } catch (monitoringError) {
-            console.warn('Failed to register market analysis worker:', monitoringError);
+            LoggerService.warn('Failed to register market analysis worker', {
+                service: 'NeuralNetworkService',
+                operation: 'registerWorker',
+                error: { message: String(monitoringError) }
+            });
         }
 
         // ВАЖНО: Убеждаемся, что IntegratedAIService инициализирован перед анализом
@@ -2838,7 +3017,11 @@ class NeuralNetworkService {
                     metadata: { stage: 'Инициализация' }
                 });
             } catch (monitoringError) {
-                console.warn('Failed to update worker progress:', monitoringError);
+                LoggerService.warn('Failed to update worker progress', {
+                    service: 'NeuralNetworkService',
+                    operation: 'updateWorkerProgress',
+                    error: { message: String(monitoringError) }
+                });
             }
         }
 
@@ -2975,7 +3158,11 @@ class NeuralNetworkService {
                         metadata: { stage: 'Обработка портфеля', portfolioItems: portfolioItems.length }
                     });
                 } catch (monitoringError) {
-                    console.warn('Failed to update worker progress:', monitoringError);
+                    LoggerService.warn('Failed to update worker progress', {
+                    service: 'NeuralNetworkService',
+                    operation: 'updateWorkerProgress',
+                    error: { message: String(monitoringError) }
+                });
                 }
             }
 
@@ -3133,7 +3320,11 @@ class NeuralNetworkService {
                         }
                     });
                 } catch (monitoringError) {
-                    console.warn('Failed to update worker progress:', monitoringError);
+                    LoggerService.warn('Failed to update worker progress', {
+                    service: 'NeuralNetworkService',
+                    operation: 'updateWorkerProgress',
+                    error: { message: String(monitoringError) }
+                });
                 }
             }
 
@@ -3165,7 +3356,11 @@ class NeuralNetworkService {
                     WorkerMonitoringService.reportWorkerError(workerId, error);
                     WorkerMonitoringService.completeWorker(workerId, false, { error: error.message });
                 } catch (monitoringError) {
-                    console.warn('Failed to report worker error:', monitoringError);
+                    LoggerService.warn('Failed to report worker error', {
+                        service: 'NeuralNetworkService',
+                        operation: 'reportWorkerError',
+                        error: { message: String(monitoringError) }
+                    });
                 }
             }
 
@@ -3208,7 +3403,11 @@ class NeuralNetworkService {
                         });
                     }
                 } catch (monitoringError) {
-                    console.warn('Failed to complete worker:', monitoringError);
+                    LoggerService.warn('Failed to complete worker', {
+                        service: 'NeuralNetworkService',
+                        operation: 'completeWorker',
+                        error: { message: String(monitoringError) }
+                    });
                 }
             }
 
@@ -3230,7 +3429,11 @@ class NeuralNetworkService {
                     });
                 }
             } catch (wsError) {
-                console.warn('Failed to broadcast analysis status (finish):', wsError.message);
+                LoggerService.warn('Failed to broadcast analysis status (finish)', {
+                    service: 'NeuralNetworkService',
+                    operation: 'broadcastAnalysisStatus',
+                    error: { message: wsError.message }
+                });
             }
         }
     }
@@ -3262,14 +3465,20 @@ class NeuralNetworkService {
             for (const rec of buyRecommendations) {
                 // Проверяем наличие instrument
                 if (!rec.instrument) {
-                    console.warn('⚠️ Skipping recommendation: missing instrument', rec);
+                    LoggerService.warn('Skipping recommendation: missing instrument', {
+                        service: 'NeuralNetworkService',
+                        operation: 'saveRecommendations',
+                        recommendation: rec
+                    });
                     continue;
                 }
                 
                 // Получаем данные инструмента из Sequelize модели или обычного объекта
                 const instrumentData = this.getInstrumentData(rec.instrument);
                 if (!instrumentData || !instrumentData.figi) {
-                    console.warn('⚠️ Skipping recommendation: missing figi', {
+                    LoggerService.warn('Skipping recommendation: missing figi', {
+                        service: 'NeuralNetworkService',
+                        operation: 'saveRecommendations',
                         instrument: rec.instrument,
                         instrumentData: instrumentData
                     });
@@ -3464,11 +3673,22 @@ class NeuralNetworkService {
                                 { where: { figi } }
                             );
                         } else if (recommendation === 'HOLD') {
-                            console.warn(`⚠️ Cannot save HOLD recommendation without price for ${figi} (${instrumentData.ticker || 'UNKNOWN'})`);
+                            LoggerService.warn('Cannot save HOLD recommendation without price', {
+                                service: 'NeuralNetworkService',
+                                operation: 'saveRecommendations',
+                                figi: figi,
+                                ticker: instrumentData.ticker || 'UNKNOWN'
+                            });
                         }
                     } catch (priceError) {
                         if (recommendation === 'HOLD') {
-                            console.warn(`⚠️ Price fetch failed for HOLD recommendation ${figi} (${instrumentData.ticker || 'UNKNOWN'}):`, priceError.message);
+                            LoggerService.warn('Price fetch failed for HOLD recommendation', {
+                                service: 'NeuralNetworkService',
+                                operation: 'saveRecommendations',
+                                figi: figi,
+                                ticker: instrumentData.ticker || 'UNKNOWN',
+                                error: { message: priceError.message }
+                            });
                         }
                     }
                 }
@@ -3476,7 +3696,12 @@ class NeuralNetworkService {
                 // Для HOLD рекомендаций без цены - логируем предупреждение, но все равно сохраняем
                 // Пользователь должен видеть рекомендацию, даже если цена временно недоступна
                 if (recommendation === 'HOLD' && (!currentPrice || currentPrice === 0 || isNaN(currentPrice))) {
-                    console.warn(`⚠️ Saving HOLD recommendation for ${figi} (${instrumentData.ticker || 'UNKNOWN'}) WITHOUT price - price will be 0`);
+                    LoggerService.warn('Saving HOLD recommendation WITHOUT price - price will be 0', {
+                        service: 'NeuralNetworkService',
+                        operation: 'saveRecommendations',
+                        figi: figi,
+                        ticker: instrumentData.ticker || 'UNKNOWN'
+                    });
                     // Устанавливаем цену в 0, чтобы рекомендация была сохранена
                     // На фронтенде кнопка "Купить" будет отключена для таких рекомендаций
                     currentPrice = 0;
@@ -3580,7 +3805,11 @@ class NeuralNetworkService {
                             });
                         }
                     } catch (wsError) {
-                        console.warn('⚠️ Could not broadcast trading signal:', wsError.message);
+                        LoggerService.warn('Could not broadcast trading signal', {
+                            service: 'NeuralNetworkService',
+                            operation: 'broadcastTradingSignal',
+                            error: { message: wsError.message }
+                        });
                     }
 
                     // Автоматическое создание заявки для высокоуверенных сигналов (только для новых)
@@ -3606,7 +3835,11 @@ class NeuralNetworkService {
                                     agreement = integratedRec.agreement || null;
                                 }
                             } catch (error) {
-                                console.warn('⚠️ Could not get agreement for auto-trade:', error.message);
+                                LoggerService.warn('Could not get agreement for auto-trade', {
+                                    service: 'NeuralNetworkService',
+                                    operation: 'getAgreementForAutoTrade',
+                                    error: { message: error.message }
+                                });
                             }
 
                             const meetsAgreement = agreement === null || agreement >= minAgreement;
@@ -3619,7 +3852,11 @@ class NeuralNetworkService {
                             }
                         }
                     } catch (autoTradeError) {
-                        console.warn('⚠️ Could not auto-create trading request:', autoTradeError.message);
+                        LoggerService.warn('Could not auto-create trading request', {
+                            service: 'NeuralNetworkService',
+                            operation: 'autoCreateTradingRequest',
+                            error: { message: autoTradeError.message }
+                        });
                         // Не прерываем выполнение, если не удалось создать заявку
                     }
                 }
@@ -3629,14 +3866,19 @@ class NeuralNetworkService {
             for (const rec of sellRecommendations) {
                 let instrument = rec.instrument || rec.item;
                 if (!instrument) {
-                    console.warn('⚠️ Skipping SELL recommendation: missing instrument/item');
+                    LoggerService.warn('Skipping SELL recommendation: missing instrument/item', {
+                        service: 'NeuralNetworkService',
+                        operation: 'saveRecommendations'
+                    });
                     continue;
                 }
                 
                 // Получаем данные инструмента из Sequelize модели или обычного объекта
                 let instrumentData = this.getInstrumentData(instrument);
                 if (!instrumentData || !instrumentData.figi) {
-                    console.warn('⚠️ Skipping SELL recommendation: missing figi', {
+                    LoggerService.warn('Skipping SELL recommendation: missing figi', {
+                        service: 'NeuralNetworkService',
+                        operation: 'saveRecommendations',
                         instrument: instrument,
                         instrumentData: instrumentData
                     });
@@ -3899,7 +4141,11 @@ class NeuralNetworkService {
                             });
                         }
                     } catch (wsError) {
-                        console.warn('⚠️ Could not broadcast trading signal:', wsError.message);
+                        LoggerService.warn('Could not broadcast trading signal', {
+                            service: 'NeuralNetworkService',
+                            operation: 'broadcastTradingSignal',
+                            error: { message: wsError.message }
+                        });
                     }
                 }
             }
@@ -3918,11 +4164,19 @@ class NeuralNetworkService {
                     });
                 }
             } catch (wsError) {
-                console.warn('Failed to broadcast recommendations update via WebSocket:', wsError.message);
+                LoggerService.warn('Failed to broadcast recommendations update via WebSocket', {
+                    service: 'NeuralNetworkService',
+                    operation: 'broadcastRecommendations',
+                    error: { message: wsError.message }
+                });
             }
 
         } catch (error) {
-            console.error('❌ Error saving recommendations to database:', error);
+            LoggerService.error('Error saving recommendations to database', {
+                service: 'NeuralNetworkService',
+                operation: 'saveRecommendations',
+                error: { message: error.message, stack: error.stack }
+            });
         }
     }
 
@@ -3985,7 +4239,11 @@ class NeuralNetworkService {
                     // Не выводим предупреждение, чтобы не засорять логи
                 }
             } catch (err) {
-                console.warn('⚠️ Ошибка при поиске моделей:', err.message);
+                        LoggerService.warn('Ошибка при поиске моделей', {
+                            service: 'NeuralNetworkService',
+                            operation: 'findModels',
+                            error: { message: err.message }
+                        });
             }
         }
         
@@ -4046,7 +4304,11 @@ class NeuralNetworkService {
                 successfulPredictions: this.successfulPredictions || 0
             };
         } catch (error) {
-            console.error('Error in getModelStatus:', error);
+            LoggerService.error('Error in getModelStatus', {
+                service: 'NeuralNetworkService',
+                operation: 'getModelStatus',
+                error: { message: error.message, stack: error.stack }
+            });
             return {
                 isLoaded: false,
                 isTraining: false,
@@ -4077,7 +4339,11 @@ class NeuralNetworkService {
 
             return explanation;
         } catch (error) {
-            console.error('Error generating explanation:', error);
+            LoggerService.error('Error generating explanation', {
+                service: 'NeuralNetworkService',
+                operation: 'generateExplanation',
+                error: { message: error.message, stack: error.stack }
+            });
             return {
                 summary: 'Анализ недоступен',
                 confidence: 'Низкая',
@@ -4171,7 +4437,11 @@ class NeuralNetworkService {
                 status: this.status
             };
         } catch (error) {
-            console.error('❌ Error stopping training:', error);
+            LoggerService.error('Error stopping training', {
+                service: 'NeuralNetworkService',
+                operation: 'stopTraining',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -4204,7 +4474,11 @@ class NeuralNetworkService {
                         try {
                             worker.terminate();
                         } catch (error) {
-                            console.warn('⚠️ Error terminating worker:', error.message);
+                            LoggerService.warn('Error terminating worker', {
+                                service: 'NeuralNetworkService',
+                                operation: 'terminateWorker',
+                                error: { message: error.message }
+                            });
                         }
                     }
                 });
@@ -4212,7 +4486,11 @@ class NeuralNetworkService {
             }
             
         } catch (error) {
-            console.error('❌ Error stopping Neural Network Service:', error);
+            LoggerService.error('Error stopping Neural Network Service', {
+                service: 'NeuralNetworkService',
+                operation: 'stop',
+                error: { message: error.message, stack: error.stack }
+            });
             // Не пробрасываем ошибку дальше при остановке
         } finally {
             this.isStopping = false;

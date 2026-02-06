@@ -64,8 +64,8 @@ class OptimizedTrainingService {
     async trainInstrument(figi, options = {}) {
         const {
             days = 180,
-            epochs = 50,
-            batchSize = 16,
+            epochs = 30, // Уменьшено с 50 до 30 для предотвращения переобучения
+            batchSize = 32, // Увеличено с 16 до 32 для более стабильного обучения
             useAdvancedFeatures = true,
             enableValidation = true,
             useWorker = true
@@ -120,16 +120,67 @@ class OptimizedTrainingService {
                 throw new Error('No features prepared');
             }
 
+            // 4.0. Проверка качества данных перед обучением
+            const dataQuality = this.validateDataQuality(features, labels);
+            if (!dataQuality.valid) {
+                LoggerService.warn('Data quality issues detected', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'trainInstrument',
+                    figi,
+                    issues: dataQuality.issues,
+                    warnings: dataQuality.warnings,
+                    stats: dataQuality.stats
+                });
+                
+                // Если есть критические проблемы, прерываем обучение
+                const criticalIssues = dataQuality.issues.filter(issue => 
+                    issue.includes('Empty') || 
+                    issue.includes('Mismatch') || 
+                    issue.includes('Insufficient samples per class')
+                );
+                
+                if (criticalIssues.length > 0) {
+                    return {
+                        success: false,
+                        figi,
+                        error: `Data quality check failed: ${criticalIssues.join('; ')}`,
+                        reason: 'DATA_QUALITY_FAILED',
+                        dataQuality
+                    };
+                }
+            } else if (dataQuality.warnings.length > 0) {
+                LoggerService.info('Data quality warnings', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'trainInstrument',
+                    figi,
+                    warnings: dataQuality.warnings
+                });
+            }
+
             // 4.1. Разделение на train/validation/test (Фаза 2, задача 2.4.1)
-            const { trainValidationTestSplit, timeBasedSplit } = await import('../utils/dataSplitUtils.js');
+            const { trainValidationTestSplit, timeBasedSplit, stratifiedSplit } = await import('../utils/dataSplitUtils.js');
             const useTimeBasedSplit = options.timeBasedSplit !== false; // По умолчанию true для временных рядов
+            const useStratifiedSplit = options.useStratifiedSplit === true; // Опционально: использовать stratified split для балансировки классов
             
             let dataSplit;
-            if (useTimeBasedSplit) {
-                dataSplit = timeBasedSplit(features, labels, {
+            if (useStratifiedSplit && !useTimeBasedSplit) {
+                // Используем stratified split для балансировки классов (только если не time-based)
+                LoggerService.info('Using stratified split for class balancing', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'trainInstrument',
+                    figi
+                });
+                dataSplit = stratifiedSplit(features, labels, {
                     trainRatio: options.trainRatio || 0.7,
                     validationRatio: options.validationRatio || 0.15,
                     testRatio: options.testRatio || 0.15
+                });
+            } else if (useTimeBasedSplit) {
+                dataSplit = timeBasedSplit(features, labels, {
+                    trainRatio: options.trainRatio || 0.7,
+                    validationRatio: options.validationRatio || 0.15,
+                    testRatio: options.testRatio || 0.15,
+                    gapDays: options.gapDays || 5 // Gap между train и validation для предотвращения data leakage
                 });
             } else {
                 dataSplit = trainValidationTestSplit(features, labels, {
@@ -150,19 +201,116 @@ class OptimizedTrainingService {
 
             // 5. Пытаемся загрузить существующую модель (тёплый старт), иначе создаем новую
             const inputSize = trainFeatures[0].length;
+            
+            // Автоматически определяем, нужен ли focal loss на основе дисбаланса классов
+            const positiveCount = trainLabels.filter(l => l === 1).length;
+            const negativeCount = trainLabels.filter(l => l === 0).length;
+            const totalCount = trainLabels.length;
+            const classImbalance = Math.abs(positiveCount - negativeCount) / totalCount;
+            const useFocalLoss = options.useFocalLoss !== false && classImbalance > 0.3; // Автоматически используем focal loss при дисбалансе > 30%
+            
+            // Применяем SMOTE при сильном дисбалансе (>70%)
+            let finalTrainFeatures = trainFeatures;
+            let finalTrainLabels = trainLabels;
+            if (options.useSMOTE !== false && classImbalance > 0.7) {
+                LoggerService.info('Applying SMOTE due to severe class imbalance', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'trainInstrument',
+                    figi,
+                    classImbalance: (classImbalance * 100).toFixed(2) + '%',
+                    positiveCount,
+                    negativeCount
+                });
+                
+                const smoteResult = this.applySMOTE(trainFeatures, trainLabels, {
+                    k: 5,
+                    ratio: 0.8 // Целевое соотношение 80% (не полный баланс, чтобы не переобучить)
+                });
+                
+                finalTrainFeatures = smoteResult.features;
+                finalTrainLabels = smoteResult.labels;
+            }
+            
+            if (useFocalLoss && classImbalance > 0.3) {
+                LoggerService.info('Using focal loss due to class imbalance', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'trainInstrument',
+                    figi,
+                    classImbalance: (classImbalance * 100).toFixed(2) + '%',
+                    positiveCount,
+                    negativeCount
+                });
+            }
+
+            // 5.0. Вычисление адаптивных параметров обучения
+            // Сначала пытаемся загрузить сохраненные лучшие параметры
+            const savedParams = await this.loadBestHyperparameters();
+            
+            const adaptiveParams = this.calculateAdaptiveTrainingParams(
+                finalTrainFeatures.length, // Используем финальные фичи (после SMOTE, если применен)
+                inputSize,
+                classImbalance
+            );
+            
+            // Используем сохраненные параметры, если они есть, иначе адаптивные
+            const finalEpochs = options.epochs !== undefined 
+                ? options.epochs 
+                : (savedParams?.epochs || adaptiveParams.epochs);
+            const finalBatchSize = options.batchSize !== undefined 
+                ? options.batchSize 
+                : (savedParams?.batchSize || adaptiveParams.batchSize);
+            const finalLearningRate = savedParams?.learningRate || adaptiveParams.learningRate;
+            
+            if (savedParams) {
+                LoggerService.info('Using saved best hyperparameters', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'trainInstrument',
+                    figi,
+                    savedParams
+                });
+            }
+            
+            LoggerService.info('Training parameters', {
+                service: 'OptimizedTrainingService',
+                operation: 'trainInstrument',
+                figi,
+                epochs: finalEpochs,
+                batchSize: finalBatchSize,
+                learningRate: finalLearningRate,
+                dataSize: trainFeatures.length,
+                classImbalance: (classImbalance * 100).toFixed(2) + '%',
+                adaptive: options.epochs === undefined || options.batchSize === undefined
+            });
+            
             let model = await this.loadModel(figi, inputSize);
             if (!model) {
-                model = await this.createOptimizedModel(inputSize);
+                model = await this.createOptimizedModel(inputSize, useFocalLoss, finalLearningRate);
+            } else if (useFocalLoss) {
+                // Если модель загружена, но нужен focal loss, перекомпилируем с новой loss функцией
+                const focalLoss = this.createFocalLoss(0.25, 2.0);
+                model.compile({
+                    optimizer: tf.train.adam(finalLearningRate),
+                    loss: focalLoss,
+                    metrics: ['accuracy'] // F1-score, precision, recall вычисляются вручную
+                });
+            } else {
+                // Обновляем learning rate, если он изменился
+                model.compile({
+                    optimizer: tf.train.adam(finalLearningRate),
+                    loss: 'binaryCrossentropy',
+                    metrics: ['accuracy'] // F1-score, precision, recall вычисляются вручную
+                });
             }
 
             // 6. Обучение на train set с валидацией на validation set
+            // Используем финальные фичи (после SMOTE, если применен)
             let trainingResult;
             if (useWorker) {
                 try {
                     // Для воркера объединяем train и validation (воркер сам разделит через validationSplit)
-                    const combinedFeatures = [...trainFeatures, ...validationFeatures];
-                    const combinedLabels = [...trainLabels, ...validationLabels];
-                    trainingResult = await this.trainModelViaWorker(combinedFeatures, combinedLabels, epochs, batchSize, 'nn');
+                    const combinedFeatures = [...finalTrainFeatures, ...validationFeatures];
+                    const combinedLabels = [...finalTrainLabels, ...validationLabels];
+                    trainingResult = await this.trainModelViaWorker(combinedFeatures, combinedLabels, finalEpochs, finalBatchSize, 'nn');
                 } catch (workerError) {
                     if (LoggerService.isInitialized) {
                         LoggerService.error('Worker training failed, falling back to local', {
@@ -173,33 +321,62 @@ class OptimizedTrainingService {
                         });
                     }
                     // Локальное обучение с явным validation set
-                    trainingResult = await this.trainModel(model, [...trainFeatures, ...validationFeatures], [...trainLabels, ...validationLabels], epochs, batchSize);
+                    trainingResult = await this.trainModel(model, [...finalTrainFeatures, ...validationFeatures], [...finalTrainLabels, ...validationLabels], finalEpochs, finalBatchSize);
                 }
             } else {
                 // Локальное обучение - используем train + validation вместе (trainModel сам разделит через validationData)
                 // Но для правильной валидации на validation set, создаем отдельные тензоры
                 trainingResult = await this.trainModelWithExplicitValidation(
                     model, 
-                    trainFeatures, 
-                    trainLabels, 
+                    finalTrainFeatures, 
+                    finalTrainLabels, 
                     validationFeatures, 
                     validationLabels, 
-                    epochs, 
-                    batchSize
+                    finalEpochs, 
+                    finalBatchSize
                 );
             }
 
             // 7. Финальная оценка на test set
             let testResult = null;
             if (enableValidation && testFeatures.length > 0) {
-                testResult = await this.validateModel(model, testFeatures, testLabels);
+                // Используем calculateMetrics для получения всех метрик
+                testResult = await this.calculateMetrics(model, testFeatures, testLabels);
             }
             
             // Для обратной совместимости используем testResult как validationResult
             const validationResult = testResult;
 
-            // 6. Сохраняем модель
-            await this.saveModel(figi, model);
+            // 6. Сохраняем модель с метаданными
+            const saveMetadata = {
+                trainingMetrics: trainingResult ? {
+                    finalLoss: trainingResult.finalLoss,
+                    finalAccuracy: trainingResult.finalAccuracy
+                } : null,
+                validationMetrics: validationResult ? {
+                    f1: validationResult.f1,
+                    precision: validationResult.precision,
+                    recall: validationResult.recall,
+                    auc: validationResult.auc,
+                    accuracy: validationResult.accuracy,
+                    directionAccuracy: validationResult.directionAccuracy,
+                    classImbalance: validationResult.classImbalance
+                } : null,
+                trainingParams: {
+                    epochs: finalEpochs,
+                    batchSize: finalBatchSize,
+                    learningRate: finalLearningRate,
+                    useFocalLoss,
+                    dataSize: trainFeatures.length,
+                    featureSize: inputSize
+                },
+                dataQuality: dataQuality ? {
+                    valid: dataQuality.valid,
+                    warnings: dataQuality.warnings.length,
+                    issues: dataQuality.issues.length
+                } : null
+            };
+            await this.saveModel(figi, model, saveMetadata);
             
             // 6.0. Обновляем модель в NeuralNetworkService для использования в анализе
             try {
@@ -216,23 +393,26 @@ class OptimizedTrainingService {
                 }
             }
 
-            // 6.1. Условительное сохранение лучшей модели по вал. accuracy
-            if (validationResult && typeof validationResult.accuracy === 'number') {
-                const currentAccuracy = validationResult.accuracy;
+            // 6.1. Условительное сохранение лучшей модели по F1-score (основная метрика)
+            if (validationResult && typeof validationResult.f1 === 'number') {
+                const currentF1 = validationResult.f1;
                 const bestMeta = await this.loadBestMeta(figi);
-                const bestAcc = bestMeta?.bestAccuracy ?? -Infinity;
-                if (currentAccuracy > bestAcc) {
-                    await this.saveBestModel(figi, model, currentAccuracy);
+                const bestF1 = bestMeta?.bestF1 ?? -Infinity;
+                if (currentF1 > bestF1) {
+                    await this.saveBestModel(figi, model, currentF1, 'f1');
                 }
             }
 
             // 6.2. Проверка деградации и восстановление best-модели при необходимости
-            if (validationResult && typeof validationResult.accuracy === 'number') {
+            // Используем F1-score как основную метрику для проверки деградации
+            if (validationResult && typeof validationResult.f1 === 'number') {
                 const currentMetrics = {
-                    accuracy: validationResult.accuracy,
+                    f1: validationResult.f1, // Основная метрика
+                    accuracy: validationResult.accuracy || 0,
                     precision: validationResult.precision || 0,
                     recall: validationResult.recall || 0,
-                    f1: validationResult.f1 || 0
+                    directionAccuracy: validationResult.directionAccuracy || 0,
+                    classImbalance: validationResult.classImbalance || 0
                 };
                 await this.checkDegradationAndRestore(figi, model, currentMetrics);
             }
@@ -256,6 +436,25 @@ class OptimizedTrainingService {
 
             // Мониторинг воркера обрабатывается внутри trainModelViaWorker
 
+            // Логируем метрики для анализа
+            if (validationResult) {
+                LoggerService.info('Training metrics', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'trainInstrument',
+                    figi,
+                    metrics: {
+                        f1: validationResult.f1?.toFixed(4) || 'N/A',
+                        precision: validationResult.precision?.toFixed(4) || 'N/A',
+                        recall: validationResult.recall?.toFixed(4) || 'N/A',
+                        accuracy: validationResult.accuracy?.toFixed(4) || 'N/A',
+                        directionAccuracy: validationResult.directionAccuracy?.toFixed(4) || 'N/A',
+                        auc: validationResult.auc?.toFixed(4) || 'N/A',
+                        classImbalance: validationResult.classImbalance?.toFixed(4) || 'N/A',
+                        classDistribution: validationResult.classDistribution || {}
+                    }
+                });
+            }
+
             return {
                 success: true,
                 figi,
@@ -267,8 +466,13 @@ class OptimizedTrainingService {
                 trainSize: trainFeatures.length,
                 validationSize: validationFeatures.length,
                 testSize: testFeatures.length,
-                accuracy: trainingResult.finalAccuracy || 0,
-                testAccuracy: testResult?.accuracy || null
+                // Основные метрики
+                f1: validationResult?.f1 || testResult?.f1 || null,
+                accuracy: validationResult?.accuracy || testResult?.accuracy || trainingResult.finalAccuracy || 0,
+                directionAccuracy: validationResult?.directionAccuracy || testResult?.directionAccuracy || null,
+                // Для обратной совместимости
+                testAccuracy: testResult?.accuracy || null,
+                testF1: testResult?.f1 || null
             };
 
         } catch (error) {
@@ -339,17 +543,24 @@ class OptimizedTrainingService {
             const name = typeof instrument === 'string' ? figi : instrument.name;
             
             try {
-                console.log(`📊 [TRAINING] Starting training ${index + 1}/${instruments.length}: ${name || figi.substring(0, 10)}`);
+                 
                 
                 const result = await this.trainInstrument(figi, options);
                 
                 if (result.success) {
                     results.push(result);
                     this.trainingProgress.completedInstruments++;
-                    console.log(`✅ [TRAINING] Completed ${index + 1}/${instruments.length}: ${name || figi.substring(0, 10)} (accuracy: ${(result.accuracy * 100).toFixed(2)}%)`);
+                     
                 } else {
                     errors.push({ figi, name, error: result.error || 'Training failed' });
-                    console.warn(`⚠️ [TRAINING] Failed ${index + 1}/${instruments.length}: ${name || figi.substring(0, 10)} - ${result.error}`);
+                    LoggerService.warn('Training failed', {
+                        service: 'OptimizedTrainingService',
+                        operation: 'trainInstrument',
+                        index: index + 1,
+                        total: instruments.length,
+                        instrument: name || figi.substring(0, 10),
+                        error: result.error
+                    });
                 }
                 
                 // Обновляем прогресс в TrainingStatusService
@@ -366,7 +577,14 @@ class OptimizedTrainingService {
                 
             } catch (error) {
                 errors.push({ figi, name, error: error.message });
-                console.error(`❌ [TRAINING] Error training ${index + 1}/${instruments.length}: ${name || figi.substring(0, 10)} - ${error.message}`);
+                LoggerService.error('Error training instrument', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'trainInstrument',
+                    index: index + 1,
+                    total: instruments.length,
+                    instrument: name || figi.substring(0, 10),
+                    error: { message: error.message, stack: error.stack }
+                });
                 
                 if (LoggerService.isInitialized) {
                     LoggerService.error('Failed training for instrument', {
@@ -391,14 +609,19 @@ class OptimizedTrainingService {
                     const nextPromise = processInstrument(nextInstrument, nextIndex);
                     allPromises.push(nextPromise);
                     nextPromise.catch(err => {
-                        console.error(`❌ [TRAINING] Error in parallel training for index ${nextIndex}:`, err.message);
+                        LoggerService.error('Error in parallel training', {
+                            service: 'OptimizedTrainingService',
+                            operation: 'parallelTraining',
+                            index: nextIndex,
+                            error: { message: err.message, stack: err.stack }
+                        });
                     });
                 }
             }
         };
 
         // Запускаем первые maxConcurrent обучений
-        console.log(`🚀 [TRAINING] Starting parallel training: ${Math.min(maxConcurrent, instruments.length)} concurrent, ${instruments.length} total`);
+         
         
         for (let i = 0; i < Math.min(maxConcurrent, instruments.length); i++) {
             currentIndex = i + 1; // Следующий индекс после текущего
@@ -408,7 +631,7 @@ class OptimizedTrainingService {
         }
 
         // Ждем завершения ВСЕХ промисов (включая те, что запускаются в finally)
-        console.log(`⏳ [TRAINING] Waiting for ${allPromises.length} training promises to complete...`);
+         
         await Promise.all(allPromises);
 
         // Дополнительная проверка на случай, если что-то осталось (защита от зацикливания)
@@ -420,9 +643,14 @@ class OptimizedTrainingService {
         }
         
         if (activeTrainings > 0) {
-            console.warn(`⚠️ [TRAINING] Warning: ${activeTrainings} active trainings still running after ${waitCount * 0.1}s timeout`);
+            LoggerService.warn('Active trainings still running after timeout', {
+                service: 'OptimizedTrainingService',
+                operation: 'waitForTraining',
+                activeTrainings: activeTrainings,
+                timeout: waitCount * 0.1
+            });
         } else {
-            console.log(`✅ [TRAINING] All trainings completed, activeTrainings=${activeTrainings}`);
+             
         }
 
         const summary = {
@@ -435,7 +663,7 @@ class OptimizedTrainingService {
             errors
         };
 
-        console.log(`📊 [TRAINING] Training summary: ${results.length} successful, ${errors.length} failed out of ${instruments.length} total`);
+         
 
         // Завершаем обучение в TrainingStatusService
         if (TrainingStatusService) {
@@ -533,7 +761,11 @@ class OptimizedTrainingService {
 
             return { features, labels };
         } catch (error) {
-            console.warn('Error preparing features:', error.message);
+            LoggerService.warn('Error preparing features', {
+                service: 'OptimizedTrainingService',
+                operation: 'prepareFeatures',
+                error: { message: error.message }
+            });
             return { features: [], labels: [] };
         }
     }
@@ -558,19 +790,65 @@ class OptimizedTrainingService {
     }
 
     /**
+     * Focal Loss для борьбы с дисбалансом классов
+     * Фокусируется на сложных примерах, уменьшая вес легких примеров
+     * @param {number} alpha - Весовой коэффициент для класса (0.25 по умолчанию)
+     * @param {number} gamma - Фокусирующий параметр (2.0 по умолчанию)
+     * @returns {Function} Функция потерь для TensorFlow.js
+     */
+    createFocalLoss(alpha = 0.25, gamma = 2.0) {
+        return (yTrue, yPred) => {
+            // Ограничиваем предсказания для численной стабильности
+            const epsilon = 1e-7;
+            const clippedPred = tf.clipByValue(yPred, epsilon, 1 - epsilon);
+            
+            // Вычисляем p_t: вероятность правильного класса
+            // Для yTrue = 1: p_t = yPred, для yTrue = 0: p_t = 1 - yPred
+            const ones = tf.onesLike(yTrue);
+            const p_t = tf.add(
+                tf.mul(yTrue, clippedPred),
+                tf.mul(tf.sub(ones, yTrue), tf.sub(ones, clippedPred))
+            );
+            
+            // Вычисляем (1 - p_t)^gamma
+            const oneMinusPt = tf.sub(ones, p_t);
+            const modulatingFactor = tf.pow(oneMinusPt, gamma);
+            
+            // Вычисляем alpha_t: весовой коэффициент
+            // Для yTrue = 1: alpha, для yTrue = 0: 1 - alpha
+            const alphaScalar = tf.scalar(alpha);
+            const oneMinusAlpha = tf.scalar(1 - alpha);
+            const alpha_t = tf.add(
+                tf.mul(yTrue, alphaScalar),
+                tf.mul(tf.sub(ones, yTrue), oneMinusAlpha)
+            );
+            
+            // Вычисляем log(p_t)
+            const logPt = tf.log(p_t);
+            
+            // Focal Loss: -alpha_t * (1 - p_t)^gamma * log(p_t)
+            const focalLoss = tf.mul(
+                tf.mul(tf.neg(alpha_t), modulatingFactor),
+                logPt
+            );
+            
+            return tf.mean(focalLoss);
+        };
+    }
+
+    /**
      * Создание оптимизированной модели
      */
-    async createOptimizedModel(inputShape) {
-        console.log(`🧠 Создание оптимизированной модели нейросети...`);
-        console.log(`   📊 Входной размер: ${inputShape}`);
+    async createOptimizedModel(inputShape, useFocalLoss = false, learningRate = 0.0005) {
+         
         
-        // L2 регуляризация для предотвращения переобучения
-        const l2Regularizer = tf.regularizers.l2({ l2: 0.001 });
+        // L2 регуляризация для предотвращения переобучения (увеличена с 0.001 до 0.01)
+        const l2Regularizer = tf.regularizers.l2({ l2: 0.01 });
         
         const layer1Units = Math.min(128, Math.max(32, inputShape * 2));
         const layer2Units = Math.min(64, Math.max(16, inputShape));
         
-        console.log(`   🏗️  Архитектура: Dense(${layer1Units}) -> Dropout(0.25) -> Dense(${layer2Units}) -> Dropout(0.2) -> Dense(1)`);
+         
         
         const model = tf.sequential({
             layers: [
@@ -581,33 +859,51 @@ class OptimizedTrainingService {
                     kernelInitializer: 'heUniform',
                     kernelRegularizer: l2Regularizer // L2 регуляризация
                 }),
-                tf.layers.dropout({ rate: 0.25 }), // Увеличен dropout для лучшей регуляризации
+                tf.layers.batchNormalization({
+                    betaInitializer: 'zeros',
+                    gammaInitializer: 'ones',
+                    movingMeanInitializer: 'zeros',
+                    movingVarianceInitializer: 'ones'
+                }), // Batch Normalization для стабилизации обучения
+                tf.layers.dropout({ rate: 0.3 }), // Увеличен dropout с 0.25 до 0.3 для лучшей регуляризации
                 tf.layers.dense({
                     units: layer2Units,
                     activation: 'relu',
                     kernelInitializer: 'heUniform',
                     kernelRegularizer: l2Regularizer // L2 регуляризация
                 }),
-                tf.layers.dropout({ rate: 0.2 }), // Актуализированный dropout
+                tf.layers.batchNormalization({
+                    betaInitializer: 'zeros',
+                    gammaInitializer: 'ones',
+                    movingMeanInitializer: 'zeros',
+                    movingVarianceInitializer: 'ones'
+                }), // Batch Normalization для стабилизации обучения
+                tf.layers.dropout({ rate: 0.25 }), // Увеличен dropout с 0.2 до 0.25
                 tf.layers.dense({
                     units: 1,
                     activation: 'sigmoid',
                     kernelInitializer: 'glorotUniform'
-                    // Выходной слой без L2 для сохранения предсказательной способности
+                    // Выходной слой без L2 и BatchNorm для сохранения предсказательной способности
                 })
             ]
         });
 
-        console.log(`   ⚙️  Компиляция модели: optimizer=adam(0.001), loss=binaryCrossentropy, metrics=[accuracy]`);
+         
+        
+        // Выбираем функцию потерь: focal loss для дисбаланса классов или стандартный binaryCrossentropy
+        const lossFunction = useFocalLoss 
+            ? this.createFocalLoss(0.25, 2.0) 
+            : 'binaryCrossentropy';
         
         model.compile({
-            optimizer: tf.train.adam(0.001),
-            loss: 'binaryCrossentropy',
-            metrics: ['accuracy']
+            optimizer: tf.train.adam(learningRate), // Адаптивный learning rate
+            loss: lossFunction,
+            metrics: ['accuracy'] // TensorFlow.js поддерживает только accuracy из коробки
+            // F1-score, precision, recall вычисляются вручную в calculateMetrics()
         });
 
         const totalParams = model.countParams();
-        console.log(`   ✅ Модель успешно создана: ${model.layers.length} слоев, ${totalParams.toLocaleString()} параметров`);
+         
         
         return model;
     }
@@ -640,7 +936,11 @@ class OptimizedTrainingService {
                     { modelType, epochs, batchSize, featuresCount: features.length }
                 );
             } catch (monitoringError) {
-                console.warn('Failed to register worker in monitoring service:', monitoringError);
+                LoggerService.warn('Failed to register worker in monitoring service', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'registerWorker',
+                    error: { message: String(monitoringError) }
+                });
             }
             
             // Добавляем worker в список для отслеживания
@@ -659,7 +959,11 @@ class OptimizedTrainingService {
                             const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
                             WorkerMonitoringService.completeWorker(workerId, true, { result: msg.data });
                         } catch (monitoringError) {
-                            console.warn('Failed to complete worker in monitoring service:', monitoringError);
+                            LoggerService.warn('Failed to complete worker in monitoring service', {
+                                service: 'OptimizedTrainingService',
+                                operation: 'completeWorker',
+                                error: { message: String(monitoringError) }
+                            });
                         }
                     }
                     
@@ -674,7 +978,11 @@ class OptimizedTrainingService {
                             WorkerMonitoringService.reportWorkerError(workerId, msg.data.error);
                             WorkerMonitoringService.completeWorker(workerId, false, { error: msg.data.error });
                         } catch (monitoringError) {
-                            console.warn('Failed to report worker error in monitoring service:', monitoringError);
+                            LoggerService.warn('Failed to report worker error in monitoring service', {
+                                service: 'OptimizedTrainingService',
+                                operation: 'reportWorkerError',
+                                error: { message: String(monitoringError) }
+                            });
                         }
                     }
                     
@@ -698,7 +1006,11 @@ class OptimizedTrainingService {
                                 }
                             });
                         } catch (monitoringError) {
-                            console.warn('Failed to update worker progress in monitoring service:', monitoringError);
+                            LoggerService.warn('Failed to update worker progress in monitoring service', {
+                                service: 'OptimizedTrainingService',
+                                operation: 'updateWorkerProgress',
+                                error: { message: String(monitoringError) }
+                            });
                         }
                     }
                     
@@ -721,7 +1033,11 @@ class OptimizedTrainingService {
                         WorkerMonitoringService.reportWorkerError(workerId, error);
                         WorkerMonitoringService.completeWorker(workerId, false, { error: error.message });
                     } catch (monitoringError) {
-                        console.warn('Failed to report worker error in monitoring service:', monitoringError);
+                        LoggerService.warn('Failed to report worker error in monitoring service', {
+                            service: 'OptimizedTrainingService',
+                            operation: 'reportWorkerError',
+                            error: { message: String(monitoringError) }
+                        });
                     }
                 }
                 
@@ -740,7 +1056,11 @@ class OptimizedTrainingService {
                             WorkerMonitoringService.completeWorker(workerId, code === 0, { exitCode: code });
                         }
                     } catch (monitoringError) {
-                        console.warn('Failed to complete worker in monitoring service:', monitoringError);
+                        LoggerService.warn('Failed to complete worker in monitoring service', {
+                            service: 'OptimizedTrainingService',
+                            operation: 'completeWorker',
+                            error: { message: String(monitoringError) }
+                        });
                     }
                 }
                 
@@ -830,7 +1150,12 @@ class OptimizedTrainingService {
             if (model.inputs && model.inputs[0] && model.inputs[0].shape) {
                 const expectedSize = model.inputs[0].shape[1];
                 if (expectedSize !== featureSize) {
-                    console.warn(`⚠️ Feature size mismatch in calculateMetrics: model expects ${expectedSize}, got ${featureSize}. Skipping metrics calculation.`);
+                    LoggerService.warn('Feature size mismatch in calculateMetrics', {
+                        service: 'OptimizedTrainingService',
+                        operation: 'calculateMetrics',
+                        expectedSize: expectedSize,
+                        gotSize: featureSize
+                    });
                     // Возвращаем нулевые метрики при несовместимости
                     return {
                         accuracy: 0,
@@ -863,16 +1188,16 @@ class OptimizedTrainingService {
                 else if (actual === 1 && pred === 0) fn++;
             }
             
-            // Precision, Recall, F1
-            const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
-            const recall = tp + fn > 0 ? tp / (tp + fn) : 0;
-            const f1 = precision + recall > 0 ? 2 * (precision * recall) / (precision + recall) : 0;
+            // Precision, Recall, F1 с защитой от деления на ноль
+            const precision = (tp + fp > 0) ? (tp / (tp + fp)) : 0;
+            const recall = (tp + fn > 0) ? (tp / (tp + fn)) : 0;
+            const f1 = (precision + recall > 0) ? (2 * (precision * recall) / (precision + recall)) : 0;
             
             // ROC-AUC (упрощенный расчет через площадь под кривой)
             const sortedPairs = probs.map((prob, i) => ({ prob, label: labels[i] }))
                 .sort((a, b) => b.prob - a.prob);
             
-            let auc = 0;
+            let auc = 0.5; // По умолчанию 0.5 (случайное угадывание)
             let tpr = 0, fpr = 0;
             let prevTpr = 0, prevFpr = 0;
             const totalPos = labels.filter(l => l === 1).length;
@@ -895,18 +1220,62 @@ class OptimizedTrainingService {
                     prevTpr = currentTpr;
                     prevFpr = currentFpr;
                 }
+            } else {
+                // Если нет одного из классов, AUC = 0.5 (случайное угадывание)
+                auc = 0.5;
             }
             
+            // Accuracy с защитой от деления на ноль
+            const total = tp + tn + fp + fn;
+            const accuracy = total > 0 ? (tp + tn) / total : 0;
+            
+            // Проверка на дисбаланс классов (используем уже вычисленные totalPos и totalNeg)
+            const classImbalance = labels.length > 0 ? Math.abs(totalPos - totalNeg) / labels.length : 0;
+            
+            // Direction Accuracy: правильность направления (независимо от порога)
+            let directionCorrect = 0;
+            for (let i = 0; i < labels.length; i++) {
+                const actual = labels[i];
+                const pred = preds[i];
+                // Если оба 1 или оба 0 - направление правильное
+                if ((actual === 1 && pred === 1) || (actual === 0 && pred === 0)) {
+                    directionCorrect++;
+                }
+            }
+            const directionAccuracy = (labels.length > 0) ? (directionCorrect / labels.length) : 0;
+            
+            // Защита от NaN и Infinity
+            const safeValue = (value) => {
+                if (typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
+                    return 0;
+                }
+                return value;
+            };
+            
             return {
-                precision,
-                recall,
-                f1,
-                auc,
-                accuracy: (tp + tn) / (tp + tn + fp + fn),
-                confusionMatrix: { tp, fp, tn, fn }
+                // Основные метрики (с защитой от NaN)
+                f1: safeValue(f1), // F1-score как основная метрика
+                precision: safeValue(precision),
+                recall: safeValue(recall),
+                auc: safeValue(auc),
+                accuracy: safeValue(accuracy), // Accuracy для справки, но не основная метрика
+                directionAccuracy: safeValue(directionAccuracy), // Правильность направления
+                
+                // Дополнительная информация
+                confusionMatrix: { tp, fp, tn, fn },
+                classImbalance: safeValue(classImbalance), // Дисбаланс классов (0 = сбалансировано, 1 = полностью несбалансировано)
+                classDistribution: {
+                    positive: totalPos,
+                    negative: totalNeg,
+                    positiveRatio: labels.length > 0 ? safeValue(totalPos / labels.length) : 0
+                }
             };
         } catch (error) {
-            console.error('Error calculating metrics:', error);
+            LoggerService.error('Error calculating metrics', {
+                service: 'OptimizedTrainingService',
+                operation: 'calculateMetrics',
+                error: { message: error.message, stack: error.stack }
+            });
             return {
                 precision: 0,
                 recall: 0,
@@ -922,27 +1291,11 @@ class OptimizedTrainingService {
         // Time-based split (хронологическое разделение)
         const split = this.timeBasedSplit(features, labels, 0.7, 0.15);
         
-        // Взвешивание свежих данных для train: более новые примеры получают больший вес
-        const n = split.train.features.length;
-        const weightedFeatures = [];
-        const weightedLabels = [];
-        
-        if (n > 0) {
-            for (let i = 0; i < n; i++) {
-                const weight = 0.7 + (0.6 * i) / Math.max(1, n - 1); // от 0.7 до 1.3
-                const repetitions = Math.max(1, Math.round(weight)); // количество повторений
-                
-                // Добавляем пример несколько раз в зависимости от веса
-                for (let j = 0; j < repetitions; j++) {
-                    weightedFeatures.push(split.train.features[i]);
-                    weightedLabels.push(split.train.labels[i]);
-                }
-            }
-        }
-        
-        // Используем взвешенные данные для обучения
-        const finalTrainFeatures = weightedFeatures.length > 0 ? weightedFeatures : split.train.features;
-        const finalTrainLabels = weightedLabels.length > 0 ? weightedLabels : split.train.labels;
+        // УБРАНО взвешивание через дублирование для предотвращения переобучения
+        // Вместо этого используем исходные данные без дублирования
+        // Это предотвращает переобучение и улучшает генерализацию
+        const finalTrainFeatures = split.train.features;
+        const finalTrainLabels = split.train.labels;
         
         // Расчет class weights для балансировки классов
         // Примечание: TensorFlow.js не поддерживает sampleWeight в model.fit()
@@ -997,7 +1350,7 @@ class OptimizedTrainingService {
 
         // Настройки для early stopping и reduce LR on plateau
         let bestValLoss = Infinity;
-        let patience = 10; // Количество эпох без улучшения для early stopping
+        let patience = 5; // Уменьшено с 10 до 5 для более раннего остановки при переобучении
         let patienceCount = 0;
         let reduceLRPatience = 5; // Количество эпох без улучшения для снижения LR
         let reduceLRCount = 0;
@@ -1046,10 +1399,52 @@ class OptimizedTrainingService {
                     this.trainingProgress.accuracy = logs.acc || 0;
                     this.broadcastEpochProgress(epoch, logs);
                     
-                    // Early stopping и reduce LR on plateau
+                    // Мониторинг переобучения: отслеживаем разницу между train и validation
+                    const trainLoss = logs.loss || 0;
+                    const trainAccuracy = logs.acc || 0;
                     const valLoss = logs.val_loss || logs.loss;
-                    const valAccuracy = logs.val_acc || logs.acc || 0;
-                    const accuracy = logs.acc || 0;
+                    const valAccuracy = logs.val_acc || logs.val_accuracy || logs.acc || 0;
+                    
+                    // Рассчитываем разницу между train и validation метриками
+                    const lossDiff = trainLoss - valLoss; // Отрицательное значение = переобучение
+                    const accuracyDiff = trainAccuracy - valAccuracy; // Положительное значение = переобучение
+                    
+                    // Логируем метрики на каждой эпохе для мониторинга переобучения
+                    if (epoch % 5 === 0 || epoch === epochs - 1) { // Каждые 5 эпох или последняя
+                        LoggerService.info('Training epoch metrics', {
+                            service: 'OptimizedTrainingService',
+                            operation: 'trainModel',
+                            epoch: epoch + 1,
+                            totalEpochs: epochs,
+                            metrics: {
+                                trainLoss: trainLoss.toFixed(4),
+                                valLoss: valLoss.toFixed(4),
+                                lossDiff: lossDiff.toFixed(4),
+                                trainAccuracy: trainAccuracy.toFixed(4),
+                                valAccuracy: valAccuracy.toFixed(4),
+                                accuracyDiff: accuracyDiff.toFixed(4),
+                                overfittingRisk: lossDiff < -0.1 || accuracyDiff > 0.1 ? 'HIGH' : 
+                                               lossDiff < -0.05 || accuracyDiff > 0.05 ? 'MEDIUM' : 'LOW'
+                            }
+                        });
+                    }
+                    
+                    // Алерт при сильном переобучении
+                    if (lossDiff < -0.15 || accuracyDiff > 0.15) {
+                        LoggerService.warn('Potential overfitting detected', {
+                            service: 'OptimizedTrainingService',
+                            operation: 'trainModel',
+                            epoch: epoch + 1,
+                            trainLoss: trainLoss.toFixed(4),
+                            valLoss: valLoss.toFixed(4),
+                            trainAccuracy: trainAccuracy.toFixed(4),
+                            valAccuracy: valAccuracy.toFixed(4),
+                            lossDiff: lossDiff.toFixed(4),
+                            accuracyDiff: accuracyDiff.toFixed(4)
+                        });
+                    }
+                    
+                    // Early stopping и reduce LR on plateau
                     
                     if (valLoss < bestValLoss) {
                         // Улучшение - сбрасываем счетчики
@@ -1086,7 +1481,11 @@ class OptimizedTrainingService {
                                     });
                                     
                                 } catch (lrError) {
-                                    console.warn(`⚠️ Не удалось изменить LR: ${lrError.message}`);
+                                    LoggerService.warn('Не удалось изменить LR', {
+                                        service: 'OptimizedTrainingService',
+                                        operation: 'changeLearningRate',
+                                        error: { message: lrError.message }
+                                    });
                                 }
                             }
                             
@@ -1301,7 +1700,7 @@ class OptimizedTrainingService {
     /**
      * Сохранение модели
      */
-    async saveModel(figi, model) {
+    async saveModel(figi, model, metadata = {}) {
         try {
             // Сохраняем модель в файлы для конкретного инструмента
             const fs = await import('fs/promises');
@@ -1321,9 +1720,45 @@ class OptimizedTrainingService {
                 // Игнорируем ошибки chmod (может не работать в некоторых окружениях)
             }
             
-            // Сохраняем архитектуру модели
+            // Генерируем версию модели на основе timestamp и метаданных
+            const timestamp = Date.now();
+            const version = `${timestamp}_${Math.random().toString(36).substring(2, 9)}`;
+            
+            // Сохраняем архитектуру модели с версионированием
             const modelPath = path.join(modelsDir, `${figi}_model.json`);
             const weightsPath = path.join(modelsDir, `${figi}_weights.json`);
+            const metadataPath = path.join(modelsDir, `${figi}_metadata.json`);
+            
+            // Загружаем существующие метаданные, если есть
+            let existingMetadata = {};
+            try {
+                const existingMetadataContent = await fs.readFile(metadataPath, 'utf-8');
+                existingMetadata = JSON.parse(existingMetadataContent);
+            } catch (e) {
+                // Файл не существует или невалидный - создаем новый
+            }
+            
+            // Обновляем метаданные с версионированием
+            const modelMetadata = {
+                ...existingMetadata,
+                currentVersion: version,
+                versions: existingMetadata.versions || [],
+                lastUpdated: new Date().toISOString(),
+                ...metadata
+            };
+            
+            // Добавляем текущую версию в историю (сохраняем последние 10 версий)
+            modelMetadata.versions.push({
+                version,
+                timestamp,
+                date: new Date().toISOString(),
+                metadata: { ...metadata }
+            });
+            
+            // Ограничиваем историю версий до 10 последних
+            if (modelMetadata.versions.length > 10) {
+                modelMetadata.versions = modelMetadata.versions.slice(-10);
+            }
             
             const archJson = model.toJSON(null, false);
             const weights = model.getWeights();
@@ -1354,25 +1789,55 @@ class OptimizedTrainingService {
                 // Игнорируем ошибки chmod
             }
             
+            // Сохраняем метаданные с версионированием
+            await fs.writeFile(metadataPath, JSON.stringify(modelMetadata, null, 2));
+            
+            try {
+                await fs.chmod(metadataPath, 0o666);
+            } catch (chmodError) {
+                // Игнорируем ошибки chmod
+            }
+            
             // Также сохраняем через ModelManager для совместимости
             try {
                 await ModelManager.saveModel(model, `neural/${figi}`);
             } catch (modelManagerError) {
-                console.warn(`⚠️ Failed to save model via ModelManager for ${figi}: ${modelManagerError.message}`);
+                LoggerService.warn('Failed to save model via ModelManager', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'saveModel',
+                    figi: figi,
+                    error: { message: modelManagerError.message }
+                });
             }
             
             // Также сохраняем в памяти для быстрого доступа
-            this.currentModel = { figi, model };
+            this.currentModel = { figi, model, version, metadata: modelMetadata };
+            
+            LoggerService.info('Model saved with versioning', {
+                service: 'OptimizedTrainingService',
+                operation: 'saveModel',
+                figi,
+                version,
+                totalVersions: modelMetadata.versions.length
+            });
             
         } catch (error) {
-            console.warn('Failed to save model:', error.message);
+            LoggerService.warn('Failed to save model', {
+                service: 'OptimizedTrainingService',
+                operation: 'saveModel',
+                error: { message: error.message }
+            });
         }
     }
 
     /**
      * Сохранить лучшую модель и метаданные
+     * @param {string} figi - FIGI инструмента
+     * @param {Object} model - Модель TensorFlow.js
+     * @param {number} bestMetric - Лучшая метрика (F1-score или accuracy)
+     * @param {string} metricType - Тип метрики ('f1' или 'accuracy')
      */
-    async saveBestModel(figi, model, bestAccuracy) {
+    async saveBestModel(figi, model, bestMetric, metricType = 'f1') {
         try {
             const fs = await import('fs/promises');
             const path = await import('path');
@@ -1411,10 +1876,13 @@ class OptimizedTrainingService {
             await fs.writeFile(bestWeightsPath, JSON.stringify({ specs }, null, 2));
 
             // Метаданные
-            await fs.writeFile(metaPath, JSON.stringify({
-                bestAccuracy,
+            const metadata = {
+                bestF1: metricType === 'f1' ? bestMetric : null,
+                bestAccuracy: metricType === 'accuracy' ? bestMetric : null,
+                metricType,
                 savedAt: new Date().toISOString()
-            }, null, 2));
+            };
+            await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2));
             
             // Устанавливаем права на все файлы
             try {
@@ -1425,7 +1893,12 @@ class OptimizedTrainingService {
                 // Игнорируем ошибки chmod
             }
         } catch (error) {
-            console.warn(`⚠️ Failed to save best model for ${figi}:`, error.message);
+            LoggerService.warn('Failed to save best model', {
+                service: 'OptimizedTrainingService',
+                operation: 'saveBestModel',
+                figi: figi,
+                error: { message: error.message }
+            });
         }
     }
 
@@ -1479,7 +1952,11 @@ class OptimizedTrainingService {
             const specs = weightsData.specs || weightsData.weights || null;
             
             if (!specs || !Array.isArray(specs) || specs.length === 0) {
-                console.warn(`⚠️ Invalid weights format for best model ${figi}, skipping load`);
+                LoggerService.warn('Invalid weights format for best model, skipping load', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'loadBestModel',
+                    figi: figi
+                });
                 throw new Error('Invalid weights format: specs is not an array');
             }
             
@@ -1495,7 +1972,12 @@ class OptimizedTrainingService {
 
             return model;
         } catch (error) {
-            console.warn(`⚠️ Failed to load best model for ${figi}:`, error.message);
+            LoggerService.warn('Failed to load best model', {
+                service: 'OptimizedTrainingService',
+                operation: 'loadBestModel',
+                figi: figi,
+                error: { message: error.message }
+            });
             return null;
         }
     }
@@ -1506,24 +1988,39 @@ class OptimizedTrainingService {
     async checkDegradationAndRestore(figi, currentModel, currentMetrics = null) {
         try {
             const bestMeta = await this.loadBestMeta(figi);
-            if (!bestMeta || !bestMeta.bestAccuracy) {
+            
+            // Используем F1-score как основную метрику, fallback на accuracy для совместимости
+            const bestMetric = bestMeta?.bestF1 ?? bestMeta?.bestAccuracy ?? null;
+            const metricType = bestMeta?.metricType || (bestMeta?.bestF1 ? 'f1' : 'accuracy');
+            
+            if (!bestMetric) {
                 // Нет best-модели, текущая модель становится best
-                if (currentMetrics && currentMetrics.accuracy) {
-                    await this.saveBestModel(figi, currentModel, currentMetrics.accuracy);
+                if (currentMetrics && currentMetrics.f1) {
+                    await this.saveBestModel(figi, currentModel, currentMetrics.f1, 'f1');
+                } else if (currentMetrics && currentMetrics.accuracy) {
+                    await this.saveBestModel(figi, currentModel, currentMetrics.accuracy, 'accuracy');
                 }
                 return { degraded: false, restored: false };
             }
 
-            const bestAccuracy = bestMeta.bestAccuracy;
             const degradationThreshold = 0.05; // 5% деградация - порог для восстановления
 
-            // Если есть текущие метрики, сравниваем с best
-            if (currentMetrics && currentMetrics.accuracy) {
-                const currentAccuracy = currentMetrics.accuracy;
-                const degradation = bestAccuracy - currentAccuracy;
+            // Если есть текущие метрики, сравниваем с best (приоритет F1-score)
+            const currentMetric = currentMetrics?.f1 ?? currentMetrics?.accuracy ?? null;
+            if (currentMetric !== null) {
+                const degradation = bestMetric - currentMetric;
 
                 if (degradation > degradationThreshold) {
-                    console.warn(`⚠️ Model degradation detected for ${figi}: current=${currentAccuracy.toFixed(4)}, best=${bestAccuracy.toFixed(4)}, degradation=${(degradation*100).toFixed(2)}%`);
+                    LoggerService.warn('Model degradation detected', {
+                        service: 'OptimizedTrainingService',
+                        operation: 'checkDegradation',
+                        figi: figi,
+                        currentMetric: currentMetric.toFixed(4),
+                        bestMetric: bestMetric.toFixed(4),
+                        metricType: metricType,
+                        degradation: (degradation*100).toFixed(2) + '%',
+                        classImbalance: currentMetrics?.classImbalance?.toFixed(4) || 'N/A'
+                    });
                     
                     // Восстанавливаем best-модель
                     const bestModel = await this.loadBestModel(figi);
@@ -1541,8 +2038,9 @@ class OptimizedTrainingService {
                                 type: 'model_degradation',
                                 data: {
                                     figi,
-                                    currentAccuracy,
-                                    bestAccuracy,
+                                    currentMetric,
+                                    bestMetric,
+                                    metricType,
                                     degradation: degradation * 100,
                                     restored: true
                                 },
@@ -1552,16 +2050,22 @@ class OptimizedTrainingService {
 
                         return { degraded: true, restored: true, bestModel };
                     }
-                } else if (currentAccuracy > bestAccuracy) {
+                } else if (currentMetric > bestMetric) {
                     // Текущая модель лучше best - обновляем best
-                    await this.saveBestModel(figi, currentModel, currentAccuracy);
+                    const newMetricType = currentMetrics?.f1 ? 'f1' : 'accuracy';
+                    await this.saveBestModel(figi, currentModel, currentMetric, newMetricType);
                     return { degraded: false, restored: false, bestUpdated: true };
                 }
             }
 
             return { degraded: false, restored: false };
         } catch (error) {
-            console.error(`❌ Error checking degradation for ${figi}:`, error.message);
+            LoggerService.error('Error checking degradation', {
+                service: 'OptimizedTrainingService',
+                operation: 'checkDegradation',
+                figi: figi,
+                error: { message: error.message, stack: error.stack }
+            });
             return { degraded: false, restored: false, error: error.message };
         }
     }
@@ -1591,10 +2095,18 @@ class OptimizedTrainingService {
                 recall: metrics.recall,
                 f1: metrics.f1,
                 auc: metrics.auc,
-                confusionMatrix: metrics.confusionMatrix
+                directionAccuracy: metrics.directionAccuracy,
+                confusionMatrix: metrics.confusionMatrix,
+                classImbalance: metrics.classImbalance,
+                classDistribution: metrics.classDistribution
             };
         } catch (error) {
-            console.error(`❌ Error evaluating model performance for ${figi}:`, error.message);
+            LoggerService.error('Error evaluating model performance', {
+                service: 'OptimizedTrainingService',
+                operation: 'evaluateModelPerformance',
+                figi: figi,
+                error: { message: error.message, stack: error.stack }
+            });
             return null;
         }
     }
@@ -1632,7 +2144,11 @@ class OptimizedTrainingService {
             const specs = weightsData.specs || weightsData.weights || null;
             
             if (!specs || !Array.isArray(specs) || specs.length === 0) {
-                console.warn(`⚠️ Invalid weights format for ${figi}, skipping load`);
+                LoggerService.warn('Invalid weights format, skipping load', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'loadModel',
+                    figi: figi
+                });
                 throw new Error('Invalid weights format: specs is not an array');
             }
             
@@ -1670,7 +2186,12 @@ class OptimizedTrainingService {
             return model;
                 }
             } catch (figiError) {
-                console.warn(`⚠️ Failed to load per-FIGI model for ${figi}:`, figiError.message);
+                LoggerService.warn('Failed to load per-FIGI model', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'loadModel',
+                    figi: figi,
+                    error: { message: figiError.message }
+                });
             }
             
             // Попытка 2: Загрузить через ModelManager (общая модель)
@@ -1690,7 +2211,12 @@ class OptimizedTrainingService {
                     return model;
                 }
             } catch (modelManagerError) {
-                console.warn(`⚠️ Failed to load model via ModelManager for ${figi}:`, modelManagerError.message);
+                LoggerService.warn('Failed to load model via ModelManager', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'loadModel',
+                    figi: figi,
+                    error: { message: modelManagerError.message }
+                });
             }
             
             // Попытка 3: Загрузить общую модель (без FIGI)
@@ -1711,7 +2237,10 @@ class OptimizedTrainingService {
                     const specs = weightsData.specs || weightsData.weights || null;
                     
                     if (!specs || !Array.isArray(specs) || specs.length === 0) {
-                        console.warn(`⚠️ Invalid weights format for general model, skipping load`);
+                        LoggerService.warn('Invalid weights format for general model, skipping load', {
+                            service: 'OptimizedTrainingService',
+                            operation: 'loadModel'
+                        });
                         throw new Error('Invalid weights format: specs is not an array');
                     }
                     
@@ -1749,13 +2278,23 @@ class OptimizedTrainingService {
                     return model;
                 }
             } catch (generalError) {
-                console.warn(`⚠️ Failed to load general model as fallback for ${figi}:`, generalError.message);
+                LoggerService.warn('Failed to load general model as fallback', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'loadModel',
+                    figi: figi,
+                    error: { message: generalError.message }
+                });
             }
 
             // Fallback: модель не найдена, вернем null (будет создана новая)
             return null;
         } catch (error) {
-            console.warn(`⚠️ Failed to load model for ${figi}:`, error.message);
+            LoggerService.warn('Failed to load model', {
+                service: 'OptimizedTrainingService',
+                operation: 'loadModel',
+                figi: figi,
+                error: { message: error.message }
+            });
             return null;
         }
     }
@@ -1964,7 +2503,11 @@ class OptimizedTrainingService {
                 const tensors = specs.map(s => tf.tensor(s.data, s.shape, s.dtype));
                 model.setWeights(tensors);
             } else {
-                console.warn(`⚠️ Invalid weights format for ${figi}, model loaded without weights`);
+                LoggerService.warn('Invalid weights format, model loaded without weights', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'loadModel',
+                    figi: figi
+                });
             }
             
             // Компилируем модель, если она не скомпилирована
@@ -1978,7 +2521,12 @@ class OptimizedTrainingService {
 
             return model;
         } catch (error) {
-            console.error(`❌ Error loading model for ${figi}:`, error.message);
+            LoggerService.error('Error loading model', {
+                service: 'OptimizedTrainingService',
+                operation: 'loadModel',
+                figi: figi,
+                error: { message: error.message, stack: error.stack }
+            });
             // Не выводим полный stack trace для каждого инструмента без модели
             return null;
         }
@@ -2006,7 +2554,12 @@ class OptimizedTrainingService {
             
             return result[0];
         } catch (error) {
-            console.error(`Error predicting for ${figi}:`, error);
+            LoggerService.error('Error predicting', {
+                service: 'OptimizedTrainingService',
+                operation: 'predict',
+                figi: figi,
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -2017,7 +2570,10 @@ class OptimizedTrainingService {
     async batchTrainAll(epochs = 50, batchSize = 16) {
         // Защита от повторного запуска
         if (this.isBatchTraining) {
-            console.warn('⚠️ [TRAINING] Batch training already in progress, skipping duplicate request');
+            LoggerService.warn('Batch training already in progress, skipping duplicate request', {
+                service: 'OptimizedTrainingService',
+                operation: 'batchTrainAll'
+            });
             return {
                 success: false,
                 message: 'Batch training is already running',
@@ -2028,7 +2584,7 @@ class OptimizedTrainingService {
         this.isBatchTraining = true;
         const startTime = Date.now();
         
-        console.log(`🚀 [TRAINING] Starting batch training: epochs=${epochs}, batchSize=${batchSize}`);
+         
         
         const TrainingStatusService = getService('TrainingStatusService');
         try {
@@ -2038,7 +2594,7 @@ class OptimizedTrainingService {
                 throw new Error('No instruments available for training');
             }
             
-            console.log(`📊 [TRAINING] Found ${instruments.length} instruments to train`);
+             
             
             // Используем существующий метод trainMultipleInstruments
             // (статус обучения обновляется внутри trainMultipleInstruments)
@@ -2051,18 +2607,18 @@ class OptimizedTrainingService {
             });
             
             const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
-            console.log(`✅ [TRAINING] Batch training completed in ${duration} minutes:`, {
-                total: result.total,
-                successful: result.successful,
-                failed: result.failed,
-                successRate: result.successRate.toFixed(2) + '%'
-            });
+             
             
             return result;
             
         } catch (error) {
             const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
-            console.error(`❌ [TRAINING] Batch training failed after ${duration} minutes:`, error.message);
+            LoggerService.error('Batch training failed', {
+                service: 'OptimizedTrainingService',
+                operation: 'batchTrainAll',
+                duration: duration,
+                error: { message: error.message, stack: error.stack }
+            });
             
             // Завершаем обучение с ошибкой
             if (TrainingStatusService) {
@@ -2072,15 +2628,29 @@ class OptimizedTrainingService {
         } finally {
             // Снимаем флаг обучения
             this.isBatchTraining = false;
-            console.log('🔓 [TRAINING] Batch training lock released');
+             
         }
     }
 
     /**
      * Подбор гиперпараметров на 3-5 FIGI
      * Тестирует различные комбинации epochs, batchSize, predictionHorizon, days
+     * Поддерживает как grid search, так и Bayesian Optimization
      */
     async tuneHyperparameters(testFigis = null, options = {}) {
+        const useBayesian = options.useBayesian !== false; // По умолчанию используем Bayesian Optimization
+        
+        if (useBayesian) {
+            return await this.tuneHyperparametersBayesian(testFigis, options);
+        } else {
+            return await this.tuneHyperparametersGrid(testFigis, options);
+        }
+    }
+
+    /**
+     * Grid Search для подбора гиперпараметров (старый метод)
+     */
+    async tuneHyperparametersGrid(testFigis = null, options = {}) {
         try {
             // Получаем список FIGI для тестирования
             let figis = testFigis;
@@ -2127,13 +2697,24 @@ class OptimizedTrainingService {
                                         // Получаем данные
                                         const candles = await this.getTrainingData(figi, days);
                                         if (candles.length < 50) {
-                                            console.warn(`   ⚠️ Insufficient data for ${figi}: ${candles.length} candles`);
+                                            LoggerService.warn('Insufficient data for training', {
+                                                service: 'OptimizedTrainingService',
+                                                operation: 'trainInstrument',
+                                                figi: figi,
+                                                candlesCount: candles.length
+                                            });
                                             continue;
                                         }
 
                                         // Проверяем, что данных достаточно для указанного lookback
                                         if (candles.length < lookback + horizon) {
-                                            console.warn(`   ⚠️ Insufficient data for ${figi}: need ${lookback + horizon}, have ${candles.length}`);
+                                            LoggerService.warn('Insufficient data for hyperparameter tuning', {
+                                                service: 'OptimizedTrainingService',
+                                                operation: 'tuneHyperparameters',
+                                                figi: figi,
+                                                need: lookback + horizon,
+                                                have: candles.length
+                                            });
                                             continue;
                                         }
 
@@ -2146,7 +2727,11 @@ class OptimizedTrainingService {
                                         );
 
                                     if (features.length === 0) {
-                                        console.warn(`   ⚠️ No features prepared for ${figi}`);
+                                        LoggerService.warn('No features prepared for hyperparameter tuning', {
+                                            service: 'OptimizedTrainingService',
+                                            operation: 'tuneHyperparameters',
+                                            figi: figi
+                                        });
                                         continue;
                                     }
 
@@ -2177,7 +2762,12 @@ class OptimizedTrainingService {
                                         model.dispose();
 
                                     } catch (error) {
-                                        console.error(`   ❌ Error testing ${figi}:`, error.message);
+                                        LoggerService.error('Error testing during hyperparameter tuning', {
+                                            service: 'OptimizedTrainingService',
+                                            operation: 'tuneHyperparameters',
+                                            figi: figi,
+                                            error: { message: error.message, stack: error.stack }
+                                        });
                                         figiResults[figi] = { error: error.message };
                                     }
                                 }
@@ -2200,7 +2790,10 @@ class OptimizedTrainingService {
                                         figiResults
                                     });
                                 } else {
-                                    console.warn(`   ⚠️ No successful tests for this combination`);
+                                    LoggerService.warn('No successful tests for hyperparameter combination', {
+                                        service: 'OptimizedTrainingService',
+                                        operation: 'tuneHyperparameters'
+                                    });
                                 }
                             }
                         }
@@ -2214,16 +2807,751 @@ class OptimizedTrainingService {
             // Выбираем лучшую комбинацию
             const bestCombination = results[0];
 
+            // Сохраняем лучшие параметры
+            if (bestCombination) {
+                await this.saveBestHyperparameters(bestCombination.combination, bestCombination.metrics, figis);
+            }
+
             return {
                 best: bestCombination.combination,
                 bestMetrics: bestCombination.metrics,
                 allResults: results,
-                testedFigis: figis
+                testedFigis: figis,
+                method: 'grid_search'
             };
 
         } catch (error) {
-            console.error('❌ Hyperparameter tuning failed:', error);
+            LoggerService.error('Hyperparameter tuning failed', {
+                service: 'OptimizedTrainingService',
+                operation: 'tuneHyperparametersGrid',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
+        }
+    }
+
+    /**
+     * Bayesian Optimization для подбора гиперпараметров
+     * Более эффективный метод, который использует вероятностную модель для выбора следующих параметров
+     */
+    async tuneHyperparametersBayesian(testFigis = null, options = {}) {
+        try {
+            // Получаем список FIGI для тестирования
+            let figis = testFigis;
+            if (!figis || figis.length === 0) {
+                const instruments = await CacheService.getAllInstruments(10);
+                if (!instruments || instruments.length === 0) {
+                    throw new Error('No instruments available for hyperparameter tuning');
+                }
+                const count = Math.min(5, Math.max(3, instruments.length));
+                figis = instruments.slice(0, count).map(inst => inst.figi);
+            }
+
+            // Диапазоны гиперпараметров
+            const paramRanges = {
+                epochs: options.epochsRange || { min: 20, max: 80, step: 10 },
+                batchSize: options.batchSizeRange || { min: 8, max: 64, step: 8 },
+                days: options.daysRange || { min: 90, max: 365, step: 30 },
+                horizon: options.horizonRange || { min: 3, max: 10, step: 1 },
+                lookback: options.lookbackRange || { min: 30, max: 90, step: 10 }
+            };
+
+            const maxIterations = options.maxIterations || 20; // Количество итераций Bayesian Optimization
+            const initialRandomSamples = options.initialRandomSamples || 5; // Начальные случайные образцы
+
+            const observedParams = []; // Наблюденные параметры
+            const observedScores = []; // Наблюденные метрики (F1-score)
+
+            // Функция для нормализации параметров в диапазон [0, 1]
+            const normalizeParams = (params) => {
+                return {
+                    epochs: (params.epochs - paramRanges.epochs.min) / (paramRanges.epochs.max - paramRanges.epochs.min),
+                    batchSize: (params.batchSize - paramRanges.batchSize.min) / (paramRanges.batchSize.max - paramRanges.batchSize.min),
+                    days: (params.days - paramRanges.days.min) / (paramRanges.days.max - paramRanges.days.min),
+                    horizon: (params.horizon - paramRanges.horizon.min) / (paramRanges.horizon.max - paramRanges.horizon.min),
+                    lookback: (params.lookback - paramRanges.lookback.min) / (paramRanges.lookback.max - paramRanges.lookback.min)
+                };
+            };
+
+            // Функция для денормализации параметров
+            const denormalizeParams = (normalized) => {
+                return {
+                    epochs: Math.round(normalized.epochs * (paramRanges.epochs.max - paramRanges.epochs.min) + paramRanges.epochs.min),
+                    batchSize: Math.round(normalized.batchSize * (paramRanges.batchSize.max - paramRanges.batchSize.min) + paramRanges.batchSize.min),
+                    days: Math.round(normalized.days * (paramRanges.days.max - paramRanges.days.min) + paramRanges.days.min),
+                    horizon: Math.round(normalized.horizon * (paramRanges.horizon.max - paramRanges.horizon.min) + paramRanges.horizon.min),
+                    lookback: Math.round(normalized.lookback * (paramRanges.lookback.max - paramRanges.lookback.min) + paramRanges.lookback.min)
+                };
+            };
+
+            // Функция для оценки параметров
+            const evaluateParams = async (params) => {
+                let totalF1 = 0;
+                let successfulTests = 0;
+
+                for (const figi of figis) {
+                    try {
+                        const candles = await this.getTrainingData(figi, params.days);
+                        if (candles.length < params.lookback + params.horizon) {
+                            continue;
+                        }
+
+                        const { features, labels } = await OptimizedDataService.prepareTrainingData(
+                            candles,
+                            params.lookback,
+                            params.horizon,
+                            figi
+                        );
+
+                        if (features.length === 0) {
+                            continue;
+                        }
+
+                        const model = await this.createOptimizedModel(features[0].length);
+                        await this.trainModel(model, features, labels, params.epochs, params.batchSize);
+                        
+                        const split = this.timeBasedSplit(features, labels, 0.7, 0.15);
+                        const metrics = await this.calculateMetrics(model, split.val.features, split.val.labels);
+                        
+                        totalF1 += metrics.f1;
+                        successfulTests++;
+                        model.dispose();
+                    } catch (error) {
+                        // Пропускаем ошибки
+                        continue;
+                    }
+                }
+
+                return successfulTests > 0 ? totalF1 / successfulTests : 0;
+            };
+
+            // Начальные случайные образцы
+            LoggerService.info('Bayesian Optimization: Starting with random samples', {
+                service: 'OptimizedTrainingService',
+                operation: 'tuneHyperparametersBayesian',
+                initialSamples: initialRandomSamples
+            });
+
+            for (let i = 0; i < initialRandomSamples; i++) {
+                const randomParams = {
+                    epochs: Math.round(Math.random() * (paramRanges.epochs.max - paramRanges.epochs.min) + paramRanges.epochs.min),
+                    batchSize: Math.round(Math.random() * (paramRanges.batchSize.max - paramRanges.batchSize.min) + paramRanges.batchSize.min),
+                    days: Math.round(Math.random() * (paramRanges.days.max - paramRanges.days.min) + paramRanges.days.min),
+                    horizon: Math.round(Math.random() * (paramRanges.horizon.max - paramRanges.horizon.min) + paramRanges.horizon.min),
+                    lookback: Math.round(Math.random() * (paramRanges.lookback.max - paramRanges.lookback.min) + paramRanges.lookback.min)
+                };
+
+                const score = await evaluateParams(randomParams);
+                observedParams.push(normalizeParams(randomParams));
+                observedScores.push(score);
+
+                LoggerService.info(`Bayesian Optimization: Sample ${i + 1}/${initialRandomSamples}`, {
+                    service: 'OptimizedTrainingService',
+                    operation: 'tuneHyperparametersBayesian',
+                    params: randomParams,
+                    score: score.toFixed(4)
+                });
+            }
+
+            // Bayesian Optimization итерации
+            for (let iteration = 0; iteration < maxIterations; iteration++) {
+                // Упрощенная версия: используем Expected Improvement (EI)
+                // Выбираем следующую точку, которая максимизирует Expected Improvement
+                let bestNextParams = null;
+                let bestEI = -Infinity;
+
+                // Генерируем кандидатов для следующей итерации
+                const numCandidates = 50;
+                for (let c = 0; c < numCandidates; c++) {
+                    const candidate = {
+                        epochs: Math.random(),
+                        batchSize: Math.random(),
+                        days: Math.random(),
+                        horizon: Math.random(),
+                        lookback: Math.random()
+                    };
+
+                    // Вычисляем Expected Improvement
+                    // Упрощенная версия: используем расстояние до лучших наблюдений
+                    const bestObservedScore = Math.max(...observedScores);
+                    const distances = observedParams.map(obs => {
+                        const dist = Math.sqrt(
+                            Math.pow(candidate.epochs - obs.epochs, 2) +
+                            Math.pow(candidate.batchSize - obs.batchSize, 2) +
+                            Math.pow(candidate.days - obs.days, 2) +
+                            Math.pow(candidate.horizon - obs.horizon, 2) +
+                            Math.pow(candidate.lookback - obs.lookback, 2)
+                        );
+                        return dist;
+                    });
+                    const minDistance = Math.min(...distances);
+
+                    // Expected Improvement: чем дальше от наблюдений и чем выше потенциальный score, тем лучше
+                    // Упрощенная версия: используем комбинацию расстояния и оптимистичной оценки
+                    const ei = minDistance * (1 + Math.random() * 0.5); // Упрощенная оценка
+
+                    if (ei > bestEI) {
+                        bestEI = ei;
+                        bestNextParams = candidate;
+                    }
+                }
+
+                // Оцениваем выбранные параметры
+                const nextParams = denormalizeParams(bestNextParams);
+                const score = await evaluateParams(nextParams);
+                observedParams.push(bestNextParams);
+                observedScores.push(score);
+
+                LoggerService.info(`Bayesian Optimization: Iteration ${iteration + 1}/${maxIterations}`, {
+                    service: 'OptimizedTrainingService',
+                    operation: 'tuneHyperparametersBayesian',
+                    params: nextParams,
+                    score: score.toFixed(4),
+                    bestScore: Math.max(...observedScores).toFixed(4)
+                });
+            }
+
+            // Находим лучшие параметры
+            const bestIndex = observedScores.indexOf(Math.max(...observedScores));
+            const bestParams = denormalizeParams(observedParams[bestIndex]);
+            const bestScore = observedScores[bestIndex];
+
+            // Сохраняем лучшие параметры
+            await this.saveBestHyperparameters(bestParams, { f1: bestScore }, figis);
+
+            LoggerService.info('Bayesian Optimization completed', {
+                service: 'OptimizedTrainingService',
+                operation: 'tuneHyperparametersBayesian',
+                bestParams,
+                bestScore: bestScore.toFixed(4),
+                totalIterations: initialRandomSamples + maxIterations
+            });
+
+            return {
+                best: bestParams,
+                bestMetrics: { f1: bestScore },
+                allResults: observedParams.map((p, i) => ({
+                    combination: denormalizeParams(p),
+                    metrics: { f1: observedScores[i] }
+                })),
+                testedFigis: figis,
+                method: 'bayesian_optimization'
+            };
+
+        } catch (error) {
+            LoggerService.error('Bayesian Optimization failed', {
+                service: 'OptimizedTrainingService',
+                operation: 'tuneHyperparametersBayesian',
+                error: { message: error.message, stack: error.stack }
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Обнаружение дрейфа данных (data drift)
+     * Сравнивает текущее распределение данных с базовым распределением
+     * @param {Array} currentFeatures - Текущие фичи
+     * @param {Array} baselineFeatures - Базовые фичи (из обучающей выборки)
+     * @returns {Object} - Результат проверки дрейфа
+     */
+    detectDataDrift(currentFeatures, baselineFeatures) {
+        if (!currentFeatures || !baselineFeatures || 
+            currentFeatures.length === 0 || baselineFeatures.length === 0) {
+            return {
+                hasDrift: false,
+                driftScore: 0,
+                reason: 'Insufficient data for drift detection'
+            };
+        }
+
+        const featureSize = currentFeatures[0]?.length || 0;
+        if (featureSize === 0 || baselineFeatures[0]?.length !== featureSize) {
+            return {
+                hasDrift: false,
+                driftScore: 0,
+                reason: 'Feature size mismatch'
+            };
+        }
+
+        // Вычисляем статистики для каждой фичи
+        const driftScores = [];
+        for (let i = 0; i < featureSize; i++) {
+            const baselineValues = baselineFeatures.map(f => f[i]).filter(v => isFinite(v) && !isNaN(v));
+            const currentValues = currentFeatures.map(f => f[i]).filter(v => isFinite(v) && !isNaN(v));
+
+            if (baselineValues.length === 0 || currentValues.length === 0) {
+                continue;
+            }
+
+            // Вычисляем среднее и стандартное отклонение
+            const baselineMean = baselineValues.reduce((sum, v) => sum + v, 0) / baselineValues.length;
+            const currentMean = currentValues.reduce((sum, v) => sum + v, 0) / currentValues.length;
+
+            const baselineStd = Math.sqrt(
+                baselineValues.reduce((sum, v) => sum + Math.pow(v - baselineMean, 2), 0) / baselineValues.length
+            );
+            const currentStd = Math.sqrt(
+                currentValues.reduce((sum, v) => sum + Math.pow(v - currentMean, 2), 0) / currentValues.length
+            );
+
+            // Вычисляем дрейф как комбинацию изменения среднего и стандартного отклонения
+            const meanDrift = baselineStd > 0 ? Math.abs(currentMean - baselineMean) / baselineStd : 0;
+            const stdDrift = baselineStd > 0 ? Math.abs(currentStd - baselineStd) / baselineStd : 0;
+            
+            // Общий дрейф для этой фичи
+            const featureDrift = (meanDrift + stdDrift) / 2;
+            driftScores.push(featureDrift);
+        }
+
+        // Средний дрейф по всем фичам
+        const avgDrift = driftScores.length > 0 
+            ? driftScores.reduce((sum, s) => sum + s, 0) / driftScores.length 
+            : 0;
+
+        // Порог для обнаружения дрейфа (0.3 = 30% изменение)
+        const driftThreshold = 0.3;
+        const hasDrift = avgDrift > driftThreshold;
+
+        return {
+            hasDrift,
+            driftScore: avgDrift,
+            featureDrifts: driftScores,
+            threshold: driftThreshold,
+            severity: avgDrift > 0.5 ? 'HIGH' : avgDrift > 0.3 ? 'MEDIUM' : 'LOW'
+        };
+    }
+
+    /**
+     * Триггерное обучение при обнаружении дрейфа данных
+     * @param {string} figi - FIGI инструмента
+     * @param {Object} options - Опции обучения
+     * @returns {Promise<Object>} - Результат обучения
+     */
+    async triggerTrainingOnDrift(figi, options = {}) {
+        try {
+            LoggerService.info('Checking for data drift', {
+                service: 'OptimizedTrainingService',
+                operation: 'triggerTrainingOnDrift',
+                figi
+            });
+
+            // Получаем текущие данные
+            const currentCandles = await this.getTrainingData(figi, 30); // Последние 30 дней
+            if (currentCandles.length < 20) {
+                return {
+                    triggered: false,
+                    reason: 'Insufficient current data'
+                };
+            }
+
+            // Получаем базовые данные (из последнего обучения)
+            const baselineCandles = await this.getTrainingData(figi, 180); // Более длинный период для базовой линии
+            if (baselineCandles.length < 50) {
+                return {
+                    triggered: false,
+                    reason: 'Insufficient baseline data'
+                };
+            }
+
+            // Подготавливаем фичи
+            const { features: currentFeatures } = await this.prepareFeatures(currentCandles, figi, true);
+            const { features: baselineFeatures } = await this.prepareFeatures(
+                baselineCandles.slice(-60), // Берем последние 60 свечей из базовой линии
+                figi, 
+                true
+            );
+
+            if (currentFeatures.length === 0 || baselineFeatures.length === 0) {
+                return {
+                    triggered: false,
+                    reason: 'Failed to prepare features'
+                };
+            }
+
+            // Обнаруживаем дрейф
+            const driftResult = this.detectDataDrift(currentFeatures, baselineFeatures);
+
+            if (driftResult.hasDrift) {
+                LoggerService.warn('Data drift detected, triggering retraining', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'triggerTrainingOnDrift',
+                    figi,
+                    driftScore: driftResult.driftScore.toFixed(4),
+                    severity: driftResult.severity
+                });
+
+                // Запускаем обучение
+                const trainingResult = await this.trainInstrument(figi, {
+                    ...options,
+                    reason: 'data_drift',
+                    driftScore: driftResult.driftScore,
+                    severity: driftResult.severity
+                });
+
+                return {
+                    triggered: true,
+                    driftResult,
+                    trainingResult
+                };
+            } else {
+                LoggerService.info('No data drift detected', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'triggerTrainingOnDrift',
+                    figi,
+                    driftScore: driftResult.driftScore.toFixed(4)
+                });
+
+                return {
+                    triggered: false,
+                    driftResult
+                };
+            }
+        } catch (error) {
+            LoggerService.error('Error in trigger training on drift', {
+                service: 'OptimizedTrainingService',
+                operation: 'triggerTrainingOnDrift',
+                figi,
+                error: { message: error.message, stack: error.stack }
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * SMOTE (Synthetic Minority Over-sampling Technique)
+     * Генерирует синтетические образцы для балансировки классов
+     * @param {Array} features - Массив фичей
+     * @param {Array} labels - Массив меток
+     * @param {Object} options - Опции SMOTE
+     * @returns {Object} - Сбалансированные данные
+     */
+    applySMOTE(features, labels, options = {}) {
+        const {
+            k = 5, // Количество ближайших соседей
+            ratio = 1.0 // Целевое соотношение классов (1.0 = полный баланс)
+        } = options;
+
+        if (features.length === 0 || labels.length === 0) {
+            return { features, labels };
+        }
+
+        // Разделяем на классы
+        const minorityClass = labels.filter(l => l === 1).length < labels.filter(l => l === 0).length ? 1 : 0;
+        const majorityClass = 1 - minorityClass;
+
+        const minorityIndices = labels.map((l, i) => l === minorityClass ? i : null).filter(i => i !== null);
+        const majorityIndices = labels.map((l, i) => l === majorityClass ? i : null).filter(i => i !== null);
+
+        if (minorityIndices.length === 0 || majorityIndices.length === 0) {
+            return { features, labels };
+        }
+
+        // Вычисляем, сколько синтетических образцов нужно создать
+        const targetCount = Math.floor(majorityIndices.length * ratio);
+        const samplesNeeded = Math.max(0, targetCount - minorityIndices.length);
+
+        if (samplesNeeded === 0) {
+            return { features, labels };
+        }
+
+        const syntheticFeatures = [];
+        const syntheticLabels = [];
+
+        // Функция для вычисления расстояния между двумя векторами
+        const euclideanDistance = (a, b) => {
+            let sum = 0;
+            for (let i = 0; i < a.length; i++) {
+                sum += Math.pow(a[i] - b[i], 2);
+            }
+            return Math.sqrt(sum);
+        };
+
+        // Находим k ближайших соседей для каждого образца меньшинства
+        for (let i = 0; i < samplesNeeded; i++) {
+            // Выбираем случайный образец из меньшинства
+            const randomIndex = minorityIndices[Math.floor(Math.random() * minorityIndices.length)];
+            const sample = features[randomIndex];
+
+            // Находим k ближайших соседей из того же класса
+            const distances = minorityIndices.map(idx => ({
+                index: idx,
+                distance: euclideanDistance(sample, features[idx])
+            }));
+
+            distances.sort((a, b) => a.distance - b.distance);
+            const nearestNeighbors = distances.slice(1, k + 1); // Исключаем сам образец
+
+            if (nearestNeighbors.length === 0) {
+                continue;
+            }
+
+            // Выбираем случайного соседа
+            const neighbor = nearestNeighbors[Math.floor(Math.random() * nearestNeighbors.length)];
+            const neighborSample = features[neighbor.index];
+
+            // Генерируем синтетический образец
+            const randomFactor = Math.random(); // От 0 до 1
+            const synthetic = sample.map((val, idx) => 
+                val + randomFactor * (neighborSample[idx] - val)
+            );
+
+            syntheticFeatures.push(synthetic);
+            syntheticLabels.push(minorityClass);
+        }
+
+        // Объединяем оригинальные и синтетические данные
+        const balancedFeatures = [...features, ...syntheticFeatures];
+        const balancedLabels = [...labels, ...syntheticLabels];
+
+        LoggerService.info('SMOTE applied', {
+            service: 'OptimizedTrainingService',
+            operation: 'applySMOTE',
+            originalMinorityCount: minorityIndices.length,
+            originalMajorityCount: majorityIndices.length,
+            syntheticSamples: syntheticFeatures.length,
+            finalMinorityCount: balancedLabels.filter(l => l === minorityClass).length,
+            finalMajorityCount: balancedLabels.filter(l => l === majorityClass).length
+        });
+
+        return {
+            features: balancedFeatures,
+            labels: balancedLabels
+        };
+    }
+
+    /**
+     * Проверка качества данных перед обучением
+     * @param {Array} features - Массив фичей
+     * @param {Array} labels - Массив меток
+     * @returns {Object} - Результат проверки качества данных
+     */
+    validateDataQuality(features, labels) {
+        const issues = [];
+        const warnings = [];
+        const stats = {
+            totalSamples: features.length,
+            featureSize: features.length > 0 ? features[0].length : 0,
+            positiveLabels: 0,
+            negativeLabels: 0,
+            nanFeatures: 0,
+            infinityFeatures: 0,
+            constantFeatures: [],
+            missingValues: 0
+        };
+
+        if (features.length === 0 || labels.length === 0) {
+            issues.push('Empty dataset');
+            return { valid: false, issues, warnings, stats };
+        }
+
+        if (features.length !== labels.length) {
+            issues.push(`Mismatch: ${features.length} features vs ${labels.length} labels`);
+            return { valid: false, issues, warnings, stats };
+        }
+
+        // Проверка меток
+        for (let i = 0; i < labels.length; i++) {
+            if (labels[i] === 1) stats.positiveLabels++;
+            else if (labels[i] === 0) stats.negativeLabels++;
+            else {
+                issues.push(`Invalid label at index ${i}: ${labels[i]} (expected 0 or 1)`);
+            }
+        }
+
+        // Проверка фичей
+        if (stats.featureSize === 0) {
+            issues.push('Empty feature vectors');
+            return { valid: false, issues, warnings, stats };
+        }
+
+        // Проверка на NaN, Infinity и константные фичи
+        for (let j = 0; j < stats.featureSize; j++) {
+            let hasNaN = false;
+            let hasInfinity = false;
+            let isConstant = true;
+            const firstValue = features[0][j];
+            
+            for (let i = 0; i < features.length; i++) {
+                const value = features[i][j];
+                
+                if (typeof value !== 'number') {
+                    issues.push(`Non-numeric feature at [${i}][${j}]: ${typeof value}`);
+                    hasNaN = true;
+                } else if (isNaN(value)) {
+                    stats.nanFeatures++;
+                    hasNaN = true;
+                } else if (!isFinite(value)) {
+                    stats.infinityFeatures++;
+                    hasInfinity = true;
+                }
+                
+                if (value !== firstValue) {
+                    isConstant = false;
+                }
+            }
+            
+            if (hasNaN) {
+                stats.missingValues++;
+                issues.push(`Feature ${j} contains NaN values`);
+            }
+            
+            if (hasInfinity) {
+                warnings.push(`Feature ${j} contains Infinity values`);
+            }
+            
+            if (isConstant && features.length > 1) {
+                stats.constantFeatures.push(j);
+                warnings.push(`Feature ${j} is constant (value: ${firstValue})`);
+            }
+        }
+
+        // Проверка дисбаланса классов
+        const classImbalance = Math.abs(stats.positiveLabels - stats.negativeLabels) / labels.length;
+        if (classImbalance > 0.7) {
+            warnings.push(`Severe class imbalance: ${(classImbalance * 100).toFixed(2)}%`);
+        }
+
+        // Проверка минимального количества данных
+        if (features.length < 10) {
+            issues.push(`Insufficient samples: ${features.length} (minimum: 10)`);
+        }
+
+        // Проверка минимального количества данных для каждого класса
+        if (stats.positiveLabels < 2 || stats.negativeLabels < 2) {
+            issues.push(`Insufficient samples per class: positive=${stats.positiveLabels}, negative=${stats.negativeLabels} (minimum: 2 each)`);
+        }
+
+        return {
+            valid: issues.length === 0,
+            issues,
+            warnings,
+            stats
+        };
+    }
+
+    /**
+     * Вычисление адаптивных параметров обучения на основе данных
+     * @param {number} dataSize - Размер обучающей выборки
+     * @param {number} featureSize - Размер вектора фичей
+     * @param {number} classImbalance - Дисбаланс классов (0-1)
+     * @returns {Object} - Адаптивные параметры обучения
+     */
+    calculateAdaptiveTrainingParams(dataSize, featureSize, classImbalance = 0) {
+        // Адаптивные epochs: больше данных = больше epochs, но с ограничением
+        const baseEpochs = 30;
+        const dataBasedEpochs = Math.min(50, Math.max(20, Math.floor(dataSize / 50)));
+        const epochs = Math.max(baseEpochs, dataBasedEpochs);
+
+        // Адаптивный batch size: зависит от размера данных
+        // Для малых данных используем меньший batch size
+        let batchSize;
+        if (dataSize < 100) {
+            batchSize = 16;
+        } else if (dataSize < 500) {
+            batchSize = 32;
+        } else if (dataSize < 2000) {
+            batchSize = 64;
+        } else {
+            batchSize = 128;
+        }
+
+        // Адаптивный learning rate: зависит от размера данных и дисбаланса
+        // Для малых данных или сильного дисбаланса используем меньший learning rate
+        let learningRate = 0.0005; // Базовый learning rate
+        if (dataSize < 200 || classImbalance > 0.5) {
+            learningRate = 0.0003; // Более консервативный learning rate
+        } else if (dataSize > 2000) {
+            learningRate = 0.0007; // Немного более агрессивный для больших данных
+        }
+
+        return {
+            epochs,
+            batchSize,
+            learningRate
+        };
+    }
+
+    /**
+     * Сохранение лучших гиперпараметров в файл
+     * @param {Object} params - Параметры для сохранения
+     * @param {Object} metrics - Метрики для сохранения
+     * @param {Array} figis - Список FIGI, на которых тестировались параметры
+     */
+    async saveBestHyperparameters(params, metrics, figis = []) {
+        try {
+            const fs = await import('fs/promises');
+            const path = await import('path');
+            const { fileURLToPath } = await import('url');
+            
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const configDir = path.join(__dirname, '../../config');
+            const filePath = path.join(configDir, 'best_hyperparameters.json');
+
+            // Создаем директорию, если её нет
+            try {
+                await fs.access(configDir);
+            } catch {
+                await fs.mkdir(configDir, { recursive: true });
+            }
+
+            const data = {
+                params: {
+                    epochs: params.epochs,
+                    batchSize: params.batchSize,
+                    learningRate: params.learningRate || 0.0005,
+                    days: params.days,
+                    horizon: params.horizon,
+                    lookback: params.lookback
+                },
+                metrics: {
+                    f1: metrics.f1 || 0,
+                    accuracy: metrics.accuracy || 0,
+                    precision: metrics.precision || 0,
+                    recall: metrics.recall || 0
+                },
+                testedFigis: figis,
+                savedAt: new Date().toISOString()
+            };
+
+            await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+            
+            LoggerService.info('Best hyperparameters saved', {
+                service: 'OptimizedTrainingService',
+                operation: 'saveBestHyperparameters',
+                filePath
+            });
+        } catch (error) {
+            LoggerService.error('Failed to save best hyperparameters', {
+                service: 'OptimizedTrainingService',
+                operation: 'saveBestHyperparameters',
+                error: { message: error.message, stack: error.stack }
+            });
+        }
+    }
+
+    /**
+     * Загрузка сохраненных лучших гиперпараметров из файла
+     * @returns {Promise<Object|null>} - Сохраненные параметры или null
+     */
+    async loadBestHyperparameters() {
+        try {
+            const fs = await import('fs/promises');
+            const path = await import('path');
+            const { fileURLToPath } = await import('url');
+            
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const filePath = path.join(__dirname, '../../config/best_hyperparameters.json');
+
+            const content = await fs.readFile(filePath, 'utf-8');
+            const data = JSON.parse(content);
+            
+            return data.params || null;
+        } catch (error) {
+            // Файл не существует или ошибка чтения - это нормально
+            return null;
         }
     }
 
@@ -2260,7 +3588,12 @@ class OptimizedTrainingService {
                 try {
                     callback(data);
                 } catch (error) {
-                    console.error(`Error in event listener for ${event}:`, error);
+                    LoggerService.error('Error in event listener', {
+                        service: 'OptimizedTrainingService',
+                        operation: 'eventListener',
+                        event: event,
+                        error: { message: error.message, stack: error.stack }
+                    });
                 }
             });
         }

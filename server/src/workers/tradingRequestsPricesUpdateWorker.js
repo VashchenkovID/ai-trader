@@ -5,7 +5,8 @@ import TradingRequest from '../models/TradingRequest.js';
 import { Op } from 'sequelize';
 import ServiceManager from '../services/ServiceManager.js';
 import { setGlobalServiceManager } from '../services/GlobalServiceManager.js';
-import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+// Импортируем ServiceInitializationTracker динамически, чтобы избежать проблем с инициализацией в worker'е
+let ServiceInitializationTracker = null;
 
 // Устанавливаем флаг воркера
 process.env.WORKER = 'true';
@@ -15,14 +16,41 @@ async function performTradingRequestsPricesUpdate() {
         // Инициализируем ServiceManager для использования в сервисах
         setGlobalServiceManager(ServiceManager);
         
-        // Проверяем глобальную инициализацию
-        const isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
+        // Проверяем глобальную инициализацию (динамический импорт для избежания проблем в worker'е)
+        let isServiceManagerGlobal = false;
+        try {
+            if (!ServiceInitializationTracker) {
+                ServiceInitializationTracker = (await import('../utils/ServiceInitializationTracker.js')).default;
+            }
+            if (ServiceInitializationTracker && typeof ServiceInitializationTracker.isServiceInitializedGlobally === 'function') {
+                isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
+            }
+        } catch (trackerError) {
+            // Игнорируем ошибки трекера - это не критично
+            console.warn('⚠️ [Trading Requests Worker] ServiceInitializationTracker error:', trackerError.message);
+        }
         
         if (!isServiceManagerGlobal && !ServiceManager.isInitialized) {
-            console.log('🔧 [Trading Requests Worker] ServiceManager not initialized globally, initializing in worker...');
+            const LoggerService = (await import('../services/LoggerService.js')).default;
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.info('ServiceManager not initialized globally, initializing in worker', {
+                    service: 'tradingRequestsPricesUpdateWorker',
+                    operation: 'performTradingRequestsPricesUpdate'
+                });
+            } else {
+                console.log('🔧 [Trading Requests Worker] ServiceManager not initialized globally, initializing in worker...');
+            }
             await ServiceManager.initialize();
         } else if (isServiceManagerGlobal) {
-            console.log('ℹ️ [Trading Requests Worker] ServiceManager already initialized globally, skipping full initialization');
+            const LoggerService = (await import('../services/LoggerService.js')).default;
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.info('ServiceManager already initialized globally, skipping full initialization', {
+                    service: 'tradingRequestsPricesUpdateWorker',
+                    operation: 'performTradingRequestsPricesUpdate'
+                });
+            } else {
+                console.log('ℹ️ [Trading Requests Worker] ServiceManager already initialized globally, skipping full initialization');
+            }
         }
 
         const startTime = Date.now();
@@ -30,7 +58,15 @@ async function performTradingRequestsPricesUpdate() {
         let totalFailed = 0;
         const readyToExecute = [];
 
-        console.log('📋 [Trading Requests Worker] Starting trading requests prices update...');
+        const LoggerService = (await import('../services/LoggerService.js')).default;
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.info('Starting trading requests prices update', {
+                service: 'tradingRequestsPricesUpdateWorker',
+                operation: 'performTradingRequestsPricesUpdate'
+            });
+        } else {
+            console.log('📋 [Trading Requests Worker] Starting trading requests prices update...');
+        }
 
         // Получаем активные заявки (PENDING или APPROVED)
         const activeRequests = await TradingRequest.findAll({
@@ -46,7 +82,14 @@ async function performTradingRequestsPricesUpdate() {
         });
 
         if (activeRequests.length === 0) {
-            console.log('⚠️ [Trading Requests Worker] No active trading requests found');
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.info('No active trading requests found', {
+                    service: 'tradingRequestsPricesUpdateWorker',
+                    operation: 'performTradingRequestsPricesUpdate'
+                });
+            } else {
+                console.log('⚠️ [Trading Requests Worker] No active trading requests found');
+            }
             parentPort.postMessage({
                 type: 'done',
                 data: {
@@ -64,7 +107,16 @@ async function performTradingRequestsPricesUpdate() {
         // Извлекаем уникальные FIGI
         const figis = [...new Set(activeRequests.map(r => r.figi).filter(f => f))];
 
-        console.log(`📋 [Trading Requests Worker] Updating prices for ${figis.length} instruments with ${activeRequests.length} active requests...`);
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.info('Updating prices for instruments', {
+                service: 'tradingRequestsPricesUpdateWorker',
+                operation: 'performTradingRequestsPricesUpdate',
+                instrumentsCount: figis.length,
+                requestsCount: activeRequests.length
+            });
+        } else {
+            console.log(`📋 [Trading Requests Worker] Updating prices for ${figis.length} instruments with ${activeRequests.length} active requests...`);
+        }
 
         // Оптимизация: загружаем актуальные статусы всех заявок одним запросом вместо N+1
         // Создаем Map для быстрого доступа к статусам по ID заявки
@@ -205,7 +257,16 @@ async function performTradingRequestsPricesUpdate() {
                             }
                         }
                     } catch (updateError) {
-                        console.error(`❌ [Trading Requests Worker] Error updating price for ${priceData.figi}:`, updateError.message);
+                        if (LoggerService && LoggerService.isInitialized) {
+                            LoggerService.error('Error updating price', {
+                                service: 'tradingRequestsPricesUpdateWorker',
+                                operation: 'performTradingRequestsPricesUpdate',
+                                figi: priceData.figi,
+                                error: { message: updateError.message }
+                            });
+                        } else {
+                            console.error(`❌ [Trading Requests Worker] Error updating price for ${priceData.figi}:`, updateError.message);
+                        }
                         totalFailed++;
                     }
                 }
@@ -227,7 +288,16 @@ async function performTradingRequestsPricesUpdate() {
                     await new Promise(resolve => setTimeout(resolve, 200));
                 }
             } catch (batchError) {
-                console.error(`❌ [Trading Requests Worker] Error processing batch ${batchIndex + 1}:`, batchError.message);
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.error('Error processing batch', {
+                        service: 'tradingRequestsPricesUpdateWorker',
+                        operation: 'performTradingRequestsPricesUpdate',
+                        batchIndex: batchIndex + 1,
+                        error: { message: batchError.message }
+                    });
+                } else {
+                    console.error(`❌ [Trading Requests Worker] Error processing batch ${batchIndex + 1}:`, batchError.message);
+                }
                 totalFailed += batch.length;
             }
         }
@@ -249,7 +319,16 @@ async function performTradingRequestsPricesUpdate() {
         });
 
     } catch (error) {
-        console.error('❌ [Trading Requests Worker] Trading requests prices update failed:', error);
+        const LoggerService = (await import('../services/LoggerService.js')).default;
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.error('Trading requests prices update failed', {
+                service: 'tradingRequestsPricesUpdateWorker',
+                operation: 'performTradingRequestsPricesUpdate',
+                error: { message: error.message, stack: error.stack }
+            });
+        } else {
+            console.error('❌ [Trading Requests Worker] Trading requests prices update failed:', error);
+        }
         
         parentPort.postMessage({
             type: 'error',

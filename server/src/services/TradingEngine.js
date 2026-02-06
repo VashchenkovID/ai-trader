@@ -42,7 +42,11 @@ class TradingEngine {
             this.isActive = true; // Активируем после инициализации
             
         } catch (error) {
-            console.error('❌ Ошибка инициализации Trading Engine:', error);
+            LoggerService.error('Ошибка инициализации Trading Engine', {
+                service: 'TradingEngine',
+                operation: 'initialize',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -122,7 +126,11 @@ class TradingEngine {
             await this.saveVirtualPortfolio();
             
         } catch (error) {
-            console.warn('⚠️ Ошибка инициализации демо-портфеля:', error.message);
+            LoggerService.warn('Ошибка инициализации демо-портфеля', {
+                service: 'TradingEngine',
+                operation: 'initializeDemoPortfolio',
+                error: { message: error.message }
+            });
         }
     }
 
@@ -150,7 +158,11 @@ class TradingEngine {
                 try {
                     portfolio = await this.getRealPortfolioValue();
                 } catch (error) {
-                    console.warn('⚠️ Не удалось получить реальный портфель, используем виртуальный:', error.message);
+                    LoggerService.warn('Не удалось получить реальный портфель, используем виртуальный', {
+                        service: 'TradingEngine',
+                        operation: 'getRealPortfolio',
+                        error: { message: error.message }
+                    });
                     portfolio = await this.getVirtualPortfolioValue();
                 }
             }
@@ -160,7 +172,11 @@ class TradingEngine {
             const validation = await RiskManagementService.validateOrder(signal, portfolio, currentPrices);
             
             if (!validation.isValid) {
-                console.warn('⚠️ Ордер отклонен риск-менеджментом:', validation.errors);
+                LoggerService.warn('Ордер отклонен риск-менеджментом', {
+                    service: 'TradingEngine',
+                    operation: 'validateOrder',
+                    errors: validation.errors
+                });
                 throw new Error(`Ордер отклонен: ${validation.errors.join(', ')}`);
             }
 
@@ -176,7 +192,9 @@ class TradingEngine {
 
                 // Если модель рекомендует избегать входа, добавляем предупреждение
                 if (entryPrediction.success && entryPrediction.optimalTime === 'avoid') {
-                    console.warn('⚠️ EntryOptimizationService рекомендует избегать входа сейчас:', {
+                    LoggerService.warn('EntryOptimizationService рекомендует избегать входа сейчас', {
+                        service: 'TradingEngine',
+                        operation: 'entryOptimization',
                         probability: entryPrediction.probability,
                         confidence: entryPrediction.confidence
                     });
@@ -230,7 +248,11 @@ class TradingEngine {
                 };
 
             } catch (optimizationError) {
-                console.warn('⚠️ Ошибка оптимизации входа, продолжаем с исходным сигналом:', optimizationError.message);
+                LoggerService.warn('Ошибка оптимизации входа, продолжаем с исходным сигналом', {
+                    service: 'TradingEngine',
+                    operation: 'optimizeEntry',
+                    error: { message: optimizationError.message }
+                });
                 // Продолжаем с исходным сигналом при ошибке оптимизации
             }
 
@@ -265,7 +287,11 @@ class TradingEngine {
             return result;
 
         } catch (error) {
-            console.error('❌ Ошибка исполнения ордера:', error);
+            LoggerService.error('Ошибка исполнения ордера', {
+                service: 'TradingEngine',
+                operation: 'executeOrder',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -304,14 +330,23 @@ class TradingEngine {
                     prices[symbol] = 0;
                     
                 } catch (error) {
-                    console.warn(`⚠️ Ошибка получения цены для ${symbol}:`, error.message);
+                    LoggerService.warn('Ошибка получения цены', {
+                        service: 'TradingEngine',
+                        operation: 'getPrice',
+                        symbol: symbol,
+                        error: { message: error.message }
+                    });
                     prices[symbol] = 0;
                 }
             }
             
             return prices;
         } catch (error) {
-            console.error('❌ Ошибка получения цен:', error);
+            LoggerService.error('Ошибка получения цен', {
+                service: 'TradingEngine',
+                operation: 'getPrices',
+                error: { message: error.message, stack: error.stack }
+            });
             return {};
         }
     }
@@ -468,7 +503,12 @@ class TradingEngine {
                 }
             } catch (error) {
                 // Не прерываем выполнение сделки при ошибке обновления статистики
-                console.warn(`⚠️ Не удалось обновить статистику инструмента для ${symbol}:`, error.message);
+                LoggerService.warn('Не удалось обновить статистику инструмента', {
+                    service: 'TradingEngine',
+                    operation: 'updateInstrumentStats',
+                    symbol: symbol,
+                    error: { message: error.message }
+                });
             }
         }
         
@@ -544,7 +584,11 @@ class TradingEngine {
             };
 
         } catch (error) {
-            console.error('❌ Ошибка микро-торговли:', error);
+            LoggerService.error('Ошибка микро-торговли', {
+                service: 'TradingEngine',
+                operation: 'microTrading',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -602,7 +646,11 @@ class TradingEngine {
             };
 
         } catch (error) {
-            console.error('❌ Ошибка реальной торговли:', error);
+            LoggerService.error('Ошибка реальной торговли', {
+                service: 'TradingEngine',
+                operation: 'realTrading',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -639,7 +687,11 @@ class TradingEngine {
                     try {
                         positions = JSON.parse(positions);
                     } catch (e) {
-                        console.warn('⚠️ Ошибка парсинга positions из БД:', e.message);
+                        LoggerService.warn('Ошибка парсинга positions из БД', {
+                            service: 'TradingEngine',
+                            operation: 'parsePositions',
+                            error: { message: e.message }
+                        });
                         positions = {};
                     }
                 }
@@ -649,7 +701,11 @@ class TradingEngine {
                     try {
                         trades = JSON.parse(trades);
                     } catch (e) {
-                        console.warn('⚠️ Ошибка парсинга trades из БД:', e.message);
+                        LoggerService.warn('Ошибка парсинга trades из БД', {
+                            service: 'TradingEngine',
+                            operation: 'parseTrades',
+                            error: { message: e.message }
+                        });
                         trades = [];
                     }
                 }
@@ -685,7 +741,12 @@ class TradingEngine {
                                 }
                             } catch (error) {
                                 // Пропускаем позиции с ошибками получения цены
-                                console.warn(`⚠️ Не удалось получить цену для ${figi}:`, error.message);
+                                LoggerService.warn('Не удалось получить цену для figi', {
+                                    service: 'TradingEngine',
+                                    operation: 'getPrice',
+                                    figi: figi,
+                                    error: { message: error.message }
+                                });
                             }
                         }
                     }
@@ -694,7 +755,11 @@ class TradingEngine {
                         this.virtualPortfolio.totalValue = this.virtualPortfolio.cash + positionsValue;
                     }
                 } catch (priceError) {
-                    console.warn('⚠️ Не удалось пересчитать стоимость позиций, используем сохраненное значение:', priceError.message);
+                    LoggerService.warn('Не удалось пересчитать стоимость позиций, используем сохраненное значение', {
+                        service: 'TradingEngine',
+                        operation: 'recalculatePositionsValue',
+                        error: { message: priceError.message }
+                    });
                 }
             } else {
                 // Если портфеля нет в БД, создаем новый
@@ -708,8 +773,15 @@ class TradingEngine {
                 await this.saveVirtualPortfolio();
             }
         } catch (error) {
-            console.error('❌ Ошибка загрузки виртуального портфеля из БД:', error);
-            console.warn('⚠️ Используем значения по умолчанию');
+            LoggerService.error('Ошибка загрузки виртуального портфеля из БД', {
+                service: 'TradingEngine',
+                operation: 'loadVirtualPortfolio',
+                error: { message: error.message, stack: error.stack }
+            });
+            LoggerService.warn('Используем значения по умолчанию', {
+                service: 'TradingEngine',
+                operation: 'loadVirtualPortfolio'
+            });
             this.virtualPortfolio = {
                 cash: 1000000,
                 positions: {},
@@ -740,7 +812,12 @@ class TradingEngine {
                             }
                         } catch (error) {
                             // Если не удалось получить цену, пропускаем эту позицию
-                            console.warn(`⚠️ Не удалось получить цену для ${symbol} при сохранении:`, error.message);
+                            LoggerService.warn('Не удалось получить цену при сохранении', {
+                                service: 'TradingEngine',
+                                operation: 'saveVirtualPortfolio',
+                                symbol: symbol,
+                                error: { message: error.message }
+                            });
                         }
                     }
                 }
@@ -763,8 +840,11 @@ class TradingEngine {
                 initialCapital: this.virtualPortfolio.initialCapital || 1000000
             });
         } catch (error) {
-            console.error('❌ Ошибка сохранения виртуального портфеля в БД:', error);
-            console.error('   Детали ошибки:', error.stack);
+            LoggerService.error('Ошибка сохранения виртуального портфеля в БД', {
+                service: 'TradingEngine',
+                operation: 'saveVirtualPortfolio',
+                error: { message: error.message, stack: error.stack }
+            });
             // Не прерываем выполнение, если сохранение не удалось
         }
     }
@@ -796,7 +876,12 @@ class TradingEngine {
                     
                 } catch (error) {
                     // Если не удалось получить актуальную цену, логируем предупреждение
-                    console.warn(`⚠️ Не удалось получить актуальную цену для ${symbol}:`, error.message);
+                    LoggerService.warn('Не удалось получить актуальную цену', {
+                        service: 'TradingEngine',
+                        operation: 'getCurrentPrice',
+                        symbol: symbol,
+                        error: { message: error.message }
+                    });
                 }
             }
         }
@@ -836,7 +921,11 @@ class TradingEngine {
                 // transformPortfolioData уже преобразовал quantity в число
                 for (const position of portfolio.positions) {
                     if (!position.figi) {
-                        console.warn('⚠️ Position without figi:', position);
+                        LoggerService.warn('Position without figi', {
+                            service: 'TradingEngine',
+                            operation: 'getRealPortfolio',
+                            position: position
+                        });
                         continue;
                     }
                     
@@ -1070,7 +1159,7 @@ class TradingEngine {
             } else {
                 // Если totalPortfolio нет, используем расчетную сумму
                 finalTotalValue = calculatedTotal;
-                console.log('📊 [REAL] totalPortfolio нет, используем calculatedTotal:', finalTotalValue);
+                // Логирование удалено согласно рефакторингу (было console.log)
             }
             
             return {
@@ -1083,7 +1172,11 @@ class TradingEngine {
                 mode: this.modeManager.getCurrentMode()
             };
         } catch (error) {
-            console.error('❌ Ошибка получения реального портфеля:', error);
+            LoggerService.error('Ошибка получения реального портфеля', {
+                service: 'TradingEngine',
+                operation: 'getRealPortfolio',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -1155,7 +1248,11 @@ class TradingEngine {
                     executedAt: trade.executedAt || trade.exitDate
                 }));
             } catch (error) {
-                console.warn('⚠️ Не удалось получить закрытые сделки из портфеля:', error.message);
+                LoggerService.warn('Не удалось получить закрытые сделки из портфеля', {
+                    service: 'TradingEngine',
+                    operation: 'getClosedTrades',
+                    error: { message: error.message }
+                });
                 // Fallback на обычный метод
                 trades = await this.getTradeHistory();
             }
@@ -1253,15 +1350,8 @@ class TradingEngine {
         // Логируем для отладки
         const LoggerService = (await import('./LoggerService.js')).default;
         if (LoggerService && LoggerService.isInitialized && processedTrades > 0) {
-            LoggerService.debug('TradingEngine.calculateTradingStats: расчет статистики', {
-                service: 'TradingEngine',
-                mode,
-                totalTrades: trades.length,
-                processedTrades,
-                profitableTrades,
-                winRate: (winRate * 100).toFixed(2) + '%',
-                totalReturn: totalReturn.toFixed(2)
-            });
+            // Логирование удалено согласно рефакторингу (было LoggerService.debug)
+            // Метрики доступны в возвращаемом объекте функции
         }
 
         return {
@@ -1293,7 +1383,11 @@ class TradingEngine {
             }
         } catch (error) {
             // Игнорируем ошибки WebSocket, чтобы не прерывать выполнение ордера
-            console.warn('Failed to broadcast order execution via WebSocket:', error.message);
+            LoggerService.warn('Failed to broadcast order execution via WebSocket', {
+                service: 'TradingEngine',
+                operation: 'broadcastOrderExecution',
+                error: { message: error.message }
+            });
         }
     }
 
@@ -1336,7 +1430,11 @@ class TradingEngine {
                 requiresActivation: newMode !== 'paper'
             };
         } catch (error) {
-            console.error('❌ Ошибка переключения режима в TradingEngine:', error);
+            LoggerService.error('Ошибка переключения режима в TradingEngine', {
+                service: 'TradingEngine',
+                operation: 'switchMode',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -1380,7 +1478,11 @@ class TradingEngine {
                 timestamp: new Date().toISOString()
             };
         } catch (error) {
-            console.error('❌ Ошибка активации Trading Engine:', error);
+            LoggerService.error('Ошибка активации Trading Engine', {
+                service: 'TradingEngine',
+                operation: 'activate',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -1398,7 +1500,11 @@ class TradingEngine {
                 timestamp: new Date().toISOString()
             };
         } catch (error) {
-            console.error('❌ Ошибка деактивации Trading Engine:', error);
+            LoggerService.error('Ошибка деактивации Trading Engine', {
+                service: 'TradingEngine',
+                operation: 'deactivate',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -1443,7 +1549,11 @@ class TradingEngine {
             }
 
         } catch (error) {
-            console.error('❌ Error stopping Trading Engine:', error);
+            LoggerService.error('Error stopping Trading Engine', {
+                service: 'TradingEngine',
+                operation: 'stop',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }

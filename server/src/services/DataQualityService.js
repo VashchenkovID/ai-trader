@@ -529,6 +529,145 @@ class DataQualityService {
     }
 
     /**
+     * Winsorization - ограничение выбросов до заданных перцентилей
+     * @param {Array} values - Массив значений
+     * @param {number} lowerPercentile - Нижний перцентиль (по умолчанию 5)
+     * @param {number} upperPercentile - Верхний перцентиль (по умолчанию 95)
+     * @returns {Object} - Обработанные значения и статистика
+     */
+    winsorize(values, lowerPercentile = 5, upperPercentile = 95) {
+        if (!Array.isArray(values) || values.length === 0) {
+            return {
+                values: [],
+                stats: {
+                    lowerBound: 0,
+                    upperBound: 0,
+                    cappedCount: 0
+                }
+            };
+        }
+
+        // Фильтруем валидные значения
+        const validValues = values
+            .map((v, i) => ({ value: v, index: i }))
+            .filter(item => typeof item.value === 'number' && isFinite(item.value));
+
+        if (validValues.length === 0) {
+            return {
+                values: [...values],
+                stats: {
+                    lowerBound: 0,
+                    upperBound: 0,
+                    cappedCount: 0
+                }
+            };
+        }
+
+        // Сортируем для вычисления перцентилей
+        const sorted = [...validValues].sort((a, b) => a.value - b.value);
+        
+        const lowerIndex = Math.floor(sorted.length * (lowerPercentile / 100));
+        const upperIndex = Math.floor(sorted.length * (upperPercentile / 100));
+        
+        const lowerBound = sorted[Math.max(0, lowerIndex)].value;
+        const upperBound = sorted[Math.min(sorted.length - 1, upperIndex)].value;
+
+        // Применяем Winsorization
+        const winsorized = [...values];
+        let cappedCount = 0;
+
+        for (let i = 0; i < winsorized.length; i++) {
+            const value = winsorized[i];
+            if (typeof value === 'number' && isFinite(value)) {
+                if (value < lowerBound) {
+                    winsorized[i] = lowerBound;
+                    cappedCount++;
+                } else if (value > upperBound) {
+                    winsorized[i] = upperBound;
+                    cappedCount++;
+                }
+            }
+        }
+
+        return {
+            values: winsorized,
+            stats: {
+                lowerBound,
+                upperBound,
+                lowerPercentile,
+                upperPercentile,
+                cappedCount,
+                totalValues: values.length
+            }
+        };
+    }
+
+    /**
+     * Обработка выбросов в свечах с использованием Winsorization
+     * @param {Array} candles - Массив свечей
+     * @param {Object} options - Опции обработки
+     * @returns {Object} - Обработанные свечи и статистика
+     */
+    processOutliers(candles, options = {}) {
+        const {
+            method = 'winsorize', // 'winsorize', 'remove', 'mark'
+            lowerPercentile = 5,
+            upperPercentile = 95,
+            fields = ['close', 'volume'] // Поля для обработки
+        } = options;
+
+        if (!Array.isArray(candles) || candles.length === 0) {
+            return {
+                candles: [],
+                stats: {}
+            };
+        }
+
+        const processed = candles.map(c => ({ ...c }));
+        const stats = {};
+
+        for (const field of fields) {
+            const values = processed.map(c => c[field]);
+            
+            if (method === 'winsorize') {
+                const result = this.winsorize(values, lowerPercentile, upperPercentile);
+                for (let i = 0; i < processed.length; i++) {
+                    processed[i][field] = result.values[i];
+                }
+                stats[field] = result.stats;
+            } else if (method === 'remove') {
+                // Удаляем свечи с выбросами
+                const outliers = this.detectOutliers(values, 'iqr');
+                const validIndices = new Set(
+                    Array.from({ length: values.length }, (_, i) => i)
+                        .filter(i => !outliers.indices.includes(i))
+                );
+                return {
+                    candles: processed.filter((_, i) => validIndices.has(i)),
+                    stats: {
+                        removed: processed.length - validIndices.size,
+                        field
+                    }
+                };
+            } else if (method === 'mark') {
+                // Добавляем флаг isOutlier
+                const outliers = this.detectOutliers(values, 'iqr');
+                for (let i = 0; i < processed.length; i++) {
+                    processed[i][`${field}_isOutlier`] = outliers.indices.includes(i);
+                }
+                stats[field] = {
+                    outliersCount: outliers.outliers.length
+                };
+            }
+        }
+
+        return {
+            candles: processed,
+            stats
+        };
+    }
+
+    /**
      * Получение настроек
      */
     getSettings() {

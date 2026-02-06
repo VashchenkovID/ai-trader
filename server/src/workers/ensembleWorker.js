@@ -2,7 +2,8 @@ import { parentPort, workerData } from 'worker_threads';
 import EnsembleService from '../services/EnsembleService.js';
 import ServiceManager from '../services/ServiceManager.js';
 import { setGlobalServiceManager } from '../services/GlobalServiceManager.js';
-import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+// Импортируем ServiceInitializationTracker динамически, чтобы избежать проблем с инициализацией в worker'е
+let ServiceInitializationTracker = null;
 
 // Устанавливаем флаг воркера
 process.env.WORKER = 'true';
@@ -13,8 +14,18 @@ async function run() {
         // Устанавливаем глобальный ServiceManager для использования в сервисах
         setGlobalServiceManager(ServiceManager);
         
-        // Проверяем, не инициализирован ли ServiceManager глобально
-        const isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
+        // Проверяем, не инициализирован ли ServiceManager глобально (динамический импорт)
+        let isServiceManagerGlobal = false;
+        try {
+            if (!ServiceInitializationTracker) {
+                ServiceInitializationTracker = (await import('../utils/ServiceInitializationTracker.js')).default;
+            }
+            if (ServiceInitializationTracker && typeof ServiceInitializationTracker.isServiceInitializedGlobally === 'function') {
+                isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
+            }
+        } catch (trackerError) {
+            // Игнорируем ошибки трекера - это не критично
+        }
         
         if (!isServiceManagerGlobal && !ServiceManager.isInitialized) {
                 await ServiceManager.initialize();
@@ -22,7 +33,14 @@ async function run() {
         }
         
         // Проверяем, не инициализирован ли EnsembleService глобально
-        const isEnsembleGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('EnsembleService');
+        let isEnsembleGlobal = false;
+        try {
+            if (ServiceInitializationTracker && typeof ServiceInitializationTracker.isServiceInitializedGlobally === 'function') {
+                isEnsembleGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('EnsembleService');
+            }
+        } catch (trackerError) {
+            // Игнорируем ошибки трекера - это не критично
+        }
         
         if (!isEnsembleGlobal && !EnsembleService.isInitialized) {
                 await EnsembleService.initialize();

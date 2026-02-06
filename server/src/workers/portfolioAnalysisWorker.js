@@ -1,5 +1,6 @@
 import { parentPort, workerData } from 'worker_threads';
-import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+// Импортируем ServiceInitializationTracker динамически, чтобы избежать проблем с инициализацией в worker'е
+let ServiceInitializationTracker = null;
 
 // Устанавливаем флаг воркера
 process.env.WORKER = 'true';
@@ -9,11 +10,28 @@ async function performPortfolioAnalysis() {
     try {
         // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем DatabaseConnectionManager для получения подключения с ожиданием в очереди
         const DatabaseConnectionManager = (await import('../utils/DatabaseConnectionManager.js')).default;
+        const LoggerService = (await import('../services/LoggerService.js')).default;
         const workerId = `portfolio-analysis-${Date.now()}`;
         
-        console.log(`📊 [Worker] Requesting database connection (${workerId})...`);
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.info('Requesting database connection', {
+                service: 'portfolioAnalysisWorker',
+                operation: 'performPortfolioAnalysis',
+                workerId
+            });
+        } else {
+            console.log(`📊 [Worker] Requesting database connection (${workerId})...`);
+        }
         connection = await DatabaseConnectionManager.acquireConnection(workerId, 60000);
-        console.log(`✅ [Worker] Database connection acquired (${connection.connectionId})`);
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.info('Database connection acquired', {
+                service: 'portfolioAnalysisWorker',
+                operation: 'performPortfolioAnalysis',
+                connectionId: connection.connectionId
+            });
+        } else {
+            console.log(`✅ [Worker] Database connection acquired (${connection.connectionId})`);
+        }
         
         const { 
             portfolioType, 
@@ -22,8 +40,18 @@ async function performPortfolioAnalysis() {
             analysisType // 'full' | 'positions-only'
         } = workerData;
 
-        console.log(`📊 [Worker] Starting ${analysisType} portfolio analysis for ${portfolioType} portfolio...`);
-        console.log(`📊 [Worker] Portfolio items: ${portfolioItems.length}`);
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.info('Starting portfolio analysis', {
+                service: 'portfolioAnalysisWorker',
+                operation: 'performPortfolioAnalysis',
+                analysisType,
+                portfolioType,
+                itemsCount: portfolioItems.length
+            });
+        } else {
+            console.log(`📊 [Worker] Starting ${analysisType} portfolio analysis for ${portfolioType} portfolio...`);
+            console.log(`📊 [Worker] Portfolio items: ${portfolioItems.length}`);
+        }
 
         // Динамически импортируем необходимые сервисы
         const NeuralNetworkService = (await import('../services/NeuralNetworkService.js')).default;
@@ -38,16 +66,48 @@ async function performPortfolioAnalysis() {
         try {
             const { ensureAssociations } = await import('../utils/ensureAssociations.js');
             await ensureAssociations();
-            console.log('✅ [Worker] All associations ensured');
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.info('All associations ensured', {
+                    service: 'portfolioAnalysisWorker',
+                    operation: 'performPortfolioAnalysis'
+                });
+            } else {
+                console.log('✅ [Worker] All associations ensured');
+            }
         } catch (assocError) {
-            console.warn('⚠️ [Worker] Could not ensure associations:', assocError.message);
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.warn('Could not ensure associations', {
+                    service: 'portfolioAnalysisWorker',
+                    operation: 'performPortfolioAnalysis',
+                    error: { message: assocError.message }
+                });
+            } else {
+                console.warn('⚠️ [Worker] Could not ensure associations:', assocError.message);
+            }
         }
 
-        // Проверяем глобальную инициализацию перед локальной
-        const isNeuralNetworkGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('NeuralNetworkService');
+        // Проверяем глобальную инициализацию перед локальной (динамический импорт)
+        let isNeuralNetworkGlobal = false;
+        try {
+            if (!ServiceInitializationTracker) {
+                ServiceInitializationTracker = (await import('../utils/ServiceInitializationTracker.js')).default;
+            }
+            if (ServiceInitializationTracker && typeof ServiceInitializationTracker.isServiceInitializedGlobally === 'function') {
+                isNeuralNetworkGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('NeuralNetworkService');
+            }
+        } catch (trackerError) {
+            // Игнорируем ошибки трекера - это не критично
+        }
         
         if (isNeuralNetworkGlobal) {
-            console.log('ℹ️ NeuralNetworkService already initialized globally, skipping full initialization in worker');
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.info('NeuralNetworkService already initialized globally, skipping full initialization in worker', {
+                    service: 'portfolioAnalysisWorker',
+                    operation: 'performPortfolioAnalysis'
+                });
+            } else {
+                console.log('ℹ️ NeuralNetworkService already initialized globally, skipping full initialization in worker');
+            }
         } else {
             // Инициализируем сервисы если нужно
             if (!NeuralNetworkService.isActive) {
@@ -94,7 +154,16 @@ async function performPortfolioAnalysis() {
                             }
                         }
                     } catch (strategyError) {
-                        console.warn(`⚠️ [Worker] Could not load strategy for ${item.ticker}:`, strategyError.message);
+                        if (LoggerService && LoggerService.isInitialized) {
+                            LoggerService.warn('Could not load strategy', {
+                                service: 'portfolioAnalysisWorker',
+                                operation: 'performPortfolioAnalysis',
+                                ticker: item.ticker,
+                                error: { message: strategyError.message }
+                            });
+                        } else {
+                            console.warn(`⚠️ [Worker] Could not load strategy for ${item.ticker}:`, strategyError.message);
+                        }
                     }
 
                     // Получаем предсказание через IntegratedAIService
@@ -105,10 +174,24 @@ async function performPortfolioAnalysis() {
                     const isIntegratedAIGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('IntegratedAIService');
                     
                     if (!isIntegratedAIGlobal && !IntegratedAIService.isInitialized) {
-                        console.log('🔧 IntegratedAIService not initialized globally, initializing in worker...');
+                        if (LoggerService && LoggerService.isInitialized) {
+                            LoggerService.info('IntegratedAIService not initialized globally, initializing in worker', {
+                                service: 'portfolioAnalysisWorker',
+                                operation: 'performPortfolioAnalysis'
+                            });
+                        } else {
+                            console.log('🔧 IntegratedAIService not initialized globally, initializing in worker...');
+                        }
                         await IntegratedAIService.initialize();
                     } else if (isIntegratedAIGlobal) {
-                        console.log('ℹ️ IntegratedAIService already initialized globally, using lightweight initialization');
+                        if (LoggerService && LoggerService.isInitialized) {
+                            LoggerService.info('IntegratedAIService already initialized globally, using lightweight initialization', {
+                                service: 'portfolioAnalysisWorker',
+                                operation: 'performPortfolioAnalysis'
+                            });
+                        } else {
+                            console.log('ℹ️ IntegratedAIService already initialized globally, using lightweight initialization');
+                        }
                         if (!IntegratedAIService.isInitialized) {
                             if (typeof IntegratedAIService.initializeLightweight === 'function') {
                                 await IntegratedAIService.initializeLightweight();
@@ -159,7 +242,15 @@ async function performPortfolioAnalysis() {
                                 positionValue: currentPrice * item.quantity
                             };
                         } catch (budgetError) {
-                            console.warn(`⚠️ [Worker] Could not get budget info:`, budgetError.message);
+                            if (LoggerService && LoggerService.isInitialized) {
+                                LoggerService.warn('Could not get budget info', {
+                                    service: 'portfolioAnalysisWorker',
+                                    operation: 'performPortfolioAnalysis',
+                                    error: { message: budgetError.message }
+                                });
+                            } else {
+                                console.warn(`⚠️ [Worker] Could not get budget info:`, budgetError.message);
+                            }
                         }
                     }
 
@@ -212,7 +303,16 @@ async function performPortfolioAnalysis() {
                     });
 
                 } catch (err) {
-                    console.warn(`⚠️ [Worker] Could not analyze ${item.ticker}:`, err.message);
+                    if (LoggerService && LoggerService.isInitialized) {
+                        LoggerService.warn('Could not analyze item', {
+                            service: 'portfolioAnalysisWorker',
+                            operation: 'performPortfolioAnalysis',
+                            ticker: item.ticker,
+                            error: { message: err.message }
+                        });
+                    } else {
+                        console.warn(`⚠️ [Worker] Could not analyze ${item.ticker}:`, err.message);
+                    }
                 }
             }
 
@@ -246,9 +346,18 @@ async function performPortfolioAnalysis() {
             analysis = await NeuralNetworkService.analyzePortfolio(portfolioItems, totalBudget);
         }
 
-        console.log(`✅ [Worker] Portfolio analysis completed`);
-        console.log(`   - Sell recommendations: ${analysis.sellRecommendations?.length || 0}`);
-        console.log(`   - Buy recommendations: ${analysis.buyRecommendations?.length || 0}`);
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.info('Portfolio analysis completed', {
+                service: 'portfolioAnalysisWorker',
+                operation: 'performPortfolioAnalysis',
+                sellRecommendationsCount: analysis.sellRecommendations?.length || 0,
+                buyRecommendationsCount: analysis.buyRecommendations?.length || 0
+            });
+        } else {
+            console.log(`✅ [Worker] Portfolio analysis completed`);
+            console.log(`   - Sell recommendations: ${analysis.sellRecommendations?.length || 0}`);
+            console.log(`   - Buy recommendations: ${analysis.buyRecommendations?.length || 0}`);
+        }
 
         // Отправляем результат
         parentPort.postMessage({
@@ -260,7 +369,16 @@ async function performPortfolioAnalysis() {
         });
 
     } catch (error) {
-        console.error('❌ [Worker] Portfolio analysis failed:', error);
+        const LoggerService = (await import('../services/LoggerService.js')).default;
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.error('Portfolio analysis failed', {
+                service: 'portfolioAnalysisWorker',
+                operation: 'performPortfolioAnalysis',
+                error: { message: error.message, stack: error.stack }
+            });
+        } else {
+            console.error('❌ [Worker] Portfolio analysis failed:', error);
+        }
         
         parentPort.postMessage({
             type: 'error',
@@ -274,7 +392,16 @@ async function performPortfolioAnalysis() {
         // Освобождаем подключение к БД
         if (connection && connection.release) {
             connection.release();
-            console.log(`🔓 [Worker] Database connection released (${connection.connectionId})`);
+            const LoggerService = (await import('../services/LoggerService.js')).default;
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.info('Database connection released', {
+                    service: 'portfolioAnalysisWorker',
+                    operation: 'performPortfolioAnalysis',
+                    connectionId: connection.connectionId
+                });
+            } else {
+                console.log(`🔓 [Worker] Database connection released (${connection.connectionId})`);
+            }
         }
     }
 }

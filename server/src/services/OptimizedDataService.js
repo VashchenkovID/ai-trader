@@ -81,7 +81,14 @@ class OptimizedDataService {
                     // Рекурсивно вызываем с адаптивными параметрами
                     return await this.prepareTrainingData(candles, adaptiveLookback, adaptiveHorizon, figi);
                 } else {
-                    console.warn(`⚠️ Insufficient data: ${candles?.length || 0} candles, need at least ${minRequired}`);
+                    const LoggerService = (await import('./LoggerService.js')).default;
+                    LoggerService.warn('Insufficient data for training', {
+                        service: 'OptimizedDataService',
+                        operation: 'prepareTrainingData',
+                        figi,
+                        candlesCount: candles?.length || 0,
+                        minRequired
+                    });
                     return { features: [], labels: [] };
                 }
             }
@@ -94,7 +101,13 @@ class OptimizedDataService {
                 try {
                     allCandles = await CacheService.getCandles(figi, 'DAY', 365, true);
                 } catch (error) {
-                    console.warn(`⚠️ Failed to preload candles for market features: ${error.message}`);
+                    const LoggerService = (await import('./LoggerService.js')).default;
+                    LoggerService.warn('Failed to preload candles for market features', {
+                        service: 'OptimizedDataService',
+                        operation: 'prepareTrainingData',
+                        figi,
+                        error: { message: error.message }
+                    });
                 }
             }
 
@@ -109,10 +122,19 @@ class OptimizedDataService {
 
             for (let i = lookbackPeriod; i < candles.length - predictionHorizon; i++) {
                 // Создаем окно данных
-                const window = candles.slice(i - lookbackPeriod, i);
+                // Преобразуем Sequelize модели в простые объекты, если нужно
+                const window = candles.slice(i - lookbackPeriod, i).map(c => {
+                    if (c && typeof c.toJSON === 'function') {
+                        return c.toJSON();
+                    }
+                    return c;
+                });
                 const futureCandle = candles[i + predictionHorizon];
+                const futureCandleData = futureCandle && typeof futureCandle.toJSON === 'function' 
+                    ? futureCandle.toJSON() 
+                    : futureCandle;
                 
-                if (window.length === lookbackPeriod && futureCandle) {
+                if (window.length === lookbackPeriod && futureCandleData) {
                     try {
                         // Логируем прогресс
                         processedSamples++;
@@ -124,21 +146,54 @@ class OptimizedDataService {
                         if (expectedFeatureSize === null) {
                             expectedFeatureSize = featureVector.length;
                         } else if (featureVector.length !== expectedFeatureSize) {
-                            console.warn(`⚠️ Feature size mismatch: expected ${expectedFeatureSize}, got ${featureVector.length}, skipping sample ${i}`);
+                            const LoggerService = (await import('./LoggerService.js')).default;
+                            LoggerService.warn('Feature size mismatch, skipping sample', {
+                                service: 'OptimizedDataService',
+                                operation: 'prepareTrainingData',
+                                figi,
+                                expectedSize: expectedFeatureSize,
+                                gotSize: featureVector.length,
+                                sampleIndex: i
+                            });
                             skippedSamples++;
                             continue;
                         }
                         
-                        // Создаем лейбл
-                        // Пропускаем медленный вызов getLabelFromSignals для ускорения
-                        // Используем стандартную логику (рост > 1%)
-                        const priceChange = ((futureCandle.close - window[window.length - 1].close) / window[window.length - 1].close) * 100;
-                        const label = priceChange > 1 ? 1 : 0;
+                        // Создаем лейбл с адаптивным порогом на основе волатильности
+                        const priceChange = ((futureCandleData.close - window[window.length - 1].close) / window[window.length - 1].close) * 100;
+                        
+                        // Рассчитываем волатильность окна для адаптивного порога
+                        const windowPrices = window.map(c => c.close);
+                        const volatility = this.calculateVolatility(windowPrices);
+                        const volatilityPercent = volatility * 100; // Конвертируем в проценты
+                        
+                        // Адаптивный порог: минимум 0.5%, максимум 2.0%, зависит от волатильности
+                        // Для волатильных инструментов порог выше, для стабильных - ниже
+                        const adaptiveThreshold = Math.max(0.5, Math.min(2.0, volatilityPercent * 0.8));
+                        
+                        // Учитываем направление тренда (простое скользящее среднее)
+                        const shortMA = windowPrices.slice(-5).reduce((sum, p) => sum + p, 0) / 5;
+                        const longMA = windowPrices.slice(-10).reduce((sum, p) => sum + p, 0) / 10;
+                        const trend = (shortMA - longMA) / longMA * 100; // Тренд в процентах
+                        const trendBonus = trend > 0 ? -0.2 : 0.2; // Если тренд вверх, снижаем порог для BUY
+                        
+                        // Финальный порог с учетом тренда
+                        const finalThreshold = adaptiveThreshold + trendBonus;
+                        
+                        // Создаем label: 1 если рост превышает адаптивный порог, иначе 0
+                        const label = priceChange > finalThreshold ? 1 : 0;
                         
                         features.push(featureVector);
                         labels.push(label);
                     } catch (featureError) {
-                        console.warn(`⚠️ Error creating feature vector for sample ${i}:`, featureError.message);
+                        const LoggerService = (await import('./LoggerService.js')).default;
+                        LoggerService.warn('Error creating feature vector', {
+                            service: 'OptimizedDataService',
+                            operation: 'prepareTrainingData',
+                            figi,
+                            sampleIndex: i,
+                            error: { message: featureError.message }
+                        });
                         skippedSamples++;
                         continue;
                     }
@@ -146,15 +201,27 @@ class OptimizedDataService {
             }
 
             if (skippedSamples > 0) {
-                console.warn(`⚠️ Skipped ${skippedSamples} samples due to inconsistent feature sizes`);
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn('Skipped samples due to inconsistent feature sizes', {
+                    service: 'OptimizedDataService',
+                    operation: 'prepareTrainingData',
+                    figi,
+                    skippedSamples,
+                    totalSamples: candles.length
+                });
             }
 
             const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
 
             return { features, labels };
         } catch (error) {
-            console.error('❌ Error preparing training data:', error);
-            console.error('Error stack:', error.stack);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error preparing training data', {
+                service: 'OptimizedDataService',
+                operation: 'prepareTrainingData',
+                figi,
+                error: { message: error.message, stack: error.stack }
+            });
             return { features: [], labels: [] };
         }
     }
@@ -171,25 +238,93 @@ class OptimizedDataService {
                 throw new Error('candles must be a non-empty array');
             }
             
+            // Преобразуем Sequelize модели в простые объекты, если нужно
+            const normalizedCandles = candles.map(c => {
+                if (c && typeof c.toJSON === 'function') {
+                    return c.toJSON();
+                }
+                return c;
+            });
+            
             // Валидация свечей - проверяем наличие всех обязательных полей
-            const validCandles = candles.filter(c => 
-                c && 
-                typeof c.close === 'number' && !isNaN(c.close) && c.close > 0 &&
-                typeof c.volume === 'number' && !isNaN(c.volume) && c.volume >= 0 &&
-                typeof c.high === 'number' && !isNaN(c.high) && c.high > 0 &&
-                typeof c.low === 'number' && !isNaN(c.low) && c.low > 0 &&
-                typeof c.time !== 'undefined' && c.time !== null &&
-                c.high >= c.low &&
-                c.high >= c.close &&
-                c.low <= c.close
-            );
+            let validCandles = normalizedCandles.filter(c => {
+                if (!c) return false;
+                
+                // Преобразуем time в Date, если это строка
+                let candleTime = c.time;
+                if (candleTime && typeof candleTime === 'string') {
+                    candleTime = new Date(candleTime);
+                } else if (candleTime && !(candleTime instanceof Date)) {
+                    candleTime = new Date(candleTime);
+                }
+                
+                return typeof c.close === 'number' && !isNaN(c.close) && c.close > 0 &&
+                    typeof c.volume === 'number' && !isNaN(c.volume) && c.volume >= 0 &&
+                    typeof c.high === 'number' && !isNaN(c.high) && c.high > 0 &&
+                    typeof c.low === 'number' && !isNaN(c.low) && c.low > 0 &&
+                    candleTime && !isNaN(candleTime.getTime()) &&
+                    c.high >= c.low &&
+                    c.high >= c.close &&
+                    c.low <= c.close;
+            });
+            
+            // Обновляем time в валидных свечах, если нужно
+            validCandles = validCandles.map(c => {
+                if (c.time && typeof c.time === 'string') {
+                    c.time = new Date(c.time);
+                } else if (c.time && !(c.time instanceof Date)) {
+                    c.time = new Date(c.time);
+                }
+                return c;
+            });
             
             if (validCandles.length === 0) {
                 throw new Error('No valid candles found - all candles missing required fields or have invalid values');
             }
             
             if (validCandles.length < candles.length) {
-                console.warn(`⚠️ Filtered out ${candles.length - validCandles.length} invalid candles`);
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn('Filtered out invalid candles', {
+                    service: 'OptimizedDataService',
+                    operation: 'createFeatureVector',
+                    figi,
+                    filteredCount: candles.length - validCandles.length,
+                    validCount: validCandles.length
+                });
+            }
+
+            // Обработка выбросов с использованием Winsorization (если доступен DataQualityService)
+            try {
+                const DataQualityService = (await import('./DataQualityService.js')).default;
+                if (DataQualityService && DataQualityService.isInitialized && validCandles.length > 10) {
+                    const processed = DataQualityService.processOutliers(validCandles, {
+                        method: 'winsorize',
+                        lowerPercentile: 5,
+                        upperPercentile: 95,
+                        fields: ['close', 'volume']
+                    });
+                    validCandles = processed.candles;
+                    // Логируем статистику обработки выбросов только если есть выбросы
+                    if (processed.stats.close && processed.stats.close.cappedCount > 0) {
+                        const LoggerService = (await import('./LoggerService.js')).default;
+                        LoggerService.info('Winsorization applied', {
+                            service: 'OptimizedDataService',
+                            operation: 'createFeatureVector',
+                            figi,
+                            priceOutliersCapped: processed.stats.close.cappedCount,
+                            volumeOutliersCapped: processed.stats.volume?.cappedCount || 0
+                        });
+                    }
+                }
+            } catch (error) {
+                // Игнорируем ошибки обработки выбросов - не критично
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn('Failed to process outliers', {
+                    service: 'OptimizedDataService',
+                    operation: 'createFeatureVector',
+                    figi,
+                    error: { message: error.message }
+                });
             }
             
             // Базовые фичи: цены и объемы (используем только валидные свечи)
@@ -215,7 +350,14 @@ class OptimizedDataService {
             
             // Убеждаемся, что у нас ровно 5 фичей для цен и объемов
             if (normalizedPrices.length !== 5) {
-                console.warn(`⚠️ Prices count mismatch: expected 5, got ${normalizedPrices.length}`);
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn('Prices count mismatch', {
+                    service: 'OptimizedDataService',
+                    operation: 'createFeatureVector',
+                    figi,
+                    expected: 5,
+                    got: normalizedPrices.length
+                });
                 while (normalizedPrices.length < 5) {
                     normalizedPrices.push(0);
                 }
@@ -225,7 +367,14 @@ class OptimizedDataService {
             }
             
             if (normalizedVolumes.length !== 5) {
-                console.warn(`⚠️ Volumes count mismatch: expected 5, got ${normalizedVolumes.length}`);
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn('Volumes count mismatch', {
+                    service: 'OptimizedDataService',
+                    operation: 'createFeatureVector',
+                    figi,
+                    expected: 5,
+                    got: normalizedVolumes.length
+                });
                 while (normalizedVolumes.length < 5) {
                     normalizedVolumes.push(0);
                 }
@@ -237,26 +386,69 @@ class OptimizedDataService {
             // Технические индикаторы
             const technicalFeatures = this.calculateTechnicalIndicators(prices, volumes, highs, lows);
             
-            // Временные фичи (используем последнюю валидную свечу)
-            const timeFeatures = this.createTimeFeatures(validCandles[validCandles.length - 1].time);
+            // Дополнительные фичи: взаимодействия, тренд, волатильность
+            const advancedFeatures = this.createAdvancedFeatures(
+                prices, 
+                volumes, 
+                technicalFeatures, 
+                validCandles
+            );
             
-            // Используем время последней валидной свечи для всех временных фичей
-            const lastCandleTime = validCandles[validCandles.length - 1].time;
+            // Временные фичи (используем последнюю валидную свечу)
+            const lastCandle = validCandles[validCandles.length - 1];
+            const lastCandleTime = lastCandle?.time;
+            
+            // Проверяем валидность времени последней свечи
+            let validTimestamp = lastCandleTime;
+            if (!validTimestamp || (validTimestamp instanceof Date && isNaN(validTimestamp.getTime()))) {
+                // Если время невалидно, используем текущее время
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn('Invalid time in last candle, using current time', {
+                    service: 'OptimizedDataService',
+                    operation: 'createFeatureVector',
+                    figi: figi || 'N/A',
+                    candlesCount: validCandles.length,
+                    lastCandleTime,
+                    lastCandle: lastCandle ? {
+                        hasTime: !!lastCandle.time,
+                        timeType: typeof lastCandle.time,
+                        timeValue: lastCandle.time,
+                        close: lastCandle.close,
+                        volume: lastCandle.volume
+                    } : null
+                });
+                validTimestamp = new Date();
+            } else if (!(validTimestamp instanceof Date)) {
+                // Если это строка или число, конвертируем в Date
+                validTimestamp = new Date(validTimestamp);
+                if (isNaN(validTimestamp.getTime())) {
+                    const LoggerService = (await import('./LoggerService.js')).default;
+                    LoggerService.warn('Invalid time in last candle, using current time', {
+                        service: 'OptimizedDataService',
+                        operation: 'createFeatureVector',
+                        figi: figi || 'N/A',
+                        lastCandleTime
+                    });
+                    validTimestamp = new Date();
+                }
+            }
+            
+            const timeFeatures = this.createTimeFeatures(validTimestamp);
             
             // Рыночные фичи (если доступны) - передаем предзагруженные свечи для оптимизации
-            const marketFeatures = await this.getMarketFeatures(figi, lastCandleTime, preloadedCandles);
+            const marketFeatures = await this.getMarketFeatures(figi, validTimestamp, preloadedCandles);
             
             // Новостные фичи и анализ настроений
-            const newsFeatures = await this.getNewsFeatures(figi, lastCandleTime);
+            const newsFeatures = await this.getNewsFeatures(figi, validTimestamp);
             
             // Telegram настроения
-            const telegramFeatures = await this.getTelegramFeatures(figi, lastCandleTime);
+            const telegramFeatures = await this.getTelegramFeatures(figi, validTimestamp);
             
             // Сигналы аналитиков
-            const signalsFeatures = await this.getSignalsFeatures(figi, lastCandleTime);
+            const signalsFeatures = await this.getSignalsFeatures(figi, validTimestamp);
             
             // Макроэкономические фичи (11 фичей: 8 базовых + 3 сырьевых: нефть, газ, золото)
-            const macroFeatures = await this.getMacroFeatures(lastCandleTime);
+            const macroFeatures = await this.getMacroFeatures(validTimestamp);
             
             // Фундаментальные фичи (P/E, P/B, EV/EBITDA, ROE, Debt/EBITDA, Operating Margin, Net Margin)
             const fundamentalFeatures = figi 
@@ -287,6 +479,7 @@ class OptimizedDataService {
             features.push(...normalizedPrices);
             features.push(...normalizedVolumes);
             features.push(...technicalFeatures);
+            features.push(...advancedFeatures);
             features.push(...timeFeatures);
             features.push(...marketFeatures);
             features.push(...newsFeatures);
@@ -299,10 +492,17 @@ class OptimizedDataService {
             features.push(...sectorFeatures);
             
             // Логирование и исправление размеров фичей
-            // Полный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) + 15 (macro: 8 базовых + 3 сырьевых + 2 валютных + 2 индекса) + 7 (fundamental) + 6 (options: IV, avgIV, ivRank, PCR, avgPCR, OI) + 2 (dividend: coverage, stability) + 4 (sector: условно для отраслевых инструментов) = 64
-            const expectedSize = 64;
+            // Полный набор: 5 (prices) + 5 (volumes) + 6 (technical) + 6 (advanced: interactions, trend, volatility) + 2 (time) + 3 (market) + 2 (news) + 2 (telegram) + 5 (signals) + 15 (macro: 8 базовых + 3 сырьевых + 2 валютных + 2 индекса) + 7 (fundamental) + 6 (options: IV, avgIV, ivRank, PCR, avgPCR, OI) + 2 (dividend: coverage, stability) + 4 (sector: условно для отраслевых инструментов) = 70
+            const expectedSize = 70;
             if (features.length !== expectedSize) {
-                console.warn(`⚠️ Unexpected feature size: ${features.length}, expected ${expectedSize}`);
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn('Unexpected feature size', {
+                    service: 'OptimizedDataService',
+                    operation: 'createFeatureVector',
+                    figi,
+                    gotSize: features.length,
+                    expectedSize
+                });
                 
                 // Исправляем размер фичей
                 if (features.length < expectedSize) {
@@ -327,10 +527,16 @@ class OptimizedDataService {
             
             return clippedFeatures;
         } catch (error) {
-            console.error('Error creating feature vector:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error creating feature vector', {
+                service: 'OptimizedDataService',
+                operation: 'createFeatureVector',
+                figi,
+                error: { message: error.message, stack: error.stack }
+            });
             // Возвращаем нулевой вектор при ошибке с правильным размером
-            // Полный набор: 5 + 5 + 6 + 2 + 3 + 2 + 2 + 5 + 15 + 7 + 6 + 2 + 4 = 64
-            return new Array(64).fill(0);
+            // Полный набор: 5 + 5 + 6 + 6 + 2 + 3 + 2 + 2 + 5 + 15 + 7 + 6 + 2 + 4 = 70
+            return new Array(70).fill(0);
         }
     }
 
@@ -402,7 +608,12 @@ class OptimizedDataService {
 
             return splitData;
         } catch (error) {
-            console.error('Error splitting data:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error splitting data', {
+                service: 'OptimizedDataService',
+                operation: 'splitData',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -455,7 +666,13 @@ class OptimizedDataService {
             await DividendService.updateDividends(figi);
 
         } catch (error) {
-            console.error(`❌ Error updating data for ${figi}:`, error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error updating data', {
+                service: 'OptimizedDataService',
+                operation: 'updateData',
+                figi,
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -478,7 +695,12 @@ class OptimizedDataService {
             }
             return results;
         } catch (error) {
-            console.error('❌ Error updating all data:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error updating all data', {
+                service: 'OptimizedDataService',
+                operation: 'updateAllData',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -494,7 +716,12 @@ class OptimizedDataService {
         try {
             return await CacheService.getTradingHours(figi);
         } catch (error) {
-            console.error('Error getting trading hours:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error getting trading hours', {
+                service: 'OptimizedDataService',
+                operation: 'getTradingHours',
+                error: { message: error.message, stack: error.stack }
+            });
             return null;
         }
     }
@@ -512,7 +739,12 @@ class OptimizedDataService {
             
             return currentTime >= tradingHours.open && currentTime <= tradingHours.close;
         } catch (error) {
-            console.error('Error checking market status:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error checking market status', {
+                service: 'OptimizedDataService',
+                operation: 'checkMarketStatus',
+                error: { message: error.message, stack: error.stack }
+            });
             return false;
         }
     }
@@ -594,7 +826,13 @@ class OptimizedDataService {
             
             // Всего должно быть 6 фичей (упрощенный набор)
             if (features.length !== 6) {
-                console.warn(`⚠️ Technical indicators count mismatch: expected 6, got ${features.length}`);
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn('Technical indicators count mismatch', {
+                    service: 'OptimizedDataService',
+                    operation: 'calculateTechnicalIndicators',
+                    expected: 6,
+                    got: features.length
+                });
                 // Дополняем или обрезаем до 6
                 while (features.length < 6) {
                     features.push(0);
@@ -606,8 +844,139 @@ class OptimizedDataService {
             
             return features;
         } catch (error) {
-            console.error('Error calculating technical indicators:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error calculating technical indicators', {
+                service: 'OptimizedDataService',
+                operation: 'calculateTechnicalIndicators',
+                error: { message: error.message, stack: error.stack }
+            });
             return new Array(6).fill(0);
+        }
+    }
+
+    /**
+     * Создание дополнительных фичей: взаимодействия, тренд, волатильность
+     * @param {Array} prices - Массив цен
+     * @param {Array} volumes - Массив объемов
+     * @param {Array} technicalFeatures - Технические индикаторы [rsi, macd, bbPosition, sma20, ema12, volumeSma]
+     * @param {Array} candles - Массив свечей
+     * @returns {Array} - Массив дополнительных фичей
+     */
+    createAdvancedFeatures(prices, volumes, technicalFeatures, candles) {
+        try {
+            const features = [];
+            
+            if (prices.length < 2 || technicalFeatures.length < 6) {
+                return new Array(6).fill(0); // Возвращаем 6 фичей по умолчанию
+            }
+            
+            const currentPrice = prices[prices.length - 1];
+            const [rsi, macd, bbPosition, sma20, ema12, volumeSma] = technicalFeatures;
+            
+            // 1. Взаимодействия между фичами (2 фичи)
+            // RSI * MACD - комбинация осциллятора и трендового индикатора
+            const rsiMacdInteraction = (rsi / 100) * macd; // Нормализуем RSI к 0-1
+            features.push(Math.max(-1, Math.min(1, rsiMacdInteraction)));
+            
+            // RSI * BB Position - комбинация осциллятора и волатильности
+            const rsiBbInteraction = (rsi / 100) * bbPosition;
+            features.push(Math.max(-1, Math.min(1, rsiBbInteraction)));
+            
+            // 2. Фичи тренда (2 фичи)
+            // Сила тренда: разница между короткой и длинной MA, нормализованная
+            const shortMA = ema12 * currentPrice; // Восстанавливаем из нормализованного значения
+            const longMA = sma20 * currentPrice * 2; // Восстанавливаем из нормализованного значения
+            const trendStrength = currentPrice > 0 && longMA > 0 
+                ? Math.abs(shortMA - longMA) / longMA 
+                : 0;
+            features.push(Math.min(1, trendStrength)); // Ограничиваем до 1
+            
+            // Направление тренда: 1 для восходящего, -1 для нисходящего, 0 для бокового
+            const trendDirection = shortMA > longMA ? 1 : (shortMA < longMA ? -1 : 0);
+            features.push(trendDirection);
+            
+            // 3. Фичи волатильности (2 фичи)
+            // Относительная волатильность: текущая волатильность / историческая волатильность
+            if (prices.length >= 20) {
+                const recentPrices = prices.slice(-10);
+                const historicalPrices = prices.slice(-20);
+                
+                const currentVolatility = this.calculateVolatility(recentPrices);
+                const historicalVolatility = this.calculateVolatility(historicalPrices);
+                
+                const volatilityRatio = historicalVolatility > 0 
+                    ? currentVolatility / historicalVolatility 
+                    : 1;
+                features.push(Math.min(3, volatilityRatio)); // Ограничиваем до 3x
+            } else {
+                features.push(1); // Нейтральное значение при недостатке данных
+            }
+            
+            // ATR нормализованный относительно цены
+            if (candles && candles.length >= 14) {
+                const atr = this.calculateATR(candles, 14);
+                const atrRatio = currentPrice > 0 ? atr / currentPrice : 0;
+                features.push(Math.min(0.1, atrRatio)); // Ограничиваем до 10% от цены
+            } else {
+                features.push(0);
+            }
+            
+            // Всего должно быть 6 дополнительных фичей
+            if (features.length !== 6) {
+                while (features.length < 6) {
+                    features.push(0);
+                }
+                if (features.length > 6) {
+                    features.splice(6);
+                }
+            }
+            
+            return features;
+        } catch (error) {
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error creating advanced features', {
+                service: 'OptimizedDataService',
+                operation: 'createAdvancedFeatures',
+                error: { message: error.message, stack: error.stack }
+            });
+            return new Array(6).fill(0);
+        }
+    }
+
+    /**
+     * Расчет волатильности (стандартное отклонение доходности)
+     * @param {Array} prices - Массив цен
+     * @returns {number} - Волатильность
+     */
+    calculateVolatility(prices) {
+        try {
+            if (!prices || prices.length < 2) {
+                return 0;
+            }
+            
+            // Вычисляем доходности
+            const returns = [];
+            for (let i = 1; i < prices.length; i++) {
+                if (prices[i - 1] > 0) {
+                    returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
+                }
+            }
+            
+            if (returns.length === 0) {
+                return 0;
+            }
+            
+            // Средняя доходность
+            const meanReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+            
+            // Дисперсия
+            const variance = returns.reduce((sum, r) => sum + Math.pow(r - meanReturn, 2), 0) / returns.length;
+            
+            // Стандартное отклонение (волатильность)
+            return Math.sqrt(variance);
+        } catch (error) {
+            console.error('Error calculating volatility:', error);
+            return 0;
         }
     }
 
@@ -1438,7 +1807,31 @@ class OptimizedDataService {
             const SignalCacheService = (await import('./SignalCacheService.js')).default;
             
             // Получаем активные сигналы на указанную дату (только до timestamp!)
-            const timestampDate = new Date(timestamp);
+            // Проверяем валидность timestamp
+            let timestampDate;
+            if (timestamp) {
+                if (timestamp instanceof Date) {
+                    timestampDate = timestamp;
+                } else {
+                    timestampDate = new Date(timestamp);
+                }
+                // Проверяем, что дата валидна
+                if (isNaN(timestampDate.getTime()) || !(timestampDate instanceof Date)) {
+                    // Если дата невалидна, используем текущую дату
+                    console.warn(`⚠️ Invalid timestamp in getSignalsFeatures for ${figi}, using current date`);
+                    timestampDate = new Date();
+                }
+            } else {
+                // Если timestamp не указан, используем текущую дату
+                timestampDate = new Date();
+            }
+            
+            // Финальная проверка перед вызовом
+            if (isNaN(timestampDate.getTime())) {
+                console.error(`❌ Failed to create valid date in getSignalsFeatures for ${figi}, returning default values`);
+                return [0, 0.5, 0, 1, 0.5]; // Возвращаем нейтральные значения
+            }
+            
             const signals = await SignalCacheService.getSignalsByDate(figi, timestampDate);
             
             if (signals.length === 0) {

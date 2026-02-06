@@ -4,7 +4,8 @@ import CachedInstrument from '../models/CachedInstrument.js';
 import TradingEngine from '../services/TradingEngine.js';
 import ServiceManager from '../services/ServiceManager.js';
 import { setGlobalServiceManager } from '../services/GlobalServiceManager.js';
-import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+// Импортируем ServiceInitializationTracker динамически, чтобы избежать проблем с инициализацией в worker'е
+let ServiceInitializationTracker = null;
 
 // Устанавливаем флаг воркера
 process.env.WORKER = 'true';
@@ -14,8 +15,26 @@ async function performPortfolioPricesUpdate() {
         // Инициализируем ServiceManager для использования в сервисах
         setGlobalServiceManager(ServiceManager);
         
-        // Проверяем глобальную инициализацию
-        const isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
+        // Проверяем глобальную инициализацию (динамический импорт для избежания проблем в worker'е)
+        let isServiceManagerGlobal = false;
+        try {
+            if (!ServiceInitializationTracker) {
+                ServiceInitializationTracker = (await import('../utils/ServiceInitializationTracker.js')).default;
+            }
+            if (ServiceInitializationTracker && typeof ServiceInitializationTracker.isServiceInitializedGlobally === 'function') {
+                isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
+            }
+        } catch (trackerError) {
+            // Игнорируем ошибки трекера - это не критично
+            const LoggerService = (await import('../services/LoggerService.js')).default;
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.warn('ServiceInitializationTracker error', {
+                    service: 'portfolioPricesUpdateWorker',
+                    operation: 'performPortfolioPricesUpdate',
+                    error: { message: trackerError.message }
+                });
+            }
+        }
         
         if (!isServiceManagerGlobal && !ServiceManager.isInitialized) {
             await ServiceManager.initialize();
@@ -95,7 +114,17 @@ async function performPortfolioPricesUpdate() {
 
                         totalUpdated++;
                     } catch (updateError) {
-                        console.error(`❌ [Portfolio Worker] Error updating price for ${priceData.figi}:`, updateError.message);
+                        const LoggerService = (await import('../services/LoggerService.js')).default;
+                        if (LoggerService && LoggerService.isInitialized) {
+                            LoggerService.error('Error updating price', {
+                                service: 'portfolioPricesUpdateWorker',
+                                operation: 'performPortfolioPricesUpdate',
+                                figi: priceData.figi,
+                                error: { message: updateError.message }
+                            });
+                        } else {
+                            console.error(`❌ [Portfolio Worker] Error updating price for ${priceData.figi}:`, updateError.message);
+                        }
                         totalFailed++;
                     }
                 }
@@ -116,7 +145,17 @@ async function performPortfolioPricesUpdate() {
                     await new Promise(resolve => setTimeout(resolve, 200));
                 }
             } catch (batchError) {
-                console.error(`❌ [Portfolio Worker] Error processing batch ${batchIndex + 1}:`, batchError.message);
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.error('Error processing batch', {
+                        service: 'portfolioPricesUpdateWorker',
+                        operation: 'performPortfolioPricesUpdate',
+                        batchIndex: batchIndex + 1,
+                        error: { message: batchError.message }
+                    });
+                } else {
+                    console.error(`❌ [Portfolio Worker] Error processing batch ${batchIndex + 1}:`, batchError.message);
+                }
                 totalFailed += batch.length;
             }
         }
@@ -137,7 +176,16 @@ async function performPortfolioPricesUpdate() {
         });
 
     } catch (error) {
-        console.error('❌ [Portfolio Worker] Portfolio prices update failed:', error);
+        const LoggerService = (await import('../services/LoggerService.js')).default;
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.error('Portfolio prices update failed', {
+                service: 'portfolioPricesUpdateWorker',
+                operation: 'performPortfolioPricesUpdate',
+                error: { message: error.message, stack: error.stack }
+            });
+        } else {
+            console.error('❌ [Portfolio Worker] Portfolio prices update failed:', error);
+        }
         
         parentPort.postMessage({
             type: 'error',

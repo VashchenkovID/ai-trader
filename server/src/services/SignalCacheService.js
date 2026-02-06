@@ -18,7 +18,12 @@ class SignalCacheService {
         try {
             this.isInitialized = true;
         } catch (error) {
-            console.error('❌ Ошибка инициализации SignalCacheService:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error initializing SignalCacheService', {
+                service: 'SignalCacheService',
+                operation: 'initialize',
+                error: { message: error.message, stack: error.stack }
+            });
             throw error;
         }
     }
@@ -72,13 +77,25 @@ class SignalCacheService {
             } catch (apiError) {
                 // 404 или "Instrument not found" - это нормально, инструмент просто не найден
                 if (!apiError.message || (!apiError.message.includes('404') && !apiError.message.includes('Instrument not found'))) {
-                    console.warn(`⚠️ Ошибка поиска инструмента ${instrumentUid} через API:`, apiError.message);
+                    const LoggerService = (await import('./LoggerService.js')).default;
+                    LoggerService.warn('Error finding instrument via API', {
+                        service: 'SignalCacheService',
+                        operation: 'convertInstrumentUidToFigi',
+                        instrumentUid,
+                        error: { message: apiError.message }
+                    });
                 }
             }
 
             return null;
         } catch (error) {
-            console.error(`❌ Ошибка конвертации instrumentUid ${instrumentUid} в FIGI:`, error.message);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error converting instrumentUid to FIGI', {
+                service: 'SignalCacheService',
+                operation: 'convertInstrumentUidToFigi',
+                instrumentUid,
+                error: { message: error.message }
+            });
             return null;
         }
     }
@@ -225,7 +242,13 @@ class SignalCacheService {
                         // Игнорируем ошибки обновления при race condition
                     }
                 } else {
-                    console.error(`❌ Ошибка сохранения сигнала ${signal.signalId}:`, error.message);
+                    const LoggerService = (await import('./LoggerService.js')).default;
+                    LoggerService.error('Error saving signal', {
+                        service: 'SignalCacheService',
+                        operation: 'saveSignals',
+                        signalId: signal.signalId,
+                        error: { message: error.message }
+                    });
                     skippedCount++;
                 }
             }
@@ -357,7 +380,13 @@ class SignalCacheService {
                 }
 
             } catch (error) {
-                console.error(`❌ Ошибка отправки группированных сигналов для ${figi}:`, error.message);
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Error sending grouped signals', {
+                    service: 'SignalCacheService',
+                    operation: 'sendGroupedSignals',
+                    figi,
+                    error: { message: error.message }
+                });
             }
         }
     }
@@ -394,13 +423,24 @@ class SignalCacheService {
                     }
                 } catch (error) {
                     errorCount++;
-                    console.error(`❌ Ошибка обновления FIGI для сигнала ${signal.signalId}:`, error.message);
+                    const LoggerService = (await import('./LoggerService.js')).default;
+                    LoggerService.error('Error updating FIGI for signal', {
+                        service: 'SignalCacheService',
+                        operation: 'updateMissingFigi',
+                        signalId: signal.signalId,
+                        error: { message: error.message }
+                    });
                 }
             }
 
             return updatedCount;
         } catch (error) {
-            console.error('❌ Ошибка обновления FIGI для сигналов:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error updating FIGI for signals', {
+                service: 'SignalCacheService',
+                operation: 'updateMissingFigi',
+                error: { message: error.message, stack: error.stack }
+            });
             return 0;
         }
     }
@@ -418,7 +458,12 @@ class SignalCacheService {
             const result = await TinkoffApiService.getSignals(figi, options);
 
             if (!result.success || !result.data || !result.data.signals) {
-                console.warn(`⚠️ Не удалось получить сигналы для ${figi}`);
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn('Failed to get signals', {
+                    service: 'SignalCacheService',
+                    operation: 'fetchAndCacheSignals',
+                    figi
+                });
                 return { success: false, savedCount: 0 };
             }
 
@@ -432,7 +477,13 @@ class SignalCacheService {
                 totalSignals: signals.length
             };
         } catch (error) {
-            console.error(`❌ Ошибка загрузки и кэширования сигналов для ${figi}:`, error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error loading and caching signals', {
+                service: 'SignalCacheService',
+                operation: 'fetchAndCacheSignals',
+                figi,
+                error: { message: error.message, stack: error.stack }
+            });
             return { success: false, savedCount: 0, error: error.message };
         }
     }
@@ -486,7 +537,13 @@ class SignalCacheService {
 
             return signals;
         } catch (error) {
-            console.error(`❌ Ошибка получения сигналов из БД для ${figi}:`, error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error getting signals from DB', {
+                service: 'SignalCacheService',
+                operation: 'getSignals',
+                figi,
+                error: { message: error.message, stack: error.stack }
+            });
             return [];
         }
     }
@@ -572,7 +629,12 @@ class SignalCacheService {
 
             return signalsWithInstrument;
         } catch (error) {
-            console.error('❌ Ошибка получения всех сигналов из БД:', error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error getting all signals from DB', {
+                service: 'SignalCacheService',
+                operation: 'getAllSignals',
+                error: { message: error.message, stack: error.stack }
+            });
             return [];
         }
     }
@@ -585,7 +647,41 @@ class SignalCacheService {
      */
     async getSignalsByDate(figi, date) {
         try {
-            const targetDate = date instanceof Date ? date : new Date(date);
+            // Проверяем валидность даты
+            let targetDate;
+            if (date instanceof Date) {
+                targetDate = date;
+            } else if (date) {
+                targetDate = new Date(date);
+            } else {
+                // Если дата не указана, используем текущую дату
+                targetDate = new Date();
+            }
+
+            // Проверяем, что дата валидна
+            if (isNaN(targetDate.getTime()) || !(targetDate instanceof Date)) {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn('Invalid date provided to getSignalsByDate', {
+                    service: 'SignalCacheService',
+                    operation: 'getSignalsByDate',
+                    figi,
+                    providedDate: date,
+                    usingCurrentDate: true
+                });
+                targetDate = new Date(); // Используем текущую дату как fallback
+            }
+
+            // Дополнительная проверка: убеждаемся, что дата действительно валидна
+            if (isNaN(targetDate.getTime())) {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.error('Failed to create valid date', {
+                    service: 'SignalCacheService',
+                    operation: 'getSignalsByDate',
+                    figi,
+                    providedDate: date
+                });
+                return []; // Возвращаем пустой массив вместо ошибки
+            }
 
             const signals = await CachedSignal.findAll({
                 where: {
@@ -602,7 +698,25 @@ class SignalCacheService {
 
             return signals;
         } catch (error) {
-            console.error(`❌ Ошибка получения сигналов на дату ${date} для ${figi}:`, error);
+            // Если ошибка связана с невалидной датой, возвращаем пустой массив
+            if (error.message && error.message.includes('Invalid date')) {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                LoggerService.warn('Invalid date in getSignalsByDate', {
+                    service: 'SignalCacheService',
+                    operation: 'getSignalsByDate',
+                    figi,
+                    errorMessage: error.message
+                });
+                return [];
+            }
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error getting signals by date', {
+                service: 'SignalCacheService',
+                operation: 'getSignalsByDate',
+                figi,
+                date,
+                error: { message: error.message, stack: error.stack }
+            });
             return [];
         }
     }
@@ -682,7 +796,12 @@ class SignalCacheService {
             });
 
         } catch (error) {
-            console.error(`❌ Ошибка отправки сигнала в Telegram:`, error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error sending signal to Telegram', {
+                service: 'SignalCacheService',
+                operation: 'sendSignalToTelegram',
+                error: { message: error.message, stack: error.stack }
+            });
             // Не бросаем ошибку, чтобы не прерывать сохранение сигналов
         }
     }
@@ -773,7 +892,13 @@ class SignalCacheService {
             const timeSinceUpdate = Date.now() - new Date(lastSignal.updatedAt).getTime();
             return timeSinceUpdate > this.cacheTimeout;
         } catch (error) {
-            console.error(`❌ Ошибка проверки необходимости обновления кэша для ${figi}:`, error);
+            const LoggerService = (await import('./LoggerService.js')).default;
+            LoggerService.error('Error checking cache update need', {
+                service: 'SignalCacheService',
+                operation: 'shouldUpdateCache',
+                figi,
+                error: { message: error.message, stack: error.stack }
+            });
             return true; // В случае ошибки лучше обновить
         }
     }

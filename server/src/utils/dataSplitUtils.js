@@ -170,13 +170,144 @@ function shufflePairs(features, labels) {
  * @param {Array} features - Массив фичей
  * @param {Array} labels - Массив меток
  * @param {Object} options - Опции разделения
+ * @param {number} options.trainRatio - Доля обучающей выборки (по умолчанию 0.7)
+ * @param {number} options.validationRatio - Доля валидационной выборки (по умолчанию 0.15)
+ * @param {number} options.testRatio - Доля тестовой выборки (по умолчанию 0.15)
+ * @param {number} options.gapDays - Gap между train и validation в количестве примеров (по умолчанию 5)
  * @returns {Object} - {train: {features, labels}, validation: {features, labels}, test: {features, labels}}
  */
 export function timeBasedSplit(features, labels, options = {}) {
-    return trainValidationTestSplit(features, labels, {
-        ...options,
-        shuffle: false,
-        timeBased: true
-    });
+    const {
+        trainRatio = 0.7,
+        validationRatio = 0.15,
+        testRatio = 0.15,
+        gapDays = 5 // Gap между train и validation для предотвращения data leakage
+    } = options;
+
+    // Проверка корректности пропорций
+    const totalRatio = trainRatio + validationRatio + testRatio;
+    if (Math.abs(totalRatio - 1.0) > 0.001) {
+        throw new Error(`Sum of ratios must equal 1.0, got ${totalRatio}`);
+    }
+
+    if (features.length !== labels.length) {
+        throw new Error(`Features and labels must have the same length. Got ${features.length} and ${labels.length}`);
+    }
+
+    if (features.length === 0) {
+        return {
+            train: { features: [], labels: [] },
+            validation: { features: [], labels: [] },
+            test: { features: [], labels: [] }
+        };
+    }
+
+    // Вычисляем границы разделения
+    const trainEnd = Math.floor(features.length * trainRatio);
+    
+    // Добавляем gap между train и validation для предотвращения data leakage
+    const gapSize = Math.min(gapDays, Math.floor(features.length * 0.05)); // Gap не более 5% данных
+    const validationStart = trainEnd + gapSize;
+    const validationEnd = validationStart + Math.floor(features.length * validationRatio);
+    
+    // Проверяем, что после gap и validation остается место для test
+    if (validationEnd >= features.length) {
+        // Если не хватает места, уменьшаем gap
+        const adjustedGap = Math.max(0, features.length - Math.floor(features.length * validationRatio) - trainEnd - Math.floor(features.length * testRatio));
+        const adjustedValidationStart = trainEnd + adjustedGap;
+        const adjustedValidationEnd = adjustedValidationStart + Math.floor(features.length * validationRatio);
+        
+        return {
+            train: {
+                features: features.slice(0, trainEnd),
+                labels: labels.slice(0, trainEnd)
+            },
+            validation: {
+                features: features.slice(adjustedValidationStart, adjustedValidationEnd),
+                labels: labels.slice(adjustedValidationStart, adjustedValidationEnd)
+            },
+            test: {
+                features: features.slice(adjustedValidationEnd),
+                labels: labels.slice(adjustedValidationEnd)
+            }
+        };
+    }
+
+    // Разделяем данные с gap
+    return {
+        train: {
+            features: features.slice(0, trainEnd),
+            labels: labels.slice(0, trainEnd)
+        },
+        validation: {
+            features: features.slice(validationStart, validationEnd),
+            labels: labels.slice(validationStart, validationEnd)
+        },
+        test: {
+            features: features.slice(validationEnd),
+            labels: labels.slice(validationEnd)
+        }
+    };
+}
+
+/**
+ * Walk-Forward Validation для временных рядов
+ * Разделяет данные на несколько скользящих окон train/validation
+ * @param {Array} features - Массив фичей
+ * @param {Array} labels - Массив меток
+ * @param {Object} options - Опции разделения
+ * @param {number} options.initialTrainSize - Начальный размер обучающей выборки (по умолчанию 0.6)
+ * @param {number} options.validationSize - Размер валидационной выборки (по умолчанию 0.2)
+ * @param {number} options.stepSize - Шаг для скользящего окна (по умолчанию 0.1)
+ * @param {number} options.gapDays - Gap между train и validation (по умолчанию 5)
+ * @returns {Array} - Массив объектов {train: {features, labels}, validation: {features, labels}, fold: number}
+ */
+export function walkForwardValidation(features, labels, options = {}) {
+    const {
+        initialTrainSize = 0.6,
+        validationSize = 0.2,
+        stepSize = 0.1,
+        gapDays = 5
+    } = options;
+
+    if (features.length !== labels.length) {
+        throw new Error(`Features and labels must have the same length. Got ${features.length} and ${labels.length}`);
+    }
+
+    if (features.length === 0) {
+        return [];
+    }
+
+    const total = features.length;
+    const initialTrainEnd = Math.floor(total * initialTrainSize);
+    const validationWindowSize = Math.floor(total * validationSize);
+    const step = Math.max(1, Math.floor(total * stepSize));
+    const gapSize = Math.min(gapDays, Math.floor(total * 0.05));
+
+    const folds = [];
+    let trainEnd = initialTrainEnd;
+    let foldNumber = 0;
+
+    while (trainEnd + gapSize + validationWindowSize <= total) {
+        const validationStart = trainEnd + gapSize;
+        const validationEnd = Math.min(validationStart + validationWindowSize, total);
+
+        folds.push({
+            fold: foldNumber++,
+            train: {
+                features: features.slice(0, trainEnd),
+                labels: labels.slice(0, trainEnd)
+            },
+            validation: {
+                features: features.slice(validationStart, validationEnd),
+                labels: labels.slice(validationStart, validationEnd)
+            }
+        });
+
+        // Сдвигаем окно
+        trainEnd += step;
+    }
+
+    return folds;
 }
 

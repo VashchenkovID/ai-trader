@@ -5,7 +5,8 @@ import CachedSignal from '../models/CachedSignal.js';
 import { Op } from 'sequelize';
 import ServiceManager from '../services/ServiceManager.js';
 import { setGlobalServiceManager } from '../services/GlobalServiceManager.js';
-import ServiceInitializationTracker from '../utils/ServiceInitializationTracker.js';
+// Импортируем ServiceInitializationTracker динамически, чтобы избежать проблем с инициализацией в worker'е
+let ServiceInitializationTracker = null;
 
 // Устанавливаем флаг воркера
 process.env.WORKER = 'true';
@@ -15,14 +16,48 @@ async function performActiveSignalsPricesUpdate() {
         // Инициализируем ServiceManager для использования в сервисах
         setGlobalServiceManager(ServiceManager);
         
-        // Проверяем глобальную инициализацию
-        const isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
+        // Проверяем глобальную инициализацию (динамический импорт для избежания проблем в worker'е)
+        let isServiceManagerGlobal = false;
+        try {
+            if (!ServiceInitializationTracker) {
+                ServiceInitializationTracker = (await import('../utils/ServiceInitializationTracker.js')).default;
+            }
+            if (ServiceInitializationTracker && typeof ServiceInitializationTracker.isServiceInitializedGlobally === 'function') {
+                isServiceManagerGlobal = await ServiceInitializationTracker.isServiceInitializedGlobally('ServiceManager');
+            }
+        } catch (trackerError) {
+            // Игнорируем ошибки трекера - это не критично
+            const LoggerService = (await import('../services/LoggerService.js')).default;
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.warn('ServiceInitializationTracker error', {
+                    service: 'activeSignalsPricesUpdateWorker',
+                    operation: 'performActiveSignalsPricesUpdate',
+                    error: { message: trackerError.message }
+                });
+            }
+        }
         
         if (!isServiceManagerGlobal && !ServiceManager.isInitialized) {
-            console.log('🔧 [Active Signals Worker] ServiceManager not initialized globally, initializing in worker...');
+            const LoggerService = (await import('../services/LoggerService.js')).default;
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.info('ServiceManager not initialized globally, initializing in worker', {
+                    service: 'activeSignalsPricesUpdateWorker',
+                    operation: 'performActiveSignalsPricesUpdate'
+                });
+            } else {
+                console.log('🔧 [Active Signals Worker] ServiceManager not initialized globally, initializing in worker...');
+            }
             await ServiceManager.initialize();
         } else if (isServiceManagerGlobal) {
-            console.log('ℹ️ [Active Signals Worker] ServiceManager already initialized globally, skipping full initialization');
+            const LoggerService = (await import('../services/LoggerService.js')).default;
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.info('ServiceManager already initialized globally, skipping full initialization', {
+                    service: 'activeSignalsPricesUpdateWorker',
+                    operation: 'performActiveSignalsPricesUpdate'
+                });
+            } else {
+                console.log('ℹ️ [Active Signals Worker] ServiceManager already initialized globally, skipping full initialization');
+            }
         }
 
         const startTime = Date.now();
@@ -30,7 +65,15 @@ async function performActiveSignalsPricesUpdate() {
         let totalFailed = 0;
         const triggeredSignals = [];
 
-        console.log('📊 [Active Signals Worker] Starting active signals prices update...');
+        const LoggerService = (await import('../services/LoggerService.js')).default;
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.info('Starting active signals prices update', {
+                service: 'activeSignalsPricesUpdateWorker',
+                operation: 'performActiveSignalsPricesUpdate'
+            });
+        } else {
+            console.log('📊 [Active Signals Worker] Starting active signals prices update...');
+        }
 
         // Получаем активные сигналы (endDt > now)
         const now = new Date();
@@ -47,7 +90,14 @@ async function performActiveSignalsPricesUpdate() {
         });
 
         if (activeSignals.length === 0) {
-            console.log('⚠️ [Active Signals Worker] No active signals found');
+            if (LoggerService && LoggerService.isInitialized) {
+                LoggerService.info('No active signals found', {
+                    service: 'activeSignalsPricesUpdateWorker',
+                    operation: 'performActiveSignalsPricesUpdate'
+                });
+            } else {
+                console.log('⚠️ [Active Signals Worker] No active signals found');
+            }
             parentPort.postMessage({
                 type: 'done',
                 data: {
@@ -65,7 +115,16 @@ async function performActiveSignalsPricesUpdate() {
         // Извлекаем уникальные FIGI
         const figis = [...new Set(activeSignals.map(s => s.figi).filter(f => f))];
 
-        console.log(`📊 [Active Signals Worker] Updating prices for ${figis.length} instruments with ${activeSignals.length} active signals...`);
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.info('Updating prices for instruments', {
+                service: 'activeSignalsPricesUpdateWorker',
+                operation: 'performActiveSignalsPricesUpdate',
+                instrumentsCount: figis.length,
+                signalsCount: activeSignals.length
+            });
+        } else {
+            console.log(`📊 [Active Signals Worker] Updating prices for ${figis.length} instruments with ${activeSignals.length} active signals...`);
+        }
 
         // Разбиваем на батчи по 50 инструментов (лимит API)
         const batchSize = 50;
@@ -160,23 +219,63 @@ async function performActiveSignalsPricesUpdate() {
                             if (signal.direction === 'SIGNAL_DIRECTION_BUY') {
                                 // Для BUY: targetPrice должна быть выше initialPrice
                                 if (targetPrice && initialPrice && targetPrice <= initialPrice) {
-                                    console.warn(`⚠️ [Active Signals Worker] Invalid BUY signal ${signal.signalId}: targetPrice (${targetPrice}) <= initialPrice (${initialPrice}). Skipping trigger check.`);
+                                    if (LoggerService && LoggerService.isInitialized) {
+                                        LoggerService.warn('Invalid BUY signal', {
+                                            service: 'activeSignalsPricesUpdateWorker',
+                                            operation: 'performActiveSignalsPricesUpdate',
+                                            signalId: signal.signalId,
+                                            targetPrice,
+                                            initialPrice
+                                        });
+                                    } else {
+                                        console.warn(`⚠️ [Active Signals Worker] Invalid BUY signal ${signal.signalId}: targetPrice (${targetPrice}) <= initialPrice (${initialPrice}). Skipping trigger check.`);
+                                    }
                                     signalDataValid = false;
                                 }
                                 // Также проверяем, что targetPrice не слишком низкая (меньше текущей цены более чем на 50%)
                                 if (targetPrice && priceValue && targetPrice < priceValue * 0.5) {
-                                    console.warn(`⚠️ [Active Signals Worker] Suspicious BUY signal ${signal.signalId}: targetPrice (${targetPrice}) is much lower than current price (${priceValue}). Signal may be corrupted. Skipping trigger check.`);
+                                    if (LoggerService && LoggerService.isInitialized) {
+                                        LoggerService.warn('Suspicious BUY signal', {
+                                            service: 'activeSignalsPricesUpdateWorker',
+                                            operation: 'performActiveSignalsPricesUpdate',
+                                            signalId: signal.signalId,
+                                            targetPrice,
+                                            currentPrice: priceValue
+                                        });
+                                    } else {
+                                        console.warn(`⚠️ [Active Signals Worker] Suspicious BUY signal ${signal.signalId}: targetPrice (${targetPrice}) is much lower than current price (${priceValue}). Signal may be corrupted. Skipping trigger check.`);
+                                    }
                                     signalDataValid = false;
                                 }
                             } else if (signal.direction === 'SIGNAL_DIRECTION_SELL') {
                                 // Для SELL: targetPrice должна быть ниже initialPrice
                                 if (targetPrice && initialPrice && targetPrice >= initialPrice) {
-                                    console.warn(`⚠️ [Active Signals Worker] Invalid SELL signal ${signal.signalId}: targetPrice (${targetPrice}) >= initialPrice (${initialPrice}). Skipping trigger check.`);
+                                    if (LoggerService && LoggerService.isInitialized) {
+                                        LoggerService.warn('Invalid SELL signal', {
+                                            service: 'activeSignalsPricesUpdateWorker',
+                                            operation: 'performActiveSignalsPricesUpdate',
+                                            signalId: signal.signalId,
+                                            targetPrice,
+                                            initialPrice
+                                        });
+                                    } else {
+                                        console.warn(`⚠️ [Active Signals Worker] Invalid SELL signal ${signal.signalId}: targetPrice (${targetPrice}) >= initialPrice (${initialPrice}). Skipping trigger check.`);
+                                    }
                                     signalDataValid = false;
                                 }
                                 // Также проверяем, что targetPrice не слишком высокая (больше текущей цены более чем на 50%)
                                 if (targetPrice && priceValue && targetPrice > priceValue * 1.5) {
-                                    console.warn(`⚠️ [Active Signals Worker] Suspicious SELL signal ${signal.signalId}: targetPrice (${targetPrice}) is much higher than current price (${priceValue}). Signal may be corrupted. Skipping trigger check.`);
+                                    if (LoggerService && LoggerService.isInitialized) {
+                                        LoggerService.warn('Suspicious SELL signal', {
+                                            service: 'activeSignalsPricesUpdateWorker',
+                                            operation: 'performActiveSignalsPricesUpdate',
+                                            signalId: signal.signalId,
+                                            targetPrice,
+                                            currentPrice: priceValue
+                                        });
+                                    } else {
+                                        console.warn(`⚠️ [Active Signals Worker] Suspicious SELL signal ${signal.signalId}: targetPrice (${targetPrice}) is much higher than current price (${priceValue}). Signal may be corrupted. Skipping trigger check.`);
+                                    }
                                     signalDataValid = false;
                                 }
                             }
@@ -225,7 +324,16 @@ async function performActiveSignalsPricesUpdate() {
                             }
                         }
                     } catch (updateError) {
-                        console.error(`❌ [Active Signals Worker] Error updating price for ${priceData.figi}:`, updateError.message);
+                        if (LoggerService && LoggerService.isInitialized) {
+                            LoggerService.error('Error updating price', {
+                                service: 'activeSignalsPricesUpdateWorker',
+                                operation: 'performActiveSignalsPricesUpdate',
+                                figi: priceData.figi,
+                                error: { message: updateError.message }
+                            });
+                        } else {
+                            console.error(`❌ [Active Signals Worker] Error updating price for ${priceData.figi}:`, updateError.message);
+                        }
                         totalFailed++;
                     }
                 }
@@ -247,13 +355,33 @@ async function performActiveSignalsPricesUpdate() {
                     await new Promise(resolve => setTimeout(resolve, 200));
                 }
             } catch (batchError) {
-                console.error(`❌ [Active Signals Worker] Error processing batch ${batchIndex + 1}:`, batchError.message);
+                if (LoggerService && LoggerService.isInitialized) {
+                    LoggerService.error('Error processing batch', {
+                        service: 'activeSignalsPricesUpdateWorker',
+                        operation: 'performActiveSignalsPricesUpdate',
+                        batchIndex: batchIndex + 1,
+                        error: { message: batchError.message }
+                    });
+                } else {
+                    console.error(`❌ [Active Signals Worker] Error processing batch ${batchIndex + 1}:`, batchError.message);
+                }
                 totalFailed += batch.length;
             }
         }
 
         const duration = Math.round((Date.now() - startTime) / 1000);
-        console.log(`✅ [Active Signals Worker] Active signals prices update completed in ${duration}s. Updated: ${totalUpdated}, Failed: ${totalFailed}, Triggered: ${triggeredSignals.length}`);
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.info('Active signals prices update completed', {
+                service: 'activeSignalsPricesUpdateWorker',
+                operation: 'performActiveSignalsPricesUpdate',
+                duration,
+                totalUpdated,
+                totalFailed,
+                triggeredCount: triggeredSignals.length
+            });
+        } else {
+            console.log(`✅ [Active Signals Worker] Active signals prices update completed in ${duration}s. Updated: ${totalUpdated}, Failed: ${totalFailed}, Triggered: ${triggeredSignals.length}`);
+        }
 
         // Отправляем результат
         parentPort.postMessage({
@@ -270,7 +398,16 @@ async function performActiveSignalsPricesUpdate() {
         });
 
     } catch (error) {
-        console.error('❌ [Active Signals Worker] Active signals prices update failed:', error);
+        const LoggerService = (await import('../services/LoggerService.js')).default;
+        if (LoggerService && LoggerService.isInitialized) {
+            LoggerService.error('Active signals prices update failed', {
+                service: 'activeSignalsPricesUpdateWorker',
+                operation: 'performActiveSignalsPricesUpdate',
+                error: { message: error.message, stack: error.stack }
+            });
+        } else {
+            console.error('❌ [Active Signals Worker] Active signals prices update failed:', error);
+        }
         
         parentPort.postMessage({
             type: 'error',

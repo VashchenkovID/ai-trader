@@ -751,7 +751,7 @@ class IntegratedAIService {
                 // Проверяем, нужно ли переобучить модель
                 // shouldRetrain теперь async и проверяет данные ДО принятия решения
                 if (await StackingService.shouldRetrain()) {
-                    LoggerService.info('🔄 Retraining stacking model...');
+                    // Логирование удалено согласно рефакторингу (было LoggerService.info)
                     // Для stacking модели не передаем figi - используем все инструменты
                     await StackingService.trainMetaModel(null);
                 }
@@ -1467,15 +1467,7 @@ class IntegratedAIService {
                     
                     // Проверяем, был ли инструмент пропущен из-за недостаточных данных
                     if (ensembleResult && ensembleResult.skipped) {
-                        if (LoggerService.isInitialized) {
-                            LoggerService.info('Ensemble training skipped', {
-                                service: 'IntegratedAIService',
-                                operation: 'trainAllNetworks',
-                                figi,
-                                reason: ensembleResult.reason,
-                                message: ensembleResult.message
-                            });
-                        }
+                        // Логирование удалено согласно рефакторингу (было LoggerService.info)
                         results.ensemble = ensembleResult; // Сохраняем результат с информацией о пропуске
                     } else {
                         results.ensemble = ensembleResult;
