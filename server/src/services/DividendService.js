@@ -10,6 +10,9 @@ class DividendService {
     constructor() {
         this.isInitialized = false;
         this.priorityInstruments = new Set();
+        // Кеш для результатов дивидендов, чтобы избежать повторных запросов при обучении
+        this.dividendsCache = new Map(); // key: figi, value: { data, timestamp }
+        this.cacheTTL = 3600000; // 1 час в миллисекундах
     }
 
     /**
@@ -44,6 +47,14 @@ class DividendService {
 
             // Получаем дивиденды от Tinkoff API
             const dividends = await TinkoffApiService.getDividends(figi);
+            
+            // Обновляем кеш после получения новых данных
+            if (dividends) {
+                this.dividendsCache.set(figi, {
+                    data: dividends,
+                    timestamp: Date.now()
+                });
+            }
             
             if (dividends && dividends.dividends) {
                 // Обновляем дивидендную доходность в кеше
@@ -190,7 +201,25 @@ class DividendService {
             const dateFrom = new Date(timestamp);
             dateFrom.setFullYear(dateFrom.getFullYear() - years);
 
-            const dividendsResponse = await TinkoffApiService.getDividends(figi);
+            // Проверяем кеш перед запросом к API
+            let dividendsResponse = null;
+            const cacheKey = figi;
+            const cached = this.dividendsCache.get(cacheKey);
+            const now = Date.now();
+            
+            if (cached && (now - cached.timestamp) < this.cacheTTL) {
+                // Используем кешированные данные
+                dividendsResponse = cached.data;
+            } else {
+                // Делаем запрос к API и кешируем результат
+                dividendsResponse = await TinkoffApiService.getDividends(figi);
+                if (dividendsResponse) {
+                    this.dividendsCache.set(cacheKey, {
+                        data: dividendsResponse,
+                        timestamp: now
+                    });
+                }
+            }
             
             if (!dividendsResponse || !dividendsResponse.dividends || dividendsResponse.dividends.length === 0) {
                 // Нет данных о дивидендах - стабильность 0

@@ -19,6 +19,12 @@ const formatPercent = (value: number, decimals: number = 2) => {
   return `${value >= 0 ? '+' : ''}${value.toFixed(decimals)}%`;
 };
 
+// Форматирование процентов без знака "+" (для winRate и других метрик, которые всегда положительные)
+const formatPercentNoSign = (value: number, decimals: number = 2) => {
+  if (value === null || value === undefined || isNaN(value)) return '—';
+  return `${value.toFixed(decimals)}%`;
+};
+
 const formatNumber = (value: number | null | undefined, decimals: number = 2) => {
   if (value === null || value === undefined || isNaN(value)) return '—';
   return value.toFixed(decimals);
@@ -139,11 +145,11 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({ clas
           <div className="metric-label">
             Win Rate
             {summary?.minWinRate && (
-              <span className="metric-min-value"> (мин: {formatPercent(summary.minWinRate, 1)})</span>
+              <span className="metric-min-value"> (мин: {formatPercentNoSign(summary.minWinRate, 1)})</span>
             )}
           </div>
           <div className={`metric-value number-success ${summary?.minWinRate && summary.winRate < summary.minWinRate ? 'metric-below-min' : ''}`}>
-            {summary ? formatPercent(summary.winRate, 1) : '—'}
+            {summary ? formatPercentNoSign(summary.winRate, 1) : '—'}
           </div>
         </Card>
 

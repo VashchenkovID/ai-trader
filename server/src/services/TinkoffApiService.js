@@ -299,6 +299,14 @@ class TinkoffApiService {
     // Получение информации о дивидендах (ИСПРАВЛЕННЫЙ МЕТОД)
     async getDividends(figi) {
         try {
+            // Увеличенная задержка для GetDividends, чтобы избежать ошибки 429 (Too Many Requests)
+            // Этот эндпоинт часто используется при обучении нейросети, поэтому нужна дополнительная задержка
+            const dividendsDelay = 2000; // 2 секунды задержка для дивидендов
+            const timeSinceLastRequest = Date.now() - this.lastRequestTime;
+            if (timeSinceLastRequest < dividendsDelay) {
+                await RetryService.delay(dividendsDelay - timeSinceLastRequest);
+            }
+            
             // Правильный формат запроса для дивидендов
             const response = await this.makeRequest('/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetDividends', {
                 instrumentId: figi, // Используем instrumentId вместо id
