@@ -338,13 +338,16 @@ class SwitchValidator {
     async calculateProfitableMonths(stats) {
         try {
             // Получаем закрытые сделки из портфеля
+            // ВАЖНО: Для валидации всегда используем данные из виртуального (paper) режима
             const TradingEngine = (await import('./TradingEngine.js')).default;
             const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
-            const portfolio = await TradingEngine.getPortfolioValue();
+            // Всегда используем виртуальный портфель для валидации
+            const portfolio = await TradingEngine.getVirtualPortfolioValue();
             
             if (!portfolio) return 0;
             
-            const closedTrades = await PnLCalculationService.getClosedTrades(portfolio?.mode || 'paper');
+            // Всегда используем 'paper' для валидации, независимо от текущего режима
+            const closedTrades = await PnLCalculationService.getClosedTrades('paper');
             
             if (closedTrades.length === 0) return 0;
             
@@ -424,9 +427,11 @@ class SwitchValidator {
     async calculateSharpeRatio(stats) {
         try {
             // Используем единую функцию из PnLCalculationService
+            // ВАЖНО: Для валидации всегда используем виртуальный портфель
             const TradingEngine = (await import('./TradingEngine.js')).default;
             const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
-            const portfolio = await TradingEngine.getPortfolioValue();
+            // Всегда используем виртуальный портфель для валидации
+            const portfolio = await TradingEngine.getVirtualPortfolioValue();
             
             if (!portfolio) {
                 // Fallback на tradeHistory если нет портфеля
@@ -438,7 +443,8 @@ class SwitchValidator {
                 return stdDev > 0 ? mean / stdDev : 0;
             }
             
-            const closedTrades = await PnLCalculationService.getClosedTrades(portfolio?.mode || 'paper');
+            // Всегда используем 'paper' для валидации, независимо от текущего режима
+            const closedTrades = await PnLCalculationService.getClosedTrades('paper');
             const initialCapital = portfolio?.initialCapital || 1000000;
             
             if (closedTrades.length < 2) return 0;
@@ -628,7 +634,9 @@ class SwitchValidator {
     async updateStatsFromPortfolio(riskStats) {
         try {
             const TradingEngine = (await import('./TradingEngine.js')).default;
-            const portfolio = await TradingEngine.getPortfolioValue();
+            // ВАЖНО: Для валидации всегда используем виртуальный портфель (paper режим),
+            // независимо от текущего режима торговли
+            const portfolio = await TradingEngine.getVirtualPortfolioValue();
             const trades = portfolio?.trades || [];
             const rawPositions = portfolio?.positions || {};
             
@@ -654,9 +662,11 @@ class SwitchValidator {
             
             // Обновляем Sharpe ratio используя единый метод расчета из PnLCalculationService
             // Это обеспечивает синхронизацию с дашбордом производительности
+            // ВАЖНО: Для валидации всегда используем данные из виртуального (paper) режима
             try {
                 const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
-                const closedTrades = await PnLCalculationService.getClosedTrades(portfolio?.mode || 'paper');
+                // Всегда используем 'paper' для валидации, независимо от текущего режима
+                const closedTrades = await PnLCalculationService.getClosedTrades('paper');
                 const initialCapital = portfolio?.initialCapital || 1000000;
                 
                 if (closedTrades.length > 0) {
@@ -686,10 +696,12 @@ class SwitchValidator {
             
             // Обновляем profitFactor из актуальных данных используя единую функцию
             // Получаем закрытые сделки из PnLCalculationService
+            // ВАЖНО: Для валидации всегда используем данные из виртуального (paper) режима
             if (pnlResult.totalTrades > 0) {
                 try {
                     const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
-                    const closedTrades = await PnLCalculationService.getClosedTrades(portfolio?.mode || 'paper');
+                    // Всегда используем 'paper' для валидации, независимо от текущего режима
+                    const closedTrades = await PnLCalculationService.getClosedTrades('paper');
                     
                     if (closedTrades.length > 0) {
                         // Рассчитываем profitFactor из закрытых сделок
@@ -729,9 +741,11 @@ class SwitchValidator {
             }
             
             // Обновляем tradeHistory для расчета confidence и consistency из закрытых сделок
+            // ВАЖНО: Для валидации всегда используем данные из виртуального (paper) режима
             try {
                 const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
-                const closedTrades = await PnLCalculationService.getClosedTrades(portfolio?.mode || 'paper');
+                // Всегда используем 'paper' для валидации, независимо от текущего режима
+                const closedTrades = await PnLCalculationService.getClosedTrades('paper');
                 
                 if (closedTrades.length > 0) {
                     // Получаем confidence из TradingRequest для каждой сделки

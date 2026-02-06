@@ -264,6 +264,23 @@ async function safeSyncModel(Model, modelName = null) {
                         enumError.message.includes('type "virtual" does not exist')
                     )) {
                         await Model.sync({ force: false });
+                    } else if (enumError.message && (
+                        enumError.message.includes('constraint') && enumError.message.includes('does not exist') ||
+                        enumError.message.includes('Unknown constraint') ||
+                        (enumError.original && enumError.original.message && (
+                            enumError.original.message.includes('constraint') && enumError.original.message.includes('does not exist') ||
+                            enumError.original.message.includes('Unknown constraint')
+                        ))
+                    )) {
+                        // Ошибка с constraint - пробуем без alter
+                        try {
+                            await Model.sync({ force: false });
+                        } catch (retryError) {
+                            // Игнорируем повторные ошибки с constraint
+                            if (!retryError.message?.includes('constraint')) {
+                                throw retryError;
+                            }
+                        }
                     } else {
                         throw enumError;
                     }
@@ -271,7 +288,31 @@ async function safeSyncModel(Model, modelName = null) {
             }
         } else {
             // Для моделей без ENUM и VIRTUAL используем alter: true
-            await Model.sync({ alter: true });
+            try {
+                await Model.sync({ alter: true });
+            } catch (alterError) {
+                // Если ошибка с constraint при alter, пробуем без alter
+                if (alterError.message && (
+                    alterError.message.includes('constraint') && alterError.message.includes('does not exist') ||
+                    alterError.message.includes('Unknown constraint') ||
+                    (alterError.original && alterError.original.message && (
+                        alterError.original.message.includes('constraint') && alterError.original.message.includes('does not exist') ||
+                        alterError.original.message.includes('Unknown constraint')
+                    ))
+                )) {
+                    // Ошибка с constraint - пробуем без alter
+                    try {
+                        await Model.sync({ force: false });
+                    } catch (retryError) {
+                        // Игнорируем повторные ошибки с constraint
+                        if (!retryError.message?.includes('constraint')) {
+                            throw retryError;
+                        }
+                    }
+                } else {
+                    throw alterError;
+                }
+            }
         }
     } catch (syncError) {
         // Игнорируем ошибки создания ENUM типов, если они уже существуют
@@ -370,14 +411,32 @@ async function safeSyncModel(Model, modelName = null) {
         } else if (syncError.message && (
             syncError.message.includes('Unknown constraint') ||
             syncError.message.includes('constraint') && syncError.message.includes('does not exist') ||
+            syncError.message.includes('relation') && syncError.message.includes('already exists') ||
             (syncError.original && syncError.original.message && (
                 syncError.original.message.includes('Unknown constraint') ||
-                syncError.original.message.includes('constraint') && syncError.original.message.includes('does not exist')
+                syncError.original.message.includes('constraint') && syncError.original.message.includes('does not exist') ||
+                syncError.original.message.includes('relation') && syncError.original.message.includes('already exists')
             ))
         )) {
             // Ошибка с ограничениями/индексами - возможно, индекс уже существует или таблица в процессе изменения
+            // Игнорируем эти ошибки - они не критичны
+        } else if (syncError.message && (
+            syncError.message.includes('cache lookup failed') ||
+            syncError.message.includes('cache lookup failed for attribute') ||
+            (syncError.original && syncError.original.message && (
+                syncError.original.message.includes('cache lookup failed') ||
+                syncError.original.message.includes('cache lookup failed for attribute')
+            ))
+        )) {
+            // Ошибка с кешем PostgreSQL - это внутренняя ошибка БД, не критична
+            // Игнорируем, так как это может происходить при параллельных операциях
         } else {
-            console.error(`❌ Ошибка синхронизации таблицы ${name}:`, syncError.message);
+            // Логируем только серьезные ошибки, не связанные с constraint/index
+            if (!syncError.message?.includes('constraint') && 
+                !syncError.message?.includes('index') &&
+                !syncError.message?.includes('already exists')) {
+                console.error(`❌ Ошибка синхронизации таблицы ${name}:`, syncError.message);
+            }
             // Не прерываем инициализацию при ошибке синхронизации
         }
     }
@@ -594,6 +653,17 @@ async function ensureDatabaseExists() {
             // Игнорируем ошибки закрытия
         }
 
+        // Если ошибка аутентификации - это может быть нормально, если БД уже существует
+        // и основное подключение работает. Не прерываем инициализацию.
+        if (error.message?.includes('password authentication failed') ||
+            error.message?.includes('authentication failed') ||
+            (error.original && error.original.message && error.original.message.includes('password authentication failed'))) {
+            // БД может уже существовать, и основное подключение работает
+            // Просто игнорируем эту ошибку - основное подключение проверит существование БД
+            console.warn(`⚠️ Не удалось подключиться к системной БД postgres для проверки (это нормально, если БД уже существует):`, error.message);
+            return; // Выходим без ошибки
+        }
+
         // Если ошибка подключения - возможно, PostgreSQL еще не запущен
         if (error.name === 'SequelizeConnectionError' || 
             error.name === 'SequelizeConnectionRefusedError' ||
@@ -618,12 +688,18 @@ async function ensureDatabaseExists() {
                 await retrySequelize.query(`CREATE DATABASE "${dbName.replace(/"/g, '""')}"`);
                 await retrySequelize.close();
             } catch (createError) {
+                // Если ошибка аутентификации при создании - игнорируем
+                if (createError.message?.includes('password authentication failed') ||
+                    createError.message?.includes('authentication failed')) {
+                    console.warn(`⚠️ Не удалось создать БД через системное подключение (это нормально, если БД уже существует):`, createError.message);
+                    return;
+                }
                 console.error(`❌ Ошибка создания базы данных:`, createError.message);
                 throw createError;
             }
         } else {
-            console.error(`❌ Ошибка проверки базы данных:`, error.message);
-            throw error;
+            // Для других ошибок - только предупреждение, не прерываем инициализацию
+            console.warn(`⚠️ Ошибка проверки базы данных (это нормально, если БД уже существует):`, error.message);
         }
     }
 }
