@@ -284,10 +284,53 @@ class BackupService {
 
             let totalRecords = 0;
 
-            // Экспортируем данные из каждой модели
+            // Экспортируем данные из каждой модели с ограничением размера
+            const MAX_RECORDS_PER_TABLE = 100000; // Максимум записей на таблицу
+            const MAX_TOTAL_SIZE_MB = 500; // Максимальный размер бэкапа в MB
+            
             for (const [modelName, Model] of Object.entries(models)) {
                 try {
-                    const records = await Model.findAll({raw: true});
+                    // Для больших таблиц ограничиваем количество записей
+                    const count = await Model.count();
+                    
+                    if (count > MAX_RECORDS_PER_TABLE) {
+                        LoggerService.warn('Таблица слишком большая для полного бэкапа, экспортируем только метаданные', {
+                            service: 'BackupService',
+                            modelName,
+                            totalRecords: count,
+                            maxRecords: MAX_RECORDS_PER_TABLE
+                        });
+                        backupData.tables[modelName] = {
+                            count: count,
+                            data: [],
+                            warning: `Table too large (${count} records), only metadata exported. Use pg_dump for full backup.`
+                        };
+                        totalRecords += count;
+                        continue;
+                    }
+                    
+                    const records = await Model.findAll({raw: true, limit: MAX_RECORDS_PER_TABLE});
+                    
+                    // Проверяем размер данных перед добавлением
+                    const testString = JSON.stringify(records.slice(0, 1000));
+                    const estimatedSizeMB = (testString.length * records.length / 1000) / (1024 * 1024);
+                    
+                    if (estimatedSizeMB > MAX_TOTAL_SIZE_MB) {
+                        LoggerService.warn('Данные таблицы слишком большие для JSON бэкапа', {
+                            service: 'BackupService',
+                            modelName,
+                            estimatedSizeMB: estimatedSizeMB.toFixed(2),
+                            maxSizeMB: MAX_TOTAL_SIZE_MB
+                        });
+                        backupData.tables[modelName] = {
+                            count: records.length,
+                            data: [],
+                            warning: `Data too large (${estimatedSizeMB.toFixed(2)}MB), only metadata exported. Use pg_dump for full backup.`
+                        };
+                        totalRecords += records.length;
+                        continue;
+                    }
+                    
                     backupData.tables[modelName] = {
                         count: records.length,
                         data: records
@@ -309,8 +352,37 @@ class BackupService {
                 }
             }
 
-            // Сохраняем в JSON файл
-            await fs.writeFile(backupPath, JSON.stringify(backupData, null, 2));
+            // Сохраняем в JSON файл с обработкой ошибок размера
+            try {
+                const jsonString = JSON.stringify(backupData, null, 2);
+                await fs.writeFile(backupPath, jsonString);
+            } catch (stringifyError) {
+                if (stringifyError.message.includes('Invalid string length') || stringifyError.message.includes('RangeError')) {
+                    // Если данные слишком большие, сохраняем только метаданные
+                    LoggerService.warn('Данные слишком большие для JSON.stringify, сохраняем только метаданные', {
+                        service: 'BackupService',
+                        error: { message: stringifyError.message }
+                    });
+                    
+                    const metadataOnly = {
+                        timestamp: backupData.timestamp,
+                        version: backupData.version,
+                        tables: {}
+                    };
+                    
+                    for (const [modelName, tableData] of Object.entries(backupData.tables)) {
+                        metadataOnly.tables[modelName] = {
+                            count: tableData.count,
+                            data: [],
+                            warning: 'Data too large for JSON backup. Use pg_dump for full backup.'
+                        };
+                    }
+                    
+                    await fs.writeFile(backupPath, JSON.stringify(metadataOnly, null, 2));
+                } else {
+                    throw stringifyError;
+                }
+            }
 
             const stats = await fs.stat(backupPath);
 

@@ -1068,17 +1068,67 @@ class NeuralNetworkService {
 
             // Используем новый метод с дивидендами
             // prepareTrainingData возвращает массив сэмплов, берем последний как наиболее свежий
-            const { features } = await OptimizedDataService.prepareTrainingData(candles, 60, 5, figi);
-            if (!features || features.length === 0) {
+            let features;
+            try {
+                const result = await OptimizedDataService.prepareTrainingData(candles, 60, 5, figi);
+                features = result?.features;
+            } catch (prepareError) {
                 if (LoggerService.isInitialized) {
-                    LoggerService.error('No features prepared for prediction', {
+                    LoggerService.error('Error preparing training data for prediction', {
                         service: 'NeuralNetworkService',
                         operation: 'predict',
                         figi,
-                        error: { message: 'No features prepared for prediction' }
+                        candlesCount: candles?.length || 0,
+                        error: { 
+                            message: prepareError.message,
+                            stack: prepareError.stack
+                        }
                     });
                 }
-                return { score: 0, confidence: 0, error: 'No features prepared for prediction' };
+                return { 
+                    score: 0, 
+                    confidence: 0, 
+                    error: 'Failed to prepare features',
+                    reason: `Data preparation error: ${prepareError.message}`
+                };
+            }
+            
+            if (!features || features.length === 0) {
+                // Детальная диагностика проблемы
+                const candlesCount = candles?.length || 0;
+                const minRequired = 60 + 5; // lookbackPeriod + predictionHorizon
+                
+                let reason = 'Unknown reason';
+                if (candlesCount < minRequired) {
+                    reason = `Insufficient data: ${candlesCount} candles, need at least ${minRequired}`;
+                } else if (!candles || candles.length === 0) {
+                    reason = 'No candles data available';
+                } else {
+                    reason = 'Features preparation returned empty array (possible data quality issue)';
+                }
+                
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('No features prepared for prediction', {
+                        service: 'NeuralNetworkService',
+                        operation: 'predict',
+                        figi,
+                        candlesCount,
+                        minRequired,
+                        reason,
+                        candlesSample: candles?.slice(-3).map(c => ({
+                            time: c?.time,
+                            close: c?.close,
+                            volume: c?.volume
+                        }))
+                    });
+                }
+                return { 
+                    score: 0, 
+                    confidence: 0, 
+                    error: 'No features prepared for prediction',
+                    reason,
+                    candlesCount
+                };
             }
             const featureVector = features[features.length - 1];
 

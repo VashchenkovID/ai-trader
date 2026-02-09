@@ -2707,8 +2707,16 @@ class SchedulerService {
         }
         
         try {
-            const { CachedCandle } = await import('../models/CachedCandle.js');
+            const CachedCandle = (await import('../models/CachedCandle.js')).default;
             const TriggeredSignal = (await import('../models/TriggeredSignal.js')).default;
+            
+            // Проверяем, что модели загружены корректно
+            if (!CachedCandle || typeof CachedCandle.destroy !== 'function') {
+                throw new Error('CachedCandle model is not properly loaded');
+            }
+            if (!TriggeredSignal || typeof TriggeredSignal.destroy !== 'function') {
+                throw new Error('TriggeredSignal model is not properly loaded');
+            }
 
             if (workerId) {
                 try {
@@ -2729,13 +2737,27 @@ class SchedulerService {
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-            const deletedCandlesCount = await CachedCandle.destroy({
-                where: {
-                    time: {
-                        [Op.lt]: thirtyDaysAgo
+            let deletedCandlesCount = 0;
+            try {
+                deletedCandlesCount = await CachedCandle.destroy({
+                    where: {
+                        time: {
+                            [Op.lt]: thirtyDaysAgo
+                        }
                     }
-                }
-            });
+                });
+            } catch (destroyError) {
+                LoggerService.error('Error destroying old candles', {
+                    service: 'SchedulerService',
+                    operation: 'performCleanup',
+                    error: { 
+                        message: destroyError.message,
+                        stack: destroyError.stack
+                    }
+                });
+                // Продолжаем выполнение, даже если удаление свечей не удалось
+                deletedCandlesCount = 0;
+            }
 
             if (workerId) {
                 try {
@@ -2756,13 +2778,27 @@ class SchedulerService {
             const oneDayAgo = new Date();
             oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
-            const deletedSignalsCount = await TriggeredSignal.destroy({
-                where: {
-                    triggeredAt: {
-                        [Op.lt]: oneDayAgo
+            let deletedSignalsCount = 0;
+            try {
+                deletedSignalsCount = await TriggeredSignal.destroy({
+                    where: {
+                        triggeredAt: {
+                            [Op.lt]: oneDayAgo
+                        }
                     }
-                }
-            });
+                });
+            } catch (destroyError) {
+                LoggerService.error('Error destroying old signals', {
+                    service: 'SchedulerService',
+                    operation: 'performCleanup',
+                    error: { 
+                        message: destroyError.message,
+                        stack: destroyError.stack
+                    }
+                });
+                // Продолжаем выполнение, даже если удаление сигналов не удалось
+                deletedSignalsCount = 0;
+            }
 
             if (workerId) {
                 try {
