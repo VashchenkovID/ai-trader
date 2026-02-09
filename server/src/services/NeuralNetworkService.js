@@ -1134,23 +1134,48 @@ class NeuralNetworkService {
 
             
             // Выбираем подходящую модель для предсказания
-            // Пытаемся взять актуальную per-FIGI модель из OptimizedTrainingService (соответствует текущему размеру фичей)
-            // Если не удалось — не используем устаревшую this.model с другой размерностью, а мягко возвращаем ошибку
+            // Пытаемся взять актуальную per-FIGI модель из OptimizedTrainingService
+            // Если размер не совпадает, адаптируем feature vector под модель
             let model = null;
             try {
                 // Используем прямой импорт, так как метод может вызываться из worker'а
                 const OptimizedTrainingService = (await import('./OptimizedTrainingService.js')).default;
-                const loadedModel = await OptimizedTrainingService.loadModel(figi, featureVector.length);
+                // Пытаемся загрузить модель без проверки размера (null = не проверять)
+                const loadedModel = await OptimizedTrainingService.loadModel(figi, null);
                 if (loadedModel) {
+                    // Проверяем размер модели и адаптируем feature vector при необходимости
+                    const modelInputShape = loadedModel.inputs?.[0]?.shape;
+                    const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
+                    
+                    if (modelInputSize !== null && modelInputSize !== featureVector.length) {
+                        if (LoggerService.isInitialized) {
+                            LoggerService.warn('Per-FIGI model feature size mismatch, adjusting feature vector', {
+                                service: 'NeuralNetworkService',
+                                operation: 'predict',
+                                figi,
+                                modelExpectedSize: modelInputSize,
+                                featureVectorSize: featureVector.length,
+                                action: featureVector.length > modelInputSize ? 'trimming' : 'padding'
+                            });
+                        }
+                        
+                        // Адаптируем размер feature vector
+                        if (featureVector.length > modelInputSize) {
+                            featureVector = featureVector.slice(0, modelInputSize);
+                        } else if (featureVector.length < modelInputSize) {
+                            const padding = new Array(modelInputSize - featureVector.length).fill(0);
+                            featureVector = [...featureVector, ...padding];
+                        }
+                    }
                     model = loadedModel;
                 }
             } catch (serviceError) {
                 if (LoggerService.isInitialized) {
-                    LoggerService.error('Failed to load per-FIGI model for prediction', {
+                    LoggerService.warn('Failed to load per-FIGI model for prediction, will try general model', {
                         service: 'NeuralNetworkService',
                         operation: 'predict',
                         figi,
-                        error: { message: serviceError.message, stack: serviceError.stack }
+                        error: { message: serviceError.message }
                     });
                 }
             }
@@ -1164,28 +1189,35 @@ class NeuralNetworkService {
                 if (modelInputSize === null || modelInputSize === featureVector.length) {
                     model = this.model;
                 } else {
+                    // Адаптируем размер feature vector под модель вместо создания временной модели
+                    // Это позволяет использовать обученную модель даже при изменении количества фичей
                     if (LoggerService.isInitialized) {
-                        LoggerService.error('General model input size mismatch', {
+                        LoggerService.warn('Feature size mismatch, adjusting feature vector', {
                             service: 'NeuralNetworkService',
                             operation: 'predict',
                             figi,
-                            error: { message: `Expected ${modelInputSize}, got ${featureVector.length}` }
+                            modelExpectedSize: modelInputSize,
+                            featureVectorSize: featureVector.length,
+                            action: featureVector.length > modelInputSize ? 'trimming' : 'padding'
                         });
                     }
-                    // Пытаемся создать временную модель с правильным размером для предсказания
-                    try {
-                        const tempModel = await this.createModel(featureVector.length, 60);
-                        model = tempModel;
-                    } catch (tempModelError) {
-                        if (LoggerService.isInitialized) {
-                            LoggerService.error('Failed to create temporary model', {
-                                service: 'NeuralNetworkService',
-                                operation: 'predict',
-                                figi,
-                                error: { message: tempModelError.message, stack: tempModelError.stack }
-                            });
+                    
+                    // Создаем адаптированный вектор признаков
+                    const adjustedFeatureVector = [...featureVector];
+                    
+                    if (adjustedFeatureVector.length > modelInputSize) {
+                        // Обрезаем лишние признаки с конца (новейшие фичи, которые могут отсутствовать в старой модели)
+                        adjustedFeatureVector.splice(modelInputSize);
+                    } else if (adjustedFeatureVector.length < modelInputSize) {
+                        // Дополняем нулями, если признаков меньше
+                        while (adjustedFeatureVector.length < modelInputSize) {
+                            adjustedFeatureVector.push(0);
                         }
                     }
+                    
+                    // Обновляем featureVector для использования в предсказании
+                    featureVector = adjustedFeatureVector;
+                    model = this.model;
                 }
             }
 
@@ -1210,17 +1242,24 @@ class NeuralNetworkService {
             if (model.inputs && model.inputs[0] && model.inputs[0].shape) {
                 const expectedShape = model.inputs[0].shape[1];
                 if (expectedShape !== featureVector.length) {
+                    // Финальная адаптация размера, если все еще не совпадает
                     if (LoggerService.isInitialized) {
-                        LoggerService.error('Prediction input shape mismatch', {
+                        LoggerService.warn('Final feature size adjustment', {
                             service: 'NeuralNetworkService',
                             operation: 'predict',
                             figi,
                             expectedShape,
-                            actualShape: featureVector.length,
-                            error: { message: `Input shape mismatch: expected ${expectedShape}, got ${featureVector.length}` }
+                            actualShape: featureVector.length
                         });
                     }
-                    return { score: 0, confidence: 0, error: `Input shape mismatch: expected ${expectedShape}, got ${featureVector.length}` };
+                    
+                    // Адаптируем размер
+                    if (featureVector.length > expectedShape) {
+                        featureVector = featureVector.slice(0, expectedShape);
+                    } else if (featureVector.length < expectedShape) {
+                        const padding = new Array(expectedShape - featureVector.length).fill(0);
+                        featureVector = [...featureVector, ...padding];
+                    }
                 }
             } else {
                 if (LoggerService.isInitialized) {

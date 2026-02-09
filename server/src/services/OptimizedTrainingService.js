@@ -2156,23 +2156,28 @@ class OptimizedTrainingService {
             model.setWeights(tensors);
 
                     // Проверяем совместимость входного размера, если он известен
+                    // Но не удаляем модель - размер можно адаптировать в NeuralNetworkService
                     if (inputSize !== null) {
                         const modelInputShape = model.inputs?.[0]?.shape;
                         const modelInputSize = Array.isArray(modelInputShape) ? modelInputShape[1] : null;
                         
                         if (modelInputSize !== null && modelInputSize !== inputSize) {
-                            // Удаляем несовместимую модель для освобождения места
-                            try {
-                                if (await fs.access(figiModelPath).then(() => true).catch(() => false)) {
-                                    await fs.unlink(figiModelPath);
-                                }
-                                if (await fs.access(figiWeightsPath).then(() => true).catch(() => false)) {
-                                    await fs.unlink(figiWeightsPath);
-                                }
-                            } catch (cleanupError) {
-                                // Игнорируем ошибки удаления
-                            }
-                            return null;
+                            // Логируем несоответствие, но не удаляем модель - размер можно адаптировать
+                            LoggerService.warn('Model input size mismatch, but keeping model for potential adaptation', {
+                                service: 'OptimizedTrainingService',
+                                operation: 'loadModel',
+                                figi,
+                                modelInputSize,
+                                requestedInputSize: inputSize
+                            });
+                            // Возвращаем модель несмотря на несоответствие - NeuralNetworkService адаптирует фичи
+                            // Компилируем модель перед возвратом
+                            model.compile({
+                                optimizer: tf.train.adam(0.001),
+                                loss: 'binaryCrossentropy',
+                                metrics: ['accuracy']
+                            });
+                            return model;
                         }
                     }
 
