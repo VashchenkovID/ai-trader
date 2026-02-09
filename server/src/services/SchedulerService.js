@@ -3013,27 +3013,42 @@ class SchedulerService {
                     return { skipped: true, reason: 'retraining_not_needed' };
                 }
             } else {
-                // Для планового обучения (force: true): проверяем, но не прерываем процесс
-                // Отправляем предупреждение, если переобучение не обязательно, но продолжаем обучение
+                // Для планового обучения (force: true): проверяем необходимость переобучения
+                // Если модели актуальны, пропускаем обучение даже при force: true
                 const shouldRetrain = await this.shouldRetrainModel(null, workerId);
                 if (!shouldRetrain) {
-                    // Логирование удалено согласно рефакторингу (было console.log)
-                    // Отправляем предупреждение в Telegram, но не прерываем процесс
+                    if (LoggerService.isInitialized) {
+                        LoggerService.info('Full Training skipped: models are up to date (even with force: true)', {
+                            service: 'SchedulerService',
+                            operation: 'performFullTraining',
+                            reason: 'models_up_to_date'
+                        });
+                    }
+                    
+                    // Отправляем уведомление о том, что обучение пропущено
                     try {
                         await OptimizedTelegramService.sendAlert(
-                            'TRAINING_WARNING',
-                            `⚠️ <b>ПРЕДУПРЕЖДЕНИЕ: ПЕРЕОБУЧЕНИЕ НЕ ОБЯЗАТЕЛЬНО</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n📊 Статус: Плановое обучение\n\nℹ️ Модели актуальны, переобучение не обязательно\n\n✅ Продолжаем обучение по расписанию (force: true)`,
-                            'warning'
+                            'TRAINING_SKIPPED',
+                            `ℹ️ <b>ПОЛНОЕ ОБУЧЕНИЕ ПРОПУЩЕНО</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n📊 Статус: Плановое обучение\n\n✅ Модели актуальны, переобучение не требуется\n\n⏭️ Обучение пропущено для экономии ресурсов`,
+                            'info'
                         );
                     } catch (telegramError) {
-                        LoggerService.warn('Failed to send Telegram notification about training warning', {
+                        LoggerService.warn('Failed to send Telegram notification about training skip', {
                             service: 'SchedulerService',
                             operation: 'sendTelegramNotification',
                             error: { message: telegramError.message }
                         });
                     }
+                    
+                    this.isTraining = false;
+                    return { skipped: true, reason: 'models_up_to_date', force: true };
                 } else {
-                    // Логирование удалено согласно рефакторингу (было console.log)
+                    if (LoggerService.isInitialized) {
+                        LoggerService.info('Full Training: models need retraining, proceeding with training', {
+                            service: 'SchedulerService',
+                            operation: 'performFullTraining'
+                        });
+                    }
                 }
             }
             

@@ -120,10 +120,56 @@ class PortfolioRebalancingService {
             try {
                 const optimization = await CapitalAllocationStrategy.optimizeAllocation();
                 targetAllocation = optimization.targetAllocation || [];
+                
+                if (targetAllocation.length === 0) {
+                    console.warn('⚠️ Оптимизация вернула пустое целевое распределение');
+                } else {
+                    console.log(`✅ Получено целевое распределение: ${targetAllocation.length} позиций`);
+                }
             } catch (error) {
                 console.warn('⚠️ Ошибка оптимизации распределения, используем упрощенный подход:', error.message);
                 // Если оптимизация не удалась, возвращаем пустое целевое распределение
                 // Это не критично для проверки ребалансировки
+            }
+
+            // КРИТИЧЕСКАЯ ПРОВЕРКА: Если целевое распределение пустое, используем текущее как целевое
+            // Это предотвращает продажу всех позиций при ошибке оптимизации
+            let usingCurrentAsTarget = false;
+            if (!targetAllocation || targetAllocation.length === 0) {
+                console.warn('⚠️ Целевое распределение пустое, используем текущее распределение как целевое');
+                usingCurrentAsTarget = true;
+                
+                // Создаем целевое распределение на основе текущих позиций
+                targetAllocation = positions.map(position => ({
+                    symbol: position.figi,
+                    figi: position.figi,
+                    ticker: position.ticker,
+                    weight: totalValue > 0 ? position.marketValue / totalValue : 0,
+                    value: position.marketValue,
+                    quantity: position.quantity
+                }));
+                
+                // Если и текущее распределение пустое, ребалансировка не нужна
+                if (targetAllocation.length === 0) {
+                    return {
+                        needsRebalancing: false,
+                        deviations: [],
+                        allDeviations: [],
+                        summary: {
+                            totalValue: Math.round(totalValue * 100) / 100,
+                            positionsCount: 0,
+                            targetPositionsCount: 0,
+                            deviationsCount: 0,
+                            maxDeviation: 0,
+                            threshold: this.settings.threshold,
+                            reason: 'Нет позиций для ребалансировки'
+                        }
+                    };
+                }
+                
+                // Если используем текущее как целевое, ребалансировка не нужна
+                // Но все равно возвращаем отклонения для информации
+                console.warn('⚠️ Используется текущее распределение как целевое - ребалансировка не будет выполнена');
             }
 
             // Рассчитываем отклонения для каждой позиции
@@ -131,18 +177,33 @@ class PortfolioRebalancingService {
             let needsRebalancing = false;
 
             for (const position of positions) {
+                // Ищем целевую позицию по FIGI или ticker
                 const targetPos = targetAllocation.find(t => 
-                    t.symbol === position.figi || t.symbol === position.ticker
+                    t.symbol === position.figi || 
+                    t.figi === position.figi || 
+                    t.symbol === position.ticker ||
+                    t.ticker === position.ticker
                 );
 
                 const currentWeight = totalValue > 0 ? (position.marketValue / totalValue) * 100 : 0;
+                // Если целевая позиция не найдена, используем 0 как целевой вес
+                // НО только если это не текущая позиция (т.е. позиция должна быть продана)
                 const targetWeight = targetPos ? (targetPos.weight || 0) * 100 : 0;
                 const deviation = currentWeight - targetWeight;
-                const deviationPercent = targetWeight > 0 ? Math.abs(deviation / targetWeight) * 100 : Math.abs(deviation);
+                
+                // Рассчитываем процент отклонения только если целевой вес > 0
+                // Если целевой вес = 0, это означает, что позиция должна быть продана
+                const deviationPercent = targetWeight > 0 
+                    ? Math.abs(deviation / targetWeight) * 100 
+                    : (currentWeight > 0 ? 100 : 0); // Если позиция есть, но не должна быть - 100% отклонение
 
                 // Проверяем, нужна ли ребалансировка
-                const needsRebalance = Math.abs(deviationPercent) > this.settings.threshold || 
-                                     Math.abs(deviation) > 1; // Минимум 1% абсолютного отклонения
+                // НЕ продаем позиции, если целевой вес = 0, но позиция есть в текущем портфеле
+                // Это защита от случайной продажи всех позиций
+                const needsRebalance = targetWeight > 0 && (
+                    Math.abs(deviationPercent) > this.settings.threshold || 
+                    Math.abs(deviation) > 1 // Минимум 1% абсолютного отклонения
+                );
 
                 if (needsRebalance) {
                     needsRebalancing = true;
@@ -165,8 +226,15 @@ class PortfolioRebalancingService {
 
             // Проверяем позиции, которые должны быть добавлены
             for (const targetPos of targetAllocation) {
+                // Используем правильные поля для поиска (symbol, figi, ticker)
+                const targetFigi = targetPos.figi || targetPos.symbol;
+                const targetTicker = targetPos.ticker || targetPos.symbol;
+                
                 const existingPos = positions.find(p => 
-                    p.figi === targetPos.symbol || p.ticker === targetPos.symbol
+                    p.figi === targetFigi || 
+                    p.figi === targetPos.symbol ||
+                    p.ticker === targetTicker ||
+                    p.ticker === targetPos.symbol
                 );
 
                 if (!existingPos && targetPos.weight > 0) {
@@ -176,9 +244,9 @@ class PortfolioRebalancingService {
                     if (targetValue >= this.settings.minAmount) {
                         needsRebalancing = true;
                         deviations.push({
-                            figi: targetPos.symbol,
-                            ticker: targetPos.symbol,
-                            name: targetPos.symbol,
+                            figi: targetFigi || targetPos.symbol,
+                            ticker: targetTicker || targetPos.symbol,
+                            name: targetPos.name || targetTicker || targetPos.symbol,
                             currentWeight: 0,
                             targetWeight: Math.round(targetWeight * 100) / 100,
                             deviation: -targetWeight,
@@ -194,6 +262,11 @@ class PortfolioRebalancingService {
 
             this.lastCheck = new Date();
 
+            // Если используем текущее как целевое, ребалансировка не нужна
+            if (usingCurrentAsTarget) {
+                needsRebalancing = false;
+            }
+
             return {
                 needsRebalancing,
                 deviations: deviations.filter(d => d.needsRebalancing),
@@ -206,7 +279,11 @@ class PortfolioRebalancingService {
                     maxDeviation: deviations.length > 0 
                         ? Math.max(...deviations.map(d => Math.abs(d.deviationPercent)))
                         : 0,
-                    threshold: this.settings.threshold
+                    threshold: this.settings.threshold,
+                    usingCurrentAsTarget: usingCurrentAsTarget,
+                    reason: usingCurrentAsTarget 
+                        ? 'Используется текущее распределение как целевое (оптимизация не удалась)' 
+                        : null
                 }
             };
 
@@ -295,6 +372,13 @@ class PortfolioRebalancingService {
             for (const deviation of deviations) {
                 if (!deviation.needsRebalancing) continue;
 
+                // КРИТИЧЕСКАЯ ЗАЩИТА: Не продаем позиции, если целевой вес = 0
+                // Это предотвращает случайную продажу всех позиций при ошибке оптимизации
+                if (deviation.targetWeight === 0 && deviation.currentWeight > 0) {
+                    console.warn(`⚠️ Пропущена операция продажи ${deviation.ticker}: целевой вес = 0 (защита от обнуления портфеля)`);
+                    continue;
+                }
+
                 const valueDiff = deviation.targetValue - deviation.currentValue;
                 const absValueDiff = Math.abs(valueDiff);
 
@@ -331,6 +415,13 @@ class PortfolioRebalancingService {
                 } else {
                     // Нужно продать
                     action = 'SELL';
+                    
+                    // Дополнительная проверка: не продаем, если целевой вес = 0
+                    if (deviation.targetWeight === 0) {
+                        console.warn(`⚠️ Пропущена операция продажи ${deviation.ticker}: целевой вес = 0`);
+                        continue;
+                    }
+                    
                     const positions = await this.getDetailedPositions(portfolio);
                     const position = positions.find(p => p.figi === deviation.figi || p.ticker === deviation.ticker);
                     

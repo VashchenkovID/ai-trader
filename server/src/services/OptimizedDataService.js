@@ -663,8 +663,26 @@ class OptimizedDataService {
             // Обновляем свечи
             await CacheService.updateCandles(figi);
             
-            // Обновляем дивиденды
-            await DividendService.updateDividends(figi);
+            // Обновляем дивиденды только для акций и ETF
+            // Проверяем тип инструмента перед вызовом updateDividends
+            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+            const instrument = await CachedInstrument.findOne({ 
+                where: { figi },
+                attributes: ['figi', 'instrumentType']
+            });
+            
+            if (instrument) {
+                const instrumentType = (instrument.instrumentType || '').toLowerCase();
+                // Обновляем дивиденды только для акций и ETF
+                if (!instrumentType || instrumentType === 'share' || instrumentType === 'etf') {
+                    await DividendService.updateDividends(figi);
+                }
+                // Для других типов (future, bond, currency, option) пропускаем обновление дивидендов
+            } else {
+                // Если инструмент не найден в кеше, все равно пытаемся обновить дивиденды
+                // (проверка будет в DividendService)
+                await DividendService.updateDividends(figi);
+            }
 
         } catch (error) {
             const LoggerService = (await import('./LoggerService.js')).default;

@@ -45,6 +45,22 @@ class DividendService {
                 await this.initialize();
             }
 
+            // Проверяем тип инструмента перед запросом дивидендов
+            // Дивиденды можно получать только для акций (share) и ETF (etf)
+            const instrument = await CachedInstrument.findOne({ 
+                where: { figi },
+                attributes: ['figi', 'instrumentType', 'ticker']
+            });
+            
+            if (instrument) {
+                const instrumentType = (instrument.instrumentType || '').toLowerCase();
+                // Пропускаем обновление для инструментов, которые не могут иметь дивиденды
+                if (instrumentType && instrumentType !== 'share' && instrumentType !== 'etf') {
+                    // Не логируем, так как это нормальное поведение для фьючерсов, облигаций и т.д.
+                    return null;
+                }
+            }
+
             // Получаем дивиденды от Tinkoff API
             const dividends = await TinkoffApiService.getDividends(figi);
             

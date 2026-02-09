@@ -445,11 +445,25 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
 
         try {
             const message = await this.formatStrongRecommendationsMessage();
-            if (message) {
-                await this.safeSendMessage(this.chatId, message, { parse_mode: 'HTML' });
+            // Проверяем, что сообщение не пустое и содержит рекомендации
+            if (message && message.trim().length > 0) {
+                // Дополнительная проверка: убеждаемся, что в сообщении есть рекомендации
+                // (не только заголовок и время)
+                const hasRecommendations = message.includes('ПОКУПКИ') || message.includes('ПРОДАЖИ');
+                if (hasRecommendations) {
+                    await this.safeSendMessage(this.chatId, message, { parse_mode: 'HTML' });
+                } else {
+                    // Если сообщение сформировано, но нет рекомендаций, не отправляем
+                    if (LoggerService.isInitialized) {
+                        LoggerService.debug('Skipping empty strong recommendations message', {
+                            service: 'OptimizedTelegramService',
+                            operation: 'sendStrongRecommendations'
+                        });
+                    }
+                }
             }
             
-            // Очищаем после отправки
+            // Очищаем после отправки (или если сообщение пустое)
             this.strongRecommendations = [];
         } catch (error) {
             console.error('❌ Error sending strong recommendations:', error);
@@ -461,6 +475,11 @@ ${accuracy ? `• Точность: ${(accuracy * 100).toFixed(2)}%` : ''}
 
         const buyRecommendations = this.strongRecommendations.filter(r => r.recommendation === 'BUY');
         const sellRecommendations = this.strongRecommendations.filter(r => r.recommendation === 'SELL');
+        
+        // Если нет ни покупок, ни продаж, не формируем сообщение
+        if (buyRecommendations.length === 0 && sellRecommendations.length === 0) {
+            return '';
+        }
 
         // Загружаем информацию об инструментах из кеша
         const CachedInstrument = (await import('../models/CachedInstrument.js')).default;

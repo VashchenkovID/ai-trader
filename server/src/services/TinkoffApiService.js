@@ -299,6 +299,26 @@ class TinkoffApiService {
     // Получение информации о дивидендах (ИСПРАВЛЕННЫЙ МЕТОД)
     async getDividends(figi) {
         try {
+            // Проверяем тип инструмента перед запросом дивидендов
+            // Дивиденды можно получать только для акций (share) и ETF (etf)
+            const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+            const instrument = await CachedInstrument.findOne({ 
+                where: { figi },
+                attributes: ['figi', 'instrumentType', 'ticker']
+            });
+            
+            if (instrument) {
+                const instrumentType = (instrument.instrumentType || '').toLowerCase();
+                // Пропускаем запрос для инструментов, которые не могут иметь дивиденды
+                if (instrumentType && instrumentType !== 'share' && instrumentType !== 'etf') {
+                    // Логируем только для отладки, не выводим ошибку
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log(`ℹ️ Skipping dividends request for ${instrument.ticker || figi}: instrument type is ${instrumentType} (only share/etf can have dividends)`);
+                    }
+                    return { dividends: [] };
+                }
+            }
+            
             // Увеличенная задержка для GetDividends, чтобы избежать ошибки 429 (Too Many Requests)
             // Этот эндпоинт часто используется при обучении нейросети, поэтому нужна дополнительная задержка
             const dividendsDelay = 2000; // 2 секунды задержка для дивидендов
@@ -314,6 +334,10 @@ class TinkoffApiService {
             });
             return response;
         } catch (error) {
+            // Если ошибка связана с типом инструмента, возвращаем пустой массив без логирования ошибки
+            if (error.message && error.message.includes('Instrument type is not a share or etf')) {
+                return { dividends: [] };
+            }
             return {dividends: []};
         }
     }
