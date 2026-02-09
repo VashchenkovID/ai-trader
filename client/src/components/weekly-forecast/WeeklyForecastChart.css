@@ -1,0 +1,14 @@
+.weekly-forecast-chart {
+  width: 100%;
+  position: relative;
+}
+
+.weekly-forecast-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+

@@ -13,6 +13,7 @@ import Settings from '../pages/Settings'
 import MetricsMonitoring from '../pages/MetricsMonitoring/MetricsMonitoring.tsx'
 import Performance from '../pages/Performance/Performance.tsx'
 import WorkerMonitoring from '../pages/WorkerMonitoring/WorkerMonitoring.tsx'
+import WeeklyForecastDetail from '../pages/WeeklyForecast/WeeklyForecastDetail.tsx'
 
 const AppRouter: FC = () => {
 
@@ -33,6 +34,7 @@ const AppRouter: FC = () => {
                 <Route path="/metrics-monitoring" element={<MetricsMonitoring/>}/>
                 <Route path="/performance" element={<Performance/>}/>
                 <Route path="/worker-monitoring" element={<WorkerMonitoring/>}/>
+                <Route path="/weekly-forecast/:figi" element={<WeeklyForecastDetail/>}/>
                 <Route path="*" element={<>Нет роута</>}/>
             </Routes>
 

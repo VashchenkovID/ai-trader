@@ -78,6 +78,7 @@ import User from '../models/User.js';
 import CashFlow from '../models/CashFlow.js';
 import EntryOptimizationModel from '../models/EntryOptimizationModel.js';
 import SyncSettings from '../models/SyncSettings.js';
+import WeeklyForecast from '../models/WeeklyForecast.js';
 import bcrypt from 'bcrypt';
 
 /**
@@ -1104,6 +1105,13 @@ export async function initDatabase() {
             await safeSyncModel(ModelPerformance, 'ModelPerformance');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы производительности моделей:', syncError);
+        }
+        
+        // Создаем таблицу недельных прогнозов (WeeklyForecast)
+        try {
+            await safeSyncModel(WeeklyForecast, 'WeeklyForecast');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы недельных прогнозов:', syncError);
         }
         
         // Создаем таблицу миграций БД (DatabaseMigration)

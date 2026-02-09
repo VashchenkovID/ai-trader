@@ -8,6 +8,9 @@ export * from './schedulerTaskHelpers.js';
 // Утилиты для работы с кешем
 export * from './cacheManagementUtils.js';
 
+// Утилиты для обучения Weekly Forecast моделей
+export * from './weeklyForecastTrainingUtils.js';
+
 // Утилиты для обновления цен
 export * from './priceUpdateUtils.js';
 

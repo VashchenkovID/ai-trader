@@ -11,6 +11,7 @@ import { apiService } from '../../services/apiService';
 import { Toast } from 'primereact/toast';
 import { Skeleton } from '../ui/Skeleton/Skeleton';
 import { workerMonitoringApi, Worker } from '../../services/workerMonitoringApi';
+import { weeklyForecastApi } from '../../services/weeklyForecastApi';
 import './TrainingSettingsSection.css';
 
 interface TrainingSettings {
@@ -93,6 +94,12 @@ const TrainingSettingsSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [startingTraining, setStartingTraining] = useState(false);
+  const [startingWeeklyForecastTraining, setStartingWeeklyForecastTraining] = useState(false);
+  const [weeklyForecastTrainingStatus, setWeeklyForecastTrainingStatus] = useState<{
+    isTraining: boolean;
+    progress?: number;
+    lastTrainingTime?: string;
+  } | null>(null);
   const [fullTrainingWorker, setFullTrainingWorker] = useState<Worker | null>(null);
   const toast = useRef<Toast>(null);
 
@@ -230,6 +237,47 @@ const TrainingSettingsSection: React.FC = () => {
       showToast('error', `Ошибка запуска обучения: ${error.message}`);
     } finally {
       setStartingTraining(false);
+    }
+  };
+
+  const handleStartWeeklyForecastTraining = async () => {
+    if (!window.confirm('Запустить полное обучение моделей Weekly Forecast? Это может занять много времени (обучение для всех инструментов).')) {
+      return;
+    }
+    
+    try {
+      setStartingWeeklyForecastTraining(true);
+      setWeeklyForecastTrainingStatus({ isTraining: true });
+      
+      const result = await weeklyForecastApi.trainModels({
+        maxInstruments: 10,
+        trainingOptions: {
+          historicalDays: 365,
+          lookbackDays: 60,
+          forecastDays: 7,
+          epochs: 50,
+          batchSize: 16
+        }
+      });
+      
+      if (result.success) {
+        showToast('success', `Обучение завершено: ${result.data.success?.length || 0} успешно, ${result.data.failed?.length || 0} ошибок`);
+        setWeeklyForecastTrainingStatus({
+          isTraining: false,
+          lastTrainingTime: new Date().toISOString()
+        });
+      } else {
+        throw new Error('Обучение завершилось с ошибкой');
+      }
+    } catch (error: any) {
+      console.error('Error starting Weekly Forecast training:', error);
+      showToast('error', `Ошибка запуска обучения: ${error.message}`);
+      setWeeklyForecastTrainingStatus({
+        isTraining: false,
+        lastTrainingTime: weeklyForecastTrainingStatus?.lastTrainingTime
+      });
+    } finally {
+      setStartingWeeklyForecastTraining(false);
     }
   };
 
@@ -649,6 +697,49 @@ const TrainingSettingsSection: React.FC = () => {
             
             <div className="training-settings-hint">
               Запустит обучение для всех инструментов с текущими настройками
+            </div>
+          </div>
+        </Card>
+
+        {/* Обучение Weekly Forecast моделей */}
+        <Card className="training-settings-card">
+          <div className="training-settings-card-header">
+            <h3>Обучение Weekly Forecast моделей</h3>
+            {weeklyForecastTrainingStatus?.isTraining && (
+              <Badge variant="warning">Обучение в процессе</Badge>
+            )}
+          </div>
+          <Divider />
+          
+          <div className="training-settings-form">
+            {weeklyForecastTrainingStatus?.isTraining && (
+              <Alert variant="info">
+                Обучение моделей Weekly Forecast в процессе...
+                <div style={{ marginTop: '8px' }}>
+                  Это может занять несколько минут для каждого инструмента.
+                </div>
+              </Alert>
+            )}
+            
+            {weeklyForecastTrainingStatus?.lastTrainingTime && !weeklyForecastTrainingStatus?.isTraining && (
+              <div className="training-settings-info">
+                <strong>Последнее обучение:</strong> {new Date(weeklyForecastTrainingStatus.lastTrainingTime).toLocaleString('ru-RU')}
+              </div>
+            )}
+            
+            <Button
+              variant="primary"
+              onClick={handleStartWeeklyForecastTraining}
+              disabled={startingWeeklyForecastTraining || weeklyForecastTrainingStatus?.isTraining}
+            >
+              {startingWeeklyForecastTraining || weeklyForecastTrainingStatus?.isTraining
+                ? 'Обучение...' 
+                : 'Запустить полное обучение Weekly Forecast'}
+            </Button>
+            
+            <div className="training-settings-hint">
+              Запустит полное обучение моделей Weekly Forecast для всех активных инструментов.
+              Обучение происходит автоматически раз в неделю (понедельник в 4:00).
             </div>
           </div>
         </Card>

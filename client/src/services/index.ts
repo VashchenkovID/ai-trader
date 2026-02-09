@@ -6,6 +6,7 @@ import ApiUtils, { useApiHooks } from './apiUtils';
 export { apiService, default as api } from './apiService';
 export { ApiUtils, useApiHooks } from './apiUtils';
 export { API_CONSTANTS, ApiConstantsUtils } from './apiConstants';
+export { weeklyForecastApi } from './weeklyForecastApi';
 
 // Экспорт типов
 export type {

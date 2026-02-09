@@ -50,6 +50,8 @@ class SchedulerService {
         this.positionMonitoringTask = null; // Задача мониторинга позиций
         this.dailyReportTask = null; // Задача ежедневных отчетов
         this.dataCleanupTask = null; // Задача автоматической очистки данных
+        this.weeklyForecastUpdateTask = null; // Задача обновления недельных прогнозов реальными данными
+        this.weeklyForecastTrainingTask = null; // Задача обучения моделей Weekly Forecast
         this.isInitialized = null;
         this.isTraining = false;
         this.isAnalyzing = false;
@@ -1738,6 +1740,309 @@ class SchedulerService {
         }, { scheduled: true, timezone: "Europe/Moscow" });
         this.intervals.add(cacheCheckTask);
         
+        // Задача обновления недельных прогнозов реальными данными (каждый час)
+        const weeklyForecastUpdateTask = cron.schedule('0 * * * *', async () => {
+            // Пропускаем первый запуск при старте (минимум 10 минут с момента старта)
+            const timeSinceStart = Date.now() - this.startTime;
+            if (timeSinceStart < 10 * 60 * 1000) {
+                return;
+            }
+            
+            let workerId = null;
+            try {
+                if (!this.isInitialized) {
+                    return;
+                }
+                
+                // Регистрируем воркер для мониторинга
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (!WorkerMonitoringService.isInitialized) {
+                        await WorkerMonitoringService.initialize();
+                    }
+                    workerId = WorkerMonitoringService.registerWorker(
+                        'weekly-forecast-update',
+                        'Обновление недельных прогнозов',
+                        {
+                            stage: 'initializing'
+                        }
+                    );
+                } catch (monitoringError) {
+                    LoggerService.warn('Failed to register worker in monitoring service', {
+                        service: 'SchedulerService',
+                        operation: 'weeklyForecastUpdate',
+                        error: { message: String(monitoringError) }
+                    });
+                }
+                
+                const WeeklyForecastService = (await import('./WeeklyForecastService.js')).default;
+                
+                // Убеждаемся, что сервис инициализирован
+                if (!WeeklyForecastService.isInitialized) {
+                    await WeeklyForecastService.initialize();
+                }
+                
+                // Обновляем статус: получение активных прогнозов
+                if (workerId) {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress: 10,
+                        metadata: {
+                            stage: 'loading_forecasts'
+                        }
+                    });
+                }
+                
+                // Получаем все активные прогнозы (не завершенные)
+                const { Op } = await import('sequelize');
+                const WeeklyForecast = (await import('../models/WeeklyForecast.js')).default;
+                
+                const activeForecasts = await WeeklyForecast.findAll({
+                    where: {
+                        isCompleted: false
+                    },
+                    limit: 50 // Ограничиваем количество для обработки за раз
+                });
+                
+                if (activeForecasts.length === 0) {
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            skipped: true,
+                            reason: 'no_active_forecasts'
+                        });
+                    }
+                    return;
+                }
+                
+                // Обновляем статус: начало обновления
+                if (workerId) {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress: 20,
+                        metadata: {
+                            stage: 'updating',
+                            total: activeForecasts.length,
+                            current: 0
+                        }
+                    });
+                }
+                
+                LoggerService.warn(`Updating ${activeForecasts.length} weekly forecasts with actual data`, {
+                    service: 'SchedulerService',
+                    operation: 'weeklyForecastUpdate'
+                });
+                
+                // Обновляем каждый прогноз
+                let successCount = 0;
+                let errorCount = 0;
+                
+                for (let i = 0; i < activeForecasts.length; i++) {
+                    const forecast = activeForecasts[i];
+                    try {
+                        // Обновляем прогресс
+                        if (workerId) {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            const progress = 20 + Math.round((i / activeForecasts.length) * 70);
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                progress,
+                                metadata: {
+                                    stage: 'updating',
+                                    total: activeForecasts.length,
+                                    current: i + 1,
+                                    currentFigi: forecast.figi
+                                }
+                            });
+                        }
+                        
+                        const result = await WeeklyForecastService.updateWithActualData(
+                            forecast.figi,
+                            forecast.id
+                        );
+                        
+                        if (result.success) {
+                            successCount++;
+                        }
+                    } catch (error) {
+                        errorCount++;
+                        LoggerService.error('Error updating forecast', {
+                            service: 'SchedulerService',
+                            operation: 'weeklyForecastUpdate',
+                            forecastId: forecast.id,
+                            figi: forecast.figi,
+                            error: { message: error.message }
+                        });
+                    }
+                }
+                
+                // Обновляем статус: завершение
+                if (workerId) {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.updateWorkerStatus(workerId, {
+                        progress: 100,
+                        metadata: {
+                            stage: 'completed',
+                            successCount,
+                            errorCount,
+                            total: activeForecasts.length
+                        }
+                    });
+                    WorkerMonitoringService.completeWorker(workerId, true, {
+                        successCount,
+                        errorCount,
+                        total: activeForecasts.length
+                    });
+                }
+                
+                if (successCount > 0 || errorCount > 0) {
+                    LoggerService.warn('Weekly forecast update completed', {
+                        service: 'SchedulerService',
+                        operation: 'weeklyForecastUpdate',
+                        successCount,
+                        errorCount,
+                        total: activeForecasts.length
+                    });
+                }
+            } catch (error) {
+                if (workerId) {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.completeWorker(workerId, false, {
+                        error: { message: error.message }
+                    });
+                }
+                LoggerService.error('Error in weekly forecast update task', {
+                    service: 'SchedulerService',
+                    operation: 'weeklyForecastUpdate',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
+        }, { scheduled: true, timezone: "Europe/Moscow" });
+        this.weeklyForecastUpdateTask = weeklyForecastUpdateTask;
+        this.intervals.add(weeklyForecastUpdateTask);
+        
+        // Задача обучения моделей Weekly Forecast (раз в неделю, понедельник в 4:00)
+        const weeklyForecastTrainingSchedule = schedulerSettings.weekly_forecast_training_schedule || '0 4 * * 1';
+        const weeklyForecastTrainingTask = SchedulerUtils.createScheduledTask(
+            weeklyForecastTrainingSchedule,
+            async () => {
+                const { trainWeeklyForecastModelsForAllInstruments } = await import('../utils/scheduler/weeklyForecastTrainingUtils.js');
+                
+                let workerId = null;
+                try {
+                    if (!this.isInitialized) {
+                        return;
+                    }
+                    
+                    // Регистрируем воркер для мониторинга
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (!WorkerMonitoringService.isInitialized) {
+                            await WorkerMonitoringService.initialize();
+                        }
+                        workerId = WorkerMonitoringService.registerWorker(
+                            'weekly-forecast-training',
+                            'Обучение моделей Weekly Forecast',
+                            {
+                                stage: 'initializing',
+                                trainingType: 'scheduled'
+                            }
+                        );
+                    } catch (monitoringError) {
+                        LoggerService.warn('Failed to register worker in monitoring service', {
+                            service: 'SchedulerService',
+                            operation: 'weeklyForecastTraining',
+                            error: { message: String(monitoringError) }
+                        });
+                    }
+                    
+                    if (LoggerService.isInitialized) {
+                        LoggerService.info('Starting scheduled Weekly Forecast models training', {
+                            service: 'SchedulerService',
+                            operation: 'weeklyForecastTraining'
+                        });
+                    }
+                    
+                    // Обновляем статус: начало обучения
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 5,
+                            metadata: {
+                                stage: 'training',
+                                currentInstrument: 0,
+                                totalInstruments: 0
+                            }
+                        });
+                    }
+                    
+                    const result = await trainWeeklyForecastModelsForAllInstruments({
+                        maxInstruments: 10,
+                        trainingOptions: {
+                            historicalDays: 365,
+                            lookbackDays: 60,
+                            forecastDays: 7,
+                            epochs: 50,
+                            batchSize: 16
+                        },
+                        workerId // Передаем workerId для обновления прогресса
+                    });
+                    
+                    // Обновляем статус: завершение
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 100,
+                            metadata: {
+                                stage: 'completed',
+                                total: result.total,
+                                success: result.success.length,
+                                failed: result.failed.length
+                            }
+                        });
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            total: result.total,
+                            success: result.success.length,
+                            failed: result.failed.length
+                        });
+                    }
+                    
+                    if (LoggerService.isInitialized) {
+                        LoggerService.info('Scheduled Weekly Forecast models training completed', {
+                            service: 'SchedulerService',
+                            operation: 'weeklyForecastTraining',
+                            total: result.total,
+                            success: result.success.length,
+                            failed: result.failed.length
+                        });
+                    }
+                } catch (error) {
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.completeWorker(workerId, false, {
+                            error: { message: error.message }
+                        });
+                    }
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Error in scheduled Weekly Forecast models training', {
+                            service: 'SchedulerService',
+                            operation: 'weeklyForecastTraining',
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
+                }
+            },
+            {
+                taskName: 'weekly-forecast-training',
+                sendAlerts: true,
+                alertType: 'warning',
+                startTime: this.startTime,
+                minDelay: 10 * 60 * 1000, // 10 минут
+                timezone: 'Europe/Moscow'
+            }
+        );
+        this.weeklyForecastTrainingTask = weeklyForecastTrainingTask;
+        this.intervals.add(weeklyForecastTrainingTask);
+        
         // Запускаем все cron задачи
         this.intervals.forEach(task => {
             if (task && typeof task.start === 'function') {
@@ -1881,6 +2186,16 @@ class SchedulerService {
                 this.dataCleanupTask.stop();
                 this.dataCleanupTask.destroy();
                 this.dataCleanupTask = null;
+            }
+            if (this.weeklyForecastUpdateTask) {
+                this.weeklyForecastUpdateTask.stop();
+                this.weeklyForecastUpdateTask.destroy();
+                this.weeklyForecastUpdateTask = null;
+            }
+            if (this.weeklyForecastTrainingTask) {
+                this.weeklyForecastTrainingTask.stop();
+                this.weeklyForecastTrainingTask.destroy();
+                this.weeklyForecastTrainingTask = null;
             }
             
             // Останавливаем все cron задачи из intervals
