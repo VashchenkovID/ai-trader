@@ -3,6 +3,7 @@ import DividendService from './DividendService.js';
 import MacroDataService from './MacroDataService.js';
 import FundamentalDataService from './FundamentalDataService.js';
 import OptionsDataService from './OptionsDataService.js';
+import LoggerService from './LoggerService.js';
 // import CompanySyncService from './CompanySyncService.js'; // Временно отключено
 // import PortfolioSyncService from './PortfolioSyncService.js'; // Временно отключено
 
@@ -826,13 +827,14 @@ class OptimizedDataService {
             
             // Всего должно быть 6 фичей (упрощенный набор)
             if (features.length !== 6) {
-                const LoggerService = (await import('./LoggerService.js')).default;
-                LoggerService.warn('Technical indicators count mismatch', {
-                    service: 'OptimizedDataService',
-                    operation: 'calculateTechnicalIndicators',
-                    expected: 6,
-                    got: features.length
-                });
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Technical indicators count mismatch', {
+                        service: 'OptimizedDataService',
+                        operation: 'calculateTechnicalIndicators',
+                        expected: 6,
+                        got: features.length
+                    });
+                }
                 // Дополняем или обрезаем до 6
                 while (features.length < 6) {
                     features.push(0);
@@ -844,12 +846,13 @@ class OptimizedDataService {
             
             return features;
         } catch (error) {
-            const LoggerService = (await import('./LoggerService.js')).default;
-            LoggerService.error('Error calculating technical indicators', {
-                service: 'OptimizedDataService',
-                operation: 'calculateTechnicalIndicators',
-                error: { message: error.message, stack: error.stack }
-            });
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error calculating technical indicators', {
+                    service: 'OptimizedDataService',
+                    operation: 'calculateTechnicalIndicators',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return new Array(6).fill(0);
         }
     }
@@ -933,12 +936,13 @@ class OptimizedDataService {
             
             return features;
         } catch (error) {
-            const LoggerService = (await import('./LoggerService.js')).default;
-            LoggerService.error('Error creating advanced features', {
-                service: 'OptimizedDataService',
-                operation: 'createAdvancedFeatures',
-                error: { message: error.message, stack: error.stack }
-            });
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error creating advanced features', {
+                    service: 'OptimizedDataService',
+                    operation: 'createAdvancedFeatures',
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
             return new Array(6).fill(0);
         }
     }
