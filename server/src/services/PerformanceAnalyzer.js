@@ -1001,9 +1001,16 @@ class PerformanceAnalyzer {
             // Используем единый метод PnLCalculationService для расчета метрик
             // Это обеспечивает консистентность с остальным приложением
             const PnLCalculationService = (await import('./PnLCalculationService.js')).default;
-            const Portfolio = (await import('../models/Portfolio.js')).default;
-            const portfolio = await Portfolio.findOne();
-            const initialCapital = portfolio?.initialCapital || 1000000;
+            
+            // Получаем портфель через TradingEngine (как в других сервисах)
+            let initialCapital = 1000000; // Значение по умолчанию
+            try {
+                const TradingEngine = (await import('./TradingEngine.js')).default;
+                const portfolio = await TradingEngine.getPortfolioValue();
+                initialCapital = portfolio?.initialCapital || initialCapital;
+            } catch (error) {
+                console.warn('Could not get portfolio for initial capital, using default:', error.message);
+            }
             
             // Убеждаемся, что у всех сделок есть поле pnl
             const tradesWithPnL = closedTrades.map(trade => ({

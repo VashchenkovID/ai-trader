@@ -225,8 +225,26 @@ async function startServer() {
     try {
         await initializeServices();
         
-        server.listen(PORT, () => {
+        server.listen(PORT, async () => {
             console.log(`✅ Сервер запущен на порту ${PORT}`);
+            // Убеждаемся, что WebSocket инициализирован после запуска сервера
+            try {
+                const { default: ServiceManager } = await import('./services/ServiceManager.js');
+                const webSocketService = ServiceManager.getService('WebSocketService');
+                if (webSocketService) {
+                    const status = webSocketService.getStatus();
+                    if (!status.isInitialized) {
+                        console.log('🔄 Reinitializing WebSocket after server start...');
+                        webSocketService.initialize(server, '/ws');
+                    } else {
+                        console.log('✅ WebSocket already initialized');
+                    }
+                } else {
+                    console.warn('⚠️ WebSocketService not found in ServiceManager');
+                }
+            } catch (error) {
+                console.error('❌ Error checking WebSocket status:', error);
+            }
         });
         
     } catch (error) {

@@ -17,13 +17,27 @@ class WebSocketService {
     }
 
     initialize(server, path = '/') {
-        // Защита от повторной инициализации
+        // Если WebSocket уже инициализирован, проверяем его состояние
         if (this.wss) {
-            return;
+            // Проверяем, что сервер все еще активен
+            try {
+                // Если сервер закрыт или недействителен, переинициализируем
+                if (this.wss.clients && typeof this.wss.close === 'function') {
+                    // Сервер активен, не переинициализируем
+                    console.log('WebSocket server already initialized, skipping...');
+                    return;
+                }
+            } catch (error) {
+                // Сервер недействителен, очищаем и переинициализируем
+                console.log('WebSocket server invalid, reinitializing...');
+                this.wss = null;
+                this.clients.clear();
+            }
         }
         
         try {
             this.wss = new WebSocketServer({ server, path });
+            console.log(`✅ WebSocket server initialized on path: ${path}`);
         } catch (error) {
             console.error('❌ Failed to create WebSocket server:', error);
             return;
@@ -327,9 +341,29 @@ class WebSocketService {
         try {
             // Получаем сервисы из глобального ServiceManager
             const { getService } = await import('./GlobalServiceManager.js');
-            const NeuralNetworkService = getService('NeuralNetworkService');
-            const TradingEngine = getService('TradingEngine');
-            const EnsembleService = getService('EnsembleService');
+            
+            // Безопасное получение сервисов с обработкой ошибок
+            let NeuralNetworkService = null;
+            let TradingEngine = null;
+            let EnsembleService = null;
+            
+            try {
+                NeuralNetworkService = getService('NeuralNetworkService');
+            } catch (error) {
+                console.warn('NeuralNetworkService not available:', error.message);
+            }
+            
+            try {
+                TradingEngine = getService('TradingEngine');
+            } catch (error) {
+                console.warn('TradingEngine not available:', error.message);
+            }
+            
+            try {
+                EnsembleService = getService('EnsembleService');
+            } catch (error) {
+                console.warn('EnsembleService not available:', error.message);
+            }
             
             // Получаем реальный статус системы с полными данными
             let neuralNetworkStatus = {};
@@ -417,14 +451,80 @@ class WebSocketService {
             });
 
             // Отправляем статус кеша
-            const SchedulerService = getService('SchedulerService');
-            if (SchedulerService) {
-                const cacheStatus = await SchedulerService.getCacheStatus();
+            try {
+                const SchedulerService = getService('SchedulerService');
+                if (SchedulerService && typeof SchedulerService.getCacheStatus === 'function') {
+                    const cacheStatus = await SchedulerService.getCacheStatus();
+                    this.sendToClient(ws, {
+                        type: 'cache_status_update',
+                        data: cacheStatus,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (error) {
+                // SchedulerService может быть еще не инициализирован, это не критично
+                console.warn('SchedulerService not available for cache status:', error.message);
+            }
+
+            // Отправляем системные ресурсы сразу при подключении
+            try {
+                const os = await import('os');
+                const cpus = os.default.cpus();
+                const loadAvg = os.default.loadavg();
+                const cpuUsagePercent = Math.min((loadAvg[0] / cpus.length) * 100, 100);
+                const totalMemory = os.default.totalmem();
+                const freeMemory = os.default.freemem();
+                const usedMemory = totalMemory - freeMemory;
+                const memoryUsagePercent = (usedMemory / totalMemory) * 100;
+                
+                const systemResources = {
+                    cpu: {
+                        usage: Math.round(cpuUsagePercent),
+                        cores: cpus.length,
+                        loadAverage: loadAvg
+                    },
+                    memory: {
+                        used: Math.round(usedMemory / 1024 / 1024), // MB
+                        total: Math.round(totalMemory / 1024 / 1024), // MB
+                        free: Math.round(freeMemory / 1024 / 1024), // MB
+                        usage: Math.round(memoryUsagePercent)
+                    },
+                    timestamp: new Date().toISOString()
+                };
+                
                 this.sendToClient(ws, {
-                    type: 'cache_status_update',
-                    data: cacheStatus,
+                    type: 'system_resources_update',
+                    data: systemResources,
                     timestamp: new Date().toISOString()
                 });
+            } catch (error) {
+                console.warn('Error sending initial system resources:', error.message);
+            }
+
+            // Отправляем статус обучения сразу при подключении
+            try {
+                const { getService } = await import('./GlobalServiceManager.js');
+                let TrainingStatusService = null;
+                try {
+                    TrainingStatusService = getService('TrainingStatusService');
+                } catch (error) {
+                    // Сервис не найден - используем дефолтный статус
+                }
+                
+                const trainingStatus = TrainingStatusService?.getStatus() || {
+                    neuralNetwork: { isTraining: false, stage: 'idle', progress: 0 },
+                    ensemble: { isTraining: false, stage: 'idle', progress: 0 },
+                    metaLearning: { isTraining: false, stage: 'idle', progress: 0 },
+                    reinforcementLearning: { isTraining: false, stage: 'idle', progress: 0 }
+                };
+                
+                this.sendToClient(ws, {
+                    type: 'training_status_update',
+                    data: trainingStatus,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (error) {
+                console.warn('Error sending initial training status:', error.message);
             }
 
             // Отправляем торговую статистику
@@ -504,7 +604,9 @@ class WebSocketService {
                 }
             }
         } catch (error) {
-            console.error('❌ Error sending initial system status:', error);
+            // Ошибки при отправке начального статуса не критичны - сервисы могут быть еще не инициализированы
+            // Логируем как предупреждение, а не как ошибку
+            console.warn('⚠️ Warning sending initial system status (some services may not be initialized yet):', error.message);
         }
     }
 

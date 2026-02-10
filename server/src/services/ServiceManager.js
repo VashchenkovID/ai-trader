@@ -179,10 +179,14 @@ class ServiceManager {
             // 5. Инициализируем WebSocket с сервером (если передан)
             if (server) {
                 const WebSocketService = (await import('./WebSocketService.js')).default;
-                const webSocketService = new WebSocketService();
+                // Используем существующий экземпляр или создаем новый
+                let webSocketService = this.services.get('WebSocketService');
+                if (!webSocketService) {
+                    webSocketService = new WebSocketService();
+                    this.services.set('WebSocketService', webSocketService);
+                }
                 // Инициализируем WebSocket на пути /ws для соответствия nginx конфигурации
                 webSocketService.initialize(server, '/ws');
-                this.services.set('WebSocketService', webSocketService);
                 
                 // Отмечаем WebSocketService как глобально инициализированный (если не воркер)
                 if (!this.isWorker) {

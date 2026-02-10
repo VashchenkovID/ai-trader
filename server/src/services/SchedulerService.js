@@ -1270,18 +1270,22 @@ class SchedulerService {
             }
         }, { scheduled: false });
         this.intervals.add(cacheTask);
+        cacheTask.start(); // Запускаем задачу сразу
 
-        // Отправляем данные о системных ресурсах каждые 10 секунд (cron: каждые 10 секунд)
-        const resourcesTask = cron.schedule('*/10 * * * * *', async () => {
+        // Отправляем данные о системных ресурсах каждые 5 секунд (cron: каждые 5 секунд)
+        // Используем более частые обновления для лучшей отзывчивости
+        const resourcesTask = cron.schedule('*/5 * * * * *', async () => {
             try {
                 const WebSocketService = this.getWebSocketService();
                 if (WebSocketService) {
                     const os = await import('os');
                     
-                    // CPU информация
+                    // CPU информация - используем loadAverage для более точного расчета
                     const cpus = os.default.cpus();
-                    const cpuUsage = process.cpuUsage();
-                    const cpuUsagePercent = Math.min((cpuUsage.user + cpuUsage.system) / 1000000, 100);
+                    const loadAvg = os.default.loadavg();
+                    // loadAverage[0] - средняя нагрузка за 1 минуту
+                    // Умножаем на 100 и делим на количество ядер для получения процента
+                    const cpuUsagePercent = Math.min((loadAvg[0] / cpus.length) * 100, 100);
                     
                     // Memory информация
                     const totalMemory = os.default.totalmem();
@@ -1293,7 +1297,7 @@ class SchedulerService {
                         cpu: {
                             usage: Math.round(cpuUsagePercent),
                             cores: cpus.length,
-                            loadAverage: os.default.loadavg()
+                            loadAverage: loadAvg
                         },
                         memory: {
                             used: Math.round(usedMemory / 1024 / 1024), // MB
@@ -1319,6 +1323,47 @@ class SchedulerService {
             }
         }, { scheduled: false });
         this.intervals.add(resourcesTask);
+        resourcesTask.start(); // Запускаем задачу сразу
+        
+        // Отправляем первое обновление сразу после запуска
+        setTimeout(async () => {
+            try {
+                const WebSocketService = this.getWebSocketService();
+                if (WebSocketService) {
+                    const os = await import('os');
+                    const cpus = os.default.cpus();
+                    const loadAvg = os.default.loadavg();
+                    const cpuUsagePercent = Math.min((loadAvg[0] / cpus.length) * 100, 100);
+                    const totalMemory = os.default.totalmem();
+                    const freeMemory = os.default.freemem();
+                    const usedMemory = totalMemory - freeMemory;
+                    const memoryUsagePercent = (usedMemory / totalMemory) * 100;
+                    
+                    const systemResources = {
+                        cpu: {
+                            usage: Math.round(cpuUsagePercent),
+                            cores: cpus.length,
+                            loadAverage: loadAvg
+                        },
+                        memory: {
+                            used: Math.round(usedMemory / 1024 / 1024),
+                            total: Math.round(totalMemory / 1024 / 1024),
+                            free: Math.round(freeMemory / 1024 / 1024),
+                            usage: Math.round(memoryUsagePercent)
+                        },
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    WebSocketService.broadcast({
+                        type: 'system_resources_update',
+                        data: systemResources,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (error) {
+                // Игнорируем ошибки при первой отправке
+            }
+        }, 1000); // Отправляем через 1 секунду после запуска
 
         // Отправляем системный статус каждые 15 секунд (cron: каждые 15 секунд)
         const systemStatusTask = cron.schedule('*/15 * * * * *', async () => {
@@ -1459,6 +1504,7 @@ class SchedulerService {
             }
         }, { scheduled: false });
         this.intervals.add(systemStatusTask);
+        systemStatusTask.start(); // Запускаем задачу сразу
 
         // Отправляем торговую статистику каждые 20 секунд (cron: каждые 20 секунд)
         const tradingStatsTask = cron.schedule('*/20 * * * * *', async () => {
@@ -1574,6 +1620,7 @@ class SchedulerService {
             }
         }, { scheduled: false });
         this.intervals.add(tradingStatsTask);
+        tradingStatsTask.start(); // Запускаем задачу сразу
 
         // Отправляем статус обучения каждые 5 секунд (cron: каждые 5 секунд)
         const trainingStatusTask = cron.schedule('*/5 * * * * *', async () => {
@@ -1623,6 +1670,7 @@ class SchedulerService {
             }
         }, { scheduled: false });
         this.intervals.add(trainingStatusTask);
+        trainingStatusTask.start(); // Запускаем задачу сразу
 
         // Отправляем метрики моделей каждую минуту (cron: каждую минуту)
         const modelMetricsTask = cron.schedule('0 * * * * *', async () => {
@@ -1715,6 +1763,7 @@ class SchedulerService {
             }
         }, { scheduled: false });
         this.intervals.add(modelMetricsTask);
+        modelMetricsTask.start(); // Запускаем задачу сразу
         
         // Добавляем частую проверку кеша (каждые 30 минут) - включено обратно
         // Добавляем частую проверку кеша (каждые 30 минут)
