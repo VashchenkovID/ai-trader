@@ -158,13 +158,16 @@ async function initializeServices() {
         const ServiceInitializationTracker = (await import('./utils/ServiceInitializationTracker.js')).default;
         
         // Initialize complete system through ServiceManager
+        console.log('🔄 Инициализация сервисов через ServiceManager...');
         await ServiceManager.initializeSystem(server, sequelize);
+        console.log('✅ ServiceManager инициализирован');
         
         // Отмечаем ServiceManager как глобально инициализированный
         await ServiceInitializationTracker.markServiceInitialized('ServiceManager');
         
         // Устанавливаем глобальный ServiceManager
         setGlobalServiceManager(ServiceManager);
+        console.log('✅ Глобальный ServiceManager установлен');
         
         // Initialize Telegram (optional) - ПОСЛЕ всех остальных сервисов
         if (process.env.TELEGRAM_BOT_TOKEN) {
@@ -202,6 +205,8 @@ async function initializeServices() {
             }
         }
         
+        console.log('✅ Все сервисы инициализированы');
+        
     } catch (error) {
         LoggerService.error('Failed to initialize services', {
             service: 'app',
@@ -221,10 +226,11 @@ async function startServer() {
         await initializeServices();
         
         server.listen(PORT, () => {
-            // Сервер запущен, логирование не требуется
+            console.log(`✅ Сервер запущен на порту ${PORT}`);
         });
         
     } catch (error) {
+        console.error('❌ Ошибка запуска сервера:', error);
         LoggerService.error('Failed to start server', {
             service: 'app',
             operation: 'startServer',

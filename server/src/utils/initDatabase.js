@@ -497,15 +497,18 @@ async function ensureModelColumns(Model) {
                 continue;
             }
             
+            // Используем имя столбца из БД (field), если оно определено, иначе используем имя атрибута
+            const dbColumnName = attribute.field || columnName;
+            
             // Проверяем, существует ли столбец
-            if (!existingColumnNames.has(columnName)) {
+            if (!existingColumnNames.has(dbColumnName)) {
                 try {
                     const pgType = getPostgresType(attribute);
                     const defaultValue = getDefaultValue(attribute);
                     const allowNull = attribute.allowNull !== false;
                     
                     // Формируем SQL запрос для добавления столбца
-                    let alterQuery = `ALTER TABLE "${tableName}" ADD COLUMN "${columnName}" ${pgType}`;
+                    let alterQuery = `ALTER TABLE "${tableName}" ADD COLUMN "${dbColumnName}" ${pgType}`;
                     
                     if (defaultValue) {
                         alterQuery += ` DEFAULT ${defaultValue}`;

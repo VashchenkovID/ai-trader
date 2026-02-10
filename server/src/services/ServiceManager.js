@@ -190,9 +190,11 @@ class ServiceManager {
                 }
                 
                 // Передаем WebSocketService в SchedulerService
-                const schedulerService = this.getService('SchedulerService');
-                if (schedulerService && typeof schedulerService.setWebSocketService === 'function') {
-                    schedulerService.setWebSocketService(webSocketService);
+                if (this.services.has('SchedulerService')) {
+                    const schedulerService = this.getService('SchedulerService');
+                    if (schedulerService && typeof schedulerService.setWebSocketService === 'function') {
+                        schedulerService.setWebSocketService(webSocketService);
+                    }
                 }
             }
 
@@ -204,7 +206,10 @@ class ServiceManager {
                     await ServiceInitializationTracker.markServiceInitialized(serviceName);
                 }
             }
+            
+            console.log('✅ ServiceManager.initializeSystem завершена успешно');
         } catch (error) {
+            console.error('❌ System initialization failed:', error);
             if (LoggerService.isInitialized) {
                 LoggerService.error('System initialization failed', {
                     service: 'ServiceManager',
@@ -213,8 +218,6 @@ class ServiceManager {
                         stack: error.stack
                     }
                 });
-            } else {
-                console.error('❌ System initialization failed:', error);
             }
             throw error;
         }
