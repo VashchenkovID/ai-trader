@@ -172,6 +172,7 @@ class MetaLearningService {
      * Обучение Meta-Learning (алиас для adaptToTask)
      */
     async train(figi, options = {}) {
+        const { workerId = null } = options;
         // Получаем TrainingStatusService один раз
         const trainingStatusService = getService('TrainingStatusService');
         
@@ -203,6 +204,23 @@ class MetaLearningService {
             // Обновляем статус обучения
             if (trainingStatusService) {
                 trainingStatusService.startTraining('metaLearning', 1);
+            }
+            
+            // Обновляем прогресс воркера (начало обучения)
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            metadata: {
+                                metaTrainingStage: 'preparing_data',
+                                figi
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    // Игнорируем ошибки обновления воркера
+                }
             }
             
             // Получаем данные для задачи (skipUpdate = true - режим обучения, не делаем запросы к API)
@@ -252,8 +270,43 @@ class MetaLearningService {
             // Базовая модель под реальный размер признаков
             const baseModel = this.createBaseModel(inputSize);
 
+            // Обновляем прогресс воркера (начало адаптации)
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            metadata: {
+                                metaTrainingStage: 'adapting',
+                                figi,
+                                adaptationSteps: options.adaptationSteps || 5
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    // Игнорируем ошибки обновления воркера
+                }
+            }
+
             // Адаптируемся к задаче
             const result = await this.adaptToTask(taskData, baseModel, options.adaptationSteps || 5);
+            
+            // Обновляем прогресс воркера (завершение адаптации)
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            metadata: {
+                                metaTrainingStage: 'completed',
+                                figi
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    // Игнорируем ошибки обновления воркера
+                }
+            }
             
             // Обновляем время завершения адаптации
             this.lastAdaptationTime = new Date().toISOString();

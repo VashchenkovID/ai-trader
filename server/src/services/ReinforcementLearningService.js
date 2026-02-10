@@ -150,7 +150,8 @@ class ReinforcementLearningService {
         const {
             episodes = 50,
             days = 30,
-            initialPortfolio = { cash: 10000, position: 0, total_value: 10000 }
+            initialPortfolio = { cash: 10000, position: 0, total_value: 10000 },
+            workerId = null
         } = options;
 
         // Получаем TrainingStatusService один раз
@@ -261,6 +262,25 @@ class ReinforcementLearningService {
             const finalEpisodes = adaptedEpisodes || episodes;
             const finalMaxSteps = adaptedMaxSteps || 100;
 
+            // Обновляем прогресс воркера (начало обучения эпизодов)
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            metadata: {
+                                rlTrainingStage: 'training_episodes',
+                                figi,
+                                totalEpisodes: finalEpisodes,
+                                currentEpisode: 0
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    // Игнорируем ошибки обновления воркера
+                }
+            }
+
             for (let episode = 0; episode < finalEpisodes; episode++) {
                 const result = await this.runEpisode(candles, initialPortfolio, episode, finalMaxSteps);
                 results.push(result);
@@ -290,6 +310,49 @@ class ReinforcementLearningService {
 
                 // Уведомляем о прогрессе
                 this.broadcastTrainingProgress(episode, episodes, result);
+                
+                // Обновляем прогресс воркера (прогресс эпизодов)
+                if (workerId && (episode % 5 === 0 || episode === finalEpisodes - 1)) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            const episodeProgress = Math.floor((episode + 1) / finalEpisodes * 100);
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                metadata: {
+                                    rlTrainingStage: 'training_episodes',
+                                    figi,
+                                    totalEpisodes: finalEpisodes,
+                                    currentEpisode: episode + 1,
+                                    episodeProgress,
+                                    bestReward,
+                                    averageReward: this.stats.averageReward
+                                }
+                            });
+                        }
+                    } catch (monitoringError) {
+                        // Игнорируем ошибки обновления воркера
+                    }
+                }
+            }
+            
+            // Обновляем прогресс воркера (завершение обучения)
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            metadata: {
+                                rlTrainingStage: 'completed',
+                                figi,
+                                totalEpisodes: finalEpisodes,
+                                bestReward,
+                                averageReward: this.stats.averageReward
+                            }
+                        });
+                    }
+                } catch (monitoringError) {
+                    // Игнорируем ошибки обновления воркера
+                }
             }
 
             // Сохраняем обновлённую модель для накопления знаний

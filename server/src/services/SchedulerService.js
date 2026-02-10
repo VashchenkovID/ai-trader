@@ -3640,7 +3640,8 @@ class SchedulerService {
                 
                 try {
                     await MetaLearningService.train(instrument.figi, {
-                        days: trainingDays
+                        days: trainingDays,
+                        workerId // Передаем workerId для обновления прогресса
                     });
                     successes++;
                 } catch (error) {
@@ -3698,7 +3699,8 @@ class SchedulerService {
                 try {
                     await ReinforcementLearningService.train(instrument.figi, {
                         days: trainingDays,
-                        episodes: 50
+                        episodes: 50,
+                        workerId // Передаем workerId для обновления прогресса
                     });
                     successes++;
                 } catch (error) {
