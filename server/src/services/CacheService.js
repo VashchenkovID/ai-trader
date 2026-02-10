@@ -682,12 +682,19 @@ class CacheService {
      */
     async updateCache() {
         try {
-            const SchedulerService = (await import('./SchedulerService.js')).default;
+            const { getGlobalServiceManager } = await import('./GlobalServiceManager.js');
+            const globalServiceManager = getGlobalServiceManager();
+            const SchedulerService = globalServiceManager?.getServiceSafe('SchedulerService');
+            if (!SchedulerService) {
+                throw new Error('SchedulerService недоступен для обновления кеша');
+            }
             const result = await SchedulerService.performCacheUpdate();
             
             // После обновления кеша также обновляем сигналы
             try {
-                await SchedulerService.performSignalsUpdate();
+                if (SchedulerService && typeof SchedulerService.performSignalsUpdate === 'function') {
+                    await SchedulerService.performSignalsUpdate();
+                }
             } catch (signalsError) {
                 console.warn('⚠️ Ошибка обновления сигналов (не критично):', signalsError.message);
                 // Не прерываем процесс, если обновление сигналов не удалось

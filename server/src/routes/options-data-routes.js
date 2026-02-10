@@ -48,7 +48,9 @@ router.post('/update-all', asyncHandler(async (req, res) => {
     // Запускаем обновление в фоне через worker
     try {
         const ServiceManager = (await import('../services/ServiceManager.js')).default;
-        const SchedulerService = (await import('../services/SchedulerService.js')).default;
+        const { getGlobalServiceManager } = await import('../services/GlobalServiceManager.js');
+        const globalServiceManager = getGlobalServiceManager();
+        const SchedulerService = globalServiceManager?.getServiceSafe('SchedulerService');
         
         LoggerService.info('📊 [OPTIONS] Starting worker for options data update', {
             service: 'OptionsDataRoutes',
@@ -57,7 +59,7 @@ router.post('/update-all', asyncHandler(async (req, res) => {
         
         const context = {
             getWebSocketService: () => ServiceManager.getServiceSafe('WebSocketService'),
-            workersSet: SchedulerService.workers || new Set()
+            workersSet: SchedulerService?.workers || new Set()
         };
         
         const result = await performOptionsDataUpdate(context, {

@@ -3041,7 +3041,9 @@ class NeuralNetworkService {
         // Проверяем, не идет ли полное обновление кеша (блокируем только тяжелые операции)
         // Анализ рынка может работать параллельно с обучением и анализом портфеля
         try {
-            const SchedulerService = (await import('./SchedulerService.js')).default;
+            const { getGlobalServiceManager } = await import('./GlobalServiceManager.js');
+            const globalServiceManager = getGlobalServiceManager();
+            const SchedulerService = globalServiceManager?.getServiceSafe('SchedulerService');
             if (SchedulerService && SchedulerService.isFullCacheUpdateRunning) {
                 return;
             }

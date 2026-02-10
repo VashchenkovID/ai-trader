@@ -362,9 +362,11 @@ class QuickTrainingService {
      */
     async isFullTrainingActive() {
         try {
-            // SchedulerService экспортируется как singleton, импортируем напрямую
-            const SchedulerService = (await import('./SchedulerService.js')).default;
-            return SchedulerService.isTraining === true;
+            // Получаем SchedulerService через глобальный ServiceManager
+            const { getGlobalServiceManager } = await import('./GlobalServiceManager.js');
+            const globalServiceManager = getGlobalServiceManager();
+            const SchedulerService = globalServiceManager?.getServiceSafe('SchedulerService');
+            return SchedulerService?.isTraining === true;
         } catch (error) {
             console.warn('⚠️ Error checking full training status:', error.message);
             return false;

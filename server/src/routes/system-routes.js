@@ -2,10 +2,10 @@ import express from 'express';
 import NeuralNetworkService from '../services/NeuralNetworkService.js';
 import TradingEngine from '../services/TradingEngine.js';
 import ServiceManager from '../services/ServiceManager.js';
+import { getGlobalServiceManager } from '../services/GlobalServiceManager.js';
 import EnsembleService from '../services/EnsembleService.js';
 import CacheService from '../services/CacheService.js';
 import SettingsService from '../services/SettingsService.js';
-import SchedulerService from '../services/SchedulerService.js';
 import Settings from '../models/Settings.js';
 import RiskManagementService from '../services/RiskManagementService.js';
 import sequelize from '../config/database.js';
@@ -118,6 +118,14 @@ router.post('/market-analysis', async (req, res) => {
  */
 router.get('/cache/status', async (req, res) => {
     try {
+        const globalServiceManager = getGlobalServiceManager();
+        const SchedulerService = globalServiceManager?.getServiceSafe('SchedulerService');
+        if (!SchedulerService) {
+            return res.status(503).json({
+                success: false,
+                message: 'SchedulerService недоступен'
+            });
+        }
         const cacheStatus = await SchedulerService.getCacheStatus();
         res.json({
             success: true,
@@ -166,6 +174,12 @@ router.post('/cache/update', async (req, res) => {
 
         // Запускаем инкрементальное обновление кеша в фоне
         try {
+            const globalServiceManager = getGlobalServiceManager();
+            const SchedulerService = globalServiceManager?.getServiceSafe('SchedulerService');
+            if (!SchedulerService) {
+                console.error('SchedulerService недоступен для обновления кеша');
+                return;
+            }
             const result = await SchedulerService.performCacheUpdate();
             console.log('Инкрементальное обновление кеша завершено:', result);
         } catch (updateError) {
@@ -204,6 +218,12 @@ router.post('/cache/full-update', async (req, res) => {
         // Запускаем полное обновление кеша в фоне
         // ВАЖНО: Не вызывать автоматически! Только по запросу пользователя.
         try {
+            const globalServiceManager = getGlobalServiceManager();
+            const SchedulerService = globalServiceManager?.getServiceSafe('SchedulerService');
+            if (!SchedulerService) {
+                console.error('SchedulerService недоступен для полного обновления кеша');
+                return;
+            }
             const result = await SchedulerService.performFullCacheUpdate(true); // force = true для ручного запуска
             console.log('✅ Полное обновление кеша завершено:', result);
         } catch (updateError) {
@@ -225,6 +245,14 @@ router.post('/cache/full-update', async (req, res) => {
  */
 router.get('/scheduler/status', async (req, res) => {
     try {
+        const globalServiceManager = getGlobalServiceManager();
+        const SchedulerService = globalServiceManager?.getServiceSafe('SchedulerService');
+        if (!SchedulerService) {
+            return res.status(503).json({
+                success: false,
+                message: 'SchedulerService недоступен'
+            });
+        }
         const schedulerStatus = await SchedulerService.getStatus();
         res.json({
             success: true,
