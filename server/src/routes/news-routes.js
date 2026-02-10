@@ -349,7 +349,15 @@ router.get('/figis-without-month-news', async (req, res) => {
  */
 router.post('/update-daily', async (req, res) => {
     try {
-        const SchedulerService = (await import('../services/SchedulerService.js')).default;
+        const { getGlobalServiceManager } = await import('../services/GlobalServiceManager.js');
+        const globalServiceManager = getGlobalServiceManager();
+        const SchedulerService = globalServiceManager?.getServiceSafe('SchedulerService');
+        if (!SchedulerService) {
+            return res.status(503).json({
+                success: false,
+                message: 'SchedulerService недоступен'
+            });
+        }
         const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
         
         // Отправляем ответ сразу, так как обновление будет выполняться в фоне

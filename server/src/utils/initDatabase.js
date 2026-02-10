@@ -386,16 +386,54 @@ async function safeSyncModel(Model, modelName = null) {
                         }
                     }
                 } catch (queryError) {
-                    // Если не удалось получить список индексов (поврежденный индекс), 
+                    // Если не удалось получить список индексов (поврежденный индекс или cache lookup failed), 
                     // пытаемся удалить все индексы по известным именам из модели
+                    if (queryError.message && (
+                        queryError.message.includes('cache lookup failed') ||
+                        queryError.message.includes('cache lookup failed for attribute')
+                    )) {
+                        console.warn(`⚠️ Обнаружена ошибка cache lookup для таблицы ${tableName}, пересоздаем индексы...`);
+                    }
+                    
                     const indexes = Model.options?.indexes || [];
                     for (const index of indexes) {
                         try {
-                            const indexName = index.name || `${tableName}_${(index.fields || []).join('_')}`;
+                            // Пробуем несколько вариантов имен индексов
+                            const indexFields = index.fields || [];
+                            const indexName = index.name || 
+                                `${tableName}_${indexFields.join('_')}_idx` ||
+                                `${tableName}_${indexFields.join('_')}`;
+                            
+                            // Пробуем удалить индекс
                             await sequelize.query(`DROP INDEX IF EXISTS "${indexName}" CASCADE`);
+                            
+                            // Также пробуем удалить индекс с другим форматом имени (Sequelize может создавать разные имена)
+                            if (indexFields.length > 0) {
+                                const altIndexName = `${tableName}_${indexFields.map(f => typeof f === 'string' ? f : f.attribute || f).join('_')}`;
+                                await sequelize.query(`DROP INDEX IF EXISTS "${altIndexName}" CASCADE`);
+                            }
                         } catch (dropError) {
                             // Игнорируем ошибки удаления
                         }
+                    }
+                    
+                    // Также пытаемся удалить все индексы, которые могут быть созданы автоматически
+                    try {
+                        // Удаляем индексы, созданные для отдельных полей с index: true
+                        const attributes = Model.rawAttributes || {};
+                        for (const [attrName, attr] of Object.entries(attributes)) {
+                            if (attr.index === true || attr.unique === true) {
+                                const dbColumnName = attr.field || attrName;
+                                const autoIndexName = `${tableName}_${dbColumnName}_idx`;
+                                try {
+                                    await sequelize.query(`DROP INDEX IF EXISTS "${autoIndexName}" CASCADE`);
+                                } catch (e) {
+                                    // Игнорируем
+                                }
+                            }
+                        }
+                    } catch (attrError) {
+                        // Игнорируем ошибки
                     }
                 }
                 
@@ -1050,6 +1088,44 @@ export async function initDatabase() {
         // Создаем таблицу оптимизации входа (EntryOptimization)
         try {
             await safeSyncModel(EntryOptimizationModel, 'EntryOptimization');
+            
+            // Дополнительная проверка и исправление индексов для entry_optimizations
+            // Если есть ошибка "cache lookup failed", пересоздаем индексы
+            try {
+                // Проверяем, есть ли поврежденные индексы
+                await sequelize.query(`
+                    SELECT indexname 
+                    FROM pg_indexes 
+                    WHERE tablename = 'entry_optimizations'
+                `);
+            } catch (indexError) {
+                if (indexError.message && indexError.message.includes('cache lookup failed')) {
+                    console.warn('⚠️ Обнаружены поврежденные индексы в entry_optimizations, пересоздаем...');
+                    try {
+                        // Удаляем все индексы (кроме первичного ключа)
+                        const indexes = await sequelize.query(`
+                            SELECT indexname 
+                            FROM pg_indexes 
+                            WHERE tablename = 'entry_optimizations'
+                            AND indexname != 'entry_optimizations_pkey'
+                        `, { type: sequelize.QueryTypes.SELECT });
+                        
+                        for (const idx of indexes) {
+                            try {
+                                await sequelize.query(`DROP INDEX IF EXISTS "${idx.indexname}" CASCADE`);
+                            } catch (dropError) {
+                                // Игнорируем ошибки удаления
+                            }
+                        }
+                        
+                        // Пересоздаем индексы через sync
+                        await EntryOptimizationModel.sync({ alter: true });
+                        console.log('✅ Индексы для entry_optimizations пересозданы');
+                    } catch (fixError) {
+                        console.warn('⚠️ Не удалось пересоздать индексы для entry_optimizations:', fixError.message);
+                    }
+                }
+            }
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы оптимизации входа:', syncError);
         }

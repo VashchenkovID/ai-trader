@@ -354,8 +354,10 @@ router.post('/train', async (req, res) => {
 
         // Проверяем, не идет ли полное обучение
         try {
-            const SchedulerService = (await import('../services/SchedulerService.js')).default;
-            if (SchedulerService.isTraining) {
+            const { getGlobalServiceManager } = await import('../services/GlobalServiceManager.js');
+            const globalServiceManager = getGlobalServiceManager();
+            const SchedulerService = globalServiceManager?.getServiceSafe('SchedulerService');
+            if (SchedulerService && SchedulerService.isTraining) {
                 const LoggerService = (await import('../services/LoggerService.js')).default;
                 if (LoggerService.isInitialized) {
                     LoggerService.info('Weekly Forecast training skipped: full training is in progress', {

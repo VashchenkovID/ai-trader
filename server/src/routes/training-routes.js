@@ -3,6 +3,7 @@ import OptimizedTrainingService from '../services/OptimizedTrainingService.js';
 import MetaLearningService from '../services/MetaLearningService.js';
 import ReinforcementLearningService from '../services/ReinforcementLearningService.js';
 import ServiceManager from '../services/ServiceManager.js';
+import { getGlobalServiceManager } from '../services/GlobalServiceManager.js';
 import OptimizedTelegramService from '../services/OptimizedTelegramService.js';
 import { heavyOperationLimiter } from '../middleware/rateLimiter.js';
 
@@ -30,13 +31,39 @@ router.post('/batch-train-all', async (req, res) => {
     try {
         const { epochs = 10, batchSize = 32, force = false } = req.body;
         
-        // Получаем SchedulerService для вызова унифицированной функции полного обучения
-        const SchedulerService = ServiceManager.getServiceSafe('SchedulerService');
-        if (!SchedulerService) {
-            return res.status(500).json({
+        // Получаем глобальный ServiceManager
+        const globalServiceManager = getGlobalServiceManager();
+        
+        // Проверяем, инициализирован ли ServiceManager
+        if (!globalServiceManager || !globalServiceManager.isInitialized) {
+            return res.status(503).json({
                 success: false,
-                message: 'SchedulerService недоступен'
+                message: 'ServiceManager не инициализирован. Попробуйте позже.'
             });
+        }
+        
+        // Получаем SchedulerService для вызова унифицированной функции полного обучения
+        let SchedulerService = null;
+        try {
+            SchedulerService = globalServiceManager.getService('SchedulerService');
+        } catch (error) {
+            // Если сервис не найден, пробуем получить через getServiceSafe
+            SchedulerService = globalServiceManager.getServiceSafe('SchedulerService');
+        }
+        
+        if (!SchedulerService) {
+            // Пробуем инициализировать SchedulerService, если он еще не инициализирован
+            try {
+                await globalServiceManager.initializeService('SchedulerService', () => import('../services/SchedulerService.js'));
+                SchedulerService = globalServiceManager.getService('SchedulerService');
+            } catch (initError) {
+                console.error('Ошибка инициализации SchedulerService:', initError);
+                return res.status(500).json({
+                    success: false,
+                    message: 'SchedulerService недоступен. Не удалось инициализировать сервис.',
+                    error: initError.message
+                });
+            }
         }
         
         // Проверяем, не идет ли уже обучение
