@@ -74,7 +74,25 @@ class ServiceManager {
             
             // WebSocketService инициализируется отдельно, так как требует сервер
             
-            // SchedulerService - критический сервис
+            // SettingsService должен быть инициализирован ДО SchedulerService, так как SchedulerService использует настройки
+            try {
+                await this.initializeService('SettingsService', () => import('./SettingsService.js'));
+            } catch (error) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Не удалось инициализировать SettingsService', {
+                        service: 'ServiceManager',
+                        error: {
+                            message: error.message,
+                            stack: error.stack
+                        }
+                    });
+                } else {
+                    console.warn('⚠️ Не удалось инициализировать SettingsService:', error);
+                }
+                // Продолжаем инициализацию других сервисов
+            }
+            
+            // SchedulerService - критический сервис (инициализируется после SettingsService)
             try {
                 await this.initializeService('SchedulerService', () => import('./SchedulerService.js'));
             } catch (error) {
@@ -142,7 +160,15 @@ class ServiceManager {
             await this.initializeService('PerformanceAnalyzer', () => import('./PerformanceAnalyzer.js'));
             await this.initializeService('RiskAdjustmentService', () => import('./RiskAdjustmentService.js'));
             await this.initializeService('RiskManagementService', () => import('./RiskManagementService.js'));
-            await this.initializeService('SettingsService', () => import('./SettingsService.js'));
+            // SettingsService уже инициализирован выше (перед SchedulerService)
+            // Пропускаем повторную инициализацию, если он уже есть
+            if (!this.services.has('SettingsService')) {
+                try {
+                    await this.initializeService('SettingsService', () => import('./SettingsService.js'));
+                } catch (error) {
+                    // Игнорируем ошибку, если SettingsService уже инициализирован
+                }
+            }
             await this.initializeService('Stage3Validator', () => import('./Stage3Validator.js'));
             // Telegram сервисы инициализируются отдельно в app.js
             await this.initializeService('TinkoffApiService', () => import('./TinkoffApiService.js'));

@@ -53,6 +53,10 @@ class SchedulerService {
         this.weeklyForecastUpdateTask = null; // Задача обновления недельных прогнозов реальными данными
         this.weeklyForecastTrainingTask = null; // Задача обучения моделей Weekly Forecast
         this.isInitialized = null;
+        // Сохраняем настройки как свойства класса для использования в других методах
+        this.schedulerSettings = {};
+        this.nnSettings = {};
+        this.notificationSettings = {};
         this.isTraining = false;
         this.isAnalyzing = false;
         this.lastCacheUpdate = null; // Время последнего обновления кеша
@@ -140,9 +144,49 @@ class SchedulerService {
         }
 
         // Получаем настройки планировщика
-        const schedulerSettings = await SettingsService.getSchedulerSettings();
-        const nnSettings = await SettingsService.getNeuralNetworkSettings();
-        const notificationSettings = await SettingsService.getNotificationSettings();
+        try {
+            // Получаем SettingsService через ServiceManager (может быть еще не инициализирован)
+            let settingsServiceInstance = null;
+            try {
+                settingsServiceInstance = ServiceManager.getServiceSafe('SettingsService');
+            } catch (error) {
+                // SettingsService не найден в ServiceManager, пробуем использовать прямой импорт
+                if (SettingsService && typeof SettingsService.getSchedulerSettings === 'function') {
+                    settingsServiceInstance = SettingsService;
+                }
+            }
+            
+            // Пытаемся получить настройки из SettingsService
+            if (settingsServiceInstance && typeof settingsServiceInstance.getSchedulerSettings === 'function') {
+                this.schedulerSettings = await settingsServiceInstance.getSchedulerSettings() || {};
+            }
+            if (settingsServiceInstance && typeof settingsServiceInstance.getNeuralNetworkSettings === 'function') {
+                this.nnSettings = await settingsServiceInstance.getNeuralNetworkSettings() || {};
+            }
+            if (settingsServiceInstance && typeof settingsServiceInstance.getNotificationSettings === 'function') {
+                this.notificationSettings = await settingsServiceInstance.getNotificationSettings() || {};
+            }
+        } catch (error) {
+            // Если SettingsService не доступен или произошла ошибка, используем значения по умолчанию
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('Ошибка получения настроек планировщика, используем значения по умолчанию', {
+                    service: 'SchedulerService',
+                    operation: 'start',
+                    error: { message: error.message, stack: error.stack }
+                });
+            } else {
+                console.warn('⚠️ Ошибка получения настроек планировщика, используем значения по умолчанию:', error.message);
+            }
+            // Используем пустые объекты, значения по умолчанию будут использованы ниже
+            this.schedulerSettings = {};
+            this.nnSettings = {};
+            this.notificationSettings = {};
+        }
+        
+        // Используем локальные переменные для обратной совместимости с существующим кодом
+        const schedulerSettings = this.schedulerSettings;
+        const nnSettings = this.nnSettings;
+        const notificationSettings = this.notificationSettings;
         // Инкрементальное обновление кеша 3 раза в день (02:00, 10:00, 18:00)
         const cacheSchedule = schedulerSettings.cache_update_interval || '0 2,10,18 * * *';
         // Полное обучение ночью в 03:00 понедельника (после обновления кеша в 02:00, последовательно: Базовая → Ансамбль → Мета-обучение → RL)
@@ -1970,7 +2014,7 @@ class SchedulerService {
         this.intervals.add(weeklyForecastUpdateTask);
         
         // Задача обучения моделей Weekly Forecast (раз в неделю, понедельник в 4:00)
-        const weeklyForecastTrainingSchedule = schedulerSettings.weekly_forecast_training_schedule || '0 4 * * 1';
+        const weeklyForecastTrainingSchedule = this.schedulerSettings.weekly_forecast_training_schedule || '0 4 * * 1';
         const weeklyForecastTrainingTask = SchedulerUtils.createScheduledTask(
             weeklyForecastTrainingSchedule,
             async () => {
