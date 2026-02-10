@@ -1,6 +1,7 @@
 import * as tf from '@tensorflow/tfjs';
 import ModelManager from '../utils/ModelManager.js';
 import LoggerService from './LoggerService.js';
+import tensorFlowTrainingQueue from '../utils/TensorFlowTrainingQueue.js';
 
 /**
  * Сервис для работы с моделями недельных прогнозов
@@ -244,6 +245,7 @@ class WeeklyForecastModelService {
      * @param {Array} sequences - Входные последовательности
      * @param {Array} targets - Целевые последовательности
      * @param {Object} options - Опции обучения
+     * @param {string} [options.figi] - FIGI инструмента (для идентификации в очереди)
      * @returns {Promise<Object>} История обучения
      */
     async trainModel(model, sequences, targets, options = {}) {
@@ -251,7 +253,8 @@ class WeeklyForecastModelService {
             epochs = 50,
             batchSize = 16,
             validationSplit = 0.2,
-            verbose = 0
+            verbose = 0,
+            figi = null
         } = options;
         
         try {
@@ -287,31 +290,37 @@ class WeeklyForecastModelService {
             // Targets: [batch, forecastDays, 5] (open, high, low, close, volume)
             const targetTensor = tf.tensor3d(targets);
             
-            // Обучение
-            const history = await model.fit(
-                [encoderInput, decoderInput],
-                targetTensor,
-                {
-                    epochs,
-                    batchSize,
-                    validationSplit,
-                    verbose,
-                    callbacks: {
-                        onEpochEnd: (epoch, logs) => {
-                            if (LoggerService.isInitialized && verbose > 0) {
-                                LoggerService.warn(`Training epoch ${epoch + 1}/${epochs}`, {
-                                    service: 'WeeklyForecastModelService',
-                                    operation: 'trainModel',
-                                    epoch: epoch + 1,
-                                    loss: logs.loss,
-                                    valLoss: logs.val_loss,
-                                    mae: logs.mae,
-                                    valMae: logs.val_mae
-                                });
+            // Обучение через очередь, чтобы избежать одновременных вызовов fit()
+            const identifier = `weekly_forecast_${figi || 'unknown'}`;
+            const history = await tensorFlowTrainingQueue.enqueue(
+                async () => {
+                    return await model.fit(
+                        [encoderInput, decoderInput],
+                        targetTensor,
+                        {
+                            epochs,
+                            batchSize,
+                            validationSplit,
+                            verbose,
+                            callbacks: {
+                                onEpochEnd: (epoch, logs) => {
+                                    if (LoggerService.isInitialized && verbose > 0) {
+                                        LoggerService.warn(`Training epoch ${epoch + 1}/${epochs}`, {
+                                            service: 'WeeklyForecastModelService',
+                                            operation: 'trainModel',
+                                            epoch: epoch + 1,
+                                            loss: logs.loss,
+                                            valLoss: logs.val_loss,
+                                            mae: logs.mae,
+                                            valMae: logs.val_mae
+                                        });
+                                    }
+                                }
                             }
                         }
-                    }
-                }
+                    );
+                },
+                identifier
             );
             
             // Освобождаем память

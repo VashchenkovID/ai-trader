@@ -362,6 +362,7 @@ class QuickTrainingService {
      */
     async isFullTrainingActive() {
         try {
+            // SchedulerService экспортируется как singleton, импортируем напрямую
             const SchedulerService = (await import('./SchedulerService.js')).default;
             return SchedulerService.isTraining === true;
         } catch (error) {
@@ -378,6 +379,39 @@ class QuickTrainingService {
         let workerId = null;
         
         try {
+            // Проверяем, не идет ли полное обучение
+            const isFullTrainingActive = await this.isFullTrainingActive();
+            if (isFullTrainingActive) {
+                const LoggerService = (await import('./LoggerService.js')).default;
+                if (LoggerService.isInitialized) {
+                    LoggerService.info('Quick training skipped: full training is in progress', {
+                        service: 'QuickTrainingService',
+                        operation: 'performQuickTraining'
+                    });
+                }
+                
+                // Отправляем уведомление в Telegram
+                try {
+                    const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
+                    if (OptimizedTelegramService.isInitialized) {
+                        await OptimizedTelegramService.sendAlert(
+                            'QUICK_TRAINING_SKIPPED',
+                            `⏸️ <b>БЫСТРОЕ ОБУЧЕНИЕ ПРОПУЩЕНО</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n📊 Причина: Идет полное обучение\n\n🔄 Быстрое обучение будет выполнено после завершения полного`,
+                            'info'
+                        );
+                    }
+                } catch (telegramError) {
+                    // Игнорируем ошибки отправки уведомлений
+                }
+                
+                return {
+                    success: false,
+                    skipped: true,
+                    reason: 'full_training_in_progress',
+                    message: 'Quick training skipped because full training is in progress'
+                };
+            }
+            
             // Регистрируем воркер в мониторинге
             try {
                 const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;

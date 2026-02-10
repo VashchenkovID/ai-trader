@@ -352,6 +352,51 @@ router.post('/train', async (req, res) => {
     try {
         const { figi = null, maxInstruments = 10, trainingOptions = {} } = req.body;
 
+        // Проверяем, не идет ли полное обучение
+        try {
+            const SchedulerService = (await import('../services/SchedulerService.js')).default;
+            if (SchedulerService.isTraining) {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService.isInitialized) {
+                    LoggerService.info('Weekly Forecast training skipped: full training is in progress', {
+                        service: 'WeeklyForecastRoutes',
+                        operation: 'POST /train'
+                    });
+                }
+                
+                // Отправляем уведомление в Telegram
+                try {
+                    const OptimizedTelegramService = (await import('../services/OptimizedTelegramService.js')).default;
+                    if (OptimizedTelegramService.isInitialized) {
+                        await OptimizedTelegramService.sendAlert(
+                            'WEEKLY_FORECAST_TRAINING_SKIPPED',
+                            `⏸️ <b>ОБУЧЕНИЕ WEEKLY FORECAST ПРОПУЩЕНО</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n📊 Причина: Идет полное обучение\n\n🔄 Обучение Weekly Forecast будет выполнено после завершения полного обучения`,
+                            'info'
+                        );
+                    }
+                } catch (telegramError) {
+                    // Игнорируем ошибки отправки уведомлений
+                }
+                
+                return res.status(409).json({
+                    success: false,
+                    skipped: true,
+                    reason: 'full_training_in_progress',
+                    message: 'Weekly Forecast training skipped because full training is in progress'
+                });
+            }
+        } catch (schedulerError) {
+            // Если не удалось проверить статус, продолжаем (не блокируем обучение)
+            const LoggerService = (await import('../services/LoggerService.js')).default;
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('Failed to check full training status', {
+                    service: 'WeeklyForecastRoutes',
+                    operation: 'POST /train',
+                    error: { message: schedulerError.message }
+                });
+            }
+        }
+
         // Регистрируем воркер для мониторинга
         try {
             const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;

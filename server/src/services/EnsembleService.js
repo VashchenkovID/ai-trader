@@ -4,6 +4,7 @@ import ModelManager from '../utils/ModelManager.js';
 import LoggerService from './LoggerService.js';
 import { getService } from './GlobalServiceManager.js';
 import ServiceManager from './ServiceManager.js';
+import tensorFlowTrainingQueue from '../utils/TensorFlowTrainingQueue.js';
 
 /**
  * Сервис ансамбля нейросетей
@@ -1101,7 +1102,14 @@ class EnsembleService {
             }
         };
         
-        const history = await model.fit(xs, ys, fitOptions);
+        // Используем очередь для обучения, чтобы избежать одновременных вызовов fit()
+        const identifier = `ensemble_${modelType}_${figi || 'unknown'}`;
+        const history = await tensorFlowTrainingQueue.enqueue(
+            async () => {
+                return await model.fit(xs, ys, fitOptions);
+            },
+            identifier
+        );
 
         // Очистка памяти
         xs.dispose();

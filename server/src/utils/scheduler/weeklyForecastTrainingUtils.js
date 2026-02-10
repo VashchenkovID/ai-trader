@@ -94,7 +94,8 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             epochs,
             batchSize,
             validationSplit: 0.2,
-            verbose: 0
+            verbose: 0,
+            figi // Передаем figi для идентификации в очереди
         });
 
         // 7. Сохраняем модель

@@ -1933,6 +1933,31 @@ class SchedulerService {
                         return;
                     }
                     
+                    // Проверяем, не идет ли полное обучение
+                    if (this.isTraining) {
+                        LoggerService.info('Weekly Forecast training skipped: full training is in progress', {
+                            service: 'SchedulerService',
+                            operation: 'weeklyForecastTraining'
+                        });
+                        
+                        // Отправляем уведомление в Telegram
+                        try {
+                            await OptimizedTelegramService.sendAlert(
+                                'WEEKLY_FORECAST_TRAINING_SKIPPED',
+                                `⏸️ <b>ОБУЧЕНИЕ WEEKLY FORECAST ПРОПУЩЕНО</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n📊 Причина: Идет полное обучение\n\n🔄 Обучение Weekly Forecast будет выполнено после завершения полного обучения`,
+                                'info'
+                            );
+                        } catch (telegramError) {
+                            LoggerService.warn('Failed to send Telegram notification about Weekly Forecast training skip', {
+                                service: 'SchedulerService',
+                                operation: 'sendTelegramNotification',
+                                error: { message: telegramError.message }
+                            });
+                        }
+                        
+                        return;
+                    }
+                    
                     // Регистрируем воркер для мониторинга
                     try {
                         const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
@@ -4417,6 +4442,36 @@ class SchedulerService {
         let workerId = null;
         
         try {
+            // Проверяем, не идет ли полное обучение
+            if (this.isTraining) {
+                LoggerService.info('Degradation check skipped: full training is in progress', {
+                    service: 'SchedulerService',
+                    operation: 'checkDegradationAndRestoreAll'
+                });
+                
+                // Отправляем уведомление в Telegram
+                try {
+                    await OptimizedTelegramService.sendAlert(
+                        'DEGRADATION_CHECK_SKIPPED',
+                        `⏸️ <b>ПРОВЕРКА ДЕГРАДАЦИИ ПРОПУЩЕНА</b>\n\n⏰ Время: ${new Date().toLocaleString('ru-RU')}\n📊 Причина: Идет полное обучение\n\n🔄 Проверка деградации будет выполнена после завершения полного обучения`,
+                        'info'
+                    );
+                } catch (telegramError) {
+                    LoggerService.warn('Failed to send Telegram notification about degradation check skip', {
+                        service: 'SchedulerService',
+                        operation: 'sendTelegramNotification',
+                        error: { message: telegramError.message }
+                    });
+                }
+                
+                return {
+                    success: false,
+                    skipped: true,
+                    reason: 'full_training_in_progress',
+                    message: 'Degradation check skipped because full training is in progress'
+                };
+            }
+            
             // Регистрируем воркер в мониторинге
             const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
             if (!WorkerMonitoringService.isInitialized) {

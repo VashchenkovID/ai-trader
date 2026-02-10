@@ -1347,7 +1347,8 @@ class WeeklyForecastService {
                 epochs: 3, // Небольшое количество эпох для fine-tuning
                 batchSize: 1,
                 validationSplit: 0,
-                verbose: 0
+                verbose: 0,
+                figi // Передаем figi для идентификации в очереди
             });
             
             // Сохранение обновленной модели

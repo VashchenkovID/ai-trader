@@ -317,11 +317,18 @@ class ReinforcementLearningService {
             // Временный алерт в Telegram
             try {
                 const OptimizedTelegramService = (await import('./OptimizedTelegramService.js')).default;
-                await OptimizedTelegramService.sendAlert('RL_TRAINING_ERROR', {
-                    error: error.message,
-                    context: 'RL Training',
-                    timestamp: new Date().toISOString()
-                });
+                if (OptimizedTelegramService.isInitialized) {
+                    // Форматируем ошибку в читаемый вид
+                    const errorMessage = error.message || 'Unknown error';
+                    const errorStack = error.stack ? `\n\n📋 Stack:\n${error.stack.substring(0, 500)}` : '';
+                    const figiInfo = figi ? `\n📈 FIGI: ${figi}` : '';
+                    
+                    await OptimizedTelegramService.sendAlert(
+                        'RL_TRAINING_ERROR',
+                        `❌ <b>ОШИБКА ОБУЧЕНИЯ RL АГЕНТА</b>\n\n🔍 Ошибка: ${errorMessage}${figiInfo}${errorStack}\n⏰ Время: ${new Date().toLocaleString('ru-RU')}`,
+                        'error'
+                    );
+                }
             } catch (telegramError) {
                 console.error('Failed to send Telegram alert:', telegramError);
             }
