@@ -196,26 +196,91 @@ router.post('/train', async (req, res) => {
  */
 router.post('/batch-train', async (req, res) => {
     try {
-        const { epochs = 10, batchSize = 32 } = req.body;
+        const { epochs = 50, days = 180, limit = null } = req.body;
         
         // Отправляем ответ сразу
         res.json({
             success: true,
             message: 'Пакетное обучение ансамбля запущено',
-            data: { epochs, batchSize }
+            data: { epochs, days, limit }
         });
 
         // Запускаем пакетное обучение в фоне
         try {
-            const result = await EnsembleService.batchTrainEnsemble(epochs, batchSize);
-            console.log('Пакетное обучение ансамбля завершено:', result);
+            // Получаем все инструменты для обучения
+            const CacheService = ServiceManager.getService('CacheService');
+            let instruments = await CacheService.getAllInstruments();
+            
+            if (!instruments || instruments.length === 0) {
+                throw new Error('No instruments available for ensemble training');
+            }
+            
+            // Ограничиваем количество инструментов, если указан лимит
+            if (limit && limit > 0) {
+                instruments = instruments.slice(0, limit);
+            }
+            
+            const results = {
+                total: instruments.length,
+                success: [],
+                failed: []
+            };
+            
+            // Обучаем ансамбль для каждого инструмента
+            for (const instrument of instruments) {
+                try {
+                    const figi = instrument.figi || instrument;
+                    const result = await EnsembleService.trainEnsemble(figi, {
+                        days: days,
+                        epochs: epochs
+                    });
+                    
+                    if (result && result.success) {
+                        results.success.push({
+                            figi: figi,
+                            ticker: instrument.ticker || instrument.name,
+                            result: result
+                        });
+                    } else if (result && result.skipped) {
+                        // Пропущенные инструменты не считаем ошибкой
+                        results.success.push({
+                            figi: figi,
+                            ticker: instrument.ticker || instrument.name,
+                            skipped: true,
+                            message: result.message || 'insufficient data'
+                        });
+                    } else {
+                        results.failed.push({
+                            figi: figi,
+                            ticker: instrument.ticker || instrument.name,
+                            error: result?.message || 'unknown error'
+                        });
+                    }
+                } catch (error) {
+                    results.failed.push({
+                        figi: instrument.figi || instrument,
+                        ticker: instrument.ticker || instrument.name,
+                        error: error.message
+                    });
+                }
+            }
+            
+            console.log('Пакетное обучение ансамбля завершено:', {
+                total: results.total,
+                success: results.success.length,
+                failed: results.failed.length
+            });
             
             // Уведомляем через WebSocket
             const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
-                WebSocketService.broadcast('ensemble_batch_training_completed', {
-                    success: true,
-                    result: result
+                WebSocketService.broadcast({
+                    type: 'ensemble_batch_training_completed',
+                    data: {
+                        success: true,
+                        result: results
+                    },
+                    timestamp: new Date().toISOString()
                 });
             }
         } catch (trainingError) {
@@ -232,9 +297,13 @@ router.post('/batch-train', async (req, res) => {
             // Уведомляем через WebSocket
             const WebSocketService = ServiceManager.getServiceSafe('WebSocketService');
             if (WebSocketService) {
-                WebSocketService.broadcast('ensemble_batch_training_error', {
-                    success: false,
-                    error: trainingError.message
+                WebSocketService.broadcast({
+                    type: 'ensemble_batch_training_error',
+                    data: {
+                        success: false,
+                        error: trainingError.message
+                    },
+                    timestamp: new Date().toISOString()
                 });
             }
         }

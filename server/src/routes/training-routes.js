@@ -9,12 +9,14 @@ import { heavyOperationLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
-// Middleware для применения лимитера ко всем роутам, кроме batch-train-all
+// Middleware для применения лимитера ко всем роутам, кроме пакетного обучения
 const applyHeavyLimiter = (req, res, next) => {
-    // Пропускаем batch-train-all, для него используется отдельный лимитер
+    // Пропускаем пакетное обучение (batch-train), для них не нужен rate limiter
     // Проверяем как полный путь, так и базовый путь
     const path = req.path || req.url || '';
-    if (path.includes('/batch-train-all') || path.endsWith('/batch-train-all')) {
+    if (path.includes('/batch-train-all') || path.endsWith('/batch-train-all') ||
+        path.includes('/meta-learning/batch-train') || path.endsWith('/meta-learning/batch-train') ||
+        path.includes('/reinforcement-learning/batch-train') || path.endsWith('/reinforcement-learning/batch-train')) {
         return next();
     }
     return heavyOperationLimiter(req, res, next);
