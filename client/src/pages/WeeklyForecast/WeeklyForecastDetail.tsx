@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Button, LoadingSpinner } from '../../components/ui';
+import { Card, Button } from '../../components/ui';
 import { WeeklyForecastChart } from '../../components/weekly-forecast/WeeklyForecastChart';
 import { weeklyForecastApi, WeeklyForecast, ForecastMetrics } from '../../services/weeklyForecastApi';
 import './WeeklyForecastDetail.css';
@@ -84,7 +84,7 @@ export const WeeklyForecastDetail: React.FC = () => {
     return (
       <div className="weekly-forecast-detail">
         <div className="loading-container">
-          <LoadingSpinner />
+          <i className="pi pi-spin pi-spinner" style={{ fontSize: '2rem' }}></i>
           <p>Загрузка прогноза...</p>
         </div>
       </div>
