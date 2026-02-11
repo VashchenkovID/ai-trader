@@ -415,6 +415,14 @@ class ReinforcementLearningService {
             const currentCandle = candles[i];
             const previousCandle = candles[i - 1];
 
+            // Пропускаем итерацию, если свечи невалидны
+            if (!currentCandle || !previousCandle || 
+                typeof currentCandle.close !== 'number' || 
+                typeof previousCandle.close !== 'number') {
+                console.warn(`⚠️ RL: Skipping invalid candle at index ${i}. currentCandle: ${!!currentCandle}, previousCandle: ${!!previousCandle}`);
+                continue;
+            }
+
             // Получаем состояние
             const state = this.getState(currentCandle, previousCandle, portfolio, candles, i);
 
@@ -428,8 +436,9 @@ class ReinforcementLearningService {
             const reward = this.calculateReward(action, currentCandle, newPortfolio, portfolio);
 
             // Получаем следующее состояние
-            const nextState = i < maxSteps - 1 ? 
-                this.getState(candles[i + 1], currentCandle, newPortfolio, candles, i + 1) : 
+            const nextCandle = i < maxSteps - 1 ? candles[i + 1] : null;
+            const nextState = (nextCandle && typeof nextCandle.close === 'number') ? 
+                this.getState(nextCandle, currentCandle, newPortfolio, candles, i + 1) : 
                 state;
 
             // Сохраняем опыт
@@ -460,9 +469,39 @@ class ReinforcementLearningService {
     getState(currentCandle, previousCandle, portfolio, candles, index) {
         const state = [];
 
+        // Валидация входных данных
+        if (!currentCandle || !previousCandle) {
+            console.warn(`⚠️ RL: Invalid candles in getState. currentCandle: ${!!currentCandle}, previousCandle: ${!!previousCandle}, index: ${index}`);
+            // Возвращаем нулевое состояние при отсутствии данных
+            return new Array(this.config.stateSize).fill(0);
+        }
+
+        // Проверяем наличие обязательных полей
+        if (typeof currentCandle.close !== 'number' || typeof previousCandle.close !== 'number') {
+            console.warn(`⚠️ RL: Invalid candle data in getState. currentCandle.close: ${currentCandle.close}, previousCandle.close: ${previousCandle.close}`);
+            return new Array(this.config.stateSize).fill(0);
+        }
+
         // Технические индикаторы
-        const prices = candles.slice(Math.max(0, index - 20), index + 1).map(c => c.close);
-        const indicators = OptimizedAnalysisService.getAllIndicators(prices);
+        const prices = candles
+            .slice(Math.max(0, index - 20), index + 1)
+            .filter(c => c && typeof c.close === 'number')
+            .map(c => c.close);
+        
+        // Если недостаточно данных для индикаторов, используем значения по умолчанию
+        const indicators = prices.length >= 2 
+            ? OptimizedAnalysisService.getAllIndicators(prices)
+            : {
+                rsi: 0.5,
+                macd: 0,
+                bb_position: 0.5,
+                sma_20: 0,
+                ema_12: 0,
+                stoch: 0.5,
+                williams_r: -0.5,
+                atr: 0,
+                volatility: 0
+            };
         
         state.push(indicators.rsi || 0.5);
         state.push(indicators.macd || 0);
@@ -475,25 +514,49 @@ class ReinforcementLearningService {
         state.push(indicators.volatility || 0);
 
         // Рыночные условия
-        const priceChange = (currentCandle.close - previousCandle.close) / previousCandle.close;
-        const volumeRatio = currentCandle.volume / (previousCandle.volume || 1);
+        const prevClose = previousCandle.close || currentCandle.close || 1;
+        const priceChange = prevClose !== 0 
+            ? (currentCandle.close - prevClose) / prevClose 
+            : 0;
+        const prevVolume = previousCandle.volume || 1;
+        const volumeRatio = prevVolume !== 0 
+            ? (currentCandle.volume || 0) / prevVolume 
+            : 1;
         const volatility = Math.abs(priceChange);
         
         state.push(priceChange);
         state.push(volumeRatio);
         state.push(volatility);
-        state.push(currentCandle.high / currentCandle.close - 1); // High/Close ratio
-        state.push(currentCandle.low / currentCandle.close - 1);  // Low/Close ratio
+        
+        // High/Close и Low/Close ratios с защитой от деления на ноль
+        const currentClose = currentCandle.close || 1;
+        state.push(currentCandle.high && currentClose !== 0 
+            ? currentCandle.high / currentClose - 1 
+            : 0);
+        state.push(currentCandle.low && currentClose !== 0 
+            ? currentCandle.low / currentClose - 1 
+            : 0);
 
         // Портфель
-        state.push(portfolio.cash / portfolio.total_value);
-        state.push(portfolio.position / portfolio.total_value);
-        state.push((portfolio.total_value - 10000) / 10000); // PnL ratio
+        const totalValue = portfolio.total_value || 1;
+        state.push((portfolio.cash || 0) / totalValue);
+        state.push((portfolio.position || 0) / totalValue);
+        state.push((totalValue - 10000) / 10000); // PnL ratio
 
         // Временные факторы
-        const date = new Date(currentCandle.time);
-        state.push(date.getHours() / 23);
-        state.push(date.getDay() / 6);
+        if (currentCandle.time) {
+            const date = new Date(currentCandle.time);
+            if (!isNaN(date.getTime())) {
+                state.push(date.getHours() / 23);
+                state.push(date.getDay() / 6);
+            } else {
+                state.push(0.5); // По умолчанию
+                state.push(0.5);
+            }
+        } else {
+            state.push(0.5);
+            state.push(0.5);
+        }
 
         // Дополняем до нужного размера
         while (state.length < this.config.stateSize) {
@@ -530,6 +593,13 @@ class ReinforcementLearningService {
      */
     executeAction(action, portfolio, candle) {
         const newPortfolio = { ...portfolio };
+        
+        // Защита от невалидных данных
+        if (!candle || typeof candle.close !== 'number' || candle.close <= 0) {
+            console.warn(`⚠️ RL: Invalid candle in executeAction, using previous price`);
+            return newPortfolio;
+        }
+        
         const price = candle.close;
 
         switch (action) {
@@ -566,22 +636,27 @@ class ReinforcementLearningService {
         let reward = 0;
 
         // Базовая награда за изменение стоимости портфеля
-        const pnl = (newPortfolio.total_value - oldPortfolio.total_value) / oldPortfolio.total_value;
+        const oldValue = oldPortfolio.total_value || 1;
+        const pnl = oldValue !== 0 
+            ? (newPortfolio.total_value - oldValue) / oldValue 
+            : 0;
         reward += pnl * 100; // Масштабируем награду
 
-        // Бонус за правильные решения
-        const priceChange = (candle.close - candle.open) / candle.open;
-        if ((action === 1 && priceChange > 0) || (action === 2 && priceChange < 0)) {
-            reward += 0.1;
-        }
+        // Бонус за правильные решения (только если свеча валидна)
+        if (candle && typeof candle.close === 'number' && typeof candle.open === 'number' && candle.open !== 0) {
+            const priceChange = (candle.close - candle.open) / candle.open;
+            if ((action === 1 && priceChange > 0) || (action === 2 && priceChange < 0)) {
+                reward += 0.1;
+            }
 
-        // Штраф за неправильные решения
-        if ((action === 1 && priceChange < 0) || (action === 2 && priceChange > 0)) {
-            reward -= 0.1;
+            // Штраф за неправильные решения
+            if ((action === 1 && priceChange < 0) || (action === 2 && priceChange > 0)) {
+                reward -= 0.1;
+            }
         }
 
         // Штраф за большие просадки
-        if (newPortfolio.total_value < oldPortfolio.total_value * 0.9) {
+        if (oldValue > 0 && newPortfolio.total_value < oldValue * 0.9) {
             reward -= 0.2;
         }
 
@@ -808,6 +883,18 @@ class ReinforcementLearningService {
 
             const currentCandle = candles[candles.length - 1];
             const previousCandle = candles[candles.length - 2];
+
+            // Проверяем валидность свечей
+            if (!currentCandle || !previousCandle || 
+                typeof currentCandle.close !== 'number' || 
+                typeof previousCandle.close !== 'number') {
+                return { 
+                    action: 0, 
+                    confidence: 0, 
+                    reason: 'Invalid candle data',
+                    error: 'Candles are missing or have invalid close prices'
+                };
+            }
 
             // Получаем состояние
             const state = this.getState(currentCandle, previousCandle, portfolio, candles, candles.length - 1);
