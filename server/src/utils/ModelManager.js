@@ -128,7 +128,22 @@ class ModelManager {
             return true;
             
         } catch (error) {
-            console.error(`❌ Failed to save model ${modelName}:`, error.message);
+            // Пытаемся использовать LoggerService, если доступен
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Failed to save model', {
+                        service: 'ModelManager',
+                        operation: 'saveModel',
+                        modelName,
+                        error: { message: error.message, stack: error.stack }
+                    });
+                } else {
+                    console.error(`❌ Failed to save model ${modelName}:`, error.message);
+                }
+            } catch (loggerError) {
+                console.error(`❌ Failed to save model ${modelName}:`, error.message);
+            }
             return false;
         }
     }

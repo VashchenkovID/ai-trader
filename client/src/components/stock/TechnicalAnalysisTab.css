@@ -1,0 +1,100 @@
+.technical-analysis-tab {
+  padding: 1rem 0;
+}
+
+.technical-analysis-tab__empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #9ca3af;
+}
+
+.technical-analysis-tab__empty-hint {
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  color: #6b7280;
+}
+
+.technical-analysis-tab__panels {
+  margin-bottom: 2rem;
+}
+
+.technical-analysis-tab__charts {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.technical-analysis-tab__chart-card {
+  padding: 1.5rem;
+}
+
+.technical-analysis-tab__chart-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 1rem 0;
+}
+
+.technical-analysis-tab__chart-description {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.technical-analysis-tab__chart-description p {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0.5rem 0;
+  line-height: 1.5;
+}
+
+.technical-analysis-tab__levels-card {
+  padding: 1.5rem;
+}
+
+.technical-analysis-tab__levels {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.technical-analysis-tab__levels-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.technical-analysis-tab__levels-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.technical-analysis-tab__levels-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.technical-analysis-tab__level-value {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.technical-analysis-tab__level-value--support {
+  background: #d1fae5;
+  color: #059669;
+  border: 1px solid #10b981;
+}
+
+.technical-analysis-tab__level-value--resistance {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #ef4444;
+}
+

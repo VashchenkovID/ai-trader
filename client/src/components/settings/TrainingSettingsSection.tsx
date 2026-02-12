@@ -250,7 +250,7 @@ const TrainingSettingsSection: React.FC = () => {
       setWeeklyForecastTrainingStatus({ isTraining: true });
       
       const result = await weeklyForecastApi.trainModels({
-        maxInstruments: 10,
+        maxInstruments: null, // null означает обучение всех инструментов без ограничений
         trainingOptions: {
           historicalDays: 365,
           lookbackDays: 60,

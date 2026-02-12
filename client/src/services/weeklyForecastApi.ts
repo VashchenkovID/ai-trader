@@ -141,7 +141,7 @@ export const weeklyForecastApi = {
    */
   async trainModels(options?: {
     figi?: string;
-    maxInstruments?: number;
+    maxInstruments?: number | null;
     trainingOptions?: {
       historicalDays?: number;
       lookbackDays?: number;

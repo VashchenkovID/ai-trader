@@ -1,0 +1,128 @@
+.main-recommendation-card {
+  padding: 1.5rem;
+}
+
+.main-recommendation-card--positive {
+  border-left: 4px solid #10b981;
+  background: #f0fdf4;
+}
+
+.main-recommendation-card--negative {
+  border-left: 4px solid #ef4444;
+  background: #fef2f2;
+}
+
+.main-recommendation-card--neutral {
+  border-left: 4px solid #f59e0b;
+  background: #fffbeb;
+}
+
+.main-recommendation-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.main-recommendation-card__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.main-recommendation-card__refresh-btn {
+  padding: 0.375rem;
+  min-width: auto;
+  width: 2rem;
+  height: 2rem;
+}
+
+.main-recommendation-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.main-recommendation-card__recommendation {
+  display: flex;
+  justify-content: center;
+}
+
+.main-recommendation-card__badge {
+  font-size: 1.25rem;
+  font-weight: 700;
+  padding: 0.75rem 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.main-recommendation-card__metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.main-recommendation-card__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.main-recommendation-card__metric-label {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.main-recommendation-card__metric-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.main-recommendation-card__metric-value--positive {
+  color: #10b981;
+}
+
+.main-recommendation-card__metric-value--negative {
+  color: #ef4444;
+}
+
+.main-recommendation-card__metric-value--neutral {
+  color: #f59e0b;
+}
+
+.main-recommendation-card__progress {
+  height: 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.main-recommendation-card__progress--positive .progress-bar__fill {
+  background: #10b981;
+}
+
+.main-recommendation-card__progress--negative .progress-bar__fill {
+  background: #ef4444;
+}
+
+.main-recommendation-card__progress--neutral .progress-bar__fill {
+  background: #f59e0b;
+}
+
+.main-recommendation-card__footer {
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.main-recommendation-card__date {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-align: center;
+}
+

@@ -1,0 +1,51 @@
+.enhanced-price-chart {
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.enhanced-price-chart__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.enhanced-price-chart__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.enhanced-price-chart__container {
+  position: relative;
+  width: 100%;
+}
+
+.enhanced-price-chart__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .enhanced-price-chart {
+    padding: 1rem;
+  }
+
+  .enhanced-price-chart__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .enhanced-price-chart__container {
+    height: 300px !important;
+  }
+}
+

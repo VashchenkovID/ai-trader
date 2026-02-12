@@ -100,7 +100,7 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
 
         // 7. Сохраняем модель
         const modelVersion = WeeklyForecastService.generateModelVersion();
-        await WeeklyForecastModelService.saveModel(model, figi, 'seq2seq', {
+        const saveSuccess = await WeeklyForecastModelService.saveModel(model, figi, 'seq2seq', {
             version: modelVersion,
             trainedAt: new Date().toISOString(),
             epochs,
@@ -112,6 +112,10 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             finalLoss: history.history.loss[history.history.loss.length - 1],
             finalValLoss: history.history.val_loss ? history.history.val_loss[history.history.val_loss.length - 1] : null
         });
+        
+        if (!saveSuccess) {
+            throw new Error(`Failed to save model for ${figi}. Model training completed but save operation failed.`);
+        }
 
         // 8. Очищаем кеш модели для этого FIGI, чтобы загрузить новую версию
         const cacheKey = `${figi}_seq2seq`;
@@ -165,7 +169,7 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
 export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
     const {
         figiList = null,
-        maxInstruments = 10,
+        maxInstruments = null, // По умолчанию null - обучение всех инструментов без ограничений
         trainingOptions = {},
         workerId = null
     } = options;

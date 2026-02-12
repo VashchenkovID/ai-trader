@@ -1,0 +1,82 @@
+import React from 'react';
+import { Card, TabView, TabPanel } from '../ui';
+import ForecastHorizonsTab from './ForecastHorizonsTab';
+import ForecastHistoryTab from './ForecastHistoryTab';
+import TechnicalAnalysisTab from './TechnicalAnalysisTab';
+import FundamentalAnalysisTab from './FundamentalAnalysisTab';
+import AllSignalsTab from './AllSignalsTab';
+import AllNewsTab from './AllNewsTab';
+import './StockDetailTabs.css';
+
+interface StockDetailTabsProps {
+  figi: string;
+  ticker: string;
+  // Данные для вкладок
+  horizons?: any;
+  weeklyForecasts?: any[];
+  signals?: any[];
+  news?: any[];
+  technicalIndicators?: any;
+  fundamentalData?: any;
+}
+
+const StockDetailTabs: React.FC<StockDetailTabsProps> = ({
+  figi,
+  ticker,
+  horizons,
+  weeklyForecasts,
+  signals,
+  news,
+  technicalIndicators,
+  fundamentalData
+}) => {
+  return (
+    <Card className="stock-detail-tabs">
+      <TabView>
+        <TabPanel header="Прогнозы по горизонтам">
+          <ForecastHorizonsTab horizons={horizons} />
+        </TabPanel>
+        
+        <TabPanel header="История прогнозов">
+          <ForecastHistoryTab 
+            figi={figi}
+            ticker={ticker}
+            weeklyForecasts={weeklyForecasts || []}
+          />
+        </TabPanel>
+        
+        <TabPanel header="Технический анализ">
+          <TechnicalAnalysisTab 
+            figi={figi}
+            technicalIndicators={technicalIndicators}
+          />
+        </TabPanel>
+        
+        <TabPanel header="Фундаментальный анализ">
+          <FundamentalAnalysisTab 
+            figi={figi}
+            fundamentalData={fundamentalData}
+          />
+        </TabPanel>
+        
+        <TabPanel header="Все сигналы">
+          <AllSignalsTab 
+            figi={figi}
+            signals={signals || []}
+          />
+        </TabPanel>
+        
+        <TabPanel header="Все новости">
+          <AllNewsTab 
+            figi={figi}
+            ticker={ticker}
+            news={news || []}
+          />
+        </TabPanel>
+      </TabView>
+    </Card>
+  );
+};
+
+export default StockDetailTabs;
+

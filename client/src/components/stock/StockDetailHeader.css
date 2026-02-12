@@ -1,0 +1,189 @@
+.stock-detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.stock-detail-header__content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  max-width: 100%;
+}
+
+.stock-detail-header__left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.stock-detail-header__back-btn {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+}
+
+.stock-detail-header__back-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.stock-detail-header__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.stock-detail-header__ticker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.stock-detail-header__ticker {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.stock-detail-header__sector {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.stock-detail-header__name {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-detail-header__center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.stock-detail-header__price-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stock-detail-header__price {
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1;
+}
+
+.stock-detail-header__change {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.stock-detail-header__change.positive {
+  color: #10b981;
+}
+
+.stock-detail-header__change.negative {
+  color: #ef4444;
+}
+
+.stock-detail-header__change-arrow {
+  font-size: 1rem;
+}
+
+.stock-detail-header__change-amount {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.stock-detail-header__change-percent {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.stock-detail-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.stock-detail-header__action-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.stock-detail-header__action-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.stock-detail-header__action-btn--primary {
+  background: white;
+  color: #667eea;
+  border-color: white;
+}
+
+.stock-detail-header__action-btn--primary:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* Адаптивность */
+@media (max-width: 1024px) {
+  .stock-detail-header__content {
+    flex-wrap: wrap;
+  }
+
+  .stock-detail-header__center {
+    order: 3;
+    width: 100%;
+    margin-top: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .stock-detail-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .stock-detail-header__ticker {
+    font-size: 1.5rem;
+  }
+
+  .stock-detail-header__price {
+    font-size: 1.5rem;
+  }
+
+  .stock-detail-header__actions {
+    flex-wrap: wrap;
+  }
+
+  .stock-detail-header__action-btn {
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+  }
+}
+

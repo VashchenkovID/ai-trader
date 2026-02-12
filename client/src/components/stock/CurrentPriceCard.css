@@ -1,0 +1,124 @@
+.current-price-card {
+  padding: 1.25rem;
+}
+
+.current-price-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.current-price-card__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.current-price-card__live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #10b981;
+  font-weight: 600;
+}
+
+.current-price-card__live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #10b981;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.current-price-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.current-price-card__price {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111827;
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.2;
+}
+
+.current-price-card__currency {
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: #6b7280;
+  margin-left: 0.25rem;
+}
+
+.current-price-card__change {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  width: fit-content;
+}
+
+.current-price-card__change.positive {
+  color: #10b981;
+  background: #d1fae5;
+}
+
+.current-price-card__change.negative {
+  color: #ef4444;
+  background: #fee2e2;
+}
+
+.current-price-card__change-arrow {
+  font-size: 1rem;
+}
+
+.current-price-card__change-amount {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.current-price-card__change-percent {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.current-price-card__update-time {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+/* Анимация при изменении цены */
+.current-price-card__price {
+  transition: color 0.3s ease;
+}
+
+.current-price-card__price.updating {
+  color: #3b82f6;
+  animation: priceUpdate 0.5s ease;
+}
+
+@keyframes priceUpdate {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+

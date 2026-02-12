@@ -478,13 +478,23 @@ class WeeklyForecastModelService {
             }
             
             if (LoggerService.isInitialized) {
-                LoggerService.warn('Model saved', {
-                    service: 'WeeklyForecastModelService',
-                    operation: 'saveModel',
-                    figi,
-                    modelType,
-                    success
-                });
+                if (success) {
+                    LoggerService.info('Model saved successfully', {
+                        service: 'WeeklyForecastModelService',
+                        operation: 'saveModel',
+                        figi,
+                        modelType,
+                        modelPath
+                    });
+                } else {
+                    LoggerService.error('Model save returned false', {
+                        service: 'WeeklyForecastModelService',
+                        operation: 'saveModel',
+                        figi,
+                        modelType,
+                        modelPath
+                    });
+                }
             }
             
             return success;

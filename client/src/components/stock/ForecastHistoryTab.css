@@ -1,0 +1,66 @@
+.forecast-history-tab {
+  padding: 1rem 0;
+}
+
+.forecast-history-tab__empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #9ca3af;
+}
+
+.forecast-history-tab__empty-hint {
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  color: #6b7280;
+}
+
+.forecast-history-tab__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 0.5rem;
+}
+
+.forecast-history-tab__summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.forecast-history-tab__summary-label {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.forecast-history-tab__summary-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.forecast-history-tab__chart {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.forecast-history-tab__chart-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 1rem 0;
+}
+
+.forecast-history-tab__table {
+  margin-top: 1rem;
+}
+

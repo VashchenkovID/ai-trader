@@ -350,7 +350,7 @@ router.get('/performance/metrics', async (req, res) => {
 router.post('/train', async (req, res) => {
     let workerId = null;
     try {
-        const { figi = null, maxInstruments = 10, trainingOptions = {} } = req.body;
+        const { figi = null, maxInstruments = null, trainingOptions = {} } = req.body;
 
         // Проверяем, не идет ли полное обучение
         try {
