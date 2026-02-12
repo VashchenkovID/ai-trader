@@ -422,92 +422,130 @@ router.post('/train', async (req, res) => {
             });
         }
 
-        // Импортируем утилиту обучения
-        const { trainWeeklyForecastModelsForAllInstruments, trainWeeklyForecastModel } = await import('../utils/scheduler/weeklyForecastTrainingUtils.js');
-
-        let result;
-
-        if (figi) {
-            // Обучение для конкретного инструмента
-            if (workerId) {
-                const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
-                WorkerMonitoringService.updateWorkerStatus(workerId, {
-                    progress: 10,
-                    metadata: {
-                        stage: 'training',
-                        figi
-                    }
-                });
-            }
-            
-            result = await trainWeeklyForecastModel(figi, trainingOptions);
-            
-            if (workerId) {
-                const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
-                WorkerMonitoringService.updateWorkerStatus(workerId, {
-                    progress: 100,
-                    metadata: {
-                        stage: 'completed',
-                        figi,
-                        modelVersion: result.modelVersion
-                    }
-                });
-                WorkerMonitoringService.completeWorker(workerId, true, {
-                    figi,
-                    modelVersion: result.modelVersion,
-                    sequencesCount: result.sequencesCount
-                });
-            }
-        } else {
-            // Обучение для всех инструментов
-            if (workerId) {
-                const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
-                WorkerMonitoringService.updateWorkerStatus(workerId, {
-                    progress: 5,
-                    metadata: {
-                        stage: 'training',
-                        currentInstrument: 0,
-                        totalInstruments: 0
-                    }
-                });
-            }
-            
-            result = await trainWeeklyForecastModelsForAllInstruments({
-                maxInstruments,
-                trainingOptions,
-                workerId // Передаем workerId для обновления прогресса
-            });
-            
-            if (workerId) {
-                const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
-                WorkerMonitoringService.updateWorkerStatus(workerId, {
-                    progress: 100,
-                    metadata: {
-                        stage: 'completed',
-                        total: result.total,
-                        success: result.success.length,
-                        failed: result.failed.length
-                    }
-                });
-                WorkerMonitoringService.completeWorker(workerId, true, {
-                    total: result.total,
-                    success: result.success.length,
-                    failed: result.failed.length
-                });
-            }
-        }
-
+        // Отправляем ответ сразу, обучение выполняется асинхронно
+        // Важно: ответ отправляется до начала обучения, чтобы не блокировать клиента
         res.json({
             success: true,
-            data: result,
-            workerId // Возвращаем workerId для отслеживания на фронтенде
+            message: 'Обучение запущено',
+            workerId, // Возвращаем workerId для отслеживания на фронтенде
+            status: 'started'
         });
+
+        // Выполняем обучение асинхронно (не блокируем ответ)
+        (async () => {
+            try {
+                // Импортируем утилиту обучения
+                const { trainWeeklyForecastModelsForAllInstruments, trainWeeklyForecastModel } = await import('../utils/scheduler/weeklyForecastTrainingUtils.js');
+
+                let result;
+
+                if (figi) {
+                    // Обучение для конкретного инструмента
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 10,
+                            metadata: {
+                                stage: 'training',
+                                figi
+                            }
+                        });
+                    }
+                    
+                    result = await trainWeeklyForecastModel(figi, trainingOptions);
+                    
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 100,
+                            metadata: {
+                                stage: 'completed',
+                                figi,
+                                modelVersion: result.modelVersion
+                            }
+                        });
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            figi,
+                            modelVersion: result.modelVersion,
+                            sequencesCount: result.sequencesCount
+                        });
+                    }
+                } else {
+                    // Обучение для всех инструментов
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 5,
+                            metadata: {
+                                stage: 'training',
+                                currentInstrument: 0,
+                                totalInstruments: 0
+                            }
+                        });
+                    }
+                    
+                    result = await trainWeeklyForecastModelsForAllInstruments({
+                        maxInstruments,
+                        trainingOptions,
+                        workerId // Передаем workerId для обновления прогресса
+                    });
+                    
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 100,
+                            metadata: {
+                                stage: 'completed',
+                                total: result.total,
+                                success: result.success.length,
+                                failed: result.failed.length
+                            }
+                        });
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            total: result.total,
+                            success: result.success.length,
+                            failed: result.failed.length
+                        });
+                    }
+                }
+
+                if (LoggerService.isInitialized) {
+                    LoggerService.info('Weekly Forecast training completed', {
+                        service: 'WeeklyForecastRoutes',
+                        operation: 'POST /train',
+                        workerId,
+                        figi: figi || 'all',
+                        result: figi ? { modelVersion: result.modelVersion } : { total: result.total, success: result.success.length, failed: result.failed.length }
+                    });
+                }
+            } catch (asyncError) {
+                if (workerId) {
+                    const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
+                    WorkerMonitoringService.completeWorker(workerId, false, {
+                        error: { message: asyncError.message }
+                    });
+                }
+                if (LoggerService.isInitialized) {
+                    LoggerService.error('Error in async Weekly Forecast training', {
+                        service: 'WeeklyForecastRoutes',
+                        operation: 'POST /train (async)',
+                        workerId,
+                        error: { message: asyncError.message, stack: asyncError.stack }
+                    });
+                }
+            }
+        })();
     } catch (error) {
+        // Обрабатываем ошибки, которые произошли до отправки ответа
         if (workerId) {
-            const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
-            WorkerMonitoringService.completeWorker(workerId, false, {
-                error: { message: error.message }
-            });
+            try {
+                const WorkerMonitoringService = (await import('../services/WorkerMonitoringService.js')).default;
+                WorkerMonitoringService.completeWorker(workerId, false, {
+                    error: { message: error.message }
+                });
+            } catch (workerError) {
+                // Игнорируем ошибки при завершении воркера
+            }
         }
         if (LoggerService.isInitialized) {
             LoggerService.error('Error training Weekly Forecast models', {
@@ -516,10 +554,13 @@ router.post('/train', async (req, res) => {
                 error: { message: error.message, stack: error.stack }
             });
         }
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        // Отправляем ответ только если он еще не отправлен
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
     }
 });
 
