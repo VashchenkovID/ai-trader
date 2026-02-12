@@ -437,14 +437,44 @@ class WeeklyForecastModelService {
                 const __dirname = path.dirname(__filename);
                 const modelsDir = path.join(__dirname, '../../models');
                 const metadataPath = path.join(modelsDir, `weekly_forecast/${figi}/${modelType}_metadata.json`);
+                const metadataDir = path.dirname(metadataPath);
                 
-                await fs.mkdir(path.dirname(metadataPath), { recursive: true });
+                // Создаем директорию с рекурсивным созданием родительских папок
+                await fs.mkdir(metadataDir, { recursive: true });
+                
+                // Устанавливаем права доступа на созданные папки
+                try {
+                    await fs.chmod(metadataDir, 0o777);
+                    // Также устанавливаем права на родительские папки
+                    const weeklyForecastDir = path.join(modelsDir, 'weekly_forecast');
+                    await fs.chmod(weeklyForecastDir, 0o777);
+                    const figiDir = path.join(weeklyForecastDir, figi);
+                    await fs.chmod(figiDir, 0o777);
+                    await fs.chmod(modelsDir, 0o777);
+                } catch (chmodError) {
+                    // Игнорируем ошибки chmod (может не работать в некоторых окружениях, например Windows)
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('Failed to set directory permissions', {
+                            service: 'WeeklyForecastModelService',
+                            operation: 'saveModel',
+                            error: chmodError.message
+                        });
+                    }
+                }
+                
                 await fs.writeFile(metadataPath, JSON.stringify({
                     ...metadata,
                     savedAt: new Date().toISOString(),
                     figi,
                     modelType
                 }, null, 2));
+                
+                // Устанавливаем права на файл метаданных
+                try {
+                    await fs.chmod(metadataPath, 0o666);
+                } catch (chmodError) {
+                    // Игнорируем ошибки chmod
+                }
             }
             
             if (LoggerService.isInitialized) {

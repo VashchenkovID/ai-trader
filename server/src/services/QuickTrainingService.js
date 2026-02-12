@@ -6,7 +6,7 @@ import { Op } from 'sequelize';
 /**
  * Сервис для быстрого обучения нейросетей
  * Обучает небольшие батчи инструментов каждые 2 часа
- * Обучает все типы нейросетей: Базовая → Ансамбль → Мета-обучение → RL
+ * Обучает все типы нейросетей: Базовая → Ансамбль → Мета-обучение → RL → Weekly Forecast
  * Использует оптимизированные параметры для скорости (меньше эпох, меньше данных)
  */
 class QuickTrainingService {
@@ -175,7 +175,7 @@ class QuickTrainingService {
                 }
             }
 
-            // ПОСЛЕДОВАТЕЛЬНОЕ ОБУЧЕНИЕ ВСЕХ НЕЙРОСЕТЕЙ: Базовая → Ансамбль → Мета-обучение → RL
+            // ПОСЛЕДОВАТЕЛЬНОЕ ОБУЧЕНИЕ ВСЕХ НЕЙРОСЕТЕЙ: Базовая → Ансамбль → Мета-обучение → RL → Weekly Forecast
             // Используем оптимизированные параметры для быстрого обучения
             
             for (let instrumentIndex = 0; instrumentIndex < instruments.length; instrumentIndex++) {
@@ -264,6 +264,31 @@ class QuickTrainingService {
                 } catch (error) {
                     networksFailed++;
                     console.error(`❌ [Quick RL] Training failed for ${instrument.ticker}:`, error.message);
+                }
+                
+                // Этап 5: Weekly Forecast (с оптимизированными параметрами)
+                try {
+                    const { trainWeeklyForecastModel } = await import('../utils/scheduler/weeklyForecastTrainingUtils.js');
+                    await trainWeeklyForecastModel(instrument.figi, {
+                        historicalDays: Math.max(trainingDays * 2, 180), // Минимум 180 дней для weekly forecast
+                        lookbackDays: 30, // Вместо стандартных 60
+                        forecastDays: 7,
+                        epochs: 20, // Вместо стандартных 50
+                        batchSize: 16
+                    });
+                    networksTrained++;
+                } catch (error) {
+                    networksFailed++;
+                    const LoggerService = (await import('./LoggerService.js')).default;
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Quick Weekly Forecast training failed', {
+                            service: 'QuickTrainingService',
+                            operation: 'trainQuickBatch',
+                            figi: instrument.figi,
+                            ticker: instrument.ticker,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
                 }
                 
                 // Считаем инструмент успешным, если хотя бы одна нейросеть обучилась
@@ -480,7 +505,8 @@ class QuickTrainingService {
                     `• Базовая нейросеть (15 эпох)\n` +
                     `• Ансамбль моделей (20 эпох)\n` +
                     `• Мета-обучение\n` +
-                    `• Обучение с подкреплением (20 эпизодов)\n\n` +
+                    `• Обучение с подкреплением (20 эпизодов)\n` +
+                    `• Weekly Forecast (20 эпох)\n\n` +
                     `⏰ Время начала: ${new Date().toLocaleString('ru-RU')}`,
                     'info'
                 );
@@ -584,7 +610,7 @@ class QuickTrainingService {
             if (successful > 0) {
                 await OptimizedTelegramService.sendAlert(
                     'QUICK_TRAINING_COMPLETED',
-                    `⚡ <b>БЫСТРОЕ ОБУЧЕНИЕ ЗАВЕРШЕНО</b>\n\n📊 Результаты:\n• Успешно обучено: ${successful} инструментов\n• Ошибок: ${errors || 0}\n• Время выполнения: ${duration} секунд\n• Инструментов в очереди: ${totalInstruments}\n\n🧠 Обучены все типы нейросетей:\n• Базовая нейросеть\n• Ансамбль моделей\n• Мета-обучение\n• Обучение с подкреплением\n\n✅ Нейросети обновлены и готовы к работе`,
+                    `⚡ <b>БЫСТРОЕ ОБУЧЕНИЕ ЗАВЕРШЕНО</b>\n\n📊 Результаты:\n• Успешно обучено: ${successful} инструментов\n• Ошибок: ${errors || 0}\n• Время выполнения: ${duration} секунд\n• Инструментов в очереди: ${totalInstruments}\n\n🧠 Обучены все типы нейросетей:\n• Базовая нейросеть\n• Ансамбль моделей\n• Мета-обучение\n• Обучение с подкреплением\n• Weekly Forecast\n\n✅ Нейросети обновлены и готовы к работе`,
                     'success'
                 );
             }

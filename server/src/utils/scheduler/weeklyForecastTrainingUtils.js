@@ -100,7 +100,7 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
 
         // 7. Сохраняем модель
         const modelVersion = WeeklyForecastService.generateModelVersion();
-        await WeeklyForecastModelService.saveModel(figi, 'seq2seq', model, {
+        await WeeklyForecastModelService.saveModel(model, figi, 'seq2seq', {
             version: modelVersion,
             trainedAt: new Date().toISOString(),
             epochs,
@@ -195,8 +195,8 @@ export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
             instruments = allInstruments || [];
         }
 
-        // Ограничиваем количество
-        if (instruments.length > maxInstruments) {
+        // Ограничиваем количество (только если maxInstruments указан и не null)
+        if (maxInstruments !== null && maxInstruments !== undefined && instruments.length > maxInstruments) {
             instruments = instruments.slice(0, maxInstruments);
         }
 

@@ -2094,7 +2094,7 @@ class SchedulerService {
                     }
                     
                     const result = await trainWeeklyForecastModelsForAllInstruments({
-                        maxInstruments: 10,
+                        maxInstruments: null, // null означает обучение всех инструментов без ограничений
                         trainingOptions: {
                             historicalDays: 365,
                             lookbackDays: 60,

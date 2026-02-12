@@ -46,13 +46,30 @@ class ModelManager {
             // Создаем директорию если не существует
             await fs.mkdir(modelDir, { recursive: true });
             
-            // Устанавливаем права доступа на созданную папку
+            // Устанавливаем права доступа на созданную папку и все промежуточные папки
             try {
-                await fs.chmod(modelDir, 0o777);
-                // Также устанавливаем права на родительскую папку models
-                await fs.chmod(this.modelsDir, 0o777);
+                // Устанавливаем права на все папки в пути (от корня models до конечной папки)
+                let currentDir = modelDir;
+                const dirsToChmod = [];
+                
+                // Собираем все промежуточные директории
+                while (currentDir !== this.modelsDir && currentDir !== path.dirname(currentDir)) {
+                    dirsToChmod.push(currentDir);
+                    currentDir = path.dirname(currentDir);
+                }
+                dirsToChmod.push(this.modelsDir);
+                
+                // Устанавливаем права на все папки
+                for (const dir of dirsToChmod) {
+                    try {
+                        await fs.chmod(dir, 0o777);
+                    } catch (err) {
+                        // Игнорируем ошибки для отдельных папок
+                    }
+                }
             } catch (chmodError) {
-                // Игнорируем ошибки chmod (может не работать в некоторых окружениях)
+                // Игнорируем ошибки chmod (может не работать в некоторых окружениях, например Windows)
+                console.warn(`⚠️ Failed to set directory permissions for ${modelName}:`, chmodError.message);
             }
         
             
