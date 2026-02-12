@@ -153,7 +153,10 @@ export const weeklyForecastApi = {
     success: boolean;
     data: any;
   }> {
-    const response = await api.post('/api/weekly-forecast/train', options || {});
+    // Увеличиваем таймаут для обучения (5 минут), так как обучение может занимать много времени
+    const response = await api.post('/api/weekly-forecast/train', options || {}, {
+      timeout: 300000 // 5 минут
+    });
     return response.data;
   }
 };
