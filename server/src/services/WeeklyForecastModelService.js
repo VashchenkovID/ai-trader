@@ -274,21 +274,69 @@ class WeeklyForecastModelService {
                 throw new Error(`Sequences and targets length mismatch: ${sequences.length} vs ${targets.length}`);
             }
             
+            // Проверяем форму sequences перед конвертацией
+            if (sequences.length === 0) {
+                throw new Error('Sequences array is empty');
+            }
+            
+            // Проверяем, что все sequences имеют одинаковую длину
+            const expectedSequenceLength = sequences[0].length;
+            const expectedFeatureSize = sequences[0][0]?.length || 70;
+            
+            for (let i = 0; i < sequences.length; i++) {
+                if (sequences[i].length !== expectedSequenceLength) {
+                    throw new Error(`Sequence ${i} has incorrect length: expected ${expectedSequenceLength}, got ${sequences[i].length}`);
+                }
+                for (let j = 0; j < sequences[i].length; j++) {
+                    if (sequences[i][j].length !== expectedFeatureSize) {
+                        throw new Error(`Sequence ${i}, step ${j} has incorrect feature size: expected ${expectedFeatureSize}, got ${sequences[i][j].length}`);
+                    }
+                }
+            }
+            
+            // Проверяем форму targets
+            const expectedForecastDays = targets[0]?.length || 7;
+            for (let i = 0; i < targets.length; i++) {
+                if (targets[i].length !== expectedForecastDays) {
+                    throw new Error(`Target ${i} has incorrect length: expected ${expectedForecastDays}, got ${targets[i].length}`);
+                }
+            }
+            
             // Конвертируем в тензоры
             // Для encoder: [batch, sequenceLength, featureSize]
             const encoderInput = tf.tensor3d(sequences);
             
+            // Проверяем форму encoderInput
+            const encoderShape = encoderInput.shape;
+            if (encoderShape.length !== 3) {
+                throw new Error(`Encoder input must be 3D tensor, got shape: [${encoderShape.join(', ')}]`);
+            }
+            
             // Для decoder: используем targets как decoder input (teacher forcing)
-            // В реальном inference будем использовать предыдущие предсказания
-            const decoderInput = tf.tensor3d(sequences.map((seq, idx) => {
-                // Для decoder input используем последние forecastDays дней из sequence
-                // или дублируем последний элемент
+            // Decoder input должен иметь форму [batch, forecastDays, featureSize]
+            // Используем последний элемент из каждой sequence и дублируем его для всех forecastDays
+            const decoderInput = tf.tensor3d(sequences.map((seq) => {
                 const lastFeatures = seq[seq.length - 1];
-                return Array(7).fill(lastFeatures);
+                // Создаем массив из forecastDays элементов, каждый равен lastFeatures
+                return Array(expectedForecastDays).fill(null).map(() => [...lastFeatures]);
             }));
             
             // Targets: [batch, forecastDays, 5] (open, high, low, close, volume)
             const targetTensor = tf.tensor3d(targets);
+            
+            // Проверяем формы перед обучением
+            const decoderShape = decoderInput.shape;
+            const targetShape = targetTensor.shape;
+            
+            if (LoggerService.isInitialized) {
+                LoggerService.info('Tensor shapes before training', {
+                    service: 'WeeklyForecastModelService',
+                    operation: 'trainModel',
+                    encoderShape: `[${encoderShape.join(', ')}]`,
+                    decoderShape: `[${decoderShape.join(', ')}]`,
+                    targetShape: `[${targetShape.join(', ')}]`
+                });
+            }
             
             // Обучение через очередь, чтобы избежать одновременных вызовов fit()
             const identifier = `weekly_forecast_${figi || 'unknown'}`;

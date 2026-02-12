@@ -271,7 +271,7 @@ class QuickTrainingService {
                     const { trainWeeklyForecastModel } = await import('../utils/scheduler/weeklyForecastTrainingUtils.js');
                     await trainWeeklyForecastModel(instrument.figi, {
                         historicalDays: Math.max(trainingDays * 2, 180), // Минимум 180 дней для weekly forecast
-                        lookbackDays: 30, // Вместо стандартных 60
+                        lookbackDays: 60, // Используем 60, так как модель создана с этим параметром (inputSequenceLength = 60)
                         forecastDays: 7,
                         epochs: 20, // Вместо стандартных 50
                         batchSize: 16
