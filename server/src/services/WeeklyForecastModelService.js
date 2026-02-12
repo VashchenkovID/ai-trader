@@ -328,13 +328,20 @@ class WeeklyForecastModelService {
             const decoderShape = decoderInput.shape;
             const targetShape = targetTensor.shape;
             
+            // Проверяем структуру модели - должна иметь 2 входа для Seq2Seq
+            const modelInputs = model.inputs;
+            if (!modelInputs || modelInputs.length !== 2) {
+                throw new Error(`Model input structure mismatch: expected 2 inputs (encoder and decoder), but model has ${modelInputs ? modelInputs.length : 0} inputs. Model may need to be recreated.`);
+            }
+            
             if (LoggerService.isInitialized) {
                 LoggerService.info('Tensor shapes before training', {
                     service: 'WeeklyForecastModelService',
                     operation: 'trainModel',
                     encoderShape: `[${encoderShape.join(', ')}]`,
                     decoderShape: `[${decoderShape.join(', ')}]`,
-                    targetShape: `[${targetShape.join(', ')}]`
+                    targetShape: `[${targetShape.join(', ')}]`,
+                    modelInputsCount: modelInputs.length
                 });
             }
             
@@ -342,31 +349,74 @@ class WeeklyForecastModelService {
             const identifier = `weekly_forecast_${figi || 'unknown'}`;
             const history = await tensorFlowTrainingQueue.enqueue(
                 async () => {
-                    return await model.fit(
-                        [encoderInput, decoderInput],
-                        targetTensor,
-                        {
-                            epochs,
-                            batchSize,
-                            validationSplit,
-                            verbose,
-                            callbacks: {
-                                onEpochEnd: (epoch, logs) => {
-                                    if (LoggerService.isInitialized && verbose > 0) {
-                                        LoggerService.warn(`Training epoch ${epoch + 1}/${epochs}`, {
-                                            service: 'WeeklyForecastModelService',
-                                            operation: 'trainModel',
-                                            epoch: epoch + 1,
-                                            loss: logs.loss,
-                                            valLoss: logs.val_loss,
-                                            mae: logs.mae,
-                                            valMae: logs.val_mae
-                                        });
+                    try {
+                        // Убеждаемся, что передаем входы как массив для multi-input модели
+                        const inputs = [encoderInput, decoderInput];
+                        
+                        // Дополнительная проверка перед вызовом fit()
+                        if (LoggerService.isInitialized) {
+                            LoggerService.info('Calling model.fit() with inputs', {
+                                service: 'WeeklyForecastModelService',
+                                operation: 'trainModel',
+                                inputsCount: inputs.length,
+                                encoderShape: encoderInput.shape,
+                                decoderShape: decoderInput.shape,
+                                targetShape: targetTensor.shape,
+                                modelInputsCount: modelInputs.length,
+                                modelInputShapes: modelInputs.map(inp => inp.shape)
+                            });
+                        }
+                        
+                        return await model.fit(
+                            inputs,
+                            targetTensor,
+                            {
+                                epochs,
+                                batchSize,
+                                validationSplit,
+                                verbose,
+                                callbacks: {
+                                    onEpochEnd: async (epoch, logs) => {
+                                        if (LoggerService.isInitialized && verbose > 0) {
+                                            LoggerService.warn(`Training epoch ${epoch + 1}/${epochs}`, {
+                                                service: 'WeeklyForecastModelService',
+                                                operation: 'trainModel',
+                                                epoch: epoch + 1,
+                                                loss: logs.loss,
+                                                valLoss: logs.val_loss,
+                                                mae: logs.mae,
+                                                valMae: logs.val_mae
+                                            });
+                                        }
+                                        
+                                        // Освобождаем event loop между эпохами, чтобы не блокировать другие запросы
+                                        // Это критично для производительности сервера во время длительного обучения
+                                        if (epoch < epochs - 1) {
+                                            await new Promise(resolve => setImmediate(resolve));
+                                        }
                                     }
                                 }
                             }
+                        );
+                    } catch (fitError) {
+                        // Логируем детальную информацию об ошибке
+                        if (LoggerService.isInitialized) {
+                            LoggerService.error('Error in model.fit()', {
+                                service: 'WeeklyForecastModelService',
+                                operation: 'trainModel',
+                                error: {
+                                    message: fitError.message,
+                                    stack: fitError.stack
+                                },
+                                encoderShape: encoderInput.shape,
+                                decoderShape: decoderInput.shape,
+                                targetShape: targetTensor.shape,
+                                modelInputsCount: modelInputs.length,
+                                modelInputShapes: modelInputs.map(inp => inp.shape)
+                            });
                         }
-                    );
+                        throw fitError;
+                    }
                 },
                 identifier
             );
@@ -397,6 +447,210 @@ class WeeklyForecastModelService {
             }
             throw error;
         }
+    }
+
+    /**
+     * Обучение модели через worker (не блокирует event loop)
+     * @param {Array} sequences - Входные последовательности
+     * @param {Array} targets - Целевые последовательности
+     * @param {Object} options - Опции обучения
+     * @param {string} [options.figi] - FIGI инструмента (для идентификации)
+     * @param {Function} [options.onProgress] - Callback для прогресса обучения
+     * @returns {Promise<Object>} История обучения
+     */
+    async trainModelViaWorker(sequences, targets, options = {}) {
+        const {
+            epochs = 50,
+            batchSize = 16,
+            validationSplit = 0.2,
+            verbose = 0,
+            figi = null,
+            onProgress = null
+        } = options;
+
+        return new Promise(async (resolve, reject) => {
+            const { Worker } = await import('worker_threads');
+            const { join } = await import('path');
+            const { fileURLToPath } = await import('url');
+            const { dirname } = await import('path');
+            
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = dirname(__filename);
+            const workerPath = join(__dirname, '../workers/weeklyForecastTrainingWorker.js');
+            const worker = new Worker(workerPath);
+            
+            // Регистрируем воркер в WorkerMonitoringService
+            let workerId = null;
+            try {
+                const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                if (!WorkerMonitoringService.isInitialized) {
+                    await WorkerMonitoringService.initialize();
+                }
+                workerId = WorkerMonitoringService.registerWorker(
+                    'weekly-forecast-training',
+                    `Training Weekly Forecast model${figi ? `: ${figi}` : ''}`,
+                    { figi, epochs, batchSize, sequencesCount: sequences.length }
+                );
+            } catch (monitoringError) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Failed to register worker in monitoring service', {
+                        service: 'WeeklyForecastModelService',
+                        operation: 'trainModelViaWorker',
+                        error: { message: String(monitoringError) }
+                    });
+                }
+            }
+            
+            worker.postMessage({
+                type: 'train',
+                data: {
+                    sequences,
+                    targets,
+                    options: {
+                        epochs,
+                        batchSize,
+                        validationSplit,
+                        verbose
+                    }
+                }
+            });
+            
+            worker.on('message', async (msg) => {
+                if (msg.type === 'training_complete') {
+                    // Завершаем воркер в мониторинге
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            WorkerMonitoringService.completeWorker(workerId, true, { 
+                                finalLoss: msg.data.history.loss[msg.data.history.loss.length - 1],
+                                finalValLoss: msg.data.history.val_loss ? msg.data.history.val_loss[msg.data.history.val_loss.length - 1] : null
+                            });
+                        } catch (monitoringError) {
+                            // Игнорируем ошибки мониторинга
+                        }
+                    }
+                    
+                    // Создаем объект истории в формате, который ожидается
+                    const history = {
+                        history: msg.data.history,
+                        weights: msg.data.weights, // Веса обученной модели
+                        modelConfig: msg.data.modelConfig // Конфигурация модели
+                    };
+                    
+                    resolve(history);
+                    worker.terminate();
+                } else if (msg.type === 'training_error') {
+                    // Отмечаем ошибку в мониторинге
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            WorkerMonitoringService.reportWorkerError(workerId, msg.data.error);
+                            WorkerMonitoringService.completeWorker(workerId, false, { error: msg.data.error });
+                        } catch (monitoringError) {
+                            // Игнорируем ошибки мониторинга
+                        }
+                    }
+                    
+                    reject(new Error(msg.data.error));
+                    worker.terminate();
+                } else if (msg.type === 'training_progress') {
+                    // Обновляем прогресс в мониторинге
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            const progress = ((msg.data.epoch || 0) / epochs) * 100;
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                progress,
+                                metadata: {
+                                    epoch: msg.data.epoch,
+                                    epochs: msg.data.epochs,
+                                    loss: msg.data.loss,
+                                    valLoss: msg.data.valLoss,
+                                    mae: msg.data.mae,
+                                    valMae: msg.data.valMae
+                                }
+                            });
+                        } catch (monitoringError) {
+                            // Игнорируем ошибки мониторинга
+                        }
+                    }
+                    
+                    // Вызываем callback прогресса, если он указан
+                    if (onProgress) {
+                        onProgress({
+                            epoch: msg.data.epoch,
+                            epochs: msg.data.epochs,
+                            loss: msg.data.loss,
+                            valLoss: msg.data.valLoss,
+                            mae: msg.data.mae,
+                            valMae: msg.data.valMae
+                        });
+                    }
+                    
+                    // Логируем прогресс
+                    if (LoggerService.isInitialized && verbose > 0) {
+                        LoggerService.warn(`Training epoch ${msg.data.epoch}/${msg.data.epochs}`, {
+                            service: 'WeeklyForecastModelService',
+                            operation: 'trainModelViaWorker',
+                            epoch: msg.data.epoch,
+                            loss: msg.data.loss,
+                            valLoss: msg.data.valLoss,
+                            mae: msg.data.mae,
+                            valMae: msg.data.valMae
+                        });
+                    }
+                } else if (msg.type === 'error') {
+                    // Отмечаем ошибку в мониторинге
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            WorkerMonitoringService.reportWorkerError(workerId, msg.data.error);
+                            WorkerMonitoringService.completeWorker(workerId, false, { error: msg.data.error });
+                        } catch (monitoringError) {
+                            // Игнорируем ошибки мониторинга
+                        }
+                    }
+                    
+                    reject(new Error(msg.data.error));
+                    worker.terminate();
+                }
+            });
+            
+            worker.on('error', async (error) => {
+                // Отмечаем ошибку в мониторинге
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.reportWorkerError(workerId, error);
+                        WorkerMonitoringService.completeWorker(workerId, false, { error: error.message });
+                    } catch (monitoringError) {
+                        // Игнорируем ошибки мониторинга
+                    }
+                }
+                
+                reject(error);
+                worker.terminate();
+            });
+            
+            worker.on('exit', async (code) => {
+                // Завершаем воркер в мониторинге, если еще не завершен
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        const worker = WorkerMonitoringService.getWorker(workerId);
+                        if (worker && worker.status === 'running') {
+                            WorkerMonitoringService.completeWorker(workerId, code === 0, { exitCode: code });
+                        }
+                    } catch (monitoringError) {
+                        // Игнорируем ошибки мониторинга
+                    }
+                }
+                
+                if (code !== 0) {
+                    reject(new Error(`Worker stopped with exit code ${code}`));
+                }
+            });
+        });
     }
 
     /**

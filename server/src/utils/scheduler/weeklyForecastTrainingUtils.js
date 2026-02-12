@@ -1,3 +1,4 @@
+import * as tf from '@tensorflow/tfjs';
 import LoggerService from '../../services/LoggerService.js';
 import CacheService from '../../services/CacheService.js';
 import WeeklyForecastService from '../../services/WeeklyForecastService.js';
@@ -6,6 +7,9 @@ import WeeklyForecastModelService from '../../services/WeeklyForecastModelServic
 /**
  * Утилиты для обучения моделей Weekly Forecast
  */
+
+// Флаг блокировки быстрого обучения во время полного обучения
+let isFullWeeklyForecastTrainingActive = false;
 
 /**
  * Обучает модель Weekly Forecast для указанного инструмента
@@ -79,9 +83,9 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
         const modelWrapper = await WeeklyForecastService.getOrCreateModel(figi, 'seq2seq');
         const model = modelWrapper.model;
 
-        // 6. Обучаем модель
+        // 6. Обучаем модель через worker (не блокирует event loop)
         if (LoggerService.isInitialized) {
-            LoggerService.info('Training model', {
+            LoggerService.info('Training model via worker', {
                 service: 'WeeklyForecastTrainingUtils',
                 operation: 'trainWeeklyForecastModel',
                 figi,
@@ -90,13 +94,80 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             });
         }
 
-        const history = await WeeklyForecastModelService.trainModel(model, sequences, targets, {
+        // Используем worker для обучения, чтобы не блокировать event loop
+        // Worker создает и обучает модель в отдельном потоке, затем возвращает веса
+        const history = await WeeklyForecastModelService.trainModelViaWorker(sequences, targets, {
             epochs,
             batchSize,
             validationSplit: 0.2,
             verbose: 0,
-            figi // Передаем figi для идентификации в очереди
+            figi, // Передаем figi для идентификации
+            onProgress: (progress) => {
+                // Можно добавить дополнительную обработку прогресса, если нужно
+                if (LoggerService.isInitialized && progress.epoch % 10 === 0) {
+                    LoggerService.info(`Training progress: epoch ${progress.epoch}/${progress.epochs}`, {
+                        service: 'WeeklyForecastTrainingUtils',
+                        operation: 'trainWeeklyForecastModel',
+                        figi,
+                        loss: progress.loss,
+                        valLoss: progress.valLoss
+                    });
+                }
+            }
         });
+        
+        // Применяем веса из worker'а к модели в основном процессе
+        if (history.weights && history.weights.length > 0) {
+            try {
+                // Конвертируем веса обратно в тензоры и применяем к модели
+                const weightTensors = history.weights.map(w => tf.tensor(w));
+                model.setWeights(weightTensors);
+                
+                // Освобождаем память
+                weightTensors.forEach(t => t.dispose());
+                
+                if (LoggerService.isInitialized) {
+                    LoggerService.info('Model weights applied from worker', {
+                        service: 'WeeklyForecastTrainingUtils',
+                        operation: 'trainWeeklyForecastModel',
+                        figi
+                    });
+                }
+            } catch (weightError) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Failed to apply weights from worker, training model directly', {
+                        service: 'WeeklyForecastTrainingUtils',
+                        operation: 'trainWeeklyForecastModel',
+                        figi,
+                        error: { message: weightError.message }
+                    });
+                }
+                // Если не удалось применить веса, обучаем модель напрямую (блокирует event loop)
+                await WeeklyForecastModelService.trainModel(model, sequences, targets, {
+                    epochs: 1, // Одна эпоха для применения весов
+                    batchSize,
+                    validationSplit: 0,
+                    verbose: 0,
+                    figi
+                });
+            }
+        } else {
+            // Если веса не получены, обучаем модель напрямую (блокирует event loop)
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('No weights received from worker, training model directly', {
+                    service: 'WeeklyForecastTrainingUtils',
+                    operation: 'trainWeeklyForecastModel',
+                    figi
+                });
+            }
+            await WeeklyForecastModelService.trainModel(model, sequences, targets, {
+                epochs,
+                batchSize,
+                validationSplit: 0.2,
+                verbose: 0,
+                figi
+            });
+        }
 
         // 7. Сохраняем модель
         const modelVersion = WeeklyForecastService.generateModelVersion();
@@ -158,6 +229,14 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
 }
 
 /**
+ * Проверяет, активно ли полное обучение Weekly Forecast
+ * @returns {boolean} true, если полное обучение активно
+ */
+export function isFullWeeklyForecastTrainingActive() {
+    return isFullWeeklyForecastTrainingActive;
+}
+
+/**
  * Обучает модели Weekly Forecast для всех активных инструментов
  * @param {Object} options - Опции обучения
  * @param {Array<string>} options.figiList - Список FIGI для обучения (если не указан, используются все активные)
@@ -173,6 +252,9 @@ export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
         trainingOptions = {},
         workerId = null
     } = options;
+
+    // Устанавливаем флаг блокировки быстрого обучения
+    isFullWeeklyForecastTrainingActive = true;
 
     try {
         if (LoggerService.isInitialized) {
@@ -266,6 +348,12 @@ export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
                     error: error.message
                 });
             }
+            
+            // Освобождаем event loop между инструментами, чтобы не блокировать другие запросы
+            // Это критично для производительности сервера во время длительного обучения
+            if (i < instruments.length - 1) {
+                await new Promise(resolve => setImmediate(resolve));
+            }
         }
 
         if (LoggerService.isInitialized) {
@@ -288,6 +376,15 @@ export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
             });
         }
         throw error;
+    } finally {
+        // Сбрасываем флаг блокировки после завершения обучения
+        isFullWeeklyForecastTrainingActive = false;
+        if (LoggerService.isInitialized) {
+            LoggerService.info('Full Weekly Forecast training completed, quick training unlocked', {
+                service: 'WeeklyForecastTrainingUtils',
+                operation: 'trainWeeklyForecastModelsForAllInstruments'
+            });
+        }
     }
 }
 

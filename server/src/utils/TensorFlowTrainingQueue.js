@@ -54,6 +54,12 @@ class TensorFlowTrainingQueue {
                 task.reject(error);
             } finally {
                 this.currentTraining = null;
+                
+                // Освобождаем event loop между задачами в очереди, чтобы не блокировать другие запросы
+                // Это критично для производительности сервера во время длительного обучения
+                if (this.queue.length > 0) {
+                    await new Promise(resolve => setImmediate(resolve));
+                }
             }
         }
 

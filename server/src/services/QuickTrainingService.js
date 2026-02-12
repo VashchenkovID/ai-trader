@@ -267,16 +267,32 @@ class QuickTrainingService {
                 }
                 
                 // Этап 5: Weekly Forecast (с оптимизированными параметрами)
+                // Проверяем, не идет ли полное обучение Weekly Forecast
                 try {
-                    const { trainWeeklyForecastModel } = await import('../utils/scheduler/weeklyForecastTrainingUtils.js');
-                    await trainWeeklyForecastModel(instrument.figi, {
-                        historicalDays: Math.max(trainingDays * 2, 180), // Минимум 180 дней для weekly forecast
-                        lookbackDays: 60, // Используем 60, так как модель создана с этим параметром (inputSequenceLength = 60)
-                        forecastDays: 7,
-                        epochs: 20, // Вместо стандартных 50
-                        batchSize: 16
-                    });
-                    networksTrained++;
+                    const { trainWeeklyForecastModel, isFullWeeklyForecastTrainingActive } = await import('../utils/scheduler/weeklyForecastTrainingUtils.js');
+                    
+                    if (isFullWeeklyForecastTrainingActive()) {
+                        const LoggerService = (await import('./LoggerService.js')).default;
+                        if (LoggerService.isInitialized) {
+                            LoggerService.info('Quick Weekly Forecast training skipped: full training is in progress', {
+                                service: 'QuickTrainingService',
+                                operation: 'trainQuickBatch',
+                                figi: instrument.figi,
+                                ticker: instrument.ticker
+                            });
+                        }
+                        console.log(`⏸️ [Quick Weekly Forecast] Skipped ${instrument.ticker}: full training is in progress`);
+                        // Не считаем это ошибкой, просто пропускаем
+                    } else {
+                        await trainWeeklyForecastModel(instrument.figi, {
+                            historicalDays: Math.max(trainingDays * 2, 180), // Минимум 180 дней для weekly forecast
+                            lookbackDays: 60, // Используем 60, так как модель создана с этим параметром (inputSequenceLength = 60)
+                            forecastDays: 7,
+                            epochs: 20, // Вместо стандартных 50
+                            batchSize: 16
+                        });
+                        networksTrained++;
+                    }
                 } catch (error) {
                     networksFailed++;
                     const LoggerService = (await import('./LoggerService.js')).default;

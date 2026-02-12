@@ -471,6 +471,17 @@ async function safeSyncModel(Model, modelName = null) {
         )) {
             // Ошибка с кешем PostgreSQL - это внутренняя ошибка БД, не критична
             // Игнорируем, так как это может происходить при параллельных операциях
+        } else if (syncError.message && (
+            syncError.message.includes('does not exist') ||
+            syncError.message.includes('constraint') && syncError.message.includes('does not exist') ||
+            (syncError.original && syncError.original.message && (
+                syncError.original.message.includes('does not exist') ||
+                syncError.original.message.includes('constraint') && syncError.original.message.includes('does not exist')
+            ))
+        )) {
+            // Ошибка о несуществующем constraint/index - не критична
+            // Может возникать при попытке удалить constraint/index, которого нет
+            // Игнорируем, так как это не влияет на работу приложения
         } else {
             // Логируем только серьезные ошибки, не связанные с constraint/index
             if (!syncError.message?.includes('constraint') && 
@@ -936,8 +947,50 @@ export async function initDatabase() {
         }
         try {
             await safeSyncModel(PositionStrategy, 'PositionStrategy');
+            
+            // Дополнительная проверка и исправление индексов для position_strategies
+            // Если есть ошибка "cache lookup failed", пересоздаем индексы
+            try {
+                // Проверяем, есть ли поврежденные индексы
+                await sequelize.query(`
+                    SELECT indexname 
+                    FROM pg_indexes 
+                    WHERE tablename = 'position_strategies'
+                `);
+            } catch (indexError) {
+                if (indexError.message && indexError.message.includes('cache lookup failed')) {
+                    // Не критичная ошибка, просто пересоздаем индексы без лишнего логирования
+                    try {
+                        // Удаляем все индексы (кроме первичного ключа)
+                        const indexes = await sequelize.query(`
+                            SELECT indexname 
+                            FROM pg_indexes 
+                            WHERE tablename = 'position_strategies'
+                            AND indexname != 'position_strategies_pkey'
+                        `, { type: sequelize.QueryTypes.SELECT });
+                        
+                        for (const idx of indexes) {
+                            try {
+                                await sequelize.query(`DROP INDEX IF EXISTS "${idx.indexname}" CASCADE`);
+                            } catch (dropError) {
+                                // Игнорируем ошибки удаления
+                            }
+                        }
+                        
+                        // Пересоздаем индексы через sync
+                        await PositionStrategy.sync({ alter: true });
+                    } catch (fixError) {
+                        // Игнорируем ошибки пересоздания индексов
+                    }
+                }
+            }
         } catch (syncError) {
-            console.error('❌ Ошибка синхронизации таблицы стратегий позиций:', syncError);
+            // Игнорируем ошибки cache lookup, они не критичны
+            if (!syncError.message?.includes('cache lookup failed') && 
+                !syncError.message?.includes('constraint') &&
+                !syncError.message?.includes('does not exist')) {
+                console.error('❌ Ошибка синхронизации таблицы стратегий позиций:', syncError.message);
+            }
         }
         
         // Создаем таблицу результатов бэктестинга
@@ -1031,8 +1084,50 @@ export async function initDatabase() {
         // Создаем таблицу статистики инструментов
         try {
             await safeSyncModel(InstrumentStats, 'InstrumentStats');
+            
+            // Дополнительная проверка и исправление индексов для instrument_stats
+            // Если есть ошибка "cache lookup failed", пересоздаем индексы
+            try {
+                // Проверяем, есть ли поврежденные индексы
+                await sequelize.query(`
+                    SELECT indexname 
+                    FROM pg_indexes 
+                    WHERE tablename = 'instrument_stats'
+                `);
+            } catch (indexError) {
+                if (indexError.message && indexError.message.includes('cache lookup failed')) {
+                    // Не критичная ошибка, просто пересоздаем индексы без лишнего логирования
+                    try {
+                        // Удаляем все индексы (кроме первичного ключа)
+                        const indexes = await sequelize.query(`
+                            SELECT indexname 
+                            FROM pg_indexes 
+                            WHERE tablename = 'instrument_stats'
+                            AND indexname != 'instrument_stats_pkey'
+                        `, { type: sequelize.QueryTypes.SELECT });
+                        
+                        for (const idx of indexes) {
+                            try {
+                                await sequelize.query(`DROP INDEX IF EXISTS "${idx.indexname}" CASCADE`);
+                            } catch (dropError) {
+                                // Игнорируем ошибки удаления
+                            }
+                        }
+                        
+                        // Пересоздаем индексы через sync
+                        await InstrumentStats.sync({ alter: true });
+                    } catch (fixError) {
+                        // Игнорируем ошибки пересоздания индексов
+                    }
+                }
+            }
         } catch (syncError) {
-            console.error('❌ Ошибка синхронизации таблицы статистики инструментов:', syncError);
+            // Игнорируем ошибки cache lookup, они не критичны
+            if (!syncError.message?.includes('cache lookup failed') && 
+                !syncError.message?.includes('constraint') &&
+                !syncError.message?.includes('does not exist')) {
+                console.error('❌ Ошибка синхронизации таблицы статистики инструментов:', syncError.message);
+            }
         }
         
         // Создаем таблицу кеша корреляций

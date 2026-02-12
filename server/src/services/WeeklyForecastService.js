@@ -353,8 +353,16 @@ class WeeklyForecastService {
             // Вычисляем технические индикаторы для каждой свечи
             const features = [];
             
+            // Освобождаем event loop периодически при обработке большого количества свечей
+            const BATCH_SIZE = 50; // Обрабатываем по 50 свечей, затем освобождаем event loop
+            
             for (let i = 0; i < candles.length; i++) {
                 const candleFeatures = [];
+                
+                // Освобождаем event loop каждые BATCH_SIZE свечей для больших наборов данных
+                if (i > 0 && i % BATCH_SIZE === 0 && candles.length > BATCH_SIZE) {
+                    await new Promise(resolve => setImmediate(resolve));
+                }
                 
                 // Базовые цены (нормализованные относительно последней цены)
                 const lastPrice = prices[prices.length - 1];
@@ -572,21 +580,46 @@ class WeeklyForecastService {
             // Проверяем кэш моделей
             const cached = this.modelCache.get(cacheKey);
             if (cached && (now - cached.timestamp) < this.modelCacheTTL) {
-                if (LoggerService.isInitialized) {
-                    LoggerService.warn('Model loaded from cache', {
-                        service: 'WeeklyForecastService',
-                        operation: 'getOrCreateModel',
-                        figi,
-                        modelType,
-                        version: cached.version
-                    });
+                // Проверяем структуру закэшированной модели
+                const cachedModel = cached.model;
+                const cachedInputs = cachedModel?.inputs;
+                if (cachedInputs && cachedInputs.length === 2) {
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('Model loaded from cache', {
+                            service: 'WeeklyForecastService',
+                            operation: 'getOrCreateModel',
+                            figi,
+                            modelType,
+                            version: cached.version
+                        });
+                    }
+                    return {
+                        model: cachedModel,
+                        version: cached.version,
+                        isNew: false,
+                        modelType
+                    };
+                } else {
+                    // Удаляем модель с неправильной структурой из кэша
+                    if (cachedModel) {
+                        try {
+                            cachedModel.dispose();
+                        } catch (e) {
+                            // Игнорируем ошибки при освобождении
+                        }
+                    }
+                    this.modelCache.delete(cacheKey);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('Cached model has incorrect structure, removed from cache', {
+                            service: 'WeeklyForecastService',
+                            operation: 'getOrCreateModel',
+                            figi,
+                            modelType,
+                            expectedInputs: 2,
+                            actualInputs: cachedInputs ? cachedInputs.length : 0
+                        });
+                    }
                 }
-                return {
-                    model: cached.model,
-                    version: cached.version,
-                    isNew: false,
-                    modelType
-                };
             }
             
             // Пытаемся загрузить существующую модель
@@ -595,20 +628,40 @@ class WeeklyForecastService {
             let version = null;
             
             if (model) {
-                // Проверяем метаданные для получения версии
-                const metadata = await WeeklyForecastModelService.loadModelMetadata(figi, modelType);
-                version = metadata?.version || this.generateModelVersion();
-                
-                if (LoggerService.isInitialized) {
-                    LoggerService.warn('Model loaded from storage', {
-                        service: 'WeeklyForecastService',
-                        operation: 'getOrCreateModel',
-                        figi,
-                        modelType,
-                        version
-                    });
+                // Проверяем структуру модели - для Seq2Seq должна быть 2 входа
+                const modelInputs = model.inputs;
+                if (!modelInputs || modelInputs.length !== 2) {
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('Loaded model has incorrect structure, creating new model', {
+                            service: 'WeeklyForecastService',
+                            operation: 'getOrCreateModel',
+                            figi,
+                            modelType,
+                            expectedInputs: 2,
+                            actualInputs: modelInputs ? modelInputs.length : 0
+                        });
+                    }
+                    // Освобождаем неправильную модель
+                    model.dispose();
+                    model = null;
+                } else {
+                    // Проверяем метаданные для получения версии
+                    const metadata = await WeeklyForecastModelService.loadModelMetadata(figi, modelType);
+                    version = metadata?.version || this.generateModelVersion();
+                    
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('Model loaded from storage', {
+                            service: 'WeeklyForecastService',
+                            operation: 'getOrCreateModel',
+                            figi,
+                            modelType,
+                            version
+                        });
+                    }
                 }
-            } else {
+            }
+            
+            if (!model) {
                 // Создаем новую модель
                 model = WeeklyForecastModelService.createSeq2SeqModel(60, 70, 7);
                 version = this.generateModelVersion();
