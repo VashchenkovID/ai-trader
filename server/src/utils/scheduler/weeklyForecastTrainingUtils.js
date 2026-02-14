@@ -57,8 +57,45 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
 
         // 2. Получаем исторические данные
         const candles = await CacheService.getCandles(figi, 'DAY', historicalDays, true);
-        if (candles.length < lookbackDays + forecastDays) {
-            throw new Error(`Insufficient historical data: ${candles.length} candles (minimum ${lookbackDays + forecastDays})`);
+        const minimumRequired = lookbackDays + forecastDays;
+        
+        // Адаптивные параметры, если данных недостаточно
+        let actualLookbackDays = lookbackDays;
+        let actualForecastDays = forecastDays;
+        let adaptiveMode = false;
+        
+        if (candles.length < minimumRequired) {
+            // Пытаемся адаптировать параметры под доступные данные
+            // Минимум: хотя бы 10 дней для lookback и 3 дня для forecast
+            const minLookback = 10;
+            const minForecast = 3;
+            const minTotal = minLookback + minForecast;
+            
+            if (candles.length < minTotal) {
+                // Данных слишком мало даже для минимального обучения
+                const error = new Error(`Insufficient historical data: ${candles.length} candles (minimum ${minTotal} for adaptive training, ${minimumRequired} for standard)`);
+                error.code = 'INSUFFICIENT_DATA';
+                throw error;
+            }
+            
+            // Адаптируем параметры: используем доступные данные оптимально
+            // Оставляем минимум для forecast, остальное для lookback
+            actualForecastDays = Math.max(minForecast, Math.min(forecastDays, Math.floor(candles.length * 0.2)));
+            actualLookbackDays = Math.max(minLookback, candles.length - actualForecastDays);
+            adaptiveMode = true;
+            
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('Using adaptive training parameters due to insufficient data', {
+                    service: 'WeeklyForecastTrainingUtils',
+                    operation: 'trainWeeklyForecastModel',
+                    figi,
+                    availableCandles: candles.length,
+                    originalLookback: lookbackDays,
+                    originalForecast: forecastDays,
+                    adaptiveLookback: actualLookbackDays,
+                    adaptiveForecast: actualForecastDays
+                });
+            }
         }
 
         // 3. Подготавливаем features
@@ -67,12 +104,12 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             includeNews: true
         });
 
-        // 4. Подготавливаем данные для обучения
+        // 4. Подготавливаем данные для обучения (используем адаптивные параметры, если применимо)
         const { sequences, targets } = WeeklyForecastModelService.prepareTrainingData(
             candles,
             features,
-            lookbackDays,
-            forecastDays
+            actualLookbackDays,
+            actualForecastDays
         );
 
         if (sequences.length === 0) {
@@ -178,8 +215,11 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             batchSize,
             sequencesCount: sequences.length,
             historicalDays,
-            lookbackDays,
-            forecastDays,
+            lookbackDays: actualLookbackDays,
+            forecastDays: actualForecastDays,
+            adaptiveMode: adaptiveMode, // Флаг, что использовались адаптивные параметры
+            originalLookbackDays: adaptiveMode ? lookbackDays : undefined,
+            originalForecastDays: adaptiveMode ? forecastDays : undefined,
             finalLoss: history.history.loss[history.history.loss.length - 1],
             finalValLoss: history.history.val_loss ? history.history.val_loss[history.history.val_loss.length - 1] : null
         });
@@ -201,7 +241,10 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
                 figi,
                 modelVersion,
                 sequencesCount: sequences.length,
-                finalLoss: history.history.loss[history.history.loss.length - 1]
+                finalLoss: history.history.loss[history.history.loss.length - 1],
+                adaptiveMode: adaptiveMode,
+                lookbackDays: actualLookbackDays,
+                forecastDays: actualForecastDays
             });
         }
 
@@ -212,17 +255,33 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             modelVersion,
             sequencesCount: sequences.length,
             epochs,
+            lookbackDays: actualLookbackDays,
+            forecastDays: actualForecastDays,
+            adaptiveMode: adaptiveMode,
             finalLoss: history.history.loss[history.history.loss.length - 1],
             finalValLoss: history.history.val_loss ? history.history.val_loss[history.history.val_loss.length - 1] : null
         };
     } catch (error) {
-        if (LoggerService.isInitialized) {
-            LoggerService.error('Error training Weekly Forecast model', {
-                service: 'WeeklyForecastTrainingUtils',
-                operation: 'trainWeeklyForecastModel',
-                figi,
-                error: { message: error.message, stack: error.stack }
-            });
+        // Если это ошибка недостаточных данных, логируем как предупреждение
+        if (error.code === 'INSUFFICIENT_DATA' || error.message.includes('Insufficient historical data')) {
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('Insufficient historical data for Weekly Forecast training', {
+                    service: 'WeeklyForecastTrainingUtils',
+                    operation: 'trainWeeklyForecastModel',
+                    figi,
+                    reason: error.message
+                });
+            }
+        } else {
+            // Для других ошибок логируем как ошибку
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error training Weekly Forecast model', {
+                    service: 'WeeklyForecastTrainingUtils',
+                    operation: 'trainWeeklyForecastModel',
+                    figi,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
         }
         throw error;
     }
@@ -311,7 +370,8 @@ export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
         const results = {
             total: instruments.length,
             success: [],
-            failed: []
+            failed: [],
+            skipped: [] // Инструменты с недостаточными данными
         };
 
         // Обучаем модели для каждого инструмента
@@ -342,11 +402,40 @@ export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
                 const result = await trainWeeklyForecastModel(instrument.figi, trainingOptions);
                 results.success.push(result);
             } catch (error) {
-                results.failed.push({
-                    figi: instrument.figi,
-                    ticker: instrument.ticker || instrument.name,
-                    error: error.message
-                });
+                // Если это ошибка недостаточных данных, логируем как предупреждение, а не ошибку
+                if (error.code === 'INSUFFICIENT_DATA' || error.message.includes('Insufficient historical data')) {
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('Skipping Weekly Forecast training due to insufficient data', {
+                            service: 'WeeklyForecastTrainingUtils',
+                            operation: 'trainWeeklyForecastModelsForAllInstruments',
+                            figi: instrument.figi,
+                            ticker: instrument.ticker || instrument.name,
+                            reason: error.message
+                        });
+                    }
+                    // Добавляем в skipped, так как это не ошибка, а нормальная ситуация
+                    results.skipped.push({
+                        figi: instrument.figi,
+                        ticker: instrument.ticker || instrument.name,
+                        reason: error.message
+                    });
+                } else {
+                    // Для других ошибок добавляем в failed и логируем как ошибку
+                    results.failed.push({
+                        figi: instrument.figi,
+                        ticker: instrument.ticker || instrument.name,
+                        error: error.message
+                    });
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Error training Weekly Forecast model', {
+                            service: 'WeeklyForecastTrainingUtils',
+                            operation: 'trainWeeklyForecastModelsForAllInstruments',
+                            figi: instrument.figi,
+                            ticker: instrument.ticker || instrument.name,
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
+                }
             }
             
             // Освобождаем event loop между инструментами, чтобы не блокировать другие запросы
@@ -362,7 +451,8 @@ export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
                 operation: 'trainWeeklyForecastModelsForAllInstruments',
                 total: results.total,
                 success: results.success.length,
-                failed: results.failed.length
+                failed: results.failed.length,
+                skipped: results.skipped.length
             });
         }
 
