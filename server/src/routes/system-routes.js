@@ -136,35 +136,50 @@ router.get('/cache/status', async (req, res) => {
             });
         }
         
-        const SchedulerService = globalServiceManager.getServiceSafe('SchedulerService');
+        let SchedulerService = globalServiceManager.getServiceSafe('SchedulerService');
         if (!SchedulerService) {
             // Проверяем, есть ли сервис в списке, но не инициализирован
             const isRegistered = globalServiceManager.isServiceInitialized('SchedulerService');
             
-            // Логируем для диагностики
-            try {
-                const availableServices = globalServiceManager.services 
-                    ? Array.from(globalServiceManager.services.keys()) 
-                    : [];
-                console.warn('SchedulerService недоступен:', {
-                    isRegistered,
-                    isInitialized: globalServiceManager.isInitialized,
-                    availableServices
-                });
-            } catch (logError) {
-                console.warn('SchedulerService недоступен (не удалось получить список сервисов):', logError);
+            // Пытаемся инициализировать сервис, если он не найден
+            if (!isRegistered && globalServiceManager.isInitialized) {
+                try {
+                    console.log('Попытка инициализации SchedulerService...');
+                    SchedulerService = await globalServiceManager.initializeService('SchedulerService', () => import('../services/SchedulerService.js'));
+                    if (SchedulerService) {
+                        console.log('✅ SchedulerService успешно инициализирован');
+                    }
+                } catch (initError) {
+                    console.error('Ошибка инициализации SchedulerService:', initError);
+                }
             }
             
-            return res.status(503).json({
-                success: false,
-                message: isRegistered 
-                    ? 'SchedulerService зарегистрирован, но недоступен' 
-                    : 'SchedulerService не зарегистрирован в ServiceManager',
-                debug: {
-                    isRegistered,
-                    isServiceManagerInitialized: globalServiceManager.isInitialized
+            if (!SchedulerService) {
+                // Логируем для диагностики
+                try {
+                    const availableServices = globalServiceManager.services 
+                        ? Array.from(globalServiceManager.services.keys()) 
+                        : [];
+                    console.warn('SchedulerService недоступен:', {
+                        isRegistered,
+                        isInitialized: globalServiceManager.isInitialized,
+                        availableServices
+                    });
+                } catch (logError) {
+                    console.warn('SchedulerService недоступен (не удалось получить список сервисов):', logError);
                 }
-            });
+                
+                return res.status(503).json({
+                    success: false,
+                    message: isRegistered 
+                        ? 'SchedulerService зарегистрирован, но недоступен' 
+                        : 'SchedulerService не зарегистрирован в ServiceManager',
+                    debug: {
+                        isRegistered,
+                        isServiceManagerInitialized: globalServiceManager.isInitialized
+                    }
+                });
+            }
         }
         
         // Проверяем, что сервис инициализирован
@@ -316,35 +331,50 @@ router.get('/scheduler/status', async (req, res) => {
             });
         }
         
-        const SchedulerService = globalServiceManager.getServiceSafe('SchedulerService');
+        let SchedulerService = globalServiceManager.getServiceSafe('SchedulerService');
         if (!SchedulerService) {
             // Проверяем, есть ли сервис в списке, но не инициализирован
             const isRegistered = globalServiceManager.isServiceInitialized('SchedulerService');
             
-            // Логируем для диагностики
-            try {
-                const availableServices = globalServiceManager.services 
-                    ? Array.from(globalServiceManager.services.keys()) 
-                    : [];
-                console.warn('SchedulerService недоступен:', {
-                    isRegistered,
-                    isInitialized: globalServiceManager.isInitialized,
-                    availableServices
-                });
-            } catch (logError) {
-                console.warn('SchedulerService недоступен (не удалось получить список сервисов):', logError);
+            // Пытаемся инициализировать сервис, если он не найден
+            if (!isRegistered && globalServiceManager.isInitialized) {
+                try {
+                    console.log('Попытка инициализации SchedulerService...');
+                    SchedulerService = await globalServiceManager.initializeService('SchedulerService', () => import('../services/SchedulerService.js'));
+                    if (SchedulerService) {
+                        console.log('✅ SchedulerService успешно инициализирован');
+                    }
+                } catch (initError) {
+                    console.error('Ошибка инициализации SchedulerService:', initError);
+                }
             }
             
-            return res.status(503).json({
-                success: false,
-                message: isRegistered 
-                    ? 'SchedulerService зарегистрирован, но недоступен' 
-                    : 'SchedulerService не зарегистрирован в ServiceManager',
-                debug: {
-                    isRegistered,
-                    isServiceManagerInitialized: globalServiceManager.isInitialized
+            if (!SchedulerService) {
+                // Логируем для диагностики
+                try {
+                    const availableServices = globalServiceManager.services 
+                        ? Array.from(globalServiceManager.services.keys()) 
+                        : [];
+                    console.warn('SchedulerService недоступен:', {
+                        isRegistered,
+                        isInitialized: globalServiceManager.isInitialized,
+                        availableServices
+                    });
+                } catch (logError) {
+                    console.warn('SchedulerService недоступен (не удалось получить список сервисов):', logError);
                 }
-            });
+                
+                return res.status(503).json({
+                    success: false,
+                    message: isRegistered 
+                        ? 'SchedulerService зарегистрирован, но недоступен' 
+                        : 'SchedulerService не зарегистрирован в ServiceManager',
+                    debug: {
+                        isRegistered,
+                        isServiceManagerInitialized: globalServiceManager.isInitialized
+                    }
+                });
+            }
         }
         
         // Проверяем, что сервис инициализирован

@@ -9,7 +9,7 @@ import WeeklyForecastModelService from '../../services/WeeklyForecastModelServic
  */
 
 // Флаг блокировки быстрого обучения во время полного обучения
-let isFullWeeklyForecastTrainingActive = false;
+let _isFullWeeklyForecastTrainingActive = false;
 
 /**
  * Обучает модель Weekly Forecast для указанного инструмента
@@ -233,7 +233,7 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
  * @returns {boolean} true, если полное обучение активно
  */
 export function isFullWeeklyForecastTrainingActive() {
-    return isFullWeeklyForecastTrainingActive;
+    return _isFullWeeklyForecastTrainingActive;
 }
 
 /**
@@ -254,7 +254,7 @@ export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
     } = options;
 
     // Устанавливаем флаг блокировки быстрого обучения
-    isFullWeeklyForecastTrainingActive = true;
+    _isFullWeeklyForecastTrainingActive = true;
 
     try {
         if (LoggerService.isInitialized) {
@@ -378,7 +378,7 @@ export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
         throw error;
     } finally {
         // Сбрасываем флаг блокировки после завершения обучения
-        isFullWeeklyForecastTrainingActive = false;
+        _isFullWeeklyForecastTrainingActive = false;
         if (LoggerService.isInitialized) {
             LoggerService.info('Full Weekly Forecast training completed, quick training unlocked', {
                 service: 'WeeklyForecastTrainingUtils',

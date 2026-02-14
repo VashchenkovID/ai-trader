@@ -95,15 +95,31 @@ class ServiceManager {
             // SchedulerService - критический сервис (инициализируется после SettingsService)
             try {
                 const schedulerService = await this.initializeService('SchedulerService', () => import('./SchedulerService.js'));
-                // Проверяем, что SchedulerService действительно инициализирован
-                if (schedulerService && schedulerService.isInitialized === true) {
+                
+                // Проверяем, что сервис добавлен в Map
+                if (!this.services.has('SchedulerService')) {
+                    const errorMsg = 'SchedulerService не был добавлен в Map после инициализации';
                     if (LoggerService.isInitialized) {
-                        LoggerService.info('SchedulerService успешно инициализирован', {
+                        LoggerService.error(errorMsg, {
                             service: 'ServiceManager',
                             serviceName: 'SchedulerService'
                         });
                     } else {
-                        console.log('✅ SchedulerService успешно инициализирован');
+                        console.error(`❌ ${errorMsg}`);
+                    }
+                    throw new Error(errorMsg);
+                }
+                
+                // Проверяем, что SchedulerService действительно инициализирован
+                if (schedulerService && schedulerService.isInitialized === true) {
+                    if (LoggerService.isInitialized) {
+                        LoggerService.info('SchedulerService успешно инициализирован и зарегистрирован', {
+                            service: 'ServiceManager',
+                            serviceName: 'SchedulerService',
+                            isInMap: this.services.has('SchedulerService')
+                        });
+                    } else {
+                        console.log('✅ SchedulerService успешно инициализирован и зарегистрирован');
                     }
                 } else {
                     const errorMsg = 'SchedulerService не установил isInitialized = true после инициализации';
@@ -111,12 +127,14 @@ class ServiceManager {
                         LoggerService.error(errorMsg, {
                             service: 'ServiceManager',
                             serviceName: 'SchedulerService',
-                            isInitialized: schedulerService?.isInitialized
+                            isInitialized: schedulerService?.isInitialized,
+                            isInMap: this.services.has('SchedulerService')
                         });
                     } else {
                         console.error(`❌ ${errorMsg}`);
                     }
-                    throw new Error(errorMsg);
+                    // Не выбрасываем ошибку, так как сервис все равно добавлен в Map
+                    // Он может быть использован позже, даже если не полностью инициализирован
                 }
             } catch (error) {
                 if (LoggerService.isInitialized) {
@@ -125,10 +143,12 @@ class ServiceManager {
                         error: {
                             message: error.message,
                             stack: error.stack
-                        }
+                        },
+                        isInMap: this.services.has('SchedulerService')
                     });
                 } else {
                     console.error('❌ Не удалось инициализировать SchedulerService:', error);
+                    console.error('   Сервис в Map:', this.services.has('SchedulerService'));
                 }
                 // Продолжаем инициализацию других сервисов, но логируем критическую ошибку
                 // SchedulerService критичен, но система может работать без него (с ограничениями)
@@ -317,7 +337,26 @@ class ServiceManager {
                     });
                 }
                 
-                const ServiceModule = (await importFunction()).default;
+                let ServiceModule;
+                try {
+                    ServiceModule = (await importFunction()).default;
+                } catch (importError) {
+                    // Ошибка при импорте модуля (например, синтаксическая ошибка)
+                    const errorMsg = `Ошибка импорта модуля ${serviceName}: ${importError.message}`;
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error(errorMsg, {
+                            service: 'ServiceManager',
+                            serviceName,
+                            error: {
+                                message: importError.message,
+                                stack: importError.stack
+                            }
+                        });
+                    } else {
+                        console.error(`❌ ${errorMsg}`);
+                    }
+                    throw new Error(errorMsg);
+                }
                 
                 // Проверяем, является ли экспорт классом или экземпляром
                 let service;
@@ -385,14 +424,31 @@ class ServiceManager {
                 
                 this.services.set(serviceName, service);
                 
+                // Проверяем, что сервис действительно добавлен в Map
+                if (!this.services.has(serviceName)) {
+                    const errorMsg = `Сервис ${serviceName} не был добавлен в Map после инициализации`;
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error(errorMsg, {
+                            service: 'ServiceManager',
+                            serviceName
+                        });
+                    } else {
+                        console.error(`❌ ${errorMsg}`);
+                    }
+                    throw new Error(errorMsg);
+                }
+                
                 // Логируем успешную инициализацию
                 if (LoggerService.isInitialized) {
-                    LoggerService.info(`Сервис ${serviceName} успешно инициализирован`, {
+                    LoggerService.info(`Сервис ${serviceName} успешно инициализирован и добавлен в Map`, {
                         service: 'ServiceManager',
                         serviceName,
                         hasInitialize: typeof service.initialize === 'function',
-                        isInitialized: service.isInitialized !== undefined ? service.isInitialized : 'N/A'
+                        isInitialized: service.isInitialized !== undefined ? service.isInitialized : 'N/A',
+                        isInMap: this.services.has(serviceName)
                     });
+                } else {
+                    console.log(`✅ Сервис ${serviceName} успешно инициализирован и добавлен в Map`);
                 }
                 
                 // Отмечаем сервис как инициализированный глобально (если не воркер или принудительно)
