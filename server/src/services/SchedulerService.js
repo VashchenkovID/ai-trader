@@ -103,7 +103,43 @@ class SchedulerService {
     }
 
     async initialize() {
+        // Проверяем, не инициализирован ли уже сервис
+        if (this.isInitialized === true) {
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('SchedulerService уже инициализирован, пропускаем повторную инициализацию', {
+                    service: 'SchedulerService',
+                    operation: 'initialize'
+                });
+            } else {
+                console.warn('⚠️ SchedulerService уже инициализирован, пропускаем повторную инициализацию');
+            }
+            return;
+        }
+
         try {
+            // Если были запущены задачи, останавливаем их перед повторной инициализацией
+            if (this.intervals.size > 0 || this.startTime) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Останавливаем существующие задачи перед повторной инициализацией', {
+                        service: 'SchedulerService',
+                        operation: 'initialize',
+                        tasksCount: this.intervals.size
+                    });
+                }
+                // Останавливаем все задачи, но не сбрасываем полностью (чтобы не потерять ссылки)
+                this.intervals.forEach(task => {
+                    if (task && typeof task.stop === 'function') {
+                        try {
+                            task.stop();
+                        } catch (error) {
+                            // Игнорируем ошибки остановки
+                        }
+                    }
+                });
+                // Очищаем intervals для новой инициализации
+                this.intervals.clear();
+            }
+            
             // Сбрасываем флаги при инициализации (защита от зависших состояний после рестарта)
             this.isTraining = false;
             this.isAnalyzing = false;
@@ -113,7 +149,18 @@ class SchedulerService {
             
             await this.start();
             this.isInitialized = true;
+            
+            if (LoggerService.isInitialized) {
+                LoggerService.info('SchedulerService успешно инициализирован', {
+                    service: 'SchedulerService',
+                    operation: 'initialize',
+                    tasksCount: this.intervals.size
+                });
+            } else {
+                console.log(`✅ SchedulerService инициализирован, запущено ${this.intervals.size} задач`);
+            }
         } catch (error) {
+            this.isInitialized = false;
             if (LoggerService.isInitialized) {
                 LoggerService.error('Failed to initialize Scheduler Service', {
                     service: 'SchedulerService',
@@ -126,6 +173,34 @@ class SchedulerService {
     }
 
     async start() {
+        // Проверяем, не запущен ли уже start()
+        if (this.startTime && this.intervals.size > 0) {
+            // Проверяем, что задачи действительно запущены
+            let runningTasks = 0;
+            this.intervals.forEach(task => {
+                if (task && typeof task.getStatus === 'function') {
+                    const status = task.getStatus();
+                    if (status === 'scheduled') runningTasks++;
+                } else if (task) {
+                    runningTasks++; // Предполагаем, что задача запущена, если нет метода getStatus
+                }
+            });
+            
+            if (runningTasks > 0) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('SchedulerService.start() уже был вызван, пропускаем повторный запуск', {
+                        service: 'SchedulerService',
+                        operation: 'start',
+                        runningTasks,
+                        totalTasks: this.intervals.size
+                    });
+                } else {
+                    console.warn(`⚠️ SchedulerService.start() уже был вызван, запущено ${runningTasks} задач`);
+                }
+                return;
+            }
+        }
+        
         // Сохраняем время старта для предотвращения немедленного запуска задач
         // ВАЖНО: устанавливаем время старта ДО создания cron задач
         this.startTime = Date.now();
@@ -224,6 +299,7 @@ class SchedulerService {
                 checkCacheStale: false // Проверка уже внутри performCacheUpdate
             }
         );
+        this.intervals.add(this.cacheTask);
 
         // Задача 1.5: Обновление цен акций (каждые 60 минут - оптимизировано для низкой нагрузки)
         const priceUpdateIntervalMinutes = schedulerSettings.price_update_interval_minutes || 60;
@@ -2161,12 +2237,98 @@ class SchedulerService {
         this.weeklyForecastTrainingTask = weeklyForecastTrainingTask;
         this.intervals.add(weeklyForecastTrainingTask);
         
+        // Добавляем все задачи в intervals для управления
+        // (некоторые уже добавлены выше, но добавляем все для надежности)
+        if (this.cacheTask) this.intervals.add(this.cacheTask);
+        if (this.priceUpdateTask) this.intervals.add(this.priceUpdateTask);
+        if (this.portfolioPricesUpdateTask) this.intervals.add(this.portfolioPricesUpdateTask);
+        if (this.partialExitCheckTask) this.intervals.add(this.partialExitCheckTask);
+        if (this.activeSignalsPricesUpdateTask) this.intervals.add(this.activeSignalsPricesUpdateTask);
+        if (this.tradingRequestsPricesUpdateTask) this.intervals.add(this.tradingRequestsPricesUpdateTask);
+        if (this.cleanupTask) this.intervals.add(this.cleanupTask);
+        if (this.newsCleanupTask) this.intervals.add(this.newsCleanupTask);
+        if (this.newsDailyUpdateTask) this.intervals.add(this.newsDailyUpdateTask);
+        if (this.newsCacheUpdateTask) this.intervals.add(this.newsCacheUpdateTask);
+        if (this.telegramCacheTask) this.intervals.add(this.telegramCacheTask);
+        if (this.trainingTask) this.intervals.add(this.trainingTask);
+        if (this.quickTrainingTask) this.intervals.add(this.quickTrainingTask);
+        if (this.tradingHoursTask) this.intervals.add(this.tradingHoursTask);
+        if (this.tradingHoursCacheTask) this.intervals.add(this.tradingHoursCacheTask);
+        if (this.degradationCheckTask) this.intervals.add(this.degradationCheckTask);
+        if (this.portfolioAnalysisTask) this.intervals.add(this.portfolioAnalysisTask);
+        if (this.predictionsUpdateTask) this.intervals.add(this.predictionsUpdateTask);
+        if (this.signalsUpdateTask) this.intervals.add(this.signalsUpdateTask);
+        if (this.trailingStopsCheckTask) this.intervals.add(this.trailingStopsCheckTask);
+        if (this.strategyRebalanceTask) this.intervals.add(this.strategyRebalanceTask);
+        if (this.correlationPrecalcTask) this.intervals.add(this.correlationPrecalcTask);
+        if (this.dynamicBudgetRebalanceTask) this.intervals.add(this.dynamicBudgetRebalanceTask);
+        if (this.weeklyBacktestTask) this.intervals.add(this.weeklyBacktestTask);
+        if (this.macroDataUpdateTask) this.intervals.add(this.macroDataUpdateTask);
+        if (this.optionsDataUpdateTask) this.intervals.add(this.optionsDataUpdateTask);
+        if (this.fundamentalDataUpdateTask) this.intervals.add(this.fundamentalDataUpdateTask);
+        if (this.portfolioRebalancingTask) this.intervals.add(this.portfolioRebalancingTask);
+        if (this.hyperparameterOptimizationTask) this.intervals.add(this.hyperparameterOptimizationTask);
+        if (this.dataDriftCheckTask) this.intervals.add(this.dataDriftCheckTask);
+        if (this.positionMonitoringTask) this.intervals.add(this.positionMonitoringTask);
+        if (this.dailyReportTask) this.intervals.add(this.dailyReportTask);
+        if (this.dataCleanupTask) this.intervals.add(this.dataCleanupTask);
+        if (this.weeklyForecastUpdateTask) this.intervals.add(this.weeklyForecastUpdateTask);
+        
         // Запускаем все cron задачи
+        let startedCount = 0;
+        let failedCount = 0;
         this.intervals.forEach(task => {
-            if (task && typeof task.start === 'function') {
-                task.start();
+            if (task) {
+                try {
+                    // Проверяем, запущена ли задача
+                    const isRunning = task.getStatus ? task.getStatus() === 'scheduled' : false;
+                    
+                    if (!isRunning && typeof task.start === 'function') {
+                        task.start();
+                        startedCount++;
+                        if (LoggerService.isInitialized) {
+                            LoggerService.info('Cron задача запущена', {
+                                service: 'SchedulerService',
+                                operation: 'start',
+                                taskType: task.constructor?.name || 'unknown'
+                            });
+                        }
+                    } else if (isRunning) {
+                        startedCount++;
+                        if (LoggerService.isInitialized) {
+                            LoggerService.info('Cron задача уже запущена', {
+                                service: 'SchedulerService',
+                                operation: 'start',
+                                taskType: task.constructor?.name || 'unknown'
+                            });
+                        }
+                    } else {
+                        failedCount++;
+                        console.warn('Cron задача не имеет метода start() или не определена');
+                    }
+                } catch (error) {
+                    failedCount++;
+                    console.error('Ошибка запуска cron задачи:', error);
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error('Ошибка запуска cron задачи', {
+                            service: 'SchedulerService',
+                            operation: 'start',
+                            error: { message: error.message, stack: error.stack }
+                        });
+                    }
+                }
             }
         });
+        
+        if (LoggerService.isInitialized) {
+            LoggerService.info('Все cron задачи запущены', {
+                service: 'SchedulerService',
+                operation: 'start',
+                totalTasks: this.intervals.size
+            });
+        } else {
+            console.log(`✅ Запущено ${this.intervals.size} cron задач`);
+        }
     }
 
     /**
@@ -7668,36 +7830,68 @@ class SchedulerService {
      */
     async getStatus() {
         try {
-            const tasks = {
-                cacheTask: this.cacheTask ? 'active' : 'inactive',
-                priceUpdateTask: this.priceUpdateTask ? 'active' : 'inactive',
-                portfolioPricesUpdateTask: this.portfolioPricesUpdateTask ? 'active' : 'inactive',
-                activeSignalsPricesUpdateTask: this.activeSignalsPricesUpdateTask ? 'active' : 'inactive',
-                tradingRequestsPricesUpdateTask: this.tradingRequestsPricesUpdateTask ? 'active' : 'inactive',
-                cleanupTask: this.cleanupTask ? 'active' : 'inactive',
-                trainingTask: this.trainingTask ? 'active' : 'inactive',
-                quickTrainingTask: this.quickTrainingTask ? 'active' : 'inactive',
-                tradingHoursTask: this.tradingHoursTask ? 'active' : 'inactive',
-                tradingHoursCacheTask: this.tradingHoursCacheTask ? 'active' : 'inactive',
-                degradationCheckTask: this.degradationCheckTask ? 'active' : 'inactive',
-                portfolioAnalysisTask: this.portfolioAnalysisTask ? 'active' : 'inactive',
-                predictionsUpdateTask: this.predictionsUpdateTask ? 'active' : 'inactive',
-                signalsUpdateTask: this.signalsUpdateTask ? 'active' : 'inactive',
-                trailingStopsCheckTask: this.trailingStopsCheckTask ? 'active' : 'inactive',
-                newsCleanupTask: this.newsCleanupTask ? 'active' : 'inactive',
-                newsDailyUpdateTask: this.newsDailyUpdateTask ? 'active' : 'inactive',
-                telegramCacheTask: this.telegramCacheTask ? 'active' : 'inactive',
-                strategyRebalanceTask: this.strategyRebalanceTask ? 'active' : 'inactive',
-                dynamicBudgetRebalanceTask: this.dynamicBudgetRebalanceTask ? 'active' : 'inactive',
-                correlationPrecalcTask: this.correlationPrecalcTask ? 'active' : 'inactive',
-                weeklyBacktestTask: this.weeklyBacktestTask ? 'active' : 'inactive',
-                macroDataUpdateTask: this.macroDataUpdateTask ? 'active' : 'inactive',
-                portfolioRebalancingTask: this.portfolioRebalancingTask ? 'active' : 'inactive'
+            // Функция для проверки статуса задачи
+            const getTaskStatus = (task) => {
+                if (!task) return 'not_created';
+                try {
+                    // Проверяем, есть ли метод getStatus у задачи
+                    if (typeof task.getStatus === 'function') {
+                        const status = task.getStatus();
+                        return status === 'scheduled' ? 'running' : status;
+                    }
+                    // Проверяем, есть ли задача в intervals (значит она должна быть запущена)
+                    if (this.intervals.has(task)) {
+                        return 'running';
+                    }
+                    return 'created';
+                } catch (error) {
+                    return 'error';
+                }
             };
+
+            const tasks = {
+                cacheTask: getTaskStatus(this.cacheTask),
+                priceUpdateTask: getTaskStatus(this.priceUpdateTask),
+                portfolioPricesUpdateTask: getTaskStatus(this.portfolioPricesUpdateTask),
+                activeSignalsPricesUpdateTask: getTaskStatus(this.activeSignalsPricesUpdateTask),
+                tradingRequestsPricesUpdateTask: getTaskStatus(this.tradingRequestsPricesUpdateTask),
+                cleanupTask: getTaskStatus(this.cleanupTask),
+                trainingTask: getTaskStatus(this.trainingTask),
+                quickTrainingTask: getTaskStatus(this.quickTrainingTask),
+                tradingHoursTask: getTaskStatus(this.tradingHoursTask),
+                tradingHoursCacheTask: getTaskStatus(this.tradingHoursCacheTask),
+                degradationCheckTask: getTaskStatus(this.degradationCheckTask),
+                portfolioAnalysisTask: getTaskStatus(this.portfolioAnalysisTask),
+                predictionsUpdateTask: getTaskStatus(this.predictionsUpdateTask),
+                signalsUpdateTask: getTaskStatus(this.signalsUpdateTask),
+                trailingStopsCheckTask: getTaskStatus(this.trailingStopsCheckTask),
+                newsCleanupTask: getTaskStatus(this.newsCleanupTask),
+                newsDailyUpdateTask: getTaskStatus(this.newsDailyUpdateTask),
+                telegramCacheTask: getTaskStatus(this.telegramCacheTask),
+                strategyRebalanceTask: getTaskStatus(this.strategyRebalanceTask),
+                dynamicBudgetRebalanceTask: getTaskStatus(this.dynamicBudgetRebalanceTask),
+                correlationPrecalcTask: getTaskStatus(this.correlationPrecalcTask),
+                weeklyBacktestTask: getTaskStatus(this.weeklyBacktestTask),
+                macroDataUpdateTask: getTaskStatus(this.macroDataUpdateTask),
+                portfolioRebalancingTask: getTaskStatus(this.portfolioRebalancingTask),
+                weeklyForecastUpdateTask: getTaskStatus(this.weeklyForecastUpdateTask),
+                weeklyForecastTrainingTask: getTaskStatus(this.weeklyForecastTrainingTask)
+            };
+
+            // Подсчитываем количество запущенных задач
+            const runningTasksCount = Object.values(tasks).filter(status => status === 'running').length;
+            const totalTasksCount = Object.keys(tasks).length;
 
             return {
                 isInitialized: this.isInitialized || false,
                 tasks,
+                tasksSummary: {
+                    total: totalTasksCount,
+                    running: runningTasksCount,
+                    created: Object.values(tasks).filter(status => status === 'created').length,
+                    notCreated: Object.values(tasks).filter(status => status === 'not_created').length,
+                    errors: Object.values(tasks).filter(status => status === 'error').length
+                },
                 activeWorkers: this.workers.size,
                 activeIntervals: this.intervals.size,
                 lastCacheUpdate: this.lastCacheUpdate ? new Date(this.lastCacheUpdate).toISOString() : null,

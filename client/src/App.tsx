@@ -20,7 +20,7 @@ import TradingRequests from './pages/TradingRequests';
 import Recommendations from './pages/Recommendations/Recommendations.tsx';
 import Portfolio from './pages/Portfolio/Portfolio.tsx';
 import TrainingDebug from './pages/TrainingDebug';
-import StockDetail from './pages/StockDetail';
+import StockDetail from './pages/StockDetailNew';
 import DesignSystemTest from './pages/DesignSystemTest/DesignSystemTest.tsx';
 import Performance from './pages/Performance/Performance.tsx';
 import WorkerMonitoring from './pages/WorkerMonitoring/WorkerMonitoring.tsx';

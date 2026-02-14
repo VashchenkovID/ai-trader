@@ -688,6 +688,10 @@ class CacheService {
             if (!SchedulerService) {
                 throw new Error('SchedulerService недоступен для обновления кеша');
             }
+            // Проверяем, что сервис инициализирован
+            if (SchedulerService.isInitialized !== undefined && !SchedulerService.isInitialized) {
+                throw new Error('SchedulerService зарегистрирован, но не инициализирован');
+            }
             const result = await SchedulerService.performCacheUpdate();
             
             // После обновления кеша также обновляем сигналы

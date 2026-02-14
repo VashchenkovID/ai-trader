@@ -68,6 +68,15 @@ router.post('/batch-train-all', async (req, res) => {
             }
         }
         
+        // Проверяем, что сервис инициализирован
+        if (SchedulerService.isInitialized !== undefined && !SchedulerService.isInitialized) {
+            return res.status(503).json({
+                success: false,
+                message: 'SchedulerService зарегистрирован, но не инициализирован. Попробуйте перезапустить сервер.',
+                error: 'SchedulerService not initialized'
+            });
+        }
+        
         // Проверяем, не идет ли уже обучение
         if (SchedulerService.isTraining && !force) {
             return res.status(409).json({

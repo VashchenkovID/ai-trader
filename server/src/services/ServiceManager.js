@@ -94,7 +94,30 @@ class ServiceManager {
             
             // SchedulerService - критический сервис (инициализируется после SettingsService)
             try {
-                await this.initializeService('SchedulerService', () => import('./SchedulerService.js'));
+                const schedulerService = await this.initializeService('SchedulerService', () => import('./SchedulerService.js'));
+                // Проверяем, что SchedulerService действительно инициализирован
+                if (schedulerService && schedulerService.isInitialized === true) {
+                    if (LoggerService.isInitialized) {
+                        LoggerService.info('SchedulerService успешно инициализирован', {
+                            service: 'ServiceManager',
+                            serviceName: 'SchedulerService'
+                        });
+                    } else {
+                        console.log('✅ SchedulerService успешно инициализирован');
+                    }
+                } else {
+                    const errorMsg = 'SchedulerService не установил isInitialized = true после инициализации';
+                    if (LoggerService.isInitialized) {
+                        LoggerService.error(errorMsg, {
+                            service: 'ServiceManager',
+                            serviceName: 'SchedulerService',
+                            isInitialized: schedulerService?.isInitialized
+                        });
+                    } else {
+                        console.error(`❌ ${errorMsg}`);
+                    }
+                    throw new Error(errorMsg);
+                }
             } catch (error) {
                 if (LoggerService.isInitialized) {
                     LoggerService.error('Не удалось инициализировать SchedulerService', {
@@ -107,7 +130,8 @@ class ServiceManager {
                 } else {
                     console.error('❌ Не удалось инициализировать SchedulerService:', error);
                 }
-                // Продолжаем инициализацию других сервисов
+                // Продолжаем инициализацию других сервисов, но логируем критическую ошибку
+                // SchedulerService критичен, но система может работать без него (с ограничениями)
             }
             
             // TradingEngine - критический сервис
