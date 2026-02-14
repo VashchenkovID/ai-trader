@@ -79,9 +79,32 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             }
             
             // Адаптируем параметры: используем доступные данные оптимально
-            // Оставляем минимум для forecast, остальное для lookback
+            // Важно: нужно оставить место для создания хотя бы одной последовательности
+            // Цикл в prepareTrainingData: for (let i = lookbackDays; i < candles.length - forecastDays; i++)
+            // Для создания хотя бы одной последовательности нужно: lookbackDays < candles.length - forecastDays
+            // То есть: lookbackDays + forecastDays < candles.length
+            
+            // Сначала определяем forecast (минимум 3, максимум 20% от данных)
             actualForecastDays = Math.max(minForecast, Math.min(forecastDays, Math.floor(candles.length * 0.2)));
-            actualLookbackDays = Math.max(minLookback, candles.length - actualForecastDays);
+            
+            // Затем определяем lookback так, чтобы осталось место для хотя бы одной последовательности
+            // Нужно: lookbackDays < candles.length - forecastDays
+            // Оставляем минимум 1 день для создания последовательности
+            const maxLookback = candles.length - actualForecastDays - 1;
+            actualLookbackDays = Math.max(minLookback, Math.min(lookbackDays, maxLookback));
+            
+            // Если после адаптации все еще недостаточно места, уменьшаем forecast
+            if (actualLookbackDays + actualForecastDays >= candles.length) {
+                actualForecastDays = Math.max(minForecast, candles.length - actualLookbackDays - 1);
+            }
+            
+            // Финальная проверка: должно быть место для хотя бы одной последовательности
+            if (actualLookbackDays >= candles.length - actualForecastDays) {
+                // Если все еще нет места, делаем минимальные параметры
+                actualForecastDays = minForecast;
+                actualLookbackDays = Math.max(minLookback, candles.length - actualForecastDays - 1);
+            }
+            
             adaptiveMode = true;
             
             if (LoggerService.isInitialized) {
@@ -104,23 +127,48 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             includeNews: true
         });
 
-        // 4. Подготавливаем данные для обучения (используем адаптивные параметры, если применимо)
-        const { sequences, targets } = WeeklyForecastModelService.prepareTrainingData(
-            candles,
-            features,
-            actualLookbackDays,
-            actualForecastDays
-        );
+        // 4. Проверяем, что будет создана хотя бы одна последовательность
+        // Цикл в prepareTrainingData: for (let i = lookbackDays; i < candles.length - forecastDays; i++)
+        // Для создания последовательностей нужно: lookbackDays < candles.length - forecastDays
+        const minCandlesForSequence = actualLookbackDays + actualForecastDays + 1;
+        if (candles.length < minCandlesForSequence) {
+            const error = new Error(`Insufficient data for sequence generation: ${candles.length} candles (need at least ${minCandlesForSequence} for lookback=${actualLookbackDays}, forecast=${actualForecastDays})`);
+            error.code = 'INSUFFICIENT_DATA';
+            throw error;
+        }
+        
+        // 5. Подготавливаем данные для обучения (используем адаптивные параметры, если применимо)
+        let sequences, targets;
+        try {
+            const trainingData = WeeklyForecastModelService.prepareTrainingData(
+                candles,
+                features,
+                actualLookbackDays,
+                actualForecastDays
+            );
+            sequences = trainingData.sequences;
+            targets = trainingData.targets;
+        } catch (error) {
+            // Если prepareTrainingData выбросил ошибку, это может быть из-за недостатка данных
+            if (error.message.includes('Insufficient data') || error.message.includes('length mismatch')) {
+                const adaptedError = new Error(`Failed to prepare training data: ${error.message}. Available: ${candles.length} candles, lookback: ${actualLookbackDays}, forecast: ${actualForecastDays}`);
+                adaptedError.code = 'INSUFFICIENT_DATA';
+                throw adaptedError;
+            }
+            throw error;
+        }
 
         if (sequences.length === 0) {
-            throw new Error('No training sequences generated');
+            const error = new Error(`No training sequences generated: ${candles.length} candles, lookback=${actualLookbackDays}, forecast=${actualForecastDays}. Need at least ${actualLookbackDays + actualForecastDays + 1} candles for one sequence.`);
+            error.code = 'INSUFFICIENT_DATA';
+            throw error;
         }
 
         // 5. Создаем или загружаем модель
         const modelWrapper = await WeeklyForecastService.getOrCreateModel(figi, 'seq2seq');
         const model = modelWrapper.model;
 
-        // 6. Обучаем модель через worker (не блокирует event loop)
+        // 7. Обучаем модель через worker (не блокирует event loop)
         if (LoggerService.isInitialized) {
             LoggerService.info('Training model via worker', {
                 service: 'WeeklyForecastTrainingUtils',
@@ -206,7 +254,7 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             });
         }
 
-        // 7. Сохраняем модель
+        // 8. Сохраняем модель
         const modelVersion = WeeklyForecastService.generateModelVersion();
         const saveSuccess = await WeeklyForecastModelService.saveModel(model, figi, 'seq2seq', {
             version: modelVersion,
@@ -228,7 +276,7 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             throw new Error(`Failed to save model for ${figi}. Model training completed but save operation failed.`);
         }
 
-        // 8. Очищаем кеш модели для этого FIGI, чтобы загрузить новую версию
+        // 9. Очищаем кеш модели для этого FIGI, чтобы загрузить новую версию
         const cacheKey = `${figi}_seq2seq`;
         if (WeeklyForecastService.modelCache) {
             WeeklyForecastService.modelCache.delete(cacheKey);
