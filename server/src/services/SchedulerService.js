@@ -3574,7 +3574,25 @@ class SchedulerService {
             // Проверяем, нужно ли переобучение
             if (!force) {
                 // Для ручного запуска: пропускаем обучение, если не требуется
-                const shouldRetrain = await this.shouldRetrainModel(null, workerId);
+                // Добавляем таймаут для проверки переобучения (максимум 5 минут)
+                const shouldRetrainPromise = this.shouldRetrainModel(null, workerId);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('shouldRetrainModel timeout after 300 seconds')), 300000)
+                );
+                
+                let shouldRetrain;
+                try {
+                    shouldRetrain = await Promise.race([shouldRetrainPromise, timeoutPromise]);
+                } catch (timeoutError) {
+                    LoggerService.error('shouldRetrainModel timeout for global check, assuming retrain needed', {
+                        service: 'SchedulerService',
+                        operation: 'performFullTraining',
+                        error: { message: timeoutError.message }
+                    });
+                    // При таймауте считаем, что нужно переобучить
+                    shouldRetrain = true;
+                }
+                
                 if (!shouldRetrain) {
                     // Логирование удалено согласно рефакторингу (было console.log)
                     if (LoggerService.isInitialized) {
@@ -3610,7 +3628,25 @@ class SchedulerService {
             } else {
                 // Для планового обучения (force: true): проверяем необходимость переобучения
                 // Если модели актуальны, пропускаем обучение даже при force: true
-                const shouldRetrain = await this.shouldRetrainModel(null, workerId);
+                // Добавляем таймаут для проверки переобучения (максимум 5 минут)
+                const shouldRetrainPromise = this.shouldRetrainModel(null, workerId);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('shouldRetrainModel timeout after 300 seconds')), 300000)
+                );
+                
+                let shouldRetrain;
+                try {
+                    shouldRetrain = await Promise.race([shouldRetrainPromise, timeoutPromise]);
+                } catch (timeoutError) {
+                    LoggerService.error('shouldRetrainModel timeout for scheduled check, assuming retrain needed', {
+                        service: 'SchedulerService',
+                        operation: 'performFullTraining',
+                        error: { message: timeoutError.message }
+                    });
+                    // При таймауте считаем, что нужно переобучить
+                    shouldRetrain = true;
+                }
+                
                 if (!shouldRetrain) {
                     if (LoggerService.isInitialized) {
                         LoggerService.info('Full Training skipped: models are up to date (even with force: true)', {
@@ -3758,7 +3794,27 @@ class SchedulerService {
                 }
                 
                 try {
-                    const shouldRetrain = await this.shouldRetrainModel(instrument.figi, null, workerId);
+                    // Добавляем таймаут для проверки переобучения (максимум 2 минуты на инструмент)
+                    const shouldRetrainPromise = this.shouldRetrainModel(instrument.figi, null, workerId);
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('shouldRetrainModel timeout after 120 seconds')), 120000)
+                    );
+                    
+                    let shouldRetrain;
+                    try {
+                        shouldRetrain = await Promise.race([shouldRetrainPromise, timeoutPromise]);
+                    } catch (timeoutError) {
+                        LoggerService.warn('shouldRetrainModel timeout, assuming retrain needed', {
+                            service: 'SchedulerService',
+                            operation: 'baseTraining',
+                            figi: instrument.figi,
+                            ticker: instrument.ticker,
+                            error: { message: timeoutError.message }
+                        });
+                        // При таймауте считаем, что нужно переобучить
+                        shouldRetrain = true;
+                    }
+                    
                     if (!shouldRetrain && !force) {
                         continue;
                     }
@@ -4606,9 +4662,58 @@ class SchedulerService {
                 const bestMeta = await OptimizedTrainingService.loadBestMeta(figi);
                 if (bestMeta && bestMeta.bestAccuracy) {
                     // Загружаем текущую модель и оцениваем её производительность
-                    const currentModel = await OptimizedTrainingService.loadModel(figi);
+                    // Добавляем таймаут для предотвращения зависания
+                    const loadModelPromise = OptimizedTrainingService.loadModel(figi);
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('loadModel timeout after 30 seconds')), 30000)
+                    );
+                    
+                    let currentModel;
+                    try {
+                        currentModel = await Promise.race([loadModelPromise, timeoutPromise]);
+                    } catch (loadError) {
+                        LoggerService.warn('loadModel timeout or error, skipping degradation check', {
+                            service: 'SchedulerService',
+                            operation: 'shouldRetrainModelForFigi',
+                            figi,
+                            error: { message: loadError.message }
+                        });
+                        // Отменяем промис загрузки модели, если он еще выполняется
+                        // (хотя Promise.race уже должен был завершиться)
+                        // Если не удалось загрузить модель, пропускаем проверку деградации
+                        // но проверяем только возраст модели
+                        return false;
+                    }
+                    
                     if (currentModel) {
-                        const currentMetrics = await OptimizedTrainingService.evaluateModelPerformance(figi, currentModel);
+                        // Добавляем таймаут для evaluateModelPerformance
+                        const evaluatePromise = OptimizedTrainingService.evaluateModelPerformance(figi, currentModel);
+                        const evaluateTimeoutPromise = new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('evaluateModelPerformance timeout after 60 seconds')), 60000)
+                        );
+                        
+                        let currentMetrics;
+                        try {
+                            currentMetrics = await Promise.race([evaluatePromise, evaluateTimeoutPromise]);
+                        } catch (evaluateError) {
+                            LoggerService.warn('evaluateModelPerformance timeout or error, skipping degradation check', {
+                                service: 'SchedulerService',
+                                operation: 'shouldRetrainModelForFigi',
+                                figi,
+                                error: { message: evaluateError.message }
+                            });
+                            // Очищаем модель, если она была загружена, но оценка не удалась
+                            if (currentModel && typeof currentModel.dispose === 'function') {
+                                try {
+                                    currentModel.dispose();
+                                } catch (disposeError) {
+                                    // Игнорируем ошибки при очистке
+                                }
+                            }
+                            // Если не удалось оценить модель, пропускаем проверку деградации
+                            // но проверяем только возраст модели
+                            return false;
+                        }
                         
                         if (currentMetrics && currentMetrics.accuracy) {
                             const degradation = bestMeta.bestAccuracy - currentMetrics.accuracy;

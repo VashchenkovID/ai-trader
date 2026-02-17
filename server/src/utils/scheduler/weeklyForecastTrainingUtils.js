@@ -181,7 +181,7 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
 
         // Используем worker для обучения, чтобы не блокировать event loop
         // Worker создает и обучает модель в отдельном потоке, затем возвращает веса
-        const history = await WeeklyForecastModelService.trainModelViaWorker(sequences, targets, {
+        let history = await WeeklyForecastModelService.trainModelViaWorker(sequences, targets, {
             epochs,
             batchSize,
             validationSplit: 0.2,
@@ -200,6 +200,25 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
                 }
             }
         });
+        
+        // Проверяем, что history содержит необходимые данные
+        if (!history || !history.history) {
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('No history received from worker, training model directly', {
+                    service: 'WeeklyForecastTrainingUtils',
+                    operation: 'trainWeeklyForecastModel',
+                    figi
+                });
+            }
+            // Обучаем модель напрямую, если history не получен
+            history = await WeeklyForecastModelService.trainModel(model, sequences, targets, {
+                epochs,
+                batchSize,
+                validationSplit: 0.2,
+                verbose: 0,
+                figi
+            });
+        }
         
         // Применяем веса из worker'а к модели в основном процессе
         if (history.weights && history.weights.length > 0) {
@@ -228,13 +247,17 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
                     });
                 }
                 // Если не удалось применить веса, обучаем модель напрямую (блокирует event loop)
-                await WeeklyForecastModelService.trainModel(model, sequences, targets, {
+                const directHistory = await WeeklyForecastModelService.trainModel(model, sequences, targets, {
                     epochs: 1, // Одна эпоха для применения весов
                     batchSize,
                     validationSplit: 0,
                     verbose: 0,
                     figi
                 });
+                // Обновляем history, если получен новый
+                if (directHistory && directHistory.history) {
+                    history = directHistory;
+                }
             }
         } else {
             // Если веса не получены, обучаем модель напрямую (блокирует event loop)
@@ -245,13 +268,39 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
                     figi
                 });
             }
-            await WeeklyForecastModelService.trainModel(model, sequences, targets, {
+            const directHistory = await WeeklyForecastModelService.trainModel(model, sequences, targets, {
                 epochs,
                 batchSize,
                 validationSplit: 0.2,
                 verbose: 0,
                 figi
             });
+            // Обновляем history, если получен новый
+            if (directHistory && directHistory.history) {
+                history = directHistory;
+            }
+        }
+        
+        // Проверяем, что history содержит необходимые данные для сохранения
+        if (!history) {
+            throw new Error('Training completed but no history received');
+        }
+        
+        // Убеждаемся, что history.history существует
+        if (!history.history) {
+            // Если history не имеет структуры history, создаем минимальную структуру
+            history.history = {
+                loss: [],
+                val_loss: []
+            };
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('History structure is incomplete, using empty arrays', {
+                    service: 'WeeklyForecastTrainingUtils',
+                    operation: 'trainWeeklyForecastModel',
+                    figi,
+                    historyKeys: Object.keys(history)
+                });
+            }
         }
 
         // 8. Сохраняем модель
@@ -268,8 +317,12 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             adaptiveMode: adaptiveMode, // Флаг, что использовались адаптивные параметры
             originalLookbackDays: adaptiveMode ? lookbackDays : undefined,
             originalForecastDays: adaptiveMode ? forecastDays : undefined,
-            finalLoss: history.history.loss[history.history.loss.length - 1],
-            finalValLoss: history.history.val_loss ? history.history.val_loss[history.history.val_loss.length - 1] : null
+            finalLoss: (history.history.loss && Array.isArray(history.history.loss) && history.history.loss.length > 0) 
+                ? history.history.loss[history.history.loss.length - 1] 
+                : null,
+            finalValLoss: (history.history.val_loss && Array.isArray(history.history.val_loss) && history.history.val_loss.length > 0)
+                ? history.history.val_loss[history.history.val_loss.length - 1]
+                : null
         });
         
         if (!saveSuccess) {
@@ -289,7 +342,9 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
                 figi,
                 modelVersion,
                 sequencesCount: sequences.length,
-                finalLoss: history.history.loss[history.history.loss.length - 1],
+                finalLoss: (history.history.loss && Array.isArray(history.history.loss) && history.history.loss.length > 0) 
+                    ? history.history.loss[history.history.loss.length - 1] 
+                    : null,
                 adaptiveMode: adaptiveMode,
                 lookbackDays: actualLookbackDays,
                 forecastDays: actualForecastDays
@@ -306,8 +361,12 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             lookbackDays: actualLookbackDays,
             forecastDays: actualForecastDays,
             adaptiveMode: adaptiveMode,
-            finalLoss: history.history.loss[history.history.loss.length - 1],
-            finalValLoss: history.history.val_loss ? history.history.val_loss[history.history.val_loss.length - 1] : null
+            finalLoss: (history.history.loss && Array.isArray(history.history.loss) && history.history.loss.length > 0) 
+                ? history.history.loss[history.history.loss.length - 1] 
+                : null,
+            finalValLoss: (history.history.val_loss && Array.isArray(history.history.val_loss) && history.history.val_loss.length > 0)
+                ? history.history.val_loss[history.history.val_loss.length - 1]
+                : null
         };
     } catch (error) {
         // Если это ошибка недостаточных данных, логируем как предупреждение
