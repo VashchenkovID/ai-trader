@@ -116,15 +116,28 @@ class PortfolioRebalancingService {
             // Получаем целевое распределение
             // Для ребалансировки нам не нужен полный анализ портфеля с метриками
             // Используем упрощенный подход - получаем только целевое распределение
+            // Добавляем таймаут для предотвращения зависания (максимум 60 секунд)
             let targetAllocation = [];
             try {
-                const optimization = await CapitalAllocationStrategy.optimizeAllocation();
-                targetAllocation = optimization.targetAllocation || [];
+                const optimizePromise = CapitalAllocationStrategy.optimizeAllocation();
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('optimizeAllocation timeout after 60 seconds')), 60000)
+                );
                 
-                if (targetAllocation.length === 0) {
-                    console.warn('⚠️ Оптимизация вернула пустое целевое распределение');
-                } else {
-                    console.log(`✅ Получено целевое распределение: ${targetAllocation.length} позиций`);
+                let optimization;
+                try {
+                    optimization = await Promise.race([optimizePromise, timeoutPromise]);
+                    targetAllocation = optimization.targetAllocation || [];
+                    
+                    if (targetAllocation.length === 0) {
+                        console.warn('⚠️ Оптимизация вернула пустое целевое распределение');
+                    } else {
+                        console.log(`✅ Получено целевое распределение: ${targetAllocation.length} позиций`);
+                    }
+                } catch (timeoutError) {
+                    console.warn('⚠️ Таймаут оптимизации распределения (60 секунд), используем упрощенный подход:', timeoutError.message);
+                    // Если оптимизация зависла, используем текущее распределение как целевое
+                    targetAllocation = [];
                 }
             } catch (error) {
                 console.warn('⚠️ Ошибка оптимизации распределения, используем упрощенный подход:', error.message);
@@ -744,8 +757,22 @@ class PortfolioRebalancingService {
                 };
             }
 
-            // Проверяем необходимость ребалансировки
-            const check = await this.checkRebalancingNeeded();
+            // Проверяем необходимость ребалансировки с таймаутом (максимум 90 секунд)
+            let check;
+            try {
+                const checkPromise = this.checkRebalancingNeeded();
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('checkRebalancingNeeded timeout after 90 seconds')), 90000)
+                );
+                check = await Promise.race([checkPromise, timeoutPromise]);
+            } catch (timeoutError) {
+                console.error('❌ Таймаут проверки необходимости ребалансировки:', timeoutError.message);
+                return {
+                    success: false,
+                    reason: 'Таймаут проверки необходимости ребалансировки',
+                    error: timeoutError.message
+                };
+            }
 
             if (!check.needsRebalancing) {
                 return {
@@ -756,8 +783,22 @@ class PortfolioRebalancingService {
                 };
             }
 
-            // Рассчитываем операции
-            const operations = await this.calculateRebalancingOperations(check.deviations);
+            // Рассчитываем операции с таймаутом (максимум 30 секунд)
+            let operations;
+            try {
+                const operationsPromise = this.calculateRebalancingOperations(check.deviations);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('calculateRebalancingOperations timeout after 30 seconds')), 30000)
+                );
+                operations = await Promise.race([operationsPromise, timeoutPromise]);
+            } catch (timeoutError) {
+                console.error('❌ Таймаут расчета операций ребалансировки:', timeoutError.message);
+                return {
+                    success: false,
+                    reason: 'Таймаут расчета операций ребалансировки',
+                    error: timeoutError.message
+                };
+            }
 
             if (operations.length === 0) {
                 return {
@@ -768,8 +809,22 @@ class PortfolioRebalancingService {
                 };
             }
 
-            // Оптимизируем операции
-            const optimizedOperations = await this.optimizeOperationsWithCommissions(operations);
+            // Оптимизируем операции с таймаутом (максимум 30 секунд)
+            let optimizedOperations;
+            try {
+                const optimizePromise = this.optimizeOperationsWithCommissions(operations);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('optimizeOperationsWithCommissions timeout after 30 seconds')), 30000)
+                );
+                optimizedOperations = await Promise.race([optimizePromise, timeoutPromise]);
+            } catch (timeoutError) {
+                console.error('❌ Таймаут оптимизации операций ребалансировки:', timeoutError.message);
+                return {
+                    success: false,
+                    reason: 'Таймаут оптимизации операций ребалансировки',
+                    error: timeoutError.message
+                };
+            }
 
             if (optimizedOperations.length === 0) {
                 return {

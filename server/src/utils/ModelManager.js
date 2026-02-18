@@ -78,12 +78,32 @@ class ModelManager {
             const weights = model.getWeights();
             
             // Сохраняем веса в бинарном формате
-            const weightsData = new Float32Array(weights.reduce((acc, w) => acc + w.size, 0));
+            const totalSize = weights.reduce((acc, w) => acc + w.size, 0);
+            if (totalSize === 0) {
+                console.warn(`⚠️ Model ${modelName} has zero total weights size!`);
+                return false;
+            }
+            
+            const weightsData = new Float32Array(totalSize);
             let offset = 0;
             const weightsSpecs = [];
             
             for (const weight of weights) {
+                if (!weight || weight.size === 0) {
+                    console.warn(`⚠️ Model ${modelName} has empty weight at index ${weightsSpecs.length}`);
+                    continue;
+                }
+                
                 const data = await weight.data();
+                if (!data || data.length === 0) {
+                    console.warn(`⚠️ Model ${modelName} weight ${weight.name || weightsSpecs.length} has no data!`);
+                    continue;
+                }
+                
+                if (data.length !== weight.size) {
+                    console.warn(`⚠️ Model ${modelName} weight ${weight.name || weightsSpecs.length} size mismatch: expected ${weight.size}, got ${data.length}`);
+                }
+                
                 weightsData.set(data, offset);
                 weightsSpecs.push({
                     name: weight.name || `weight_${weightsSpecs.length}`,
@@ -93,8 +113,22 @@ class ModelManager {
                 offset += weight.size;
             }
             
+            // Проверяем, что все веса были сохранены
+            if (weightsSpecs.length === 0) {
+                console.error(`❌ Model ${modelName} has no valid weights to save!`);
+                return false;
+            }
+            
+            if (offset !== totalSize) {
+                console.warn(`⚠️ Model ${modelName} weights size mismatch: expected ${totalSize}, saved ${offset}`);
+            }
+            
             // Сохраняем бинарные данные весов
             await fs.writeFile(`${modelPath}.weights.bin`, Buffer.from(weightsData.buffer));
+            
+            // Получаем размер файла весов для логирования
+            const weightsStats = await fs.stat(`${modelPath}.weights.bin`);
+            const weightsSizeKB = (weightsStats.size / 1024).toFixed(2);
             
             // Устанавливаем права на файл весов
             try {
@@ -118,11 +152,36 @@ class ModelManager {
             // Сохраняем манифест (это основной файл модели)
             await fs.writeFile(`${modelPath}.json`, JSON.stringify(manifest, null, 2));
             
+            // Получаем размер файла манифеста для логирования
+            const manifestStats = await fs.stat(`${modelPath}.json`);
+            const manifestSizeKB = (manifestStats.size / 1024).toFixed(2);
+            
             // Устанавливаем права на файл манифеста
             try {
                 await fs.chmod(`${modelPath}.json`, 0o666);
             } catch (chmodError) {
                 // Игнорируем ошибки chmod
+            }
+            
+            // Логируем информацию о сохранении
+            try {
+                const LoggerService = (await import('../services/LoggerService.js')).default;
+                if (LoggerService.isInitialized) {
+                    LoggerService.info('Model saved successfully', {
+                        service: 'ModelManager',
+                        operation: 'saveModel',
+                        modelName,
+                        weightsCount: weightsSpecs.length,
+                        totalWeightsSize: `${totalSize} elements`,
+                        weightsFileSize: `${weightsSizeKB} KB`,
+                        manifestFileSize: `${manifestSizeKB} KB`,
+                        totalFileSize: `${((weightsStats.size + manifestStats.size) / 1024).toFixed(2)} KB`
+                    });
+                } else {
+                    console.log(`✅ Model ${modelName} saved: ${weightsSpecs.length} weights, ${weightsSizeKB} KB weights file, ${manifestSizeKB} KB manifest`);
+                }
+            } catch (loggerError) {
+                console.log(`✅ Model ${modelName} saved: ${weightsSpecs.length} weights, ${weightsSizeKB} KB weights file, ${manifestSizeKB} KB manifest`);
             }
             
             return true;

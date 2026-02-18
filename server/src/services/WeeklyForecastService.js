@@ -140,11 +140,12 @@ class WeeklyForecastService {
                 const existing = await this.getActiveForecast(figi);
                 if (existing && this.isForecastFresh(existing)) {
                     if (LoggerService.isInitialized) {
-                        LoggerService.warn('Returning cached forecast', {
+                        LoggerService.warn('Returning cached forecast (with conversion)', {
                             service: 'WeeklyForecastService',
                             operation: 'generateForecast',
                             figi,
-                            forecastId: existing.id
+                            forecastId: existing.id,
+                            firstCandle: existing.forecastData?.[0]
                         });
                     }
                     return {
@@ -179,12 +180,49 @@ class WeeklyForecastService {
             // ШАГ 6: Генерация прогноза
             const rawForecast = await this.generateModelForecast(modelWrapper, features);
             
+            // Логирование сырого прогноза
+            if (LoggerService.isInitialized && rawForecast && rawForecast.length > 0) {
+                LoggerService.warn('Raw forecast generated', {
+                    service: 'WeeklyForecastService',
+                    operation: 'generateForecast',
+                    figi,
+                    forecastDays: rawForecast.length,
+                    firstCandle: rawForecast[0],
+                    lastCandle: rawForecast[rawForecast.length - 1],
+                    allCandles: rawForecast.map(c => ({
+                        open: c.open,
+                        high: c.high,
+                        low: c.low,
+                        close: c.close
+                    }))
+                });
+            }
+            
             // ШАГ 7: Постобработка прогноза
             const processedForecast = this.postProcessForecast(
                 rawForecast,
                 candles,
                 instrument
             );
+            
+            // Логирование обработанного прогноза
+            if (LoggerService.isInitialized && processedForecast && processedForecast.candles && processedForecast.candles.length > 0) {
+                LoggerService.warn('Processed forecast', {
+                    service: 'WeeklyForecastService',
+                    operation: 'generateForecast',
+                    figi,
+                    forecastDays: processedForecast.candles.length,
+                    firstCandle: processedForecast.candles[0],
+                    lastCandle: processedForecast.candles[processedForecast.candles.length - 1],
+                    confidence: processedForecast.confidence,
+                    allCandles: processedForecast.candles.map(c => ({
+                        open: c.open,
+                        high: c.high,
+                        low: c.low,
+                        close: c.close
+                    }))
+                });
+            }
             
             // ШАГ 8: Вычисление метаданных
             const metadata = this.calculateForecastMetadata(processedForecast);
@@ -242,9 +280,10 @@ class WeeklyForecastService {
                 });
             }
             
+            const forecastJson = forecast.toJSON();
             return {
                 success: true,
-                forecast: forecast.toJSON(),
+                forecast: this.normalizeForecastDates(forecastJson, forecast),
                 cached: false,
                 executionTime
             };
@@ -267,6 +306,88 @@ class WeeklyForecastService {
     }
 
     /**
+     * Нормализация дат в прогнозе в строки ISO
+     * @param {Object} forecastJson - JSON объект прогноза
+     * @param {Object} forecastModel - Sequelize модель прогноза (для fallback)
+     * @returns {Object} Прогноз с нормализованными датами
+     */
+    normalizeForecastDates(forecastJson, forecastModel = null) {
+        if (!forecastJson) return forecastJson;
+        
+        const normalizeDate = (dateValue, modelValue) => {
+            if (!dateValue && dateValue !== 0) return dateValue;
+            
+            // Если дата пришла как пустой объект {} или невалидный объект
+            if (typeof dateValue === 'object' && !(dateValue instanceof Date)) {
+                // Проверяем, является ли это пустым объектом
+                if (Object.keys(dateValue).length === 0 && modelValue) {
+                    try {
+                        const date = new Date(modelValue);
+                        if (!isNaN(date.getTime())) {
+                            return date.toISOString();
+                        }
+                    } catch (e) {
+                        // Игнорируем ошибки
+                    }
+                }
+                // Если это не пустой объект, но и не Date, пробуем преобразовать из модели
+                if (modelValue) {
+                    try {
+                        const date = new Date(modelValue);
+                        if (!isNaN(date.getTime())) {
+                            return date.toISOString();
+                        }
+                    } catch (e) {
+                        // Игнорируем ошибки
+                    }
+                }
+                return null;
+            }
+            
+            if (dateValue instanceof Date) {
+                return dateValue.toISOString();
+            }
+            if (typeof dateValue === 'string') {
+                return dateValue;
+            }
+            
+            // Если modelValue есть, пробуем использовать его
+            if (modelValue) {
+                try {
+                    const date = new Date(modelValue);
+                    if (!isNaN(date.getTime())) {
+                        return date.toISOString();
+                    }
+                } catch (e) {
+                    // Игнорируем ошибки
+                }
+            }
+            return null;
+        };
+        
+        if (forecastJson.forecastDate) {
+            forecastJson.forecastDate = normalizeDate(forecastJson.forecastDate, forecastModel?.forecastDate);
+        }
+        if (forecastJson.startDate) {
+            forecastJson.startDate = normalizeDate(forecastJson.startDate, forecastModel?.startDate);
+        }
+        if (forecastJson.endDate) {
+            forecastJson.endDate = normalizeDate(forecastJson.endDate, forecastModel?.endDate);
+        }
+        if (forecastJson.completionDate) {
+            forecastJson.completionDate = normalizeDate(forecastJson.completionDate, forecastModel?.completionDate);
+        }
+        if (forecastJson.createdAt) {
+            forecastJson.createdAt = normalizeDate(forecastJson.createdAt, forecastModel?.createdAt);
+        }
+        if (forecastJson.updatedAt) {
+            forecastJson.updatedAt = normalizeDate(forecastJson.updatedAt, forecastModel?.updatedAt);
+        }
+        
+        return forecastJson;
+    }
+
+    /**
      * Получение активного прогноза для инструмента
      * @param {string} figi - FIGI инструмента
      * @returns {Promise<Object|null>} Активный прогноз или null
@@ -281,7 +402,44 @@ class WeeklyForecastService {
                 order: [['forecast_date', 'DESC']]
             });
 
-            return forecast ? forecast.toJSON() : null;
+            if (!forecast) {
+                return null;
+            }
+
+            const forecastJson = forecast.toJSON();
+            const normalized = this.normalizeForecastDates(forecastJson, forecast);
+            
+            // Конвертируем данные прогноза, если они в неправильном формате
+            if (normalized.forecastData && normalized.forecastData.length > 0) {
+                try {
+                    // Получаем исторические данные для конвертации
+                    const candles = await CacheService.getCandles(figi, 'DAY', 90, true);
+                    if (candles && candles.length > 0) {
+                        const instrument = await CacheService.getInstrument(figi, true);
+                        if (instrument) {
+                            // Используем postProcessForecast для конвертации данных
+                            const processed = this.postProcessForecast(
+                                normalized.forecastData,
+                                candles,
+                                instrument
+                            );
+                            normalized.forecastData = processed.candles;
+                        }
+                    }
+                } catch (conversionError) {
+                    // Если конвертация не удалась, логируем, но не падаем
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('Failed to convert forecast data on load', {
+                            service: 'WeeklyForecastService',
+                            operation: 'getActiveForecast',
+                            figi,
+                            error: { message: conversionError.message }
+                        });
+                    }
+                }
+            }
+            
+            return normalized;
         } catch (error) {
             if (LoggerService.isInitialized) {
                 LoggerService.error('Error getting active forecast', {
@@ -584,21 +742,21 @@ class WeeklyForecastService {
                 const cachedModel = cached.model;
                 const cachedInputs = cachedModel?.inputs;
                 if (cachedInputs && cachedInputs.length === 2) {
-                    if (LoggerService.isInitialized) {
-                        LoggerService.warn('Model loaded from cache', {
-                            service: 'WeeklyForecastService',
-                            operation: 'getOrCreateModel',
-                            figi,
-                            modelType,
-                            version: cached.version
-                        });
-                    }
-                    return {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Model loaded from cache', {
+                        service: 'WeeklyForecastService',
+                        operation: 'getOrCreateModel',
+                        figi,
+                        modelType,
+                        version: cached.version
+                    });
+                }
+                return {
                         model: cachedModel,
-                        version: cached.version,
-                        isNew: false,
-                        modelType
-                    };
+                    version: cached.version,
+                    isNew: false,
+                    modelType
+                };
                 } else {
                     // Удаляем модель с неправильной структурой из кэша
                     if (cachedModel) {
@@ -645,19 +803,19 @@ class WeeklyForecastService {
                     model.dispose();
                     model = null;
                 } else {
-                    // Проверяем метаданные для получения версии
-                    const metadata = await WeeklyForecastModelService.loadModelMetadata(figi, modelType);
-                    version = metadata?.version || this.generateModelVersion();
-                    
-                    if (LoggerService.isInitialized) {
-                        LoggerService.warn('Model loaded from storage', {
-                            service: 'WeeklyForecastService',
-                            operation: 'getOrCreateModel',
-                            figi,
-                            modelType,
-                            version
-                        });
-                    }
+                // Проверяем метаданные для получения версии
+                const metadata = await WeeklyForecastModelService.loadModelMetadata(figi, modelType);
+                version = metadata?.version || this.generateModelVersion();
+                
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Model loaded from storage', {
+                        service: 'WeeklyForecastService',
+                        operation: 'getOrCreateModel',
+                        figi,
+                        modelType,
+                        version
+                    });
+                }
                 }
             }
             
@@ -780,9 +938,156 @@ class WeeklyForecastService {
             throw new Error('Invalid last price');
         }
         
+        // Проверяем формат данных
+        const firstCandle = rawForecast[0];
+        const closeValue = Math.abs(firstCandle?.close || 0);
+        const maxOHLC = Math.max(
+            Math.abs(firstCandle?.open || 0),
+            Math.abs(firstCandle?.high || 0),
+            Math.abs(firstCandle?.low || 0)
+        );
+        
+        // Определяем формат данных:
+        // 1. Если close большой (>= 10% от lastPrice), а high/low/open маленькие (< 1% от close) - смешанный формат
+        //    В этом случае high/low/open могут быть процентами (0.0009 = 0.09%) или нормализованными значениями
+        // 2. Если все значения маленькие (< 10% от lastPrice) - все изменения или нормализованные
+        // 3. Если все значения большие - все абсолютные
+        
+        const isCloseAbsolute = closeValue >= lastPrice * 0.1;
+        // Если high/low/open в диапазоне -1.0 до 1.0, это проценты в десятичном виде
+        // Например: 0.15 = 15%, -0.046 = -4.6%
+        const isOHLCPercentage = maxOHLC < 1.0 && Math.abs(firstCandle?.low || 0) < 1.0;
+        const isMixedFormat = isCloseAbsolute && isOHLCPercentage;
+        const isAllRelative = !isCloseAbsolute && maxOHLC < lastPrice * 0.1;
+        
+        // Логирование для отладки
+        if (LoggerService.isInitialized) {
+            LoggerService.warn('Forecast data format detection', {
+                service: 'WeeklyForecastService',
+                operation: 'postProcessForecast',
+                figi: instrument?.figi || 'unknown',
+                lastPrice,
+                firstCandle: {
+                    open: firstCandle?.open,
+                    high: firstCandle?.high,
+                    low: firstCandle?.low,
+                    close: firstCandle?.close
+                },
+                closeValue,
+                maxOHLC,
+                isCloseAbsolute,
+                isOHLCPercentage,
+                isMixedFormat,
+                isAllRelative,
+                detectedFormat: isMixedFormat ? 'mixed' : (isAllRelative ? 'all_relative' : 'all_absolute')
+            });
+        }
+        
         // Валидация и исправление свечей
-        const processedCandles = rawForecast.map((candle, index) => {
-            const processed = { ...candle };
+        const processedCandles = [];
+        let currentClose = lastPrice;
+        
+        for (let index = 0; index < rawForecast.length; index++) {
+            const candle = rawForecast[index];
+            let processed = { ...candle };
+            
+            if (isMixedFormat) {
+                // Смешанный формат: close уже абсолютный, high/low/open - проценты в десятичном виде
+                // Например: 0.15 = 15%, -0.046 = -4.6%
+                // Если close не меняется между свечами, используем currentClose (который обновляется)
+                let newClose = candle.close || currentClose;
+                
+                // Если это первая свеча, используем close из данных или lastPrice
+                if (index === 0) {
+                    newClose = candle.close || lastPrice;
+                } else {
+                    // Для последующих свечей используем close из данных, если он есть и отличается
+                    // Иначе используем currentClose (закрытие предыдущей свечи)
+                    if (candle.close && Math.abs(candle.close - currentClose) > 0.01) {
+                        newClose = candle.close;
+                    } else {
+                        newClose = currentClose;
+                    }
+                }
+                
+                const openValue = candle.open || 0;
+                const highValue = candle.high || 0;
+                const lowValue = candle.low || 0;
+                
+                const originalValues = { open: openValue, high: highValue, low: lowValue, close: newClose };
+                
+                processed = {
+                    ...candle,
+                    // Проценты: close * (1 + value)
+                    // Например: 79.038 * (1 + 0.15) = 90.894 для high
+                    //           79.038 * (1 - 0.046) = 75.402 для low
+                    open: newClose * (1 + openValue),
+                    high: newClose * (1 + highValue),
+                    low: newClose * (1 + lowValue),
+                    close: newClose,
+                    volume: Math.max(0, candle.volume || 0)
+                };
+                
+                // Логирование для отладки (только для первых 3 свечей)
+                if (LoggerService.isInitialized && index < 3) {
+                    LoggerService.warn('Converting mixed format candle', {
+                        service: 'WeeklyForecastService',
+                        operation: 'postProcessForecast',
+                        candleIndex: index,
+                        originalValues,
+                        convertedValues: {
+                            open: processed.open,
+                            high: processed.high,
+                            low: processed.low,
+                            close: processed.close
+                        },
+                        calculation: {
+                            open: `${newClose} * (1 + ${openValue}) = ${processed.open}`,
+                            high: `${newClose} * (1 + ${highValue}) = ${processed.high}`,
+                            low: `${newClose} * (1 + ${lowValue}) = ${processed.low}`
+                        }
+                    });
+                }
+                
+                currentClose = newClose;
+            } else if (isAllRelative) {
+                // Все значения - изменения или нормализованные (нужно умножить на lastPrice)
+                // Проверяем, нормализованные ли это (обычно в диапазоне 0.9-1.1) или изменения
+                const isNormalized = closeValue > 0.5 && closeValue < 2.0;
+                
+                if (isNormalized) {
+                    // Нормализованные значения - умножаем на lastPrice
+                    const newClose = (candle.close || 0) * lastPrice;
+                    processed = {
+                        ...candle,
+                        open: (candle.open || 0) * lastPrice,
+                        high: (candle.high || 0) * lastPrice,
+                        low: (candle.low || 0) * lastPrice,
+                        close: newClose,
+                        volume: Math.max(0, candle.volume || 0)
+                    };
+                    currentClose = newClose;
+                } else {
+                    // Изменения - прибавляем к currentClose
+                    const newClose = currentClose + (candle.close || 0);
+                    processed = {
+                        ...candle,
+                        open: newClose + (candle.open || 0),
+                        high: newClose + (candle.high || 0),
+                        low: newClose + (candle.low || 0),
+                        close: newClose,
+                        volume: Math.max(0, candle.volume || 0)
+                    };
+                    currentClose = newClose;
+                }
+            } else {
+                // Все значения уже абсолютные
+                processed = {
+                    ...candle,
+                    volume: Math.max(0, candle.volume || 0)
+                };
+                currentClose = processed.close || currentClose;
+            }
             
             // Проверка на валидность цен
             if (processed.high < processed.low) {
@@ -803,11 +1108,6 @@ class WeeklyForecastService {
                 processed.close = lastPrice + Math.sign(processed.close - lastPrice) * maxChange;
             }
             
-            // Убеждаемся, что объем не отрицательный
-            if (processed.volume < 0) {
-                processed.volume = 0;
-            }
-            
             // Вычисление уверенности для свечи
             processed.confidence = this.calculateCandleConfidence(processed, historicalCandles, index);
             
@@ -815,8 +1115,8 @@ class WeeklyForecastService {
             const candleDate = this.addDays(new Date(), index + 1);
             processed.date = candleDate.toISOString().split('T')[0];
             
-            return processed;
-        });
+            processedCandles.push(processed);
+        }
         
         // Вычисление общей уверенности
         const confidence = processedCandles.reduce((sum, c) => sum + (c.confidence || 0.5), 0) / processedCandles.length;

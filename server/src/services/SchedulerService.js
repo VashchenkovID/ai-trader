@@ -52,6 +52,7 @@ class SchedulerService {
         this.dataCleanupTask = null; // Задача автоматической очистки данных
         this.weeklyForecastUpdateTask = null; // Задача обновления недельных прогнозов реальными данными
         this.weeklyForecastTrainingTask = null; // Задача обучения моделей Weekly Forecast
+        this.weeklyForecastGenerationTask = null; // Задача ежедневной генерации недельных прогнозов
         this.isInitialized = null;
         // Сохраняем настройки как свойства класса для использования в других методах
         this.schedulerSettings = {};
@@ -1909,8 +1910,101 @@ class SchedulerService {
         }, { scheduled: true, timezone: "Europe/Moscow" });
         this.intervals.add(cacheCheckTask);
         
-        // Задача обновления недельных прогнозов реальными данными (каждый час)
-        const weeklyForecastUpdateTask = cron.schedule('0 * * * *', async () => {
+        // Задача ежедневной генерации недельных прогнозов (каждый день в 8:00)
+        const weeklyForecastGenerationSchedule = this.schedulerSettings.weekly_forecast_generation_schedule || '0 8 * * *';
+        const weeklyForecastGenerationTask = SchedulerUtils.createScheduledTask(
+            weeklyForecastGenerationSchedule,
+            async () => {
+                try {
+                    if (!this.isInitialized) {
+                        return;
+                    }
+                    
+                    // Получаем список активных инструментов
+                    const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+                    const { Op } = await import('sequelize');
+                    
+                    const instruments = await CachedInstrument.findAll({
+                        where: {
+                            [Op.and]: [
+                                {
+                                    [Op.or]: [
+                                        { currency: 'RUB' },
+                                        { currency: 'rub' }
+                                    ]
+                                },
+                                {
+                                    instrumentType: 'share'
+                                },
+                                {
+                                    [Op.or]: [
+                                        { isActive: true },
+                                        { isActive: null }
+                                    ]
+                                },
+                                {
+                                    isAccessible: true
+                                }
+                            ]
+                        },
+                        attributes: ['figi', 'ticker', 'name'],
+                        limit: 100 // Ограничиваем количество для производительности
+                    });
+                    
+                    if (instruments.length === 0) {
+                        return;
+                    }
+                    
+                    // Запускаем генерацию через worker
+                    const { executeWorkerTask } = await import('../utils/scheduler/workerUtils.js');
+                    
+                    await executeWorkerTask(
+                        'weeklyForecastGenerationWorker.js',
+                        {
+                            instruments: instruments.map(i => ({
+                                figi: i.figi,
+                                ticker: i.ticker,
+                                name: i.name
+                            })),
+                            options: {
+                                maxInstruments: 100,
+                                historicalDays: 90,
+                                includeMacro: true,
+                                includeNews: true
+                            }
+                        },
+                        {
+                            getWebSocketService: () => this.getWebSocketService(),
+                            onProgress: (progress) => {
+                                // Прогресс обрабатывается автоматически через WorkerMonitoringService
+                            },
+                            workersSet: this.workers,
+                            broadcastType: 'weekly_forecast_generation'
+                        }
+                    );
+                } catch (error) {
+                    LoggerService.error('Error in weekly forecast generation task', {
+                        service: 'SchedulerService',
+                        operation: 'weeklyForecastGeneration',
+                        error: { message: error.message, stack: error.stack }
+                    });
+                }
+            },
+            {
+                taskName: 'weekly-forecast-generation',
+                sendAlerts: true,
+                alertType: 'info',
+                startTime: this.startTime,
+                minDelay: 10 * 60 * 1000, // 10 минут
+                timezone: 'Europe/Moscow'
+            }
+        );
+        this.weeklyForecastGenerationTask = weeklyForecastGenerationTask;
+        this.intervals.add(weeklyForecastGenerationTask);
+        
+        // Задача обновления недельных прогнозов реальными данными (ежедневно в 9:00, после генерации)
+        const weeklyForecastUpdateSchedule = this.schedulerSettings.weekly_forecast_update_schedule || '0 9 * * *';
+        const weeklyForecastUpdateTask = cron.schedule(weeklyForecastUpdateSchedule, async () => {
             // Пропускаем первый запуск при старте (минимум 10 минут с момента старта)
             const timeSinceStart = Date.now() - this.startTime;
             if (timeSinceStart < 10 * 60 * 1000) {
@@ -2266,6 +2360,7 @@ class SchedulerService {
         if (this.macroDataUpdateTask) this.intervals.add(this.macroDataUpdateTask);
         if (this.optionsDataUpdateTask) this.intervals.add(this.optionsDataUpdateTask);
         if (this.fundamentalDataUpdateTask) this.intervals.add(this.fundamentalDataUpdateTask);
+        if (this.weeklyForecastGenerationTask) this.intervals.add(this.weeklyForecastGenerationTask);
         if (this.portfolioRebalancingTask) this.intervals.add(this.portfolioRebalancingTask);
         if (this.hyperparameterOptimizationTask) this.intervals.add(this.hyperparameterOptimizationTask);
         if (this.dataDriftCheckTask) this.intervals.add(this.dataDriftCheckTask);
@@ -2284,7 +2379,7 @@ class SchedulerService {
                     const isRunning = task.getStatus ? task.getStatus() === 'scheduled' : false;
                     
                     if (!isRunning && typeof task.start === 'function') {
-                        task.start();
+                task.start();
                         startedCount++;
                         if (LoggerService.isInitialized) {
                             LoggerService.info('Cron задача запущена', {
@@ -2476,6 +2571,11 @@ class SchedulerService {
                 this.weeklyForecastTrainingTask.stop();
                 this.weeklyForecastTrainingTask.destroy();
                 this.weeklyForecastTrainingTask = null;
+            }
+            if (this.weeklyForecastGenerationTask) {
+                this.weeklyForecastGenerationTask.stop();
+                this.weeklyForecastGenerationTask.destroy();
+                this.weeklyForecastGenerationTask = null;
             }
             
             // Останавливаем все cron задачи из intervals
@@ -4969,7 +5069,25 @@ class SchedulerService {
                 try {
                     const model = await OptimizedTrainingService.loadModel(instrument.figi);
                     if (model) {
-                        const metrics = await OptimizedTrainingService.evaluateModelPerformance(instrument.figi, model);
+                        // Добавляем таймаут для оценки производительности модели (максимум 30 секунд на инструмент)
+                        const evaluatePromise = OptimizedTrainingService.evaluateModelPerformance(instrument.figi, model);
+                        const timeoutPromise = new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('evaluateModelPerformance timeout after 30 seconds')), 30000)
+                        );
+                        
+                        let metrics = null;
+                        try {
+                            metrics = await Promise.race([evaluatePromise, timeoutPromise]);
+                        } catch (timeoutError) {
+                            LoggerService.warn('Model evaluation timeout, skipping degradation check for this instrument', {
+                                service: 'SchedulerService',
+                                operation: 'checkDegradation',
+                                figi: instrument.figi,
+                                error: { message: timeoutError.message }
+                            });
+                            continue; // Пропускаем этот инструмент
+                        }
+                        
                         if (metrics) {
                             const result = await OptimizedTrainingService.checkDegradationAndRestore(
                                 instrument.figi, 
@@ -7980,7 +8098,8 @@ class SchedulerService {
                 macroDataUpdateTask: getTaskStatus(this.macroDataUpdateTask),
                 portfolioRebalancingTask: getTaskStatus(this.portfolioRebalancingTask),
                 weeklyForecastUpdateTask: getTaskStatus(this.weeklyForecastUpdateTask),
-                weeklyForecastTrainingTask: getTaskStatus(this.weeklyForecastTrainingTask)
+                weeklyForecastTrainingTask: getTaskStatus(this.weeklyForecastTrainingTask),
+                weeklyForecastGenerationTask: getTaskStatus(this.weeklyForecastGenerationTask)
             };
 
             // Подсчитываем количество запущенных задач

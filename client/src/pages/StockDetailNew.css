@@ -1,58 +1,125 @@
-/* Новая структура страницы StockDetail с 3-колоночной сеткой */
+/* Оптимизированная структура страницы StockDetail с улучшенной сеткой */
 
 .stock-detail-new {
-  padding: 1.5rem;
+  padding: 1rem;
   max-width: 1920px;
   margin: 0 auto;
+  min-height: 100vh;
+}
+
+.stock-detail-new__recommendations-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
 }
 
 .stock-detail-new__grid {
   display: grid;
-  grid-template-columns: 320px 1fr 320px;
-  gap: 1.5rem;
-  margin-top: 1.5rem;
+  grid-template-columns: 1fr minmax(280px, 320px);
+  gap: 1rem;
+  align-items: start;
 }
 
-.stock-detail-new__left-column {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
 
 .stock-detail-new__center-column {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
+  min-width: 0; /* Важно для предотвращения переполнения */
 }
 
 .stock-detail-new__right-column {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
+  position: sticky;
+  top: calc(var(--header-height, 80px) + 1rem);
+  max-height: calc(100vh - var(--header-height, 80px) - 2rem);
+  overflow-y: auto;
+  padding-left: 0.5rem;
+}
+
+.stock-detail-new__right-column::-webkit-scrollbar {
+  width: 6px;
+}
+
+.stock-detail-new__right-column::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.stock-detail-new__right-column::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.stock-detail-new__right-column::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .stock-detail-new__full-width {
   grid-column: 1 / -1;
-  margin-top: 1.5rem;
+  margin-top: 1rem;
+}
+
+/* Адаптивность для больших экранов */
+@media (min-width: 1600px) {
+  .stock-detail-new__recommendations-section {
+    gap: 1.25rem;
+  }
+  
+  .stock-detail-new__grid {
+    grid-template-columns: 1fr minmax(320px, 360px);
+    gap: 1.25rem;
+  }
+}
+
+/* Адаптивность для средних экранов */
+@media (max-width: 1400px) {
+  .stock-detail-new__recommendations-section {
+    gap: 0.875rem;
+  }
+  
+  .stock-detail-new__grid {
+    grid-template-columns: 1fr minmax(260px, 300px);
+    gap: 0.875rem;
+  }
 }
 
 /* Адаптивность для планшетов */
 @media (max-width: 1200px) {
+  .stock-detail-new__recommendations-section {
+    gap: 0.75rem;
+  }
+  
   .stock-detail-new__grid {
-    grid-template-columns: 280px 1fr 280px;
-    gap: 1rem;
+    grid-template-columns: 1fr minmax(240px, 280px);
+    gap: 0.75rem;
   }
 }
 
 /* Адаптивность для средних планшетов */
 @media (max-width: 1024px) {
-  .stock-detail-new__grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
+  .stock-detail-new {
+    padding: 0.75rem;
   }
 
-  .stock-detail-new__left-column,
+  .stock-detail-new__recommendations-section {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .stock-detail-new__grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
   .stock-detail-new__right-column {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+    padding: 0;
     order: 2;
   }
 
@@ -64,11 +131,20 @@
 /* Адаптивность для мобильных */
 @media (max-width: 768px) {
   .stock-detail-new {
-    padding: 1rem;
+    padding: 0.5rem;
+  }
+
+  .stock-detail-new__recommendations-section {
+    gap: 0.5rem;
   }
 
   .stock-detail-new__grid {
-    gap: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .stock-detail-new__right-column,
+  .stock-detail-new__center-column {
+    gap: 0.5rem;
   }
 }
 

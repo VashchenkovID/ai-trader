@@ -43,6 +43,7 @@ const FundamentalMetricsWidget: React.FC<FundamentalMetricsWidgetProps> = ({
   currency = 'RUB'
 }) => {
   const formatCurrency = (value: number) => {
+    if (value == null || isNaN(value)) return 'N/A';
     if (value >= 1e12) {
       return `${(value / 1e12).toFixed(2)} трлн`;
     } else if (value >= 1e9) {
@@ -59,6 +60,7 @@ const FundamentalMetricsWidget: React.FC<FundamentalMetricsWidgetProps> = ({
   };
 
   const formatPercent = (value: number) => {
+    if (value == null || isNaN(value)) return 'N/A';
     return `${value.toFixed(2)}%`;
   };
 
@@ -103,7 +105,7 @@ const FundamentalMetricsWidget: React.FC<FundamentalMetricsWidgetProps> = ({
 
   if (!hasAnyMetrics) {
     return (
-      <Card className="fundamental-metrics-widget">
+      <Card variant="default" className="fundamental-metrics-widget">
         <div className="fundamental-metrics-widget__header">
           <h3 className="fundamental-metrics-widget__title">Фундаментальные показатели</h3>
         </div>
@@ -115,7 +117,7 @@ const FundamentalMetricsWidget: React.FC<FundamentalMetricsWidgetProps> = ({
   }
 
   return (
-    <Card className="fundamental-metrics-widget">
+    <Card variant="default" className="fundamental-metrics-widget">
       <div className="fundamental-metrics-widget__header">
         <h3 className="fundamental-metrics-widget__title">Фундаментальные показатели</h3>
       </div>

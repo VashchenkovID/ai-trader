@@ -22,7 +22,7 @@ const CurrentPriceCard: React.FC<CurrentPriceCardProps> = ({
   const isPositive = priceChange >= 0;
 
   return (
-    <Card className="current-price-card">
+    <Card variant="default" className="current-price-card">
       <div className="current-price-card__header">
         <h3 className="current-price-card__title">Текущая цена</h3>
         {isLive && (
@@ -54,7 +54,7 @@ const CurrentPriceCard: React.FC<CurrentPriceCardProps> = ({
               })} {currency}
             </span>
             <span className="current-price-card__change-percent">
-              ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
+              ({isPositive ? '+' : ''}{(priceChangePercent != null && !isNaN(priceChangePercent) ? priceChangePercent : 0).toFixed(2)}%)
             </span>
           </div>
         )}

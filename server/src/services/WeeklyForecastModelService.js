@@ -367,37 +367,37 @@ class WeeklyForecastModelService {
                             });
                         }
                         
-                        return await model.fit(
+                    return await model.fit(
                             inputs,
-                            targetTensor,
-                            {
-                                epochs,
-                                batchSize,
-                                validationSplit,
-                                verbose,
-                                callbacks: {
-                                    onEpochEnd: async (epoch, logs) => {
-                                        if (LoggerService.isInitialized && verbose > 0) {
-                                            LoggerService.warn(`Training epoch ${epoch + 1}/${epochs}`, {
-                                                service: 'WeeklyForecastModelService',
-                                                operation: 'trainModel',
-                                                epoch: epoch + 1,
-                                                loss: logs.loss,
-                                                valLoss: logs.val_loss,
-                                                mae: logs.mae,
-                                                valMae: logs.val_mae
-                                            });
-                                        }
-                                        
-                                        // Освобождаем event loop между эпохами, чтобы не блокировать другие запросы
-                                        // Это критично для производительности сервера во время длительного обучения
-                                        if (epoch < epochs - 1) {
-                                            await new Promise(resolve => setImmediate(resolve));
-                                        }
+                        targetTensor,
+                        {
+                            epochs,
+                            batchSize,
+                            validationSplit,
+                            verbose,
+                            callbacks: {
+                                onEpochEnd: async (epoch, logs) => {
+                                    if (LoggerService.isInitialized && verbose > 0) {
+                                        LoggerService.warn(`Training epoch ${epoch + 1}/${epochs}`, {
+                                            service: 'WeeklyForecastModelService',
+                                            operation: 'trainModel',
+                                            epoch: epoch + 1,
+                                            loss: logs.loss,
+                                            valLoss: logs.val_loss,
+                                            mae: logs.mae,
+                                            valMae: logs.val_mae
+                                        });
+                                    }
+                                    
+                                    // Освобождаем event loop между эпохами, чтобы не блокировать другие запросы
+                                    // Это критично для производительности сервера во время длительного обучения
+                                    if (epoch < epochs - 1) {
+                                        await new Promise(resolve => setImmediate(resolve));
                                     }
                                 }
                             }
-                        );
+                        }
+                    );
                     } catch (fitError) {
                         // Логируем детальную информацию об ошибке
                         if (LoggerService.isInitialized) {

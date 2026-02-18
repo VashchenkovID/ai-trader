@@ -77,11 +77,88 @@ router.get('/:figi/history', async (req, res) => {
             limit: parseInt(limit)
         });
 
+        // Нормализуем даты в строках для всех прогнозов
+        const normalizedForecasts = forecasts.map(forecast => {
+            const forecastJson = forecast.toJSON();
+            // Нормализуем даты в строки ISO
+            const normalizeDate = (dateValue, modelValue) => {
+                if (!dateValue && dateValue !== 0) return dateValue;
+                
+                // Если дата пришла как пустой объект {} или невалидный объект
+                if (typeof dateValue === 'object' && !(dateValue instanceof Date)) {
+                    // Проверяем, является ли это пустым объектом
+                    if (Object.keys(dateValue).length === 0 && modelValue) {
+                        try {
+                            const date = new Date(modelValue);
+                            if (!isNaN(date.getTime())) {
+                                return date.toISOString();
+                            }
+                        } catch (e) {
+                            // Игнорируем ошибки
+                        }
+                    }
+                    // Если это не пустой объект, но и не Date, пробуем преобразовать из модели
+                    if (modelValue) {
+                        try {
+                            const date = new Date(modelValue);
+                            if (!isNaN(date.getTime())) {
+                                return date.toISOString();
+                            }
+                        } catch (e) {
+                            // Игнорируем ошибки
+                        }
+                    }
+                    return null;
+                }
+                
+                if (dateValue instanceof Date) {
+                    return dateValue.toISOString();
+                }
+                if (typeof dateValue === 'string') {
+                    return dateValue;
+                }
+                
+                // Если modelValue есть, пробуем использовать его
+                if (modelValue) {
+                    try {
+                        const date = new Date(modelValue);
+                        if (!isNaN(date.getTime())) {
+                            return date.toISOString();
+                        }
+                    } catch (e) {
+                        // Игнорируем ошибки
+                    }
+                }
+                return null;
+            };
+            
+            if (forecastJson.forecastDate) {
+                forecastJson.forecastDate = normalizeDate(forecastJson.forecastDate, forecast.forecastDate);
+            }
+            if (forecastJson.startDate) {
+                forecastJson.startDate = normalizeDate(forecastJson.startDate, forecast.startDate);
+            }
+            if (forecastJson.endDate) {
+                forecastJson.endDate = normalizeDate(forecastJson.endDate, forecast.endDate);
+            }
+            if (forecastJson.completionDate) {
+                forecastJson.completionDate = normalizeDate(forecastJson.completionDate, forecast.completionDate);
+            }
+            if (forecastJson.createdAt) {
+                forecastJson.createdAt = normalizeDate(forecastJson.createdAt, forecast.createdAt);
+            }
+            if (forecastJson.updatedAt) {
+                forecastJson.updatedAt = normalizeDate(forecastJson.updatedAt, forecast.updatedAt);
+            }
+            
+            return forecastJson;
+        });
+
         res.json({
             success: true,
             data: {
-                forecasts,
-                count: forecasts.length
+                forecasts: normalizedForecasts,
+                count: normalizedForecasts.length
             }
         });
     } catch (error) {

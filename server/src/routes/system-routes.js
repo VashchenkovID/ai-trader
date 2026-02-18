@@ -154,7 +154,7 @@ router.get('/cache/status', async (req, res) => {
                 }
             }
             
-            if (!SchedulerService) {
+        if (!SchedulerService) {
                 // Логируем для диагностики
                 try {
                     const availableServices = globalServiceManager.services 
@@ -349,7 +349,7 @@ router.get('/scheduler/status', async (req, res) => {
                 }
             }
             
-            if (!SchedulerService) {
+        if (!SchedulerService) {
                 // Логируем для диагностики
                 try {
                     const availableServices = globalServiceManager.services 

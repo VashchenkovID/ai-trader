@@ -1,5 +1,5 @@
 .take-profit-card {
-  padding: 1.25rem;
+  padding: 1rem;
   border-left: 4px solid #10b981;
   background: #f0fdf4;
 }
@@ -8,7 +8,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .take-profit-card__title {

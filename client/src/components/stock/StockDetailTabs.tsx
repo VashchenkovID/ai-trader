@@ -13,6 +13,7 @@ interface StockDetailTabsProps {
   ticker: string;
   // Данные для вкладок
   horizons?: any;
+  agreement?: number | null;
   weeklyForecasts?: any[];
   signals?: any[];
   news?: any[];
@@ -24,6 +25,7 @@ const StockDetailTabs: React.FC<StockDetailTabsProps> = ({
   figi,
   ticker,
   horizons,
+  agreement,
   weeklyForecasts,
   signals,
   news,
@@ -34,7 +36,7 @@ const StockDetailTabs: React.FC<StockDetailTabsProps> = ({
     <Card className="stock-detail-tabs">
       <TabView>
         <TabPanel header="Прогнозы по горизонтам">
-          <ForecastHorizonsTab horizons={horizons} />
+          <ForecastHorizonsTab horizons={horizons} agreement={agreement} />
         </TabPanel>
         
         <TabPanel header="История прогнозов">
@@ -49,6 +51,7 @@ const StockDetailTabs: React.FC<StockDetailTabsProps> = ({
           <TechnicalAnalysisTab 
             figi={figi}
             technicalIndicators={technicalIndicators}
+            currency={ticker ? undefined : 'RUB'}
           />
         </TabPanel>
         
@@ -56,6 +59,7 @@ const StockDetailTabs: React.FC<StockDetailTabsProps> = ({
           <FundamentalAnalysisTab 
             figi={figi}
             fundamentalData={fundamentalData}
+            currency="RUB"
           />
         </TabPanel>
         

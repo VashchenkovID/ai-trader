@@ -19,12 +19,16 @@ interface RecentNewsWidgetProps {
   news: NewsItem[];
   maxVisible?: number;
   onViewAll?: () => void;
+  onRefresh?: () => void;
+  isLoading?: boolean;
 }
 
 const RecentNewsWidget: React.FC<RecentNewsWidgetProps> = ({
   news,
   maxVisible = 5,
-  onViewAll
+  onViewAll,
+  onRefresh,
+  isLoading = false
 }) => {
   const [showAllModal, setShowAllModal] = useState(false);
 
@@ -95,11 +99,25 @@ const RecentNewsWidget: React.FC<RecentNewsWidgetProps> = ({
       <Card className="recent-news-widget">
         <div className="recent-news-widget__header">
           <h3 className="recent-news-widget__title">Последние новости</h3>
-          {news.length > maxVisible && (
-            <Badge variant="neutral" className="recent-news-widget__count">
-              {news.length}
-            </Badge>
-          )}
+          <div className="recent-news-widget__header-actions">
+            {onRefresh && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRefresh}
+                disabled={isLoading}
+                className="recent-news-widget__refresh-btn"
+                aria-label="Обновить новости"
+              >
+                {isLoading ? '⏳' : '🔄'}
+              </Button>
+            )}
+            {news.length > maxVisible && (
+              <Badge variant="neutral" className="recent-news-widget__count">
+                {news.length}
+              </Badge>
+            )}
+          </div>
         </div>
         
         <div className="recent-news-widget__content">

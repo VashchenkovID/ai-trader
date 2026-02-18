@@ -627,11 +627,34 @@ class StackingService {
             
             // Сохраняем веса
             const weights = await this.metaModel.getWeights();
-            const weightsData = await Promise.all(weights.map(w => w.data()));
+            if (!weights || weights.length === 0) {
+                LoggerService.warn('Stacking model has no weights to save');
+                return;
+            }
+            
+            const weightsData = await Promise.all(weights.map(async (w) => {
+                const data = await w.data();
+                if (!data || data.length === 0) {
+                    LoggerService.warn(`Stacking model weight ${w.name || 'unnamed'} has no data`);
+                    return [];
+                }
+                return Array.from(data);
+            }));
             const weightsShapes = weights.map(w => w.shape);
             
+            // Проверяем, что все веса были извлечены
+            const validWeights = weightsData.filter(w => w.length > 0);
+            if (validWeights.length === 0) {
+                LoggerService.error('Stacking model has no valid weights to save');
+                return;
+            }
+            
+            if (validWeights.length !== weights.length) {
+                LoggerService.warn(`Stacking model: only ${validWeights.length} out of ${weights.length} weights are valid`);
+            }
+            
             await fs.writeFile(this.weightsFile, JSON.stringify({
-                weights: weightsData.map(w => Array.from(w)),
+                weights: weightsData,
                 shapes: weightsShapes
             }, null, 2));
             

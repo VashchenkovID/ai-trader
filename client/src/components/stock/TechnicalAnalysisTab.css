@@ -31,19 +31,19 @@
 .technical-analysis-tab__chart-title {
   font-size: 1.125rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--color-text-primary, #F9FAFB);
   margin: 0 0 1rem 0;
 }
 
 .technical-analysis-tab__chart-description {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
 }
 
 .technical-analysis-tab__chart-description p {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--color-text-secondary, #9CA3AF);
   margin: 0.5rem 0;
   line-height: 1.5;
 }
@@ -67,7 +67,7 @@
 .technical-analysis-tab__levels-label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--color-text-primary, #F9FAFB);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }

@@ -1,12 +1,12 @@
 .fundamental-metrics-widget {
-  padding: 1.25rem;
+  padding: 1rem;
   max-height: 600px;
   display: flex;
   flex-direction: column;
 }
 
 .fundamental-metrics-widget__header {
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .fundamental-metrics-widget__title {
@@ -21,7 +21,7 @@
 .fundamental-metrics-widget__content {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
   overflow-y: auto;
   flex: 1;
   padding-right: 0.5rem;
@@ -54,11 +54,11 @@
 .fundamental-metrics-widget__section-title {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #374151;
+  color: var(--color-text-primary, #F9FAFB);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   padding-bottom: 0.5rem;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
 }
 
 .fundamental-metrics-widget__section-content {
@@ -72,9 +72,9 @@
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.75rem;
-  background: #f9fafb;
+  background: var(--color-surface-default, #1A1A24);
   border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
 }
 
 .fundamental-metrics-widget__metric-label {
@@ -86,7 +86,7 @@
 .fundamental-metrics-widget__metric-value {
   font-size: 1rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--color-text-primary, #F9FAFB);
   font-family: 'JetBrains Mono', monospace;
   display: flex;
   flex-direction: column;

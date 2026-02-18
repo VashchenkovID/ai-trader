@@ -1580,7 +1580,24 @@ class EnsembleService {
             }
             
             if (candles.length < minRequired) {
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Insufficient candles for ensemble prediction', {
+                        service: 'EnsembleService',
+                        operation: 'predict',
+                        figi,
+                        candlesCount: candles.length,
+                        minRequired,
+                        minRequiredForLSTM,
+                        minRequiredForCNN,
+                        minRequiredForTransformer,
+                        hasEnoughForLSTM: candles.length >= minRequiredForLSTM,
+                        hasEnoughForCNN: candles.length >= minRequiredForCNN,
+                        hasEnoughForTransformer: candles.length >= minRequiredForTransformer,
+                        willUseSimpleModel: candles.length < minRequiredForLSTM && candles.length < minRequiredForCNN && candles.length < minRequiredForTransformer
+                    });
+                } else {
                 console.warn(`⚠️ Very few candles for ${figi}: ${candles.length} < ${minRequired}. Some models may not work.`);
+                }
             }
 
             // Проверяем минимальные требования для фиксированных размеров окон моделей

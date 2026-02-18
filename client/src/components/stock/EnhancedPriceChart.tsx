@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { Card, Chart, Tabs } from '../ui';
-import { WeeklyForecastCandle } from '../../services/weeklyForecastApi';
 import './EnhancedPriceChart.css';
 
 export type TimePeriod = 'day' | 'week' | 'month' | 'year' | 'all';
@@ -24,8 +23,6 @@ interface EnhancedPriceChartProps {
   stopLoss?: number;
   takeProfit?: number;
   targetPrice?: number;
-  // Weekly Forecast
-  weeklyForecast?: WeeklyForecastCandle[];
   // Технические индикаторы (опционально)
   sma20?: number[];
   ema12?: number[];
@@ -42,7 +39,6 @@ export const EnhancedPriceChart: React.FC<EnhancedPriceChartProps> = ({
   stopLoss,
   takeProfit,
   targetPrice,
-  weeklyForecast,
   sma20,
   ema12,
   bollingerUpper,
@@ -250,80 +246,13 @@ export const EnhancedPriceChart: React.FC<EnhancedPriceChartProps> = ({
       });
     }
 
-    // Weekly Forecast (если есть)
-    if (weeklyForecast && weeklyForecast.length > 0) {
-      // Добавляем даты прогноза к лейблам
-      const forecastLabels = weeklyForecast.map(f => formatDateShort(f.date));
-      const extendedLabels = [...labels, ...forecastLabels];
-      
-      // Создаем массив данных для прогноза (null для исторических данных)
-      const forecastCloseData = [
-        ...new Array(validCandles.length).fill(null),
-        ...weeklyForecast.map(f => f.close)
-      ];
-
-      const forecastHighData = [
-        ...new Array(validCandles.length).fill(null),
-        ...weeklyForecast.map(f => f.high)
-      ];
-
-      const forecastLowData = [
-        ...new Array(validCandles.length).fill(null),
-        ...weeklyForecast.map(f => f.low)
-      ];
-
-      datasets.push({
-        label: 'Weekly Forecast (закрытие)',
-        data: forecastCloseData,
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        borderWidth: 2,
-        tension: 0.4,
-        fill: false,
-        pointRadius: 3,
-        pointHoverRadius: 5,
-        pointBackgroundColor: '#3B82F6',
-        pointBorderColor: '#ffffff',
-        pointBorderWidth: 2,
-        borderDash: [0, 0],
-        spanGaps: false
-      });
-
-      datasets.push({
-        label: 'Weekly Forecast (максимум)',
-        data: forecastHighData,
-        borderColor: '#10B981',
-        backgroundColor: 'transparent',
-        borderWidth: 1,
-        tension: 0.4,
-        borderDash: [5, 5],
-        pointRadius: 0,
-        spanGaps: false
-      });
-
-      datasets.push({
-        label: 'Weekly Forecast (минимум)',
-        data: forecastLowData,
-        borderColor: '#EF4444',
-        backgroundColor: 'transparent',
-        borderWidth: 1,
-        tension: 0.4,
-        borderDash: [5, 5],
-        pointRadius: 0,
-        spanGaps: false
-      });
-
-      return {
-        labels: extendedLabels,
-        datasets
-      };
-    }
+    // Weekly Forecast убран по запросу
 
     return {
       labels,
       datasets
     };
-  }, [candles, currentPrice, stopLoss, takeProfit, targetPrice, weeklyForecast, sma20, ema12, bollingerUpper, bollingerLower]);
+  }, [candles, currentPrice, stopLoss, takeProfit, targetPrice, sma20, ema12, bollingerUpper, bollingerLower]);
 
   const chartOptions = useMemo(() => ({
     responsive: true,
@@ -345,8 +274,7 @@ export const EnhancedPriceChart: React.FC<EnhancedPriceChartProps> = ({
                    label === 'Текущая цена' ||
                    label === 'Стоп-лосс' ||
                    label === 'Тейк-профит' ||
-                   label === 'Целевая цена' ||
-                   label === 'Weekly Forecast (закрытие)';
+                   label === 'Целевая цена';
           }
         }
       },
@@ -358,8 +286,7 @@ export const EnhancedPriceChart: React.FC<EnhancedPriceChartProps> = ({
                  datasetLabel === 'Текущая цена' ||
                  datasetLabel === 'Стоп-лосс' ||
                  datasetLabel === 'Тейк-профит' ||
-                 datasetLabel === 'Целевая цена' ||
-                 datasetLabel === 'Weekly Forecast (закрытие)';
+                 datasetLabel === 'Целевая цена';
         },
         callbacks: {
           label: function(context: any) {
@@ -367,20 +294,6 @@ export const EnhancedPriceChart: React.FC<EnhancedPriceChartProps> = ({
             const value = context.parsed.y;
             
             if (value === null || value === undefined) return '';
-            
-            if (datasetLabel.includes('Weekly Forecast')) {
-              const forecastIndex = context.dataIndex - candles.length;
-              if (forecastIndex >= 0 && weeklyForecast && weeklyForecast[forecastIndex]) {
-                const candle = weeklyForecast[forecastIndex];
-                return [
-                  `${datasetLabel}: ${formatCurrency(value)}`,
-                  `Открытие: ${formatCurrency(candle.open)}`,
-                  `Максимум: ${formatCurrency(candle.high)}`,
-                  `Минимум: ${formatCurrency(candle.low)}`,
-                  candle.confidence !== undefined ? `Уверенность: ${(candle.confidence * 100).toFixed(1)}%` : ''
-                ].filter(Boolean);
-              }
-            }
             
             return `${datasetLabel}: ${formatCurrency(value)}`;
           }
@@ -397,7 +310,7 @@ export const EnhancedPriceChart: React.FC<EnhancedPriceChartProps> = ({
         }
       }
     }
-  }), [candles, weeklyForecast, currency]);
+  }), [candles, currency]);
 
   return (
     <Card variant="default" className="enhanced-price-chart">

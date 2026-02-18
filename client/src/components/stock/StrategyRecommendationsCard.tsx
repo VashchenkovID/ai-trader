@@ -145,14 +145,16 @@ const StrategyRecommendationsCard: React.FC<StrategyRecommendationsCardProps> = 
   };
 
   return (
-    <Card className="strategy-recommendations-card">
-      <div className="strategy-recommendations-card__header">
+    <Card 
+      variant="default" 
+      className="strategy-recommendations-card"
+      header={
         <h3 className="strategy-recommendations-card__title">
           <span className="strategy-recommendations-card__icon">📊</span>
           Рекомендации по стратегиям
         </h3>
-      </div>
-      
+      }
+    >
       <div className="strategy-recommendations-card__content">
         {renderStrategy('Агрессивная', '🔴', 'red', aggressive, 'aggressive')}
         {renderStrategy('Умеренная', '🟡', 'yellow', moderate, 'moderate')}

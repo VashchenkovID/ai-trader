@@ -19,7 +19,7 @@ const StopLossCard: React.FC<StopLossCardProps> = ({
 }) => {
   // Вычисляем расстояние, если не передано
   const calculatedDistance = distance ?? (currentPrice - stopLossPrice);
-  const calculatedDistancePercent = distancePercent ?? ((calculatedDistance / currentPrice) * 100);
+  const calculatedDistancePercent = distancePercent ?? (currentPrice !== 0 ? ((calculatedDistance / currentPrice) * 100) : 0);
 
   // Определяем уровень опасности
   const getDangerLevel = (percent: number): 'safe' | 'warning' | 'danger' => {
@@ -60,7 +60,7 @@ const StopLossCard: React.FC<StopLossCardProps> = ({
               maximumFractionDigits: 2 
             })} {currency}
             <span className="stop-loss-card__distance-percent">
-              ({Math.abs(calculatedDistancePercent).toFixed(2)}%)
+              ({Math.abs(calculatedDistancePercent != null && !isNaN(calculatedDistancePercent) ? calculatedDistancePercent : 0).toFixed(2)}%)
             </span>
           </div>
         </div>

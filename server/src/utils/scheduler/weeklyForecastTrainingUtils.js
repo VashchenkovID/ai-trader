@@ -141,11 +141,11 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
         let sequences, targets;
         try {
             const trainingData = WeeklyForecastModelService.prepareTrainingData(
-                candles,
-                features,
+            candles,
+            features,
                 actualLookbackDays,
                 actualForecastDays
-            );
+        );
             sequences = trainingData.sequences;
             targets = trainingData.targets;
         } catch (error) {
@@ -280,7 +280,7 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
                 history = directHistory;
             }
         }
-        
+
         // Проверяем, что history содержит необходимые данные для сохранения
         if (!history) {
             throw new Error('Training completed but no history received');
@@ -381,13 +381,13 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             }
         } else {
             // Для других ошибок логируем как ошибку
-            if (LoggerService.isInitialized) {
-                LoggerService.error('Error training Weekly Forecast model', {
-                    service: 'WeeklyForecastTrainingUtils',
-                    operation: 'trainWeeklyForecastModel',
-                    figi,
-                    error: { message: error.message, stack: error.stack }
-                });
+        if (LoggerService.isInitialized) {
+            LoggerService.error('Error training Weekly Forecast model', {
+                service: 'WeeklyForecastTrainingUtils',
+                operation: 'trainWeeklyForecastModel',
+                figi,
+                error: { message: error.message, stack: error.stack }
+            });
             }
         }
         throw error;
@@ -528,11 +528,11 @@ export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
                     });
                 } else {
                     // Для других ошибок добавляем в failed и логируем как ошибку
-                    results.failed.push({
-                        figi: instrument.figi,
-                        ticker: instrument.ticker || instrument.name,
-                        error: error.message
-                    });
+                results.failed.push({
+                    figi: instrument.figi,
+                    ticker: instrument.ticker || instrument.name,
+                    error: error.message
+                });
                     if (LoggerService.isInitialized) {
                         LoggerService.error('Error training Weekly Forecast model', {
                             service: 'WeeklyForecastTrainingUtils',

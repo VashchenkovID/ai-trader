@@ -33,19 +33,59 @@ const ForecastHistoryTab: React.FC<ForecastHistoryTabProps> = ({
   // ticker,
   weeklyForecasts
 }) => {
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   const tableData = useMemo(() => {
     return weeklyForecasts.map(forecast => ({
       id: forecast.id,
-      forecastDate: new Date(forecast.forecastDate).toLocaleDateString('ru-RU'),
-      startDate: new Date(forecast.startDate).toLocaleDateString('ru-RU'),
-      endDate: new Date(forecast.endDate).toLocaleDateString('ru-RU'),
+      forecastDate: formatDate(forecast.forecastDate),
+      startDate: formatDate(forecast.startDate),
+      endDate: formatDate(forecast.endDate),
       predictedPrice: forecast.forecastData?.[forecast.forecastData.length - 1]?.close || 'N/A',
       actualPrice: forecast.actualData?.[forecast.actualData.length - 1]?.close || 'N/A',
-      priceChange: forecast.predictedPriceChange ? `${forecast.predictedPriceChange > 0 ? '+' : ''}${forecast.predictedPriceChange.toFixed(2)}%` : 'N/A',
-      confidence: `${(forecast.confidenceScore * 100).toFixed(1)}%`,
-      mae: forecast.accuracyMetrics?.mae?.toFixed(4) || 'N/A',
-      rmse: forecast.accuracyMetrics?.rmse?.toFixed(4) || 'N/A',
-      directionAccuracy: forecast.accuracyMetrics?.directionAccuracy ? `${(forecast.accuracyMetrics.directionAccuracy * 100).toFixed(1)}%` : 'N/A',
+      priceChange: forecast.predictedPriceChange != null ? (() => {
+        const value = typeof forecast.predictedPriceChange === 'number' 
+          ? forecast.predictedPriceChange 
+          : parseFloat(String(forecast.predictedPriceChange || 0));
+        const numValue = !isNaN(value) ? value : 0;
+        return `${numValue > 0 ? '+' : ''}${numValue.toFixed(2)}%`;
+      })() : 'N/A',
+      confidence: (() => {
+        const value = typeof forecast.confidenceScore === 'number' 
+          ? forecast.confidenceScore 
+          : parseFloat(String(forecast.confidenceScore || 0));
+        return `${(!isNaN(value) ? value * 100 : 0).toFixed(1)}%`;
+      })(),
+      mae: forecast.accuracyMetrics?.mae != null ? (() => {
+        const value = typeof forecast.accuracyMetrics.mae === 'number' 
+          ? forecast.accuracyMetrics.mae 
+          : parseFloat(String(forecast.accuracyMetrics.mae || 0));
+        return (!isNaN(value) ? value : 0).toFixed(4);
+      })() : 'N/A',
+      rmse: forecast.accuracyMetrics?.rmse != null ? (() => {
+        const value = typeof forecast.accuracyMetrics.rmse === 'number' 
+          ? forecast.accuracyMetrics.rmse 
+          : parseFloat(String(forecast.accuracyMetrics.rmse || 0));
+        return (!isNaN(value) ? value : 0).toFixed(4);
+      })() : 'N/A',
+      directionAccuracy: forecast.accuracyMetrics?.directionAccuracy != null ? (() => {
+        const value = typeof forecast.accuracyMetrics.directionAccuracy === 'number' 
+          ? forecast.accuracyMetrics.directionAccuracy 
+          : parseFloat(String(forecast.accuracyMetrics.directionAccuracy || 0));
+        return `${(!isNaN(value) ? value * 100 : 0).toFixed(1)}%`;
+      })() : 'N/A',
       status: forecast.isCompleted ? 'Завершен' : 'Активен'
     }));
   }, [weeklyForecasts]);

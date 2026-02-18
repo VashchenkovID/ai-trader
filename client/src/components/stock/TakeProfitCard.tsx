@@ -21,7 +21,7 @@ const TakeProfitCard: React.FC<TakeProfitCardProps> = ({
 }) => {
   // Вычисляем расстояние, если не передано
   const calculatedDistance = distance ?? (takeProfitPrice - currentPrice);
-  const calculatedDistancePercent = distancePercent ?? ((calculatedDistance / currentPrice) * 100);
+  const calculatedDistancePercent = distancePercent ?? (currentPrice !== 0 ? ((calculatedDistance / currentPrice) * 100) : 0);
   const potentialProfit = calculatedDistance;
   const potentialProfitPercent = calculatedDistancePercent;
 
@@ -51,7 +51,7 @@ const TakeProfitCard: React.FC<TakeProfitCardProps> = ({
               maximumFractionDigits: 2 
             })} {currency}
             <span className="take-profit-card__profit-percent">
-              (+{potentialProfitPercent.toFixed(2)}%)
+              (+{(potentialProfitPercent != null && !isNaN(potentialProfitPercent) ? potentialProfitPercent : 0).toFixed(2)}%)
             </span>
           </div>
         </div>
@@ -64,7 +64,7 @@ const TakeProfitCard: React.FC<TakeProfitCardProps> = ({
             ></div>
           </div>
           <div className="take-profit-card__progress-label">
-            Прогресс: {Math.min(Math.abs(potentialProfitPercent), 100).toFixed(1)}%
+            Прогресс: {Math.min(Math.abs(potentialProfitPercent != null && !isNaN(potentialProfitPercent) ? potentialProfitPercent : 0), 100).toFixed(1)}%
           </div>
         </div>
         
@@ -74,7 +74,7 @@ const TakeProfitCard: React.FC<TakeProfitCardProps> = ({
             <div className={`take-profit-card__risk-reward-value ${
               riskRewardRatio >= 1 ? 'good' : riskRewardRatio >= 0.5 ? 'moderate' : 'poor'
             }`}>
-              1:{riskRewardRatio.toFixed(2)}
+              1:{(riskRewardRatio != null && !isNaN(riskRewardRatio) ? riskRewardRatio : 0).toFixed(2)}
             </div>
           </div>
         )}

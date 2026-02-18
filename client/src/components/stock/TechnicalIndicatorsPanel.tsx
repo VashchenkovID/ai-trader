@@ -36,9 +36,24 @@ const TechnicalIndicatorsPanel: React.FC<TechnicalIndicatorsPanelProps> = ({
     }).format(price);
   };
 
+  // Форматируем даты для графиков
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   // RSI график
   const rsiChartData = rsi && rsi.length > 0 ? {
-    labels: labels.length > 0 ? labels : rsi.map((_, i) => `День ${i + 1}`),
+    labels: labels.length > 0 ? labels.map(formatDate) : rsi.map((_, i) => `День ${i + 1}`),
     datasets: [{
       label: 'RSI',
       data: rsi,
@@ -75,15 +90,24 @@ const TechnicalIndicatorsPanel: React.FC<TechnicalIndicatorsPanelProps> = ({
         min: 0,
         max: 100,
         ticks: {
-          stepSize: 20
+          stepSize: 20,
+          color: '#9CA3AF'
         },
         grid: {
           color: (context: any) => {
             if (context.tick.value === 70 || context.tick.value === 30) {
               return '#EF4444';
             }
-            return '#E5E7EB';
+            return 'rgba(255, 255, 255, 0.1)';
           }
+        }
+      },
+      x: {
+        ticks: {
+          color: '#9CA3AF'
+        },
+        grid: {
+          color: 'rgba(255, 255, 255, 0.1)'
         }
       }
     }
@@ -91,7 +115,7 @@ const TechnicalIndicatorsPanel: React.FC<TechnicalIndicatorsPanelProps> = ({
 
   // MACD график
   const macdChartData = macd && macd.macd.length > 0 ? {
-    labels: labels.length > 0 ? labels : macd.macd.map((_, i) => `День ${i + 1}`),
+    labels: labels.length > 0 ? labels.map(formatDate) : macd.macd.map((_, i) => `День ${i + 1}`),
     datasets: [
       {
         label: 'MACD',
@@ -140,8 +164,19 @@ const TechnicalIndicatorsPanel: React.FC<TechnicalIndicatorsPanelProps> = ({
     scales: {
       y: {
         beginAtZero: false,
+        ticks: {
+          color: '#9CA3AF'
+        },
         grid: {
-          color: '#E5E7EB'
+          color: 'rgba(255, 255, 255, 0.1)'
+        }
+      },
+      x: {
+        ticks: {
+          color: '#9CA3AF'
+        },
+        grid: {
+          color: 'rgba(255, 255, 255, 0.1)'
         }
       }
     }
@@ -166,7 +201,7 @@ const TechnicalIndicatorsPanel: React.FC<TechnicalIndicatorsPanelProps> = ({
   const bollingerStatus = getBollingerStatus(bollingerPosition);
 
   return (
-    <Card className="technical-indicators-panel">
+    <Card variant="default" className="technical-indicators-panel">
       <div className="technical-indicators-panel__header">
         <h3 className="technical-indicators-panel__title">Технические индикаторы</h3>
       </div>

@@ -16,7 +16,8 @@ interface WeeklyForecastRecommendationCardProps {
   figi: string;
   ticker: string;
   forecastData?: WeeklyForecastCandle[]; // Данные для мини-графика
-  currentPrice?: number; // Текущая цена для отображения на графике
+  onGenerate?: () => void; // Callback для генерации прогноза
+  isGenerating?: boolean; // Флаг загрузки генерации
 }
 
 const WeeklyForecastRecommendationCard: React.FC<WeeklyForecastRecommendationCardProps> = ({
@@ -29,8 +30,9 @@ const WeeklyForecastRecommendationCard: React.FC<WeeklyForecastRecommendationCar
   currency,
   figi,
   // ticker,
-  forecastData
-  // currentPrice
+  forecastData,
+  onGenerate,
+  isGenerating = false
 }) => {
   const navigate = useNavigate();
   const isPositive = (priceChangePercent ?? 0) >= 0;
@@ -69,12 +71,23 @@ const WeeklyForecastRecommendationCard: React.FC<WeeklyForecastRecommendationCar
   };
 
   return (
-    <Card className="weekly-forecast-recommendation-card">
+    <Card variant="default" className="weekly-forecast-recommendation-card">
       <div className="weekly-forecast-recommendation-card__header">
         <h3 className="weekly-forecast-recommendation-card__title">
           <span className="weekly-forecast-recommendation-card__icon">📈</span>
           Weekly Forecast (7 дней)
         </h3>
+        {onGenerate && (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onGenerate}
+            disabled={isGenerating}
+            className="weekly-forecast-recommendation-card__generate-btn"
+          >
+            {isGenerating ? '⏳ Генерация...' : '🔄 Сгенерировать прогноз'}
+          </Button>
+        )}
       </div>
       
       <div className="weekly-forecast-recommendation-card__content">
@@ -83,24 +96,33 @@ const WeeklyForecastRecommendationCard: React.FC<WeeklyForecastRecommendationCar
             <div className="weekly-forecast-recommendation-card__price-group">
               <div className="weekly-forecast-recommendation-card__price-label">Ожидаемая цена:</div>
               <div className="weekly-forecast-recommendation-card__price">
-                {forecastPrice.toLocaleString('ru-RU', { 
-                  minimumFractionDigits: 2, 
-                  maximumFractionDigits: 2 
-                })} {currency}
+                {(() => {
+                  const value = typeof forecastPrice === 'number' ? forecastPrice : parseFloat(String(forecastPrice || 0));
+                  return (!isNaN(value) ? value : 0).toLocaleString('ru-RU', { 
+                    minimumFractionDigits: 2, 
+                    maximumFractionDigits: 2 
+                  });
+                })()} {currency}
               </div>
               {(priceChange !== undefined || priceChangePercent !== undefined) && (
                 <div className={`weekly-forecast-recommendation-card__change ${isPositive ? 'positive' : 'negative'}`}>
                   {priceChange !== undefined && (
                     <span>
-                      {isPositive ? '+' : ''}{priceChange.toLocaleString('ru-RU', { 
-                        minimumFractionDigits: 2, 
-                        maximumFractionDigits: 2 
-                      })} {currency}
+                      {isPositive ? '+' : ''}{(() => {
+                        const value = typeof priceChange === 'number' ? priceChange : parseFloat(String(priceChange || 0));
+                        return (!isNaN(value) ? value : 0).toLocaleString('ru-RU', { 
+                          minimumFractionDigits: 2, 
+                          maximumFractionDigits: 2 
+                        });
+                      })()} {currency}
                     </span>
                   )}
                   {priceChangePercent !== undefined && (
                     <span>
-                      ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
+                      ({isPositive ? '+' : ''}{(() => {
+                        const value = typeof priceChangePercent === 'number' ? priceChangePercent : parseFloat(String(priceChangePercent || 0));
+                        return (!isNaN(value) ? value : 0).toFixed(2);
+                      })()}%)
                     </span>
                   )}
                 </div>
@@ -122,7 +144,10 @@ const WeeklyForecastRecommendationCard: React.FC<WeeklyForecastRecommendationCar
             {confidenceScore !== undefined && (
               <div className="weekly-forecast-recommendation-card__confidence">
                 <div className="weekly-forecast-recommendation-card__confidence-label">
-                  Уверенность: {confidenceScore.toFixed(1)}%
+                  Уверенность: {(() => {
+                    const value = typeof confidenceScore === 'number' ? confidenceScore : parseFloat(String(confidenceScore || 0));
+                    return (!isNaN(value) ? value : 0).toFixed(1);
+                  })()}%
                 </div>
                 <ProgressBar 
                   value={confidenceScore} 
@@ -135,7 +160,10 @@ const WeeklyForecastRecommendationCard: React.FC<WeeklyForecastRecommendationCar
               <div className="weekly-forecast-recommendation-card__volatility">
                 <div className="weekly-forecast-recommendation-card__volatility-label">Волатильность:</div>
                 <div className="weekly-forecast-recommendation-card__volatility-value">
-                  {volatility.toFixed(2)}%
+                  {(() => {
+                    const value = typeof volatility === 'number' ? volatility : parseFloat(String(volatility || 0));
+                    return (!isNaN(value) ? value : 0).toFixed(2);
+                  })()}%
                 </div>
               </div>
             )}
@@ -146,7 +174,7 @@ const WeeklyForecastRecommendationCard: React.FC<WeeklyForecastRecommendationCar
                 <WeeklyForecastChart
                   forecastData={forecastData}
                   currency={currency}
-                  height={150}
+                  height={250}
                   className="weekly-forecast-recommendation-card__chart-inner"
                 />
               </div>

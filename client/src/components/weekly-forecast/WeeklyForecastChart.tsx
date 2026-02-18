@@ -37,23 +37,26 @@ export const WeeklyForecastChart: React.FC<WeeklyForecastChartProps> = ({
     });
   };
 
+  // Данные уже конвертированы на сервере в абсолютные цены
+  const convertedData = forecastData || [];
+
   const chartData = useMemo(() => {
-    if (!forecastData || forecastData.length === 0) {
+    if (!convertedData || convertedData.length === 0) {
       return {
         labels: [],
         datasets: []
       };
     }
 
-    const labels = forecastData.map(c => formatDate(c.date));
+    const labels = convertedData.map(c => formatDate(c.date));
 
     const datasets: any[] = [
       {
         label: 'Прогноз (закрытие)',
-        data: forecastData.map(c => c.close),
+        data: convertedData.map(c => c.close),
         borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        borderWidth: 2,
+        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+        borderWidth: 2.5,
         tension: 0.4,
         fill: true,
         pointRadius: 4,
@@ -61,34 +64,43 @@ export const WeeklyForecastChart: React.FC<WeeklyForecastChartProps> = ({
         pointBackgroundColor: '#3B82F6',
         pointBorderColor: '#ffffff',
         pointBorderWidth: 2,
-        borderDash: [0, 0]
+        borderDash: [0, 0],
+        fillOpacity: 0.1
       },
       {
         label: 'Прогноз (максимум)',
-        data: forecastData.map(c => c.high),
+        data: convertedData.map(c => c.high),
         borderColor: '#10B981',
         backgroundColor: 'transparent',
-        borderWidth: 1,
+        borderWidth: 1.5,
         tension: 0.4,
-        borderDash: [5, 5],
-        pointRadius: 0
+        borderDash: [6, 4],
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        pointBackgroundColor: '#10B981',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 1
       },
       {
         label: 'Прогноз (минимум)',
-        data: forecastData.map(c => c.low),
+        data: convertedData.map(c => c.low),
         borderColor: '#EF4444',
         backgroundColor: 'transparent',
-        borderWidth: 1,
+        borderWidth: 1.5,
         tension: 0.4,
-        borderDash: [5, 5],
-        pointRadius: 0
+        borderDash: [6, 4],
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        pointBackgroundColor: '#EF4444',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 1
       }
     ];
 
     // Добавляем реальные данные, если они есть
     if (actualData && actualData.length > 0) {
       // Сопоставляем реальные данные с прогнозом по датам
-      const actualClose = forecastData.map(forecastCandle => {
+      const actualClose = convertedData.map(forecastCandle => {
         const actualCandle = actualData.find(ac => {
           const forecastDate = new Date(forecastCandle.date).toISOString().split('T')[0];
           const actualDate = new Date(ac.date).toISOString().split('T')[0];
@@ -117,79 +129,118 @@ export const WeeklyForecastChart: React.FC<WeeklyForecastChartProps> = ({
       labels,
       datasets
     };
-  }, [forecastData, actualData]);
+  }, [convertedData, actualData]);
 
-  const chartOptions = useMemo(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-      mode: 'index' as const,
-      intersect: false
-    },
-    plugins: {
-      legend: {
-        position: 'top' as const,
-        labels: {
-          usePointStyle: true,
-          padding: 15
+  const chartOptions = useMemo(() => {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index' as const,
+        intersect: false
+      },
+      plugins: {
+        legend: {
+          position: 'top' as const,
+          display: true,
+          labels: {
+            usePointStyle: true,
+            padding: 12,
+            font: {
+              size: 11,
+              weight: '500' as const
+            },
+            color: '#6b7280'
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          padding: 12,
+          titleFont: {
+            size: 13,
+            weight: '600' as const
+          },
+          bodyFont: {
+            size: 12
+          },
+          borderColor: 'rgba(255, 255, 255, 0.1)',
+          borderWidth: 1,
+          cornerRadius: 8,
+          displayColors: true,
+          filter: (tooltipItem: any) => {
+            // Показываем только основные линии в тултипе
+            return tooltipItem.datasetIndex === 0 || 
+                   (actualData && tooltipItem.datasetIndex === 3);
+          },
+          callbacks: {
+            label: function(context: any) {
+              const datasetIndex = context.datasetIndex;
+              const dataIndex = context.dataIndex;
+              
+              if (datasetIndex === 0) {
+                // Прогноз - данные уже в абсолютных ценах
+                const candle = convertedData[dataIndex];
+                if (!candle) return '';
+                return [
+                  `Прогноз закрытие: ${formatCurrency(candle.close)}`,
+                  `Прогноз максимум: ${formatCurrency(candle.high)}`,
+                  `Прогноз минимум: ${formatCurrency(candle.low)}`,
+                  `Прогноз открытие: ${formatCurrency(candle.open)}`
+                ];
+              } else if (datasetIndex === 3 && actualData) {
+                // Реальность
+                const forecastCandle = convertedData[dataIndex];
+                const actualCandle = actualData.find(ac => {
+                  const forecastDate = new Date(forecastCandle.date).toISOString().split('T')[0];
+                  const actualDate = new Date(ac.date).toISOString().split('T')[0];
+                  return forecastDate === actualDate;
+                });
+                if (!actualCandle) return '';
+                return [
+                  `Реальность закрытие: ${formatCurrency(actualCandle.close)}`,
+                  `Реальность максимум: ${formatCurrency(actualCandle.high)}`,
+                  `Реальность минимум: ${formatCurrency(actualCandle.low)}`,
+                  `Реальность открытие: ${formatCurrency(actualCandle.open)}`
+                ];
+              }
+              return '';
+            }
+          }
         }
       },
-      tooltip: {
-        filter: (tooltipItem: any) => {
-          // Показываем только основные линии в тултипе
-          return tooltipItem.datasetIndex === 0 || 
-                 (actualData && tooltipItem.datasetIndex === 3);
+      scales: {
+        x: {
+          grid: {
+            display: false
+          },
+          ticks: {
+            font: {
+              size: 11
+            },
+            color: '#9ca3af'
+          }
         },
-        callbacks: {
-          label: function(context: any) {
-            const datasetIndex = context.datasetIndex;
-            const dataIndex = context.dataIndex;
-            
-            if (datasetIndex === 0) {
-              // Прогноз
-              const candle = forecastData[dataIndex];
-              if (!candle) return '';
-              return [
-                `Прогноз закрытие: ${formatCurrency(candle.close)}`,
-                `Прогноз максимум: ${formatCurrency(candle.high)}`,
-                `Прогноз минимум: ${formatCurrency(candle.low)}`,
-                `Прогноз открытие: ${formatCurrency(candle.open)}`,
-                candle.confidence !== undefined ? `Уверенность: ${(candle.confidence * 100).toFixed(1)}%` : ''
-              ].filter(Boolean);
-            } else if (datasetIndex === 3 && actualData) {
-              // Реальность
-              const forecastCandle = forecastData[dataIndex];
-              const actualCandle = actualData.find(ac => {
-                const forecastDate = new Date(forecastCandle.date).toISOString().split('T')[0];
-                const actualDate = new Date(ac.date).toISOString().split('T')[0];
-                return forecastDate === actualDate;
-              });
-              if (!actualCandle) return '';
-              return [
-                `Реальность закрытие: ${formatCurrency(actualCandle.close)}`,
-                `Реальность максимум: ${formatCurrency(actualCandle.high)}`,
-                `Реальность минимум: ${formatCurrency(actualCandle.low)}`,
-                `Реальность открытие: ${formatCurrency(actualCandle.open)}`
-              ];
+        y: {
+          beginAtZero: false,
+          grid: {
+            color: 'rgba(0, 0, 0, 0.05)',
+            drawBorder: false
+          },
+          ticks: {
+            font: {
+              size: 11
+            },
+            color: '#9ca3af',
+            callback: function(value: any) {
+              return formatCurrency(value);
             }
-            return '';
           }
         }
       }
-    },
-    scales: {
-      y: {
-        beginAtZero: false,
-        ticks: {
-          callback: function(value: any) {
-            return formatCurrency(value);
-          }
-        }
-      }
-    }
-  }), [forecastData, actualData, currency]);
+    };
+  }, [convertedData, actualData, currency]);
 
-  if (!forecastData || forecastData.length === 0) {
+  if (!convertedData || convertedData.length === 0) {
     return (
       <div className={`weekly-forecast-chart-empty ${className}`}>
         <p>Нет данных для отображения</p>

@@ -1,12 +1,12 @@
 .current-price-card {
-  padding: 1.25rem;
+  padding: 1rem;
 }
 
 .current-price-card__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .current-price-card__title {
@@ -51,9 +51,9 @@
 }
 
 .current-price-card__price {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  color: #111827;
+  color: #F9FAFB;
   font-family: 'JetBrains Mono', monospace;
   line-height: 1.2;
 }

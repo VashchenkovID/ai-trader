@@ -279,19 +279,27 @@ router.get('/stock/:figi/latest-recommendation', async (req, res) => {
             const { formatModelDates } = await import('../utils/dateFormatter.js');
             const formattedRec = formatModelDates(latestRec, ['analysisDate', 'validUntil', 'createdAt', 'updatedAt']);
             
+            // Преобразуем Sequelize модель в обычный объект для доступа к данным
+            const recData = latestRec.toJSON ? latestRec.toJSON() : (latestRec.dataValues || latestRec);
+            
             // Возвращаем данные в формате, совместимом с IntegratedAIService
             res.json({
                 success: true,
                 data: {
-                    recommendation: formattedRec.recommendation || latestRec.recommendation,
-                    score: formattedRec.score || latestRec.score,
-                    confidence: formattedRec.confidence || latestRec.confidence,
-                    explanation: formattedRec.explanation || latestRec.explanation,
-                    analysis: formattedRec.analysis || latestRec.analysis,
-                    agreement: formattedRec.analysis?.agreement || latestRec.analysis?.agreement || 0,
-                    horizons: formattedRec.analysis?.horizons || latestRec.analysis?.horizons || null,
-                    summary: formattedRec.explanation?.summary || latestRec.explanation?.summary || latestRec.explanation?.details?.summary || '',
+                    recommendation: formattedRec.recommendation || recData.recommendation,
+                    score: formattedRec.score || recData.score,
+                    confidence: formattedRec.confidence || recData.confidence,
+                    explanation: formattedRec.explanation || recData.explanation,
+                    analysis: formattedRec.analysis || recData.analysis,
+                    agreement: formattedRec.analysis?.agreement || recData.analysis?.agreement || 0,
+                    horizons: formattedRec.analysis?.horizons || recData.analysis?.horizons || null,
+                    summary: formattedRec.explanation?.summary || recData.explanation?.summary || recData.explanation?.details?.summary || '',
                     analysisDate: formattedRec.analysisDate,
+                    // Добавляем stopLoss, takeProfit и targetPrice из модели
+                    stopLoss: recData.stopLoss !== undefined && recData.stopLoss !== null ? recData.stopLoss : null,
+                    takeProfit: recData.takeProfit !== undefined && recData.takeProfit !== null ? recData.takeProfit : null,
+                    targetPrice: recData.targetPrice !== undefined && recData.targetPrice !== null ? recData.targetPrice : null,
+                    priceAtAnalysis: recData.priceAtAnalysis !== undefined && recData.priceAtAnalysis !== null ? recData.priceAtAnalysis : null,
                     isFromDatabase: true
                 },
                 isFresh: true,

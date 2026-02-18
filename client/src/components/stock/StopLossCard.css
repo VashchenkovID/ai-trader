@@ -1,5 +1,5 @@
 .stop-loss-card {
-  padding: 1.25rem;
+  padding: 1rem;
   border-left: 4px solid #ef4444;
 }
 
@@ -20,7 +20,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .stop-loss-card__title {

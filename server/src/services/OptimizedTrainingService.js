@@ -404,18 +404,14 @@ class OptimizedTrainingService {
             }
 
             // 6.2. Проверка деградации и восстановление best-модели при необходимости
-            // Используем F1-score как основную метрику для проверки деградации
-            if (validationResult && typeof validationResult.f1 === 'number') {
-                const currentMetrics = {
-                    f1: validationResult.f1, // Основная метрика
-                    accuracy: validationResult.accuracy || 0,
-                    precision: validationResult.precision || 0,
-                    recall: validationResult.recall || 0,
-                    directionAccuracy: validationResult.directionAccuracy || 0,
-                    classImbalance: validationResult.classImbalance || 0
-                };
-                await this.checkDegradationAndRestore(figi, model, currentMetrics);
-            }
+            // ВАЖНО: Проверка деградации НЕ выполняется сразу после обучения
+            // чтобы не откатывать только что обученную модель
+            // Проверка деградации выполняется отдельной задачей каждые 6 часов
+            // Это позволяет моделям "устояться" перед проверкой
+            // 
+            // Если текущая модель лучше best-модели, best-модель уже обновлена выше (строка 402)
+            // Если текущая модель хуже, но обучение было успешным, даем ей шанс
+            // Проверка деградации через планировщик определит, нужно ли откатывать
 
             // 8. Обновление базовых метрик в ModelMonitoringService после обучения (Фаза 2, задача 2.4.3)
             try {
@@ -1762,12 +1758,70 @@ class OptimizedTrainingService {
             
             const archJson = model.toJSON(null, false);
             const weights = model.getWeights();
-            const specs = await Promise.all(weights.map(async (w) => ({
-                name: w.name,
-                shape: w.shape,
-                dtype: w.dtype,
-                data: await w.array()
-            })));
+            
+            if (!weights || weights.length === 0) {
+                LoggerService.error('Model has no weights to save', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'saveModel',
+                    figi
+                });
+                return;
+            }
+            
+            const specs = await Promise.all(weights.map(async (w) => {
+                if (!w || w.size === 0) {
+                    LoggerService.warn(`Model weight ${w?.name || 'unnamed'} has zero size`, {
+                        service: 'OptimizedTrainingService',
+                        operation: 'saveModel',
+                        figi
+                    });
+                    return null;
+                }
+                
+                const weightArray = await w.array();
+                if (!weightArray || weightArray.length === 0) {
+                    LoggerService.warn(`Model weight ${w.name || 'unnamed'} has no data`, {
+                        service: 'OptimizedTrainingService',
+                        operation: 'saveModel',
+                        figi
+                    });
+                    return null;
+                }
+                
+                if (weightArray.length !== w.size) {
+                    LoggerService.warn(`Model weight ${w.name || 'unnamed'} size mismatch: expected ${w.size}, got ${weightArray.length}`, {
+                        service: 'OptimizedTrainingService',
+                        operation: 'saveModel',
+                        figi
+                    });
+                }
+                
+                return {
+                    name: w.name,
+                    shape: w.shape,
+                    dtype: w.dtype,
+                    data: weightArray
+                };
+            }));
+            
+            // Фильтруем null значения
+            const validSpecs = specs.filter(s => s !== null);
+            if (validSpecs.length === 0) {
+                LoggerService.error('Model has no valid weights to save', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'saveModel',
+                    figi
+                });
+                return;
+            }
+            
+            if (validSpecs.length !== weights.length) {
+                LoggerService.warn(`Model: only ${validSpecs.length} out of ${weights.length} weights are valid`, {
+                    service: 'OptimizedTrainingService',
+                    operation: 'saveModel',
+                    figi
+                });
+            }
             
             // Сохраняем архитектуру
             await fs.writeFile(modelPath, JSON.stringify(archJson, null, 2));
@@ -1780,7 +1834,7 @@ class OptimizedTrainingService {
             }
             
             // Сохраняем веса
-            await fs.writeFile(weightsPath, JSON.stringify({ specs }, null, 2));
+            await fs.writeFile(weightsPath, JSON.stringify({ specs: validSpecs }, null, 2));
             
             // Устанавливаем права на файлы
             try {
@@ -1987,6 +2041,14 @@ class OptimizedTrainingService {
      */
     async checkDegradationAndRestore(figi, currentModel, currentMetrics = null) {
         try {
+            // Импортируем необходимые модули для работы с файлами
+            const path = await import('path');
+            const fs = await import('fs/promises');
+            const { fileURLToPath } = await import('url');
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = path.dirname(__filename);
+            const modelsDir = path.join(__dirname, '../../models');
+            
             const bestMeta = await this.loadBestMeta(figi);
             
             // Используем F1-score как основную метрику, fallback на accuracy для совместимости
@@ -2003,14 +2065,65 @@ class OptimizedTrainingService {
                 return { degraded: false, restored: false };
             }
 
-            const degradationThreshold = 0.05; // 5% деградация - порог для восстановления
+            // ВАЖНО: Увеличен порог деградации до 30% чтобы не откатывать модели при колебаниях метрик
+            // Также проверяем, что модель не была обучена недавно (в течение последних 48 часов)
+            const degradationThreshold = 0.30; // 30% деградация - порог для восстановления (увеличено с 15%)
+            
+            // Проверяем время последнего обучения модели через метаданные
+            try {
+                const metadataPath = path.join(modelsDir, `${figi}_metadata.json`);
+                const metadataExists = await fs.access(metadataPath).then(() => true).catch(() => false);
+                if (metadataExists) {
+                    const metadataContent = await fs.readFile(metadataPath, 'utf-8');
+                    const modelMetadata = JSON.parse(metadataContent);
+                    const lastTrainingTime = modelMetadata.lastUpdated || modelMetadata.lastTrainingTime;
+                    if (lastTrainingTime) {
+                        const hoursSinceTraining = (Date.now() - new Date(lastTrainingTime).getTime()) / (1000 * 60 * 60);
+                        // Если модель обучена менее 48 часов назад, не откатываем её
+                        // Это дает модели время "устояться" и показать реальную производительность
+                        if (hoursSinceTraining < 48) {
+                            LoggerService.info('Skipping degradation check for recently trained model', {
+                                service: 'OptimizedTrainingService',
+                                operation: 'checkDegradation',
+                                figi: figi,
+                                hoursSinceTraining: hoursSinceTraining.toFixed(2),
+                                reason: 'model_trained_recently'
+                            });
+                            return { degraded: false, restored: false, reason: 'recently_trained', hoursSinceTraining: hoursSinceTraining.toFixed(2) };
+                        }
+                    }
+                }
+            } catch (metadataError) {
+                // Если не удалось проверить метаданные, продолжаем проверку деградации
+                LoggerService.warn('Failed to check model metadata for training time', {
+                    service: 'OptimizedTrainingService',
+                    operation: 'checkDegradation',
+                    figi: figi,
+                    error: { message: metadataError.message }
+                });
+            }
 
             // Если есть текущие метрики, сравниваем с best (приоритет F1-score)
             const currentMetric = currentMetrics?.f1 ?? currentMetrics?.accuracy ?? null;
             if (currentMetric !== null) {
+                // Проверяем валидность метрик - они должны быть в разумном диапазоне
+                if (currentMetric < 0 || currentMetric > 1 || bestMetric < 0 || bestMetric > 1) {
+                    LoggerService.warn('Invalid metrics detected, skipping degradation check', {
+                        service: 'OptimizedTrainingService',
+                        operation: 'checkDegradation',
+                        figi: figi,
+                        currentMetric,
+                        bestMetric
+                    });
+                    return { degraded: false, restored: false, reason: 'invalid_metrics' };
+                }
+
+                // Проверяем, что разница не слишком мала (может быть шумом)
+                const minSignificantDifference = 0.10; // Минимальная значимая разница 10% (увеличено с 5%)
                 const degradation = bestMetric - currentMetric;
 
-                if (degradation > degradationThreshold) {
+                // Восстанавливаем только если деградация значительна и превышает порог
+                if (degradation > degradationThreshold && degradation > minSignificantDifference) {
                     LoggerService.warn('Model degradation detected', {
                         service: 'OptimizedTrainingService',
                         operation: 'checkDegradation',

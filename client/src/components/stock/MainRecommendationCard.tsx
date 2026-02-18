@@ -53,7 +53,7 @@ const MainRecommendationCard: React.FC<MainRecommendationCardProps> = ({
   const label = getRecommendationLabel(recommendation);
 
   return (
-    <Card className={`main-recommendation-card main-recommendation-card--${colorClass}`}>
+    <Card variant="default" className={`main-recommendation-card main-recommendation-card--${colorClass}`}>
       <div className="main-recommendation-card__header">
         <h3 className="main-recommendation-card__title">Общая рекомендация</h3>
         {onRefresh && (
@@ -84,7 +84,7 @@ const MainRecommendationCard: React.FC<MainRecommendationCardProps> = ({
           <div className="main-recommendation-card__metric">
             <div className="main-recommendation-card__metric-label">Уверенность</div>
             <div className="main-recommendation-card__metric-value">
-              {confidence.toFixed(1)}%
+              {(confidence != null && !isNaN(confidence) ? confidence : 0).toFixed(1)}%
             </div>
             <ProgressBar 
               value={confidence} 
@@ -95,7 +95,7 @@ const MainRecommendationCard: React.FC<MainRecommendationCardProps> = ({
           <div className="main-recommendation-card__metric">
             <div className="main-recommendation-card__metric-label">Общий балл</div>
             <div className={`main-recommendation-card__metric-value main-recommendation-card__metric-value--${colorClass}`}>
-              {score > 0 ? '+' : ''}{score.toFixed(2)}
+              {score > 0 ? '+' : ''}{(score != null && !isNaN(score) ? score : 0).toFixed(2)}
             </div>
           </div>
           
@@ -114,13 +114,17 @@ const MainRecommendationCard: React.FC<MainRecommendationCardProps> = ({
         
         <div className="main-recommendation-card__footer">
           <div className="main-recommendation-card__date">
-            Анализ от {new Date(analysisDate).toLocaleDateString('ru-RU', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
+            {analysisDate && !isNaN(new Date(analysisDate).getTime()) ? (
+              `Анализ от ${new Date(analysisDate).toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}`
+            ) : (
+              'Дата анализа недоступна'
+            )}
           </div>
         </div>
       </div>

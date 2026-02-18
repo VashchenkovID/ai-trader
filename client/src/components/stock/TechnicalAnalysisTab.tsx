@@ -43,11 +43,11 @@ const TechnicalAnalysisTab: React.FC<TechnicalAnalysisTabProps> = ({
   }
 
   // RSI график
-  const rsiChartData = technicalIndicators.rsi && technicalIndicators.rsi.length > 0 ? {
-    labels: labels.length > 0 ? labels : technicalIndicators.rsi.map((_, i) => `День ${i + 1}`),
+  const rsiChartData = technicalIndicators?.rsi && technicalIndicators.rsi.length > 0 ? {
+    labels: labels.length > 0 ? labels : (technicalIndicators?.rsi || []).map((_, i) => `День ${i + 1}`),
     datasets: [{
       label: 'RSI',
-      data: technicalIndicators.rsi,
+      data: technicalIndicators?.rsi || [],
       borderColor: '#8B5CF6',
       backgroundColor: 'rgba(139, 92, 246, 0.1)',
       borderWidth: 2,
@@ -85,12 +85,12 @@ const TechnicalAnalysisTab: React.FC<TechnicalAnalysisTabProps> = ({
   } : null;
 
   // MACD график
-  const macdChartData = technicalIndicators.macd && technicalIndicators.macd.macd.length > 0 ? {
-    labels: labels.length > 0 ? labels : technicalIndicators.macd.macd.map((_, i) => `День ${i + 1}`),
+  const macdChartData = technicalIndicators?.macd && technicalIndicators.macd.macd.length > 0 ? {
+    labels: labels.length > 0 ? labels : (technicalIndicators?.macd?.macd || []).map((_, i) => `День ${i + 1}`),
     datasets: [
       {
         label: 'MACD',
-        data: technicalIndicators.macd.macd,
+        data: technicalIndicators?.macd?.macd || [],
         borderColor: '#3B82F6',
         backgroundColor: 'transparent',
         borderWidth: 2,
@@ -99,7 +99,7 @@ const TechnicalAnalysisTab: React.FC<TechnicalAnalysisTabProps> = ({
       },
       {
         label: 'Signal',
-        data: technicalIndicators.macd.signal,
+        data: technicalIndicators?.macd?.signal || [],
         borderColor: '#EF4444',
         backgroundColor: 'transparent',
         borderWidth: 2,
@@ -109,9 +109,9 @@ const TechnicalAnalysisTab: React.FC<TechnicalAnalysisTabProps> = ({
       },
       {
         label: 'Histogram',
-        data: technicalIndicators.macd.histogram,
+        data: technicalIndicators?.macd?.histogram || [],
         borderColor: '#10B981',
-        backgroundColor: technicalIndicators.macd.histogram.map((val) => val >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'),
+        backgroundColor: (technicalIndicators?.macd?.histogram || []).map((val) => val >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'),
         borderWidth: 1,
         type: 'bar' as const,
         order: 2
@@ -132,19 +132,8 @@ const TechnicalAnalysisTab: React.FC<TechnicalAnalysisTabProps> = ({
 
   return (
     <div className="technical-analysis-tab">
-      <div className="technical-analysis-tab__panels">
-        <TechnicalIndicatorsPanel
-          rsi={technicalIndicators.rsi}
-          macd={technicalIndicators.macd}
-          bollingerPosition={technicalIndicators.bollingerPosition}
-          sma20={technicalIndicators.sma20?.[technicalIndicators.sma20.length - 1]}
-          ema12={technicalIndicators.ema12?.[technicalIndicators.ema12.length - 1]}
-          atr={technicalIndicators.atr}
-          currency={currency}
-          labels={labels}
-        />
-      </div>
-
+      {/* Убрали TechnicalIndicatorsPanel, так как он уже отображается выше на странице */}
+      
       <div className="technical-analysis-tab__charts">
         {rsiChartData && (
           <Card className="technical-analysis-tab__chart-card">
@@ -175,11 +164,11 @@ const TechnicalAnalysisTab: React.FC<TechnicalAnalysisTabProps> = ({
           </Card>
         )}
 
-        {(technicalIndicators.supportLevels || technicalIndicators.resistanceLevels) && (
+        {(technicalIndicators?.supportLevels || technicalIndicators?.resistanceLevels) && (
           <Card className="technical-analysis-tab__levels-card">
             <h4 className="technical-analysis-tab__chart-title">Уровни поддержки и сопротивления</h4>
             <div className="technical-analysis-tab__levels">
-              {technicalIndicators.supportLevels && technicalIndicators.supportLevels.length > 0 && (
+              {technicalIndicators?.supportLevels && technicalIndicators.supportLevels.length > 0 && (
                 <div className="technical-analysis-tab__levels-group">
                   <div className="technical-analysis-tab__levels-label">Поддержка:</div>
                   <div className="technical-analysis-tab__levels-values">
@@ -191,7 +180,7 @@ const TechnicalAnalysisTab: React.FC<TechnicalAnalysisTabProps> = ({
                   </div>
                 </div>
               )}
-              {technicalIndicators.resistanceLevels && technicalIndicators.resistanceLevels.length > 0 && (
+              {technicalIndicators?.resistanceLevels && technicalIndicators.resistanceLevels.length > 0 && (
                 <div className="technical-analysis-tab__levels-group">
                   <div className="technical-analysis-tab__levels-label">Сопротивление:</div>
                   <div className="technical-analysis-tab__levels-values">

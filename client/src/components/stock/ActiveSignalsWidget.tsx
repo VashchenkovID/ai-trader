@@ -75,7 +75,7 @@ const ActiveSignalsWidget: React.FC<ActiveSignalsWidgetProps> = ({
 
   if (activeSignals.length === 0) {
     return (
-      <Card className="active-signals-widget">
+      <Card variant="default" className="active-signals-widget">
         <div className="active-signals-widget__header">
           <h3 className="active-signals-widget__title">Активные сигналы</h3>
         </div>
@@ -88,7 +88,7 @@ const ActiveSignalsWidget: React.FC<ActiveSignalsWidgetProps> = ({
 
   return (
     <>
-      <Card className="active-signals-widget">
+      <Card variant="default" className="active-signals-widget">
         <div className="active-signals-widget__header">
           <h3 className="active-signals-widget__title">Активные сигналы</h3>
           {allActiveSignals.length > maxVisible && (
@@ -154,7 +154,7 @@ const ActiveSignalsWidget: React.FC<ActiveSignalsWidgetProps> = ({
                 <div className="active-signals-widget__item-confidence">
                   <span className="active-signals-widget__item-confidence-label">Уверенность:</span>
                   <span className="active-signals-widget__item-confidence-value">
-                    {(signal.probability * 100).toFixed(0)}%
+                    {(signal.probability != null && !isNaN(signal.probability) ? signal.probability : 0).toFixed(1)}%
                   </span>
                 </div>
               </div>

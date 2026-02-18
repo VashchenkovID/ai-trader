@@ -1,27 +1,24 @@
 .main-recommendation-card {
-  padding: 1.5rem;
+  padding: 1rem;
 }
 
 .main-recommendation-card--positive {
   border-left: 4px solid #10b981;
-  background: #f0fdf4;
 }
 
 .main-recommendation-card--negative {
   border-left: 4px solid #ef4444;
-  background: #fef2f2;
 }
 
 .main-recommendation-card--neutral {
   border-left: 4px solid #f59e0b;
-  background: #fffbeb;
 }
 
 .main-recommendation-card__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
 }
 
 .main-recommendation-card__title {
@@ -82,7 +79,7 @@
 .main-recommendation-card__metric-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #111827;
+  color: #F9FAFB;
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -124,5 +121,10 @@
   font-size: 0.75rem;
   color: #9ca3af;
   text-align: center;
+}
+
+/* Исправление для Invalid Date */
+.main-recommendation-card__date:empty::before {
+  content: 'Дата анализа недоступна';
 }
 
