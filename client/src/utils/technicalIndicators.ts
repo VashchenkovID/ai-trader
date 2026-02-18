@@ -263,7 +263,6 @@ export function calculateAllIndicators(candles: Array<{ open: number; high: numb
   const closes = candles.map(c => c.close);
   const highs = candles.map(c => c.high);
   const lows = candles.map(c => c.low);
-  const volumes = candles.map(c => c.volume);
 
   // RSI
   const rsi = calculateRSI(closes, 14);

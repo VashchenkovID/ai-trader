@@ -1,6 +1,5 @@
 import React from 'react';
 import { Card, Chart } from '../ui';
-import TechnicalIndicatorsPanel from './TechnicalIndicatorsPanel';
 import './TechnicalAnalysisTab.css';
 
 interface TechnicalAnalysisTabProps {

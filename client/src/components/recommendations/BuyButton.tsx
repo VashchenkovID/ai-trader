@@ -37,6 +37,7 @@ interface Recommendation {
   targetPrice?: number;
   stopLoss?: number;
   takeProfit?: number;
+  analysisDate?: string; // Дата анализа
   explanation?: {
     details?: {
       ensemble?: {

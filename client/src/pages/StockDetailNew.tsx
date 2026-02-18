@@ -6,9 +6,6 @@ import { weeklyForecastApi } from '../services/weeklyForecastApi';
 import { useWebSocketData } from '../components/WebSocketDataProvider';
 import { Skeleton } from '../components/ui';
 import { calculateAllIndicators } from '../utils/technicalIndicators';
-import BuyButton from '../components/recommendations/BuyButton';
-import AnalyzeButton from '../components/recommendations/AnalyzeButton';
-import TrainButton from '../components/recommendations/TrainButton';
 
 // Header
 import StockDetailHeader from '../components/stock/StockDetailHeader';
