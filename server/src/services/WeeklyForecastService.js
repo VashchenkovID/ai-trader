@@ -164,8 +164,10 @@ class WeeklyForecastService {
             
             // ШАГ 3: Получение исторических данных
             const candles = await CacheService.getCandles(figi, 'DAY', historicalDays, true);
-            if (candles.length < 60) {
-                throw new Error(`Insufficient historical data: ${candles.length} candles (minimum 60)`);
+            // Минимум 30 свечей для генерации прогноза (можно работать с меньшим количеством, но качество будет ниже)
+            const minimumRequired = 30;
+            if (candles.length < minimumRequired) {
+                throw new Error(`Insufficient historical data: ${candles.length} candles (minimum ${minimumRequired})`);
             }
             
             // ШАГ 4: Подготовка features
@@ -892,8 +894,28 @@ class WeeklyForecastService {
                 throw new Error('Features array is empty');
             }
             
-            // Используем последние 60 дней для прогноза
-            const inputSequence = features.slice(-60);
+            // Используем последние 60 дней для прогноза (или все доступные, если меньше)
+            // Если данных меньше 60, дополняем первыми доступными свечами
+            const requiredLength = 60;
+            let inputSequence = features.slice(-requiredLength);
+            
+            // Если данных меньше требуемого, дополняем первыми доступными свечами
+            if (inputSequence.length < requiredLength) {
+                const paddingNeeded = requiredLength - inputSequence.length;
+                const firstFeature = features[0];
+                const padding = Array(paddingNeeded).fill(firstFeature);
+                inputSequence = [...padding, ...inputSequence];
+                
+                if (LoggerService.isInitialized) {
+                    LoggerService.warn('Padding input sequence for forecast', {
+                        service: 'WeeklyForecastService',
+                        operation: 'generateModelForecast',
+                        originalLength: features.length,
+                        paddedLength: inputSequence.length,
+                        paddingSize: paddingNeeded
+                    });
+                }
+            }
             
             // Генерируем прогноз через WeeklyForecastModelService
             const forecast = await WeeklyForecastModelService.generateForecast(
