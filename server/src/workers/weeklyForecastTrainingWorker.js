@@ -241,6 +241,9 @@ class WeeklyForecastTrainingWorker {
             const weights = await this.model.getWeights();
             const weightsData = await Promise.all(weights.map(w => w.array()));
             
+            // Освобождаем веса из памяти GPU/CPU после копирования
+            weights.forEach(w => w.dispose());
+            
             // Отправляем результат с весами
             parentPort.postMessage({
                 type: 'training_complete',
@@ -255,6 +258,18 @@ class WeeklyForecastTrainingWorker {
                     modelConfig: this.model.getConfig()
                 }
             });
+
+            // Освобождаем модель после получения весов
+            this.dispose();
+            
+            // Принудительная очистка памяти TensorFlow
+            try {
+                const tf = await import('@tensorflow/tfjs');
+                tf.engine().startScope();
+                tf.engine().endScope();
+            } catch (tfError) {
+                // Игнорируем ошибки очистки
+            }
 
             this.isTraining = false;
             return history;

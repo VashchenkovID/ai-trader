@@ -18,13 +18,16 @@ import PortfolioRebalancing from '../models/PortfolioRebalancing.js';
 class PortfolioRebalancingService {
     constructor() {
         this.isInitialized = false;
+        this.isRebalancing = false; // Флаг для предотвращения параллельных запусков
+        this.rebalancingStartTime = null; // Время начала ребалансировки для отслеживания зависших процессов
         this.settings = {
             enabled: true,
             threshold: 5,              // Порог отклонения в процентах (5%)
             minAmount: 1000,          // Минимальная сумма операции в рублях
             minBenefit: 50,           // Минимальная чистая выгода в рублях
             maxOperations: 20,        // Максимум операций за раз
-            dryRun: false             // Режим тестирования (без выполнения)
+            dryRun: false,            // Режим тестирования (без выполнения)
+            maxRebalancingTime: 3600000 // Максимальное время ребалансировки (1 час в миллисекундах)
         };
         this.lastCheck = null;
         this.lastRebalance = null;
@@ -757,6 +760,27 @@ class PortfolioRebalancingService {
                 };
             }
 
+            // Проверяем, не идет ли уже ребалансировка
+            if (this.isRebalancing) {
+                // Проверяем, не зависла ли предыдущая ребалансировка
+                const maxTime = this.settings.maxRebalancingTime || 3600000; // 1 час по умолчанию
+                if (this.rebalancingStartTime && (Date.now() - this.rebalancingStartTime) > maxTime) {
+                    console.warn('⚠️ Предыдущая ребалансировка зависла, сбрасываем флаг');
+                    this.isRebalancing = false;
+                    this.rebalancingStartTime = null;
+                } else {
+                    return {
+                        success: false,
+                        reason: 'Ребалансировка уже выполняется',
+                        inProgress: true
+                    };
+                }
+            }
+
+            // Устанавливаем флаг и время начала
+            this.isRebalancing = true;
+            this.rebalancingStartTime = Date.now();
+
             // Проверяем необходимость ребалансировки с таймаутом (максимум 90 секунд)
             let check;
             try {
@@ -866,6 +890,10 @@ class PortfolioRebalancingService {
                 success: false,
                 error: error.message
             };
+        } finally {
+            // Всегда сбрасываем флаг ребалансировки
+            this.isRebalancing = false;
+            this.rebalancingStartTime = null;
         }
     }
 

@@ -538,7 +538,10 @@ class WeeklyForecastModelService {
                     };
                     
                     resolve(history);
-                    worker.terminate();
+                    // Даем время на освобождение памяти перед завершением worker
+                    setTimeout(() => {
+                        worker.terminate();
+                    }, 100);
                 } else if (msg.type === 'training_error') {
                     // Отмечаем ошибку в мониторинге
                     if (workerId) {
@@ -612,7 +615,10 @@ class WeeklyForecastModelService {
                     }
                     
                     reject(new Error(msg.data.error));
-                    worker.terminate();
+                    // Даем время на освобождение памяти перед завершением worker
+                    setTimeout(() => {
+                        worker.terminate();
+                    }, 100);
                 }
             });
             
@@ -629,7 +635,10 @@ class WeeklyForecastModelService {
                 }
                 
                 reject(error);
-                worker.terminate();
+                // Даем время на освобождение памяти перед завершением worker
+                setTimeout(() => {
+                    worker.terminate();
+                }, 100);
             });
             
             worker.on('exit', async (code) => {
@@ -648,6 +657,16 @@ class WeeklyForecastModelService {
                 
                 if (code !== 0) {
                     reject(new Error(`Worker stopped with exit code ${code}`));
+                }
+                
+                // Принудительная очистка памяти после завершения worker
+                try {
+                    const tf = await import('@tensorflow/tfjs');
+                    // Очищаем неиспользуемые тензоры
+                    tf.engine().startScope();
+                    tf.engine().endScope();
+                } catch (tfError) {
+                    // Игнорируем ошибки очистки
                 }
             });
         });

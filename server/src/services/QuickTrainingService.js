@@ -421,7 +421,27 @@ class QuickTrainingService {
         const startTime = Date.now();
         let workerId = null;
         
+        // Проверяем, не идет ли уже быстрое обучение
+        if (this.isTraining) {
+            const LoggerService = (await import('./LoggerService.js')).default;
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('Quick training already in progress, skipping duplicate start', {
+                    service: 'QuickTrainingService',
+                    operation: 'performQuickTraining'
+                });
+            }
+            return {
+                success: false,
+                skipped: true,
+                reason: 'already_in_progress',
+                message: 'Quick training is already in progress'
+            };
+        }
+        
         try {
+            // Устанавливаем флаг обучения
+            this.isTraining = true;
+            
             // Проверяем, не идет ли полное обучение
             const isFullTrainingActive = await this.isFullTrainingActive();
             if (isFullTrainingActive) {
@@ -611,6 +631,9 @@ class QuickTrainingService {
                     console.warn('⚠️ Failed to report worker error:', monitoringError.message);
                 }
             }
+        } finally {
+            // Всегда сбрасываем флаг обучения
+            this.isTraining = false;
         }
     }
 

@@ -299,7 +299,7 @@ const StockDetailNew: React.FC = () => {
     : 0;
 
   // Извлекаем данные из рекомендации (проверяем все возможные источники)
-  const stopLoss = recommendation?.stopLoss 
+  let stopLoss = recommendation?.stopLoss 
     || recommendation?.analysis?.stopLoss 
     || recommendation?.explanation?.stopLoss
     || recommendation?.explanation?.details?.stopLoss
@@ -307,13 +307,31 @@ const StockDetailNew: React.FC = () => {
     || (recommendation?.analysis?.horizons?.shortTerm?.stopLoss)
     || (recommendation?.explanation?.details?.ensemble?.horizons?.shortTerm?.stopLoss);
   
-  const takeProfit = recommendation?.takeProfit 
+  let takeProfit = recommendation?.takeProfit 
     || recommendation?.analysis?.takeProfit 
     || recommendation?.explanation?.takeProfit
     || recommendation?.explanation?.details?.takeProfit
     || recommendation?.explanation?.details?.ensemble?.takeProfit
     || (recommendation?.analysis?.horizons?.shortTerm?.takeProfit)
     || (recommendation?.explanation?.details?.ensemble?.horizons?.shortTerm?.takeProfit);
+  
+  // Проверяем и исправляем перепутанные значения
+  // Стоп-лосс должен быть ниже текущей цены, тейк-профит - выше
+  if (stopLoss && takeProfit && stockDetail.currentPrice) {
+    const stopLossIsAbovePrice = stopLoss > stockDetail.currentPrice;
+    const takeProfitIsBelowPrice = takeProfit < stockDetail.currentPrice;
+    
+    // Если оба значения перепутаны, меняем их местами
+    if (stopLossIsAbovePrice && takeProfitIsBelowPrice) {
+      [stopLoss, takeProfit] = [takeProfit, stopLoss];
+    } else if (stopLossIsAbovePrice) {
+      // Если только стоп-лосс выше цены, а тейк-профит правильный, меняем местами
+      [stopLoss, takeProfit] = [takeProfit, stopLoss];
+    } else if (takeProfitIsBelowPrice && stopLoss < stockDetail.currentPrice) {
+      // Если только тейк-профит ниже цены, а стоп-лосс правильный, меняем местами
+      [stopLoss, takeProfit] = [takeProfit, stopLoss];
+    }
+  }
   
   const targetPrice = recommendation?.targetPrice
     || recommendation?.analysis?.targetPrice

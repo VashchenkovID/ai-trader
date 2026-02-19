@@ -7944,8 +7944,13 @@ class SchedulerService {
                 return;
             }
             
-            // Выполняем ребалансировку
-            const result = await PortfolioRebalancingService.performRebalancing();
+            // Выполняем ребалансировку с таймаутом (максимум 2 часа)
+            const rebalancingPromise = PortfolioRebalancingService.performRebalancing();
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Portfolio rebalancing timeout after 2 hours')), 7200000)
+            );
+            
+            const result = await Promise.race([rebalancingPromise, timeoutPromise]);
             
             // Формируем отчет
             if (result.success) {
@@ -7982,7 +7987,36 @@ class SchedulerService {
                 operation: 'portfolioRebalancing',
                 error: { message: error.message, stack: error.stack }
             });
+            
+            // Завершаем воркер с ошибкой
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        WorkerMonitoringService.reportWorkerError(workerId, error.message);
+                        WorkerMonitoringService.completeWorker(workerId, false, { error: error.message });
+                    }
+                } catch (monitoringError) {
+                    // Игнорируем ошибки мониторинга
+                }
+            }
+            
             await OptimizedTelegramService.sendAlert('PORTFOLIO_REBALANCING_ERROR', error.message, 'error');
+        } finally {
+            // Завершаем воркер, если он еще активен
+            if (workerId) {
+                try {
+                    const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                    if (WorkerMonitoringService.isInitialized) {
+                        const worker = WorkerMonitoringService.getWorker(workerId);
+                        if (worker && worker.status === 'running') {
+                            WorkerMonitoringService.completeWorker(workerId, true, { completed: true });
+                        }
+                    }
+                } catch (monitoringError) {
+                    // Игнорируем ошибки мониторинга
+                }
+            }
         }
     }
 
