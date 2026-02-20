@@ -1,0 +1,1087 @@
+[
+  {
+    "variant": "Вариант 1: Рекомендуемые настройки (minConfidence=0.7, minScore=0.65)",
+    "settings": {
+      "minConfidence": 0.7,
+      "minScore": 0.65,
+      "minAgreement": 0.6,
+      "holdMinConfidence": 0.5599999999999999,
+      "holdMinScore": 0.52
+    },
+    "total": 158,
+    "passed": 48,
+    "failed": 110,
+    "byRecommendation": {
+      "BUY": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0
+      },
+      "SELL": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0
+      },
+      "HOLD": {
+        "total": 158,
+        "passed": 48,
+        "failed": 110
+      }
+    },
+    "passedRecommendations": [
+      {
+        "figi": "BBG002B298N6",
+        "ticker": "YAKG",
+        "name": "ЯТЭК",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004730ZJ9",
+        "ticker": "VTBR",
+        "name": "Банк ВТБ",
+        "recommendation": "HOLD",
+        "confidence": 0.5729391171887651,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS10A108K09",
+        "ticker": "VSEH",
+        "name": "ВИ.РУ",
+        "recommendation": "HOLD",
+        "confidence": 0.7951289802680892,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG002YFXL29",
+        "ticker": "UNKL",
+        "name": "ЮУНК",
+        "recommendation": "HOLD",
+        "confidence": 0.9902896115488001,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS00A0JPP37",
+        "ticker": "UGLD",
+        "name": "Южуралзолото ГК",
+        "recommendation": "HOLD",
+        "confidence": 0.9801455745429257,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG00475KHX6",
+        "ticker": "TRNFP",
+        "name": "Транснефть - привилегированные акции",
+        "recommendation": "HOLD",
+        "confidence": 0.571408277886867,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000RG4ZQ4",
+        "ticker": "TGKN",
+        "name": "ТГК-14",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000Q7GG57",
+        "ticker": "TGKB",
+        "name": "ТГК-2",
+        "recommendation": "HOLD",
+        "confidence": 0.9779804807712579,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000QFH687",
+        "ticker": "TGKA",
+        "name": "ТГК-1",
+        "recommendation": "HOLD",
+        "confidence": 0.8594696831343152,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S68829",
+        "ticker": "TATNP",
+        "name": "Татнефть - привилегированные акции",
+        "recommendation": "HOLD",
+        "confidence": 0.7304241864997951,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004RVFFC0",
+        "ticker": "TATN",
+        "name": "Татнефть",
+        "recommendation": "HOLD",
+        "confidence": 0.8417508084362643,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS00A0ZZBC2",
+        "ticker": "SOFL",
+        "name": "Софтлайн",
+        "recommendation": "HOLD",
+        "confidence": 0.5681264260749181,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S681M2",
+        "ticker": "SNGSP",
+        "name": "Сургутнефтегаз - привилегированные акции",
+        "recommendation": "HOLD",
+        "confidence": 0.7801302788422472,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG0047315D0",
+        "ticker": "SNGS",
+        "name": "Сургутнефтегаз",
+        "recommendation": "HOLD",
+        "confidence": 0.560948557993561,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG00F6NKQX3",
+        "ticker": "SMLT",
+        "name": "ГК Самолет",
+        "recommendation": "HOLD",
+        "confidence": 0.5607162048645352,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S682Z6",
+        "ticker": "RTKM",
+        "name": "Ростелеком",
+        "recommendation": "HOLD",
+        "confidence": 0.5737726127889659,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004731354",
+        "ticker": "ROSN",
+        "name": "Роснефть",
+        "recommendation": "HOLD",
+        "confidence": 0.5694229295964199,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG00F9XX7H4",
+        "ticker": "RNFT",
+        "name": "РуссНефть",
+        "recommendation": "HOLD",
+        "confidence": 0.5831883048208922,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG00QKJSX05",
+        "ticker": "RENI",
+        "name": "Ренессанс Страхование",
+        "recommendation": "HOLD",
+        "confidence": 0.8541028252061386,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS00A103X66",
+        "ticker": "POSI",
+        "name": "Группа Позитив",
+        "recommendation": "HOLD",
+        "confidence": 0.8477568669803011,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000R607Y3",
+        "ticker": "PLZL",
+        "name": "Полюс",
+        "recommendation": "HOLD",
+        "confidence": 0.8700490140166842,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S68BH6",
+        "ticker": "PIKK",
+        "name": "ПИК СЗ (ПАО) ао",
+        "recommendation": "HOLD",
+        "confidence": 0.8225258775302381,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000RK52V1",
+        "ticker": "OGKB",
+        "name": "Вторая генерирующая компания оптового рынка электроэнергии",
+        "recommendation": "HOLD",
+        "confidence": 0.8068683054082111,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S681B4",
+        "ticker": "NLMK",
+        "name": "НЛМК",
+        "recommendation": "HOLD",
+        "confidence": 0.977450433210365,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000GQSVC2",
+        "ticker": "NKNCP",
+        "name": "Нижнекамскнефтехим (привилегированные)",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S681W1",
+        "ticker": "MTSS",
+        "name": "МТС",
+        "recommendation": "HOLD",
+        "confidence": 0.567908676933312,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S68FR6",
+        "ticker": "MTLRP",
+        "name": "Мечел - Привилегированные акции",
+        "recommendation": "HOLD",
+        "confidence": 0.9397974112133509,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S687W8",
+        "ticker": "MSNG",
+        "name": "Мосэнерго",
+        "recommendation": "HOLD",
+        "confidence": 0.5609976600457149,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000C7P5M7",
+        "ticker": "MRKY",
+        "name": "Россети Юг",
+        "recommendation": "HOLD",
+        "confidence": 0.9784905977677918,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000PKWCQ7",
+        "ticker": "MRKV",
+        "name": "Россети Волга",
+        "recommendation": "HOLD",
+        "confidence": 0.8239599003748959,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000VH7TZ8",
+        "ticker": "MRKC",
+        "name": "Россети Центр",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004730JJ5",
+        "ticker": "MOEX",
+        "name": "Московская Биржа",
+        "recommendation": "HOLD",
+        "confidence": 0.6085397880240239,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000PZ0833",
+        "ticker": "MGTSP",
+        "name": "МГТС - акции привилегированные",
+        "recommendation": "HOLD",
+        "confidence": 0.9350095329904081,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG0029SFXB3",
+        "ticker": "KZOS",
+        "name": "Казаньоргсинтез - акции обыкновенные",
+        "recommendation": "HOLD",
+        "confidence": 0.8666778120546187,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS00A107KX0",
+        "ticker": "KLVZ",
+        "name": "Кристалл",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000DBD6F6",
+        "ticker": "KLSB",
+        "name": "Калужская сбытовая компания",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS10A10A0J4",
+        "ticker": "JETL",
+        "name": "Джетленд Холдинг",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS03A0ZYD22",
+        "ticker": "GTRK",
+        "name": "ГТМ",
+        "recommendation": "HOLD",
+        "confidence": 0.9220664162714878,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS00A107JE2",
+        "ticker": "GEMC",
+        "name": "МКПАО ЮМГ",
+        "recommendation": "HOLD",
+        "confidence": 0.8771780782076529,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000R04X57",
+        "ticker": "FLOT",
+        "name": "Совкомфлот",
+        "recommendation": "HOLD",
+        "confidence": 0.9242265723828379,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS40A10B5G8",
+        "ticker": "FIXR",
+        "name": "Публичное акционерное общество \"Фикс Прайс\"",
+        "recommendation": "HOLD",
+        "confidence": 0.5735189501100498,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG00475JZZ6",
+        "ticker": "FEES",
+        "name": "ФСК Россети",
+        "recommendation": "HOLD",
+        "confidence": 0.748395414056509,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000F6YPH8",
+        "ticker": "ELFV",
+        "name": "ЭЛ5-Энерго",
+        "recommendation": "HOLD",
+        "confidence": 0.8497946001787251,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000V07CB8",
+        "ticker": "DVEC",
+        "name": "ДЭК",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000RP8V70",
+        "ticker": "CHMK",
+        "name": "ЧМК",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000TY1CD1",
+        "ticker": "BELU",
+        "name": "Novabev Group",
+        "recommendation": "HOLD",
+        "confidence": 0.8402528207064437,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S686N0",
+        "ticker": "BANEP",
+        "name": "Башнефть - привилегированные акции",
+        "recommendation": "HOLD",
+        "confidence": 0.8535160512721763,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "RU000A106T36",
+        "ticker": "ASTR",
+        "name": "Группа Астра",
+        "recommendation": "HOLD",
+        "confidence": 0.560529211956304,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      }
+    ],
+    "failedByReason": {
+      "confidence": 15,
+      "score": 12,
+      "agreement": 0,
+      "multiple": 83
+    }
+  },
+  {
+    "variant": "Вариант 2: Значения по умолчанию (minConfidence=0.85, minScore=0.8)",
+    "settings": {
+      "minConfidence": 0.85,
+      "minScore": 0.8,
+      "minAgreement": 0.6,
+      "holdMinConfidence": 0.68,
+      "holdMinScore": 0.6400000000000001
+    },
+    "total": 158,
+    "passed": 0,
+    "failed": 158,
+    "byRecommendation": {
+      "BUY": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0
+      },
+      "SELL": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0
+      },
+      "HOLD": {
+        "total": 158,
+        "passed": 0,
+        "failed": 158
+      }
+    },
+    "passedRecommendations": [],
+    "failedByReason": {
+      "confidence": 0,
+      "score": 38,
+      "agreement": 0,
+      "multiple": 120
+    }
+  },
+  {
+    "variant": "Вариант 3: Сниженные пороги (minConfidence=0.7, minScore=0.6)",
+    "settings": {
+      "minConfidence": 0.7,
+      "minScore": 0.6,
+      "minAgreement": 0.6,
+      "holdMinConfidence": 0.5599999999999999,
+      "holdMinScore": 0.48
+    },
+    "total": 158,
+    "passed": 60,
+    "failed": 98,
+    "byRecommendation": {
+      "BUY": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0
+      },
+      "SELL": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0
+      },
+      "HOLD": {
+        "total": 158,
+        "passed": 60,
+        "failed": 98
+      }
+    },
+    "passedRecommendations": [
+      {
+        "figi": "BBG004S68CV8",
+        "ticker": "VSMO",
+        "name": "ВСМПО-АВИСМА",
+        "recommendation": "HOLD",
+        "confidence": 0.5995960758310758,
+        "score": 0.5,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004TC84Z8",
+        "ticker": "TRMK",
+        "name": "Трубная Металлургическая Компания",
+        "recommendation": "HOLD",
+        "confidence": 0.6786305690698824,
+        "score": 0.5,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000NJ9048",
+        "ticker": "RTSI",
+        "name": "Индекс РТС",
+        "recommendation": "HOLD",
+        "confidence": 0.6346522061143245,
+        "score": 0.5,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS90A0JQUZ6",
+        "ticker": "RAGR",
+        "name": "РусАгро",
+        "recommendation": "HOLD",
+        "confidence": 0.570454534861985,
+        "score": 0.5,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S68BR5",
+        "ticker": "NMTP",
+        "name": "НМТП",
+        "recommendation": "HOLD",
+        "confidence": 0.7629307954769118,
+        "score": 0.5,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000VG1034",
+        "ticker": "MRKP",
+        "name": "Россети Центр и Приволжье",
+        "recommendation": "HOLD",
+        "confidence": 0.6517232984153978,
+        "score": 0.5,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG002B2J5X0",
+        "ticker": "KRKNP",
+        "name": "Саратовский НПЗ - акции привилегированные",
+        "recommendation": "HOLD",
+        "confidence": 0.680365771233119,
+        "score": 0.5,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG002B9T6Y1",
+        "ticker": "KAZTP",
+        "name": "КуйбышевАзот - Акции привилегированные",
+        "recommendation": "HOLD",
+        "confidence": 0.7956129031123452,
+        "score": 0.5,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000RTHVK7",
+        "ticker": "GCHE",
+        "name": "Группа Черкизово",
+        "recommendation": "HOLD",
+        "confidence": 0.6378072556468996,
+        "score": 0.5,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000QJW156",
+        "ticker": "BSPB",
+        "name": "Банк Санкт-Петербург",
+        "recommendation": "HOLD",
+        "confidence": 0.6748013271554755,
+        "score": 0.5,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS00A10CTQ0",
+        "ticker": "BAZA",
+        "name": "ГК БАЗИС",
+        "recommendation": "HOLD",
+        "confidence": 0.6643200209550113,
+        "score": 0.5,
+        "agreement": 1
+      },
+      {
+        "figi": "BBG002W2FT69",
+        "ticker": "ABRD",
+        "name": "АбрауДюрсо",
+        "recommendation": "HOLD",
+        "confidence": 0.676249962303546,
+        "score": 0.5,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG002B298N6",
+        "ticker": "YAKG",
+        "name": "ЯТЭК",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004730ZJ9",
+        "ticker": "VTBR",
+        "name": "Банк ВТБ",
+        "recommendation": "HOLD",
+        "confidence": 0.5729391171887651,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS10A108K09",
+        "ticker": "VSEH",
+        "name": "ВИ.РУ",
+        "recommendation": "HOLD",
+        "confidence": 0.7951289802680892,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG002YFXL29",
+        "ticker": "UNKL",
+        "name": "ЮУНК",
+        "recommendation": "HOLD",
+        "confidence": 0.9902896115488001,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS00A0JPP37",
+        "ticker": "UGLD",
+        "name": "Южуралзолото ГК",
+        "recommendation": "HOLD",
+        "confidence": 0.9801455745429257,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG00475KHX6",
+        "ticker": "TRNFP",
+        "name": "Транснефть - привилегированные акции",
+        "recommendation": "HOLD",
+        "confidence": 0.571408277886867,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000RG4ZQ4",
+        "ticker": "TGKN",
+        "name": "ТГК-14",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000Q7GG57",
+        "ticker": "TGKB",
+        "name": "ТГК-2",
+        "recommendation": "HOLD",
+        "confidence": 0.9779804807712579,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000QFH687",
+        "ticker": "TGKA",
+        "name": "ТГК-1",
+        "recommendation": "HOLD",
+        "confidence": 0.8594696831343152,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S68829",
+        "ticker": "TATNP",
+        "name": "Татнефть - привилегированные акции",
+        "recommendation": "HOLD",
+        "confidence": 0.7304241864997951,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004RVFFC0",
+        "ticker": "TATN",
+        "name": "Татнефть",
+        "recommendation": "HOLD",
+        "confidence": 0.8417508084362643,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS00A0ZZBC2",
+        "ticker": "SOFL",
+        "name": "Софтлайн",
+        "recommendation": "HOLD",
+        "confidence": 0.5681264260749181,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S681M2",
+        "ticker": "SNGSP",
+        "name": "Сургутнефтегаз - привилегированные акции",
+        "recommendation": "HOLD",
+        "confidence": 0.7801302788422472,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG0047315D0",
+        "ticker": "SNGS",
+        "name": "Сургутнефтегаз",
+        "recommendation": "HOLD",
+        "confidence": 0.560948557993561,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG00F6NKQX3",
+        "ticker": "SMLT",
+        "name": "ГК Самолет",
+        "recommendation": "HOLD",
+        "confidence": 0.5607162048645352,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S682Z6",
+        "ticker": "RTKM",
+        "name": "Ростелеком",
+        "recommendation": "HOLD",
+        "confidence": 0.5737726127889659,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004731354",
+        "ticker": "ROSN",
+        "name": "Роснефть",
+        "recommendation": "HOLD",
+        "confidence": 0.5694229295964199,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG00F9XX7H4",
+        "ticker": "RNFT",
+        "name": "РуссНефть",
+        "recommendation": "HOLD",
+        "confidence": 0.5831883048208922,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG00QKJSX05",
+        "ticker": "RENI",
+        "name": "Ренессанс Страхование",
+        "recommendation": "HOLD",
+        "confidence": 0.8541028252061386,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS00A103X66",
+        "ticker": "POSI",
+        "name": "Группа Позитив",
+        "recommendation": "HOLD",
+        "confidence": 0.8477568669803011,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000R607Y3",
+        "ticker": "PLZL",
+        "name": "Полюс",
+        "recommendation": "HOLD",
+        "confidence": 0.8700490140166842,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S68BH6",
+        "ticker": "PIKK",
+        "name": "ПИК СЗ (ПАО) ао",
+        "recommendation": "HOLD",
+        "confidence": 0.8225258775302381,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000RK52V1",
+        "ticker": "OGKB",
+        "name": "Вторая генерирующая компания оптового рынка электроэнергии",
+        "recommendation": "HOLD",
+        "confidence": 0.8068683054082111,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S681B4",
+        "ticker": "NLMK",
+        "name": "НЛМК",
+        "recommendation": "HOLD",
+        "confidence": 0.977450433210365,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000GQSVC2",
+        "ticker": "NKNCP",
+        "name": "Нижнекамскнефтехим (привилегированные)",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S681W1",
+        "ticker": "MTSS",
+        "name": "МТС",
+        "recommendation": "HOLD",
+        "confidence": 0.567908676933312,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S68FR6",
+        "ticker": "MTLRP",
+        "name": "Мечел - Привилегированные акции",
+        "recommendation": "HOLD",
+        "confidence": 0.9397974112133509,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S687W8",
+        "ticker": "MSNG",
+        "name": "Мосэнерго",
+        "recommendation": "HOLD",
+        "confidence": 0.5609976600457149,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000C7P5M7",
+        "ticker": "MRKY",
+        "name": "Россети Юг",
+        "recommendation": "HOLD",
+        "confidence": 0.9784905977677918,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000PKWCQ7",
+        "ticker": "MRKV",
+        "name": "Россети Волга",
+        "recommendation": "HOLD",
+        "confidence": 0.8239599003748959,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000VH7TZ8",
+        "ticker": "MRKC",
+        "name": "Россети Центр",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004730JJ5",
+        "ticker": "MOEX",
+        "name": "Московская Биржа",
+        "recommendation": "HOLD",
+        "confidence": 0.6085397880240239,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000PZ0833",
+        "ticker": "MGTSP",
+        "name": "МГТС - акции привилегированные",
+        "recommendation": "HOLD",
+        "confidence": 0.9350095329904081,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG0029SFXB3",
+        "ticker": "KZOS",
+        "name": "Казаньоргсинтез - акции обыкновенные",
+        "recommendation": "HOLD",
+        "confidence": 0.8666778120546187,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS00A107KX0",
+        "ticker": "KLVZ",
+        "name": "Кристалл",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000DBD6F6",
+        "ticker": "KLSB",
+        "name": "Калужская сбытовая компания",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS10A10A0J4",
+        "ticker": "JETL",
+        "name": "Джетленд Холдинг",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS03A0ZYD22",
+        "ticker": "GTRK",
+        "name": "ГТМ",
+        "recommendation": "HOLD",
+        "confidence": 0.9220664162714878,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS00A107JE2",
+        "ticker": "GEMC",
+        "name": "МКПАО ЮМГ",
+        "recommendation": "HOLD",
+        "confidence": 0.8771780782076529,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000R04X57",
+        "ticker": "FLOT",
+        "name": "Совкомфлот",
+        "recommendation": "HOLD",
+        "confidence": 0.9242265723828379,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "TCS40A10B5G8",
+        "ticker": "FIXR",
+        "name": "Публичное акционерное общество \"Фикс Прайс\"",
+        "recommendation": "HOLD",
+        "confidence": 0.5735189501100498,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG00475JZZ6",
+        "ticker": "FEES",
+        "name": "ФСК Россети",
+        "recommendation": "HOLD",
+        "confidence": 0.748395414056509,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000F6YPH8",
+        "ticker": "ELFV",
+        "name": "ЭЛ5-Энерго",
+        "recommendation": "HOLD",
+        "confidence": 0.8497946001787251,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000V07CB8",
+        "ticker": "DVEC",
+        "name": "ДЭК",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000RP8V70",
+        "ticker": "CHMK",
+        "name": "ЧМК",
+        "recommendation": "HOLD",
+        "confidence": 1,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG000TY1CD1",
+        "ticker": "BELU",
+        "name": "Novabev Group",
+        "recommendation": "HOLD",
+        "confidence": 0.8402528207064437,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "BBG004S686N0",
+        "ticker": "BANEP",
+        "name": "Башнефть - привилегированные акции",
+        "recommendation": "HOLD",
+        "confidence": 0.8535160512721763,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      },
+      {
+        "figi": "RU000A106T36",
+        "ticker": "ASTR",
+        "name": "Группа Астра",
+        "recommendation": "HOLD",
+        "confidence": 0.560529211956304,
+        "score": 0.55,
+        "agreement": 0.6666666666666666
+      }
+    ],
+    "failedByReason": {
+      "confidence": 74,
+      "score": 0,
+      "agreement": 6,
+      "multiple": 18
+    }
+  }
+]

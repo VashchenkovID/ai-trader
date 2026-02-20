@@ -3902,16 +3902,19 @@ class NeuralNetworkService {
                             error: { message: wsError.message }
                         });
                     }
+                }
 
-                    // Автоматическое создание заявки для высокоуверенных сигналов (только для новых)
+                // Автоматическое создание заявки для высокоуверенных сигналов (для новых И обновленных рекомендаций)
+                // Убрали ограничение created === true, чтобы обрабатывать обновленные рекомендации
+                if (savedRecommendation) {
                     try {
                         const SettingsService = (await import('./SettingsService.js')).default;
                         const TradingRequestService = (await import('./TradingRequestService.js')).default;
                         const settings = await SettingsService.getSettings();
                         const autoTradeEnabled = settings.auto_trade_enabled !== false; // По умолчанию включено
-                        const minConfidence = settings.auto_trade_min_confidence || 0.85;
-                        const minScore = settings.auto_trade_min_score || 0.8;
-                        const minAgreement = settings.auto_trade_min_agreement || 0.6; // Снижено с 0.9 до 0.6 (60%)
+                        const minConfidence = parseFloat(settings.auto_trade_min_confidence) || 0.85;
+                        const minScore = parseFloat(settings.auto_trade_min_score) || 0.8;
+                        const minAgreement = parseFloat(settings.auto_trade_min_agreement) || 0.6; // Снижено с 0.9 до 0.6 (60%)
 
                         // Для BUY/SELL: проверяем стандартные условия
                         // Для HOLD: создаем BUY заявку, если confidence и score достаточно высокие
@@ -3933,52 +3936,102 @@ class NeuralNetworkService {
                         
                         if (autoTradeEnabled && meetsConfidence && meetsScore) {
                             
-                            // Получаем agreement из IntegratedAIService
+                            // Получаем agreement из сохраненной рекомендации (analysis.agreement)
+                            // Это более надежно, чем получение из IntegratedAIService
                             let agreement = null;
                             try {
-                                const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
-                                if (IntegratedAIService.isInitialized) {
-                                    const integratedRec = await IntegratedAIService.getIntegratedRecommendation(savedRecommendation.figi);
-                                    // Используем combinedAgreement если доступен (более релевантный показатель),
-                                    // иначе fallback на sourceAgreement или agreement
-                                    agreement = integratedRec.combinedAgreement !== undefined 
-                                        ? integratedRec.combinedAgreement
-                                        : (integratedRec.sourceAgreement !== undefined 
-                                            ? integratedRec.sourceAgreement 
-                                            : integratedRec.agreement || null);
+                                // Сначала пытаемся получить из сохраненной рекомендации
+                                const analysis = savedRecommendation.analysis || {};
+                                agreement = analysis.agreement !== undefined ? analysis.agreement : null;
+                                
+                                // Если не найдено в сохраненной рекомендации, пытаемся получить из IntegratedAIService
+                                if (agreement === null) {
+                                    const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
+                                    if (IntegratedAIService.isInitialized) {
+                                        const integratedRec = await IntegratedAIService.getIntegratedRecommendation(savedRecommendation.figi);
+                                        // Используем combinedAgreement если доступен (более релевантный показатель),
+                                        // иначе fallback на sourceAgreement или agreement
+                                        agreement = integratedRec.combinedAgreement !== undefined 
+                                            ? integratedRec.combinedAgreement
+                                            : (integratedRec.sourceAgreement !== undefined 
+                                                ? integratedRec.sourceAgreement 
+                                                : integratedRec.agreement || null);
+                                    }
                                 }
                             } catch (error) {
                                 LoggerService.warn('Could not get agreement for auto-trade', {
                                     service: 'NeuralNetworkService',
                                     operation: 'getAgreementForAutoTrade',
+                                    figi: savedRecommendation.figi,
                                     error: { message: error.message }
                                 });
                             }
 
-                            const meetsAgreement = agreement === null || agreement >= minAgreement;
+                            // Проверяем agreement: если null, считаем что проверка не пройдена (требуем явное значение)
+                            const meetsAgreement = agreement !== null && agreement >= minAgreement;
 
                             if (meetsAgreement) {
-                                // Автоматически создаем заявку
-                                // Для HOLD рекомендаций TradingRequestService автоматически создаст BUY заявку
-                                await TradingRequestService.createTradingRequest(savedRecommendation.figi, {
-                                    strategyId: strategyId || undefined
+                                // Проверяем, не создана ли уже заявка для этой рекомендации
+                                const TradingRequest = (await import('../models/TradingRequest.js')).default;
+                                const existingRequest = await TradingRequest.findOne({
+                                    where: {
+                                        figi: savedRecommendation.figi,
+                                        status: {
+                                            [require('sequelize').Op.in]: ['pending', 'approved']
+                                        }
+                                    }
                                 });
-                                
-                                if (isHold) {
-                                    LoggerService.debug('Auto-created BUY request from HOLD recommendation', {
+
+                                if (!existingRequest) {
+                                    // Автоматически создаем заявку
+                                    // Для HOLD рекомендаций TradingRequestService автоматически создаст BUY заявку
+                                    await TradingRequestService.createTradingRequest(savedRecommendation.figi, {
+                                        strategyId: strategyId || undefined
+                                    });
+                                    
+                                    LoggerService.info('Auto-created trading request', {
                                         service: 'NeuralNetworkService',
                                         figi: savedRecommendation.figi,
+                                        ticker: savedRecommendation.ticker,
+                                        recommendation: savedRecommendation.recommendation,
                                         confidence: savedRecommendation.confidence,
-                                        score: savedRecommendation.score
+                                        score: savedRecommendation.score,
+                                        agreement: agreement,
+                                        created: created
+                                    });
+                                } else {
+                                    LoggerService.debug('Trading request already exists, skipping', {
+                                        service: 'NeuralNetworkService',
+                                        figi: savedRecommendation.figi
                                     });
                                 }
+                            } else {
+                                LoggerService.debug('Recommendation does not meet agreement threshold', {
+                                    service: 'NeuralNetworkService',
+                                    figi: savedRecommendation.figi,
+                                    agreement: agreement,
+                                    minAgreement: minAgreement
+                                });
                             }
+                        } else {
+                            LoggerService.debug('Recommendation does not meet confidence/score thresholds', {
+                                service: 'NeuralNetworkService',
+                                figi: savedRecommendation.figi,
+                                recommendation: savedRecommendation.recommendation,
+                                confidence: savedRecommendation.confidence,
+                                score: savedRecommendation.score,
+                                meetsConfidence: meetsConfidence,
+                                meetsScore: meetsScore,
+                                minConfidence: isHold ? holdMinConfidence : minConfidence,
+                                minScore: isHold ? holdMinScore : minScore
+                            });
                         }
                     } catch (autoTradeError) {
                         LoggerService.warn('Could not auto-create trading request', {
                             service: 'NeuralNetworkService',
                             operation: 'autoCreateTradingRequest',
-                            error: { message: autoTradeError.message }
+                            figi: savedRecommendation?.figi,
+                            error: { message: autoTradeError.message, stack: autoTradeError.stack }
                         });
                         // Не прерываем выполнение, если не удалось создать заявку
                     }
