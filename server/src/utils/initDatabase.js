@@ -885,7 +885,7 @@ export async function initDatabase() {
             ];
             
             // Получаем список существующих столбцов одним запросом
-            const [existingColumns] = await sequelize.query(`
+            const existingColumns = await sequelize.query(`
                 SELECT column_name 
                 FROM information_schema.columns 
                 WHERE table_schema = 'public' 
@@ -894,8 +894,11 @@ export async function initDatabase() {
                 type: sequelize.QueryTypes.SELECT
             });
             
+            // Обрабатываем результат - Sequelize возвращает массив напрямую при QueryTypes.SELECT
+            const columnsArray = Array.isArray(existingColumns) ? existingColumns : [];
+            
             const existingColumnNames = new Set(
-                existingColumns.map(row => row.column_name)
+                columnsArray.map(row => row.column_name)
             );
             
             for (const column of columnsToAdd) {
@@ -925,22 +928,46 @@ export async function initDatabase() {
             }
             
             // Создаем индексы, если их еще нет
-            try {
-                await sequelize.query(`
-                    CREATE INDEX IF NOT EXISTS "idx_trading_requests_auto_executed" 
-                    ON trading_requests ("autoExecuted");
-                `);
-            } catch (idxError) {
-                // Игнорируем, если индекс уже существует
-            }
+            const indexesToCreate = [
+                { name: 'idx_trading_requests_auto_executed', column: 'autoExecuted' },
+                { name: 'idx_trading_requests_auto_execution_phase', column: 'autoExecutionPhase' }
+            ];
             
-            try {
-                await sequelize.query(`
-                    CREATE INDEX IF NOT EXISTS "idx_trading_requests_auto_execution_phase" 
-                    ON trading_requests ("autoExecutionPhase");
-                `);
-            } catch (idxError) {
-                // Игнорируем, если индекс уже существует
+            // Получаем список существующих индексов
+            const existingIndexes = await sequelize.query(`
+                SELECT indexname 
+                FROM pg_indexes 
+                WHERE schemaname = 'public' 
+                AND tablename = 'trading_requests';
+            `, {
+                type: sequelize.QueryTypes.SELECT
+            });
+            
+            const indexesArray = Array.isArray(existingIndexes) ? existingIndexes : [];
+            const existingIndexNames = new Set(
+                indexesArray.map(row => row.indexname)
+            );
+            
+            for (const index of indexesToCreate) {
+                // Пропускаем, если индекс уже существует
+                if (existingIndexNames.has(index.name)) {
+                    continue;
+                }
+                
+                try {
+                    await sequelize.query(`
+                        CREATE INDEX "${index.name}" 
+                        ON trading_requests ("${index.column}");
+                    `);
+                } catch (idxError) {
+                    // Игнорируем, если индекс уже существует (может быть создан параллельно)
+                    if (!idxError.message || (
+                        !idxError.message.includes('already exists') && 
+                        !idxError.message.includes('duplicate')
+                    )) {
+                        console.warn(`⚠️ Предупреждение при создании индекса ${index.name}:`, idxError.message);
+                    }
+                }
             }
             
             console.log('✅ Поля для автоматической торговли добавлены в trading_requests');
