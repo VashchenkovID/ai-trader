@@ -3913,9 +3913,25 @@ class NeuralNetworkService {
                         const minScore = settings.auto_trade_min_score || 0.8;
                         const minAgreement = settings.auto_trade_min_agreement || 0.6; // Снижено с 0.9 до 0.6 (60%)
 
-                        if (autoTradeEnabled && 
-                            savedRecommendation.confidence >= minConfidence && 
-                            savedRecommendation.score >= minScore) {
+                        // Для BUY/SELL: проверяем стандартные условия
+                        // Для HOLD: создаем BUY заявку, если confidence и score достаточно высокие
+                        const isBuyOrSell = savedRecommendation.recommendation === 'BUY' || savedRecommendation.recommendation === 'SELL';
+                        const isHold = savedRecommendation.recommendation === 'HOLD';
+                        
+                        // Для HOLD используем более мягкие пороги (80% от обычных, так как это нейтральная рекомендация)
+                        // Это позволяет обрабатывать больше HOLD рекомендаций, которые составляют ~90% всех рекомендаций
+                        const holdMinConfidence = minConfidence * 0.8; // 80% от обычного порога для HOLD
+                        const holdMinScore = minScore * 0.8; // 80% от обычного порога для HOLD
+                        
+                        const meetsConfidence = isBuyOrSell 
+                            ? savedRecommendation.confidence >= minConfidence
+                            : (isHold && savedRecommendation.confidence >= holdMinConfidence);
+                        
+                        const meetsScore = isBuyOrSell
+                            ? savedRecommendation.score >= minScore
+                            : (isHold && savedRecommendation.score >= holdMinScore);
+                        
+                        if (autoTradeEnabled && meetsConfidence && meetsScore) {
                             
                             // Получаем agreement из IntegratedAIService
                             let agreement = null;
@@ -3943,9 +3959,19 @@ class NeuralNetworkService {
 
                             if (meetsAgreement) {
                                 // Автоматически создаем заявку
+                                // Для HOLD рекомендаций TradingRequestService автоматически создаст BUY заявку
                                 await TradingRequestService.createTradingRequest(savedRecommendation.figi, {
                                     strategyId: strategyId || undefined
                                 });
+                                
+                                if (isHold) {
+                                    LoggerService.debug('Auto-created BUY request from HOLD recommendation', {
+                                        service: 'NeuralNetworkService',
+                                        figi: savedRecommendation.figi,
+                                        confidence: savedRecommendation.confidence,
+                                        score: savedRecommendation.score
+                                    });
+                                }
                             }
                         }
                     } catch (autoTradeError) {
