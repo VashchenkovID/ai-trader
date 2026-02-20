@@ -350,7 +350,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:09.738Z"
+                        "timestamp": "2026-02-20T14:03:30.976Z"
                     },
                     "horizons": null
                 },
@@ -375,14 +375,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.664Z",
+        "analysisDate": "2026-02-20T14:10:56.289Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 6.11,
-        "targetPrice": 6.415500000000001,
-        "stopLoss": 5.8045,
-        "takeProfit": 6.721000000000001,
+        "priceAtAnalysis": 6.102,
+        "targetPrice": 6.407100000000001,
+        "stopLoss": 5.7969,
+        "takeProfit": 6.712200000000001,
         "strategyId": null,
         "tags": [],
         "sector": "financial",
@@ -390,7 +390,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:40.457Z",
-        "updatedAt": "2026-02-20T13:45:35.664Z",
+        "updatedAt": "2026-02-20T14:10:56.290Z",
         "strategy": null
     },
     {
@@ -744,7 +744,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:37:53.467Z"
+                        "timestamp": "2026-02-20T14:03:14.672Z"
                     },
                     "horizons": null
                 },
@@ -769,14 +769,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.660Z",
+        "analysisDate": "2026-02-20T14:10:56.285Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1491.5,
-        "targetPrice": 1566.075,
-        "stopLoss": 1416.925,
-        "takeProfit": 1640.65,
+        "priceAtAnalysis": 1487.5,
+        "targetPrice": 1561.875,
+        "stopLoss": 1413.125,
+        "takeProfit": 1636.2500000000002,
         "strategyId": null,
         "tags": [],
         "sector": "energy",
@@ -784,7 +784,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:40.454Z",
-        "updatedAt": "2026-02-20T13:45:35.661Z",
+        "updatedAt": "2026-02-20T14:10:56.285Z",
         "strategy": null
     },
     {
@@ -1138,21 +1138,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:44:48.258Z"
+                        "timestamp": "2026-02-20T14:10:09.283Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.657Z",
+        "analysisDate": "2026-02-20T14:10:56.280Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 149,
-        "targetPrice": 156.45000000000002,
-        "stopLoss": 141.54999999999998,
-        "takeProfit": 163.9,
+        "priceAtAnalysis": 148.95,
+        "targetPrice": 156.3975,
+        "stopLoss": 141.50249999999997,
+        "takeProfit": 163.845,
         "strategyId": null,
         "tags": [],
         "sector": "financial",
@@ -1160,7 +1160,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:40.451Z",
-        "updatedAt": "2026-02-20T13:45:35.657Z",
+        "updatedAt": "2026-02-20T14:10:56.280Z",
         "strategy": null
     },
     {
@@ -1514,7 +1514,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:44:45.851Z"
+                        "timestamp": "2026-02-20T14:10:06.799Z"
                     },
                     "horizons": null
                 },
@@ -1539,14 +1539,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.654Z",
+        "analysisDate": "2026-02-20T14:10:56.276Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 4786,
-        "targetPrice": 5025.3,
-        "stopLoss": 4546.7,
-        "takeProfit": 5264.6,
+        "priceAtAnalysis": 4789.5,
+        "targetPrice": 5028.975,
+        "stopLoss": 4550.025,
+        "takeProfit": 5268.450000000001,
         "strategyId": null,
         "tags": [],
         "sector": "it",
@@ -1554,7 +1554,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:40.448Z",
-        "updatedAt": "2026-02-20T13:45:35.654Z",
+        "updatedAt": "2026-02-20T14:10:56.276Z",
         "strategy": null
     },
     {
@@ -1908,21 +1908,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:44:37.814Z"
+                        "timestamp": "2026-02-20T14:09:58.763Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.651Z",
+        "analysisDate": "2026-02-20T14:10:56.271Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 103,
-        "targetPrice": 108.15,
-        "stopLoss": 97.85,
-        "takeProfit": 113.30000000000001,
+        "priceAtAnalysis": 102.8,
+        "targetPrice": 107.94,
+        "stopLoss": 97.66,
+        "takeProfit": 113.08000000000001,
         "strategyId": null,
         "tags": [],
         "sector": "industrials",
@@ -1930,7 +1930,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:40.444Z",
-        "updatedAt": "2026-02-20T13:45:35.651Z",
+        "updatedAt": "2026-02-20T14:10:56.272Z",
         "strategy": null
     },
     {
@@ -2105,7 +2105,7 @@
                     "score": 0.6744462698698044,
                     "confidence": 0.9696534134321414,
                     "recommendation": "HOLD",
-                    "weight": 0.5798906641831466,
+                    "weight": 0.5798899207965438,
                     "rawDetails": {
                         "lstm": 0.5523136258125305,
                         "cnn": 0.6172023415565491,
@@ -2274,7 +2274,7 @@
                     "score": 0.5063953995704651,
                     "confidence": 0.5063953995704651,
                     "recommendation": "HOLD",
-                    "weight": 0.3028442539657573,
+                    "weight": 0.30284386573677724,
                     "rawDetails": {
                         "summary": "Умеренная рекомендация к покупке",
                         "confidence": "Низкая",
@@ -2284,7 +2284,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:44:32.531Z"
+                        "timestamp": "2026-02-20T14:09:53.501Z"
                     },
                     "horizons": null
                 },
@@ -2292,7 +2292,7 @@
                     "score": 0.265,
                     "confidence": 0.47,
                     "recommendation": "SELL",
-                    "weight": 0.04529732034666582,
+                    "weight": 0.04529726227809675,
                     "rawDetails": {
                         "signalsCount": 2,
                         "buySignals": 0,
@@ -2309,7 +2309,7 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.647Z",
+        "analysisDate": "2026-02-20T14:10:56.266Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -2324,7 +2324,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:40.440Z",
-        "updatedAt": "2026-02-20T13:45:35.648Z",
+        "updatedAt": "2026-02-20T14:10:56.267Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -2683,21 +2683,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:44:27.430Z"
+                        "timestamp": "2026-02-20T14:09:48.296Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.085Z",
+        "analysisDate": "2026-02-20T14:10:55.717Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 371,
-        "targetPrice": 389.55,
-        "stopLoss": 352.45,
-        "takeProfit": 408.1,
+        "priceAtAnalysis": 377.5,
+        "targetPrice": 396.375,
+        "stopLoss": 358.625,
+        "takeProfit": 415.25000000000006,
         "strategyId": null,
         "tags": [],
         "sector": "utilities",
@@ -2705,7 +2705,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:39.883Z",
-        "updatedAt": "2026-02-20T13:45:35.085Z",
+        "updatedAt": "2026-02-20T14:10:55.717Z",
         "strategy": null
     },
     {
@@ -3059,21 +3059,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:44:24.830Z"
+                        "timestamp": "2026-02-20T14:09:45.686Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.082Z",
+        "analysisDate": "2026-02-20T14:10:55.711Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 318.75,
-        "targetPrice": 334.6875,
-        "stopLoss": 302.8125,
-        "takeProfit": 350.625,
+        "priceAtAnalysis": 318.5,
+        "targetPrice": 334.425,
+        "stopLoss": 302.575,
+        "takeProfit": 350.35,
         "strategyId": null,
         "tags": [],
         "sector": "it",
@@ -3081,7 +3081,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:39.881Z",
-        "updatedAt": "2026-02-20T13:45:35.083Z",
+        "updatedAt": "2026-02-20T14:10:55.712Z",
         "strategy": null
     },
     {
@@ -3435,21 +3435,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:44:19.472Z"
+                        "timestamp": "2026-02-20T14:09:40.339Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.080Z",
+        "analysisDate": "2026-02-20T14:10:55.707Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 30.8,
-        "targetPrice": 32.34,
-        "stopLoss": 29.259999999999998,
-        "takeProfit": 33.88,
+        "priceAtAnalysis": 30.76,
+        "targetPrice": 32.298,
+        "stopLoss": 29.222,
+        "takeProfit": 33.836000000000006,
         "strategyId": null,
         "tags": [],
         "sector": "industrials",
@@ -3457,7 +3457,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:39.877Z",
-        "updatedAt": "2026-02-20T13:45:35.080Z",
+        "updatedAt": "2026-02-20T14:10:55.707Z",
         "strategy": null
     },
     {
@@ -3811,21 +3811,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:44:11.550Z"
+                        "timestamp": "2026-02-20T14:09:32.414Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.077Z",
+        "analysisDate": "2026-02-20T14:10:55.702Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.458,
-        "targetPrice": 0.48090000000000005,
-        "stopLoss": 0.4351,
-        "takeProfit": 0.5038,
+        "priceAtAnalysis": 0.457,
+        "targetPrice": 0.47985000000000005,
+        "stopLoss": 0.43415,
+        "takeProfit": 0.5027,
         "strategyId": null,
         "tags": [],
         "sector": "industrials",
@@ -3833,7 +3833,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:39.873Z",
-        "updatedAt": "2026-02-20T13:45:35.077Z",
+        "updatedAt": "2026-02-20T14:10:55.702Z",
         "strategy": null
     },
     {
@@ -4187,21 +4187,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:44:03.092Z"
+                        "timestamp": "2026-02-20T14:09:24.007Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.074Z",
+        "analysisDate": "2026-02-20T14:10:55.697Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.6145,
-        "targetPrice": 0.645225,
-        "stopLoss": 0.583775,
-        "takeProfit": 0.67595,
+        "priceAtAnalysis": 0.615,
+        "targetPrice": 0.64575,
+        "stopLoss": 0.5842499999999999,
+        "takeProfit": 0.6765,
         "strategyId": null,
         "tags": [],
         "sector": "telecom",
@@ -4209,7 +4209,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:39.866Z",
-        "updatedAt": "2026-02-20T13:45:35.075Z",
+        "updatedAt": "2026-02-20T14:10:55.697Z",
         "strategy": null
     },
     {
@@ -4563,7 +4563,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:43:57.820Z"
+                        "timestamp": "2026-02-20T14:09:18.751Z"
                     },
                     "horizons": null
                 },
@@ -4588,14 +4588,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:35.071Z",
+        "analysisDate": "2026-02-20T14:10:55.691Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 106.78,
-        "targetPrice": 112.119,
-        "stopLoss": 103.25457142857142,
-        "takeProfit": 117.45800000000001,
+        "priceAtAnalysis": 106.82,
+        "targetPrice": 112.161,
+        "stopLoss": 103.29457142857142,
+        "takeProfit": 117.502,
         "strategyId": 1,
         "tags": [],
         "sector": "materials",
@@ -4603,7 +4603,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:39.862Z",
-        "updatedAt": "2026-02-20T13:45:35.071Z",
+        "updatedAt": "2026-02-20T14:10:55.692Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -4962,14 +4962,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:43:50.042Z"
+                        "timestamp": "2026-02-20T14:09:10.904Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:34.485Z",
+        "analysisDate": "2026-02-20T14:10:55.116Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -4984,7 +4984,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:39.290Z",
-        "updatedAt": "2026-02-20T13:45:34.485Z",
+        "updatedAt": "2026-02-20T14:10:55.117Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -5343,7 +5343,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:43:36.757Z"
+                        "timestamp": "2026-02-20T14:08:57.718Z"
                     },
                     "horizons": null
                 },
@@ -5368,14 +5368,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.940Z",
+        "analysisDate": "2026-02-20T14:10:54.576Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 3519,
-        "targetPrice": 3694.9500000000003,
-        "stopLoss": 3343.0499999999997,
-        "takeProfit": 3870.9,
+        "priceAtAnalysis": 3518.8,
+        "targetPrice": 3694.7400000000002,
+        "stopLoss": 3342.86,
+        "takeProfit": 3870.6800000000003,
         "strategyId": null,
         "tags": [],
         "sector": "financial",
@@ -5383,7 +5383,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.745Z",
-        "updatedAt": "2026-02-20T13:45:33.940Z",
+        "updatedAt": "2026-02-20T14:10:54.576Z",
         "strategy": null
     },
     {
@@ -5737,7 +5737,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:43:34.130Z"
+                        "timestamp": "2026-02-20T14:08:55.062Z"
                     },
                     "horizons": null
                 },
@@ -5762,14 +5762,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.937Z",
+        "analysisDate": "2026-02-20T14:10:54.572Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 14.16,
-        "targetPrice": 14.868,
-        "stopLoss": 13.452,
-        "takeProfit": 15.576000000000002,
+        "priceAtAnalysis": 14.165,
+        "targetPrice": 14.87325,
+        "stopLoss": 13.456749999999998,
+        "takeProfit": 15.5815,
         "strategyId": null,
         "tags": [],
         "sector": "financial",
@@ -5777,7 +5777,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.741Z",
-        "updatedAt": "2026-02-20T13:45:33.937Z",
+        "updatedAt": "2026-02-20T14:10:54.572Z",
         "strategy": null
     },
     {
@@ -6131,7 +6131,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:43:31.408Z"
+                        "timestamp": "2026-02-20T14:08:52.426Z"
                     },
                     "horizons": null
                 },
@@ -6156,14 +6156,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.933Z",
+        "analysisDate": "2026-02-20T14:10:54.568Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 555.5,
-        "targetPrice": 583.275,
-        "stopLoss": 527.725,
-        "takeProfit": 611.0500000000001,
+        "priceAtAnalysis": 557,
+        "targetPrice": 584.85,
+        "stopLoss": 529.15,
+        "takeProfit": 612.7,
         "strategyId": null,
         "tags": [],
         "sector": "consumer",
@@ -6171,7 +6171,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.738Z",
-        "updatedAt": "2026-02-20T13:45:33.934Z",
+        "updatedAt": "2026-02-20T14:10:54.568Z",
         "strategy": null
     },
     {
@@ -6525,21 +6525,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:43:28.938Z"
+                        "timestamp": "2026-02-20T14:08:49.905Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.930Z",
+        "analysisDate": "2026-02-20T14:10:54.564Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 253.7,
-        "targetPrice": 266.385,
-        "stopLoss": 241.015,
-        "takeProfit": 279.07,
+        "priceAtAnalysis": 253.6,
+        "targetPrice": 266.28000000000003,
+        "stopLoss": 240.92,
+        "takeProfit": 278.96000000000004,
         "strategyId": null,
         "tags": [],
         "sector": "financial",
@@ -6547,7 +6547,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.735Z",
-        "updatedAt": "2026-02-20T13:45:33.930Z",
+        "updatedAt": "2026-02-20T14:10:54.564Z",
         "strategy": null
     },
     {
@@ -6901,7 +6901,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:43:12.918Z"
+                        "timestamp": "2026-02-20T14:08:33.848Z"
                     },
                     "horizons": null
                 },
@@ -6926,14 +6926,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.927Z",
+        "analysisDate": "2026-02-20T14:10:54.560Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 504.2,
-        "targetPrice": 529.41,
-        "stopLoss": 478.98999999999995,
-        "takeProfit": 554.62,
+        "priceAtAnalysis": 504.45,
+        "targetPrice": 529.6725,
+        "stopLoss": 479.22749999999996,
+        "takeProfit": 554.895,
         "strategyId": null,
         "tags": [],
         "sector": "energy",
@@ -6941,7 +6941,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.732Z",
-        "updatedAt": "2026-02-20T13:45:33.927Z",
+        "updatedAt": "2026-02-20T14:10:54.560Z",
         "strategy": null
     },
     {
@@ -7295,7 +7295,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:43:10.156Z"
+                        "timestamp": "2026-02-20T14:08:31.184Z"
                     },
                     "horizons": null
                 },
@@ -7320,14 +7320,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.924Z",
+        "analysisDate": "2026-02-20T14:10:54.556Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1.3345,
-        "targetPrice": 1.4012250000000002,
-        "stopLoss": 1.2677749999999999,
-        "takeProfit": 1.46795,
+        "priceAtAnalysis": 1.3325,
+        "targetPrice": 1.3991250000000002,
+        "stopLoss": 1.2658749999999999,
+        "takeProfit": 1.46575,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -7335,7 +7335,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.729Z",
-        "updatedAt": "2026-02-20T13:45:33.924Z",
+        "updatedAt": "2026-02-20T14:10:54.557Z",
         "strategy": null
     },
     {
@@ -7689,21 +7689,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:43:07.546Z"
+                        "timestamp": "2026-02-20T14:08:28.541Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.921Z",
+        "analysisDate": "2026-02-20T14:10:54.553Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 925.2,
-        "targetPrice": 971.46,
-        "stopLoss": 878.94,
-        "takeProfit": 1017.7200000000001,
+        "priceAtAnalysis": 923.4,
+        "targetPrice": 969.57,
+        "stopLoss": 877.2299999999999,
+        "takeProfit": 1015.74,
         "strategyId": null,
         "tags": [],
         "sector": "financial",
@@ -7711,7 +7711,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.719Z",
-        "updatedAt": "2026-02-20T13:45:33.921Z",
+        "updatedAt": "2026-02-20T14:10:54.553Z",
         "strategy": null
     },
     {
@@ -8065,21 +8065,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:43:04.912Z"
+                        "timestamp": "2026-02-20T14:08:25.920Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.917Z",
+        "analysisDate": "2026-02-20T14:10:54.549Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 56.36,
-        "targetPrice": 59.178000000000004,
-        "stopLoss": 53.541999999999994,
-        "takeProfit": 61.996,
+        "priceAtAnalysis": 56.55,
+        "targetPrice": 59.3775,
+        "stopLoss": 53.7225,
+        "takeProfit": 62.205000000000005,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -8087,7 +8087,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.716Z",
-        "updatedAt": "2026-02-20T13:45:33.917Z",
+        "updatedAt": "2026-02-20T14:10:54.549Z",
         "strategy": null
     },
     {
@@ -8441,21 +8441,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:42:57.021Z"
+                        "timestamp": "2026-02-20T14:08:18.035Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.913Z",
+        "analysisDate": "2026-02-20T14:10:54.545Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 38.275,
-        "targetPrice": 40.18875,
-        "stopLoss": 36.36125,
-        "takeProfit": 42.1025,
+        "priceAtAnalysis": 38.25,
+        "targetPrice": 40.1625,
+        "stopLoss": 36.3375,
+        "takeProfit": 42.075,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -8463,7 +8463,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.713Z",
-        "updatedAt": "2026-02-20T13:45:33.913Z",
+        "updatedAt": "2026-02-20T14:10:54.545Z",
         "strategy": null
     },
     {
@@ -8817,14 +8817,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:42:54.569Z"
+                        "timestamp": "2026-02-20T14:08:15.531Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.909Z",
+        "analysisDate": "2026-02-20T14:10:54.540Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -8839,7 +8839,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.710Z",
-        "updatedAt": "2026-02-20T13:45:33.910Z",
+        "updatedAt": "2026-02-20T14:10:54.541Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -9198,21 +9198,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:42:53.747Z"
+                        "timestamp": "2026-02-20T14:08:14.756Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.350Z",
+        "analysisDate": "2026-02-20T14:10:53.984Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 62.5,
-        "targetPrice": 65.625,
-        "stopLoss": 59.375,
-        "takeProfit": 68.75,
+        "priceAtAnalysis": 62.45,
+        "targetPrice": 65.5725,
+        "stopLoss": 59.3275,
+        "takeProfit": 68.69500000000001,
         "strategyId": null,
         "tags": [],
         "sector": "telecom",
@@ -9220,7 +9220,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.154Z",
-        "updatedAt": "2026-02-20T13:45:33.351Z",
+        "updatedAt": "2026-02-20T14:10:53.985Z",
         "strategy": null
     },
     {
@@ -9574,21 +9574,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:42:45.939Z"
+                        "timestamp": "2026-02-20T14:08:06.839Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.347Z",
+        "analysisDate": "2026-02-20T14:10:53.978Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.574,
-        "targetPrice": 0.6027,
-        "stopLoss": 0.5452999999999999,
-        "takeProfit": 0.6314,
+        "priceAtAnalysis": 0.5728,
+        "targetPrice": 0.60144,
+        "stopLoss": 0.54416,
+        "takeProfit": 0.63008,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -9596,7 +9596,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.151Z",
-        "updatedAt": "2026-02-20T13:45:33.347Z",
+        "updatedAt": "2026-02-20T14:10:53.979Z",
         "strategy": null
     },
     {
@@ -9950,21 +9950,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:42:40.635Z"
+                        "timestamp": "2026-02-20T14:08:01.663Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.343Z",
+        "analysisDate": "2026-02-20T14:10:53.975Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 16940,
-        "targetPrice": 17787,
-        "stopLoss": 16093,
-        "takeProfit": 18634,
+        "priceAtAnalysis": 17100,
+        "targetPrice": 17955,
+        "stopLoss": 16245,
+        "takeProfit": 18810,
         "strategyId": null,
         "tags": [],
         "sector": "industrials",
@@ -9972,7 +9972,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.149Z",
-        "updatedAt": "2026-02-20T13:45:33.344Z",
+        "updatedAt": "2026-02-20T14:10:53.975Z",
         "strategy": null
     },
     {
@@ -10326,21 +10326,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:42:35.393Z"
+                        "timestamp": "2026-02-20T14:07:56.411Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.340Z",
+        "analysisDate": "2026-02-20T14:10:53.971Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 11.455,
-        "targetPrice": 12.027750000000001,
-        "stopLoss": 10.882249999999999,
-        "takeProfit": 12.6005,
+        "priceAtAnalysis": 11.45,
+        "targetPrice": 12.022499999999999,
+        "stopLoss": 10.8775,
+        "takeProfit": 12.595,
         "strategyId": null,
         "tags": [],
         "sector": "telecom",
@@ -10348,7 +10348,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.146Z",
-        "updatedAt": "2026-02-20T13:45:33.340Z",
+        "updatedAt": "2026-02-20T14:10:53.971Z",
         "strategy": null
     },
     {
@@ -10702,7 +10702,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:42:32.782Z"
+                        "timestamp": "2026-02-20T14:07:53.784Z"
                     },
                     "horizons": null
                 },
@@ -10727,14 +10727,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.335Z",
+        "analysisDate": "2026-02-20T14:10:53.967Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 171.55,
-        "targetPrice": 180.12750000000003,
-        "stopLoss": 162.9725,
-        "takeProfit": 188.70500000000004,
+        "priceAtAnalysis": 171.35,
+        "targetPrice": 179.9175,
+        "stopLoss": 162.7825,
+        "takeProfit": 188.485,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -10742,7 +10742,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.143Z",
-        "updatedAt": "2026-02-20T13:45:33.336Z",
+        "updatedAt": "2026-02-20T14:10:53.967Z",
         "strategy": null
     },
     {
@@ -11096,7 +11096,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:42:30.127Z"
+                        "timestamp": "2026-02-20T14:07:51.117Z"
                     },
                     "horizons": null
                 },
@@ -11121,7 +11121,7 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:33.330Z",
+        "analysisDate": "2026-02-20T14:10:53.961Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -11136,7 +11136,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:38.139Z",
-        "updatedAt": "2026-02-20T13:45:33.331Z",
+        "updatedAt": "2026-02-20T14:10:53.962Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -11495,21 +11495,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:42:24.848Z"
+                        "timestamp": "2026-02-20T14:07:45.856Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.778Z",
+        "analysisDate": "2026-02-20T14:10:53.410Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 4.808,
-        "targetPrice": 5.0484,
-        "stopLoss": 4.5676,
-        "takeProfit": 5.2888,
+        "priceAtAnalysis": 4.798,
+        "targetPrice": 5.0379000000000005,
+        "stopLoss": 4.5581,
+        "takeProfit": 5.2778,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -11517,7 +11517,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:37.566Z",
-        "updatedAt": "2026-02-20T13:45:32.778Z",
+        "updatedAt": "2026-02-20T14:10:53.410Z",
         "strategy": null
     },
     {
@@ -11871,21 +11871,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:42:19.625Z"
+                        "timestamp": "2026-02-20T14:07:40.647Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.772Z",
+        "analysisDate": "2026-02-20T14:10:53.404Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 618.6,
-        "targetPrice": 649.5300000000001,
-        "stopLoss": 587.67,
-        "takeProfit": 680.46,
+        "priceAtAnalysis": 615,
+        "targetPrice": 645.75,
+        "stopLoss": 584.25,
+        "takeProfit": 676.5,
         "strategyId": null,
         "tags": [],
         "sector": "utilities",
@@ -11893,7 +11893,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:37.563Z",
-        "updatedAt": "2026-02-20T13:45:32.773Z",
+        "updatedAt": "2026-02-20T14:10:53.404Z",
         "strategy": null
     },
     {
@@ -12247,21 +12247,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:42:17.049Z"
+                        "timestamp": "2026-02-20T14:07:38.031Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.768Z",
+        "analysisDate": "2026-02-20T14:10:53.399Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 522.8,
-        "targetPrice": 548.9399999999999,
-        "stopLoss": 496.6599999999999,
-        "takeProfit": 575.08,
+        "priceAtAnalysis": 522.5,
+        "targetPrice": 548.625,
+        "stopLoss": 496.375,
+        "takeProfit": 574.75,
         "strategyId": null,
         "tags": [],
         "sector": "utilities",
@@ -12269,7 +12269,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:37.560Z",
-        "updatedAt": "2026-02-20T13:45:32.768Z",
+        "updatedAt": "2026-02-20T14:10:53.399Z",
         "strategy": null
     },
     {
@@ -12623,21 +12623,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:42:09.070Z"
+                        "timestamp": "2026-02-20T14:07:30.098Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.765Z",
+        "analysisDate": "2026-02-20T14:10:53.395Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 6691,
-        "targetPrice": 7025.55,
-        "stopLoss": 6356.45,
-        "takeProfit": 7360.1,
+        "priceAtAnalysis": 6670,
+        "targetPrice": 7003.5,
+        "stopLoss": 6336.5,
+        "takeProfit": 7337.000000000001,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -12645,7 +12645,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:37.557Z",
-        "updatedAt": "2026-02-20T13:45:32.765Z",
+        "updatedAt": "2026-02-20T14:10:53.395Z",
         "strategy": null
     },
     {
@@ -12999,7 +12999,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:41:52.859Z"
+                        "timestamp": "2026-02-20T14:07:13.885Z"
                     },
                     "horizons": null
                 },
@@ -13024,14 +13024,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.762Z",
+        "analysisDate": "2026-02-20T14:10:53.390Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1192.1,
-        "targetPrice": 1251.705,
-        "stopLoss": 1132.495,
-        "takeProfit": 1311.31,
+        "priceAtAnalysis": 1192.6,
+        "targetPrice": 1252.23,
+        "stopLoss": 1132.9699999999998,
+        "takeProfit": 1311.86,
         "strategyId": null,
         "tags": [],
         "sector": "energy",
@@ -13039,7 +13039,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:37.554Z",
-        "updatedAt": "2026-02-20T13:45:32.762Z",
+        "updatedAt": "2026-02-20T14:10:53.390Z",
         "strategy": null
     },
     {
@@ -13393,14 +13393,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:41:47.445Z"
+                        "timestamp": "2026-02-20T14:07:08.443Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.758Z",
+        "analysisDate": "2026-02-20T14:10:53.381Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -13415,7 +13415,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:37.551Z",
-        "updatedAt": "2026-02-20T13:45:32.759Z",
+        "updatedAt": "2026-02-20T14:10:53.381Z",
         "strategy": null
     },
     {
@@ -13769,21 +13769,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:41:39.518Z"
+                        "timestamp": "2026-02-20T14:07:00.581Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.755Z",
+        "analysisDate": "2026-02-20T14:10:53.376Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 8.79,
-        "targetPrice": 9.2295,
-        "stopLoss": 8.518071428571428,
-        "takeProfit": 9.669,
+        "priceAtAnalysis": 8.78,
+        "targetPrice": 9.219,
+        "stopLoss": 8.508071428571428,
+        "takeProfit": 9.658,
         "strategyId": 1,
         "tags": [],
         "sector": "industrials",
@@ -13791,7 +13791,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:37.547Z",
-        "updatedAt": "2026-02-20T13:45:32.755Z",
+        "updatedAt": "2026-02-20T14:10:53.376Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -14150,14 +14150,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:41:31.656Z"
+                        "timestamp": "2026-02-20T14:06:52.698Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.197Z",
+        "analysisDate": "2026-02-20T14:10:52.818Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -14172,7 +14172,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:36.994Z",
-        "updatedAt": "2026-02-20T13:45:32.197Z",
+        "updatedAt": "2026-02-20T14:10:52.819Z",
         "strategy": null
     },
     {
@@ -14526,14 +14526,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:41:29.043Z"
+                        "timestamp": "2026-02-20T14:06:50.067Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.193Z",
+        "analysisDate": "2026-02-20T14:10:52.815Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -14548,7 +14548,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:36.991Z",
-        "updatedAt": "2026-02-20T13:45:32.193Z",
+        "updatedAt": "2026-02-20T14:10:52.815Z",
         "strategy": null
     },
     {
@@ -14902,21 +14902,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:41:26.437Z"
+                        "timestamp": "2026-02-20T14:06:47.478Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.190Z",
+        "analysisDate": "2026-02-20T14:10:52.811Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 75,
-        "targetPrice": 78.75,
-        "stopLoss": 71.25,
-        "takeProfit": 82.5,
+        "priceAtAnalysis": 74.6,
+        "targetPrice": 78.33,
+        "stopLoss": 70.86999999999999,
+        "takeProfit": 82.06,
         "strategyId": null,
         "tags": [],
         "sector": "consumer",
@@ -14924,7 +14924,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:36.988Z",
-        "updatedAt": "2026-02-20T13:45:32.190Z",
+        "updatedAt": "2026-02-20T14:10:52.811Z",
         "strategy": null
     },
     {
@@ -15278,7 +15278,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:41:18.513Z"
+                        "timestamp": "2026-02-20T14:06:39.619Z"
                     },
                     "horizons": null
                 },
@@ -15303,14 +15303,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.185Z",
+        "analysisDate": "2026-02-20T14:10:52.807Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 74.7,
-        "targetPrice": 78.435,
-        "stopLoss": 70.965,
-        "takeProfit": 82.17000000000002,
+        "priceAtAnalysis": 74.68,
+        "targetPrice": 78.41400000000002,
+        "stopLoss": 70.946,
+        "takeProfit": 82.14800000000001,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -15318,7 +15318,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:36.985Z",
-        "updatedAt": "2026-02-20T13:45:32.186Z",
+        "updatedAt": "2026-02-20T14:10:52.808Z",
         "strategy": null
     },
     {
@@ -15672,21 +15672,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:41:15.870Z"
+                        "timestamp": "2026-02-20T14:06:36.959Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:32.181Z",
+        "analysisDate": "2026-02-20T14:10:52.803Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 120.2,
-        "targetPrice": 126.21000000000001,
-        "stopLoss": 116.61285714285714,
-        "takeProfit": 132.22000000000003,
+        "priceAtAnalysis": 119.75,
+        "targetPrice": 125.73750000000001,
+        "stopLoss": 116.16285714285715,
+        "takeProfit": 131.72500000000002,
         "strategyId": 1,
         "tags": [],
         "sector": "industrials",
@@ -15694,7 +15694,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:36.982Z",
-        "updatedAt": "2026-02-20T13:45:32.182Z",
+        "updatedAt": "2026-02-20T14:10:52.803Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -16053,21 +16053,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:41:13.296Z"
+                        "timestamp": "2026-02-20T14:06:34.426Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.613Z",
+        "analysisDate": "2026-02-20T14:10:52.250Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1.7029999999999998,
-        "targetPrice": 1.78815,
-        "stopLoss": 1.6178499999999998,
-        "takeProfit": 1.8733,
+        "priceAtAnalysis": 1.7015,
+        "targetPrice": 1.786575,
+        "stopLoss": 1.616425,
+        "takeProfit": 1.8716500000000003,
         "strategyId": null,
         "tags": [],
         "sector": "utilities",
@@ -16075,7 +16075,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:36.426Z",
-        "updatedAt": "2026-02-20T13:45:31.613Z",
+        "updatedAt": "2026-02-20T14:10:52.250Z",
         "strategy": null
     },
     {
@@ -16429,21 +16429,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:41:08.082Z"
+                        "timestamp": "2026-02-20T14:06:29.121Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.610Z",
+        "analysisDate": "2026-02-20T14:10:52.244Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.1135,
-        "targetPrice": 0.119175,
-        "stopLoss": 0.107825,
-        "takeProfit": 0.12485000000000002,
+        "priceAtAnalysis": 0.11375,
+        "targetPrice": 0.11943750000000002,
+        "stopLoss": 0.10806249999999999,
+        "takeProfit": 0.12512500000000001,
         "strategyId": null,
         "tags": [],
         "sector": "utilities",
@@ -16451,7 +16451,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:36.416Z",
-        "updatedAt": "2026-02-20T13:45:31.610Z",
+        "updatedAt": "2026-02-20T14:10:52.245Z",
         "strategy": null
     },
     {
@@ -16805,21 +16805,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:41:00.151Z"
+                        "timestamp": "2026-02-20T14:06:21.244Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.607Z",
+        "analysisDate": "2026-02-20T14:10:52.237Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.5304,
-        "targetPrice": 0.55692,
-        "stopLoss": 0.50388,
-        "takeProfit": 0.5834400000000001,
+        "priceAtAnalysis": 0.5298,
+        "targetPrice": 0.5562900000000001,
+        "stopLoss": 0.50331,
+        "takeProfit": 0.5827800000000001,
         "strategyId": null,
         "tags": [],
         "sector": "utilities",
@@ -16827,7 +16827,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:36.412Z",
-        "updatedAt": "2026-02-20T13:45:31.607Z",
+        "updatedAt": "2026-02-20T14:10:52.238Z",
         "strategy": null
     },
     {
@@ -17181,21 +17181,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:40:57.525Z"
+                        "timestamp": "2026-02-20T14:06:18.601Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.604Z",
+        "analysisDate": "2026-02-20T14:10:52.233Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.5775,
-        "targetPrice": 0.606375,
-        "stopLoss": 0.548625,
-        "takeProfit": 0.6352500000000001,
+        "priceAtAnalysis": 0.5755,
+        "targetPrice": 0.604275,
+        "stopLoss": 0.546725,
+        "takeProfit": 0.6330500000000001,
         "strategyId": null,
         "tags": [],
         "sector": "utilities",
@@ -17203,7 +17203,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:36.409Z",
-        "updatedAt": "2026-02-20T13:45:31.604Z",
+        "updatedAt": "2026-02-20T14:10:52.233Z",
         "strategy": null
     },
     {
@@ -17557,21 +17557,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:54.882Z"
+                        "timestamp": "2026-02-20T14:06:15.981Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.600Z",
+        "analysisDate": "2026-02-20T14:10:52.227Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.5852,
-        "targetPrice": 0.6144600000000001,
-        "stopLoss": 0.5668014285714287,
-        "takeProfit": 0.6437200000000001,
+        "priceAtAnalysis": 0.585,
+        "targetPrice": 0.61425,
+        "stopLoss": 0.5666014285714286,
+        "takeProfit": 0.6435,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -17579,7 +17579,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:36.405Z",
-        "updatedAt": "2026-02-20T13:45:31.601Z",
+        "updatedAt": "2026-02-20T14:10:52.227Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -17938,21 +17938,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:44.394Z"
+                        "timestamp": "2026-02-20T14:06:05.434Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.077Z",
+        "analysisDate": "2026-02-20T14:10:51.707Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 3339,
-        "targetPrice": 3505.9500000000003,
-        "stopLoss": 3172.0499999999997,
-        "takeProfit": 3672.9,
+        "priceAtAnalysis": 3334,
+        "targetPrice": 3500.7000000000003,
+        "stopLoss": 3167.2999999999997,
+        "takeProfit": 3667.4,
         "strategyId": null,
         "tags": [],
         "sector": "consumer",
@@ -17960,7 +17960,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.850Z",
-        "updatedAt": "2026-02-20T13:45:31.077Z",
+        "updatedAt": "2026-02-20T14:10:51.708Z",
         "strategy": null
     },
     {
@@ -18314,21 +18314,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:41.656Z"
+                        "timestamp": "2026-02-20T14:06:02.656Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.073Z",
+        "analysisDate": "2026-02-20T14:10:51.703Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 2.765,
-        "targetPrice": 2.9032500000000003,
-        "stopLoss": 2.62675,
-        "takeProfit": 3.0415000000000005,
+        "priceAtAnalysis": 2.7635,
+        "targetPrice": 2.901675,
+        "stopLoss": 2.625325,
+        "takeProfit": 3.0398500000000004,
         "strategyId": null,
         "tags": [],
         "sector": "financial",
@@ -18336,7 +18336,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.848Z",
-        "updatedAt": "2026-02-20T13:45:31.073Z",
+        "updatedAt": "2026-02-20T14:10:51.703Z",
         "strategy": null
     },
     {
@@ -18690,7 +18690,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:39.085Z"
+                        "timestamp": "2026-02-20T14:06:00.061Z"
                     },
                     "horizons": null
                 },
@@ -18715,14 +18715,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.068Z",
+        "analysisDate": "2026-02-20T14:10:51.698Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1505.4,
-        "targetPrice": 1580.67,
-        "stopLoss": 1430.13,
-        "takeProfit": 1655.9400000000003,
+        "priceAtAnalysis": 1503.4,
+        "targetPrice": 1578.5700000000002,
+        "stopLoss": 1428.23,
+        "takeProfit": 1653.7400000000002,
         "strategyId": null,
         "tags": [],
         "sector": "health_care",
@@ -18730,7 +18730,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.845Z",
-        "updatedAt": "2026-02-20T13:45:31.068Z",
+        "updatedAt": "2026-02-20T14:10:51.698Z",
         "strategy": null
     },
     {
@@ -19084,7 +19084,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:33.834Z"
+                        "timestamp": "2026-02-20T14:05:54.789Z"
                     },
                     "horizons": null
                 },
@@ -19109,14 +19109,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.064Z",
+        "analysisDate": "2026-02-20T14:10:51.693Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 32.31,
-        "targetPrice": 33.92550000000001,
-        "stopLoss": 30.6945,
-        "takeProfit": 35.541000000000004,
+        "priceAtAnalysis": 32.29,
+        "targetPrice": 33.9045,
+        "stopLoss": 30.675499999999996,
+        "takeProfit": 35.519000000000005,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -19124,7 +19124,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.840Z",
-        "updatedAt": "2026-02-20T13:45:31.064Z",
+        "updatedAt": "2026-02-20T14:10:51.694Z",
         "strategy": null
     },
     {
@@ -19478,7 +19478,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:40:28.521Z"
+                        "timestamp": "2026-02-20T14:05:49.560Z"
                     },
                     "horizons": null
                 },
@@ -19503,7 +19503,7 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.060Z",
+        "analysisDate": "2026-02-20T14:10:51.689Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -19518,7 +19518,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.838Z",
-        "updatedAt": "2026-02-20T13:45:31.061Z",
+        "updatedAt": "2026-02-20T14:10:51.689Z",
         "strategy": null
     },
     {
@@ -19872,21 +19872,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:25.934Z"
+                        "timestamp": "2026-02-20T14:05:46.898Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.055Z",
+        "analysisDate": "2026-02-20T14:10:51.685Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 15.57,
-        "targetPrice": 16.3485,
-        "stopLoss": 14.7915,
-        "takeProfit": 17.127000000000002,
+        "priceAtAnalysis": 15.58,
+        "targetPrice": 16.359,
+        "stopLoss": 14.801,
+        "takeProfit": 17.138,
         "strategyId": null,
         "tags": [],
         "sector": "utilities",
@@ -19894,7 +19894,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.836Z",
-        "updatedAt": "2026-02-20T13:45:31.056Z",
+        "updatedAt": "2026-02-20T14:10:51.685Z",
         "strategy": null
     },
     {
@@ -20248,21 +20248,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:23.198Z"
+                        "timestamp": "2026-02-20T14:05:44.216Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.051Z",
+        "analysisDate": "2026-02-20T14:10:51.680Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 580,
-        "targetPrice": 609,
-        "stopLoss": 551,
-        "takeProfit": 638,
+        "priceAtAnalysis": 582,
+        "targetPrice": 611.1,
+        "stopLoss": 552.9,
+        "takeProfit": 640.2,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -20270,7 +20270,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.834Z",
-        "updatedAt": "2026-02-20T13:45:31.052Z",
+        "updatedAt": "2026-02-20T14:10:51.680Z",
         "strategy": null
     },
     {
@@ -20445,7 +20445,7 @@
                     "score": 0.676233348250389,
                     "confidence": 0.9689134092871104,
                     "recommendation": "HOLD",
-                    "weight": 0.801840856299547,
+                    "weight": 0.8018398971628857,
                     "rawDetails": {
                         "lstm": 0.5328670144081116,
                         "cnn": 0.6445329785346985,
@@ -20614,7 +20614,7 @@
                     "score": 0.19047462940216064,
                     "confidence": 0.19047462940216064,
                     "recommendation": "SELL",
-                    "weight": 0.15763053589643325,
+                    "weight": 0.15763034734377376,
                     "rawDetails": {
                         "summary": "Рекомендация к продаже",
                         "confidence": "Очень низкая",
@@ -20624,14 +20624,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:20.586Z"
+                        "timestamp": "2026-02-20T14:05:41.628Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.048Z",
+        "analysisDate": "2026-02-20T14:10:51.675Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -20646,7 +20646,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.831Z",
-        "updatedAt": "2026-02-20T13:45:31.048Z",
+        "updatedAt": "2026-02-20T14:10:51.676Z",
         "strategy": null
     },
     {
@@ -21000,7 +21000,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:18.037Z"
+                        "timestamp": "2026-02-20T14:05:39.083Z"
                     },
                     "horizons": null
                 },
@@ -21025,14 +21025,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.044Z",
+        "analysisDate": "2026-02-20T14:10:51.671Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 5198,
-        "targetPrice": 5457.900000000001,
-        "stopLoss": 4938.099999999999,
-        "takeProfit": 5717.8,
+        "priceAtAnalysis": 5207,
+        "targetPrice": 5467.35,
+        "stopLoss": 4946.65,
+        "takeProfit": 5727.700000000001,
         "strategyId": null,
         "tags": [],
         "sector": "energy",
@@ -21040,7 +21040,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.829Z",
-        "updatedAt": "2026-02-20T13:45:31.044Z",
+        "updatedAt": "2026-02-20T14:10:51.671Z",
         "strategy": null
     },
     {
@@ -21394,14 +21394,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:15.330Z"
+                        "timestamp": "2026-02-20T14:05:36.363Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.041Z",
+        "analysisDate": "2026-02-20T14:10:51.666Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -21416,7 +21416,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.827Z",
-        "updatedAt": "2026-02-20T13:45:31.041Z",
+        "updatedAt": "2026-02-20T14:10:51.666Z",
         "strategy": null
     },
     {
@@ -21770,7 +21770,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:10.023Z"
+                        "timestamp": "2026-02-20T14:05:31.060Z"
                     },
                     "horizons": null
                 },
@@ -21795,14 +21795,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.036Z",
+        "analysisDate": "2026-02-20T14:10:51.662Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 659.2,
-        "targetPrice": 692.1600000000001,
-        "stopLoss": 626.24,
-        "takeProfit": 725.1200000000001,
+        "priceAtAnalysis": 659.1,
+        "targetPrice": 692.0550000000001,
+        "stopLoss": 626.145,
+        "takeProfit": 725.0100000000001,
         "strategyId": null,
         "tags": [],
         "sector": "other",
@@ -21810,7 +21810,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.821Z",
-        "updatedAt": "2026-02-20T13:45:31.036Z",
+        "updatedAt": "2026-02-20T14:10:51.662Z",
         "strategy": null
     },
     {
@@ -22164,14 +22164,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:07.438Z"
+                        "timestamp": "2026-02-20T14:05:28.459Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.033Z",
+        "analysisDate": "2026-02-20T14:10:51.657Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -22186,7 +22186,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.818Z",
-        "updatedAt": "2026-02-20T13:45:31.033Z",
+        "updatedAt": "2026-02-20T14:10:51.657Z",
         "strategy": null
     },
     {
@@ -22540,21 +22540,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:58.934Z"
+                        "timestamp": "2026-02-20T14:05:19.977Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.028Z",
+        "analysisDate": "2026-02-20T14:10:51.652Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1468,
-        "targetPrice": 1541.4,
-        "stopLoss": 1394.6,
-        "takeProfit": 1614.8000000000002,
+        "priceAtAnalysis": 1467,
+        "targetPrice": 1540.3500000000001,
+        "stopLoss": 1393.6499999999999,
+        "takeProfit": 1613.7,
         "strategyId": null,
         "tags": [],
         "sector": "consumer",
@@ -22562,7 +22562,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.815Z",
-        "updatedAt": "2026-02-20T13:45:31.028Z",
+        "updatedAt": "2026-02-20T14:10:51.652Z",
         "strategy": null
     },
     {
@@ -22916,14 +22916,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:56.365Z"
+                        "timestamp": "2026-02-20T14:05:17.392Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:31.023Z",
+        "analysisDate": "2026-02-20T14:10:51.646Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -22938,7 +22938,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.813Z",
-        "updatedAt": "2026-02-20T13:45:31.023Z",
+        "updatedAt": "2026-02-20T14:10:51.647Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -23297,7 +23297,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:39:53.696Z"
+                        "timestamp": "2026-02-20T14:05:14.743Z"
                     },
                     "horizons": null
                 },
@@ -23322,14 +23322,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:30.441Z",
+        "analysisDate": "2026-02-20T14:10:51.068Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 87.3,
-        "targetPrice": 91.665,
-        "stopLoss": 84.29142857142857,
-        "takeProfit": 96.03,
+        "priceAtAnalysis": 87.1,
+        "targetPrice": 91.455,
+        "stopLoss": 84.09142857142857,
+        "takeProfit": 95.81,
         "strategyId": 1,
         "tags": [],
         "sector": "industrials",
@@ -23337,7 +23337,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:35.236Z",
-        "updatedAt": "2026-02-20T13:45:30.442Z",
+        "updatedAt": "2026-02-20T14:10:51.068Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -23696,21 +23696,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:39:45.788Z"
+                        "timestamp": "2026-02-20T14:05:06.876Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:29.870Z",
+        "analysisDate": "2026-02-20T14:10:50.489Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 431,
-        "targetPrice": 452.55,
-        "stopLoss": 416.6,
-        "takeProfit": 474.1,
+        "priceAtAnalysis": 429.5,
+        "targetPrice": 450.975,
+        "stopLoss": 415.1,
+        "takeProfit": 472.45000000000005,
         "strategyId": 1,
         "tags": [],
         "sector": "materials",
@@ -23718,7 +23718,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:34.659Z",
-        "updatedAt": "2026-02-20T13:45:29.870Z",
+        "updatedAt": "2026-02-20T14:10:50.490Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -24077,14 +24077,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:43.139Z"
+                        "timestamp": "2026-02-20T14:05:04.229Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:29.299Z",
+        "analysisDate": "2026-02-20T14:10:49.885Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -24099,7 +24099,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:34.096Z",
-        "updatedAt": "2026-02-20T13:45:29.299Z",
+        "updatedAt": "2026-02-20T14:10:49.885Z",
         "strategy": null
     },
     {
@@ -24453,21 +24453,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:37.927Z"
+                        "timestamp": "2026-02-20T14:04:59.034Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:29.295Z",
+        "analysisDate": "2026-02-20T14:10:49.882Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 159.65,
-        "targetPrice": 167.63250000000002,
-        "stopLoss": 151.6675,
-        "takeProfit": 175.615,
+        "priceAtAnalysis": 159.55,
+        "targetPrice": 167.52750000000003,
+        "stopLoss": 151.5725,
+        "takeProfit": 175.50500000000002,
         "strategyId": null,
         "tags": [],
         "sector": "it",
@@ -24475,7 +24475,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:34.094Z",
-        "updatedAt": "2026-02-20T13:45:29.296Z",
+        "updatedAt": "2026-02-20T14:10:49.882Z",
         "strategy": null
     },
     {
@@ -24829,21 +24829,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:35.269Z"
+                        "timestamp": "2026-02-20T14:04:56.309Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:29.292Z",
+        "analysisDate": "2026-02-20T14:10:49.878Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 26.06,
-        "targetPrice": 27.363,
-        "stopLoss": 25.129142857142853,
-        "takeProfit": 28.666,
+        "priceAtAnalysis": 26.08,
+        "targetPrice": 27.384,
+        "stopLoss": 25.149142857142852,
+        "takeProfit": 28.688,
         "strategyId": 1,
         "tags": [],
         "sector": "industrials",
@@ -24851,7 +24851,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:34.091Z",
-        "updatedAt": "2026-02-20T13:45:29.292Z",
+        "updatedAt": "2026-02-20T14:10:49.878Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -25210,21 +25210,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:30.184Z"
+                        "timestamp": "2026-02-20T14:04:51.230Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:28.733Z",
+        "analysisDate": "2026-02-20T14:10:49.310Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 2784,
-        "targetPrice": 2923.2000000000003,
-        "stopLoss": 2644.7999999999997,
-        "takeProfit": 3062.4,
+        "priceAtAnalysis": 2785.5,
+        "targetPrice": 2924.775,
+        "stopLoss": 2646.225,
+        "takeProfit": 3064.05,
         "strategyId": null,
         "tags": [],
         "sector": "Unknown",
@@ -25232,7 +25232,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:33.536Z",
-        "updatedAt": "2026-02-20T13:45:28.734Z",
+        "updatedAt": "2026-02-20T14:10:49.311Z",
         "strategy": null
     },
     {
@@ -25586,7 +25586,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:29.528Z"
+                        "timestamp": "2026-02-20T14:04:50.549Z"
                     },
                     "horizons": null
                 },
@@ -25611,14 +25611,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:28.728Z",
+        "analysisDate": "2026-02-20T14:10:49.305Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.432,
-        "targetPrice": 0.4536,
-        "stopLoss": 0.4104,
-        "takeProfit": 0.4752,
+        "priceAtAnalysis": 0.4324,
+        "targetPrice": 0.45402000000000003,
+        "stopLoss": 0.41078,
+        "takeProfit": 0.47564000000000006,
         "strategyId": null,
         "tags": [],
         "sector": "utilities",
@@ -25626,7 +25626,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:33.534Z",
-        "updatedAt": "2026-02-20T13:45:28.729Z",
+        "updatedAt": "2026-02-20T14:10:49.306Z",
         "strategy": null
     },
     {
@@ -25980,7 +25980,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:39:26.792Z"
+                        "timestamp": "2026-02-20T14:04:47.904Z"
                     },
                     "horizons": null
                 },
@@ -26005,14 +26005,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:28.722Z",
+        "analysisDate": "2026-02-20T14:10:49.300Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 497,
-        "targetPrice": 521.85,
-        "stopLoss": 487.04857142857145,
-        "takeProfit": 546.7,
+        "priceAtAnalysis": 496.8,
+        "targetPrice": 521.64,
+        "stopLoss": 486.84857142857146,
+        "takeProfit": 546.48,
         "strategyId": 1,
         "tags": [],
         "sector": "consumer",
@@ -26020,7 +26020,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:33.531Z",
-        "updatedAt": "2026-02-20T13:45:28.723Z",
+        "updatedAt": "2026-02-20T14:10:49.300Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -26379,21 +26379,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:15.757Z"
+                        "timestamp": "2026-02-20T14:04:36.801Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:28.154Z",
+        "analysisDate": "2026-02-20T14:10:48.733Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 154.98,
-        "targetPrice": 162.72899999999998,
-        "stopLoss": 147.231,
-        "takeProfit": 170.478,
+        "priceAtAnalysis": 155.06,
+        "targetPrice": 162.81300000000002,
+        "stopLoss": 147.307,
+        "takeProfit": 170.566,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -26401,7 +26401,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:32.965Z",
-        "updatedAt": "2026-02-20T13:45:28.155Z",
+        "updatedAt": "2026-02-20T14:10:48.733Z",
         "strategy": null
     },
     {
@@ -26755,7 +26755,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:13.039Z"
+                        "timestamp": "2026-02-20T14:04:34.079Z"
                     },
                     "horizons": null
                 },
@@ -26780,14 +26780,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:28.151Z",
+        "analysisDate": "2026-02-20T14:10:48.728Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 63.35,
-        "targetPrice": 66.5175,
-        "stopLoss": 60.1825,
-        "takeProfit": 69.685,
+        "priceAtAnalysis": 63.19,
+        "targetPrice": 66.3495,
+        "stopLoss": 60.030499999999996,
+        "takeProfit": 69.509,
         "strategyId": null,
         "tags": [],
         "sector": "real_estate",
@@ -26795,7 +26795,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:32.962Z",
-        "updatedAt": "2026-02-20T13:45:28.151Z",
+        "updatedAt": "2026-02-20T14:10:48.728Z",
         "strategy": null
     },
     {
@@ -27149,21 +27149,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:07.797Z"
+                        "timestamp": "2026-02-20T14:04:28.887Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:28.147Z",
+        "analysisDate": "2026-02-20T14:10:48.723Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 24.91,
-        "targetPrice": 26.1555,
-        "stopLoss": 23.6645,
-        "takeProfit": 27.401000000000003,
+        "priceAtAnalysis": 24.87,
+        "targetPrice": 26.113500000000002,
+        "stopLoss": 23.6265,
+        "takeProfit": 27.357000000000003,
         "strategyId": null,
         "tags": [],
         "sector": "health_care",
@@ -27171,7 +27171,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:32.959Z",
-        "updatedAt": "2026-02-20T13:45:28.147Z",
+        "updatedAt": "2026-02-20T14:10:48.724Z",
         "strategy": null
     },
     {
@@ -27525,21 +27525,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:05.134Z"
+                        "timestamp": "2026-02-20T14:04:26.252Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:28.143Z",
+        "analysisDate": "2026-02-20T14:10:48.717Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 3545,
-        "targetPrice": 3722.25,
-        "stopLoss": 3444.328571428571,
-        "takeProfit": 3899.5000000000005,
+        "priceAtAnalysis": 3539,
+        "targetPrice": 3715.9500000000003,
+        "stopLoss": 3438.328571428571,
+        "takeProfit": 3892.9,
         "strategyId": 1,
         "tags": [],
         "sector": "consumer",
@@ -27547,7 +27547,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:32.956Z",
-        "updatedAt": "2026-02-20T13:45:28.143Z",
+        "updatedAt": "2026-02-20T14:10:48.718Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -27906,21 +27906,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:38:54.623Z"
+                        "timestamp": "2026-02-20T14:04:15.741Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.603Z",
+        "analysisDate": "2026-02-20T14:10:48.231Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 54.98,
-        "targetPrice": 57.729,
-        "stopLoss": 52.230999999999995,
-        "takeProfit": 60.478,
+        "priceAtAnalysis": 54.97,
+        "targetPrice": 57.7185,
+        "stopLoss": 52.2215,
+        "takeProfit": 60.467000000000006,
         "strategyId": null,
         "tags": [],
         "sector": "industrials",
@@ -27928,7 +27928,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:32.385Z",
-        "updatedAt": "2026-02-20T13:45:27.603Z",
+        "updatedAt": "2026-02-20T14:10:48.231Z",
         "strategy": null
     },
     {
@@ -28282,21 +28282,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:49.368Z"
+                        "timestamp": "2026-02-20T14:04:10.518Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.598Z",
+        "analysisDate": "2026-02-20T14:10:48.227Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 138.15,
-        "targetPrice": 145.0575,
-        "stopLoss": 131.2425,
-        "takeProfit": 151.96500000000003,
+        "priceAtAnalysis": 138.1,
+        "targetPrice": 145.005,
+        "stopLoss": 131.195,
+        "takeProfit": 151.91,
         "strategyId": null,
         "tags": [],
         "sector": "industrials",
@@ -28304,7 +28304,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:32.382Z",
-        "updatedAt": "2026-02-20T13:45:27.598Z",
+        "updatedAt": "2026-02-20T14:10:48.227Z",
         "strategy": null
     },
     {
@@ -28658,21 +28658,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:46.693Z"
+                        "timestamp": "2026-02-20T14:04:07.872Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.593Z",
+        "analysisDate": "2026-02-20T14:10:48.224Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 42.38,
-        "targetPrice": 44.499,
-        "stopLoss": 40.261,
-        "takeProfit": 46.61800000000001,
+        "priceAtAnalysis": 42.34,
+        "targetPrice": 44.45700000000001,
+        "stopLoss": 40.223,
+        "takeProfit": 46.574000000000005,
         "strategyId": null,
         "tags": [],
         "sector": "real_estate",
@@ -28680,7 +28680,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:57.675Z",
-        "updatedAt": "2026-02-20T13:45:27.594Z",
+        "updatedAt": "2026-02-20T14:10:48.224Z",
         "strategy": null
     },
     {
@@ -29034,7 +29034,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:44.072Z"
+                        "timestamp": "2026-02-20T14:04:05.266Z"
                     },
                     "horizons": null
                 },
@@ -29059,14 +29059,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.589Z",
+        "analysisDate": "2026-02-20T14:10:48.219Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 483.85,
-        "targetPrice": 508.0425,
-        "stopLoss": 459.6575,
-        "takeProfit": 532.235,
+        "priceAtAnalysis": 483.1,
+        "targetPrice": 507.25500000000005,
+        "stopLoss": 458.945,
+        "takeProfit": 531.4100000000001,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -29074,7 +29074,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:32.379Z",
-        "updatedAt": "2026-02-20T13:45:27.590Z",
+        "updatedAt": "2026-02-20T14:10:48.219Z",
         "strategy": null
     },
     {
@@ -29428,21 +29428,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:38:41.654Z"
+                        "timestamp": "2026-02-20T14:04:02.814Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.586Z",
+        "analysisDate": "2026-02-20T14:10:48.216Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.13175,
-        "targetPrice": 0.1383375,
-        "stopLoss": 0.1251625,
-        "takeProfit": 0.14492500000000003,
+        "priceAtAnalysis": 0.13115,
+        "targetPrice": 0.13770749999999998,
+        "stopLoss": 0.12459249999999998,
+        "takeProfit": 0.144265,
         "strategyId": null,
         "tags": [],
         "sector": "it",
@@ -29450,7 +29450,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:32.376Z",
-        "updatedAt": "2026-02-20T13:45:27.586Z",
+        "updatedAt": "2026-02-20T14:10:48.216Z",
         "strategy": null
     },
     {
@@ -29804,7 +29804,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:33.255Z"
+                        "timestamp": "2026-02-20T14:03:54.454Z"
                     },
                     "horizons": null
                 },
@@ -29829,14 +29829,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.582Z",
+        "analysisDate": "2026-02-20T14:10:48.212Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 2191.3,
-        "targetPrice": 2300.8650000000002,
-        "stopLoss": 2081.735,
-        "takeProfit": 2410.4300000000003,
+        "priceAtAnalysis": 2194.4,
+        "targetPrice": 2304.1200000000003,
+        "stopLoss": 2084.68,
+        "takeProfit": 2413.84,
         "strategyId": null,
         "tags": [],
         "sector": "financial",
@@ -29844,7 +29844,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:32.373Z",
-        "updatedAt": "2026-02-20T13:45:27.582Z",
+        "updatedAt": "2026-02-20T14:10:48.212Z",
         "strategy": null
     },
     {
@@ -30198,7 +30198,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:30.903Z"
+                        "timestamp": "2026-02-20T14:03:52.073Z"
                     },
                     "horizons": null
                 },
@@ -30223,14 +30223,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.578Z",
+        "analysisDate": "2026-02-20T14:10:48.207Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1816.5,
-        "targetPrice": 1907.325,
-        "stopLoss": 1725.675,
-        "takeProfit": 1998.15,
+        "priceAtAnalysis": 1824.5,
+        "targetPrice": 1915.7250000000001,
+        "stopLoss": 1733.2749999999999,
+        "takeProfit": 2006.9500000000003,
         "strategyId": null,
         "tags": [],
         "sector": "it",
@@ -30238,7 +30238,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:31.799Z",
-        "updatedAt": "2026-02-20T13:45:27.579Z",
+        "updatedAt": "2026-02-20T14:10:48.207Z",
         "strategy": null
     },
     {
@@ -30592,21 +30592,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:28.251Z"
+                        "timestamp": "2026-02-20T14:03:49.423Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.574Z",
+        "analysisDate": "2026-02-20T14:10:48.202Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 105.35,
-        "targetPrice": 110.61749999999999,
-        "stopLoss": 100.0825,
-        "takeProfit": 115.885,
+        "priceAtAnalysis": 105.1,
+        "targetPrice": 110.355,
+        "stopLoss": 99.84499999999998,
+        "takeProfit": 115.61,
         "strategyId": null,
         "tags": [],
         "sector": "it",
@@ -30614,7 +30614,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:31.796Z",
-        "updatedAt": "2026-02-20T13:45:27.575Z",
+        "updatedAt": "2026-02-20T14:10:48.203Z",
         "strategy": null
     },
     {
@@ -30968,21 +30968,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:25.599Z"
+                        "timestamp": "2026-02-20T14:03:46.800Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.571Z",
+        "analysisDate": "2026-02-20T14:10:48.197Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 109.62,
-        "targetPrice": 115.10100000000001,
-        "stopLoss": 104.139,
-        "takeProfit": 120.58200000000001,
+        "priceAtAnalysis": 109.4,
+        "targetPrice": 114.87,
+        "stopLoss": 103.93,
+        "takeProfit": 120.34000000000002,
         "strategyId": null,
         "tags": [],
         "sector": "it",
@@ -30990,7 +30990,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:31.792Z",
-        "updatedAt": "2026-02-20T13:45:27.571Z",
+        "updatedAt": "2026-02-20T14:10:48.197Z",
         "strategy": null
     },
     {
@@ -31344,7 +31344,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:22.877Z"
+                        "timestamp": "2026-02-20T14:03:44.114Z"
                     },
                     "horizons": null
                 },
@@ -31369,7 +31369,7 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.566Z",
+        "analysisDate": "2026-02-20T14:10:48.130Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -31384,7 +31384,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:31.786Z",
-        "updatedAt": "2026-02-20T13:45:27.566Z",
+        "updatedAt": "2026-02-20T14:10:48.131Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -31743,14 +31743,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:20.246Z"
+                        "timestamp": "2026-02-20T14:03:41.496Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.004Z",
+        "analysisDate": "2026-02-20T14:10:47.570Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -31765,7 +31765,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:31.212Z",
-        "updatedAt": "2026-02-20T13:45:27.005Z",
+        "updatedAt": "2026-02-20T14:10:47.571Z",
         "strategy": null
     },
     {
@@ -32119,7 +32119,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:17.740Z"
+                        "timestamp": "2026-02-20T14:03:38.984Z"
                     },
                     "horizons": null
                 },
@@ -32144,14 +32144,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:27.001Z",
+        "analysisDate": "2026-02-20T14:10:47.566Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 593.4,
-        "targetPrice": 623.07,
-        "stopLoss": 563.7299999999999,
-        "takeProfit": 652.74,
+        "priceAtAnalysis": 594,
+        "targetPrice": 623.7,
+        "stopLoss": 564.3,
+        "takeProfit": 653.4000000000001,
         "strategyId": null,
         "tags": [],
         "sector": "it",
@@ -32159,7 +32159,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:31.209Z",
-        "updatedAt": "2026-02-20T13:45:27.001Z",
+        "updatedAt": "2026-02-20T14:10:47.566Z",
         "strategy": null
     },
     {
@@ -32513,21 +32513,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:12.434Z"
+                        "timestamp": "2026-02-20T14:03:33.643Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:26.997Z",
+        "analysisDate": "2026-02-20T14:10:47.560Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 959.8,
-        "targetPrice": 1007.79,
-        "stopLoss": 911.81,
-        "takeProfit": 1055.78,
+        "priceAtAnalysis": 957.2,
+        "targetPrice": 1005.0600000000001,
+        "stopLoss": 909.34,
+        "takeProfit": 1052.92,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -32535,7 +32535,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:31.207Z",
-        "updatedAt": "2026-02-20T13:45:26.997Z",
+        "updatedAt": "2026-02-20T14:10:47.560Z",
         "strategy": null
     },
     {
@@ -32889,7 +32889,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:07.120Z"
+                        "timestamp": "2026-02-20T14:03:28.371Z"
                     },
                     "horizons": null
                 },
@@ -32914,14 +32914,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:26.993Z",
+        "analysisDate": "2026-02-20T14:10:47.553Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1.5,
-        "targetPrice": 1.5750000000000002,
-        "stopLoss": 1.4354571428571428,
-        "takeProfit": 1.6500000000000001,
+        "priceAtAnalysis": 1.498,
+        "targetPrice": 1.5729,
+        "stopLoss": 1.4334571428571428,
+        "takeProfit": 1.6478000000000002,
         "strategyId": 1,
         "tags": [],
         "sector": "financial",
@@ -32929,7 +32929,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:31.203Z",
-        "updatedAt": "2026-02-20T13:45:26.993Z",
+        "updatedAt": "2026-02-20T14:10:47.554Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -33288,7 +33288,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:38:04.491Z"
+                        "timestamp": "2026-02-20T14:03:25.742Z"
                     },
                     "horizons": null
                 },
@@ -33313,14 +33313,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:26.418Z",
+        "analysisDate": "2026-02-20T14:10:46.977Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 342.71,
-        "targetPrice": 359.8455,
-        "stopLoss": 329.0428571428571,
-        "takeProfit": 376.981,
+        "priceAtAnalysis": 340.51,
+        "targetPrice": 357.5355,
+        "stopLoss": 326.8428571428571,
+        "takeProfit": 374.56100000000004,
         "strategyId": 1,
         "tags": [],
         "sector": "financial",
@@ -33328,7 +33328,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:30.625Z",
-        "updatedAt": "2026-02-20T13:45:26.419Z",
+        "updatedAt": "2026-02-20T14:10:46.978Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -33687,21 +33687,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:01.837Z"
+                        "timestamp": "2026-02-20T14:03:23.119Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:25.846Z",
+        "analysisDate": "2026-02-20T14:10:46.410Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 12.65,
-        "targetPrice": 13.2825,
-        "stopLoss": 12.0175,
-        "takeProfit": 13.915000000000001,
+        "priceAtAnalysis": 12.62,
+        "targetPrice": 13.251,
+        "stopLoss": 11.988999999999999,
+        "takeProfit": 13.882,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -33709,7 +33709,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:30.052Z",
-        "updatedAt": "2026-02-20T13:45:25.847Z",
+        "updatedAt": "2026-02-20T14:10:46.410Z",
         "strategy": null
     },
     {
@@ -33717,7 +33717,7 @@
         "ticker": "BAZA",
         "name": "ГК БАЗИС",
         "recommendation": "HOLD",
-        "confidence": 0.6643200209550113,
+        "confidence": 0.4869837025216269,
         "score": 0.5,
         "analysis": {
             "horizons": {
@@ -33884,7 +33884,7 @@
                     "score": 0.5579175680875779,
                     "confidence": 0.8297551894696585,
                     "recommendation": "HOLD",
-                    "weight": 0.7344557451063101,
+                    "weight": 0.6805216181470881,
                     "rawDetails": {
                         "lstm": 0.5453174114227295,
                         "cnn": 0.6494017243385315,
@@ -34055,32 +34055,45 @@
                     "weight": 0,
                     "rawDetails": null,
                     "horizons": null
+                },
+                "signals": {
+                    "score": 0.875,
+                    "confidence": 0.75,
+                    "recommendation": "BUY",
+                    "weight": 0.07343414129249563,
+                    "rawDetails": {
+                        "signalsCount": 1,
+                        "buySignals": 1,
+                        "sellSignals": 0,
+                        "validation": {
+                            "directionMatch": false,
+                            "directionAgreement": 0,
+                            "probabilityCorrelation": 0.5969181893893091,
+                            "overallAgreement": 0.11938363787786183
+                        }
+                    },
+                    "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:25.842Z",
+        "analysisDate": "2026-02-20T14:10:46.406Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 140.1,
-        "targetPrice": 147.105,
-        "stopLoss": 131.24914285714286,
-        "takeProfit": 154.11,
-        "strategyId": 1,
+        "priceAtAnalysis": 140.24,
+        "targetPrice": 147.252,
+        "stopLoss": 133.228,
+        "takeProfit": 154.264,
+        "strategyId": null,
         "tags": [],
         "sector": "it",
         "marketCap": "Unknown",
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:29.485Z",
-        "updatedAt": "2026-02-20T13:45:25.843Z",
-        "strategy": {
-            "id": 1,
-            "name": "Консервативная",
-            "type": "conservative",
-            "timeframe": "long"
-        }
+        "updatedAt": "2026-02-20T14:10:46.406Z",
+        "strategy": null
     },
     {
         "figi": "BBG000K3STR7",
@@ -34433,21 +34446,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:37:45.519Z"
+                        "timestamp": "2026-02-20T14:03:06.739Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:25.268Z",
+        "analysisDate": "2026-02-20T14:10:46.401Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 8.584,
-        "targetPrice": 9.0132,
-        "stopLoss": 8.3446,
-        "takeProfit": 9.442400000000001,
+        "priceAtAnalysis": 8.568,
+        "targetPrice": 8.9964,
+        "stopLoss": 8.3286,
+        "takeProfit": 9.424800000000001,
         "strategyId": 1,
         "tags": [],
         "sector": "consumer",
@@ -34455,7 +34468,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:28.899Z",
-        "updatedAt": "2026-02-20T13:45:25.269Z",
+        "updatedAt": "2026-02-20T14:10:46.402Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -34814,21 +34827,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:37:42.966Z"
+                        "timestamp": "2026-02-20T14:03:04.141Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:24.701Z",
+        "analysisDate": "2026-02-20T14:10:45.839Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 40.2,
-        "targetPrice": 42.21000000000001,
-        "stopLoss": 38.19,
-        "takeProfit": 44.220000000000006,
+        "priceAtAnalysis": 40.14,
+        "targetPrice": 42.147000000000006,
+        "stopLoss": 38.132999999999996,
+        "takeProfit": 44.154,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -34836,7 +34849,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:28.331Z",
-        "updatedAt": "2026-02-20T13:45:24.701Z",
+        "updatedAt": "2026-02-20T14:10:45.839Z",
         "strategy": null
     },
     {
@@ -35190,21 +35203,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:37:40.287Z"
+                        "timestamp": "2026-02-20T14:03:01.423Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:24.698Z",
+        "analysisDate": "2026-02-20T14:10:45.835Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 18830,
-        "targetPrice": 19771.5,
-        "stopLoss": 17888.5,
-        "takeProfit": 20713,
+        "priceAtAnalysis": 18804,
+        "targetPrice": 19744.2,
+        "stopLoss": 17863.8,
+        "takeProfit": 20684.4,
         "strategyId": null,
         "tags": [],
         "sector": "materials",
@@ -35212,7 +35225,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:28.328Z",
-        "updatedAt": "2026-02-20T13:45:24.698Z",
+        "updatedAt": "2026-02-20T14:10:45.835Z",
         "strategy": null
     },
     {
@@ -35566,7 +35579,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:37:37.667Z"
+                        "timestamp": "2026-02-20T14:02:58.730Z"
                     },
                     "horizons": null
                 },
@@ -35591,14 +35604,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:24.695Z",
+        "analysisDate": "2026-02-20T14:10:45.830Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 55.85,
-        "targetPrice": 58.642500000000005,
-        "stopLoss": 53.0575,
-        "takeProfit": 61.43500000000001,
+        "priceAtAnalysis": 55.83,
+        "targetPrice": 58.6215,
+        "stopLoss": 53.0385,
+        "takeProfit": 61.413000000000004,
         "strategyId": null,
         "tags": [],
         "sector": "consumer",
@@ -35606,7 +35619,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:28.325Z",
-        "updatedAt": "2026-02-20T13:45:24.695Z",
+        "updatedAt": "2026-02-20T14:10:45.831Z",
         "strategy": null
     },
     {
@@ -35960,21 +35973,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:37:32.392Z"
+                        "timestamp": "2026-02-20T14:02:53.454Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:24.691Z",
+        "analysisDate": "2026-02-20T14:10:45.825Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 163.2,
-        "targetPrice": 171.35999999999999,
-        "stopLoss": 158.7,
-        "takeProfit": 179.52,
+        "priceAtAnalysis": 162.6,
+        "targetPrice": 170.73,
+        "stopLoss": 158.1,
+        "takeProfit": 178.86,
         "strategyId": 1,
         "tags": [],
         "sector": "consumer",
@@ -35982,7 +35995,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:28.322Z",
-        "updatedAt": "2026-02-20T13:45:24.691Z",
+        "updatedAt": "2026-02-20T14:10:45.826Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -36341,21 +36354,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:37:29.861Z"
+                        "timestamp": "2026-02-20T14:02:50.896Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:24.122Z",
+        "analysisDate": "2026-02-20T14:10:45.253Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 67.8,
-        "targetPrice": 71.19,
-        "stopLoss": 64.41,
-        "takeProfit": 74.58,
+        "priceAtAnalysis": 67.46,
+        "targetPrice": 70.833,
+        "stopLoss": 64.08699999999999,
+        "takeProfit": 74.206,
         "strategyId": null,
         "tags": [],
         "sector": "health_care",
@@ -36363,7 +36376,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:27.755Z",
-        "updatedAt": "2026-02-20T13:45:24.122Z",
+        "updatedAt": "2026-02-20T14:10:45.253Z",
         "strategy": null
     },
     {
@@ -36717,14 +36730,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:44:43.142Z"
+                        "timestamp": "2026-02-20T14:10:04.079Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:24.118Z",
+        "analysisDate": "2026-02-20T14:10:45.248Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -36739,7 +36752,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:27.752Z",
-        "updatedAt": "2026-02-20T13:45:24.119Z",
+        "updatedAt": "2026-02-20T14:10:45.248Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -37098,7 +37111,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:44:40.480Z"
+                        "timestamp": "2026-02-20T14:10:01.420Z"
                     },
                     "horizons": null
                 },
@@ -37123,14 +37136,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:23.545Z",
+        "analysisDate": "2026-02-20T14:10:44.680Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 2431.5,
-        "targetPrice": 2553.0750000000003,
-        "stopLoss": 2364.578571428571,
-        "takeProfit": 2674.65,
+        "priceAtAnalysis": 2433,
+        "targetPrice": 2554.65,
+        "stopLoss": 2366.078571428571,
+        "takeProfit": 2676.3,
         "strategyId": 1,
         "tags": [],
         "sector": "consumer",
@@ -37138,7 +37151,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:27.176Z",
-        "updatedAt": "2026-02-20T13:45:23.546Z",
+        "updatedAt": "2026-02-20T14:10:44.681Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -37497,7 +37510,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:44:35.228Z"
+                        "timestamp": "2026-02-20T14:09:56.177Z"
                     },
                     "horizons": null
                 },
@@ -37522,14 +37535,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:22.981Z",
+        "analysisDate": "2026-02-20T14:10:44.097Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 87.79,
-        "targetPrice": 92.1795,
-        "stopLoss": 83.29707142857144,
-        "takeProfit": 96.56900000000002,
+        "priceAtAnalysis": 88.15,
+        "targetPrice": 92.5575,
+        "stopLoss": 83.65707142857144,
+        "takeProfit": 96.96500000000002,
         "strategyId": 1,
         "tags": [],
         "sector": "financial",
@@ -37537,7 +37550,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:26.601Z",
-        "updatedAt": "2026-02-20T13:45:22.981Z",
+        "updatedAt": "2026-02-20T14:10:44.098Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -37896,7 +37909,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:44:29.951Z"
+                        "timestamp": "2026-02-20T14:09:50.873Z"
                     },
                     "horizons": null
                 },
@@ -37921,14 +37934,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:22.415Z",
+        "analysisDate": "2026-02-20T14:10:43.530Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 75.05,
-        "targetPrice": 78.8025,
-        "stopLoss": 71.64542857142857,
-        "takeProfit": 82.555,
+        "priceAtAnalysis": 75.02,
+        "targetPrice": 78.771,
+        "stopLoss": 71.61542857142857,
+        "takeProfit": 82.522,
         "strategyId": 1,
         "tags": [],
         "sector": "consumer",
@@ -37936,7 +37949,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:26.018Z",
-        "updatedAt": "2026-02-20T13:45:22.415Z",
+        "updatedAt": "2026-02-20T14:10:43.530Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -38295,7 +38308,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:44:16.926Z"
+                        "timestamp": "2026-02-20T14:09:37.742Z"
                     },
                     "horizons": null
                 },
@@ -38320,14 +38333,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:21.842Z",
+        "analysisDate": "2026-02-20T14:10:42.938Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1.6139999999999999,
-        "targetPrice": 1.6946999999999999,
-        "stopLoss": 1.5389142857142857,
-        "takeProfit": 1.7754,
+        "priceAtAnalysis": 1.6155,
+        "targetPrice": 1.696275,
+        "stopLoss": 1.5404142857142857,
+        "takeProfit": 1.77705,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -38335,7 +38348,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:25.431Z",
-        "updatedAt": "2026-02-20T13:45:21.842Z",
+        "updatedAt": "2026-02-20T14:10:42.938Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -38694,14 +38707,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:44:14.166Z"
+                        "timestamp": "2026-02-20T14:09:35.055Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:21.262Z",
+        "analysisDate": "2026-02-20T14:10:42.367Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -38716,7 +38729,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:24.856Z",
-        "updatedAt": "2026-02-20T13:45:21.262Z",
+        "updatedAt": "2026-02-20T14:10:42.368Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -39075,21 +39088,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:44:08.928Z"
+                        "timestamp": "2026-02-20T14:09:29.773Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:20.682Z",
+        "analysisDate": "2026-02-20T14:10:41.774Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.7899,
-        "targetPrice": 0.8293950000000001,
-        "stopLoss": 0.7377771428571429,
-        "takeProfit": 0.8688900000000002,
+        "priceAtAnalysis": 0.788,
+        "targetPrice": 0.8274,
+        "stopLoss": 0.7358771428571429,
+        "takeProfit": 0.8668000000000001,
         "strategyId": 1,
         "tags": [],
         "sector": "materials",
@@ -39097,7 +39110,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:24.271Z",
-        "updatedAt": "2026-02-20T13:45:20.683Z",
+        "updatedAt": "2026-02-20T14:10:41.774Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -39456,7 +39469,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:44:00.507Z"
+                        "timestamp": "2026-02-20T14:09:21.407Z"
                     },
                     "horizons": null
                 },
@@ -39481,14 +39494,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:20.105Z",
+        "analysisDate": "2026-02-20T14:10:41.187Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1448.4,
-        "targetPrice": 1520.8200000000002,
-        "stopLoss": 1412.6828571428573,
-        "takeProfit": 1593.2400000000002,
+        "priceAtAnalysis": 1448,
+        "targetPrice": 1520.4,
+        "stopLoss": 1412.2828571428572,
+        "takeProfit": 1592.8000000000002,
         "strategyId": 1,
         "tags": [],
         "sector": "energy",
@@ -39496,7 +39509,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:23.699Z",
-        "updatedAt": "2026-02-20T13:45:20.105Z",
+        "updatedAt": "2026-02-20T14:10:41.187Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -39855,21 +39868,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:43:55.257Z"
+                        "timestamp": "2026-02-20T14:09:16.164Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:19.527Z",
+        "analysisDate": "2026-02-20T14:10:40.606Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.0068,
-        "targetPrice": 0.00714,
-        "stopLoss": 0.006302428571428571,
-        "takeProfit": 0.0074800000000000005,
+        "priceAtAnalysis": 0.00681,
+        "targetPrice": 0.007150500000000001,
+        "stopLoss": 0.006312428571428571,
+        "takeProfit": 0.007491,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -39877,7 +39890,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:23.132Z",
-        "updatedAt": "2026-02-20T13:45:19.527Z",
+        "updatedAt": "2026-02-20T14:10:40.606Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -40236,21 +40249,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:43:47.356Z"
+                        "timestamp": "2026-02-20T14:09:08.290Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:18.945Z",
+        "analysisDate": "2026-02-20T14:10:40.033Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.00736,
-        "targetPrice": 0.0077280000000000005,
-        "stopLoss": 0.006882357142857143,
-        "takeProfit": 0.008096,
+        "priceAtAnalysis": 0.007345,
+        "targetPrice": 0.00771225,
+        "stopLoss": 0.006867357142857143,
+        "takeProfit": 0.0080795,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -40258,7 +40271,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:22.559Z",
-        "updatedAt": "2026-02-20T13:45:18.945Z",
+        "updatedAt": "2026-02-20T14:10:40.033Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -40617,7 +40630,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:43:44.784Z"
+                        "timestamp": "2026-02-20T14:09:05.656Z"
                     },
                     "horizons": null
                 },
@@ -40642,14 +40655,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:18.365Z",
+        "analysisDate": "2026-02-20T14:10:39.459Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.007386,
-        "targetPrice": 0.0077553000000000006,
-        "stopLoss": 0.006909514285714286,
-        "takeProfit": 0.008124600000000001,
+        "priceAtAnalysis": 0.00735,
+        "targetPrice": 0.0077175,
+        "stopLoss": 0.006873514285714285,
+        "takeProfit": 0.008085,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -40657,7 +40670,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:21.987Z",
-        "updatedAt": "2026-02-20T13:45:18.366Z",
+        "updatedAt": "2026-02-20T14:10:39.459Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -41016,7 +41029,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:43:42.100Z"
+                        "timestamp": "2026-02-20T14:09:03.005Z"
                     },
                     "horizons": null
                 },
@@ -41041,7 +41054,7 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:17.790Z",
+        "analysisDate": "2026-02-20T14:10:38.880Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -41056,7 +41069,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:21.413Z",
-        "updatedAt": "2026-02-20T13:45:17.790Z",
+        "updatedAt": "2026-02-20T14:10:38.880Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -41415,7 +41428,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:43:39.376Z"
+                        "timestamp": "2026-02-20T14:09:00.418Z"
                     },
                     "horizons": null
                 },
@@ -41440,14 +41453,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:17.220Z",
+        "analysisDate": "2026-02-20T14:10:38.301Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 542.8,
-        "targetPrice": 569.9399999999999,
-        "stopLoss": 527.68,
-        "takeProfit": 597.08,
+        "priceAtAnalysis": 542.9,
+        "targetPrice": 570.045,
+        "stopLoss": 527.78,
+        "takeProfit": 597.19,
         "strategyId": 1,
         "tags": [],
         "sector": "energy",
@@ -41455,7 +41468,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:20.840Z",
-        "updatedAt": "2026-02-20T13:45:17.221Z",
+        "updatedAt": "2026-02-20T14:10:38.301Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -41814,7 +41827,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:43:26.068Z"
+                        "timestamp": "2026-02-20T14:08:47.046Z"
                     },
                     "horizons": null
                 },
@@ -41839,14 +41852,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:16.642Z",
+        "analysisDate": "2026-02-20T14:10:37.728Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 80.28,
-        "targetPrice": 84.29400000000001,
-        "stopLoss": 76.61314285714286,
-        "takeProfit": 88.308,
+        "priceAtAnalysis": 80.12,
+        "targetPrice": 84.126,
+        "stopLoss": 76.45314285714286,
+        "takeProfit": 88.13200000000002,
         "strategyId": 1,
         "tags": [],
         "sector": "it",
@@ -41854,7 +41867,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:20.239Z",
-        "updatedAt": "2026-02-20T13:45:16.643Z",
+        "updatedAt": "2026-02-20T14:10:37.729Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -42213,7 +42226,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:43:23.406Z"
+                        "timestamp": "2026-02-20T14:08:44.405Z"
                     },
                     "horizons": null
                 },
@@ -42238,7 +42251,7 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:16.058Z",
+        "analysisDate": "2026-02-20T14:10:37.148Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -42253,7 +42266,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:19.671Z",
-        "updatedAt": "2026-02-20T13:45:16.058Z",
+        "updatedAt": "2026-02-20T14:10:37.148Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -42612,7 +42625,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:43:20.760Z"
+                        "timestamp": "2026-02-20T14:08:41.773Z"
                     },
                     "horizons": null
                 },
@@ -42637,14 +42650,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:15.479Z",
+        "analysisDate": "2026-02-20T14:10:36.565Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 21.755,
-        "targetPrice": 22.84275,
-        "stopLoss": 21.15392857142857,
-        "takeProfit": 23.930500000000002,
+        "priceAtAnalysis": 21.795,
+        "targetPrice": 22.884750000000004,
+        "stopLoss": 21.19392857142857,
+        "takeProfit": 23.974500000000003,
         "strategyId": 1,
         "tags": [],
         "sector": "energy",
@@ -42652,7 +42665,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:19.094Z",
-        "updatedAt": "2026-02-20T13:45:15.480Z",
+        "updatedAt": "2026-02-20T14:10:36.566Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -43011,7 +43024,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:43:18.112Z"
+                        "timestamp": "2026-02-20T14:08:39.101Z"
                     },
                     "horizons": null
                 },
@@ -43036,14 +43049,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:14.903Z",
+        "analysisDate": "2026-02-20T14:10:35.965Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 850.6,
-        "targetPrice": 893.1300000000001,
-        "stopLoss": 793.6685714285715,
-        "takeProfit": 935.6600000000001,
+        "priceAtAnalysis": 851.6,
+        "targetPrice": 894.1800000000001,
+        "stopLoss": 794.6685714285715,
+        "takeProfit": 936.7600000000001,
         "strategyId": 1,
         "tags": [],
         "sector": "real_estate",
@@ -43051,7 +43064,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:18.518Z",
-        "updatedAt": "2026-02-20T13:45:14.904Z",
+        "updatedAt": "2026-02-20T14:10:35.965Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -43410,7 +43423,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:43:02.354Z"
+                        "timestamp": "2026-02-20T14:08:23.309Z"
                     },
                     "horizons": null
                 },
@@ -43435,14 +43448,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:14.325Z",
+        "analysisDate": "2026-02-20T14:10:35.392Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 314.21,
-        "targetPrice": 329.9205,
-        "stopLoss": 298.49949999999995,
-        "takeProfit": 345.63100000000003,
+        "priceAtAnalysis": 313.96,
+        "targetPrice": 329.658,
+        "stopLoss": 298.26199999999994,
+        "takeProfit": 345.356,
         "strategyId": null,
         "tags": [],
         "sector": "financial",
@@ -43450,7 +43463,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:17.947Z",
-        "updatedAt": "2026-02-20T13:45:14.325Z",
+        "updatedAt": "2026-02-20T14:10:35.392Z",
         "strategy": null
     },
     {
@@ -43804,7 +43817,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:42:59.797Z"
+                        "timestamp": "2026-02-20T14:08:20.685Z"
                     },
                     "horizons": null
                 },
@@ -43829,14 +43842,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:14.321Z",
+        "analysisDate": "2026-02-20T14:10:35.386Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 314.47,
-        "targetPrice": 330.19350000000003,
-        "stopLoss": 309.3798571428572,
-        "takeProfit": 345.91700000000003,
+        "priceAtAnalysis": 314.05,
+        "targetPrice": 329.7525,
+        "stopLoss": 308.9598571428572,
+        "takeProfit": 345.45500000000004,
         "strategyId": 1,
         "tags": [],
         "sector": "financial",
@@ -43844,7 +43857,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:17.944Z",
-        "updatedAt": "2026-02-20T13:45:14.322Z",
+        "updatedAt": "2026-02-20T14:10:35.387Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -44203,7 +44216,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:42:51.195Z"
+                        "timestamp": "2026-02-20T14:08:12.184Z"
                     },
                     "horizons": null
                 },
@@ -44228,14 +44241,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:13.752Z",
+        "analysisDate": "2026-02-20T14:10:34.808Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 64.17,
-        "targetPrice": 67.3785,
-        "stopLoss": 61.871142857142864,
-        "takeProfit": 70.587,
+        "priceAtAnalysis": 64.03,
+        "targetPrice": 67.23150000000001,
+        "stopLoss": 61.73114285714286,
+        "takeProfit": 70.433,
         "strategyId": 1,
         "tags": [],
         "sector": "telecom",
@@ -44243,7 +44256,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:17.370Z",
-        "updatedAt": "2026-02-20T13:45:13.752Z",
+        "updatedAt": "2026-02-20T14:10:34.809Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -44602,7 +44615,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:42:48.651Z"
+                        "timestamp": "2026-02-20T14:08:09.584Z"
                     },
                     "horizons": null
                 },
@@ -44627,14 +44640,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:13.174Z",
+        "analysisDate": "2026-02-20T14:10:34.237Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 397.6,
-        "targetPrice": 417.48,
-        "stopLoss": 387.98285714285714,
-        "takeProfit": 437.36000000000007,
+        "priceAtAnalysis": 396.35,
+        "targetPrice": 416.1675,
+        "stopLoss": 386.73285714285714,
+        "takeProfit": 435.98500000000007,
         "strategyId": 1,
         "tags": [],
         "sector": "energy",
@@ -44642,7 +44655,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:16.791Z",
-        "updatedAt": "2026-02-20T13:45:13.175Z",
+        "updatedAt": "2026-02-20T14:10:34.238Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -45001,7 +45014,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:42:43.314Z"
+                        "timestamp": "2026-02-20T14:08:04.278Z"
                     },
                     "horizons": null
                 },
@@ -45026,14 +45039,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:12.593Z",
+        "analysisDate": "2026-02-20T14:10:33.669Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 116.9,
-        "targetPrice": 122.745,
-        "stopLoss": 111.35857142857144,
-        "takeProfit": 128.59,
+        "priceAtAnalysis": 116.55,
+        "targetPrice": 122.3775,
+        "stopLoss": 111.00857142857143,
+        "takeProfit": 128.205,
         "strategyId": 1,
         "tags": [],
         "sector": "energy",
@@ -45041,7 +45054,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:16.216Z",
-        "updatedAt": "2026-02-20T13:45:12.594Z",
+        "updatedAt": "2026-02-20T14:10:33.669Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -45400,7 +45413,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:42:38.012Z"
+                        "timestamp": "2026-02-20T14:07:59.007Z"
                     },
                     "horizons": null
                 },
@@ -45425,14 +45438,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:12.014Z",
+        "analysisDate": "2026-02-20T14:10:33.091Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 95.98,
-        "targetPrice": 100.77900000000001,
-        "stopLoss": 92.64742857142858,
-        "takeProfit": 105.57800000000002,
+        "priceAtAnalysis": 95.92,
+        "targetPrice": 100.71600000000001,
+        "stopLoss": 92.58742857142857,
+        "takeProfit": 105.51200000000001,
         "strategyId": 1,
         "tags": [],
         "sector": "financial",
@@ -45440,7 +45453,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:15.622Z",
-        "updatedAt": "2026-02-20T13:45:12.014Z",
+        "updatedAt": "2026-02-20T14:10:33.092Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -45799,7 +45812,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:42:27.538Z"
+                        "timestamp": "2026-02-20T14:07:48.498Z"
                     },
                     "horizons": null
                 },
@@ -45824,14 +45837,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:11.444Z",
+        "analysisDate": "2026-02-20T14:10:32.510Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 415.65,
-        "targetPrice": 436.4325,
-        "stopLoss": 396.9107142857143,
-        "takeProfit": 457.21500000000003,
+        "priceAtAnalysis": 416.55,
+        "targetPrice": 437.37750000000005,
+        "stopLoss": 397.8107142857143,
+        "takeProfit": 458.20500000000004,
         "strategyId": 1,
         "tags": [],
         "sector": "health_care",
@@ -45839,7 +45852,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:15.039Z",
-        "updatedAt": "2026-02-20T13:45:11.444Z",
+        "updatedAt": "2026-02-20T14:10:32.511Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -46198,7 +46211,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:42:22.372Z"
+                        "timestamp": "2026-02-20T14:07:43.367Z"
                     },
                     "horizons": null
                 },
@@ -46223,14 +46236,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:10.864Z",
+        "analysisDate": "2026-02-20T14:10:31.934Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1190.8,
-        "targetPrice": 1250.34,
-        "stopLoss": 1137.8028571428572,
-        "takeProfit": 1309.88,
+        "priceAtAnalysis": 1192.2,
+        "targetPrice": 1251.8100000000002,
+        "stopLoss": 1139.2028571428573,
+        "takeProfit": 1311.42,
         "strategyId": 1,
         "tags": [],
         "sector": "it",
@@ -46238,7 +46251,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:14.455Z",
-        "updatedAt": "2026-02-20T13:45:10.864Z",
+        "updatedAt": "2026-02-20T14:10:31.934Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -46597,7 +46610,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:42:14.353Z"
+                        "timestamp": "2026-02-20T14:07:35.378Z"
                     },
                     "horizons": null
                 },
@@ -46622,14 +46635,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:10.287Z",
+        "analysisDate": "2026-02-20T14:10:31.350Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 2497,
-        "targetPrice": 2621.85,
-        "stopLoss": 2394.6314285714284,
-        "takeProfit": 2746.7000000000003,
+        "priceAtAnalysis": 2503.8,
+        "targetPrice": 2628.9900000000002,
+        "stopLoss": 2401.4314285714286,
+        "takeProfit": 2754.1800000000003,
         "strategyId": 1,
         "tags": [],
         "sector": "materials",
@@ -46637,7 +46650,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:13.869Z",
-        "updatedAt": "2026-02-20T13:45:10.287Z",
+        "updatedAt": "2026-02-20T14:10:31.350Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -46996,7 +47009,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:42:11.764Z"
+                        "timestamp": "2026-02-20T14:07:32.799Z"
                     },
                     "horizons": null
                 },
@@ -47021,14 +47034,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:09.699Z",
+        "analysisDate": "2026-02-20T14:10:30.775Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 463.4,
-        "targetPrice": 486.57,
-        "stopLoss": 445.7471428571428,
-        "takeProfit": 509.74,
+        "priceAtAnalysis": 462.6,
+        "targetPrice": 485.73,
+        "stopLoss": 444.94714285714286,
+        "takeProfit": 508.86000000000007,
         "strategyId": 1,
         "tags": [],
         "sector": "real_estate",
@@ -47036,7 +47049,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:13.299Z",
-        "updatedAt": "2026-02-20T13:45:09.699Z",
+        "updatedAt": "2026-02-20T14:10:30.775Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -47395,7 +47408,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:42:06.497Z"
+                        "timestamp": "2026-02-20T14:07:27.484Z"
                     },
                     "horizons": null
                 },
@@ -47420,14 +47433,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:09.137Z",
+        "analysisDate": "2026-02-20T14:10:30.198Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 52.16,
-        "targetPrice": 54.768,
-        "stopLoss": 49.55199999999999,
-        "takeProfit": 57.376,
+        "priceAtAnalysis": 52.08,
+        "targetPrice": 54.684,
+        "stopLoss": 49.476,
+        "takeProfit": 57.288000000000004,
         "strategyId": null,
         "tags": [],
         "sector": "health_care",
@@ -47435,7 +47448,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:12.725Z",
-        "updatedAt": "2026-02-20T13:45:09.138Z",
+        "updatedAt": "2026-02-20T14:10:30.198Z",
         "strategy": null
     },
     {
@@ -47789,7 +47802,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:42:03.785Z"
+                        "timestamp": "2026-02-20T14:07:24.789Z"
                     },
                     "horizons": null
                 },
@@ -47814,14 +47827,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:09.133Z",
+        "analysisDate": "2026-02-20T14:10:30.193Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 4798,
-        "targetPrice": 5037.900000000001,
-        "stopLoss": 4605.528571428571,
-        "takeProfit": 5277.8,
+        "priceAtAnalysis": 4796,
+        "targetPrice": 5035.8,
+        "stopLoss": 4603.528571428571,
+        "takeProfit": 5275.6,
         "strategyId": 1,
         "tags": [],
         "sector": "consumer",
@@ -47829,7 +47842,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:12.721Z",
-        "updatedAt": "2026-02-20T13:45:09.133Z",
+        "updatedAt": "2026-02-20T14:10:30.193Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -48188,7 +48201,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:41:58.610Z"
+                        "timestamp": "2026-02-20T14:07:19.633Z"
                     },
                     "horizons": null
                 },
@@ -48213,14 +48226,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:08.554Z",
+        "analysisDate": "2026-02-20T14:10:29.616Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.357,
-        "targetPrice": 0.37485,
-        "stopLoss": 0.34432285714285715,
-        "takeProfit": 0.3927,
+        "priceAtAnalysis": 0.3562,
+        "targetPrice": 0.37401,
+        "stopLoss": 0.3435228571428572,
+        "takeProfit": 0.39182000000000006,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -48228,7 +48241,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:12.140Z",
-        "updatedAt": "2026-02-20T13:45:08.554Z",
+        "updatedAt": "2026-02-20T14:10:29.616Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -48241,7 +48254,7 @@
         "ticker": "NLMK",
         "name": "НЛМК",
         "recommendation": "HOLD",
-        "confidence": 0.977450433210365,
+        "confidence": 1,
         "score": 0.55,
         "analysis": {
             "horizons": {
@@ -48408,7 +48421,7 @@
                     "score": 0.7147878229618072,
                     "confidence": 0.9726716486226654,
                     "recommendation": "BUY",
-                    "weight": 0.32720391198303334,
+                    "weight": 0.43127391621707023,
                     "rawDetails": {
                         "lstm": 0.5451465845108032,
                         "cnn": 0.7406548261642456,
@@ -48574,10 +48587,10 @@
                     }
                 },
                 "traditional": {
-                    "score": 0.9738220572471619,
-                    "confidence": 0.9738220572471619,
+                    "score": 0.9826737642288208,
+                    "confidence": 0.9826737642288208,
                     "recommendation": "BUY",
-                    "weight": 0.32759090609646024,
+                    "weight": 0.43570876488777094,
                     "rawDetails": {
                         "summary": "Сильная рекомендация к покупке",
                         "confidence": "Высокая",
@@ -48587,39 +48600,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:41:36.959Z"
-                    },
-                    "horizons": null
-                },
-                "signals": {
-                    "score": 0.875,
-                    "confidence": 0.75,
-                    "recommendation": "BUY",
-                    "weight": 0.24428605496341935,
-                    "rawDetails": {
-                        "signalsCount": 1,
-                        "buySignals": 1,
-                        "sellSignals": 0,
-                        "validation": {
-                            "directionMatch": true,
-                            "directionAgreement": 1,
-                            "probabilityCorrelation": 0.841224103480301,
-                            "overallAgreement": 0.9682448206960602
-                        }
+                        "timestamp": "2026-02-20T14:06:57.991Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:07.969Z",
+        "analysisDate": "2026-02-20T14:10:29.041Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 111.16,
-        "targetPrice": 116.718,
-        "stopLoss": 107.19742857142857,
-        "takeProfit": 122.27600000000001,
+        "priceAtAnalysis": 111.02,
+        "targetPrice": 116.571,
+        "stopLoss": 107.05742857142857,
+        "takeProfit": 122.122,
         "strategyId": 1,
         "tags": [],
         "sector": "materials",
@@ -48627,7 +48622,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:11.564Z",
-        "updatedAt": "2026-02-20T13:45:07.970Z",
+        "updatedAt": "2026-02-20T14:10:29.042Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -48986,21 +48981,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:41:34.306Z"
+                        "timestamp": "2026-02-20T14:06:55.320Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:07.394Z",
+        "analysisDate": "2026-02-20T14:10:28.449Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 62.06,
-        "targetPrice": 65.16300000000001,
-        "stopLoss": 60.301142857142864,
-        "takeProfit": 68.266,
+        "priceAtAnalysis": 62.08,
+        "targetPrice": 65.184,
+        "stopLoss": 60.32114285714286,
+        "takeProfit": 68.288,
         "strategyId": 1,
         "tags": [],
         "sector": "materials",
@@ -49008,7 +49003,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:10.984Z",
-        "updatedAt": "2026-02-20T13:45:07.395Z",
+        "updatedAt": "2026-02-20T14:10:28.450Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -49367,7 +49362,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:41:23.810Z"
+                        "timestamp": "2026-02-20T14:06:44.910Z"
                     },
                     "horizons": null
                 },
@@ -49392,14 +49387,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:06.818Z",
+        "analysisDate": "2026-02-20T14:10:27.865Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 234.6,
-        "targetPrice": 246.33,
-        "stopLoss": 227.38071428571428,
-        "takeProfit": 258.06,
+        "priceAtAnalysis": 234.2,
+        "targetPrice": 245.91,
+        "stopLoss": 226.98071428571427,
+        "takeProfit": 257.62,
         "strategyId": 1,
         "tags": [],
         "sector": "telecom",
@@ -49407,7 +49402,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:10.418Z",
-        "updatedAt": "2026-02-20T13:45:06.819Z",
+        "updatedAt": "2026-02-20T14:10:27.865Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -49766,21 +49761,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:41:21.089Z"
+                        "timestamp": "2026-02-20T14:06:42.191Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:06.243Z",
+        "analysisDate": "2026-02-20T14:10:27.287Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 71.8,
-        "targetPrice": 75.39,
-        "stopLoss": 68.83642857142857,
-        "takeProfit": 78.98,
+        "priceAtAnalysis": 71.85,
+        "targetPrice": 75.4425,
+        "stopLoss": 68.88642857142857,
+        "takeProfit": 79.035,
         "strategyId": 1,
         "tags": [],
         "sector": "materials",
@@ -49788,7 +49783,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:09.835Z",
-        "updatedAt": "2026-02-20T13:45:06.243Z",
+        "updatedAt": "2026-02-20T14:10:27.287Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -50147,7 +50142,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:41:10.732Z"
+                        "timestamp": "2026-02-20T14:06:31.818Z"
                     },
                     "horizons": null
                 },
@@ -50172,14 +50167,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:05.656Z",
+        "analysisDate": "2026-02-20T14:10:26.711Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 2.357,
-        "targetPrice": 2.4748500000000004,
-        "stopLoss": 2.23415,
-        "takeProfit": 2.5927000000000002,
+        "priceAtAnalysis": 2.3235,
+        "targetPrice": 2.4396750000000003,
+        "stopLoss": 2.20065,
+        "takeProfit": 2.5558500000000004,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -50187,7 +50182,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:09.260Z",
-        "updatedAt": "2026-02-20T13:45:05.656Z",
+        "updatedAt": "2026-02-20T14:10:26.712Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -50546,21 +50541,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:41:05.426Z"
+                        "timestamp": "2026-02-20T14:06:26.477Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:05.086Z",
+        "analysisDate": "2026-02-20T14:10:26.100Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.0874,
-        "targetPrice": 0.09177,
-        "stopLoss": 0.08254,
-        "takeProfit": 0.09614000000000002,
+        "priceAtAnalysis": 0.0873,
+        "targetPrice": 0.09166500000000001,
+        "stopLoss": 0.08244,
+        "takeProfit": 0.09603,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -50568,7 +50563,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:08.679Z",
-        "updatedAt": "2026-02-20T13:45:05.086Z",
+        "updatedAt": "2026-02-20T14:10:26.100Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -50927,7 +50922,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:41:02.783Z"
+                        "timestamp": "2026-02-20T14:06:23.855Z"
                     },
                     "horizons": null
                 },
@@ -50952,14 +50947,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:04.506Z",
+        "analysisDate": "2026-02-20T14:10:25.527Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.16665,
-        "targetPrice": 0.1749825,
-        "stopLoss": 0.1592957142857143,
-        "takeProfit": 0.183315,
+        "priceAtAnalysis": 0.1665,
+        "targetPrice": 0.174825,
+        "stopLoss": 0.1591457142857143,
+        "takeProfit": 0.18315000000000003,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -50967,7 +50962,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:08.095Z",
-        "updatedAt": "2026-02-20T13:45:04.506Z",
+        "updatedAt": "2026-02-20T14:10:25.527Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -51326,21 +51321,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:40:52.276Z"
+                        "timestamp": "2026-02-20T14:06:13.328Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:03.932Z",
+        "analysisDate": "2026-02-20T14:10:24.963Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.837,
-        "targetPrice": 0.87885,
-        "stopLoss": 0.7968857142857143,
-        "takeProfit": 0.9207000000000001,
+        "priceAtAnalysis": 0.8362,
+        "targetPrice": 0.8780100000000001,
+        "stopLoss": 0.7960857142857144,
+        "takeProfit": 0.9198200000000001,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -51348,7 +51343,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:07.516Z",
-        "updatedAt": "2026-02-20T13:45:03.933Z",
+        "updatedAt": "2026-02-20T14:10:24.964Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -51707,7 +51702,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:49.651Z"
+                        "timestamp": "2026-02-20T14:06:10.798Z"
                     },
                     "horizons": null
                 },
@@ -51732,14 +51727,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:03.353Z",
+        "analysisDate": "2026-02-20T14:10:24.393Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 182.14,
-        "targetPrice": 191.24699999999999,
-        "stopLoss": 177.15785714285713,
-        "takeProfit": 200.354,
+        "priceAtAnalysis": 182.21,
+        "targetPrice": 191.3205,
+        "stopLoss": 177.22785714285715,
+        "takeProfit": 200.431,
         "strategyId": 1,
         "tags": [],
         "sector": "financial",
@@ -51747,7 +51742,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:06.951Z",
-        "updatedAt": "2026-02-20T13:45:03.354Z",
+        "updatedAt": "2026-02-20T14:10:24.393Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -52106,21 +52101,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:40:46.907Z"
+                        "timestamp": "2026-02-20T14:06:08.013Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:02.777Z",
+        "analysisDate": "2026-02-20T14:10:23.819Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 784,
-        "targetPrice": 823.2,
-        "stopLoss": 766.5142857142857,
-        "takeProfit": 862.4000000000001,
+        "priceAtAnalysis": 786,
+        "targetPrice": 825.3000000000001,
+        "stopLoss": 768.5142857142857,
+        "takeProfit": 864.6,
         "strategyId": 1,
         "tags": [],
         "sector": "telecom",
@@ -52128,7 +52123,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:06.381Z",
-        "updatedAt": "2026-02-20T13:45:02.777Z",
+        "updatedAt": "2026-02-20T14:10:23.820Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -52487,7 +52482,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:40:36.400Z"
+                        "timestamp": "2026-02-20T14:05:57.374Z"
                     },
                     "horizons": null
                 },
@@ -52512,14 +52507,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:02.205Z",
+        "analysisDate": "2026-02-20T14:10:23.245Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 1402,
-        "targetPrice": 1472.1000000000001,
-        "stopLoss": 1351.7928571428572,
-        "takeProfit": 1542.2,
+        "priceAtAnalysis": 1399.5,
+        "targetPrice": 1469.4750000000001,
+        "stopLoss": 1349.2928571428572,
+        "takeProfit": 1539.45,
         "strategyId": 1,
         "tags": [],
         "sector": "financial",
@@ -52527,7 +52522,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:05.799Z",
-        "updatedAt": "2026-02-20T13:45:02.205Z",
+        "updatedAt": "2026-02-20T14:10:23.245Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -52886,7 +52881,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:31.118Z"
+                        "timestamp": "2026-02-20T14:05:52.145Z"
                     },
                     "horizons": null
                 },
@@ -52911,14 +52906,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:01.631Z",
+        "analysisDate": "2026-02-20T14:10:22.671Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 704.4,
-        "targetPrice": 739.62,
-        "stopLoss": 685.2428571428571,
-        "takeProfit": 774.84,
+        "priceAtAnalysis": 704.6,
+        "targetPrice": 739.83,
+        "stopLoss": 685.4428571428572,
+        "takeProfit": 775.0600000000001,
         "strategyId": 1,
         "tags": [],
         "sector": "real_estate",
@@ -52926,7 +52921,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:05.227Z",
-        "updatedAt": "2026-02-20T13:45:01.631Z",
+        "updatedAt": "2026-02-20T14:10:22.671Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -53285,7 +53280,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:40:12.715Z"
+                        "timestamp": "2026-02-20T14:05:33.748Z"
                     },
                     "horizons": null
                 },
@@ -53310,14 +53305,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:01.051Z",
+        "analysisDate": "2026-02-20T14:10:22.100Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 2068.5,
-        "targetPrice": 2171.925,
-        "stopLoss": 1969.4357142857143,
-        "takeProfit": 2275.3500000000004,
+        "priceAtAnalysis": 2064,
+        "targetPrice": 2167.2000000000003,
+        "stopLoss": 1964.9357142857143,
+        "takeProfit": 2270.4,
         "strategyId": 1,
         "tags": [],
         "sector": "consumer",
@@ -53325,7 +53320,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:04.658Z",
-        "updatedAt": "2026-02-20T13:45:01.052Z",
+        "updatedAt": "2026-02-20T14:10:22.100Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -53684,7 +53679,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:40:04.809Z"
+                        "timestamp": "2026-02-20T14:05:25.818Z"
                     },
                     "horizons": null
                 },
@@ -53709,7 +53704,7 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:45:00.480Z",
+        "analysisDate": "2026-02-20T14:10:21.522Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -53724,7 +53719,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:04.072Z",
-        "updatedAt": "2026-02-20T13:45:00.480Z",
+        "updatedAt": "2026-02-20T14:10:21.522Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -54083,14 +54078,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:39:51.049Z"
+                        "timestamp": "2026-02-20T14:05:12.133Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:59.900Z",
+        "analysisDate": "2026-02-20T14:10:20.938Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -54105,7 +54100,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:03.494Z",
-        "updatedAt": "2026-02-20T13:44:59.901Z",
+        "updatedAt": "2026-02-20T14:10:20.938Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -54464,14 +54459,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:39:48.510Z"
+                        "timestamp": "2026-02-20T14:05:09.547Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:59.324Z",
+        "analysisDate": "2026-02-20T14:10:20.373Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -54486,7 +54481,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:02.915Z",
-        "updatedAt": "2026-02-20T13:44:59.324Z",
+        "updatedAt": "2026-02-20T14:10:20.374Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -54845,21 +54840,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:39:40.252Z"
+                        "timestamp": "2026-02-20T14:05:01.333Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:58.747Z",
+        "analysisDate": "2026-02-20T14:10:19.796Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 28.37,
-        "targetPrice": 29.788500000000003,
-        "stopLoss": 25.788285714285713,
-        "takeProfit": 31.207000000000004,
+        "priceAtAnalysis": 28.3,
+        "targetPrice": 29.715000000000003,
+        "stopLoss": 25.718285714285713,
+        "takeProfit": 31.130000000000003,
         "strategyId": 1,
         "tags": [],
         "sector": "financial",
@@ -54867,7 +54862,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:02.334Z",
-        "updatedAt": "2026-02-20T13:44:58.748Z",
+        "updatedAt": "2026-02-20T14:10:19.796Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -55226,7 +55221,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:32.703Z"
+                        "timestamp": "2026-02-20T14:04:53.776Z"
                     },
                     "horizons": null
                 },
@@ -55251,14 +55246,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:58.178Z",
+        "analysisDate": "2026-02-20T14:10:19.212Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 3.3155,
-        "targetPrice": 3.481275,
-        "stopLoss": 3.1900785714285718,
-        "takeProfit": 3.6470500000000006,
+        "priceAtAnalysis": 3.316,
+        "targetPrice": 3.4818,
+        "stopLoss": 3.1905785714285715,
+        "takeProfit": 3.6476,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -55266,7 +55261,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:01.755Z",
-        "updatedAt": "2026-02-20T13:44:58.178Z",
+        "updatedAt": "2026-02-20T14:10:19.213Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -55625,7 +55620,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:39:23.664Z"
+                        "timestamp": "2026-02-20T14:04:44.779Z"
                     },
                     "horizons": null
                 },
@@ -55650,14 +55645,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:57.597Z",
+        "analysisDate": "2026-02-20T14:10:18.638Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 2919,
-        "targetPrice": 3064.9500000000003,
-        "stopLoss": 2824.2428571428572,
-        "takeProfit": 3210.9,
+        "priceAtAnalysis": 2916,
+        "targetPrice": 3061.8,
+        "stopLoss": 2821.2428571428572,
+        "takeProfit": 3207.6000000000004,
         "strategyId": 1,
         "tags": [],
         "sector": "it",
@@ -55665,7 +55660,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:01.169Z",
-        "updatedAt": "2026-02-20T13:44:57.598Z",
+        "updatedAt": "2026-02-20T14:10:18.639Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -56024,21 +56019,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:39:20.942Z"
+                        "timestamp": "2026-02-20T14:04:42.038Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:57.015Z",
+        "analysisDate": "2026-02-20T14:10:18.055Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 160.9,
-        "targetPrice": 168.94500000000002,
-        "stopLoss": 156.20714285714286,
-        "takeProfit": 176.99,
+        "priceAtAnalysis": 160.5,
+        "targetPrice": 168.525,
+        "stopLoss": 155.80714285714285,
+        "takeProfit": 176.55,
         "strategyId": 1,
         "tags": [],
         "sector": "industrials",
@@ -56046,7 +56041,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:00.591Z",
-        "updatedAt": "2026-02-20T13:44:57.016Z",
+        "updatedAt": "2026-02-20T14:10:18.055Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -56405,7 +56400,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:39:10.465Z"
+                        "timestamp": "2026-02-20T14:04:31.549Z"
                     },
                     "horizons": null
                 },
@@ -56430,14 +56425,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:56.434Z",
+        "analysisDate": "2026-02-20T14:10:17.475Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 854.5,
-        "targetPrice": 897.225,
-        "stopLoss": 811.0428571428572,
-        "takeProfit": 939.95,
+        "priceAtAnalysis": 856,
+        "targetPrice": 898.8000000000001,
+        "stopLoss": 812.5428571428572,
+        "takeProfit": 941.6,
         "strategyId": 1,
         "tags": [],
         "sector": "health_care",
@@ -56445,7 +56440,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:59.986Z",
-        "updatedAt": "2026-02-20T13:44:56.434Z",
+        "updatedAt": "2026-02-20T14:10:17.475Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -56804,7 +56799,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:39:02.650Z"
+                        "timestamp": "2026-02-20T14:04:23.741Z"
                     },
                     "horizons": null
                 },
@@ -56829,14 +56824,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:55.862Z",
+        "analysisDate": "2026-02-20T14:10:16.878Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 125.86,
-        "targetPrice": 132.153,
-        "stopLoss": 122.85271428571428,
-        "takeProfit": 138.446,
+        "priceAtAnalysis": 125.89,
+        "targetPrice": 132.1845,
+        "stopLoss": 122.88271428571429,
+        "takeProfit": 138.479,
         "strategyId": 1,
         "tags": [],
         "sector": "energy",
@@ -56844,7 +56839,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:59.412Z",
-        "updatedAt": "2026-02-20T13:44:55.862Z",
+        "updatedAt": "2026-02-20T14:10:16.879Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -57203,21 +57198,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:38:59.847Z"
+                        "timestamp": "2026-02-20T14:04:20.998Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:55.281Z",
+        "analysisDate": "2026-02-20T14:10:16.299Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 76.14,
-        "targetPrice": 79.947,
-        "stopLoss": 73.45671428571428,
-        "takeProfit": 83.754,
+        "priceAtAnalysis": 76.11,
+        "targetPrice": 79.91550000000001,
+        "stopLoss": 73.42671428571428,
+        "takeProfit": 83.721,
         "strategyId": 1,
         "tags": [],
         "sector": "industrials",
@@ -57225,7 +57220,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:09:32.388Z",
-        "updatedAt": "2026-02-20T13:44:55.282Z",
+        "updatedAt": "2026-02-20T14:10:16.300Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -57584,7 +57579,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:38:57.283Z"
+                        "timestamp": "2026-02-20T14:04:18.402Z"
                     },
                     "horizons": null
                 },
@@ -57609,14 +57604,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:54.711Z",
+        "analysisDate": "2026-02-20T14:10:15.724Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.5641,
-        "targetPrice": 0.5923050000000001,
-        "stopLoss": 0.5397614285714286,
-        "takeProfit": 0.6205100000000001,
+        "priceAtAnalysis": 0.5643,
+        "targetPrice": 0.592515,
+        "stopLoss": 0.5399614285714286,
+        "takeProfit": 0.6207300000000001,
         "strategyId": 1,
         "tags": [],
         "sector": "consumer",
@@ -57624,7 +57619,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:58.821Z",
-        "updatedAt": "2026-02-20T13:44:54.712Z",
+        "updatedAt": "2026-02-20T14:10:15.725Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -57983,7 +57978,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:38:52.121Z"
+                        "timestamp": "2026-02-20T14:04:13.244Z"
                     },
                     "horizons": null
                 },
@@ -58008,14 +58003,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:54.127Z",
+        "analysisDate": "2026-02-20T14:10:15.137Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.07454,
-        "targetPrice": 0.078267,
-        "stopLoss": 0.071516,
-        "takeProfit": 0.081994,
+        "priceAtAnalysis": 0.07466,
+        "targetPrice": 0.078393,
+        "stopLoss": 0.071636,
+        "takeProfit": 0.082126,
         "strategyId": 1,
         "tags": [],
         "sector": "utilities",
@@ -58023,7 +58018,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:58.246Z",
-        "updatedAt": "2026-02-20T13:44:54.128Z",
+        "updatedAt": "2026-02-20T14:10:15.138Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -58382,7 +58377,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:38:38.735Z"
+                        "timestamp": "2026-02-20T14:03:59.895Z"
                     },
                     "horizons": null
                 },
@@ -58407,14 +58402,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:53.551Z",
+        "analysisDate": "2026-02-20T14:10:14.562Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 0.5034,
-        "targetPrice": 0.52857,
-        "stopLoss": 0.48460285714285706,
-        "takeProfit": 0.55374,
+        "priceAtAnalysis": 0.5026,
+        "targetPrice": 0.52773,
+        "stopLoss": 0.48380285714285715,
+        "takeProfit": 0.5528600000000001,
         "strategyId": 1,
         "tags": [],
         "sector": "energy",
@@ -58422,7 +58417,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:57.093Z",
-        "updatedAt": "2026-02-20T13:44:53.552Z",
+        "updatedAt": "2026-02-20T14:10:14.562Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -58781,14 +58776,14 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:38:36.102Z"
+                        "timestamp": "2026-02-20T14:03:57.284Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:52.974Z",
+        "analysisDate": "2026-02-20T14:10:13.991Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -58803,7 +58798,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:56.514Z",
-        "updatedAt": "2026-02-20T13:44:52.975Z",
+        "updatedAt": "2026-02-20T14:10:13.991Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -59162,21 +59157,21 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:38:15.014Z"
+                        "timestamp": "2026-02-20T14:03:36.231Z"
                     },
                     "horizons": null
                 }
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:52.401Z",
+        "analysisDate": "2026-02-20T14:10:13.419Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 4565,
-        "targetPrice": 4793.25,
-        "stopLoss": 4360.571428571428,
-        "takeProfit": 5021.5,
+        "priceAtAnalysis": 4570,
+        "targetPrice": 4798.5,
+        "stopLoss": 4365.571428571428,
+        "takeProfit": 5027,
         "strategyId": 1,
         "tags": [],
         "sector": "materials",
@@ -59184,7 +59179,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:55.939Z",
-        "updatedAt": "2026-02-20T13:44:52.401Z",
+        "updatedAt": "2026-02-20T14:10:13.420Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -59543,7 +59538,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:37:59.233Z"
+                        "timestamp": "2026-02-20T14:03:20.528Z"
                     },
                     "horizons": null
                 },
@@ -59568,7 +59563,7 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:51.827Z",
+        "analysisDate": "2026-02-20T14:10:12.837Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
@@ -59583,7 +59578,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:55.371Z",
-        "updatedAt": "2026-02-20T13:44:51.828Z",
+        "updatedAt": "2026-02-20T14:10:12.837Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -59942,7 +59937,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Низкий",
-                        "timestamp": "2026-02-20T13:37:56.058Z"
+                        "timestamp": "2026-02-20T14:03:17.319Z"
                     },
                     "horizons": null
                 },
@@ -59967,14 +59962,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:51.259Z",
+        "analysisDate": "2026-02-20T14:10:12.265Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 921,
-        "targetPrice": 967.0500000000001,
-        "stopLoss": 899.0785714285714,
-        "takeProfit": 1013.1000000000001,
+        "priceAtAnalysis": 922.5,
+        "targetPrice": 968.625,
+        "stopLoss": 900.5785714285714,
+        "takeProfit": 1014.7500000000001,
         "strategyId": 1,
         "tags": [],
         "sector": "energy",
@@ -59982,7 +59977,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:54.796Z",
-        "updatedAt": "2026-02-20T13:44:51.259Z",
+        "updatedAt": "2026-02-20T14:10:12.265Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -60341,7 +60336,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:37:50.898Z"
+                        "timestamp": "2026-02-20T14:03:12.140Z"
                     },
                     "horizons": null
                 },
@@ -60366,14 +60361,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:50.680Z",
+        "analysisDate": "2026-02-20T14:10:11.689Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 261.25,
-        "targetPrice": 274.3125,
-        "stopLoss": 252.31428571428572,
-        "takeProfit": 287.375,
+        "priceAtAnalysis": 260.8,
+        "targetPrice": 273.84000000000003,
+        "stopLoss": 251.86428571428573,
+        "takeProfit": 286.88000000000005,
         "strategyId": 1,
         "tags": [],
         "sector": "it",
@@ -60381,7 +60376,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:54.192Z",
-        "updatedAt": "2026-02-20T13:44:50.681Z",
+        "updatedAt": "2026-02-20T14:10:11.690Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -60740,7 +60735,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Средний",
-                        "timestamp": "2026-02-20T13:37:48.192Z"
+                        "timestamp": "2026-02-20T14:03:09.410Z"
                     },
                     "horizons": null
                 },
@@ -60765,14 +60760,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:50.102Z",
+        "analysisDate": "2026-02-20T14:10:11.110Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 487.8,
-        "targetPrice": 512.19,
-        "stopLoss": 470.35285714285715,
-        "takeProfit": 536.58,
+        "priceAtAnalysis": 488.3,
+        "targetPrice": 512.715,
+        "stopLoss": 470.85285714285715,
+        "takeProfit": 537.1300000000001,
         "strategyId": 1,
         "tags": [],
         "sector": "consumer",
@@ -60780,7 +60775,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:53.623Z",
-        "updatedAt": "2026-02-20T13:44:50.103Z",
+        "updatedAt": "2026-02-20T14:10:11.110Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",
@@ -61139,7 +61134,7 @@
                             "Нейросетевая модель"
                         ],
                         "risk": "Высокий",
-                        "timestamp": "2026-02-20T13:37:35.065Z"
+                        "timestamp": "2026-02-20T14:02:56.153Z"
                     },
                     "horizons": null
                 },
@@ -61164,14 +61159,14 @@
             }
         },
         "modelVersion": "1.0",
-        "analysisDate": "2026-02-20T13:44:49.538Z",
+        "analysisDate": "2026-02-20T14:10:10.549Z",
         "validUntil": null,
         "views": 0,
         "isActive": true,
-        "priceAtAnalysis": 14.173,
-        "targetPrice": 14.88165,
-        "stopLoss": 13.657685714285714,
-        "takeProfit": 15.590300000000001,
+        "priceAtAnalysis": 14.189,
+        "targetPrice": 14.89845,
+        "stopLoss": 13.673685714285714,
+        "takeProfit": 15.6079,
         "strategyId": 1,
         "tags": [],
         "sector": "financial",
@@ -61179,7 +61174,7 @@
         "portfolioId": null,
         "history": [],
         "createdAt": "2026-02-20T12:08:53.613Z",
-        "updatedAt": "2026-02-20T13:44:49.539Z",
+        "updatedAt": "2026-02-20T14:10:10.551Z",
         "strategy": {
             "id": 1,
             "name": "Консервативная",

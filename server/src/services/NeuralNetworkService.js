@@ -3923,20 +3923,6 @@ class NeuralNetworkService {
                         const minScore = parseFloat(settings.auto_trade_min_score) || 0.8;
                         const minAgreement = parseFloat(settings.auto_trade_min_agreement) || 0.6; // Снижено с 0.9 до 0.6 (60%)
 
-                        // Логируем начало проверки для отладки
-                        LoggerService.warn('Checking auto-trade eligibility', {
-                            service: 'NeuralNetworkService',
-                            figi: savedRecommendation.figi,
-                            ticker: savedRecommendation.ticker,
-                            recommendation: savedRecommendation.recommendation,
-                            confidence: savedRecommendation.confidence,
-                            score: savedRecommendation.score,
-                            autoTradeEnabled: autoTradeEnabled,
-                            minConfidence: minConfidence,
-                            minScore: minScore,
-                            minAgreement: minAgreement
-                        });
-
                         // Для BUY/SELL: проверяем стандартные условия
                         // Для HOLD: создаем BUY заявку, если confidence и score достаточно высокие
                         const isBuyOrSell = savedRecommendation.recommendation === 'BUY' || savedRecommendation.recommendation === 'SELL';
@@ -3946,6 +3932,25 @@ class NeuralNetworkService {
                         // Это позволяет обрабатывать больше HOLD рекомендаций, которые составляют ~90% всех рекомендаций
                         const holdMinConfidence = minConfidence * 0.8; // 80% от обычного порога для HOLD
                         const holdMinScore = minScore * 0.8; // 80% от обычного порога для HOLD
+                        
+                        // Определяем актуальные пороги для логирования
+                        const actualMinConfidence = isHold ? holdMinConfidence : minConfidence;
+                        const actualMinScore = isHold ? holdMinScore : minScore;
+                        
+                        // Логируем начало проверки для отладки (с правильными порогами)
+                        LoggerService.debug('Checking auto-trade eligibility', {
+                            service: 'NeuralNetworkService',
+                            figi: savedRecommendation.figi,
+                            ticker: savedRecommendation.ticker,
+                            recommendation: savedRecommendation.recommendation,
+                            confidence: savedRecommendation.confidence,
+                            score: savedRecommendation.score,
+                            autoTradeEnabled: autoTradeEnabled,
+                            minConfidence: actualMinConfidence,
+                            minScore: actualMinScore,
+                            minAgreement: minAgreement,
+                            isHold: isHold
+                        });
                         
                         const meetsConfidence = isBuyOrSell 
                             ? savedRecommendation.confidence >= minConfidence
@@ -4016,11 +4021,12 @@ class NeuralNetworkService {
                             if (meetsAgreement) {
                                 // Проверяем, не создана ли уже заявка для этой рекомендации
                                 const TradingRequest = (await import('../models/TradingRequest.js')).default;
+                                const { Op } = await import('sequelize');
                                 const existingRequest = await TradingRequest.findOne({
                                     where: {
                                         figi: savedRecommendation.figi,
                                         status: {
-                                            [require('sequelize').Op.in]: ['pending', 'approved']
+                                            [Op.in]: ['pending', 'approved']
                                         }
                                     }
                                 });
