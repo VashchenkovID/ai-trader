@@ -1,1461 +1,814 @@
-# План реализации: Новости по секторам и политические новости РФ
+# План реализации: Привязка финансовых и политических новостей к акциям
 
 ## Обзор
 
-Реализация системы запроса новостей по секторам экономики и политических новостей, касающихся РФ, на английском и русском языках с автоматической привязкой к акциям.
+Реализация системы получения финансовых и политических новостей из RSS-фидов и автоматической привязки их к акциям с использованием существующей структуры CachedNews и анализа sentiment.
+
+**ВАЖНО**: Используем только RSS-фиды как источник новостей. Новости сохраняются в существующую модель CachedNews с привязкой по FIGI.
 
 ## Цели
 
-1. **Запрос новостей по секторам**: Получение новостей для всех акций в определенном секторе
-2. **Политические новости РФ**: Получение политических новостей, влияющих на российский фондовый рынок
-3. **Мультиязычность**: Поддержка русского и английского языков
-4. **Автоматическая привязка**: Связывание новостей с соответствующими акциями
-5. **Кеширование**: Эффективное хранение и использование новостей
-6. **API интеграция**: Расширение существующих API для работы с секторными и политическими новостями
+1. **Получение финансовых новостей**: Парсинг финансовых новостей из RSS-фидов
+2. **Получение политических новостей**: Парсинг политических новостей из RSS-фидов
+3. **Привязка к акциям**: 
+   - Политические новости - привязать ко всем российским акциям
+   - Финансовые новости - привязать к акциям по релевантности (название компании, тикер, сектор)
+4. **Анализ sentiment**: Использование существующего NewsAnalysisService для анализа тональности
+5. **Совместимость структуры**: Использование существующей модели CachedNews без изменений
+6. **Кеширование**: Эффективное хранение и использование новостей
+
+## Выбранные источники новостей
+
+### RSS-фиды российских новостных источников
+
+**Преимущества**:
+- Полностью бесплатно
+- Неограниченное количество запросов
+- Прямой доступ к источникам
+- Актуальные новости в реальном времени
+- Стандартизированный формат (RSS/XML)
+- Простая интеграция
+
+**Источники RSS для финансовых новостей**:
+- **РБК Финансы**: https://www.rbc.ru/rss/finance.xml
+- **РИА Экономика**: https://ria.ru/export/rss2/economy/index.xml
+- **РБК Технологии**: https://www.rbc.ru/rss/technology.xml
+- **РБК Общие**: https://www.rbc.ru/rss/free.xml
+- **Ведомости**: https://www.vedomosti.ru/rss/news
+- **Коммерсант**: https://www.kommersant.ru/RSS/news.xml
+
+**Источники RSS для политических новостей**:
+- **РИА Политика**: https://ria.ru/export/rss2/politics/index.xml
+- **ТАСС**: https://tass.ru/rss/v2.xml
+- **Интерфакс**: https://www.interfax.ru/rss.asp
+- **РБК Общие**: https://www.rbc.ru/rss/free.xml (содержит политику)
+- **Lenta.ru**: https://lenta.ru/rss
+- **Meduza**: https://meduza.io/rss/all
+
+**Ограничения**:
+- Зависимость от доступности RSS фидов
+- Необходимость обработки ошибок парсинга
+- Rate limiting для избежания перегрузки серверов (рекомендуется 1 запрос/5 секунд на источник)
+
+**Технические детали**:
+- Использовать библиотеку `rss-parser` или `fast-xml-parser` для парсинга RSS/XML
+- Кеширование результатов парсинга
+- Retry механизм при ошибках
+- Параллельные запросы к разным источникам допустимы
 
 ## Текущее состояние
 
 ### Существующая инфраструктура
 
 1. **Модель CachedNews** (`server/src/models/CachedNews.js`)
-   - ✅ Поддержка поля `language` (ru/en)
-   - ✅ Привязка по `figi`
-   - ✅ Поля: title, description, url, source, publishedAt, sentiment, relevance, impact
+   - ✅ Поля: id, figi, title, description, url, source, publishedAt, sentiment, relevance, impact, keywords, language, category
    - ✅ Индексы по figi, publishedAt, language
+   - ✅ Sentiment: FLOAT от -1 до 1
+   - ✅ Relevance: FLOAT от 0 до 1
+   - ✅ Impact: FLOAT от 0 до 1
 
-2. **NewsApiService** (`server/src/services/NewsApiService.js`)
-   - ✅ Интеграция с NewsAPI.org
-   - ✅ Поддержка параметра `language` в запросах
-   - ✅ Rate limiting (1 сек между запросами)
-   - ✅ Fallback механизм через FallbackService
+2. **NewsAnalysisService** (`server/src/services/NewsAnalysisService.js`)
+   - ✅ Метод `analyzeSentiment(text)` - анализ тональности с использованием BERT модели
+   - ✅ Возвращает значение от -1 до 1
+   - ✅ Fallback механизм при ошибках модели
+   - ✅ Метод `getCachedNews(figi, days, limit)` - получение новостей по FIGI
 
 3. **SectorClassifier** (`server/src/utils/sectorClassifier.js`)
    - ✅ Классификация инструментов по секторам
-   - ✅ Маппинг секторов (technology, finance, energy, consumer, healthcare, etc.)
    - ✅ Методы: `classifySector()`, `groupBySector()`, `getAvailableSectors()`
 
-4. **NewsAnalysisService** (`server/src/services/NewsAnalysisService.js`)
-   - ✅ Получение новостей по FIGI
-   - ✅ Анализ sentiment и relevance
+4. **CacheService** / **TinkoffApiService**
+   - ✅ Получение списка всех инструментов
+   - ✅ Получение информации об инструменте по FIGI (название, тикер, сектор)
 
 ## Архитектура решения
 
 ### 1. База данных
 
-#### 1.1. Расширение модели CachedNews
+**НЕ ТРЕБУЕТСЯ ИЗМЕНЕНИЙ** - используем существующую модель CachedNews без модификаций.
 
-**Файл**: `server/src/models/CachedNews.js`
-
-Добавить поля:
-```javascript
-sector: {
-    type: DataTypes.STRING(50),
-    allowNull: true,
-    index: true
-},
-isSectorNews: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: false
-},
-isPoliticalNews: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: false
-},
-politicalCategory: {
-    type: DataTypes.STRING(50),
-    allowNull: true,
-    index: true
-    // Категории: sanctions, elections, policy, international_relations, economy_policy, etc.
-},
-relatedFigis: {
-    type: DataTypes.JSON,
-    allowNull: true,
-    defaultValue: [] // Массив FIGI акций, к которым относится новость
-},
-impactLevel: {
-    type: DataTypes.ENUM('low', 'medium', 'high', 'critical'),
-    allowNull: true,
-    defaultValue: 'medium'
-    // Уровень влияния на рынок (особенно важно для политических новостей)
-}
-```
-
-**Миграция**: `server/migrations/add-sector-news-fields.js`
-
-#### 1.2. Новая таблица: SectorNewsMapping
-
-**Файл**: `server/src/models/SectorNewsMapping.js`
-
-Связь многие-ко-многим между новостями и акциями:
-```javascript
-{
-    id: INTEGER (PK),
-    newsId: INTEGER (FK -> CachedNews.id),
-    figi: STRING(50) (FK -> CachedInstrument.figi),
-    sector: STRING(50),
-    relevanceScore: FLOAT, // Оценка релевантности новости для конкретной акции
-    createdAt: DATE,
-    updatedAt: DATE
-}
-```
-
-**Индексы**:
-- `[newsId, figi]` - уникальный
-- `[sector, createdAt]`
-- `[figi, createdAt]`
-- `[isPoliticalNews, createdAt]` - для политических новостей
-- `[politicalCategory, createdAt]` - для фильтрации по категориям
+Все новости сохраняются в CachedNews с привязкой по `figi`. Одна новость может быть привязана к нескольким акциям (несколько записей с разными figi).
 
 ### 2. Сервисы
 
-#### 2.1. SectorNewsService (новый)
+#### 2.1. RssFeedService (новый)
 
-**Файл**: `server/src/services/SectorNewsService.js`
+**Файл**: `server/src/services/RssFeedService.js`
 
 **Основные методы**:
 
 ```javascript
-class SectorNewsService {
-    /**
-     * Получить новости для сектора
-     * @param {string} sector - Название сектора (technology, finance, energy, etc.)
-     * @param {Object} options - Опции запроса
-     * @param {string} options.language - Язык новостей ('ru' | 'en' | 'both')
-     * @param {number} options.days - Количество дней назад
-     * @param {number} options.limit - Максимальное количество новостей
-     * @returns {Promise<Array>} Массив новостей
-     */
-    async getSectorNews(sector, options = {}) {
-        // 1. Сформировать поисковый запрос для сектора на основе ключевых слов (из SectorClassifier)
-        // 2. Запросить новости на нужных языках через NewsApiService.fetchNewsBySector()
-        // 3. Сохранить в кеш с пометкой isSectorNews=true и sector
-        // 4. Привязать к акциям в секторе асинхронно (через linkNewsToStocks)
+class RssFeedService {
+    constructor() {
+        this.feedUrls = {
+            // Финансовые новости
+            rbc_finance: 'https://www.rbc.ru/rss/finance.xml',
+            rbc_technology: 'https://www.rbc.ru/rss/technology.xml',
+            rbc_general: 'https://www.rbc.ru/rss/free.xml',
+            ria_economy: 'https://ria.ru/export/rss2/economy/index.xml',
+            vedomosti: 'https://www.vedomosti.ru/rss/news',
+            kommersant: 'https://www.kommersant.ru/RSS/news.xml',
+            
+            // Политические новости
+            ria_politics: 'https://ria.ru/export/rss2/politics/index.xml',
+            tass: 'https://tass.ru/rss/v2.xml',
+            interfax: 'https://www.interfax.ru/rss.asp',
+            lenta: 'https://lenta.ru/rss',
+            meduza: 'https://meduza.io/rss/all'
+        };
+        this.requestDelay = 5000; // 5 секунд между запросами к одному источнику
     }
 
     /**
-     * Запросить свежие новости для сектора
-     * @param {string} sector - Название сектора
-     * @param {string} language - Язык ('ru' | 'en')
-     * @returns {Promise<Array>} Массив новых новостей
+     * Парсинг RSS фида
+     * @param {string} feedUrl - URL RSS фида
+     * @returns {Promise<Array>} Массив новостей в формате:
+     *   {
+     *     title: string,
+     *     description: string,
+     *     url: string,
+     *     source: string,
+     *     publishedAt: Date,
+     *     language: 'ru' | 'en'
+     *   }
      */
-    async fetchFreshSectorNews(sector, language = 'ru') {
-        // 1. Получить ключевые слова для сектора из SectorClassifier
-        // 2. Сформировать поисковый запрос на основе ключевых слов сектора
-        // 3. Запросить новости через NewsApiService.fetchNewsBySector()
-        // 4. Обработать новости (классификация, sentiment анализ)
-        // 5. Сохранить в кеш с пометкой isSectorNews=true и sector
-        // 6. Привязать к акциям в секторе (асинхронно, после сохранения)
+    async parseFeed(feedUrl) {
+        // 1. Получить RSS XML через node-fetch
+        // 2. Распарсить через rss-parser
+        // 3. Преобразовать в единый формат
+        // 4. Нормализовать даты
+        // 5. Определить язык (ru/en)
     }
 
     /**
-     * Привязать новость к акциям в секторе
-     * @param {Object} news - Объект новости
-     * @param {string} sector - Сектор
-     * @returns {Promise<Array>} Массив привязанных FIGI
-     */
-    async linkNewsToStocks(news, sector) {
-        // 1. Получить все FIGI акций в секторе (через SectorClassifier.getStocksBySector())
-        // 2. Проанализировать релевантность новости для каждой акции
-        //    (прямое упоминание, ключевые слова, sentiment)
-        // 3. Создать связи в SectorNewsMapping только для релевантных акций
-        //    (relevanceScore > threshold, например 0.3)
-    }
-
-    /**
-     * Получить новости для конкретной акции из секторных новостей
-     * @param {string} figi - FIGI акции
+     * Получить финансовые новости из всех источников
      * @param {Object} options - Опции
+     * @param {number} options.limit - Лимит новостей на источник
      * @returns {Promise<Array>} Массив новостей
      */
-    async getStockNewsFromSector(figi, options = {}) {
-        // 1. Определить сектор акции
-        // 2. Получить секторные новости
-        // 3. Отфильтровать по релевантности
+    async fetchFinanceNews(options = {}) {
+        const financeFeeds = [
+            this.feedUrls.rbc_finance,
+            this.feedUrls.rbc_technology,
+            this.feedUrls.rbc_general,
+            this.feedUrls.ria_economy,
+            this.feedUrls.vedomosti,
+            this.feedUrls.kommersant
+        ];
+        
+        // Параллельно запросить все фиды
+        // Объединить и отсортировать по дате
+        // Дедуплицировать по URL
     }
 
     /**
-     * Массовое обновление новостей для всех секторов
+     * Получить политические новости из всех источников
+     * @param {Object} options - Опции
+     * @param {number} options.limit - Лимит новостей на источник
+     * @returns {Promise<Array>} Массив новостей
+     */
+    async fetchPoliticalNews(options = {}) {
+        const politicalFeeds = [
+            this.feedUrls.ria_politics,
+            this.feedUrls.tass,
+            this.feedUrls.interfax,
+            this.feedUrls.rbc_general,
+            this.feedUrls.lenta,
+            this.feedUrls.meduza
+        ];
+        
+        // Параллельно запросить все фиды
+        // Объединить и отсортировать по дате
+        // Дедуплицировать по URL
+    }
+}
+```
+
+**Зависимости**:
+- `rss-parser` - парсинг RSS/XML
+- `node-fetch` - HTTP запросы
+
+#### 2.2. NewsLinkageService (новый)
+
+**Файл**: `server/src/services/NewsLinkageService.js`
+
+**Основные методы**:
+
+```javascript
+class NewsLinkageService {
+    constructor() {
+        this.newsAnalysisService = null; // Lazy load
+        this.sectorClassifier = null; // Lazy load
+        this.cacheService = null; // Lazy load
+    }
+
+    /**
+     * Привязать финансовую новость к акциям
+     * @param {Object} news - Объект новости из RSS
+     * @returns {Promise<Array<string>>} Массив FIGI акций, к которым привязана новость
+     */
+    async linkFinanceNewsToStocks(news) {
+        // 1. Получить все активные инструменты из БД
+        // 2. Для каждой акции:
+        //    - Проверить прямое упоминание (название компании, тикер)
+        //    - Проверить секторную принадлежность (ключевые слова сектора)
+        //    - Рассчитать relevance score
+        // 3. Отфильтровать по threshold (relevance > 0.3)
+        // 4. Для каждой подходящей акции:
+        //    - Проанализировать sentiment через NewsAnalysisService
+        //    - Рассчитать impact
+        //    - Сохранить в CachedNews с figi акции
+    }
+
+    /**
+     * Привязать политическую новость ко всем российским акциям
+     * @param {Object} news - Объект новости из RSS
+     * @returns {Promise<Array<string>>} Массив FIGI акций, к которым привязана новость
+     */
+    async linkPoliticalNewsToStocks(news) {
+        // 1. Получить все российские акции из БД
+        // 2. Для каждой акции:
+        //    - Проанализировать sentiment через NewsAnalysisService
+        //    - Рассчитать relevance (для политических новостей обычно 0.5-0.7)
+        //    - Рассчитать impact (зависит от категории новости)
+        //    - Сохранить в CachedNews с figi акции
+    }
+
+    /**
+     * Проверить релевантность новости для акции
+     * @param {Object} news - Объект новости
+     * @param {Object} stock - Объект акции (name, ticker, sector, figi)
+     * @returns {number} Relevance score от 0 до 1
+     */
+    calculateRelevance(news, stock) {
+        let score = 0;
+        const text = `${news.title} ${news.description || ''}`.toLowerCase();
+        const stockName = stock.name?.toLowerCase() || '';
+        const ticker = stock.ticker?.toLowerCase() || '';
+        
+        // 1. Прямое упоминание названия компании (вес 1.0)
+        if (stockName && text.includes(stockName)) {
+            score += 1.0;
+        }
+        
+        // 2. Прямое упоминание тикера (вес 0.8)
+        if (ticker && text.includes(ticker)) {
+            score += 0.8;
+        }
+        
+        // 3. Секторные ключевые слова (вес 0.5)
+        if (stock.sector) {
+            const sectorKeywords = this.getSectorKeywords(stock.sector);
+            const matches = sectorKeywords.filter(kw => 
+                text.includes(kw.toLowerCase())
+            ).length;
+            score += (matches / sectorKeywords.length) * 0.5;
+        }
+        
+        // Нормализуем до 0-1
+        return Math.min(1, score / 2.3);
+    }
+
+    /**
+     * Получить ключевые слова для сектора
+     * @param {string} sector - Название сектора
+     * @returns {Array<string>} Массив ключевых слов
+     */
+    getSectorKeywords(sector) {
+        // Использовать SectorClassifier для получения ключевых слов
+        // Вернуть массив ключевых слов на русском языке
+    }
+
+    /**
+     * Сохранить новость в CachedNews с привязкой к акции
+     * @param {Object} news - Объект новости из RSS
+     * @param {string} figi - FIGI акции
+     * @param {Object} analysis - Результаты анализа {sentiment, relevance, impact}
+     * @returns {Promise<Object>} Сохраненная запись CachedNews
+     */
+    async saveNewsToCache(news, figi, analysis) {
+        // 1. Проверить, не существует ли уже новость с таким URL и figi
+        // 2. Если существует - обновить
+        // 3. Если нет - создать новую запись
+        // 4. Использовать NewsAnalysisService для анализа sentiment если не передан
+        // 5. Сохранить в CachedNews со всеми полями:
+        //    - figi, title, description, url, source, publishedAt
+        //    - sentiment (от NewsAnalysisService.analyzeSentiment)
+        //    - relevance (рассчитанная)
+        //    - impact (рассчитанная)
+        //    - language, category, keywords
+    }
+
+    /**
+     * Обработать и привязать финансовые новости
+     * @param {Array<Object>} newsList - Массив новостей из RSS
+     * @returns {Promise<Object>} Статистика: {processed, linked, errors}
+     */
+    async processAndLinkFinanceNews(newsList) {
+        // 1. Для каждой новости:
+        //    - Привязать к акциям через linkFinanceNewsToStocks
+        //    - Сохранить в кеш
+        // 2. Вернуть статистику
+    }
+
+    /**
+     * Обработать и привязать политические новости
+     * @param {Array<Object>} newsList - Массив новостей из RSS
+     * @returns {Promise<Object>} Статистика: {processed, linked, errors}
+     */
+    async processAndLinkPoliticalNews(newsList) {
+        // 1. Для каждой новости:
+        //    - Привязать ко всем российским акциям через linkPoliticalNewsToStocks
+        //    - Сохранить в кеш
+        // 2. Вернуть статистику
+    }
+}
+```
+
+**Зависимости**:
+- `NewsAnalysisService` - для анализа sentiment
+- `SectorClassifier` - для получения ключевых слов секторов
+- `CacheService` / `TinkoffApiService` - для получения списка акций
+- `CachedNews` модель - для сохранения
+
+#### 2.3. RssNewsUpdateService (новый)
+
+**Файл**: `server/src/services/RssNewsUpdateService.js`
+
+**Основные методы**:
+
+```javascript
+class RssNewsUpdateService {
+    constructor() {
+        this.rssService = new RssFeedService();
+        this.linkageService = new NewsLinkageService();
+    }
+
+    /**
+     * Обновить финансовые новости и привязать к акциям
      * @param {Object} options - Опции
      * @returns {Promise<Object>} Статистика обновления
      */
-    async updateAllSectorsNews(options = {}) {
-        // Обновить новости для всех секторов
-    }
-}
-```
-
-**Зависимости**:
-- `NewsApiService` - запросы к NewsAPI
-- `SectorClassifier` - классификация секторов
-- `CacheService` - получение инструментов
-- `NewsAnalysisService` - анализ sentiment
-
-#### 2.2. PoliticalNewsService (новый)
-
-**Файл**: `server/src/services/PoliticalNewsService.js`
-
-**Основные методы**:
-
-```javascript
-class PoliticalNewsService {
-    /**
-     * Получить политические новости, касающиеся РФ
-     * @param {Object} options - Опции запроса
-     * @param {string} options.language - Язык новостей ('ru' | 'en' | 'both')
-     * @param {string} options.category - Категория политических новостей
-     * @param {number} options.days - Количество дней назад
-     * @param {number} options.limit - Максимальное количество новостей
-     * @returns {Promise<Array>} Массив новостей
-     */
-    async getPoliticalNews(options = {}) {
-        // 1. Сформировать поисковый запрос для политических новостей РФ
-        // 2. Запросить новости на нужных языках
-        // 3. Классифицировать по категориям
-        // 4. Сохранить в кеш
-        // 5. Привязать к российским акциям
+    async updateFinanceNews(options = {}) {
+        // 1. Получить финансовые новости из RSS через RssFeedService
+        // 2. Дедуплицировать по URL (проверить в БД)
+        // 3. Обработать и привязать через NewsLinkageService
+        // 4. Вернуть статистику
     }
 
     /**
-     * Запросить свежие политические новости
-     * @param {string} language - Язык ('ru' | 'en')
-     * @param {string} category - Категория (опционально)
-     * @returns {Promise<Array>} Массив новых новостей
-     */
-    async fetchFreshPoliticalNews(language = 'ru', category = null) {
-        // 1. Получить ключевые слова для политических новостей
-        // 2. Сформировать поисковый запрос
-        // 3. Запросить через NewsApiService
-        // 4. Классифицировать и определить уровень влияния
-        // 5. Обработать и сохранить
-    }
-
-    /**
-     * Классифицировать политическую новость по категории
-     * @param {Object} news - Объект новости
-     * @returns {string} Категория новости
-     */
-    classifyPoliticalNews(news) {
-        // Категории:
-        // - sanctions: Санкции
-        // - elections: Выборы
-        // - policy: Внутренняя политика
-        // - international_relations: Международные отношения
-        // - economy_policy: Экономическая политика
-        // - regulations: Регулирование
-        // - trade: Торговые отношения
-        // - other: Прочее
-    }
-
-    /**
-     * Определить уровень влияния политической новости на рынок
-     * @param {Object} news - Объект новости
-     * @returns {string} Уровень влияния ('low' | 'medium' | 'high' | 'critical')
-     */
-    determineImpactLevel(news) {
-        // Анализ ключевых слов, категории, источника
-        // Критичные: санкции, изменения в экономической политике
-        // Высокие: выборы, международные отношения
-        // Средние: внутренняя политика, регулирование
-        // Низкие: общие политические новости
-    }
-
-    /**
-     * Привязать политическую новость к российским акциям
-     * @param {Object} news - Объект новости
-     * @param {string} category - Категория новости
-     * @returns {Promise<Array>} Массив привязанных FIGI
-     */
-    async linkPoliticalNewsToStocks(news, category) {
-        // 1. Получить все российские акции
-        // 2. Проанализировать релевантность новости для каждой акции
-        // 3. Учитывать сектор акции и категорию новости
-        // 4. Создать связи в SectorNewsMapping
-    }
-
-    /**
-     * Получить политические новости для конкретной акции
-     * @param {string} figi - FIGI акции
+     * Обновить политические новости и привязать к акциям
      * @param {Object} options - Опции
-     * @returns {Promise<Array>} Массив новостей
+     * @returns {Promise<Object>} Статистика обновления
      */
-    async getStockPoliticalNews(figi, options = {}) {
-        // 1. Проверить, что акция российская
-        // 2. Получить политические новости
-        // 3. Отфильтровать по релевантности и сектору акции
+    async updatePoliticalNews(options = {}) {
+        // 1. Получить политические новости из RSS через RssFeedService
+        // 2. Дедуплицировать по URL (проверить в БД)
+        // 3. Обработать и привязать через NewsLinkageService
+        // 4. Вернуть статистику
     }
 
     /**
-     * Получить новости по категории
-     * @param {string} category - Категория политических новостей
+     * Обновить все новости (финансовые + политические)
      * @param {Object} options - Опции
-     * @returns {Promise<Array>} Массив новостей
+     * @returns {Promise<Object>} Статистика обновления
      */
-    async getNewsByCategory(category, options = {}) {
-        // Получить новости определенной категории
+    async updateAllNews(options = {}) {
+        // 1. Параллельно обновить финансовые и политические новости
+        // 2. Вернуть объединенную статистику
     }
-}
-```
-
-**Зависимости**:
-- `NewsApiService` - запросы к NewsAPI
-- `CacheService` - получение российских инструментов
-- `TinkoffApiService` - проверка, что акция российская
-- `NewsAnalysisService` - анализ sentiment и relevance
-
-#### 2.3. Расширение NewsApiService
-
-**Файл**: `server/src/services/NewsApiService.js`
-
-Добавить методы:
-
-```javascript
-/**
- * Построение поискового запроса для сектора
- * @param {string} sector - Название сектора
- * @param {string} language - Язык ('ru' | 'en')
- * @returns {string} Поисковый запрос
- */
-buildSectorSearchQuery(sector, language = 'ru') {
-    // Получить ключевые слова сектора из SectorClassifier
-    const sectorKeywords = SectorClassifier.getSectorKeywords(sector, language);
-    
-    // Для русского языка: использовать русские названия секторов
-    // Для английского: использовать английские названия
-    // Примеры: "нефть и газ", "oil and gas", "металлургия", "metallurgy"
-    
-    // Комбинировать ключевые слова через OR для широкого поиска
-    // Можно добавить тикеры крупных компаний сектора для более точных результатов
-    return sectorKeywords.join(' OR ');
-}
-
-/**
- * Запрос новостей по сектору
- * Использует endpoint /v2/everything для поиска по ключевым словам
- * @param {string} sector - Сектор
- * @param {Object} options - Опции
- * @param {string} options.language - Язык ('ru' | 'en')
- * @param {string} options.sortBy - Сортировка ('publishedAt' | 'relevancy')
- * @param {Date} options.fromDate - Дата начала
- * @param {Date} options.toDate - Дата окончания
- * @param {number} options.pageSize - Размер страницы (макс 100)
- * @returns {Promise<Array>} Массив новостей
- */
-async fetchNewsBySector(sector, options = {}) {
-    const query = this.buildSectorSearchQuery(sector, options.language);
-    
-    // Используем /v2/everything для поиска по ключевым словам
-    // sortBy=publishedAt для свежих новостей или sortBy=relevancy для релевантности
-    return await this.searchNews(query, {
-        language: options.language || 'ru',
-        from: options.fromDate,
-        to: options.toDate,
-        sortBy: options.sortBy || 'relevancy', // 'publishedAt' для свежих, 'relevancy' для релевантных
-        pageSize: Math.min(options.pageSize || 100, 100)
-    });
-}
-
-/**
- * Построение поискового запроса для политических новостей РФ
- * Использует endpoint /v2/everything с параметром q для поиска по ключевым словам
- * @param {string} language - Язык ('ru' | 'en')
- * @param {string} category - Категория (опционально)
- * @returns {string} Поисковый запрос для параметра q
- */
-buildPoliticalNewsSearchQuery(language = 'ru', category = null) {
-    // Базовые термины для поиска новостей о России
-    const baseTerms = {
-        ru: ['Россия', 'РФ', 'российский'],
-        en: ['Russia', 'Russian']
-    };
-    
-    // Если указана категория, добавляем специфичные термины
-    const categoryTerms = this.getPoliticalCategoryTerms(category, language);
-    
-    // Для русского языка: "Россия" или "РФ"
-    // Для английского: "Russia" или "Russian politics" (в кавычках для точной фразы)
-    if (language === 'ru') {
-        if (category) {
-            // Комбинируем: Россия AND (термины категории)
-            return `Россия AND (${categoryTerms.join(' OR ')})`;
-        }
-        return 'Россия'; // Простой поиск по "Россия"
-    } else {
-        // Для английского языка
-        if (category) {
-            // Используем кавычки для точных фраз: "Russian politics" AND (термины категории)
-            return `"Russian politics" AND (${categoryTerms.join(' OR ')})`;
-        }
-        return 'Russia'; // Или "Russian politics" для более точного поиска
-    }
-}
-
-/**
- * Получить ключевые слова для категории политических новостей
- * @param {string} category - Категория
- * @param {string} language - Язык
- * @returns {Array<string>} Массив ключевых слов
- */
-getPoliticalCategoryTerms(category, language = 'ru') {
-    const terms = {
-        // Общая и внутренняя политика
-        policy: {
-            ru: [
-                'Россия', 'РФ', 'российская политика', 'власть', 'Кремль', 
-                'Белый дом', 'Госдума', 'Совет Федерации', 'правительство РФ', 'оппозиция',
-                'Путин', 'Мишустин', 'Медведев', 'Песков', 'Шойгу', 'Лавров', 'Собянин', 'Набиуллина',
-                'выборы', 'закон', 'бюджет', 'Народная программа', 'послание президента', 'отставка', 'назначение'
-            ],
-            en: [
-                'Russia', 'Russian politics', 'Kremlin', 'State Duma', 'Federation Council', 
-                'government', 'opposition', 'Putin', 'Mishustin', 'Medvedev', 'Peskov', 
-                'Shoigu', 'Lavrov', 'Sobyanin', 'Nabiullina', 'elections', 'law', 'budget'
-            ]
-        },
-        // Внешняя политика и безопасность
-        international_relations: {
-            ru: [
-                'санкции', 'геополитика', 'международные отношения', 'ООН', 'БРИКС', 'ШОС',
-                'Украина', 'Донбасс', 'Сирия', 'США', 'Китай', 'Европа', 'НАТО', 'ЕС',
-                'СВО', 'спецоперация', 'военные', 'безопасность', 'оборона', 'ВПК', 'Совбез'
-            ],
-            en: [
-                'sanctions', 'geopolitics', 'international relations', 'UN', 'BRICS', 'SCO',
-                'Ukraine', 'Donbass', 'Syria', 'USA', 'China', 'Europe', 'NATO', 'EU',
-                'military operation', 'military', 'security', 'defense', 'defense industry'
-            ]
-        },
-        // Санкции (отдельная категория как критичная)
-        sanctions: {
-            ru: ['санкции', 'санкционный', 'эмбарго', 'ограничения', 'запрет', 'блокировка'],
-            en: ['sanctions', 'sanction', 'embargo', 'restrictions', 'ban', 'blockade']
-        },
-        // Выборы
-        elections: {
-            ru: ['выборы', 'избирательный', 'голосование', 'президентские выборы', 'парламентские выборы'],
-            en: ['elections', 'election', 'voting', 'presidential election', 'parliamentary election']
-        },
-        // Экономическая политика
-        economy_policy: {
-            ru: [
-                'экономическая политика', 'ЦБ', 'Центральный банк', 'Набиуллина', 
-                'инфляция', 'курс рубля', 'ключевая ставка', 'ставка ЦБ', 
-                'бюджет', 'Минфин', 'Минэкономразвития'
-            ],
-            en: [
-                'economic policy', 'Central Bank of Russia', 'CBR', 'Nabiullina',
-                'inflation', 'ruble', 'ruble rate', 'key rate', 'budget', 
-                'Ministry of Finance', 'Ministry of Economic Development'
-            ]
-        },
-        // Регулирование
-        regulations: {
-            ru: ['регулирование', 'надзор', 'контроль', 'лицензия', 'разрешение', 'норматив'],
-            en: ['regulation', 'supervision', 'control', 'license', 'permit', 'normative']
-        },
-        // Торговые отношения
-        trade: {
-            ru: ['торговля', 'экспорт', 'импорт', 'таможня', 'таможенный', 'торговые отношения'],
-            en: ['trade', 'export', 'import', 'customs', 'trade relations', 'commercial']
-        }
-    };
-    
-    return terms[category]?.[language] || [];
-}
-
-/**
- * Запрос политических новостей, касающихся РФ
- * Использует endpoint /v2/everything с параметрами q и language
- * @param {Object} options - Опции
- * @param {string} options.language - Язык ('ru' | 'en')
- *   - language=ru: ограничит выдачу только источниками на русском языке
- *   - language=en: западная пресса о РФ
- * @param {string} options.category - Категория политических новостей
- * @param {string} options.sortBy - Сортировка ('publishedAt' | 'relevancy')
- *   - publishedAt: самые свежие новости
- *   - relevancy: наиболее релевантные новости
- * @param {Date} options.fromDate - Дата начала
- * @param {Date} options.toDate - Дата окончания
- * @param {number} options.pageSize - Размер страницы (макс 100)
- * @returns {Promise<Array>} Массив новостей
- */
-async fetchPoliticalNews(options = {}) {
-    const query = this.buildPoliticalNewsSearchQuery(
-        options.language || 'ru',
-        options.category
-    );
-    
-    // Используем /v2/everything для поиска по ключевым словам
-    // Параметр q содержит поисковый запрос (например, "Россия" или "Russia")
-    // Параметр language ограничивает источники по языку
-    return await this.searchNews(query, {
-        language: options.language || 'ru',
-        from: options.fromDate,
-        to: options.toDate,
-        sortBy: options.sortBy || 'relevancy', // 'publishedAt' для свежих, 'relevancy' для релевантных
-        pageSize: Math.min(options.pageSize || 100, 100)
-    });
-}
-```
-
-#### 2.4. Расширение SectorClassifier
-
-**Файл**: `server/src/utils/sectorClassifier.js`
-
-Добавить методы:
-
-```javascript
-/**
- * Получить ключевые слова для поиска новостей по сектору
- * Включает общие термины сектора и названия компаний из базы данных
- * @param {string} sector - Название сектора
- * @param {string} language - Язык ('ru' | 'en')
- * @returns {Promise<Array<string>>} Массив ключевых слов
- */
-async getSectorKeywords(sector, language = 'ru') {
-    // 1. Получить базовые ключевые слова сектора
-    const baseKeywords = this.getSectorBaseKeywords(sector, language);
-    
-    // 2. Получить названия компаний из базы данных (Asset/CachedInstrument)
-    // Фильтровать по сектору и брать названия компаний, а не тикеры
-    const companies = await this.getCompaniesBySector(sector);
-    const companyNames = companies.map(c => c.name).filter(Boolean);
-    
-    // 3. Объединить базовые ключевые слова и названия компаний
-    return [...baseKeywords, ...companyNames];
-}
-
-/**
- * Получить базовые ключевые слова для сектора
- * @param {string} sector - Название сектора
- * @param {string} language - Язык ('ru' | 'en')
- * @returns {Array<string>} Массив базовых ключевых слов
- */
-getSectorBaseKeywords(sector, language = 'ru') {
-    const sectorKeywords = {
-        energy: {
-            ru: ['нефть', 'газ', 'нефтегазовый сектор', 'углеводороды', 'энергетика', 'ОПЕК+', 'экспорт нефти', 'цена на нефть'],
-            en: ['oil', 'gas', 'oil and gas', 'hydrocarbons', 'energy', 'OPEC+', 'oil export', 'oil price']
-        },
-        materials: {
-            ru: ['металлургия', 'чёрная металлургия', 'цветная металлургия', 'добыча', 'горная добыча', 'уголь', 'золото', 'сталь', 'никель', 'алюминий'],
-            en: ['metallurgy', 'steel industry', 'non-ferrous metals', 'mining', 'coal', 'gold', 'steel', 'nickel', 'aluminum']
-        },
-        finance: {
-            ru: ['банки', 'финансы', 'кредитование', 'ставка ЦБ', 'ключевая ставка', 'инфляция', 'ипотека', 'биржа'],
-            en: ['banks', 'finance', 'lending', 'Central Bank rate', 'key rate', 'inflation', 'mortgage', 'exchange']
-        },
-        technology: {
-            ru: ['IT', 'информационные технологии', 'импортозамещение', 'искусственный интеллект', 'AI', 'разработка ПО', 'цифровизация'],
-            en: ['IT', 'information technology', 'software development', 'artificial intelligence', 'AI', 'digitalization']
-        },
-        consumer: {
-            ru: ['ритейл', 'розничная торговля', 'потребительский рынок', 'FMCG'],
-            en: ['retail', 'retail trade', 'consumer market', 'FMCG']
-        },
-        industrial: {
-            ru: ['химическая промышленность', 'нефтехимия', 'удобрения', 'агрохимия'],
-            en: ['chemical industry', 'petrochemistry', 'fertilizers', 'agrochemistry']
-        },
-        utilities: {
-            ru: ['электроэнергетика', 'энергосбыт', 'генерация', 'мощность', 'тарифы'],
-            en: ['electric power', 'energy sales', 'generation', 'capacity', 'tariffs']
-        },
-        transportation: {
-            ru: ['транспорт', 'перевозки', 'логистика', 'инфраструктура'],
-            en: ['transport', 'transportation', 'logistics', 'infrastructure']
-        }
-    };
-    
-    return sectorKeywords[sector]?.[language] || [];
-}
-
-/**
- * Получить компании по сектору из базы данных
- * @param {string} sector - Название сектора
- * @returns {Promise<Array>} Массив компаний с полями {name, ticker, figi}
- */
-async getCompaniesBySector(sector) {
-    const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
-    const instruments = await CachedInstrument.findAll({
-        where: {
-            sector: sector,
-            isActive: true
-        },
-        attributes: ['name', 'ticker', 'figi']
-    });
-    return instruments.map(i => i.toJSON());
-}
-
-/**
- * Получить все FIGI акций в секторе
- * @param {string} sector - Название сектора
- * @returns {Promise<Array<string>>} Массив FIGI
- */
-async getStocksBySector(sector) {
-    // Запрос к БД для получения всех акций в секторе
 }
 ```
 
 ### 3. API Endpoints
 
-#### 3.1. Новые маршруты
-
-**Файл**: `server/src/routes/sector-news-routes.js` (новый)
-
-```javascript
-/**
- * GET /api/sector-news/:sector
- * Получить новости для сектора
- * Query params:
- *   - language: 'ru' | 'en' | 'both' (default: 'ru')
- *   - days: number (default: 7)
- *   - limit: number (default: 20)
- */
-router.get('/:sector', async (req, res) => {
-    // Получить новости для сектора
-});
-
-/**
- * GET /api/sector-news/:sector/stocks
- * Получить акции в секторе
- */
-router.get('/:sector/stocks', async (req, res) => {
-    // Получить список акций в секторе
-});
-
-/**
- * POST /api/sector-news/:sector/refresh
- * Обновить новости для сектора
- */
-router.post('/:sector/refresh', async (req, res) => {
-    // Запросить свежие новости для сектора
-});
-
-/**
- * GET /api/sector-news/:figi/from-sector
- * Получить секторные новости для конкретной акции
- */
-router.get('/stock/:figi/from-sector', async (req, res) => {
-    // Получить секторные новости для акции
-});
-```
-
-#### 3.3. Новые маршруты для политических новостей
-
-**Файл**: `server/src/routes/political-news-routes.js` (новый)
-
-```javascript
-/**
- * GET /api/political-news
- * Получить политические новости, касающиеся РФ
- * Query params:
- *   - language: 'ru' | 'en' | 'both' (default: 'ru')
- *   - category: 'sanctions' | 'elections' | 'policy' | 'international_relations' | 'economy_policy' | 'regulations' | 'trade' (optional)
- *   - days: number (default: 7)
- *   - limit: number (default: 20)
- *   - impactLevel: 'low' | 'medium' | 'high' | 'critical' (optional)
- */
-router.get('/', async (req, res) => {
-    // Получить политические новости
-});
-
-/**
- * GET /api/political-news/categories
- * Получить список категорий политических новостей
- */
-router.get('/categories', async (req, res) => {
-    // Вернуть список категорий
-});
-
-/**
- * GET /api/political-news/category/:category
- * Получить новости по категории
- */
-router.get('/category/:category', async (req, res) => {
-    // Получить новости определенной категории
-});
-
-/**
- * GET /api/political-news/stock/:figi
- * Получить политические новости для конкретной акции
- */
-router.get('/stock/:figi', async (req, res) => {
-    // Получить политические новости для акции
-});
-
-/**
- * POST /api/political-news/refresh
- * Обновить политические новости
- */
-router.post('/refresh', async (req, res) => {
-    // Запросить свежие политические новости
-});
-```
-
-#### 3.4. Расширение news-routes
+#### 3.1. Расширение news-routes
 
 **Файл**: `server/src/routes/news-routes.js`
 
-Добавить параметры `includeSectorNews` и `includePoliticalNews`:
+Существующий endpoint `/api/news/:figi` уже работает с CachedNews. Новости, привязанные через RSS, будут автоматически доступны через этот endpoint.
+
+**Опционально**: Добавить endpoint для ручного обновления:
 
 ```javascript
 /**
- * GET /api/news/:figi?includeSectorNews=true&includePoliticalNews=true
- * Получить новости для инструмента (включая секторные и политические)
+ * POST /api/news/refresh
+ * Обновить новости из RSS и привязать к акциям
+ * Query params:
+ *   - type: 'finance' | 'politics' | 'all' (default: 'all')
  */
-router.get('/:figi', async (req, res) => {
-    const includeSectorNews = req.query.includeSectorNews === 'true';
-    const includePoliticalNews = req.query.includePoliticalNews === 'true';
-    // Если includeSectorNews, добавить секторные новости
-    // Если includePoliticalNews, добавить политические новости (для российских акций)
+router.post('/refresh', async (req, res) => {
+    // Вызвать RssNewsUpdateService.updateAllNews() или updateFinanceNews() / updatePoliticalNews()
 });
 ```
 
 ### 4. Планировщик задач
 
-#### 4.1. Scheduler для обновления секторных новостей
+#### 4.1. Scheduler для обновления новостей
 
-**Файл**: `server/src/utils/scheduler/sectorNewsUpdateUtils.js` (новый)
+**Файл**: `server/src/utils/scheduler/rssNewsUpdateUtils.js` (новый)
 
 ```javascript
 /**
- * Обновление новостей для всех секторов
+ * Обновление финансовых новостей
  * Запускается ежедневно в 6:00, 12:00, 18:00
  */
-export async function updateSectorNews() {
-    const sectors = SectorClassifier.getAvailableSectors();
-    const languages = ['ru', 'en'];
-    
-    for (const sector of sectors) {
-        for (const language of languages) {
-            try {
-                await SectorNewsService.fetchFreshSectorNews(sector, language);
-            } catch (error) {
-                LoggerService.error('Error updating sector news', {
-                    sector,
-                    language,
-                    error
-                });
-            }
-        }
+export async function updateFinanceNews() {
+    try {
+        const RssNewsUpdateService = (await import('../../services/RssNewsUpdateService.js')).default;
+        const stats = await RssNewsUpdateService.updateFinanceNews();
+        
+        LoggerService.info('Finance news updated', stats);
+    } catch (error) {
+        LoggerService.error('Error updating finance news', { error });
     }
 }
 
 /**
- * Обновление политических новостей, касающихся РФ
- * Запускается ежедневно в 7:00, 13:00, 19:00 (смещено относительно секторных)
+ * Обновление политических новостей
+ * Запускается ежедневно в 7:00, 13:00, 19:00
  */
 export async function updatePoliticalNews() {
-    const languages = ['ru', 'en'];
-    const categories = [
-        'sanctions',
-        'elections',
-        'policy',
-        'international_relations',
-        'economy_policy',
-        'regulations',
-        'trade'
-    ];
-    
-    for (const language of languages) {
-        try {
-            // Обновляем общие политические новости
-            await PoliticalNewsService.fetchFreshPoliticalNews(language);
-            
-            // Обновляем новости по категориям (приоритетные категории)
-            const priorityCategories = ['sanctions', 'economy_policy', 'international_relations'];
-            for (const category of priorityCategories) {
-                try {
-                    await PoliticalNewsService.fetchFreshPoliticalNews(language, category);
-                } catch (error) {
-                    LoggerService.error('Error updating political news by category', {
-                        category,
-                        language,
-                        error
-                    });
-                }
-            }
-        } catch (error) {
-            LoggerService.error('Error updating political news', {
-                language,
-                error
-            });
-        }
+    try {
+        const RssNewsUpdateService = (await import('../../services/RssNewsUpdateService.js')).default;
+        const stats = await RssNewsUpdateService.updatePoliticalNews();
+        
+        LoggerService.info('Political news updated', stats);
+    } catch (error) {
+        LoggerService.error('Error updating political news', { error });
     }
 }
 ```
 
 **Интеграция в SchedulerService**:
 - Добавить задачу в `server/src/services/SchedulerService.js`
-- Секторные новости: каждые 6 часов (6:00, 12:00, 18:00)
-- Политические новости: каждые 6 часов (7:00, 13:00, 19:00) - смещено для распределения нагрузки
+- Финансовые новости: каждые 6 часов (6:00, 12:00, 18:00)
+- Политические новости: каждые 6 часов (7:00, 13:00, 19:00)
 
 ### 5. Frontend
 
-#### 5.1. Новый компонент: SectorNewsWidget
+**НЕ ТРЕБУЕТСЯ ИЗМЕНЕНИЙ** - существующий endpoint `/api/news/:figi` уже возвращает новости из CachedNews, включая новости, привязанные через RSS.
 
-**Файл**: `client/src/components/news/SectorNewsWidget.tsx`
+Существующие компоненты (`EnhancedNewsFeed`, `StockDetailNew`) будут автоматически показывать новые новости.
 
-```typescript
-interface SectorNewsWidgetProps {
-    sector: string;
-    figi?: string; // Если указан, показывать новости для конкретной акции
-    language?: 'ru' | 'en' | 'both';
-    maxItems?: number;
-}
+### 6. Ключевые слова для определения релевантности
 
-export const SectorNewsWidget: React.FC<SectorNewsWidgetProps> = ({
-    sector,
-    figi,
-    language = 'ru',
-    maxItems = 10
-}) => {
-    // Компонент для отображения секторных новостей
-};
-```
-
-#### 5.2. Новый компонент: PoliticalNewsWidget
-
-**Файл**: `client/src/components/news/PoliticalNewsWidget.tsx`
-
-```typescript
-interface PoliticalNewsWidgetProps {
-    figi?: string; // Если указан, показывать новости для конкретной акции
-    language?: 'ru' | 'en' | 'both';
-    category?: 'sanctions' | 'elections' | 'policy' | 'international_relations' | 'economy_policy' | 'regulations' | 'trade' | null;
-    impactLevel?: 'low' | 'medium' | 'high' | 'critical' | null;
-    maxItems?: number;
-    showCategories?: boolean; // Показывать фильтр по категориям
-}
-
-export const PoliticalNewsWidget: React.FC<PoliticalNewsWidgetProps> = ({
-    figi,
-    language = 'ru',
-    category = null,
-    impactLevel = null,
-    maxItems = 10,
-    showCategories = true
-}) => {
-    // Компонент для отображения политических новостей
-    // - Фильтр по категориям
-    // - Фильтр по уровню влияния
-    // - Показ релевантности для конкретной акции (если указан figi)
-    // - Визуальное выделение критичных новостей
-};
-```
-
-#### 5.3. Расширение EnhancedNewsFeed
-
-**Файл**: `client/src/components/news/EnhancedNewsFeed.tsx`
-
-Добавить опции показа секторных и политических новостей:
-```typescript
-interface EnhancedNewsFeedProps {
-    // ... существующие props
-    includeSectorNews?: boolean;
-    sectorNewsLanguage?: 'ru' | 'en' | 'both';
-    includePoliticalNews?: boolean; // Для российских акций
-    politicalNewsLanguage?: 'ru' | 'en' | 'both';
-}
-```
-
-#### 5.4. API Service
-
-**Файл**: `client/src/services/services/newsService.ts`
-
-Добавить методы:
-
-```typescript
-/**
- * Получить новости для сектора
- */
-async getSectorNews(
-    sector: string,
-    options?: {
-        language?: 'ru' | 'en' | 'both';
-        days?: number;
-        limit?: number;
-    }
-): Promise<NewsAnalysis> {
-    // ...
-}
-
-/**
- * Получить секторные новости для акции
- */
-async getStockSectorNews(
-    figi: string,
-    options?: {
-        language?: 'ru' | 'en' | 'both';
-        limit?: number;
-    }
-): Promise<NewsAnalysis> {
-    // ...
-}
-
-/**
- * Получить политические новости, касающиеся РФ
- */
-async getPoliticalNews(
-    options?: {
-        language?: 'ru' | 'en' | 'both';
-        category?: 'sanctions' | 'elections' | 'policy' | 'international_relations' | 'economy_policy' | 'regulations' | 'trade';
-        impactLevel?: 'low' | 'medium' | 'high' | 'critical';
-        days?: number;
-        limit?: number;
-    }
-): Promise<NewsAnalysis> {
-    // ...
-}
-
-/**
- * Получить политические новости для акции
- */
-async getStockPoliticalNews(
-    figi: string,
-    options?: {
-        language?: 'ru' | 'en' | 'both';
-        category?: string;
-        limit?: number;
-    }
-): Promise<NewsAnalysis> {
-    // ...
-}
-
-/**
- * Получить категории политических новостей
- */
-async getPoliticalNewsCategories(): Promise<string[]> {
-    // ...
-}
-```
-
-#### 5.5. Интеграция в StockDetailNew
-
-**Файл**: `client/src/pages/StockDetailNew.tsx`
-
-Добавить секции:
-- **Секторные новости**: Отдельная вкладка или секция
-  - Фильтр по языку
-  - Показ релевантности для конкретной акции
-  
-- **Политические новости** (только для российских акций):
-  - Отдельная вкладка или секция
-  - Фильтр по категориям (санкции, выборы, экономическая политика и т.д.)
-  - Фильтр по уровню влияния
-  - Фильтр по языку
-  - Визуальное выделение критичных новостей (красная рамка/бейдж)
-  - Показ релевантности для конкретной акции
-
-### 6. Ключевые слова для секторов и политических новостей
-
-#### 6.1. Расширение маппинга секторов
+#### 6.1. Расширение SectorClassifier
 
 **Файл**: `server/src/utils/sectorClassifier.js`
 
-Добавить методы для получения поисковых запросов с использованием названий компаний из базы данных:
+Добавить метод:
 
 ```javascript
 /**
- * Получить базовые ключевые слова для сектора
+ * Получить ключевые слова для сектора (на русском языке)
  * @param {string} sector - Название сектора
- * @param {string} language - Язык ('ru' | 'en')
- * @returns {Array<string>} Массив базовых ключевых слов
+ * @returns {Array<string>} Массив ключевых слов
  */
-getSectorBaseKeywords(sector, language = 'ru') {
+getSectorKeywords(sector) {
     const sectorKeywords = {
-        energy: {
-            ru: ['нефть', 'газ', 'нефтегазовый сектор', 'углеводороды', 'энергетика', 'ОПЕК+', 'экспорт нефти', 'цена на нефть'],
-            en: ['oil', 'gas', 'oil and gas', 'hydrocarbons', 'energy', 'OPEC+', 'oil export', 'oil price']
-        },
-        materials: {
-            ru: ['металлургия', 'чёрная металлургия', 'цветная металлургия', 'добыча', 'горная добыча', 'уголь', 'золото', 'сталь', 'никель', 'алюминий'],
-            en: ['metallurgy', 'steel industry', 'non-ferrous metals', 'mining', 'coal', 'gold', 'steel', 'nickel', 'aluminum']
-        },
-        finance: {
-            ru: ['банки', 'финансы', 'кредитование', 'ставка ЦБ', 'ключевая ставка', 'инфляция', 'ипотека', 'биржа'],
-            en: ['banks', 'finance', 'lending', 'Central Bank rate', 'key rate', 'inflation', 'mortgage', 'exchange']
-        },
-        technology: {
-            ru: ['IT', 'информационные технологии', 'импортозамещение', 'искусственный интеллект', 'AI', 'разработка ПО', 'цифровизация'],
-            en: ['IT', 'information technology', 'software development', 'artificial intelligence', 'AI', 'digitalization']
-        },
-        consumer: {
-            ru: ['ритейл', 'розничная торговля', 'потребительский рынок', 'FMCG'],
-            en: ['retail', 'retail trade', 'consumer market', 'FMCG']
-        },
-        industrial: {
-            ru: ['химическая промышленность', 'нефтехимия', 'удобрения', 'агрохимия'],
-            en: ['chemical industry', 'petrochemistry', 'fertilizers', 'agrochemistry']
-        },
-        utilities: {
-            ru: ['электроэнергетика', 'энергосбыт', 'генерация', 'мощность', 'тарифы'],
-            en: ['electric power', 'energy sales', 'generation', 'capacity', 'tariffs']
-        },
-        transportation: {
-            ru: ['транспорт', 'перевозки', 'логистика', 'инфраструктура'],
-            en: ['transport', 'transportation', 'logistics', 'infrastructure']
-        }
+        energy: ['нефть', 'газ', 'нефтегазовый', 'энергетика', 'ОПЕК', 'нефтедобыча'],
+        materials: ['металлургия', 'сталь', 'никель', 'алюминий', 'добыча', 'уголь', 'золото'],
+        finance: ['банк', 'финансы', 'кредит', 'ставка', 'ЦБ', 'инфляция', 'ипотека'],
+        technology: ['IT', 'технологии', 'софт', 'программное', 'цифровизация', 'AI'],
+        consumer: ['ритейл', 'торговля', 'потребительский', 'FMCG'],
+        industrial: ['химия', 'нефтехимия', 'удобрения', 'агрохимия'],
+        utilities: ['энергетика', 'электроэнергия', 'генерация', 'тарифы'],
+        transportation: ['транспорт', 'логистика', 'перевозки']
     };
     
-    return sectorKeywords[sector]?.[language] || [];
-}
-
-/**
- * Получить ключевые слова для поиска новостей по сектору
- * Включает общие термины сектора и названия компаний из базы данных
- * @param {string} sector - Название сектора
- * @param {string} language - Язык ('ru' | 'en')
- * @returns {Promise<Array<string>>} Массив ключевых слов
- */
-async getSectorKeywords(sector, language = 'ru') {
-    // 1. Получить базовые ключевые слова сектора
-    const baseKeywords = this.getSectorBaseKeywords(sector, language);
-    
-    // 2. Получить названия компаний из базы данных (CachedInstrument)
-    // Фильтровать по сектору и брать названия компаний, а не тикеры
-    const companies = await this.getCompaniesBySector(sector);
-    const companyNames = companies
-        .map(c => c.name)
-        .filter(Boolean)
-        .filter(name => name.length > 0); // Фильтруем пустые названия
-    
-    // 3. Объединить базовые ключевые слова и названия компаний
-    return [...baseKeywords, ...companyNames];
-}
-
-/**
- * Получить компании по сектору из базы данных
- * @param {string} sector - Название сектора
- * @returns {Promise<Array>} Массив компаний с полями {name, ticker, figi}
- */
-async getCompaniesBySector(sector) {
-    const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
-    const instruments = await CachedInstrument.findAll({
-        where: {
-            sector: sector,
-            isActive: true
-        },
-        attributes: ['name', 'ticker', 'figi'],
-        limit: 50 // Ограничиваем количество для оптимизации запроса
-    });
-    return instruments.map(i => i.toJSON());
+    return sectorKeywords[sector] || [];
 }
 ```
 
-#### 6.2. Ключевые слова для политических новостей РФ
+#### 6.2. Ключевые слова для политических новостей
 
-**Файл**: `server/src/services/PoliticalNewsService.js`
+**Файл**: `server/src/services/NewsLinkageService.js`
 
-Базовые ключевые слова для поиска политических новостей:
-
-```javascript
-getPoliticalNewsKeywords(language = 'ru', category = null) {
-    const baseKeywords = {
-        ru: [
-            'Россия', 'РФ', 'российский', 'Москва', 'Кремль', 
-            'правительство', 'президент', 'Путин', 'Госдума',
-            'Совет Федерации', 'министерство', 'Минфин', 'ЦБ РФ',
-            'Центральный банк', 'российская экономика', 'российский рынок'
-        ],
-        en: [
-            'Russia', 'Russian', 'Moscow', 'Kremlin', 'government',
-            'president', 'Putin', 'State Duma', 'Federation Council',
-            'ministry', 'Ministry of Finance', 'Central Bank of Russia',
-            'CBR', 'Russian economy', 'Russian market'
-        ]
-    };
-    
-    const categoryKeywords = {
-        sanctions: {
-            ru: ['санкции', 'санкционный', 'эмбарго', 'ограничения', 'запрет', 'блокировка'],
-            en: ['sanctions', 'sanction', 'embargo', 'restrictions', 'ban', 'blockade']
-        },
-        elections: {
-            ru: ['выборы', 'избирательный', 'голосование', 'президентские выборы', 'парламентские выборы'],
-            en: ['elections', 'election', 'voting', 'presidential election', 'parliamentary election']
-        },
-        policy: {
-            ru: ['политика', 'реформа', 'закон', 'законодательство', 'инициатива', 'программа'],
-            en: ['policy', 'reform', 'law', 'legislation', 'initiative', 'program']
-        },
-        international_relations: {
-            ru: ['международные отношения', 'дипломатия', 'внешняя политика', 'посол', 'посольство'],
-            en: ['international relations', 'diplomacy', 'foreign policy', 'ambassador', 'embassy']
-        },
-        economy_policy: {
-            ru: [
-                'экономическая политика', 'ЦБ', 'Центральный банк', 'инфляция', 
-                'курс рубля', 'ключевая ставка', 'валютная политика', 'бюджет',
-                'налог', 'налогообложение', 'Минэкономразвития'
-            ],
-            en: [
-                'economic policy', 'central bank', 'inflation', 'ruble', 'ruble rate',
-                'key rate', 'monetary policy', 'budget', 'tax', 'taxation', 'Ministry of Economic Development'
-            ]
-        },
-        regulations: {
-            ru: ['регулирование', 'надзор', 'контроль', 'лицензия', 'разрешение', 'норматив'],
-            en: ['regulation', 'supervision', 'control', 'license', 'permit', 'normative']
-        },
-        trade: {
-            ru: ['торговля', 'экспорт', 'импорт', 'таможня', 'таможенный', 'торговые отношения'],
-            en: ['trade', 'export', 'import', 'customs', 'trade relations', 'commercial']
-        }
-    };
-    
-    let keywords = baseKeywords[language] || [];
-    
-    if (category && categoryKeywords[category]) {
-        keywords = [...keywords, ...categoryKeywords[category][language]];
-    }
-    
-    return keywords;
-}
-```
-
-**Приоритетные источники для политических новостей**:
-- РИА Новости
-- ТАСС
-- Интерфакс
-- РБК
-- Ведомости
-- Коммерсант
-- Reuters (для английских новостей)
-- Bloomberg (для английских новостей)
+Для политических новостей relevance рассчитывается одинаково для всех акций (обычно 0.5-0.7), так как политические новости влияют на весь рынок.
 
 ## Этапы реализации
 
-### Этап 1: База данных и модели (2-3 дня)
+### Этап 1: Backend сервисы (4-5 дней)
 
-1. ✅ Создать миграцию для расширения CachedNews (секторные + политические поля)
-2. ✅ Создать модель SectorNewsMapping
-3. ✅ Создать миграцию для SectorNewsMapping
-4. ✅ Обновить индексы (включая индексы для политических новостей)
-
-**Файлы**:
-- `server/migrations/add-sector-news-fields.js` (включая политические поля)
-- `server/src/models/SectorNewsMapping.js`
-- `server/migrations/create-sector-news-mapping.js`
-
-### Этап 2: Backend сервисы (5-6 дней)
-
-1. ✅ Создать SectorNewsService
-2. ✅ Создать PoliticalNewsService
-3. ✅ Расширить NewsApiService методами для секторов и политических новостей
-4. ✅ Расширить SectorClassifier методами для поиска
-5. ✅ Добавить анализ релевантности новостей для акций
-6. ✅ Добавить классификацию политических новостей по категориям
-7. ✅ Добавить определение уровня влияния политических новостей
-8. ✅ Интегрировать с существующим NewsAnalysisService
+1. ✅ Создать RssFeedService (парсинг RSS фидов)
+2. ✅ Создать NewsLinkageService (привязка новостей к акциям)
+3. ✅ Создать RssNewsUpdateService (оркестрация обновления)
+4. ✅ Интегрировать с NewsAnalysisService для анализа sentiment
+5. ✅ Реализовать расчет relevance и impact
+6. ✅ Реализовать дедупликацию по URL
 
 **Файлы**:
-- `server/src/services/SectorNewsService.js`
-- `server/src/services/PoliticalNewsService.js` (новый)
-- Обновить `server/src/services/NewsApiService.js`
-- Обновить `server/src/utils/sectorClassifier.js`
+- `server/src/services/RssFeedService.js` (новый)
+- `server/src/services/NewsLinkageService.js` (новый)
+- `server/src/services/RssNewsUpdateService.js` (новый)
+- Обновить `server/src/utils/sectorClassifier.js` (добавить getSectorKeywords)
 
-### Этап 3: API Endpoints (2-3 дня)
+**Зависимости для установки**:
+```bash
+npm install rss-parser fast-xml-parser
+```
 
-1. ✅ Создать sector-news-routes.js
-2. ✅ Создать political-news-routes.js
-3. ✅ Расширить news-routes.js (includeSectorNews + includePoliticalNews)
-4. ✅ Добавить валидацию и обработку ошибок
-5. ✅ Добавить документацию
+### Этап 2: Планировщик (1 день)
 
-**Файлы**:
-- `server/src/routes/sector-news-routes.js`
-- `server/src/routes/political-news-routes.js` (новый)
-- Обновить `server/src/routes/news-routes.js`
-- Обновить `server/src/app.js` (регистрация роутов)
-
-### Этап 4: Планировщик (1-2 дня)
-
-1. ✅ Создать sectorNewsUpdateUtils.js
-2. ✅ Добавить функцию updatePoliticalNews в sectorNewsUpdateUtils.js
-3. ✅ Интегрировать в SchedulerService
-4. ✅ Настроить расписание обновлений (секторные и политические)
-5. ✅ Добавить мониторинг и логирование
+1. ✅ Создать rssNewsUpdateUtils.js
+2. ✅ Интегрировать в SchedulerService
+3. ✅ Настроить расписание обновлений
+4. ✅ Добавить мониторинг и логирование
 
 **Файлы**:
-- `server/src/utils/scheduler/sectorNewsUpdateUtils.js` (включая политические новости)
+- `server/src/utils/scheduler/rssNewsUpdateUtils.js` (новый)
 - Обновить `server/src/services/SchedulerService.js`
 
-### Этап 5: Frontend (4-5 дней)
+### Этап 3: Тестирование (2-3 дня)
 
-1. ✅ Создать SectorNewsWidget
-2. ✅ Создать PoliticalNewsWidget
-3. ✅ Расширить newsService (секторные + политические методы)
-4. ✅ Интегрировать в StockDetailNew
-5. ✅ Добавить фильтры и сортировку
-6. ✅ Добавить визуальное выделение критичных политических новостей
-7. ✅ Добавить стили
-
-**Файлы**:
-- `client/src/components/news/SectorNewsWidget.tsx`
-- `client/src/components/news/SectorNewsWidget.css`
-- `client/src/components/news/PoliticalNewsWidget.tsx` (новый)
-- `client/src/components/news/PoliticalNewsWidget.css` (новый)
-- Обновить `client/src/services/services/newsService.ts`
-- Обновить `client/src/pages/StockDetailNew.tsx`
-
-### Этап 6: Тестирование (3-4 дня)
-
-1. ✅ Unit тесты для SectorNewsService
-2. ✅ Unit тесты для PoliticalNewsService
-3. ✅ Integration тесты для API (секторные + политические)
-4. ✅ E2E тесты для frontend
-5. ✅ Тестирование производительности
-6. ✅ Тестирование с разными секторами и языками
-7. ✅ Тестирование классификации политических новостей
-8. ✅ Тестирование определения уровня влияния
+1. ✅ Unit тесты для RssFeedService
+2. ✅ Unit тесты для NewsLinkageService
+3. ✅ Unit тесты для RssNewsUpdateService
+4. ✅ Integration тесты (проверка привязки к акциям)
+5. ✅ Тестирование анализа sentiment
+6. ✅ Тестирование расчета relevance
+7. ✅ Тестирование дедупликации
 
 **Файлы**:
-- `server/src/__tests__/services/SectorNewsService.test.js`
-- `server/src/__tests__/services/PoliticalNewsService.test.js` (новый)
-- `server/src/__tests__/routes/sector-news-routes.test.js`
-- `server/src/__tests__/routes/political-news-routes.test.js` (новый)
-- `client/src/components/news/__tests__/SectorNewsWidget.test.tsx`
-- `client/src/components/news/__tests__/PoliticalNewsWidget.test.tsx` (новый)
+- `server/src/__tests__/services/RssFeedService.test.js` (новый)
+- `server/src/__tests__/services/NewsLinkageService.test.js` (новый)
+- `server/src/__tests__/services/RssNewsUpdateService.test.js` (новый)
 
-### Этап 7: Документация и оптимизация (1-2 дня)
+### Этап 4: Документация и оптимизация (1 день)
 
 1. ✅ Обновить API документацию
 2. ✅ Добавить примеры использования
 3. ✅ Оптимизация запросов к БД
-4. ✅ Настройка кеширования
-5. ✅ Мониторинг и метрики
+4. ✅ Мониторинг и метрики
 
 ## Технические детали
 
-### Поисковые запросы для секторов
+### Формат данных из RSS
 
-Для каждого сектора формируется запрос для параметра `q` endpoint `/v2/everything`:
-1. Ключевые слова сектора (из SectorClassifier)
-2. Названия секторов на соответствующем языке
-3. Тикеры крупных компаний сектора (опционально, для более точных результатов)
-
-**Рекомендации по использованию NewsAPI:**
-- Использовать endpoint `/v2/everything` для поиска по ключевым словам
-- `sortBy=publishedAt` для самых свежих новостей
-- `sortBy=relevancy` для наиболее релевантных новостей
-- Поиск по тикеру часто выдает новости, где упоминается компания
-
-**Пример для сектора "energy" (нефть и газ) на русском**:
-```
-GET /v2/everything?q=нефть OR газ OR энергетика OR нефтегаз&language=ru&sortBy=relevancy
+RSS фиды возвращают данные в формате:
+```xml
+<item>
+  <title>Заголовок новости</title>
+  <description>Описание новости</description>
+  <link>https://example.com/news/123</link>
+  <pubDate>Mon, 20 Feb 2024 10:00:00 +0300</pubDate>
+</item>
 ```
 
-**Пример для сектора "energy" на английском**:
-```
-GET /v2/everything?q=oil and gas OR energy OR petroleum&language=en&sortBy=publishedAt
-```
-
-**Пример для сектора "technology" на русском**:
-```
-GET /v2/everything?q=технологии OR IT OR софт OR программное обеспечение&language=ru&sortBy=relevancy
-```
-
-**Пример для сектора "technology" на английском**:
-```
-GET /v2/everything?q=technology OR IT OR software OR tech&language=en&sortBy=publishedAt
+После парсинга преобразуем в:
+```javascript
+{
+  title: string,
+  description: string,
+  url: string,
+  source: string, // Название источника (rbc, ria, tass, etc.)
+  publishedAt: Date,
+  language: 'ru' | 'en'
+}
 ```
 
-**Пример с тикером компании**:
-```
-GET /v2/everything?q=GAZP OR LKOH OR NLMK&language=ru&sortBy=publishedAt
+### Привязка финансовых новостей к акциям
+
+**Алгоритм**:
+
+1. Получить все активные инструменты из БД (CachedInstrument)
+2. Для каждой новости:
+   - Для каждой акции рассчитать relevance score:
+     - Прямое упоминание названия компании: +1.0
+     - Прямое упоминание тикера: +0.8
+     - Совпадение ключевых слов сектора: +0.5 (пропорционально количеству совпадений)
+   - Нормализовать score до 0-1
+   - Если relevance > 0.3 - привязать новость к акции
+3. Для привязанных новостей:
+   - Проанализировать sentiment через `NewsAnalysisService.analyzeSentiment()`
+   - Рассчитать impact на основе sentiment и relevance
+   - Сохранить в CachedNews с figi акции
+
+**Пример**:
+- Новость: "Сбербанк объявил о росте прибыли"
+- Акция: SBER (Сбербанк, сектор: finance)
+- Relevance: 1.0 (прямое упоминание) + 0.5 (сектор finance) = 1.5 → нормализовано = 0.65
+- Привязываем к SBER
+
+### Привязка политических новостей к акциям
+
+**Алгоритм**:
+
+1. Получить все российские акции из БД
+2. Для каждой новости:
+   - Привязать ко всем российским акциям
+   - Relevance для политических новостей: 0.5-0.7 (в зависимости от категории)
+   - Проанализировать sentiment через `NewsAnalysisService.analyzeSentiment()`
+   - Рассчитать impact на основе категории новости:
+     - Санкции, экономическая политика: impact = 0.7-0.9
+     - Выборы, международные отношения: impact = 0.5-0.7
+     - Внутренняя политика: impact = 0.3-0.5
+   - Сохранить в CachedNews с figi каждой акции
+
+**Пример**:
+- Новость: "Новые санкции против российских банков"
+- Привязываем ко всем российским акциям
+- Relevance: 0.6 (политическая новость)
+- Impact: 0.8 (санкции - высокое влияние)
+- Sentiment: -0.7 (отрицательный)
+
+### Анализ sentiment
+
+Используем существующий `NewsAnalysisService.analyzeSentiment(text)`:
+
+```javascript
+// В NewsLinkageService
+const NewsAnalysisService = (await import('./NewsAnalysisService.js')).default;
+const sentiment = await NewsAnalysisService.analyzeSentiment(
+    `${news.title} ${news.description || ''}`
+);
+// sentiment: число от -1 до 1
 ```
 
-### Поисковые запросы для политических новостей РФ
+### Расчет relevance
 
-Для политических новостей используется endpoint `/v2/everything` с параметрами:
-1. `q` - поисковый запрос (ключевые слова о России)
-2. `language` - язык источников (ru для русскоязычных, en для западной прессы)
-3. `sortBy` - сортировка (publishedAt для свежих, relevancy для релевантных)
-
-**Рекомендации по использованию NewsAPI:**
-- Для поиска новостей о России использовать `q=russia` или `q=Россия`
-- Для более точного поиска использовать кавычки: `q="Russian politics"`
-- Для комбинации условий использовать AND: `q=Russia AND Ukraine`
-- `language=ru` ограничит выдачу только источниками на русском языке
-- `language=en` даст западную прессу о РФ
-
-**Пример для общих политических новостей на русском**:
-```
-GET /v2/everything?q=Россия&language=ru&sortBy=relevancy&apiKey=YOUR_API_KEY
-```
-
-**Пример для общих политических новостей на английском**:
-```
-GET /v2/everything?q=Russia&language=en&sortBy=publishedAt&apiKey=YOUR_API_KEY
-```
-
-**Пример для категории "санкции" на русском**:
-```
-GET /v2/everything?q=Россия AND (санкции OR санкционный OR эмбарго)&language=ru&sortBy=relevancy
-```
-
-**Пример для категории "санкции" на английском**:
-```
-GET /v2/everything?q="Russian politics" AND (sanctions OR embargo)&language=en&sortBy=publishedAt
-```
-
-**Пример для категории "экономическая политика" на русском**:
-```
-GET /v2/everything?q=Россия AND (экономическая политика OR ЦБ OR инфляция)&language=ru&sortBy=relevancy
-```
-
-**Пример для категории "экономическая политика" на английском**:
-```
-GET /v2/everything?q=Russia AND (economic policy OR central bank OR inflation)&language=en&sortBy=publishedAt
-```
-
-### Релевантность новостей
-
-#### Для секторных новостей
-
-Алгоритм определения релевантности новости для акции:
-
-1. **Прямое упоминание**: Новость содержит название компании или тикер
-2. **Секторная принадлежность**: Новость относится к сектору акции
-3. **Ключевые слова**: Совпадение ключевых слов из описания компании
-4. **Sentiment анализ**: Анализ тональности новости
-
-**Формула релевантности**:
-```
-relevanceScore = (
+**Для финансовых новостей**:
+```javascript
+relevance = (
     directMention * 1.0 +
-    sectorMatch * 0.7 +
-    keywordMatch * 0.5 +
-    sentimentMatch * 0.3
-) / 2.5
+    tickerMention * 0.8 +
+    sectorKeywordsMatch * 0.5
+) / 2.3
 ```
 
-#### Для политических новостей
-
-Алгоритм определения релевантности политической новости для акции:
-
-1. **Прямое упоминание**: Новость содержит название компании или тикер
-2. **Секторная принадлежность**: Новость влияет на сектор акции
-3. **Категория новости**: Релевантность категории для сектора
-   - Санкции → влияют на все секторы (особенно энергетика, финансы)
-   - Экономическая политика → влияет на все секторы
-   - Регулирование → влияет на конкретные секторы
-4. **Уровень влияния**: Критичные новости имеют больший вес
-5. **Sentiment анализ**: Анализ тональности новости
-
-**Формула релевантности для политических новостей**:
-```
-relevanceScore = (
-    directMention * 1.0 +
-    sectorImpact * 0.8 +
-    categoryRelevance * 0.6 +
-    impactLevelWeight * 0.4 +
-    sentimentMatch * 0.3
-) / 3.1
-
-где:
-- impactLevelWeight: critical=1.0, high=0.7, medium=0.4, low=0.2
-- categoryRelevance: зависит от соответствия категории и сектора акции
+**Для политических новостей**:
+```javascript
+// Зависит от категории
+relevance = {
+    'sanctions': 0.7,
+    'economy_policy': 0.7,
+    'international_relations': 0.6,
+    'elections': 0.5,
+    'policy': 0.5,
+    'other': 0.5
+}[category] || 0.5
 ```
 
-**Матрица релевантности категорий для секторов**:
-- **Санкции**: Все секторы (высокая релевантность)
-- **Экономическая политика**: Все секторы (высокая релевантность)
-- **Регулирование**: Финансы, энергетика, технологии (средняя-высокая)
-- **Торговые отношения**: Энергетика, материалы, потребительские товары (средняя)
-- **Международные отношения**: Все секторы (средняя релевантность)
-- **Выборы**: Все секторы (низкая-средняя релевантность)
-- **Внутренняя политика**: Все секторы (низкая релевантность)
+### Расчет impact
+
+```javascript
+// Зависит от sentiment и relevance
+impact = Math.abs(sentiment) * relevance * categoryMultiplier
+
+// categoryMultiplier для политических новостей:
+const categoryMultiplier = {
+    'sanctions': 1.2,
+    'economy_policy': 1.1,
+    'international_relations': 1.0,
+    'elections': 0.9,
+    'policy': 0.8,
+    'other': 0.7
+}[category] || 1.0
+```
+
+### Дедупликация
+
+Перед сохранением проверяем:
+1. Существует ли уже новость с таким URL и figi в CachedNews
+2. Если существует - обновляем (обновляем sentiment, relevance, impact если они изменились)
+3. Если нет - создаем новую запись
+
+**Проверка**:
+```javascript
+const existing = await CachedNews.findOne({
+    where: {
+        url: news.url,
+        figi: figi
+    }
+});
+```
 
 ### Кеширование
 
-1. **Кеш новостей**: 24 часа (как в текущей модели)
-2. **Кеш секторных новостей**: 12 часов (более частые обновления)
-3. **Кеш политических новостей**: 6 часов (критичные новости требуют частых обновлений)
-4. **Кеш привязок**: 6 часов (SectorNewsMapping)
+Используем существующий механизм кеширования CachedNews:
+- Новости хранятся в БД с полями `cachedAt` и `expiresAt`
+- Время жизни: 24 часа (как в текущей модели)
+- При запросе через `NewsAnalysisService.getCachedNews()` автоматически фильтруются по expiresAt
 
 ### Rate Limiting
 
-NewsAPI.org ограничения:
-- Бесплатный план: 100 запросов/день
-- Рекомендуется: 1 запрос/секунду
+**RSS фиды**:
+- Неограниченное количество запросов
+- Рекомендуется: 1 запрос/5 секунд на источник
+- Параллельные запросы к разным источникам допустимы
 
 **Стратегия**:
-- Батчинг запросов по секторам
-- Приоритизация популярных секторов
-- Fallback на кеш при превышении лимитов
+- Параллельные запросы к разным RSS источникам
+- Последовательные запросы к одному источнику с задержкой
+- Агрессивное кеширование для уменьшения запросов
 
 ## Риски и митигация
 
-### Риск 1: Превышение лимитов NewsAPI
+### Риск 1: Недоступность RSS источников
 **Митигация**:
-- Агрессивное кеширование
-- Приоритизация секторов
-- Использование FallbackService
+- Использование нескольких RSS источников
+- Retry механизм с экспоненциальной задержкой
+- Fallback на другие источники при недоступности
+- Кеширование последних успешных результатов
 
-### Риск 2: Низкая релевантность новостей
+### Риск 2: Низкая релевантность привязки финансовых новостей
 **Митигация**:
-- Улучшение алгоритма релевантности
-- Ручная модерация для критичных новостей
+- Использование threshold (relevance > 0.3)
+- Улучшение алгоритма расчета relevance
+- Проверка по названию компании и тикеру
 - Пользовательская обратная связь
 
 ### Риск 3: Дублирование новостей
 **Митигация**:
-- Уникальный индекс по URL
-- Дедупликация перед сохранением
-- Проверка по заголовку и дате
+- Дедупликация по URL перед сохранением
+- Проверка существования записи с таким URL и figi
+- Обновление существующих записей вместо создания дубликатов
+
+### Риск 4: Изменение структуры RSS фидов
+**Митигация**:
+- Гибкий парсер RSS (rss-parser поддерживает разные форматы)
+- Обработка ошибок парсинга
+- Логирование проблемных фидов
+- Регулярное тестирование парсинга
+
+### Риск 5: Производительность при массовой привязке
+**Митигация**:
+- Батчинг операций сохранения в БД
+- Асинхронная обработка привязки
+- Оптимизация запросов к БД (индексы по figi, url)
+- Ограничение количества новостей за раз (например, последние 50)
 
 ## Метрики успеха
 
 1. **Покрытие**: 
-   - Новости доступны для всех основных секторов
-   - Политические новости покрывают все категории
+   - Финансовые новости привязаны к релевантным акциям
+   - Политические новости привязаны ко всем российским акциям
 2. **Актуальность**: 
-   - Секторные новости обновляются минимум 3 раза в день
-   - Политические новости обновляются минимум 3 раза в день
+   - Новости обновляются минимум 3 раза в день
 3. **Релевантность**: 
-   - >70% секторных новостей релевантны для связанных акций
-   - >60% политических новостей релевантны для российских акций
+   - >70% финансовых новостей привязаны к релевантным акциям (relevance > 0.3)
+   - Политические новости привязаны ко всем российским акциям
 4. **Производительность**: 
-   - Время ответа API < 500ms
-   - Кеш hit rate > 80%
-5. **Использование**: 
-   - >50% пользователей просматривают секторные новости
-   - >40% пользователей российских акций просматривают политические новости
-6. **Качество классификации**: 
-   - >85% политических новостей правильно классифицированы по категориям
-   - >80% политических новостей имеют правильный уровень влияния
+   - Время обработки одной новости < 1 секунда
+   - Время обновления всех новостей < 5 минут
+5. **Качество sentiment**: 
+   - Sentiment анализируется для всех новостей
+   - Используется существующий NewsAnalysisService
+6. **Надежность источников**:
+   - <10% ошибок при парсинге RSS фидов
+   - Успешное использование fallback механизмов
 
 ## Будущие улучшения
 
-1. **Мультиязычный анализ**: Автоматический перевод новостей
-2. **ML для релевантности**: Использование ML моделей для определения релевантности
-3. **Персонализация**: Рекомендации новостей на основе портфеля пользователя
-4. **Уведомления**: Push-уведомления о важных секторных новостях
-5. **Аналитика**: Дашборд с аналитикой по секторам
+1. **ML для релевантности**: Использование ML моделей для более точного определения релевантности
+2. **Персонализация**: Рекомендации новостей на основе портфеля пользователя
+3. **Уведомления**: Push-уведомления о важных новостях для акций в портфеле
+4. **Аналитика**: Дашборд с аналитикой по новостям
+5. **Дополнительные RSS источники**: Расширение списка RSS фидов
+6. **Улучшение алгоритма relevance**: Более точное определение релевантности с учетом контекста
 
 ## Зависимости
 
-- NewsAPI.org API ключ
-- Существующие сервисы: NewsApiService, SectorClassifier, CacheService
+### Новые зависимости
+
+```json
+{
+  "rss-parser": "^3.13.0",
+  "fast-xml-parser": "^4.3.2"
+}
+```
+
+### Переменные окружения
+
+```env
+# Опционально: настройки для RSS
+RSS_REQUEST_DELAY=5000  # Задержка между запросами к RSS (мс)
+RSS_TIMEOUT=10000       # Таймаут для RSS запросов (мс)
+RSS_RELEVANCE_THRESHOLD=0.3  # Минимальный relevance для привязки финансовых новостей
+```
+
+### Существующие зависимости
+- Существующие сервисы: NewsAnalysisService, SectorClassifier, CacheService
 - База данных: Sequelize, PostgreSQL
+- Модель: CachedNews (без изменений)
 
 ## Временная оценка
 
-**Общее время**: 18-23 рабочих дня (увеличено на 3 дня для политических новостей)
+**Общее время**: 8-10 рабочих дней
 
-- База данных: 2-3 дня
-- Backend: 5-6 дней (добавлен PoliticalNewsService)
-- API: 2-3 дня (добавлены политические endpoints)
-- Планировщик: 1-2 дня
-- Frontend: 4-5 дней (добавлен PoliticalNewsWidget)
-- Тестирование: 3-4 дня (добавлены тесты для политических новостей)
-- Документация: 1-2 дня
+- Backend сервисы: 4-5 дней
+- Планировщик: 1 день
+- Тестирование: 2-3 дня
+- Документация: 1 день
 
 ## Приоритет
 
-**Высокий** - Улучшает пользовательский опыт и предоставляет более полную информацию для принятия решений.
+**Высокий** - Улучшает покрытие новостями для акций, используя бесплатные источники и существующую инфраструктуру.
 
+## Примечания
+
+1. **Совместимость**: Все новости сохраняются в существующую модель CachedNews, совместимы с текущим API
+2. **Sentiment анализ**: Используется существующий NewsAnalysisService, никаких изменений не требуется
+3. **Frontend**: Не требует изменений, существующие компоненты автоматически покажут новые новости
+4. **Производительность**: Привязка политических новостей ко всем акциям может быть ресурсоемкой, требуется оптимизация (батчинг, асинхронная обработка)

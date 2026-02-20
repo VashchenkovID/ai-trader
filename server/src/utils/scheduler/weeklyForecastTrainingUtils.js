@@ -11,6 +11,9 @@ import WeeklyForecastModelService from '../../services/WeeklyForecastModelServic
 // Флаг блокировки быстрого обучения во время полного обучения
 let _isFullWeeklyForecastTrainingActive = false;
 
+// Map для отслеживания активных обучений по FIGI (защита от дублирования)
+const _activeTrainingByFigi = new Map();
+
 /**
  * Обучает модель Weekly Forecast для указанного инструмента
  * @param {string} figi - FIGI инструмента
@@ -35,6 +38,21 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
         if (!figi || typeof figi !== 'string') {
             throw new Error('FIGI is required and must be a string');
         }
+
+        // КРИТИЧНО: Проверяем, не запущено ли уже обучение для этого инструмента
+        if (_activeTrainingByFigi.has(figi)) {
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('Weekly Forecast training already in progress for this instrument, skipping duplicate call', {
+                    service: 'WeeklyForecastTrainingUtils',
+                    operation: 'trainWeeklyForecastModel',
+                    figi
+                });
+            }
+            throw new Error(`Weekly Forecast training is already in progress for ${figi}. Please wait for the current training to complete.`);
+        }
+
+        // Устанавливаем флаг активного обучения для этого инструмента
+        _activeTrainingByFigi.set(figi, true);
 
         if (LoggerService.isInitialized) {
             LoggerService.info('Starting Weekly Forecast model training', {
@@ -391,6 +409,9 @@ export async function trainWeeklyForecastModel(figi, options = {}) {
             }
         }
         throw error;
+    } finally {
+        // КРИТИЧНО: Сбрасываем флаг активного обучения для этого инструмента
+        _activeTrainingByFigi.delete(figi);
     }
 }
 
@@ -418,6 +439,18 @@ export async function trainWeeklyForecastModelsForAllInstruments(options = {}) {
         trainingOptions = {},
         workerId = null
     } = options;
+
+    // КРИТИЧНО: Проверяем, не запущено ли уже обучение
+    if (_isFullWeeklyForecastTrainingActive) {
+        if (LoggerService.isInitialized) {
+            LoggerService.warn('Weekly Forecast training already in progress, skipping duplicate call', {
+                service: 'WeeklyForecastTrainingUtils',
+                operation: 'trainWeeklyForecastModelsForAllInstruments',
+                workerId
+            });
+        }
+        throw new Error('Weekly Forecast training is already in progress. Please wait for the current training to complete.');
+    }
 
     // Устанавливаем флаг блокировки быстрого обучения
     _isFullWeeklyForecastTrainingActive = true;

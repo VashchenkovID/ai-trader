@@ -148,6 +148,11 @@ class WeeklyForecastTrainingWorker {
             outputDays = 7
         } = options;
 
+        // Объявляем переменные тензоров в области видимости функции для доступа в catch
+        let encoderInput = null;
+        let decoderInput = null;
+        let targetTensor = null;
+
         try {
             if (this.isTraining) {
                 throw new Error('Training already in progress');
@@ -183,26 +188,36 @@ class WeeklyForecastTrainingWorker {
                 }
             }
 
-            // Создаем модель, если её нет
-            if (!this.model) {
-                this.model = this.createSeq2SeqModel(expectedSequenceLength, expectedFeatureSize, expectedForecastDays);
+            // Всегда создаем новую модель для каждого обучения
+            // Это предотвращает проблемы с disposed переменными при повторном использовании worker'а
+            // ВАЖНО: Каждое обучение должно начинаться с новой, необученной модели
+            if (this.model) {
+                try {
+                    this.model.dispose();
+                } catch (disposeError) {
+                    // Игнорируем ошибки при dispose старой модели
+                }
+                this.model = null;
             }
+            
+            // Создаем новую модель с правильными размерами
+            this.model = this.createSeq2SeqModel(expectedSequenceLength, expectedFeatureSize, expectedForecastDays);
 
             // Конвертируем в тензоры
             // Для encoder: [batch, sequenceLength, featureSize]
-            const encoderInput = tf.tensor3d(sequences);
+            encoderInput = tf.tensor3d(sequences);
             
             // Для decoder: используем targets как decoder input (teacher forcing)
             // Decoder input должен иметь форму [batch, forecastDays, featureSize]
             // Используем последний элемент из каждой sequence и дублируем его для всех forecastDays
-            const decoderInput = tf.tensor3d(sequences.map((seq) => {
+            decoderInput = tf.tensor3d(sequences.map((seq) => {
                 const lastFeatures = seq[seq.length - 1];
                 // Создаем массив из forecastDays элементов, каждый равен lastFeatures
                 return Array(expectedForecastDays).fill(null).map(() => [...lastFeatures]);
             }));
 
             // Targets: [batch, forecastDays, 5] (open, high, low, close, volume)
-            const targetTensor = tf.tensor3d(targets);
+            targetTensor = tf.tensor3d(targets);
 
             // Обучение
             const history = await this.model.fit(
@@ -232,17 +247,44 @@ class WeeklyForecastTrainingWorker {
                 }
             );
 
-            // Освобождаем память
-            encoderInput.dispose();
-            decoderInput.dispose();
-            targetTensor.dispose();
+            // Освобождаем память после обучения
+            if (encoderInput && !encoderInput.isDisposed) {
+                encoderInput.dispose();
+            }
+            if (decoderInput && !decoderInput.isDisposed) {
+                decoderInput.dispose();
+            }
+            if (targetTensor && !targetTensor.isDisposed) {
+                targetTensor.dispose();
+            }
 
+            // Получаем конфигурацию модели ПЕРЕД получением весов
+            // Это важно, так как getConfig() может использовать внутренние переменные модели
+            const modelConfig = this.model.getConfig();
+            
             // Получаем веса модели для передачи в основной процесс
-            const weights = await this.model.getWeights();
-            const weightsData = await Promise.all(weights.map(w => w.array()));
+            // ВАЖНО: getWeights() создает новые тензоры, которые являются копиями весов
+            const weights = this.model.getWeights();
+            
+            // Копируем данные весов в обычные массивы JavaScript
+            // Это гарантирует, что данные сохранены до dispose модели
+            const weightsData = await Promise.all(weights.map(async (w) => {
+                try {
+                    const data = await w.array();
+                    return data;
+                } catch (error) {
+                    throw new Error(`Error copying weight data: ${error.message}`);
+                }
+            }));
             
             // Освобождаем веса из памяти GPU/CPU после копирования
-            weights.forEach(w => w.dispose());
+            weights.forEach(w => {
+                try {
+                    w.dispose();
+                } catch (disposeError) {
+                    // Игнорируем ошибки при dispose весов
+                }
+            });
             
             // Отправляем результат с весами
             parentPort.postMessage({
@@ -255,11 +297,12 @@ class WeeklyForecastTrainingWorker {
                         val_mae: history.history.val_mae
                     },
                     weights: weightsData,
-                    modelConfig: this.model.getConfig()
+                    modelConfig: modelConfig
                 }
             });
 
-            // Освобождаем модель после получения весов
+            // Освобождаем модель ПОСЛЕ отправки данных
+            // Это гарантирует, что все данные скопированы до dispose
             this.dispose();
             
             // Принудительная очистка памяти TensorFlow
@@ -275,6 +318,49 @@ class WeeklyForecastTrainingWorker {
             return history;
         } catch (error) {
             this.isTraining = false;
+            
+            // Освобождаем ресурсы при ошибке
+            // Важно: проверяем, что тензоры были созданы и не disposed
+            try {
+                if (encoderInput && typeof encoderInput.dispose === 'function') {
+                    if (!encoderInput.isDisposed) {
+                        encoderInput.dispose();
+                    }
+                }
+            } catch (e) {
+                // Игнорируем ошибки при dispose
+            }
+            
+            try {
+                if (decoderInput && typeof decoderInput.dispose === 'function') {
+                    if (!decoderInput.isDisposed) {
+                        decoderInput.dispose();
+                    }
+                }
+            } catch (e) {
+                // Игнорируем ошибки при dispose
+            }
+            
+            try {
+                if (targetTensor && typeof targetTensor.dispose === 'function') {
+                    if (!targetTensor.isDisposed) {
+                        targetTensor.dispose();
+                    }
+                }
+            } catch (e) {
+                // Игнорируем ошибки при dispose
+            }
+            
+            // Очищаем модель при ошибке, чтобы предотвратить проблемы при следующем обучении
+            // Это гарантирует, что следующее обучение начнется с чистой модели
+            if (this.model) {
+                try {
+                    this.dispose();
+                } catch (disposeError) {
+                    // Игнорируем ошибки при dispose
+                }
+            }
+            
             parentPort.postMessage({
                 type: 'training_error',
                 data: { error: error.message, stack: error.stack }
@@ -293,13 +379,35 @@ class WeeklyForecastTrainingWorker {
         }
 
         try {
+            // Получаем конфигурацию модели ПЕРЕД получением весов
+            const modelConfig = this.model.getConfig();
+            
             // Сохраняем веса модели
-            const weights = await this.model.getWeights();
-            const weightsData = await Promise.all(weights.map(w => w.array()));
+            // ВАЖНО: getWeights() создает новые тензоры, которые являются копиями весов
+            const weights = this.model.getWeights();
+            
+            // Копируем данные весов в обычные массивы JavaScript
+            const weightsData = await Promise.all(weights.map(async (w) => {
+                try {
+                    const data = await w.array();
+                    return data;
+                } catch (error) {
+                    throw new Error(`Error copying weight data: ${error.message}`);
+                }
+            }));
+            
+            // Освобождаем веса из памяти после копирования
+            weights.forEach(w => {
+                try {
+                    w.dispose();
+                } catch (disposeError) {
+                    // Игнорируем ошибки при dispose весов
+                }
+            });
 
             return {
                 weights: weightsData,
-                config: this.model.getConfig()
+                config: modelConfig
             };
         } catch (error) {
             parentPort.postMessage({
@@ -315,7 +423,16 @@ class WeeklyForecastTrainingWorker {
      */
     dispose() {
         if (this.model) {
-            this.model.dispose();
+            try {
+                // Проверяем, не disposed ли уже модель
+                // Если модель уже disposed, dispose() может выбросить ошибку
+                if (this.model.built) {
+                    this.model.dispose();
+                }
+            } catch (disposeError) {
+                // Игнорируем ошибки при dispose (модель может быть уже disposed)
+                // Это предотвращает падение worker'а при повторном dispose
+            }
             this.model = null;
         }
         this.isTraining = false;

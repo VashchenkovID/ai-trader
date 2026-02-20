@@ -18,6 +18,7 @@ import * as SchedulerUtils from '../utils/scheduler/index.js';
 class SchedulerService {
     constructor() {
         this.cacheTask = null;
+        this.isCacheUpdateRunning = false; // Флаг для предотвращения параллельных обновлений кеша
         this.priceUpdateTask = null; // Задача обновления цен
         this.portfolioPricesUpdateTask = null; // Задача обновления цен портфеля
         this.partialExitCheckTask = null; // Задача проверки частичного закрытия позиций
@@ -72,6 +73,8 @@ class SchedulerService {
         this.skipFirstRun = new Set(); // Задачи, которые должны пропустить первый запуск
         this.isFullCacheUpdateRunning = false; // Флаг выполнения полного обновления кеша
         this.currentFullCacheUpdateWorker = null; // Текущий worker полного обновления кеша
+        this.isCacheUpdateRunning = false; // Флаг для предотвращения параллельных обновлений кеша
+        this.cacheUpdateLock = false; // Блокировка для атомарной проверки и установки флага
         this.pendingTriggeredSignals = []; // Накопленные сработавшие сигналы для отправки после анализа
         this.maxPendingSignals = 1000; // Максимальное количество накопленных сигналов (защита от утечки памяти)
         this.lastPendingRequestNotification = new Map(); // Время последнего уведомления для каждой ожидающей заявки (ID заявки -> timestamp)
@@ -2415,6 +2418,16 @@ class SchedulerService {
                         return;
                     }
                     
+                    // КРИТИЧНО: Проверяем, не запущено ли уже обучение Weekly Forecast
+                    const { isFullWeeklyForecastTrainingActive } = await import('../utils/scheduler/weeklyForecastTrainingUtils.js');
+                    if (isFullWeeklyForecastTrainingActive()) {
+                        LoggerService.info('Weekly Forecast training skipped: Weekly Forecast training already in progress', {
+                            service: 'SchedulerService',
+                            operation: 'weeklyForecastTraining'
+                        });
+                        return;
+                    }
+                    
                     // Регистрируем воркер для мониторинга
                     try {
                         const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
@@ -2811,16 +2824,60 @@ class SchedulerService {
      * Использует утилиту из cacheUpdateUtils
      */
     async performCacheUpdate() {
-        const context = {
-            getWebSocketService: () => this.getWebSocketService(),
-            workersSet: this.workers,
-            checkFullCacheUpdate: () => this.isFullCacheUpdateRunning,
-            shouldUpdateCacheFn: () => this.shouldUpdateCache(),
-            updateLastCacheUpdate: (timestamp) => { this.lastCacheUpdate = timestamp; },
-            performLimitedNewsUpdate: (limit) => this.performLimitedNewsUpdate(limit)
-        };
+        // КРИТИЧНО: Атомарная проверка и установка флага (защита от race condition)
+        // Используем блокировку для предотвращения параллельных запусков
+        if (this.cacheUpdateLock) {
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('Cache update lock is active, skipping duplicate call', {
+                    service: 'SchedulerService',
+                    operation: 'performCacheUpdate'
+                });
+            }
+            return {
+                success: true,
+                message: 'Cache update skipped - lock is active',
+                skipped: true
+            };
+        }
         
-        return await SchedulerUtils.performCacheUpdate(context);
+        // Устанавливаем блокировку ДО проверки флага (атомарная операция)
+        this.cacheUpdateLock = true;
+        
+        // Дополнительная проверка флага (на случай, если процесс уже запущен)
+        if (this.isCacheUpdateRunning) {
+            this.cacheUpdateLock = false; // Снимаем блокировку
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('Cache update already in progress, skipping duplicate call', {
+                    service: 'SchedulerService',
+                    operation: 'performCacheUpdate'
+                });
+            }
+            return {
+                success: true,
+                message: 'Cache update skipped - already in progress',
+                skipped: true
+            };
+        }
+        
+        // Устанавливаем флаг выполнения
+        this.isCacheUpdateRunning = true;
+        this.cacheUpdateLock = false; // Снимаем блокировку после установки флага
+        
+        try {
+            const context = {
+                getWebSocketService: () => this.getWebSocketService(),
+                workersSet: this.workers,
+                checkFullCacheUpdate: () => this.isFullCacheUpdateRunning,
+                shouldUpdateCacheFn: () => this.shouldUpdateCache(),
+                updateLastCacheUpdate: (timestamp) => { this.lastCacheUpdate = timestamp; },
+                performLimitedNewsUpdate: (limit) => this.performLimitedNewsUpdate(limit)
+            };
+            
+            return await SchedulerUtils.performCacheUpdate(context);
+        } finally {
+            // Сбрасываем флаг после завершения
+            this.isCacheUpdateRunning = false;
+        }
     }
 
     /**
