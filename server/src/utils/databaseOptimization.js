@@ -241,11 +241,6 @@ class DatabaseOptimization {
             );
             
             if (existingIndexes.length > 0) {
-                LoggerService.warn('Индекс уже существует', {
-                    service: 'DatabaseOptimization',
-                    tableName,
-                    indexName
-                });
                 return { created: false, exists: true };
             }
             
@@ -273,12 +268,6 @@ class DatabaseOptimization {
                     error.original.message.includes('уже существует')
                 ))
             )) {
-                LoggerService.info('Индекс уже существует (пропуск)', {
-                    service: 'DatabaseOptimization',
-                    tableName,
-                    indexName,
-                    fields
-                });
                 return { created: false, exists: true };
             }
             

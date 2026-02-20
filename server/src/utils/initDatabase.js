@@ -898,9 +898,14 @@ export async function initDatabase() {
             
             console.log('✅ Поля для автоматической торговли добавлены в trading_requests');
         } catch (error) {
-            // Игнорируем ошибку, если столбцы уже существуют
-            if (!error.message.includes('already exists') && !error.message.includes('duplicate')) {
+            // Игнорируем ошибку, если столбцы уже существуют или ошибка валидации
+            if (!error.message.includes('already exists') && 
+                !error.message.includes('duplicate') &&
+                !error.message.includes('Validation error')) {
                 console.warn('⚠️ Предупреждение при добавлении полей автоматической торговли:', error.message);
+            } else if (error.message.includes('Validation error')) {
+                // Ошибка валидации обычно означает, что поля уже существуют с правильными типами
+                console.log('ℹ️ Поля автоматической торговли уже существуют в trading_requests');
             }
         }
         
@@ -1403,10 +1408,41 @@ export async function initDatabase() {
         
         // Создаем таблицу статистики автоматической торговли (AutoPaperTradingStats)
         try {
+            // Создаем ENUM тип для currentPhase, если его еще нет
+            try {
+                const [enumCheck] = await sequelize.query(`
+                    SELECT EXISTS (
+                        SELECT 1 FROM pg_type WHERE typname = 'enum_auto_paper_trading_stats_currentphase'
+                    ) as exists;
+                `);
+                
+                const enumExists = enumCheck && enumCheck[0] && (enumCheck[0].exists === true || enumCheck[0].exists === 't');
+                
+                if (!enumExists) {
+                    await sequelize.query(`
+                        CREATE TYPE "enum_auto_paper_trading_stats_currentphase" AS ENUM ('phase1', 'phase2', 'phase3');
+                    `);
+                }
+            } catch (enumError) {
+                // Игнорируем, если ENUM уже существует
+                if (!enumError.message.includes('already exists') && !enumError.message.includes('duplicate')) {
+                    console.warn('⚠️ Предупреждение при создании ENUM для AutoPaperTradingStats:', enumError.message);
+                }
+            }
+            
             await safeSyncModel(AutoPaperTradingStats, 'AutoPaperTradingStats');
             console.log('✅ Таблица статистики автоматической торговли создана');
         } catch (syncError) {
-            console.error('❌ Ошибка синхронизации таблицы статистики автоматической торговли:', syncError);
+            // Игнорируем ошибки валидации, если таблица уже существует с правильной структурой
+            if (syncError.message && (
+                syncError.message.includes('Validation error') ||
+                syncError.message.includes('already exists') ||
+                syncError.message.includes('duplicate')
+            )) {
+                console.warn('⚠️ Предупреждение при синхронизации AutoPaperTradingStats (таблица может уже существовать):', syncError.message);
+            } else {
+                console.error('❌ Ошибка синхронизации таблицы статистики автоматической торговли:', syncError);
+            }
         }
         
         // Инициализируем стратегии по умолчанию
