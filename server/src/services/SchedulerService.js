@@ -1912,12 +1912,70 @@ class SchedulerService {
         
         // Задача ежедневной генерации недельных прогнозов (каждый день в 8:00)
         const weeklyForecastGenerationSchedule = this.schedulerSettings.weekly_forecast_generation_schedule || '0 8 * * *';
+        if (LoggerService.isInitialized) {
+            LoggerService.info('Setting up weekly forecast generation task', {
+                service: 'SchedulerService',
+                operation: 'start',
+                schedule: weeklyForecastGenerationSchedule,
+                timezone: 'Europe/Moscow'
+            });
+        }
         const weeklyForecastGenerationTask = SchedulerUtils.createScheduledTask(
             weeklyForecastGenerationSchedule,
             async () => {
+                let workerId = null;
                 try {
                     if (!this.isInitialized) {
                         return;
+                    }
+                    
+                    // Регистрируем воркер для мониторинга
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (!WorkerMonitoringService.isInitialized) {
+                            await WorkerMonitoringService.initialize();
+                        }
+                        workerId = WorkerMonitoringService.registerWorker(
+                            'weekly-forecast-generation',
+                            'Генерация недельных прогнозов',
+                            {
+                                stage: 'initializing'
+                            }
+                        );
+                    } catch (monitoringError) {
+                        LoggerService.warn('Failed to register worker in monitoring service', {
+                            service: 'SchedulerService',
+                            operation: 'weeklyForecastGeneration',
+                            error: { message: String(monitoringError) }
+                        });
+                    }
+                    
+                    // Отправляем уведомление о начале генерации
+                    try {
+                        await OptimizedTelegramService.sendAlert(
+                            'WEEKLY_FORECAST_GENERATION_START',
+                            `📈 <b>Начата генерация недельных прогнозов</b>\n\n` +
+                            `⏰ Время: ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}\n` +
+                            `🔄 Режим: Автоматическая генерация`,
+                            'info'
+                        );
+                    } catch (telegramError) {
+                        LoggerService.warn('Failed to send Telegram notification about forecast generation start', {
+                            service: 'SchedulerService',
+                            operation: 'weeklyForecastGeneration',
+                            error: { message: telegramError.message }
+                        });
+                    }
+                    
+                    // Обновляем статус: получение списка инструментов
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 5,
+                            metadata: {
+                                stage: 'loading_instruments'
+                            }
+                        });
                     }
                     
                     // Получаем список активных инструментов
@@ -1952,13 +2010,45 @@ class SchedulerService {
                     });
                     
                     if (instruments.length === 0) {
+                        if (workerId) {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            WorkerMonitoringService.completeWorker(workerId, true, {
+                                skipped: true,
+                                reason: 'no_instruments'
+                            });
+                        }
+                        // Отправляем уведомление о пропуске
+                        try {
+                            await OptimizedTelegramService.sendAlert(
+                                'WEEKLY_FORECAST_GENERATION_SKIPPED',
+                                `⏭️ <b>Генерация прогнозов пропущена</b>\n\n` +
+                                `Причина: Нет активных инструментов для обработки`,
+                                'info'
+                            );
+                        } catch (telegramError) {
+                            // Игнорируем ошибки отправки уведомления
+                        }
                         return;
+                    }
+                    
+                    // Обновляем статус: начало генерации
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 10,
+                            metadata: {
+                                stage: 'generating',
+                                total: instruments.length,
+                                current: 0
+                            }
+                        });
                     }
                     
                     // Запускаем генерацию через worker
                     const { executeWorkerTask } = await import('../utils/scheduler/workerUtils.js');
                     
-                    await executeWorkerTask(
+                    const startTime = Date.now();
+                    const result = await executeWorkerTask(
                         'weeklyForecastGenerationWorker.js',
                         {
                             instruments: instruments.map(i => ({
@@ -1975,19 +2065,115 @@ class SchedulerService {
                         },
                         {
                             getWebSocketService: () => this.getWebSocketService(),
-                            onProgress: (progress) => {
-                                // Прогресс обрабатывается автоматически через WorkerMonitoringService
+                            onProgress: async (progress) => {
+                                // Обновляем статус воркера при прогрессе
+                                if (workerId && progress.progress !== undefined) {
+                                    try {
+                                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                                        // Масштабируем прогресс: 10-90% (10% уже занято подготовкой)
+                                        const scaledProgress = 10 + Math.round((progress.progress / 100) * 80);
+                                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                            progress: scaledProgress,
+                                            metadata: {
+                                                stage: progress.stage || 'generating',
+                                                ...progress
+                                            }
+                                        });
+                                    } catch (monitoringError) {
+                                        // Игнорируем ошибки обновления статуса
+                                    }
+                                }
                             },
                             workersSet: this.workers,
                             broadcastType: 'weekly_forecast_generation'
+                            // workerType не передаем - executeWorkerTask создаст свой тип из имени файла
+                            // Это позволит иметь два уровня мониторинга: задача (weekly-forecast-generation) 
+                            // и воркер (weekly_forecast_generation_worker)
                         }
                     );
+                    
+                    const duration = Math.round((Date.now() - startTime) / 1000);
+                    
+                    // Завершаем воркер успешно
+                    if (workerId) {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        WorkerMonitoringService.updateWorkerStatus(workerId, {
+                            progress: 100,
+                            metadata: {
+                                stage: 'completed',
+                                ...result
+                            }
+                        });
+                        WorkerMonitoringService.completeWorker(workerId, true, {
+                            success: true,
+                            duration,
+                            ...result
+                        });
+                    }
+                    
+                    // Отправляем уведомление о завершении
+                    const successCount = result.success?.length || 0;
+                    const failedCount = result.failed?.length || 0;
+                    const skippedCount = result.skipped?.length || 0;
+                    
+                    try {
+                        await OptimizedTelegramService.sendAlert(
+                            'WEEKLY_FORECAST_GENERATION_COMPLETE',
+                            `✅ <b>Генерация прогнозов завершена</b>\n\n` +
+                            `⏱️ Время выполнения: ${duration}с\n` +
+                            `✅ Успешно: ${successCount}\n` +
+                            `❌ Ошибок: ${failedCount}\n` +
+                            `⏭️ Пропущено: ${skippedCount}\n` +
+                            `📊 Всего обработано: ${instruments.length}`,
+                            'info'
+                        );
+                    } catch (telegramError) {
+                        LoggerService.warn('Failed to send Telegram notification about forecast generation completion', {
+                            service: 'SchedulerService',
+                            operation: 'weeklyForecastGeneration',
+                            error: { message: telegramError.message }
+                        });
+                    }
                 } catch (error) {
+                    // Завершаем воркер с ошибкой
+                    if (workerId) {
+                        try {
+                            const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                            WorkerMonitoringService.reportWorkerError(workerId, error.message || error);
+                            WorkerMonitoringService.completeWorker(workerId, false, {
+                                error: error.message || String(error)
+                            });
+                        } catch (monitoringError) {
+                            LoggerService.warn('Failed to report worker error', {
+                                service: 'SchedulerService',
+                                operation: 'weeklyForecastGeneration',
+                                error: { message: String(monitoringError) }
+                            });
+                        }
+                    }
+                    
                     LoggerService.error('Error in weekly forecast generation task', {
                         service: 'SchedulerService',
                         operation: 'weeklyForecastGeneration',
                         error: { message: error.message, stack: error.stack }
                     });
+                    
+                    // Отправляем уведомление об ошибке
+                    try {
+                        await OptimizedTelegramService.sendAlert(
+                            'WEEKLY_FORECAST_GENERATION_ERROR',
+                            `❌ <b>Ошибка генерации прогнозов</b>\n\n` +
+                            `Ошибка: ${error.message || String(error)}\n` +
+                            `⏰ Время: ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`,
+                            'error'
+                        );
+                    } catch (telegramError) {
+                        LoggerService.warn('Failed to send Telegram notification about forecast generation error', {
+                            service: 'SchedulerService',
+                            operation: 'weeklyForecastGeneration',
+                            error: { message: telegramError.message }
+                        });
+                    }
                 }
             },
             {
@@ -2001,6 +2187,14 @@ class SchedulerService {
         );
         this.weeklyForecastGenerationTask = weeklyForecastGenerationTask;
         this.intervals.add(weeklyForecastGenerationTask);
+        if (LoggerService.isInitialized) {
+            LoggerService.info('Weekly forecast generation task initialized', {
+                service: 'SchedulerService',
+                operation: 'start',
+                taskName: 'weekly-forecast-generation',
+                schedule: weeklyForecastGenerationSchedule
+            });
+        }
         
         // Задача обновления недельных прогнозов реальными данными (ежедневно в 9:00, после генерации)
         const weeklyForecastUpdateSchedule = this.schedulerSettings.weekly_forecast_update_schedule || '0 9 * * *';

@@ -338,7 +338,16 @@ const StockDetailNew: React.FC = () => {
     || recommendation?.explanation?.targetPrice
     || recommendation?.explanation?.details?.targetPrice;
   
-  const strategies = recommendation?.explanation?.details?.ensemble?.horizons?.shortTerm?.strategies;
+  // Извлекаем стратегии из среднесрочного горизонта (mediumTerm) как основной,
+  // аналогично RecommendationCard. Если его нет, используем shortTerm или longTerm.
+  // Это обеспечивает согласованность с отображением в ForecastHorizonsTab
+  const horizons = recommendation?.horizons 
+    || recommendation?.analysis?.horizons 
+    || recommendation?.explanation?.horizons 
+    || recommendation?.explanation?.details?.ensemble?.horizons;
+  
+  const mainHorizon = horizons?.mediumTerm || horizons?.shortTerm || horizons?.longTerm;
+  const strategies = mainHorizon?.strategies;
 
   // Извлекаем данные из Weekly Forecast
   // Данные уже конвертированы на сервере в абсолютные цены
@@ -569,6 +578,30 @@ const StockDetailNew: React.FC = () => {
           news={news}
           technicalIndicators={technicalIndicators}
           fundamentalData={fundamentalMetrics ? { metrics: fundamentalMetrics } : undefined}
+          onRefreshNews={async () => {
+            if (!figi) return;
+            setLoadingNews(true);
+            try {
+              // Используем метод для запроса свежих новостей
+              const { newsService } = await import('../services/services/newsService');
+              await newsService.fetchFreshNews(figi);
+              // Затем загружаем обновленные новости
+              const newsData = await apiService.getNews(figi);
+              setNews(newsData?.news || []);
+            } catch (e) {
+              console.error('Failed to refresh news:', e);
+              // Пробуем просто перезагрузить новости
+              try {
+                const newsData = await apiService.getNews(figi);
+                setNews(newsData?.news || []);
+              } catch (e2) {
+                console.error('Failed to reload news:', e2);
+              }
+            } finally {
+              setLoadingNews(false);
+            }
+          }}
+          isLoadingNews={loadingNews}
         />
       </div>
     </div>

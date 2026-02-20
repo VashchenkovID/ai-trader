@@ -19,12 +19,16 @@ interface AllNewsTabProps {
   figi: string;
   ticker: string;
   news: NewsItem[];
+  onRefresh?: () => void;
+  isLoading?: boolean;
 }
 
 const AllNewsTab: React.FC<AllNewsTabProps> = ({
-  // figi,
-  // ticker,
-  news
+  figi,
+  ticker,
+  news,
+  onRefresh,
+  isLoading = false
 }) => {
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('cards');
   const [filterSentiment, setFilterSentiment] = useState<string>('all');
@@ -98,19 +102,31 @@ const AllNewsTab: React.FC<AllNewsTabProps> = ({
             <option value="neutral">Нейтральные</option>
           </select>
         </div>
-        <div className="all-news-tab__view-toggle">
-          <button
-            className={`all-news-tab__view-btn ${viewMode === 'table' ? 'active' : ''}`}
-            onClick={() => setViewMode('table')}
-          >
-            Таблица
-          </button>
-          <button
-            className={`all-news-tab__view-btn ${viewMode === 'cards' ? 'active' : ''}`}
-            onClick={() => setViewMode('cards')}
-          >
-            Карточки
-          </button>
+        <div className="all-news-tab__controls-right">
+          {onRefresh && (
+            <button
+              className="all-news-tab__refresh-btn"
+              onClick={onRefresh}
+              disabled={isLoading || !figi || !ticker}
+              title="Загрузить свежие новости из NewsAPI и сохранить в БД"
+            >
+              {isLoading ? '⏳ Обновление...' : '🔄 Обновить новости'}
+            </button>
+          )}
+          <div className="all-news-tab__view-toggle">
+            <button
+              className={`all-news-tab__view-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+            >
+              Таблица
+            </button>
+            <button
+              className={`all-news-tab__view-btn ${viewMode === 'cards' ? 'active' : ''}`}
+              onClick={() => setViewMode('cards')}
+            >
+              Карточки
+            </button>
+          </div>
         </div>
       </div>
 

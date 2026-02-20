@@ -19,6 +19,9 @@ interface StockDetailTabsProps {
   news?: any[];
   technicalIndicators?: any;
   fundamentalData?: any;
+  // Callbacks
+  onRefreshNews?: () => void;
+  isLoadingNews?: boolean;
 }
 
 const StockDetailTabs: React.FC<StockDetailTabsProps> = ({
@@ -30,7 +33,9 @@ const StockDetailTabs: React.FC<StockDetailTabsProps> = ({
   signals,
   news,
   technicalIndicators,
-  fundamentalData
+  fundamentalData,
+  onRefreshNews,
+  isLoadingNews
 }) => {
   return (
     <Card className="stock-detail-tabs">
@@ -75,6 +80,8 @@ const StockDetailTabs: React.FC<StockDetailTabsProps> = ({
             figi={figi}
             ticker={ticker}
             news={news || []}
+            onRefresh={onRefreshNews}
+            isLoading={isLoadingNews}
           />
         </TabPanel>
       </TabView>
