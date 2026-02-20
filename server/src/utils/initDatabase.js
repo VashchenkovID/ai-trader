@@ -857,7 +857,16 @@ export async function initDatabase() {
             console.error('❌ Ошибка синхронизации таблиц кеширования:', syncError);
         }
         
+        // Создаем таблицу рекомендаций (Recommendation) - ДО TradingRequest, так как TradingRequest ссылается на неё
+        try {
+            await safeSyncModel(Recommendation, 'Recommendation');
+            console.log('✅ Таблица рекомендаций (Recommendation) создана');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы рекомендаций:', syncError);
+        }
+        
         // Создаем таблицу торговых заявок (КРИТИЧЕСКАЯ - используется многими сервисами)
+        // ВАЖНО: Должна создаваться ПОСЛЕ Recommendation, так как имеет foreign key на неё
         try {
             await safeSyncModel(TradingRequest, 'TradingRequest');
             console.log('✅ Таблица торговых заявок (TradingRequest) создана');
@@ -1172,28 +1181,49 @@ export async function initDatabase() {
         
         // Создаем таблицу макроиндикаторов
         try {
-            // Сначала добавляем новые значения в ENUM, если их еще нет
-            const newEnumValues = ['industrial_production', 'retail_sales', 'investments', 'exports', 'imports', 'currency_rate'];
-            for (const enumValue of newEnumValues) {
-                try {
-                    await sequelize.query(`
-                        DO $$ 
-                        BEGIN
-                            IF NOT EXISTS (
-                                SELECT 1 FROM pg_enum 
-                                WHERE enumlabel = '${enumValue}' 
-                                AND enumtypid = (
-                                    SELECT oid FROM pg_type 
-                                    WHERE typname = 'enum_macro_indicators_indicatorType'
-                                )
-                            ) THEN
-                                ALTER TYPE enum_macro_indicators_indicatorType ADD VALUE '${enumValue}';
-                            END IF;
-                        END $$;
-                    `);
-                } catch (enumError) {
-                    // Игнорируем ошибки, если ENUM еще не создан или значение уже существует
+            // Сначала проверяем, существует ли ENUM тип
+            const [enumTypeCheck] = await sequelize.query(`
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_type 
+                    WHERE typname = 'enum_macro_indicators_indicatorType'
+                ) as exists;
+            `);
+            
+            const enumTypeExists = enumTypeCheck && enumTypeCheck[0] && (enumTypeCheck[0].exists === true || enumTypeCheck[0].exists === 't');
+            
+            // Добавляем новые значения в ENUM только если тип уже существует
+            if (enumTypeExists) {
+                const newEnumValues = ['industrial_production', 'retail_sales', 'investments', 'exports', 'imports', 'currency_rate'];
+                for (const enumValue of newEnumValues) {
+                    try {
+                        await sequelize.query(`
+                            DO $$ 
+                            BEGIN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM pg_enum 
+                                    WHERE enumlabel = '${enumValue}' 
+                                    AND enumtypid = (
+                                        SELECT oid FROM pg_type 
+                                        WHERE typname = 'enum_macro_indicators_indicatorType'
+                                    )
+                                ) THEN
+                                    ALTER TYPE enum_macro_indicators_indicatorType ADD VALUE '${enumValue}';
+                                END IF;
+                            END $$;
+                        `);
+                    } catch (enumError) {
+                        // Игнорируем ошибки, если значение уже существует или ENUM не существует
+                        if (!enumError.message?.includes('does not exist') && 
+                            !enumError.message?.includes('already exists') &&
+                            !enumError.message?.includes('duplicate')) {
+                            // Логируем только неожиданные ошибки
+                            console.warn(`⚠️ Предупреждение при добавлении значения ${enumValue} в ENUM:`, enumError.message);
+                        }
+                    }
                 }
+            } else {
+                // ENUM тип еще не создан - он будет создан при синхронизации модели MacroIndicator
+                console.log('ℹ️ ENUM тип enum_macro_indicators_indicatorType еще не создан, будет создан при синхронизации модели');
             }
             
             // Миграция: изменяем тип столбца value с FLOAT на DECIMAL(10, 2) для точности до сотых
@@ -1459,14 +1489,8 @@ export async function initDatabase() {
             console.error('❌ Ошибка синхронизации таблицы кешированных свечей:', syncError);
         }
         
-        // Создаем таблицу рекомендаций (Recommendation)
-        try {
-            await safeSyncModel(Recommendation, 'Recommendation');
-        } catch (syncError) {
-            console.error('❌ Ошибка синхронизации таблицы рекомендаций:', syncError);
-        }
-        
         // Создаем таблицу пользователей (User)
+        // Примечание: Recommendation уже создана выше, перед TradingRequest
         try {
             await safeSyncModel(User, 'User');
         } catch (syncError) {
