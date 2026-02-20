@@ -861,21 +861,58 @@ export async function initDatabase() {
             const enumExists = enumCheck && enumCheck[0] && (enumCheck[0].exists === true || enumCheck[0].exists === 't');
             
             if (!enumExists) {
-                await sequelize.query(`
-                    CREATE TYPE "enum_trading_requests_autoexecutionphase" AS ENUM ('phase1', 'phase2', 'phase3');
-                `);
+                try {
+                    await sequelize.query(`
+                        CREATE TYPE "enum_trading_requests_autoexecutionphase" AS ENUM ('phase1', 'phase2', 'phase3');
+                    `);
+                } catch (createEnumError) {
+                    // Игнорируем, если ENUM уже существует
+                    if (!createEnumError.message.includes('already exists') && !createEnumError.message.includes('duplicate')) {
+                        throw createEnumError;
+                    }
+                }
             }
             
-            // Добавляем новые поля
-            await sequelize.query(`
-                ALTER TABLE trading_requests 
-                ADD COLUMN IF NOT EXISTS "autoExecuted" BOOLEAN NOT NULL DEFAULT false,
-                ADD COLUMN IF NOT EXISTS "executionSimulation" JSONB,
-                ADD COLUMN IF NOT EXISTS "autoExecutionPhase" "enum_trading_requests_autoexecutionphase",
-                ADD COLUMN IF NOT EXISTS "actualQuantity" INTEGER,
-                ADD COLUMN IF NOT EXISTS "autoExecutionFailed" BOOLEAN NOT NULL DEFAULT false,
-                ADD COLUMN IF NOT EXISTS "executionError" TEXT;
-            `);
+            // Проверяем существование столбцов перед добавлением
+            // PostgreSQL не поддерживает IF NOT EXISTS для ADD COLUMN с NOT NULL DEFAULT в одной команде
+            const columnsToAdd = [
+                { name: 'autoExecuted', sql: 'BOOLEAN NOT NULL DEFAULT false' },
+                { name: 'executionSimulation', sql: 'JSONB' },
+                { name: 'autoExecutionPhase', sql: '"enum_trading_requests_autoexecutionphase"' },
+                { name: 'actualQuantity', sql: 'INTEGER' },
+                { name: 'autoExecutionFailed', sql: 'BOOLEAN NOT NULL DEFAULT false' },
+                { name: 'executionError', sql: 'TEXT' }
+            ];
+            
+            for (const column of columnsToAdd) {
+                try {
+                    const [columnCheck] = await sequelize.query(`
+                        SELECT EXISTS (
+                            SELECT 1 FROM information_schema.columns 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'trading_requests' 
+                            AND column_name = $1
+                        ) as exists;
+                    `, {
+                        bind: [column.name],
+                        type: sequelize.QueryTypes.SELECT
+                    });
+                    
+                    const columnExists = columnCheck && columnCheck[0] && (columnCheck[0].exists === true || columnCheck[0].exists === 't');
+                    
+                    if (!columnExists) {
+                        await sequelize.query(`
+                            ALTER TABLE trading_requests 
+                            ADD COLUMN "${column.name}" ${column.sql};
+                        `);
+                    }
+                } catch (colError) {
+                    // Игнорируем, если столбец уже существует
+                    if (!colError.message.includes('already exists') && !colError.message.includes('duplicate')) {
+                        console.warn(`⚠️ Предупреждение при добавлении столбца ${column.name}:`, colError.message);
+                    }
+                }
+            }
             
             // Создаем индексы, если их еще нет
             try {
@@ -1409,19 +1446,36 @@ export async function initDatabase() {
         // Создаем таблицу статистики автоматической торговли (AutoPaperTradingStats)
         try {
             // Создаем ENUM тип для currentPhase, если его еще нет
+            // Sequelize может создать ENUM с разными именами (с заглавной или маленькой буквой)
             try {
-                const [enumCheck] = await sequelize.query(`
+                const [enumCheckLower] = await sequelize.query(`
                     SELECT EXISTS (
                         SELECT 1 FROM pg_type WHERE typname = 'enum_auto_paper_trading_stats_currentphase'
                     ) as exists;
                 `);
+                const [enumCheckUpper] = await sequelize.query(`
+                    SELECT EXISTS (
+                        SELECT 1 FROM pg_type WHERE typname = 'enum_auto_paper_trading_stats_currentPhase'
+                    ) as exists;
+                `);
                 
-                const enumExists = enumCheck && enumCheck[0] && (enumCheck[0].exists === true || enumCheck[0].exists === 't');
+                const enumExistsLower = enumCheckLower && enumCheckLower[0] && (enumCheckLower[0].exists === true || enumCheckLower[0].exists === 't');
+                const enumExistsUpper = enumCheckUpper && enumCheckUpper[0] && (enumCheckUpper[0].exists === true || enumCheckUpper[0].exists === 't');
                 
-                if (!enumExists) {
-                    await sequelize.query(`
-                        CREATE TYPE "enum_auto_paper_trading_stats_currentphase" AS ENUM ('phase1', 'phase2', 'phase3');
-                    `);
+                if (!enumExistsLower && !enumExistsUpper) {
+                    // Пробуем создать с маленькой буквой (стандартное имя)
+                    try {
+                        await sequelize.query(`
+                            CREATE TYPE "enum_auto_paper_trading_stats_currentphase" AS ENUM ('phase1', 'phase2', 'phase3');
+                        `);
+                    } catch (createError) {
+                        // Если не получилось, пробуем с заглавной (как Sequelize создает)
+                        if (createError.message.includes('already exists') || createError.message.includes('duplicate')) {
+                            // Игнорируем - ENUM уже существует под другим именем
+                        } else {
+                            throw createError;
+                        }
+                    }
                 }
             } catch (enumError) {
                 // Игнорируем, если ENUM уже существует
