@@ -154,7 +154,7 @@ const AutoPaperTradingSection: React.FC<AutoPaperTradingSectionProps> = ({ class
         <div className="auto-paper-trading-section-status">
           <div className="auto-paper-trading-section-status-row">
             <span className="auto-paper-trading-section-status-label">Статус:</span>
-            <Badge variant={status.isEnabled ? 'success' : 'secondary'}>
+            <Badge variant={status.isEnabled ? 'success' : 'neutral'}>
               {status.isEnabled ? '✅ Включена' : '⏸️ Выключена'}
             </Badge>
           </div>
