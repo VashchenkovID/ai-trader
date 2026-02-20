@@ -320,8 +320,9 @@ async function safeSyncModel(Model, modelName = null) {
         // Игнорируем ошибки создания ENUM типов, если они уже существуют
         if (syncError.name === 'SequelizeUniqueConstraintError' && 
             syncError.original && syncError.original.code === '23505' &&
-            (syncError.message && syncError.message.includes('enum_') ||
-             syncError.original.detail && syncError.original.detail.includes('enum_'))) {
+            (syncError.message && (syncError.message.includes('enum_') || syncError.message.includes('pg_type')) ||
+             syncError.original.detail && (syncError.original.detail.includes('enum_') || syncError.original.detail.includes('pg_type')))) {
+            // ENUM тип уже существует - это нормально, не логируем
         } else if (syncError.message && (
             syncError.message.includes('USING') ||
             syncError.message.includes('syntax error at or near') ||
@@ -483,11 +484,35 @@ async function safeSyncModel(Model, modelName = null) {
             // Ошибка о несуществующем constraint/index - не критична
             // Может возникать при попытке удалить constraint/index, которого нет
             // Игнорируем, так как это не влияет на работу приложения
+        } else if (syncError.message && (
+            syncError.message.includes('duplicate key') ||
+            syncError.message.includes('already exists') ||
+            syncError.message.includes('relation') && syncError.message.includes('already exists') ||
+            (syncError.original && (
+                syncError.original.code === '23505' || // unique_violation
+                syncError.original.code === '42P07' || // duplicate_table
+                (syncError.original.message && (
+                    syncError.original.message.includes('already exists') ||
+                    syncError.original.message.includes('duplicate key')
+                ))
+            ))
+        )) {
+            // Таблица/индекс/constraint уже существует - это нормально, не логируем
+        } else if (syncError.message && (
+            syncError.message.includes('relation') && syncError.message.includes('does not exist') ||
+            (syncError.original && syncError.original.message && (
+                syncError.original.message.includes('relation') && syncError.original.message.includes('does not exist')
+            ))
+        )) {
+            // Foreign key ссылается на несуществующую таблицу - это нормально при первой инициализации
+            // Таблица будет создана позже
         } else {
-            // Логируем только серьезные ошибки, не связанные с constraint/index
+            // Логируем только серьезные ошибки, не связанные с constraint/index/duplicate
             if (!syncError.message?.includes('constraint') && 
                 !syncError.message?.includes('index') &&
-                !syncError.message?.includes('already exists')) {
+                !syncError.message?.includes('already exists') &&
+                !syncError.message?.includes('duplicate') &&
+                !syncError.message?.includes('does not exist')) {
                 console.error(`❌ Ошибка синхронизации таблицы ${name}:`, syncError.message);
             }
             // Не прерываем инициализацию при ошибке синхронизации
@@ -3542,4 +3567,10 @@ async function showDatabaseStats() {
     }
 }
 
-initDatabase();
+// Автоматический запуск только если скрипт вызван напрямую (не через импорт)
+if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.includes('initDatabase.js')) {
+    initDatabase().catch(error => {
+        console.error('❌ Критическая ошибка при инициализации:', error);
+        process.exit(1);
+    });
+}

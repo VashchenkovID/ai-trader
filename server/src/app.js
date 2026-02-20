@@ -146,13 +146,11 @@ const server = createServer(app);
 // Initialize services
 async function initializeServices() {
     try {
-        // Проверяем наличие критических таблиц для быстрой проверки
-        // Если все таблицы существуют, initDatabase() быстро пройдет проверку
-        // Если нет - создаст отсутствующие таблицы и столбцы безопасно
-        console.log('🔄 Проверка и инициализация базы данных...');
-        const { initDatabase } = await import('./utils/initDatabase.js');
-        await initDatabase();
-        console.log('✅ База данных проверена и инициализирована');
+        // База данных уже инициализирована через docker-entrypoint.sh при первом запуске
+        // Здесь только проверяем подключение, но не запускаем полную инициализацию
+        console.log('🔄 Проверка подключения к базе данных...');
+        await sequelize.authenticate();
+        console.log('✅ Подключение к базе данных установлено');
         
         // Импортируем трекер для отметки сервисов как глобально инициализированных
         const ServiceInitializationTracker = (await import('./utils/ServiceInitializationTracker.js')).default;
