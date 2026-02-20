@@ -54,6 +54,8 @@ class SchedulerService {
         this.weeklyForecastUpdateTask = null; // Задача обновления недельных прогнозов реальными данными
         this.weeklyForecastTrainingTask = null; // Задача обучения моделей Weekly Forecast
         this.weeklyForecastGenerationTask = null; // Задача ежедневной генерации недельных прогнозов
+        this.autoPaperTradingDailyResetTask = null; // Задача ежедневного сброса статистики автоматической торговли
+        this.autoPaperTradingPhaseCheckTask = null; // Задача проверки условий перехода на следующую фазу
         this.isInitialized = null;
         // Сохраняем настройки как свойства класса для использования в других методах
         this.schedulerSettings = {};
@@ -266,8 +268,9 @@ class SchedulerService {
         const schedulerSettings = this.schedulerSettings;
         const nnSettings = this.nnSettings;
         const notificationSettings = this.notificationSettings;
-        // Инкрементальное обновление кеша 3 раза в день (02:00, 10:00, 18:00)
-        const cacheSchedule = schedulerSettings.cache_update_interval || '0 2,10,18 * * *';
+        // Инкрементальное обновление кеша каждые 2 часа (оптимизировано для автоматической торговли)
+        // Было: 3 раза в день (02:00, 10:00, 18:00) или каждые 4 часа
+        const cacheSchedule = schedulerSettings.cache_update_interval || '0 */2 * * *';
         // Полное обучение ночью в 03:00 понедельника (после обновления кеша в 02:00, последовательно: Базовая → Ансамбль → Мета-обучение → RL)
         const trainingSchedule = schedulerSettings.nn_training_schedule || '0 3 * * 1';
         // Быстрое обучение каждые 2 часа в торговые часы: 08:00, 10:00, 12:00, 14:00, 16:00, 18:00
@@ -279,7 +282,8 @@ class SchedulerService {
         const quickTrainingEnabled = nnSettings.nn_quick_training_enabled !== false;
         
         // Настраиваем интервал обновления кеша из настроек
-        const cacheUpdateIntervalHours = schedulerSettings.cache_update_interval_hours || 4;
+        // Оптимизировано: каждые 2 часа (было 4 часа) для более актуальных данных
+        const cacheUpdateIntervalHours = schedulerSettings.cache_update_interval_hours || 2;
         this.cacheUpdateInterval = cacheUpdateIntervalHours * 60 * 60 * 1000; // конвертируем в миллисекунды
 
         // Задача 1: Обновление кеша акций
@@ -941,6 +945,63 @@ class SchedulerService {
             });
         }
 
+        // Задачи для автоматической торговли в paper режиме
+        try {
+            // Ежедневный сброс статистики (в 00:00)
+            this.autoPaperTradingDailyResetTask = SchedulerUtils.createScheduledTask(
+                '0 0 * * *',
+                async () => {
+                    try {
+                        const AutoPaperTradingService = (await import('./AutoPaperTradingService.js')).default;
+                        if (AutoPaperTradingService.isInitialized) {
+                            await AutoPaperTradingService.resetDailyStats();
+                        }
+                    } catch (error) {
+                        LoggerService.warn('Failed to reset auto-paper trading daily stats', {
+                            service: 'SchedulerService',
+                            error: error.message
+                        });
+                    }
+                },
+                {
+                    taskName: 'auto-paper-trading-daily-reset',
+                    sendAlerts: false,
+                    startTime: this.startTime,
+                    minDelay: 60 * 1000
+                }
+            );
+
+            // Проверка условий перехода на следующую фазу (раз в день в 01:00)
+            this.autoPaperTradingPhaseCheckTask = SchedulerUtils.createScheduledTask(
+                '0 1 * * *',
+                async () => {
+                    try {
+                        const AutoPaperTradingService = (await import('./AutoPaperTradingService.js')).default;
+                        if (AutoPaperTradingService.isInitialized) {
+                            await AutoPaperTradingService.checkPhaseAdvancement();
+                        }
+                    } catch (error) {
+                        LoggerService.warn('Failed to check auto-paper trading phase advancement', {
+                            service: 'SchedulerService',
+                            error: error.message
+                        });
+                    }
+                },
+                {
+                    taskName: 'auto-paper-trading-phase-check',
+                    sendAlerts: false,
+                    startTime: this.startTime,
+                    minDelay: 60 * 1000
+                }
+            );
+        } catch (error) {
+            LoggerService.warn('Could not initialize auto-paper trading tasks', {
+                service: 'SchedulerService',
+                operation: 'initializeAutoPaperTradingTasks',
+                error: { message: error.message }
+            });
+        }
+
         // Задача 8: Проверка торговых часов и уведомлений (каждые 5 минут)
         this.tradingHoursTask = SchedulerUtils.createScheduledTask(
             '*/5 * * * *',
@@ -1017,10 +1078,11 @@ class SchedulerService {
             }
         );
 
-        // Задача 10: Автоматический анализ портфеля (каждые 2 часа)
+        // Задача 10: Автоматический анализ портфеля (каждый час)
+        // Оптимизировано: каждый час (было каждые 2 часа) для более частых рекомендаций
         // Пропускаем первый запуск, так как он будет выполнен через 30 минут после старта
         this.portfolioAnalysisTask = SchedulerUtils.createScheduledTask(
-            '0 */2 * * *',
+            '0 */1 * * *',
             async () => {
                 await this.performPortfolioAnalysis();
             },
@@ -2574,6 +2636,8 @@ class SchedulerService {
         if (this.positionMonitoringTask) this.intervals.add(this.positionMonitoringTask);
         if (this.dailyReportTask) this.intervals.add(this.dailyReportTask);
         if (this.dataCleanupTask) this.intervals.add(this.dataCleanupTask);
+        if (this.autoPaperTradingDailyResetTask) this.intervals.add(this.autoPaperTradingDailyResetTask);
+        if (this.autoPaperTradingPhaseCheckTask) this.intervals.add(this.autoPaperTradingPhaseCheckTask);
         if (this.weeklyForecastUpdateTask) this.intervals.add(this.weeklyForecastUpdateTask);
         
         // Запускаем все cron задачи

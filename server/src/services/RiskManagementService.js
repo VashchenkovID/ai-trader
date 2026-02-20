@@ -15,9 +15,10 @@ class RiskManagementService {
         
         // Основные лимиты риска
         // Обновлено в Фазе 1, задача 1.1.3 и 1.1.4
+        // Обновлено для автоматической торговли: maxTotalExposure для paper режима увеличено до 60%
         this.limits = {
             maxPositionSize: 0.05,        // 5% от капитала на одну позицию (увеличено с 2%)
-            maxTotalExposure: 0.40,       // 40% от капитала в акциях (увеличено с 20%)
+            maxTotalExposure: 0.40,       // 40% от капитала в акциях (по умолчанию, для paper режима будет 60%)
             maxDrawdown: 0.15,            // 15% максимальная просадка
             maxConsecutiveLosses: 10,     // 10 убыточных сделок подряд (увеличено с 5)
             maxDailyLoss: 0.10,           // 10% максимальный дневной убыток (увеличено с 5%)
@@ -106,9 +107,10 @@ class RiskManagementService {
                     };
                 } else {
                     // Для paper режима используем более мягкие лимиты
+                    // Увеличено maxTotalExposure до 60% для максимизации параллельных позиций
                     this.limits = {
                         maxPositionSize: settings.maxPositionSize || 0.05, // 5% для paper режима
-                        maxTotalExposure: 0.40, // 40% для paper режима
+                        maxTotalExposure: 0.60, // 60% для paper режима (было 40%) - для максимизации сбора данных
                         maxDrawdown: settings.maxDrawdown || 0.15, // 15% для paper режима
                         maxConsecutiveLosses: 10, // 10 для paper режима
                         maxDailyLoss: 0.10, // 10% для paper режима

@@ -171,6 +171,11 @@ router.get('/positions', async (req, res) => {
         
         const trades = portfolio.trades || [];
         
+        // Определяем текущий режим торговли
+        const TradingModeManager = (await import('../services/TradingModeManager.js')).default;
+        const currentMode = TradingModeManager.getCurrentMode();
+        const tradingMode = currentMode.mode || 'paper';
+        
         // Импортируем модели
         const TradingRequest = (await import('../models/TradingRequest.js')).default;
         const PositionStrategy = (await import('../models/PositionStrategy.js')).default;
@@ -183,6 +188,47 @@ router.get('/positions', async (req, res) => {
         // Собираем все уникальные FIGI из rawPositions (это уже правильные количества!)
         const allFigis = Object.keys(rawPositions).filter(figi => rawPositions[figi] > 0);
         
+        console.log(`🔍 Loading positions for mode: ${tradingMode}, FIGIs: ${allFigis.length}, trades: ${trades.length}`);
+        console.log(`🔍 Raw positions:`, Object.keys(rawPositions).map(f => `${f}: ${rawPositions[f]}`));
+        
+        // ОПТИМИЗАЦИЯ: Получаем все заявки одним запросом вместо N+1
+        // ВАЖНО: Фильтруем по tradingMode чтобы получать только заявки для текущего режима
+        const allRequests = allFigis.length > 0 ? await TradingRequest.findAll({
+            where: {
+                figi: { [Op.in]: allFigis },
+                tradingMode: tradingMode, // Фильтр по режиму торговли
+                status: {
+                    [Op.in]: ['EXECUTED', 'APPROVED', 'PENDING']
+                }
+            },
+            order: [['executedAt', 'ASC'], ['createdAt', 'ASC']]
+        }) : [];
+        
+        console.log(`🔍 Found ${allRequests.length} requests for ${allFigis.length} FIGIs`);
+        
+        // Группируем заявки по FIGI и действию
+        const requestsByFigi = new Map();
+        for (const request of allRequests) {
+            const key = `${request.figi}_${request.action}`;
+            if (!requestsByFigi.has(key)) {
+                requestsByFigi.set(key, []);
+            }
+            requestsByFigi.get(key).push(request);
+        }
+        
+        // ОПТИМИЗАЦИЯ: Получаем все PositionStrategy одним запросом
+        const requestIds = allRequests.map(r => r.id);
+        const allPositionStrategies = requestIds.length > 0 ? await PositionStrategy.findAll({
+            where: {
+                positionId: { [Op.in]: requestIds }
+            }
+        }) : [];
+        
+        // Создаем Map для быстрого поиска strategyId по positionId
+        const strategyByPositionId = new Map();
+        for (const ps of allPositionStrategies) {
+            strategyByPositionId.set(ps.positionId, ps.strategyId);
+        }
         
         for (const figi of allFigis) {
             // ИСПОЛЬЗУЕМ КОЛИЧЕСТВО ИЗ ПОРТФЕЛЯ КАК ИСТОЧНИК ИСТИНЫ
@@ -192,30 +238,9 @@ router.get('/positions', async (req, res) => {
                 continue; // Пропускаем нулевые позиции
             }
             try {
-                // Получаем все BUY заявки для этого FIGI (не только EXECUTED, но и APPROVED, PENDING)
-                // EXECUTED заявки могут не существовать, если сделки выполняются напрямую через TradingEngine
-                const buyRequests = await TradingRequest.findAll({
-                    where: {
-                        figi,
-                        action: 'BUY',
-                        status: {
-                            [Op.in]: ['EXECUTED', 'APPROVED', 'PENDING']
-                        }
-                    },
-                    order: [['executedAt', 'ASC'], ['createdAt', 'ASC']]
-                });
-                
-                // Получаем все SELL заявки для этого FIGI
-                const sellRequests = await TradingRequest.findAll({
-                    where: {
-                        figi,
-                        action: 'SELL',
-                        status: {
-                            [Op.in]: ['EXECUTED', 'APPROVED', 'PENDING']
-                        }
-                    },
-                    order: [['executedAt', 'ASC'], ['createdAt', 'ASC']]
-                });
+                // Получаем заявки из кеша
+                const buyRequests = requestsByFigi.get(`${figi}_BUY`) || [];
+                const sellRequests = requestsByFigi.get(`${figi}_SELL`) || [];
                 
                 // Отладочная информация для первого FIGI
                 if (allFigis.indexOf(figi) === 0) {
@@ -320,7 +345,8 @@ router.get('/positions', async (req, res) => {
                             }
                         }
                     } else {
-                        // Если нет сделок, создаем одну запись с количеством из rawPositions
+                        // Если нет сделок, но есть позиция - создаем запись с количеством из rawPositions
+                        // Это важно для позиций, созданных до включения автоторговли или напрямую
                         const key = `${figi}_null`;
                         if (!positionsByStrategy.has(key)) {
                             positionsByStrategy.set(key, {
@@ -330,11 +356,26 @@ router.get('/positions', async (req, res) => {
                                 sellTrades: []
                             });
                         }
-                        positionsByStrategy.get(key).buyTrades.push({
-                            quantity: rawPositions[figi],
-                            price: 0, // Будет рассчитано позже
-                            executedAt: new Date()
-                        });
+                        // Используем текущую цену как приблизительную цену покупки
+                        // Это лучше чем 0, так как позволит рассчитать PnL
+                        try {
+                            const TradingEngine = (await import('../services/TradingEngine.js')).default;
+                            const prices = await TradingEngine.getCurrentPrices([figi], true);
+                            const estimatedPrice = prices[figi] || 0;
+                            positionsByStrategy.get(key).buyTrades.push({
+                                quantity: rawPositions[figi],
+                                price: estimatedPrice, // Используем текущую цену как приближение
+                                executedAt: new Date() // Используем текущую дату
+                            });
+                            console.log(`📊 FIGI ${figi}: Created position from rawPositions, quantity: ${rawPositions[figi]}, estimated price: ${estimatedPrice}`);
+                        } catch (priceError) {
+                            // Если не удалось получить цену, используем 0
+                            positionsByStrategy.get(key).buyTrades.push({
+                                quantity: rawPositions[figi],
+                                price: 0,
+                                executedAt: new Date()
+                            });
+                        }
                     }
                 }
                 
@@ -342,14 +383,9 @@ router.get('/positions', async (req, res) => {
                 for (const buyRequest of buyRequests) {
                     let strategyId = buyRequest.strategyId;
                     
-                    // Если strategyId нет в заявке, ищем через PositionStrategy
+                    // Если strategyId нет в заявке, ищем через кеш PositionStrategy
                     if (!strategyId) {
-                        const positionStrategy = await PositionStrategy.findOne({
-                            where: { positionId: buyRequest.id }
-                        });
-                        if (positionStrategy) {
-                            strategyId = positionStrategy.strategyId;
-                        }
+                        strategyId = strategyByPositionId.get(buyRequest.id) || null;
                     }
                     
                     const key = `${figi}_${strategyId || 'null'}`;
@@ -446,12 +482,7 @@ router.get('/positions', async (req, res) => {
                     // Определяем стратегию для SELL заявки
                     let sellStrategyId = sellRequest.strategyId;
                     if (!sellStrategyId) {
-                        const positionStrategy = await PositionStrategy.findOne({
-                            where: { positionId: sellRequest.id }
-                        });
-                        if (positionStrategy) {
-                            sellStrategyId = positionStrategy.strategyId;
-                        }
+                        sellStrategyId = strategyByPositionId.get(sellRequest.id) || null;
                     }
                     
                     // Если стратегия не определена, списываем с позиций в порядке FIFO
@@ -507,7 +538,9 @@ router.get('/positions', async (req, res) => {
         // Отладочная информация перед формированием позиций
         console.log(`🔍 Positions by strategy:`, {
             totalPositionsByStrategy: positionsByStrategy.size,
-            positionsByStrategyKeys: Array.from(positionsByStrategy.keys()).slice(0, 5)
+            positionsByStrategyKeys: Array.from(positionsByStrategy.keys()).slice(0, 10),
+            allFigis: allFigis,
+            rawPositionsCount: Object.keys(rawPositions).length
         });
         
         // Получаем общий totalValue из портфеля для правильного расчета весов
@@ -547,16 +580,36 @@ router.get('/positions', async (req, res) => {
             });
         }
         
+        // ВАЖНО: Добавляем позиции из rawPositions, которые не попали в positionsByStrategy
+        // Это критично для позиций, созданных до включения автоторговли или напрямую
+        for (const figi of allFigis) {
+            if (!positionsByFigi.has(figi) && rawPositions[figi] > 0) {
+                console.log(`📊 FIGI ${figi}: Position exists in portfolio but not in positionsByStrategy, adding it`);
+                positionsByFigi.set(figi, {
+                    figi,
+                    totalQuantity: rawPositions[figi],
+                    strategies: [] // Без стратегий - будет обработано в блоке else ниже
+                });
+            }
+        }
+        
+        console.log(`🔍 PositionsByFigi: ${positionsByFigi.size} entries`);
+        for (const [figi, figiData] of positionsByFigi.entries()) {
+            console.log(`🔍 Processing FIGI ${figi}: quantity=${figiData.totalQuantity}, strategies=${figiData.strategies.length}`);
+        }
+        
         // Теперь формируем позиции, используя количество из портфеля
         for (const [figi, figiData] of positionsByFigi.entries()) {
             const totalQuantityForFigi = figiData.totalQuantity; // ИСТОЧНИК ИСТИНЫ
             
             if (totalQuantityForFigi <= 0) {
+                console.log(`⚠️ Skipping FIGI ${figi}: quantity is 0 or negative`);
                 continue; // Пропускаем нулевые позиции
             }
             
             // Если есть стратегии, распределяем позицию между ними пропорционально
             if (figiData.strategies.length > 0) {
+                console.log(`📊 FIGI ${figi}: Processing with ${figiData.strategies.length} strategies`);
                 // Рассчитываем общее рассчитанное количество для пропорционального распределения
                 const totalCalculatedQty = figiData.strategies.reduce((sum, s) => sum + Math.max(0, s.calculatedQty), 0);
                 
@@ -569,7 +622,11 @@ router.get('/positions', async (req, res) => {
                         // Пропорциональное распределение на основе рассчитанных количеств
                         quantityForStrategy = Math.round((calculatedQty / totalCalculatedQty) * totalQuantityForFigi);
                     } else if (figiData.strategies.length === 1) {
-                        // Если только одна стратегия, используем все количество
+                        // Если только одна стратегия, используем все количество из портфеля
+                        quantityForStrategy = totalQuantityForFigi;
+                    } else if (totalCalculatedQty === 0 && buyTrades.length > 0) {
+                        // Если нет рассчитанных количеств, но есть buyTrades, используем количество из портфеля
+                        // Это важно для позиций без заявок, где buyTrades созданы из rawPositions
                         quantityForStrategy = totalQuantityForFigi;
                     } else {
                         // Если нет рассчитанных количеств, распределяем поровну
@@ -579,15 +636,43 @@ router.get('/positions', async (req, res) => {
                     // Убеждаемся, что не превышаем общее количество и не меньше 0
                     quantityForStrategy = Math.max(0, Math.min(quantityForStrategy, totalQuantityForFigi));
                     
+                    console.log(`📊 FIGI ${figi}, Strategy ${strategyId || 'null'}: calculatedQty=${calculatedQty}, totalCalculatedQty=${totalCalculatedQty}, quantityForStrategy=${quantityForStrategy}, totalQuantityForFigi=${totalQuantityForFigi}`);
+                    
                     if (quantityForStrategy <= 0) {
+                        console.log(`⚠️ Skipping FIGI ${figi}, Strategy ${strategyId || 'null'}: quantityForStrategy is 0 or negative`);
                         continue; // Пропускаем нулевые позиции
                     }
                     
                     try {
                         // Получаем инструмент с актуальными данными (skipUpdate = false)
                         let instrument = await CacheService.getInstrument(figi, false);
+                        
+                        // FALLBACK: Если инструмент не найден в кеше, пытаемся получить через API
                         if (!instrument) {
-                            console.warn(`⚠️ Пропущена позиция ${figi}: инструмент не найден в кеше`);
+                            console.warn(`⚠️ Инструмент ${figi} не найден в кеше, пытаемся получить через API`);
+                            try {
+                                const TinkoffApiService = (await import('../services/TinkoffApiService.js')).default;
+                                const apiResponse = await TinkoffApiService.getInstrumentByFigi(figi);
+                                if (apiResponse?.instrument) {
+                                    // Создаем минимальный объект инструмента из API ответа
+                                    instrument = {
+                                        figi: apiResponse.instrument.figi || figi,
+                                        ticker: apiResponse.instrument.ticker || figi.substring(0, 10),
+                                        name: apiResponse.instrument.name || 'Неизвестно',
+                                        currency: apiResponse.instrument.currency || 'RUB',
+                                        sector: null,
+                                        lastPrice: 0 // Будет получено через getCurrentPrices
+                                    };
+                                    console.log(`✅ Инструмент ${figi} получен через API: ${instrument.name}`);
+                                }
+                            } catch (apiError) {
+                                console.warn(`⚠️ Не удалось получить инструмент ${figi} через API:`, apiError.message);
+                            }
+                        }
+                        
+                        // Если инструмент все еще не найден, пропускаем позицию
+                        if (!instrument) {
+                            console.warn(`⚠️ Пропущена позиция ${figi}: инструмент не найден в кеше и через API`);
                             continue;
                         }
                         
@@ -683,12 +768,40 @@ router.get('/positions', async (req, res) => {
                 }
             } else {
                 // Если нет стратегий, создаем одну позицию без стратегии
+                console.log(`📊 FIGI ${figi}: No strategies, creating position without strategy, quantity=${totalQuantityForFigi}`);
                 try {
                     let instrument = await CacheService.getInstrument(figi, false);
+                    
+                    // FALLBACK: Если инструмент не найден в кеше, пытаемся получить через API
                     if (!instrument) {
-                        console.warn(`⚠️ Пропущена позиция ${figi}: инструмент не найден в кеше`);
+                        console.warn(`⚠️ Инструмент ${figi} не найден в кеше, пытаемся получить через API`);
+                        try {
+                            const TinkoffApiService = (await import('../services/TinkoffApiService.js')).default;
+                            const apiResponse = await TinkoffApiService.getInstrumentByFigi(figi);
+                            if (apiResponse?.instrument) {
+                                // Создаем минимальный объект инструмента из API ответа
+                                instrument = {
+                                    figi: apiResponse.instrument.figi || figi,
+                                    ticker: apiResponse.instrument.ticker || figi.substring(0, 10),
+                                    name: apiResponse.instrument.name || 'Неизвестно',
+                                    currency: apiResponse.instrument.currency || 'RUB',
+                                    sector: null,
+                                    lastPrice: 0 // Будет получено через getCurrentPrices
+                                };
+                                console.log(`✅ Инструмент ${figi} получен через API: ${instrument.name}`);
+                            }
+                        } catch (apiError) {
+                            console.warn(`⚠️ Не удалось получить инструмент ${figi} через API:`, apiError.message);
+                        }
+                    }
+                    
+                    // Если инструмент все еще не найден, пропускаем позицию
+                    if (!instrument) {
+                        console.warn(`⚠️ Пропущена позиция ${figi}: инструмент не найден в кеше и через API`);
                         continue;
                     }
+                    
+                    console.log(`✅ FIGI ${figi}: Instrument found, ticker=${instrument.ticker}, name=${instrument.name}`);
                     
                     // Получаем актуальную текущую цену через TradingEngine для синхронизации с расчетом PnL
                     const TradingEngine = (await import('../services/TradingEngine.js')).default;
@@ -696,7 +809,7 @@ router.get('/positions', async (req, res) => {
                     const currentPrice = prices[figi] || instrument.lastPrice || 0;
                     const marketValue = currentPrice > 0 ? currentPrice * totalQuantityForFigi : 0;
                     
-                    positions.push({
+                    const positionData = {
                         figi,
                         ticker: instrument.ticker || figi.substring(0, 10),
                         name: instrument.name || 'Неизвестно',
@@ -712,6 +825,13 @@ router.get('/positions', async (req, res) => {
                         lastUpdate: new Date().toISOString(),
                         strategy: null,
                         positionStrategy: null
+                    };
+                    positions.push(positionData);
+                    console.log(`✅ FIGI ${figi}: Position added to array:`, {
+                        ticker: positionData.ticker,
+                        quantity: positionData.quantity,
+                        currentPrice: positionData.currentPrice,
+                        marketValue: positionData.marketValue
                     });
                 } catch (error) {
                     console.warn(`⚠️ Пропущена позиция ${figi} из-за ошибки:`, error.message);

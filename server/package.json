@@ -19,6 +19,14 @@
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "test:backup": "node test-backup.js",
     "test:auth": "node test-auth.js",
+    "test:auto-paper-trading": "node tests/test-auto-paper-trading.js",
+    "test:auto-paper-trading:unit": "node src/__tests__/services/AutoPaperTradingService.test.js",
+    "test:auto-paper-trading:simulator": "node src/__tests__/services/RealisticExecutionSimulator.test.js",
+    "test:auto-paper-trading:integration": "node src/__tests__/integration/auto-paper-trading.integration.test.js",
+    "test:auto-paper-trading:routes": "node src/__tests__/routes/auto-paper-trading-routes.test.js",
+    "test:auto-paper-trading:models": "node src/__tests__/models/AutoPaperTradingStats.test.js",
+    "test:auto-paper-trading:all": "npm run test:auto-paper-trading:unit && npm run test:auto-paper-trading:simulator && npm run test:auto-paper-trading:integration && npm run test:auto-paper-trading:routes && npm run test:auto-paper-trading:models",
+    "migrate:auto-paper-trading": "node scripts/run-auto-paper-trading-migrations.js",
     "switch:real": "node switch-to-real-mode.js"
   },
   "dependencies": {

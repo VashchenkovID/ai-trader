@@ -15,11 +15,11 @@ class TradingEngine {
         this.modeManager = TradingModeManager;
         this.broker = null;
         this.virtualPortfolio = {
-            cash: 1000000, // 1 млн руб
+            cash: 50000000, // 50 млн руб (оптимально, можно увеличить до 75 млн)
             positions: {},
-            totalValue: 1000000,
+            totalValue: 50000000,
             trades: [],
-            initialCapital: 1000000 // Начальный капитал для расчета PnL
+            initialCapital: 50000000 // Начальный капитал для расчета PnL
         };
         this.isInitialized = false;
         this.isActive = false; // Флаг активности торгового движка
@@ -353,35 +353,50 @@ class TradingEngine {
 
     /**
      * Бумажная торговля - виртуальное исполнение
+     * @param {Object} signal - Торговый сигнал
+     * @param {Object} executionResult - Результат симуляции исполнения (опционально)
      */
-    async executePaperOrder(signal) {
+    async executePaperOrder(signal, executionResult = null) {
         const modeSettings = await this.modeManager.getModeSettings();
         const settings = modeSettings.settings || modeSettings; // Поддержка старого формата
         const { symbol, action, quantity, price, confidence } = signal;
         
-        // Фаза 4, задача 4.2.3: Используем рекомендованный тип ордера и цену
-        const orderType = signal.orderType || 'MARKET';
-        const recommendedPrice = signal.recommendedPrice || price;
+        let executionPrice = price;
+        let executedQuantity = quantity;
+        let commission = 0;
         
-        // Имитация задержки исполнения
-        await this.delay(settings.executionDelay);
-        
-        // Имитация проскальзывания (более реалистичная модель)
-        // Для LIMIT ордеров проскальзывание меньше
-        const slippagePercent = (orderType === 'LIMIT' ? 0.0005 : settings.slippage || 0.001); // 0.05% для LIMIT, 0.1% для MARKET
-        // Проскальзывание зависит от объема и волатильности (более реалистично)
-        const volumeFactor = Math.min(quantity / 1000, 1); // Нормализация объема
-        const slippage = recommendedPrice * slippagePercent * volumeFactor * (action === 'BUY' ? 1 : -1);
-        const executionPrice = recommendedPrice + slippage;
-        
-        // Расчет комиссии (как у Tinkoff: 0.3% с минимумом 1 рубль)
-        const dealAmount = executionPrice * quantity;
-        const commissionRate = settings.commission || 0.003; // 0.3% по умолчанию
-        const minCommission = settings.minCommission || 1; // 1 рубль минимум
-        const commission = Math.max(dealAmount * commissionRate, minCommission);
+        // Если передан executionResult (от RealisticExecutionSimulator),
+        // используем его вместо идеального исполнения
+        if (executionResult) {
+            executionPrice = executionResult.executedPrice;
+            executedQuantity = executionResult.executedQuantity || quantity;
+            commission = executionResult.commission;
+        } else {
+            // Стандартное исполнение (для обратной совместимости)
+            // Фаза 4, задача 4.2.3: Используем рекомендованный тип ордера и цену
+            const orderType = signal.orderType || 'MARKET';
+            const recommendedPrice = signal.recommendedPrice || price;
+            
+            // Имитация задержки исполнения
+            await this.delay(settings.executionDelay);
+            
+            // Имитация проскальзывания (более реалистичная модель)
+            // Для LIMIT ордеров проскальзывание меньше
+            const slippagePercent = (orderType === 'LIMIT' ? 0.0005 : settings.slippage || 0.001); // 0.05% для LIMIT, 0.1% для MARKET
+            // Проскальзывание зависит от объема и волатильности (более реалистично)
+            const volumeFactor = Math.min(quantity / 1000, 1); // Нормализация объема
+            const slippage = recommendedPrice * slippagePercent * volumeFactor * (action === 'BUY' ? 1 : -1);
+            executionPrice = recommendedPrice + slippage;
+            
+            // Расчет комиссии (как у Tinkoff: 0.3% с минимумом 1 рубль)
+            const dealAmount = executionPrice * quantity;
+            const commissionRate = settings.commission || 0.003; // 0.3% по умолчанию
+            const minCommission = settings.minCommission || 1; // 1 рубль минимум
+            commission = Math.max(dealAmount * commissionRate, minCommission);
+        }
         
         // Проверка достаточности средств
-        const requiredAmount = executionPrice * quantity + commission;
+        const requiredAmount = executionPrice * executedQuantity + commission;
         if (action === 'BUY' && requiredAmount > this.virtualPortfolio.cash) {
             throw new Error('Недостаточно средств для покупки');
         }
@@ -389,13 +404,13 @@ class TradingEngine {
         // Обновление виртуального портфеля
         if (action === 'BUY') {
             this.virtualPortfolio.cash -= requiredAmount;
-            this.virtualPortfolio.positions[symbol] = (this.virtualPortfolio.positions[symbol] || 0) + quantity;
+            this.virtualPortfolio.positions[symbol] = (this.virtualPortfolio.positions[symbol] || 0) + executedQuantity;
         } else if (action === 'SELL') {
-            if (!this.virtualPortfolio.positions[symbol] || this.virtualPortfolio.positions[symbol] < quantity) {
+            if (!this.virtualPortfolio.positions[symbol] || this.virtualPortfolio.positions[symbol] < executedQuantity) {
                 throw new Error('Недостаточно акций для продажи');
             }
-            this.virtualPortfolio.cash += executionPrice * quantity - commission;
-            this.virtualPortfolio.positions[symbol] -= quantity;
+            this.virtualPortfolio.cash += executionPrice * executedQuantity - commission;
+            this.virtualPortfolio.positions[symbol] -= executedQuantity;
         }
 
         // Расчет PnL для сделки
@@ -427,7 +442,7 @@ class TradingEngine {
                 const averageBuyPrice = totalQuantity > 0 ? totalCost / totalQuantity : executionPrice;
                 
                 // PnL = (цена продажи - средняя цена покупки с комиссией) * количество - комиссия продажи
-                pnl = (executionPrice - averageBuyPrice) * quantity - commission;
+                pnl = (executionPrice - averageBuyPrice) * executedQuantity - commission;
             } else {
                 // Если нет истории покупок, используем текущую цену
                 pnl = -commission;
@@ -461,11 +476,11 @@ class TradingEngine {
                 const totalQuantity = buyTrades.reduce((sum, t) => sum + t.quantity, 0);
                 const averageBuyPrice = totalQuantity > 0 ? totalCost / totalQuantity : executionPrice;
                 
-                if (averageBuyPrice > 0 && quantity > 0) {
+                if (averageBuyPrice > 0 && executedQuantity > 0) {
                     // resultPercent рассчитываем из PnL, который уже учитывает обе комиссии
                     // resultPercent = PnL / (средняя цена покупки * количество)
                     // Это дает точный процент прибыли/убытка с учетом всех комиссий
-                    const totalCostBasis = averageBuyPrice * quantity;
+                    const totalCostBasis = averageBuyPrice * executedQuantity;
                     resultPercent = pnl / totalCostBasis;
                 }
             }
@@ -478,7 +493,7 @@ class TradingEngine {
             figi: signal.figi || symbol,
             ticker: signal.ticker || symbol,
             action,
-            quantity,
+            quantity: executedQuantity, // Используем фактически исполненное количество
             price: executionPrice,
             commission,
             pnl,

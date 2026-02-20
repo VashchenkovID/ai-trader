@@ -464,6 +464,33 @@ class TradingRequestService {
             })();
 
 
+            // Проверка возможности автоматического исполнения (только для paper режима)
+            if (tradingRequest.status === 'PENDING' && tradingRequest.tradingMode === 'paper') {
+                try {
+                    const AutoPaperTradingService = (await import('./AutoPaperTradingService.js')).default;
+                    if (AutoPaperTradingService.isInitialized && AutoPaperTradingService.isEnabled) {
+                        // Асинхронно обрабатываем заявку (не блокируем возврат)
+                        setImmediate(async () => {
+                            try {
+                                await AutoPaperTradingService.processNewRequest(tradingRequest);
+                            } catch (error) {
+                                // Логируем ошибку, но не прерываем создание заявки
+                                LoggerService.warn('Auto-execution failed, request remains pending', {
+                                    requestId: tradingRequest.id,
+                                    error: error.message
+                                });
+                            }
+                        });
+                    }
+                } catch (error) {
+                    // Логируем ошибку, но не прерываем создание заявки
+                    LoggerService.warn('Failed to check auto-execution', {
+                        requestId: tradingRequest.id,
+                        error: error.message
+                    });
+                }
+            }
+
             // Возвращаем заявку с предупреждением о стратегии, если есть
             const result = tradingRequest.toJSON ? tradingRequest.toJSON() : tradingRequest;
             if (strategyValidation && !strategyValidation.isValid) {

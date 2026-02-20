@@ -79,6 +79,7 @@ import CashFlow from '../models/CashFlow.js';
 import EntryOptimizationModel from '../models/EntryOptimizationModel.js';
 import SyncSettings from '../models/SyncSettings.js';
 import WeeklyForecast from '../models/WeeklyForecast.js';
+import AutoPaperTradingStats from '../models/AutoPaperTradingStats.js';
 import bcrypt from 'bcrypt';
 
 /**
@@ -848,6 +849,61 @@ export async function initDatabase() {
             // Игнорируем ошибку, если столбец уже существует или таблицы нет
         }
         
+        // Добавляем поля для автоматической торговли в trading_requests
+        try {
+            // Проверяем существование ENUM типа для autoExecutionPhase
+            const [enumCheck] = await sequelize.query(`
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_type WHERE typname = 'enum_trading_requests_autoexecutionphase'
+                ) as "exists";
+            `);
+            
+            const enumExists = enumCheck && enumCheck[0] && (enumCheck[0].exists === true || enumCheck[0].exists === 't');
+            
+            if (!enumExists) {
+                await sequelize.query(`
+                    CREATE TYPE "enum_trading_requests_autoexecutionphase" AS ENUM ('phase1', 'phase2', 'phase3');
+                `);
+            }
+            
+            // Добавляем новые поля
+            await sequelize.query(`
+                ALTER TABLE trading_requests 
+                ADD COLUMN IF NOT EXISTS "autoExecuted" BOOLEAN NOT NULL DEFAULT false,
+                ADD COLUMN IF NOT EXISTS "executionSimulation" JSONB,
+                ADD COLUMN IF NOT EXISTS "autoExecutionPhase" "enum_trading_requests_autoexecutionphase",
+                ADD COLUMN IF NOT EXISTS "actualQuantity" INTEGER,
+                ADD COLUMN IF NOT EXISTS "autoExecutionFailed" BOOLEAN NOT NULL DEFAULT false,
+                ADD COLUMN IF NOT EXISTS "executionError" TEXT;
+            `);
+            
+            // Создаем индексы, если их еще нет
+            try {
+                await sequelize.query(`
+                    CREATE INDEX IF NOT EXISTS "idx_trading_requests_auto_executed" 
+                    ON trading_requests ("autoExecuted");
+                `);
+            } catch (idxError) {
+                // Игнорируем, если индекс уже существует
+            }
+            
+            try {
+                await sequelize.query(`
+                    CREATE INDEX IF NOT EXISTS "idx_trading_requests_auto_execution_phase" 
+                    ON trading_requests ("autoExecutionPhase");
+                `);
+            } catch (idxError) {
+                // Игнорируем, если индекс уже существует
+            }
+            
+            console.log('✅ Поля для автоматической торговли добавлены в trading_requests');
+        } catch (error) {
+            // Игнорируем ошибку, если столбцы уже существуют
+            if (!error.message.includes('already exists') && !error.message.includes('duplicate')) {
+                console.warn('⚠️ Предупреждение при добавлении полей автоматической торговли:', error.message);
+            }
+        }
+        
         // Создаем таблицу виртуального портфеля
         try {
             await safeSyncModel(VirtualPortfolio, 'VirtualPortfolio');
@@ -1343,6 +1399,14 @@ export async function initDatabase() {
             await safeSyncModel(MigrationStatus, 'MigrationStatus');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы статуса миграций:', syncError);
+        }
+        
+        // Создаем таблицу статистики автоматической торговли (AutoPaperTradingStats)
+        try {
+            await safeSyncModel(AutoPaperTradingStats, 'AutoPaperTradingStats');
+            console.log('✅ Таблица статистики автоматической торговли создана');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы статистики автоматической торговли:', syncError);
         }
         
         // Инициализируем стратегии по умолчанию

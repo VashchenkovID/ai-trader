@@ -9,6 +9,7 @@ import { apiService } from '../../services/apiService';
 import { Toast } from 'primereact/toast';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import TradingModeValidationCard from './TradingModeValidationCard';
+import AutoPaperTradingSection from './AutoPaperTradingSection';
 import './TradingModeSection.css';
 
 interface TradingMode {
@@ -774,6 +775,12 @@ const TradingModeSection: React.FC<TradingModeSectionProps> = ({ className = '' 
                       />
                     )}
                   </div>
+                  {/* Показываем секцию автоматической торговли только для paper режима */}
+                  {isCurrentMode && mode.mode === 'paper' && (
+                    <div className="trading-mode-section-auto-trading-wrapper" style={{ marginTop: '1rem' }}>
+                      <AutoPaperTradingSection />
+                    </div>
+                  )}
                 </div>
               </Card>
             );

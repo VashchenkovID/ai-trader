@@ -202,7 +202,6 @@ class CacheService {
                 
                 // Если инструмент все еще не найден, возвращаем null или старые данные
                 if (!instrument) {
-                    console.warn(`No cached data available for ${figi}`);
                     return null;
                 }
             }

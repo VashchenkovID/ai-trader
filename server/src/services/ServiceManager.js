@@ -221,6 +221,7 @@ class ServiceManager {
             await this.initializeService('TradingModeManager', () => import('./TradingModeManager.js'));
             await this.initializeService('TrainingStatusService', () => import('./TrainingStatusService.js'));
             await this.initializeService('TradingRequestService', () => import('./TradingRequestService.js'));
+            await this.initializeService('AutoPaperTradingService', () => import('./AutoPaperTradingService.js'));
             await this.initializeService('StrategyAllocationService', () => import('./StrategyAllocationService.js'));
             await this.initializeService('EntryOptimizationService', () => import('./EntryOptimizationService.js'));
             await this.initializeService('ExitOptimizationService', () => import('./ExitOptimizationService.js'));

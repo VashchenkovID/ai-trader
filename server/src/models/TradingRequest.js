@@ -182,6 +182,40 @@ const TradingRequest = sequelize.define('TradingRequest', {
         type: DataTypes.JSON,
         allowNull: true,
         comment: 'Информация об анализе входа через EntryOptimizationService'
+    },
+    
+    // Поля для автоматической торговли
+    autoExecuted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        comment: 'Была ли заявка исполнена автоматически'
+    },
+    executionSimulation: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        comment: 'Данные симуляции исполнения: { spread, slippage, liquidityLevel }'
+    },
+    autoExecutionPhase: {
+        type: DataTypes.ENUM('phase1', 'phase2', 'phase3'),
+        allowNull: true,
+        comment: 'Фаза автоматического исполнения на момент создания'
+    },
+    actualQuantity: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'Фактически исполненное количество (для частичного исполнения)'
+    },
+    autoExecutionFailed: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        comment: 'Флаг ошибки автоматического исполнения'
+    },
+    executionError: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Текст ошибки при автоматическом исполнении'
     }
 }, {
     tableName: 'trading_requests',
@@ -226,6 +260,14 @@ const TradingRequest = sequelize.define('TradingRequest', {
         {
             name: 'idx_trading_requests_priority_created_at',
             fields: ['priority', 'createdAt']
+        },
+        {
+            name: 'idx_trading_requests_auto_executed',
+            fields: ['autoExecuted']
+        },
+        {
+            name: 'idx_trading_requests_auto_execution_phase',
+            fields: ['autoExecutionPhase']
         }
     ]
 });
@@ -246,7 +288,7 @@ TradingRequest.prototype.getAgeInMinutes = function() {
 };
 
 // Методы экземпляра
-TradingRequest.prototype.approve = async function(userComment = null) {
+TradingRequest.prototype.approve = async function(userComment = null, options = {}) {
     if (this.status !== 'PENDING') {
         throw new Error(`Cannot approve request with status: ${this.status}`);
     }
@@ -261,6 +303,10 @@ TradingRequest.prototype.approve = async function(userComment = null) {
         this.userComment = userComment;
     }
     
+    // Сохраняем с опциональной транзакцией
+    if (options.transaction) {
+        return this.save({ transaction: options.transaction });
+    }
     return this.save();
 };
 
@@ -275,7 +321,7 @@ TradingRequest.prototype.reject = async function(reason) {
     return this.save();
 };
 
-TradingRequest.prototype.execute = async function(executionResult) {
+TradingRequest.prototype.execute = async function(executionResult, options = {}) {
     if (this.status !== 'APPROVED') {
         throw new Error(`Cannot execute request with status: ${this.status}`);
     }
@@ -284,12 +330,36 @@ TradingRequest.prototype.execute = async function(executionResult) {
     this.executedAt = new Date();
     this.executionResult = executionResult;
     
+    // Поддержка обоих форматов executionResult
     if (executionResult.trade) {
+        // Старый формат: { trade: { price, quantity, commission } }
         this.actualPrice = executionResult.trade.price;
+        this.actualQuantity = executionResult.trade.quantity;
         this.actualAmount = executionResult.trade.price * executionResult.trade.quantity;
         this.commission = executionResult.trade.commission;
+    } else if (executionResult.executedPrice) {
+        // Новый формат от RealisticExecutionSimulator
+        this.actualPrice = executionResult.executedPrice;
+        this.actualQuantity = executionResult.executedQuantity || this.quantity;
+        this.actualAmount = executionResult.executedPrice * (executionResult.executedQuantity || this.quantity);
+        this.commission = executionResult.commission;
+        
+        // Сохраняем данные симуляции
+        if (executionResult.slippage !== undefined || executionResult.spread !== undefined) {
+            this.executionSimulation = {
+                spread: executionResult.spread,
+                slippage: executionResult.slippage,
+                liquidityLevel: executionResult.liquidityLevel,
+                executedPrice: executionResult.executedPrice,
+                originalPrice: executionResult.originalPrice || this.priceAtRequest
+            };
+        }
     }
     
+    // Сохраняем с опциональной транзакцией
+    if (options.transaction) {
+        return this.save({ transaction: options.transaction });
+    }
     return this.save();
 };
 

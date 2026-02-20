@@ -14,6 +14,7 @@ import {telegramService} from "./services/telegramService.ts";
 import {cacheService} from "./services/cacheService.ts";
 import {stockService} from "./services/stockService.ts";
 import {macroDataService} from "./services/macroDataService.ts";
+import {autoPaperTradingService} from "./services/autoPaperTradingService.ts";
 
 // В продакшене используем относительный путь через nginx proxy
 // В development можно установить window.env.REACT_APP_API_URL
@@ -281,6 +282,9 @@ export interface TelegramSentiment {
     timestamp: string;
 }
 
+// Экспорт типов для автоматической торговли
+export type { AutoPaperTradingStatus, AutoPaperTradingStats, AutoPaperTradingSettings } from "./services/autoPaperTradingService.ts";
+
 // Основной API сервис
 export const apiService = {
     ...systemService,
@@ -297,6 +301,7 @@ export const apiService = {
     ...cacheService,
     ...stockService,
     ...macroDataService,
+    ...autoPaperTradingService,
 };
 
 export default apiService;
