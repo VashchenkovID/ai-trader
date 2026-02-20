@@ -884,33 +884,43 @@ export async function initDatabase() {
                 { name: 'executionError', sql: 'TEXT' }
             ];
             
+            // Получаем список существующих столбцов одним запросом
+            const [existingColumns] = await sequelize.query(`
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' 
+                AND table_name = 'trading_requests';
+            `, {
+                type: sequelize.QueryTypes.SELECT
+            });
+            
+            const existingColumnNames = new Set(
+                existingColumns.map(row => row.column_name)
+            );
+            
             for (const column of columnsToAdd) {
+                // Пропускаем, если столбец уже существует
+                if (existingColumnNames.has(column.name)) {
+                    continue;
+                }
+                
                 try {
-                    const [columnCheck] = await sequelize.query(`
-                        SELECT EXISTS (
-                            SELECT 1 FROM information_schema.columns 
-                            WHERE table_schema = 'public' 
-                            AND table_name = 'trading_requests' 
-                            AND column_name = $1
-                        ) as exists;
-                    `, {
-                        bind: [column.name],
-                        type: sequelize.QueryTypes.SELECT
-                    });
-                    
-                    const columnExists = columnCheck && columnCheck[0] && (columnCheck[0].exists === true || columnCheck[0].exists === 't');
-                    
-                    if (!columnExists) {
-                        await sequelize.query(`
-                            ALTER TABLE trading_requests 
-                            ADD COLUMN "${column.name}" ${column.sql};
-                        `);
-                    }
+                    await sequelize.query(`
+                        ALTER TABLE trading_requests 
+                        ADD COLUMN "${column.name}" ${column.sql};
+                    `);
                 } catch (colError) {
-                    // Игнорируем, если столбец уже существует
-                    if (!colError.message.includes('already exists') && !colError.message.includes('duplicate')) {
-                        console.warn(`⚠️ Предупреждение при добавлении столбца ${column.name}:`, colError.message);
+                    // Игнорируем, если столбец уже существует (может быть добавлен параллельно)
+                    if (colError.message && (
+                        colError.message.includes('already exists') || 
+                        colError.message.includes('duplicate') ||
+                        colError.original?.message?.includes('already exists')
+                    )) {
+                        // Столбец уже существует - это нормально
+                        continue;
                     }
+                    // Для других ошибок логируем предупреждение
+                    console.warn(`⚠️ Предупреждение при добавлении столбца ${column.name}:`, colError.message || colError);
                 }
             }
             
