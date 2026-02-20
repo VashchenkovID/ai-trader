@@ -1755,7 +1755,27 @@ class TradingRequestService {
             } else {
                 // Базовая сумма на основе уверенности
                 const budget = portfolioSettings?.user_max_portfolio_budget || 100000; // Fallback: 100k
-                baseAmount = budget * 0.05; // 5% от портфеля
+                
+                // Для paper режима используем виртуальный портфель, если доступен
+                if (mode === 'paper') {
+                    try {
+                        const TradingEngine = (await import('./TradingEngine.js')).default;
+                        const portfolio = await TradingEngine.getPortfolioValue();
+                        const virtualPortfolioValue = portfolio.totalValue || portfolio.totalAmountPortfolio?.value;
+                        if (virtualPortfolioValue && virtualPortfolioValue > 0) {
+                            // Используем виртуальный портфель вместо настроек
+                            baseAmount = virtualPortfolioValue * 0.05; // 5% от виртуального портфеля
+                            console.log(`📊 Using virtual portfolio value: ${virtualPortfolioValue}, baseAmount: ${baseAmount}`);
+                        } else {
+                            baseAmount = budget * 0.05; // 5% от портфеля
+                        }
+                    } catch (error) {
+                        console.warn(`⚠️ Could not get virtual portfolio value, using budget: ${error.message}`);
+                        baseAmount = budget * 0.05; // 5% от портфеля
+                    }
+                } else {
+                    baseAmount = budget * 0.05; // 5% от портфеля
+                }
                 
                 // Корректируем на основе уверенности
                 baseAmount *= confidence;
@@ -1765,6 +1785,9 @@ class TradingRequestService {
                 if (modeSettings?.maxPositionSize) {
                     baseAmount *= modeSettings.maxPositionSize / 0.05; // Нормализуем к базовому 5%
                 }
+                
+                // Логируем для отладки
+                console.log(`💰 Quantity calculation: budget=${budget}, baseAmount=${baseAmount}, confidence=${confidence}, price=${price}`);
             }
             
             // Валидация базовой суммы
@@ -1799,7 +1822,15 @@ class TradingRequestService {
             // Валидация базовой суммы перед расчетом
             if (!baseAmount || baseAmount <= 0 || isNaN(baseAmount) || !isFinite(baseAmount)) {
                 console.warn(`⚠️ Invalid baseAmount: ${baseAmount}, using fallback`);
-                baseAmount = 10000; // Fallback: 10k рублей
+                baseAmount = Math.max(10000, price * 1.1); // Fallback: минимум 10k или цена*1.1
+            }
+            
+            // Убеждаемся, что baseAmount достаточен для покупки хотя бы 1 акции
+            // Минимальная сумма = цена акции * 1.1 (с запасом на комиссию)
+            const minAmountForOneShare = price * 1.1;
+            if (baseAmount < minAmountForOneShare) {
+                console.warn(`⚠️ baseAmount (${baseAmount.toFixed(2)}) too small for price (${price.toFixed(2)}), adjusting to minimum: ${minAmountForOneShare.toFixed(2)}`);
+                baseAmount = minAmountForOneShare;
             }
             
             // Рассчитываем количество акций
@@ -1807,11 +1838,21 @@ class TradingRequestService {
             
             // Валидация результата
             if (!quantity || quantity <= 0 || isNaN(quantity) || !isFinite(quantity)) {
-                console.warn(`⚠️ Invalid calculated quantity: ${quantity}, using fallback. baseAmount: ${baseAmount}, price: ${price}`);
-                quantity = 1; // Fallback к 1 акции
+                console.error(`❌ Invalid calculated quantity: ${quantity}. baseAmount: ${baseAmount.toFixed(2)}, price: ${price.toFixed(2)}, confidence: ${confidence}`);
+                // Если baseAmount меньше цены, используем минимальную сумму для 1 акции
+                if (baseAmount < price) {
+                    baseAmount = price * 1.1; // Цена + 10% на комиссию
+                    quantity = 1;
+                    console.warn(`⚠️ Adjusted baseAmount to ${baseAmount.toFixed(2)} for 1 share`);
+                } else {
+                    quantity = 1; // Fallback к 1 акции
+                    console.warn(`⚠️ Using fallback quantity: 1`);
+                }
             }
             
-            return Math.max(1, quantity); // Минимум 1 акция
+            const finalQuantity = Math.max(1, quantity); // Минимум 1 акция
+            console.log(`✅ Final quantity: ${finalQuantity}, baseAmount: ${baseAmount.toFixed(2)}, price: ${price.toFixed(2)}`);
+            return finalQuantity;
             
         } catch (error) {
             console.error('❌ Error calculating quantity:', error);

@@ -101,8 +101,18 @@ class StrategyAllocationService {
             // Определяем подходящую стратегию
             let strategy = null;
             
+            // Логируем для отладки
+            LoggerService.warn('Selecting strategy for recommendation', {
+                service: 'StrategyAllocationService',
+                confidence: confidence,
+                score: score
+            });
+            
+            // Пытаемся найти стратегию по приоритету (от агрессивной к консервативной)
+            // Это позволяет выбирать более подходящую стратегию, если несколько подходят
+            
+            // 1. Агрессивная стратегия для высоких показателей
             if (confidence > 0.8 && score > 0.75) {
-                // Агрессивная стратегия для высоких показателей
                 strategy = await TradingStrategy.findOne({
                     where: { 
                         type: 'aggressive', 
@@ -112,8 +122,25 @@ class StrategyAllocationService {
                     },
                     order: [['priority', 'DESC']]
                 });
-            } else if (confidence >= 0.6 && score >= 0.6) {
-                // Умеренная стратегия для средних показателей
+                
+                if (strategy) {
+                    LoggerService.debug('Selected aggressive strategy', {
+                        service: 'StrategyAllocationService',
+                        strategyId: strategy.id,
+                        strategyName: strategy.name
+                    });
+                    return strategy;
+                }
+            }
+            
+            // 2. Умеренная стратегия для средних показателей
+            // Снижаем пороги для HOLD рекомендаций (которые составляют 90% всех рекомендаций)
+            // Для HOLD используем более мягкие пороги: confidence >= 0.55, score >= 0.5
+            const isHold = recommendation.recommendation === 'HOLD';
+            const moderateConfidenceThreshold = isHold ? 0.55 : 0.6;
+            const moderateScoreThreshold = isHold ? 0.5 : 0.6;
+            
+            if (confidence >= moderateConfidenceThreshold && score >= moderateScoreThreshold) {
                 strategy = await TradingStrategy.findOne({
                     where: { 
                         type: 'moderate', 
@@ -123,8 +150,20 @@ class StrategyAllocationService {
                     },
                     order: [['priority', 'DESC']]
                 });
-            } else if (confidence >= 0.5 && score >= 0.5) {
-                // Консервативная стратегия для низких показателей
+                
+                if (strategy) {
+                    LoggerService.debug('Selected moderate strategy', {
+                        service: 'StrategyAllocationService',
+                        strategyId: strategy.id,
+                        strategyName: strategy.name,
+                        isHold: isHold
+                    });
+                    return strategy;
+                }
+            }
+            
+            // 3. Консервативная стратегия для низких показателей (fallback)
+            if (confidence >= 0.5 && score >= 0.5) {
                 strategy = await TradingStrategy.findOne({
                     where: { 
                         type: 'conservative', 
@@ -134,12 +173,54 @@ class StrategyAllocationService {
                     },
                     order: [['priority', 'DESC']]
                 });
+                
+                if (strategy) {
+                    LoggerService.debug('Selected conservative strategy', {
+                        service: 'StrategyAllocationService',
+                        strategyId: strategy.id,
+                        strategyName: strategy.name
+                    });
+                    return strategy;
+                }
+            }
+            
+            // 4. Если ничего не найдено, используем консервативную как fallback
+            if (!strategy) {
+                strategy = await TradingStrategy.findOne({
+                    where: { 
+                        type: 'conservative', 
+                        isActive: true
+                    },
+                    order: [['priority', 'ASC']] // Берем первую доступную
+                });
+                
+                if (strategy) {
+                    LoggerService.warn('No matching strategy found, using conservative as fallback', {
+                        service: 'StrategyAllocationService',
+                        confidence: confidence,
+                        score: score,
+                        strategyId: strategy.id
+                    });
+                }
             }
             
             return strategy;
         } catch (error) {
             console.error('❌ Error getting strategy for recommendation:', error);
-            return null;
+            // В случае ошибки пытаемся вернуть консервативную стратегию как fallback
+            try {
+                const fallbackStrategy = await TradingStrategy.findOne({
+                    where: { 
+                        type: 'conservative', 
+                        isActive: true
+                    },
+                    order: [['priority', 'ASC']]
+                });
+                return fallbackStrategy;
+            } catch (fallbackError) {
+                console.error('❌ Error getting fallback strategy:', fallbackError);
+                return null;
+            }
         }
     }
 
