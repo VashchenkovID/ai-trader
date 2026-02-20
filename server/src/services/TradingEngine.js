@@ -733,13 +733,34 @@ class TradingEngine {
                     trades = [];
                 }
                 
+                // Если initialCapital не установлен в БД или равен 1 млн (старое значение), используем 50 млн
+                const defaultInitialCapital = 50000000; // 50 млн руб
+                const oldDefaultCapital = 1000000; // Старое значение по умолчанию
+                
+                // Если initialCapital равен старому значению по умолчанию, обновляем до нового
+                let initialCapital = savedPortfolio.initialCapital || defaultInitialCapital;
+                if (initialCapital === oldDefaultCapital) {
+                    initialCapital = defaultInitialCapital;
+                    // Если cash тоже равен старому значению, обновляем его тоже
+                    if (savedPortfolio.cash === oldDefaultCapital && Object.keys(positions).length === 0) {
+                        // Портфель пустой - обновляем cash до нового значения
+                        savedPortfolio.cash = defaultInitialCapital;
+                        savedPortfolio.totalValue = defaultInitialCapital;
+                    }
+                }
+                
                 this.virtualPortfolio = {
-                    cash: savedPortfolio.cash || 1000000,
+                    cash: savedPortfolio.cash || defaultInitialCapital,
                     positions: positions,
                     trades: trades,
-                    totalValue: savedPortfolio.totalValue || savedPortfolio.cash || 1000000,
-                    initialCapital: savedPortfolio.initialCapital || 1000000
+                    totalValue: savedPortfolio.totalValue || savedPortfolio.cash || defaultInitialCapital,
+                    initialCapital: initialCapital
                 };
+                
+                // Если initialCapital был обновлен, сохраняем изменения
+                if (initialCapital === defaultInitialCapital && savedPortfolio.initialCapital === oldDefaultCapital) {
+                    await this.saveVirtualPortfolio();
+                }
                 
                 const positionsCount = Object.keys(this.virtualPortfolio.positions).length;
                 // Пересчитываем totalValue на основе текущих цен (но не перезаписываем сохраненное значение)
@@ -777,13 +798,14 @@ class TradingEngine {
                     });
                 }
             } else {
-                // Если портфеля нет в БД, создаем новый
+                // Если портфеля нет в БД, создаем новый с начальным капиталом 50 млн
+                const defaultInitialCapital = 50000000; // 50 млн руб
                 this.virtualPortfolio = {
-                    cash: 1000000,
+                    cash: defaultInitialCapital,
                     positions: {},
-                    totalValue: 1000000,
+                    totalValue: defaultInitialCapital,
                     trades: [],
-                    initialCapital: 1000000
+                    initialCapital: defaultInitialCapital
                 };
                 await this.saveVirtualPortfolio();
             }
@@ -797,12 +819,13 @@ class TradingEngine {
                 service: 'TradingEngine',
                 operation: 'loadVirtualPortfolio'
             });
+            const defaultInitialCapital = 50000000; // 50 млн руб
             this.virtualPortfolio = {
-                cash: 1000000,
+                cash: defaultInitialCapital,
                 positions: {},
-                totalValue: 1000000,
+                totalValue: defaultInitialCapital,
                 trades: [],
-                initialCapital: 1000000
+                initialCapital: defaultInitialCapital
             };
         }
     }
@@ -852,7 +875,7 @@ class TradingEngine {
                 positions: positionsToSave,
                 trades: tradesToSave,
                 totalValue: this.virtualPortfolio.totalValue,
-                initialCapital: this.virtualPortfolio.initialCapital || 1000000
+                initialCapital: this.virtualPortfolio.initialCapital || 50000000
             });
         } catch (error) {
             LoggerService.error('Ошибка сохранения виртуального портфеля в БД', {
@@ -912,7 +935,7 @@ class TradingEngine {
             trades: this.virtualPortfolio.trades,
             positionsValue,
             totalValue,
-            initialCapital: this.virtualPortfolio.initialCapital || 1000000,
+            initialCapital: this.virtualPortfolio.initialCapital || 50000000,
             mode: 'paper'
         };
     }

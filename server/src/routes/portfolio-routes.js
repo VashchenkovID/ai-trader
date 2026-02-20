@@ -1370,4 +1370,53 @@ router.post('/positions/:figi/assign-strategy', async (req, res) => {
     }
 });
 
+/**
+ * Сброс виртуального портфеля с указанием начального капитала
+ * POST /api/portfolio/virtual/reset
+ * Body: { initialCapital?: number }
+ */
+router.post('/virtual/reset', async (req, res) => {
+    try {
+        const VirtualPortfolio = (await import('../models/VirtualPortfolio.js')).default;
+        const TradingEngine = (await import('../services/TradingEngine.js')).default;
+        
+        const { initialCapital = 50000000 } = req.body; // По умолчанию 50 млн
+        
+        // Валидация
+        if (typeof initialCapital !== 'number' || initialCapital <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'initialCapital должен быть положительным числом'
+            });
+        }
+        
+        // Сбрасываем портфель
+        const portfolio = await VirtualPortfolio.resetPortfolio(initialCapital);
+        
+        // Перезагружаем портфель в TradingEngine
+        await TradingEngine.loadVirtualPortfolio();
+        
+        res.json({
+            success: true,
+            message: `Виртуальный портфель сброшен с начальным капиталом ${initialCapital.toLocaleString('ru-RU')} руб.`,
+            data: {
+                portfolio: {
+                    id: portfolio.id,
+                    cash: portfolio.cash,
+                    initialCapital: portfolio.initialCapital,
+                    totalValue: portfolio.totalValue,
+                    positionsCount: Object.keys(portfolio.positions || {}).length
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка сброса виртуального портфеля:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка сброса виртуального портфеля',
+            error: error.message
+        });
+    }
+});
+
 export default router;

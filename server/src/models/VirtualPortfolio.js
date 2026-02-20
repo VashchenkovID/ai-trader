@@ -152,13 +152,15 @@ VirtualPortfolio.savePortfolio = async function(portfolioData) {
         if (!portfolio) {
             // Создаем новый портфель с ID=1
             console.log('📊 Создание нового виртуального портфеля в БД...');
+            // Используем 50 млн по умолчанию для нового портфеля
+            const defaultInitialCapital = 50000000; // 50 млн руб
             portfolio = await this.create({
                 id: 1, // Явно указываем ID=1
-                cash: portfolioData.cash || 1000000,
+                cash: portfolioData.cash || defaultInitialCapital,
                 positions: portfolioData.positions || {},
                 trades: portfolioData.trades || [],
-                totalValue: portfolioData.totalValue || portfolioData.cash || 1000000,
-                initialCapital: portfolioData.initialCapital || 1000000,
+                totalValue: portfolioData.totalValue || portfolioData.cash || defaultInitialCapital,
+                initialCapital: portfolioData.initialCapital || defaultInitialCapital,
                 version: 1,
                 lastUpdated: new Date()
             });
@@ -205,7 +207,7 @@ VirtualPortfolio.savePortfolio = async function(portfolioData) {
     }
 };
 
-VirtualPortfolio.resetPortfolio = async function(initialCapital = 1000000) {
+VirtualPortfolio.resetPortfolio = async function(initialCapital = 50000000) {
     try {
         // Создаем новый портфель с начальным капиталом
         const portfolio = await this.create({
