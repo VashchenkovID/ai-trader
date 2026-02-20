@@ -4026,7 +4026,7 @@ class NeuralNetworkService {
                                     where: {
                                         figi: savedRecommendation.figi,
                                         status: {
-                                            [Op.in]: ['pending', 'approved']
+                                            [Op.in]: ['PENDING', 'APPROVED']
                                         }
                                     }
                                 });
