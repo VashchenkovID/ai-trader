@@ -3911,10 +3911,31 @@ class NeuralNetworkService {
                         const SettingsService = (await import('./SettingsService.js')).default;
                         const TradingRequestService = (await import('./TradingRequestService.js')).default;
                         const settings = await SettingsService.getSettings();
-                        const autoTradeEnabled = settings.auto_trade_enabled !== false; // По умолчанию включено
+                        
+                        // Правильно обрабатываем boolean настройки (могут быть строками из БД)
+                        let autoTradeEnabled = settings.auto_trade_enabled;
+                        if (typeof autoTradeEnabled === 'string') {
+                            autoTradeEnabled = autoTradeEnabled.toLowerCase() === 'true';
+                        }
+                        autoTradeEnabled = autoTradeEnabled !== false && autoTradeEnabled !== 'false'; // По умолчанию включено
+                        
                         const minConfidence = parseFloat(settings.auto_trade_min_confidence) || 0.85;
                         const minScore = parseFloat(settings.auto_trade_min_score) || 0.8;
                         const minAgreement = parseFloat(settings.auto_trade_min_agreement) || 0.6; // Снижено с 0.9 до 0.6 (60%)
+
+                        // Логируем начало проверки для отладки
+                        LoggerService.warn('Checking auto-trade eligibility', {
+                            service: 'NeuralNetworkService',
+                            figi: savedRecommendation.figi,
+                            ticker: savedRecommendation.ticker,
+                            recommendation: savedRecommendation.recommendation,
+                            confidence: savedRecommendation.confidence,
+                            score: savedRecommendation.score,
+                            autoTradeEnabled: autoTradeEnabled,
+                            minConfidence: minConfidence,
+                            minScore: minScore,
+                            minAgreement: minAgreement
+                        });
 
                         // Для BUY/SELL: проверяем стандартные условия
                         // Для HOLD: создаем BUY заявку, если confidence и score достаточно высокие
@@ -3941,8 +3962,30 @@ class NeuralNetworkService {
                             let agreement = null;
                             try {
                                 // Сначала пытаемся получить из сохраненной рекомендации
-                                const analysis = savedRecommendation.analysis || {};
+                                // Sequelize может возвращать JSON как строку или объект, поэтому проверяем оба варианта
+                                let analysis = savedRecommendation.analysis;
+                                if (typeof analysis === 'string') {
+                                    try {
+                                        analysis = JSON.parse(analysis);
+                                    } catch (parseError) {
+                                        LoggerService.warn('Failed to parse analysis JSON', {
+                                            service: 'NeuralNetworkService',
+                                            figi: savedRecommendation.figi,
+                                            error: { message: parseError.message }
+                                        });
+                                        analysis = {};
+                                    }
+                                }
+                                analysis = analysis || {};
                                 agreement = analysis.agreement !== undefined ? analysis.agreement : null;
+                                
+                                LoggerService.debug('Agreement extracted from recommendation', {
+                                    service: 'NeuralNetworkService',
+                                    figi: savedRecommendation.figi,
+                                    agreement: agreement,
+                                    analysisType: typeof savedRecommendation.analysis,
+                                    hasAgreement: agreement !== null
+                                });
                                 
                                 // Если не найдено в сохраненной рекомендации, пытаемся получить из IntegratedAIService
                                 if (agreement === null) {
@@ -4006,24 +4049,31 @@ class NeuralNetworkService {
                                     });
                                 }
                             } else {
-                                LoggerService.debug('Recommendation does not meet agreement threshold', {
+                                LoggerService.warn('Recommendation does not meet agreement threshold', {
                                     service: 'NeuralNetworkService',
                                     figi: savedRecommendation.figi,
+                                    ticker: savedRecommendation.ticker,
                                     agreement: agreement,
-                                    minAgreement: minAgreement
+                                    minAgreement: minAgreement,
+                                    reason: agreement === null ? 'agreement is null' : `agreement ${agreement} < ${minAgreement}`
                                 });
                             }
                         } else {
-                            LoggerService.debug('Recommendation does not meet confidence/score thresholds', {
+                            LoggerService.warn('Recommendation does not meet confidence/score thresholds', {
                                 service: 'NeuralNetworkService',
                                 figi: savedRecommendation.figi,
+                                ticker: savedRecommendation.ticker,
                                 recommendation: savedRecommendation.recommendation,
                                 confidence: savedRecommendation.confidence,
                                 score: savedRecommendation.score,
                                 meetsConfidence: meetsConfidence,
                                 meetsScore: meetsScore,
+                                autoTradeEnabled: autoTradeEnabled,
                                 minConfidence: isHold ? holdMinConfidence : minConfidence,
-                                minScore: isHold ? holdMinScore : minScore
+                                minScore: isHold ? holdMinScore : minScore,
+                                reason: !autoTradeEnabled ? 'auto-trade disabled' : 
+                                        !meetsConfidence ? `confidence ${savedRecommendation.confidence} < ${isHold ? holdMinConfidence : minConfidence}` :
+                                        !meetsScore ? `score ${savedRecommendation.score} < ${isHold ? holdMinScore : minScore}` : 'unknown'
                             });
                         }
                     } catch (autoTradeError) {

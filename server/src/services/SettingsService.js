@@ -103,6 +103,28 @@ class SettingsService {
         return result;
     }
 
+    // Получить все настройки в виде объекта (для совместимости)
+    // Возвращает объект вида { key: value, ... }, где value уже распарсено (number, boolean, object, или string)
+    async getSettings() {
+        try {
+            const allSettings = await this.getAllSettings();
+            const result = {};
+            
+            // Преобразуем массив настроек в объект
+            // getAllSettings() уже парсит значения в зависимости от dataType
+            for (const setting of allSettings) {
+                if (setting && setting.key) {
+                    result[setting.key] = setting.value;
+                }
+            }
+            
+            return result;
+        } catch (error) {
+            console.error('Error getting all settings as object:', error);
+            return {};
+        }
+    }
+
     // Получить настройки торговых часов
     async getTradingHoursSettings() {
         const settings = await this.getAllSettings('trading_hours');
