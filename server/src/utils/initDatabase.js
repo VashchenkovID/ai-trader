@@ -1020,6 +1020,86 @@ export async function initDatabase() {
             }
         }
         
+        // ВАЖНО: Все таблицы, которые зависят от TradingRequest, создаются ПОСЛЕ TradingRequest
+        // TradingRequest уже создана выше, теперь создаем зависимые таблицы
+        
+        // Создаем таблицу частичных закрытий позиций (зависит от TradingRequest)
+        try {
+            await safeSyncModel(PositionExit, 'PositionExit');
+        } catch (syncError) {
+            // Игнорируем ошибки создания ENUM типов, если они уже существуют
+            if (syncError.name === 'SequelizeUniqueConstraintError' && 
+                syncError.original && syncError.original.code === '23505' &&
+                (syncError.message && syncError.message.includes('enum_position_exits') ||
+                 syncError.original.detail && syncError.original.detail.includes('enum_position_exits'))) {
+            } else {
+                console.error('❌ Ошибка синхронизации таблицы частичных закрытий позиций:', syncError);
+            }
+        }
+        
+        // Создаем таблицу сработавших сигналов (зависит от TradingRequest)
+        try {
+            await safeSyncModel(TriggeredSignal, 'TriggeredSignal');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы сработавших сигналов:', syncError);
+        }
+        
+        // Создаем таблицу стратегий позиций (зависит от TradingRequest и TradingStrategy)
+        try {
+            await safeSyncModel(PositionStrategy, 'PositionStrategy');
+            
+            // Дополнительная проверка и исправление индексов для position_strategies
+            // Если есть ошибка "cache lookup failed", пересоздаем индексы
+            try {
+                // Проверяем, есть ли поврежденные индексы
+                await sequelize.query(`
+                    SELECT indexname 
+                    FROM pg_indexes 
+                    WHERE tablename = 'position_strategies'
+                `);
+            } catch (indexError) {
+                if (indexError.message && indexError.message.includes('cache lookup failed')) {
+                    // Не критичная ошибка, просто пересоздаем индексы без лишнего логирования
+                    try {
+                        // Удаляем все индексы (кроме первичного ключа)
+                        const indexes = await sequelize.query(`
+                            SELECT indexname 
+                            FROM pg_indexes 
+                            WHERE tablename = 'position_strategies'
+                            AND indexname != 'position_strategies_pkey'
+                        `, { type: sequelize.QueryTypes.SELECT });
+                        
+                        for (const idx of indexes) {
+                            try {
+                                await sequelize.query(`DROP INDEX IF EXISTS "${idx.indexname}" CASCADE`);
+                            } catch (dropError) {
+                                // Игнорируем ошибки удаления
+                            }
+                        }
+                        
+                        // Пересоздаем индексы через sync
+                        await PositionStrategy.sync({ alter: true });
+                    } catch (fixError) {
+                        // Игнорируем ошибки пересоздания индексов
+                    }
+                }
+            }
+        } catch (syncError) {
+            // Игнорируем ошибки cache lookup, они не критичны
+            if (!syncError.message?.includes('cache lookup failed') && 
+                !syncError.message?.includes('constraint') &&
+                !syncError.message?.includes('does not exist')) {
+                console.error('❌ Ошибка синхронизации таблицы стратегий позиций:', syncError.message);
+            }
+        }
+        
+        // Создаем таблицу трейлинг-стопов (зависит от TradingRequest и TradingStrategy)
+        try {
+            await safeSyncModel(TrailingStop, 'TrailingStop');
+        } catch (syncError) {
+            console.error('❌ Ошибка синхронизации таблицы трейлинг-стопов:', syncError);
+        }
+        
         // Создаем таблицу виртуального портфеля
         try {
             await safeSyncModel(VirtualPortfolio, 'VirtualPortfolio');
@@ -1082,27 +1162,6 @@ export async function initDatabase() {
             console.error('❌ Ошибка синхронизации таблицы кэшированных сигналов:', syncError);
         }
         
-        // Создаем таблицу частичных закрытий позиций
-        try {
-            await safeSyncModel(PositionExit, 'PositionExit');
-        } catch (syncError) {
-            // Игнорируем ошибки создания ENUM типов, если они уже существуют
-            if (syncError.name === 'SequelizeUniqueConstraintError' && 
-                syncError.original && syncError.original.code === '23505' &&
-                (syncError.message && syncError.message.includes('enum_position_exits') ||
-                 syncError.original.detail && syncError.original.detail.includes('enum_position_exits'))) {
-            } else {
-                console.error('❌ Ошибка синхронизации таблицы частичных закрытий позиций:', syncError);
-            }
-        }
-        
-        // Создаем таблицу сработавших сигналов
-        try {
-            await safeSyncModel(TriggeredSignal, 'TriggeredSignal');
-        } catch (syncError) {
-            console.error('❌ Ошибка синхронизации таблицы сработавших сигналов:', syncError);
-        }
-        
         // Создаем таблицу состояния обучения
         try {
             await safeSyncModel(TrainingState, 'TrainingState');
@@ -1112,58 +1171,15 @@ export async function initDatabase() {
         
         // Создаем таблицы для стратегий торговли
         // TradingStrategy уже создана в начале, создаем только связанные таблицы
+        // PortfolioAllocation зависит только от TradingStrategy, может создаваться до TradingRequest
         try {
             await safeSyncModel(PortfolioAllocation, 'PortfolioAllocation');
         } catch (syncError) {
             console.error('❌ Ошибка синхронизации таблицы распределения портфеля:', syncError);
         }
-        try {
-            await safeSyncModel(PositionStrategy, 'PositionStrategy');
-            
-            // Дополнительная проверка и исправление индексов для position_strategies
-            // Если есть ошибка "cache lookup failed", пересоздаем индексы
-            try {
-                // Проверяем, есть ли поврежденные индексы
-                await sequelize.query(`
-                    SELECT indexname 
-                    FROM pg_indexes 
-                    WHERE tablename = 'position_strategies'
-                `);
-            } catch (indexError) {
-                if (indexError.message && indexError.message.includes('cache lookup failed')) {
-                    // Не критичная ошибка, просто пересоздаем индексы без лишнего логирования
-                    try {
-                        // Удаляем все индексы (кроме первичного ключа)
-                        const indexes = await sequelize.query(`
-                            SELECT indexname 
-                            FROM pg_indexes 
-                            WHERE tablename = 'position_strategies'
-                            AND indexname != 'position_strategies_pkey'
-                        `, { type: sequelize.QueryTypes.SELECT });
-                        
-                        for (const idx of indexes) {
-                            try {
-                                await sequelize.query(`DROP INDEX IF EXISTS "${idx.indexname}" CASCADE`);
-                            } catch (dropError) {
-                                // Игнорируем ошибки удаления
-                            }
-                        }
-                        
-                        // Пересоздаем индексы через sync
-                        await PositionStrategy.sync({ alter: true });
-                    } catch (fixError) {
-                        // Игнорируем ошибки пересоздания индексов
-                    }
-                }
-            }
-        } catch (syncError) {
-            // Игнорируем ошибки cache lookup, они не критичны
-            if (!syncError.message?.includes('cache lookup failed') && 
-                !syncError.message?.includes('constraint') &&
-                !syncError.message?.includes('does not exist')) {
-                console.error('❌ Ошибка синхронизации таблицы стратегий позиций:', syncError.message);
-            }
-        }
+        
+        // Примечание: PositionExit, TriggeredSignal, PositionStrategy, TrailingStop, PositionPyramid
+        // зависят от TradingRequest и создаются ПОСЛЕ TradingRequest (см. код выше после создания TradingRequest)
         
         // Создаем таблицу результатов бэктестинга
         try {
@@ -1402,14 +1418,8 @@ export async function initDatabase() {
             }
         }
         
-        // Создаем таблицу трейлинг-стопов
-        try {
-            await safeSyncModel(TrailingStop, 'TrailingStop');
-        } catch (syncError) {
-            console.error('❌ Ошибка синхронизации таблицы трейлинг-стопов:', syncError);
-        }
-        
         // Создаем таблицу денежных потоков (CashFlow)
+        // Примечание: TrailingStop уже создана выше после TradingRequest (строка ~1098)
         try {
             await safeSyncModel(CashFlow, 'CashFlow');
         } catch (syncError) {
