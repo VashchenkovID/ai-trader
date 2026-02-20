@@ -115,17 +115,47 @@ class AutoPaperTradingService {
             this.stats.currentPhase = stats.currentPhase;
             
             // Загрузить время последней сделки из БД
-            const lastTrade = await TradingRequest.findOne({
-                where: {
-                    autoExecuted: true,
-                    status: 'EXECUTED'
-                },
-                order: [['executedAt', 'DESC']],
-                attributes: ['executedAt']
-            });
-            
-            if (lastTrade && lastTrade.executedAt) {
-                this.stats.lastTradeTime = new Date(lastTrade.executedAt);
+            // Проверяем, существует ли таблица trading_requests перед запросом
+            try {
+                // Проверяем существование таблицы через raw query
+                const [tableCheck] = await sequelize.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name = 'trading_requests'
+                    );
+                `);
+                
+                const tableExists = tableCheck && tableCheck[0] && (tableCheck[0].exists === true || tableCheck[0].exists === 't');
+                
+                if (tableExists) {
+                    const lastTrade = await TradingRequest.findOne({
+                        where: {
+                            autoExecuted: true,
+                            status: 'EXECUTED'
+                        },
+                        order: [['executedAt', 'DESC']],
+                        attributes: ['executedAt']
+                    });
+                    
+                    if (lastTrade && lastTrade.executedAt) {
+                        this.stats.lastTradeTime = new Date(lastTrade.executedAt);
+                    }
+                } else {
+                    LoggerService.debug('Table trading_requests does not exist yet, skipping lastTradeTime load', {
+                        service: 'AutoPaperTradingService'
+                    });
+                }
+            } catch (tableError) {
+                // Игнорируем ошибки, если таблица еще не создана
+                if (tableError.message && tableError.message.includes('does not exist')) {
+                    LoggerService.debug('Table trading_requests does not exist yet, skipping lastTradeTime load', {
+                        service: 'AutoPaperTradingService',
+                        error: tableError.message
+                    });
+                } else {
+                    throw tableError;
+                }
             }
         } catch (error) {
             LoggerService.warn('Failed to load daily stats, using defaults', {

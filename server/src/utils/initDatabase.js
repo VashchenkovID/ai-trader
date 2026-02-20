@@ -832,11 +832,14 @@ export async function initDatabase() {
             console.error('❌ Ошибка синхронизации таблиц кеширования:', syncError);
         }
         
-        // Создаем таблицу торговых заявок
+        // Создаем таблицу торговых заявок (КРИТИЧЕСКАЯ - используется многими сервисами)
         try {
             await safeSyncModel(TradingRequest, 'TradingRequest');
+            console.log('✅ Таблица торговых заявок (TradingRequest) создана');
         } catch (syncError) {
-            console.error('❌ Ошибка синхронизации таблицы торговых заявок:', syncError);
+            console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: Не удалось создать таблицу торговых заявок:', syncError);
+            // Не прерываем инициализацию, но логируем как критическую ошибку
+            // Многие сервисы зависят от этой таблицы, но могут работать с graceful degradation
         }
         
         // Добавляем столбец entryOptimization, если его нет
@@ -1446,10 +1449,32 @@ export async function initDatabase() {
         }
         
         // Создаем таблицу пирамиды позиций (PositionPyramid)
+        // ВАЖНО: PositionPyramid зависит от trading_requests, поэтому проверяем её существование
         try {
-            await safeSyncModel(PositionPyramid, 'PositionPyramid');
+            // Проверяем, что trading_requests существует перед созданием PositionPyramid
+            const [tableCheck] = await sequelize.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'trading_requests'
+                );
+            `);
+            
+            const tradingRequestsExists = tableCheck && tableCheck[0] && (tableCheck[0].exists === true || tableCheck[0].exists === 't');
+            
+            if (tradingRequestsExists) {
+                await safeSyncModel(PositionPyramid, 'PositionPyramid');
+                console.log('✅ Таблица пирамиды позиций (PositionPyramid) создана');
+            } else {
+                console.warn('⚠️ Таблица trading_requests не существует, пропускаем создание PositionPyramid');
+            }
         } catch (syncError) {
-            console.error('❌ Ошибка синхронизации таблицы пирамиды позиций:', syncError);
+            // Если ошибка связана с отсутствием trading_requests, это нормально
+            if (syncError.message && syncError.message.includes('trading_requests') && syncError.message.includes('does not exist')) {
+                console.warn('⚠️ Таблица trading_requests не существует, пропускаем создание PositionPyramid');
+            } else {
+                console.error('❌ Ошибка синхронизации таблицы пирамиды позиций:', syncError);
+            }
         }
         
         // Создаем таблицу производительности моделей (ModelPerformance)
