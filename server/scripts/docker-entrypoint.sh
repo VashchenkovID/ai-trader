@@ -19,13 +19,22 @@ until node -e "
       host: process.env.DB_HOST,
       port: process.env.DB_PORT,
       dialect: 'postgres',
-      logging: false
+      logging: false,
+      retry: {
+        max: 1
+      }
     }
   );
   sequelize.authenticate().then(() => {
     console.log('✅ База данных готова');
+    sequelize.close();
     process.exit(0);
-  }).catch(() => {
+  }).catch((err) => {
+    // Игнорируем ошибки аутентификации - они не критичны на этом этапе
+    if (err.message && err.message.includes('password authentication failed')) {
+      process.exit(1);
+    }
+    sequelize.close().catch(() => {});
     process.exit(1);
   });
 " 2>/dev/null; do
@@ -48,15 +57,23 @@ if node -e "
       host: process.env.DB_HOST,
       port: process.env.DB_PORT,
       dialect: 'postgres',
-      logging: false
+      logging: false,
+      retry: {
+        max: 1
+      }
     }
   );
   sequelize.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'settings') as exists;\")
     .then(([results]) => {
       const exists = results[0]?.exists === true || results[0]?.exists === 't';
+      sequelize.close();
       process.exit(exists ? 0 : 1);
     })
-    .catch(() => process.exit(1));
+    .catch((err) => {
+      // Игнорируем ошибки аутентификации - они не критичны
+      sequelize.close().catch(() => {});
+      process.exit(1);
+    });
 " 2>/dev/null; then
   echo "✅ База данных уже инициализирована"
   NEEDS_INIT=false

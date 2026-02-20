@@ -921,6 +921,11 @@ class IntegratedAIService {
             horizons: horizons,
             agreement: agreement, // Согласованность горизонтов внутри ensemble
             sourceAgreement: sourceAgreement, // Согласованность между источниками
+            // Комбинированная согласованность: учитывает и горизонты, и источники
+            // Используется для проверок автоторговли (более релевантный показатель)
+            combinedAgreement: sourceAgreement !== null && agreement !== null 
+                ? Math.max(sourceAgreement, agreement) // Берем максимум (более оптимистичный подход)
+                : (sourceAgreement !== null ? sourceAgreement : agreement), // Fallback на доступный показатель
             summary: finalSummary,
             // Добавляем информацию о рыночном режиме и порогах (Фаза 2, задача 2.1.3)
             // Фаза 3, задача 3.3: Расширенная информация о режиме

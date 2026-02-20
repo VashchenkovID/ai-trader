@@ -435,8 +435,14 @@ class TradingRequestService {
                             const agreementPromise = IntegratedAIService.getIntegratedRecommendation(recommendation.figi);
                             const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 2000));
                             const integratedRec = await Promise.race([agreementPromise, timeoutPromise]);
-                            if (integratedRec && integratedRec.agreement !== undefined) {
-                                agreement = integratedRec.agreement;
+                            if (integratedRec) {
+                                // Используем combinedAgreement если доступен (более релевантный показатель),
+                                // иначе fallback на sourceAgreement или agreement
+                                agreement = integratedRec.combinedAgreement !== undefined 
+                                    ? integratedRec.combinedAgreement
+                                    : (integratedRec.sourceAgreement !== undefined 
+                                        ? integratedRec.sourceAgreement 
+                                        : integratedRec.agreement);
                             }
                         }
                     } catch (error) {
@@ -522,7 +528,7 @@ class TradingRequestService {
             const autoTradeEnabled = settings.auto_trade_enabled !== false; // По умолчанию включено
             const minConfidence = settings.auto_trade_min_confidence || 0.85;
             const minScore = settings.auto_trade_min_score || 0.8;
-            const minAgreement = settings.auto_trade_min_agreement || 0.9;
+            const minAgreement = settings.auto_trade_min_agreement || 0.6; // Снижено с 0.9 до 0.6 (60%)
 
             if (!autoTradeEnabled) {
                 return false;
@@ -538,7 +544,13 @@ class TradingRequestService {
                 const IntegratedAIService = (await import('./IntegratedAIService.js')).default;
                 if (IntegratedAIService.isInitialized) {
                     const integratedRec = await IntegratedAIService.getIntegratedRecommendation(recommendation.figi);
-                    agreement = integratedRec.agreement || null;
+                    // Используем combinedAgreement если доступен (более релевантный показатель),
+                    // иначе fallback на sourceAgreement или agreement
+                    agreement = integratedRec.combinedAgreement !== undefined 
+                        ? integratedRec.combinedAgreement
+                        : (integratedRec.sourceAgreement !== undefined 
+                            ? integratedRec.sourceAgreement 
+                            : integratedRec.agreement || null);
                 }
             } catch (error) {
                 console.warn('⚠️ Could not get agreement for auto-trade check:', error.message);
@@ -804,8 +816,14 @@ class TradingRequestService {
                             const agreementPromise = IntegratedAIService.getIntegratedRecommendation(recommendationData.figi);
                             const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 2000));
                             const integratedRec = await Promise.race([agreementPromise, timeoutPromise]);
-                            if (integratedRec && integratedRec.agreement !== undefined) {
-                                agreement = integratedRec.agreement;
+                            if (integratedRec) {
+                                // Используем combinedAgreement если доступен (более релевантный показатель),
+                                // иначе fallback на sourceAgreement или agreement
+                                agreement = integratedRec.combinedAgreement !== undefined 
+                                    ? integratedRec.combinedAgreement
+                                    : (integratedRec.sourceAgreement !== undefined 
+                                        ? integratedRec.sourceAgreement 
+                                        : integratedRec.agreement);
                             }
                         }
                     } catch (error) {

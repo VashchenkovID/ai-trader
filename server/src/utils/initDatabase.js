@@ -736,13 +736,14 @@ async function ensureDatabaseExists() {
 
         // Если ошибка аутентификации - это может быть нормально, если БД уже существует
         // и основное подключение работает. Не прерываем инициализацию.
+        // Не логируем эту ошибку, так как она не критична и может быть вызвана
+        // попыткой подключения с неправильными учетными данными к системной БД
         if (error.message?.includes('password authentication failed') ||
             error.message?.includes('authentication failed') ||
             (error.original && error.original.message && error.original.message.includes('password authentication failed'))) {
             // БД может уже существовать, и основное подключение работает
-            // Просто игнорируем эту ошибку - основное подключение проверит существование БД
-            console.warn(`⚠️ Не удалось подключиться к системной БД postgres для проверки (это нормально, если БД уже существует):`, error.message);
-            return; // Выходим без ошибки
+            // Просто игнорируем эту ошибку тихо - основное подключение проверит существование БД
+            return; // Выходим без ошибки и без логирования
         }
 
         // Если ошибка подключения - возможно, PostgreSQL еще не запущен
@@ -769,10 +770,10 @@ async function ensureDatabaseExists() {
                 await retrySequelize.query(`CREATE DATABASE "${dbName.replace(/"/g, '""')}"`);
                 await retrySequelize.close();
             } catch (createError) {
-                // Если ошибка аутентификации при создании - игнорируем
+                // Если ошибка аутентификации при создании - игнорируем тихо
                 if (createError.message?.includes('password authentication failed') ||
                     createError.message?.includes('authentication failed')) {
-                    console.warn(`⚠️ Не удалось создать БД через системное подключение (это нормально, если БД уже существует):`, createError.message);
+                    // Не логируем - это не критично, основное подключение проверит существование БД
                     return;
                 }
                 console.error(`❌ Ошибка создания базы данных:`, createError.message);
