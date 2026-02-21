@@ -23,7 +23,9 @@ class OptimizedAnalysisService {
         this.cacheSettings = {
             indicatorsTTL: 5 * 60 * 1000, // 5 минут TTL для индикаторов
             maxCacheSize: 1000, // Максимальный размер кеша
-            batchSize: 10 // Размер батча для параллельной обработки (3.1.1)
+            batchSize: 10, // Размер батча для параллельной обработки (3.1.1)
+            evaluationCacheTTL: 30 * 60 * 1000, // 30 минут для evaluationCache
+            maxEvaluationCacheSize: 500 // Ограничение размера evaluationCache
         };
     }
 
@@ -391,11 +393,31 @@ class OptimizedAnalysisService {
     }
 
     /**
+     * Eviction для evaluationCache: удаляем устаревшие и лишние записи
+     */
+    _evictEvaluationCache() {
+        const now = Date.now();
+        const ttl = this.cacheSettings.evaluationCacheTTL;
+        const maxSize = this.cacheSettings.maxEvaluationCacheSize;
+        for (const [key, entry] of this.evaluationCache.entries()) {
+            const age = now - (entry.timestamp ? new Date(entry.timestamp).getTime() : 0);
+            if (age > ttl) this.evaluationCache.delete(key);
+        }
+        if (this.evaluationCache.size > maxSize) {
+            const entries = [...this.evaluationCache.entries()]
+                .sort((a, b) => (new Date(a[1].timestamp || 0).getTime()) - (new Date(b[1].timestamp || 0).getTime()));
+            for (let i = 0; i < this.evaluationCache.size - maxSize; i++) {
+                this.evaluationCache.delete(entries[i][0]);
+            }
+        }
+    }
+
+    /**
      * Сохранение результатов оценки
      */
     async saveEvaluationResults(figi, evaluation) {
         try {
-            // Сохраняем в кеш
+            this._evictEvaluationCache();
             this.evaluationCache.set(figi, {
                 ...evaluation,
                 timestamp: new Date().toISOString()

@@ -31,6 +31,7 @@ class BenchmarkService {
         };
         this.cache = new Map();
         this.cacheTTL = 60 * 60 * 1000; // 1 час для бенчмарков
+        this.maxCacheSize = 100; // Ограничение размера кеша
     }
 
     async initialize() {
@@ -38,6 +39,19 @@ class BenchmarkService {
         LoggerService.info('📊 Initializing BenchmarkService...');
         this.isInitialized = true;
         LoggerService.info('✅ BenchmarkService initialized');
+    }
+
+    _evictCache() {
+        const now = Date.now();
+        for (const [key, entry] of this.cache.entries()) {
+            if ((now - (entry.timestamp || 0)) > this.cacheTTL) this.cache.delete(key);
+        }
+        if (this.cache.size > this.maxCacheSize) {
+            const entries = [...this.cache.entries()].sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+            for (let i = 0; i < this.cache.size - this.maxCacheSize; i++) {
+                this.cache.delete(entries[i][0]);
+            }
+        }
     }
 
     /**
@@ -95,6 +109,7 @@ class BenchmarkService {
                         sharpeRatio: this.calculateSharpeRatio(returns)
                     };
 
+                    this._evictCache();
                     this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
                     return result;
                 }

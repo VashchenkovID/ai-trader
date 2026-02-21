@@ -10,6 +10,7 @@ class DatabaseQueryOptimizer {
     constructor() {
         this.queryCache = new Map(); // Кеш для часто используемых запросов
         this.cacheTimeout = 5 * 60 * 1000; // 5 минут
+        this.maxCacheSize = 500; // Ограничение размера кеша
     }
 
     /**
@@ -237,6 +238,12 @@ class DatabaseQueryOptimizer {
         for (const [key, entry] of this.queryCache.entries()) {
             if (now - entry.timestamp > this.cacheTimeout) {
                 this.queryCache.delete(key);
+            }
+        }
+        if (this.queryCache.size > this.maxCacheSize) {
+            const entries = [...this.queryCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
+            for (let i = 0; i < this.queryCache.size - this.maxCacheSize; i++) {
+                this.queryCache.delete(entries[i][0]);
             }
         }
     }

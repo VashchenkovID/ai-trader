@@ -96,6 +96,7 @@ class MarketRegimeService {
         // Кэш режимов
         this.regimeCache = new Map();
         this.cacheExpiry = 5 * 60 * 1000; // 5 минут
+        this.maxRegimeCacheSize = 500; // Ограничение размера кеша
     }
 
     /**
@@ -157,6 +158,23 @@ class MarketRegimeService {
             current = current[keys[i]];
         }
         current[keys[keys.length - 1]] = value;
+    }
+
+    /**
+     * Eviction для regimeCache
+     */
+    _evictRegimeCache() {
+        const now = Date.now();
+        for (const [key, entry] of this.regimeCache.entries()) {
+            if ((now - (entry.timestamp || 0)) > this.cacheExpiry) this.regimeCache.delete(key);
+        }
+        if (this.regimeCache.size > this.maxRegimeCacheSize) {
+            const entries = [...this.regimeCache.entries()]
+                .sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+            for (let i = 0; i < this.regimeCache.size - this.maxRegimeCacheSize; i++) {
+                this.regimeCache.delete(entries[i][0]);
+            }
+        }
     }
 
     /**
@@ -247,6 +265,7 @@ class MarketRegimeService {
 
             // Кэшируем результат
             if (useCache) {
+                this._evictRegimeCache();
                 this.regimeCache.set(figi, {
                     regime: regimeInfo,
                     timestamp: Date.now()

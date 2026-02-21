@@ -11,6 +11,20 @@ class PerformanceVisualizationService {
         this.isInitialized = false;
         this.cache = new Map();
         this.cacheTTL = 5 * 60 * 1000; // 5 минут
+        this.maxCacheSize = 100; // Ограничение размера кеша
+    }
+
+    _evictCache() {
+        const now = Date.now();
+        for (const [key, entry] of this.cache.entries()) {
+            if ((now - (entry.timestamp || 0)) > this.cacheTTL) this.cache.delete(key);
+        }
+        if (this.cache.size > this.maxCacheSize) {
+            const entries = [...this.cache.entries()].sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+            for (let i = 0; i < this.cache.size - this.maxCacheSize; i++) {
+                this.cache.delete(entries[i][0]);
+            }
+        }
     }
 
     async initialize() {
@@ -108,6 +122,7 @@ class PerformanceVisualizationService {
                 }
             };
 
+            this._evictCache();
             this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
             return result;
         } catch (error) {
@@ -199,6 +214,7 @@ class PerformanceVisualizationService {
                 }
             };
 
+            this._evictCache();
             this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
             return result;
         } catch (error) {
@@ -270,6 +286,7 @@ class PerformanceVisualizationService {
                 }
             };
 
+            this._evictCache();
             this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
             return result;
         } catch (error) {
@@ -363,6 +380,7 @@ class PerformanceVisualizationService {
                 }
             };
 
+            this._evictCache();
             this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
             return result;
         } catch (error) {
@@ -451,6 +469,7 @@ class PerformanceVisualizationService {
                 timestamp: new Date().toISOString()
             };
 
+            this._evictCache();
             this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
             return result;
         } catch (error) {

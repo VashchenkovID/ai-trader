@@ -36,6 +36,8 @@ class FallbackService {
         // Cooldown для алертов (чтобы не спамить)
         this.alertCooldown = new Map(); // serviceName -> timestamp последнего алерта
         this.alertCooldownMinutes = 5; // Минимум 5 минут между одинаковыми алертами
+        this.alertCooldownMaxSize = 100; // Ограничение размера Map
+        this.alertCooldownTTL = 60 * 60 * 1000; // 1 час - удаляем старые записи
     }
     
     /**
@@ -53,6 +55,22 @@ class FallbackService {
                 }
             });
             throw error;
+        }
+    }
+
+    /**
+     * Eviction для alertCooldown: удаляем устаревшие записи
+     */
+    _evictAlertCooldown() {
+        const now = Date.now();
+        for (const [key, ts] of this.alertCooldown.entries()) {
+            if ((now - ts) > this.alertCooldownTTL) this.alertCooldown.delete(key);
+        }
+        if (this.alertCooldown.size > this.alertCooldownMaxSize) {
+            const entries = [...this.alertCooldown.entries()].sort((a, b) => a[1] - b[1]);
+            for (let i = 0; i < this.alertCooldown.size - this.alertCooldownMaxSize; i++) {
+                this.alertCooldown.delete(entries[i][0]);
+            }
         }
     }
     
@@ -233,7 +251,7 @@ class FallbackService {
                         }
                     );
                     
-                    // Обновляем время последнего алерта
+                    this._evictAlertCooldown();
                     this.alertCooldown.set(serviceName, now);
                 }
                 

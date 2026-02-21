@@ -13,6 +13,7 @@ class DividendService {
         // Кеш для результатов дивидендов, чтобы избежать повторных запросов при обучении
         this.dividendsCache = new Map(); // key: figi, value: { data, timestamp }
         this.cacheTTL = 3600000; // 1 час в миллисекундах
+        this.maxDividendsCacheSize = 500; // Ограничение размера кеша
     }
 
     /**
@@ -33,6 +34,25 @@ class DividendService {
     addPriorityInstrument(figi) {
         if (figi) {
             this.priorityInstruments.add(figi);
+        }
+    }
+
+    /**
+     * Eviction для dividendsCache: удаляем устаревшие и лишние записи
+     */
+    _evictDividendsCache() {
+        const now = Date.now();
+        for (const [key, entry] of this.dividendsCache.entries()) {
+            if ((now - (entry.timestamp || 0)) > this.cacheTTL) {
+                this.dividendsCache.delete(key);
+            }
+        }
+        if (this.dividendsCache.size > this.maxDividendsCacheSize) {
+            const entries = [...this.dividendsCache.entries()]
+                .sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+            for (let i = 0; i < this.dividendsCache.size - this.maxDividendsCacheSize; i++) {
+                this.dividendsCache.delete(entries[i][0]);
+            }
         }
     }
 
@@ -66,6 +86,7 @@ class DividendService {
             
             // Обновляем кеш после получения новых данных
             if (dividends) {
+                this._evictDividendsCache();
                 this.dividendsCache.set(figi, {
                     data: dividends,
                     timestamp: Date.now()
@@ -230,6 +251,7 @@ class DividendService {
                 // Делаем запрос к API и кешируем результат
                 dividendsResponse = await TinkoffApiService.getDividends(figi);
                 if (dividendsResponse) {
+                    this._evictDividendsCache();
                     this.dividendsCache.set(cacheKey, {
                         data: dividendsResponse,
                         timestamp: now

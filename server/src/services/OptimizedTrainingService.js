@@ -1165,7 +1165,9 @@ class OptimizedTrainingService {
             }
             
             const xs = tf.tensor2d(featuresArray, [featuresArray.length, featureSize]);
-            const predictions = await model.predict(xs).data();
+            const predTensor = model.predict(xs);
+            const predictions = await predTensor.data();
+            predTensor.dispose();
             xs.dispose();
             
             // Преобразуем предсказания в вероятности (если нужно)

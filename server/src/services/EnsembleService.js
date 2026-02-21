@@ -1122,6 +1122,7 @@ class EnsembleService {
         // Финальная оценка на test set (Фаза 2, задача 2.4.1)
         let testMetrics = null;
         if (testFeatures.length > 0 && testLabels.length > 0) {
+            let testXs, testYs, testPredictions;
             try {
                 // Проверяем структуру test features перед созданием тензора
                 if (!Array.isArray(testFeatures[0]) || !Array.isArray(testFeatures[0][0])) {
@@ -1131,11 +1132,12 @@ class EnsembleService {
                 const testTimeSteps = testFeatures[0].length;
                 const testFeaturesPerStep = testFeatures[0][0].length;
                 const testShape = [testNumSamples, testTimeSteps, testFeaturesPerStep];
-                const testXs = tf.tensor3d(testFeatures, testShape);
-                const testYs = tf.tensor2d(testLabels, [testLabels.length, 1]);
-                const testPredictions = model.predict(testXs);
+                testXs = tf.tensor3d(testFeatures, testShape);
+                testYs = tf.tensor2d(testLabels, [testLabels.length, 1]);
+                testPredictions = model.predict(testXs);
                 const testPredValues = await testPredictions.data();
                 testPredictions.dispose();
+                testPredictions = null;
                 
                 const testCorrect = testPredValues.reduce((acc, pred, i) => {
                     return acc + (Math.round(pred) === testLabels[i] ? 1 : 0);
@@ -1146,13 +1148,14 @@ class EnsembleService {
                     correct: testCorrect,
                     total: testLabels.length
                 };
-                
-                testXs.dispose();
-                testYs.dispose();
             } catch (testError) {
                 if (LoggerService.isInitialized) {
                     LoggerService.warn(`Failed to evaluate on test set for ${modelType}:`, testError.message);
                 }
+            } finally {
+                if (testPredictions) testPredictions.dispose();
+                if (testXs) testXs.dispose();
+                if (testYs) testYs.dispose();
             }
         }
 

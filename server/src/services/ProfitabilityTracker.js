@@ -27,6 +27,30 @@ class ProfitabilityTracker {
         this.dailyStats = new Map();
         this.weeklyStats = new Map();
         this.monthlyStats = new Map();
+        this.maxDailyStatsEntries = 365; // Ограничение: последний год
+        this.maxWeeklyStatsEntries = 52; // Ограничение: последний год
+        this.maxMonthlyStatsEntries = 24; // Ограничение: последние 2 года
+    }
+
+    _trimStats() {
+        if (this.dailyStats.size > this.maxDailyStatsEntries) {
+            const entries = [...this.dailyStats.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+            for (let i = this.maxDailyStatsEntries; i < entries.length; i++) {
+                this.dailyStats.delete(entries[i][0]);
+            }
+        }
+        if (this.weeklyStats.size > this.maxWeeklyStatsEntries) {
+            const entries = [...this.weeklyStats.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+            for (let i = this.maxWeeklyStatsEntries; i < entries.length; i++) {
+                this.weeklyStats.delete(entries[i][0]);
+            }
+        }
+        if (this.monthlyStats.size > this.maxMonthlyStatsEntries) {
+            const entries = [...this.monthlyStats.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+            for (let i = this.maxMonthlyStatsEntries; i < entries.length; i++) {
+                this.monthlyStats.delete(entries[i][0]);
+            }
+        }
     }
 
     /**
@@ -244,6 +268,7 @@ class ProfitabilityTracker {
             dayStats.migrations.push(data);
             dayStats.maxDrawdown = Math.max(dayStats.maxDrawdown, data.drawdown || 0);
         }
+        this._trimStats();
     }
 
     /**
@@ -272,6 +297,7 @@ class ProfitabilityTracker {
         }
         
         weekStats.days.add(this.getDayKey(data.date));
+        this._trimStats();
     }
 
     /**
@@ -300,6 +326,7 @@ class ProfitabilityTracker {
         }
         
         monthStats.weeks.add(this.getWeekKey(data.date));
+        this._trimStats();
     }
 
     /**

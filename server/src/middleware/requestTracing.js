@@ -33,6 +33,12 @@ export const requestTracing = (req, res, next) => {
     
     LoggerService.setContext(requestId, context);
     
+    const cleanup = () => {
+        LoggerService.clearContext(requestId);
+    };
+    res.once('finish', cleanup);
+    res.once('close', cleanup);
+    
     // Засекаем время начала запроса
     const startTime = performance.now();
     
@@ -49,8 +55,7 @@ export const requestTracing = (req, res, next) => {
             LoggerService.logSlowRequest(req, duration);
         }
         
-        // Очищаем контекст после завершения запроса
-        LoggerService.clearContext(requestId);
+        cleanup();
         
         // Вызываем оригинальный send
         return originalSend.call(this, data);
@@ -59,7 +64,7 @@ export const requestTracing = (req, res, next) => {
     // Обрабатываем ошибки
     res.on('error', (error) => {
         LoggerService.logRequestError(error, req);
-        LoggerService.clearContext(requestId);
+        cleanup();
     });
     
     next();

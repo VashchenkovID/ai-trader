@@ -19,6 +19,8 @@ class AutoPaperTradingService {
         this.isEnabled = false; // Глобальный флаг включения
         this.processingLock = false; // Блокировка для предотвращения race conditions
         this.rlTrainingCache = new Map(); // Кеш для RL обучения (figi -> lastTrainingTime)
+        this.maxRlTrainingCacheSize = 500; // Ограничение размера кеша
+        this.rlTrainingCacheTTL = 24 * 60 * 60 * 1000; // 24 часа
         
         this.settings = {
             // Условия автоматического исполнения
@@ -717,12 +719,29 @@ class AutoPaperTradingService {
             
             // Обучить немедленно
             // await ReinforcementLearningService.incrementalTrainFromTrades(figi, [tradeResult]);
+            this._evictRlTrainingCache();
             this.rlTrainingCache.set(figi, now);
         } catch (error) {
             LoggerService.warn('RL training scheduling failed', {
                 figi,
                 error: error.message
             });
+        }
+    }
+
+    /**
+     * Eviction для rlTrainingCache
+     */
+    _evictRlTrainingCache() {
+        const now = Date.now();
+        for (const [key, ts] of this.rlTrainingCache.entries()) {
+            if ((now - ts) > this.rlTrainingCacheTTL) this.rlTrainingCache.delete(key);
+        }
+        if (this.rlTrainingCache.size > this.maxRlTrainingCacheSize) {
+            const entries = [...this.rlTrainingCache.entries()].sort((a, b) => a[1] - b[1]);
+            for (let i = 0; i < this.rlTrainingCache.size - this.maxRlTrainingCacheSize; i++) {
+                this.rlTrainingCache.delete(entries[i][0]);
+            }
         }
     }
 

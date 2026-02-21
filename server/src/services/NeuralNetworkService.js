@@ -779,7 +779,11 @@ class NeuralNetworkService {
                 this.lastTrainingDuration = Math.round(trainingDuration / 1000); // в секундах
                 this.lastTrainingAccuracy = finalAcc;
                 this.lastTrainingLoss = finalLoss;
-                this.trainingHistory = history.history;
+                const maxEpochsStored = 100; // Ограничение для экономии памяти
+                const h = history.history;
+                this.trainingHistory = Object.fromEntries(
+                    Object.entries(h || {}).map(([k, arr]) => [k, Array.isArray(arr) ? arr.slice(-maxEpochsStored) : arr])
+                );
             }
 
             // Получаем обученную модель из OptimizedTrainingService и сохраняем
