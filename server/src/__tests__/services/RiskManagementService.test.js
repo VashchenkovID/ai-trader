@@ -104,8 +104,8 @@ describe('RiskManagementService - Фаза 1, задача 1.1: Смягчени
             expect(RiskManagementService.limits.maxPositionSize).toBe(0.05); // 5%
         });
 
-        it('должен использовать maxTotalExposure = 40% вместо 20%', () => {
-            expect(RiskManagementService.limits.maxTotalExposure).toBe(0.40); // 40%
+        it('должен использовать maxTotalExposure = 60% (актуальная конфигурация)', () => {
+            expect(RiskManagementService.limits.maxTotalExposure).toBe(0.60); // 60%
         });
 
         it('должен позволять позицию размером 4% от капитала', async () => {

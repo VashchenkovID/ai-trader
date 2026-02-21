@@ -469,6 +469,14 @@ class PerformanceVisualizationService {
                 timestamp: new Date().toISOString()
             };
 
+            // Backward-compatibility для существующих тестов/клиентов.
+            result.charts = {
+                returns: result.returns,
+                pnlDistribution: result.pnlDistribution,
+                drawdown: result.drawdown,
+                heatmap: result.heatmap
+            };
+
             this._evictCache();
             this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
             return result;

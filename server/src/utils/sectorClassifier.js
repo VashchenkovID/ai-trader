@@ -143,6 +143,17 @@ class SectorClassifier {
     }
 
     /**
+     * Возвращает keywords для указанного сектора.
+     * Используется для расширения поисковых запросов новостей.
+     * @param {string} sector - Сектор инструмента
+     * @returns {Array<string>} Массив ключевых слов сектора
+     */
+    getSectorKeywords(sector) {
+        const normalized = this.normalizeSector(sector);
+        return this.sectorMapping[normalized] || this.sectorMapping.other || [];
+    }
+
+    /**
      * Обновляет сектор для инструмента в БД
      * @param {string} figi - FIGI инструмента
      * @param {string} sector - Название сектора

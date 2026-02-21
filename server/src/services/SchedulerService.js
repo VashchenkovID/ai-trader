@@ -6691,14 +6691,12 @@ class SchedulerService {
             
             const NewsAnalysisService = (await import('./NewsAnalysisService.js')).default;
             
-            // Загружаем свежие новости для всех акций с ротацией
-            // Ограничиваем до 30 инструментов, чтобы не превысить лимит в 100 запросов в день
-            // performCacheUpdate делает 10 запросов * 6 раз в день = 60 запросов
-            // performDailyNewsUpdate делает 30 запросов * 1 раз в день = 30 запросов
-            // Итого: 60 + 30 = 90 запросов (в пределах лимита в 100 запросов)
-            // Используем ротацию: каждый день обновляем следующие 30 инструментов
+            // Загружаем свежие новости для всех акций с ротацией и бюджетом запросов.
             const lastDailyNewsUpdateIndex = await SettingsService.getSetting('daily_news_update_last_index', 0);
             const startIndex = parseInt(lastDailyNewsUpdateIndex) || 0;
+            const newsDailyRequestsBudget = parseInt(await SettingsService.getSetting('news_daily_requests_budget', 90), 10) || 90;
+            const newsRequestsPerInstrument = parseInt(await SettingsService.getSetting('news_requests_per_instrument', 3), 10) || 3;
+            const newsDailyInstrumentsLimit = parseInt(await SettingsService.getSetting('news_daily_instruments_limit', 30), 10) || 30;
             
             // Логирование удалено согласно рефакторингу (было LoggerService.info)
             
@@ -6712,7 +6710,9 @@ class SchedulerService {
                             metadata: {
                                 stage: 'loading',
                                 startIndex,
-                                limit: 30
+                                limit: newsDailyInstrumentsLimit,
+                                requestsBudget: newsDailyRequestsBudget,
+                                requestsPerInstrument: newsRequestsPerInstrument
                             }
                         });
                     }
@@ -6726,8 +6726,11 @@ class SchedulerService {
             }
             
             const result = await NewsAnalysisService.loadFreshNewsForAllInstruments({
-                limit: 30, // Ограничиваем количество инструментов
+                limit: newsDailyInstrumentsLimit,
                 startIndex: startIndex, // Начинаем с сохраненного индекса (ротация)
+                requestsBudget: newsDailyRequestsBudget,
+                requestsPerInstrument: newsRequestsPerInstrument,
+                maxInstrumentsPerRun: newsDailyInstrumentsLimit,
                 onProgress: (progress) => {
                     // Обрабатываем callback безопасно, чтобы не было необработанных промисов
                     try {
@@ -6745,7 +6748,8 @@ class SchedulerService {
             
             // Сохраняем индекс для следующего дня (ротация)
             if (result.total !== undefined) {
-                const nextIndex = (startIndex + 30) % result.total;
+                const processed = result.processed || newsDailyInstrumentsLimit;
+                const nextIndex = (startIndex + processed) % result.total;
                 await SettingsService.setSetting('daily_news_update_last_index', nextIndex);
                 // Логирование удалено согласно рефакторингу (было LoggerService.info)
             }

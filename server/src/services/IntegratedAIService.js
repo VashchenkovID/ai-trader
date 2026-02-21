@@ -405,11 +405,22 @@ class IntegratedAIService {
                         
                         // Группируем новости по категориям
                         const newsByCategory = {};
+                        const newsBySource = {
+                            company: 0,
+                            sector: 0,
+                            political: 0
+                        };
                         enhancedNews.forEach(article => {
                             const category = article.eventClassification?.category || 'general';
                             if (!newsByCategory[category]) {
                                 newsByCategory[category] = [];
                             }
+                            const sourceBucket = category === 'political'
+                                ? 'political'
+                                : category === 'macro'
+                                    ? 'sector'
+                                    : 'company';
+                            newsBySource[sourceBucket]++;
                             newsByCategory[category].push({
                                 title: article.title,
                                 sentiment: article.sentiment,
@@ -433,6 +444,7 @@ class IntegratedAIService {
                                 highPriorityNews: highPriorityCount,
                                 criticalNews: criticalCount,
                                 newsByCategory: newsByCategory,
+                                newsBySource: newsBySource,
                                 // Фаза 3, задача 3.4.3: Feature importance
                                 featureImportance: newsFeatureImportance.featureImportance,
                                 topCategories: newsFeatureImportance.topCategories || []

@@ -1726,6 +1726,7 @@ class TradingRequestService {
      */
     async validateTradingMode(mode, recommendation) {
         try {
+            const normalizedMode = String(mode || '').toLowerCase();
             const modeSettings = await TradingModeManager.getModeSettings();
             
             // Для SELL операций (продажа) не требуем минимальную уверенность,
@@ -1742,7 +1743,18 @@ class TradingRequestService {
                 warnings: []
             };
 
-            switch (mode) {
+            switch (normalizedMode) {
+                case 'micro':
+                    // Micro режим:
+                    // <40% блокируем, 40-60% предупреждаем, >=60% пропускаем.
+                    if (recommendation.confidence < 0.4) {
+                        throw new Error(`Micro режим: уверенность ${(recommendation.confidence * 100).toFixed(0)}% слишком низкая (минимум 40%)`);
+                    } else if (recommendation.confidence < 0.6) {
+                        validationResult.warnings.push(
+                            `Micro режим: уверенность ${(recommendation.confidence * 100).toFixed(1)}% ниже рекомендуемого минимума 60%`
+                        );
+                    }
+                    break;
                 case 'paper':
                     // Paper режим - минимальные ограничения только для покупок
                     if (recommendation.confidence < 0.3) {

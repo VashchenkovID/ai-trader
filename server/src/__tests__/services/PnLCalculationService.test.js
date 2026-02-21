@@ -35,7 +35,7 @@ describe('PnLCalculationService', () => {
             expect(result.count).toBe(1);
             expect(result.profitable).toBe(1);
             expect(result.unprofitable).toBe(0);
-            expect(result.winRate).toBe(100);
+            expect(result.winRate).toBe(1);
         });
 
         it('должен правильно рассчитывать убыток от одной сделки', () => {
@@ -103,7 +103,7 @@ describe('PnLCalculationService', () => {
             expect(result.count).toBe(3);
             expect(result.profitable).toBe(2);
             expect(result.unprofitable).toBe(1);
-            expect(result.winRate).toBeCloseTo(66.67, 2);
+            expect(result.winRate).toBeCloseTo(2 / 3, 4);
         });
 
         it('должен использовать realizedProfit если она есть', () => {

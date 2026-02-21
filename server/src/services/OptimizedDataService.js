@@ -1325,12 +1325,27 @@ class OptimizedDataService {
                 return [0, 0.5]; // Нет новостей до указанного времени - нейтральные значения
             }
             
-            // Рассчитываем только самые важные фичи (упрощенный набор)
-            const sentiments = filteredNews.map(n => n.sentiment);
-            const relevances = filteredNews.map(n => n.relevance);
-            
-            const avgSentiment = sentiments.reduce((sum, s) => sum + s, 0) / sentiments.length;
-            const avgRelevance = relevances.reduce((sum, r) => sum + r, 0) / relevances.length;
+            // Сохраняем формат из 2 фич, но используем source-aware взвешивание:
+            // company > sector/macro > political.
+            const getSourceWeight = (newsItem) => {
+                const category = String(newsItem?.category || '').toLowerCase();
+                if (category === 'political') return 0.75;
+                if (category === 'macro') return 0.85;
+                return 1.0;
+            };
+
+            let weightedSentiment = 0;
+            let weightedRelevance = 0;
+            let totalWeight = 0;
+            for (const item of filteredNews) {
+                const weight = getSourceWeight(item);
+                weightedSentiment += (item.sentiment || 0) * weight;
+                weightedRelevance += (item.relevance || 0.5) * weight;
+                totalWeight += weight;
+            }
+
+            const avgSentiment = totalWeight > 0 ? weightedSentiment / totalWeight : 0;
+            const avgRelevance = totalWeight > 0 ? weightedRelevance / totalWeight : 0.5;
             
             const features = [
                 avgSentiment,      // Средний сентимент

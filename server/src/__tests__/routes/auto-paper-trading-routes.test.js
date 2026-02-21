@@ -4,6 +4,7 @@
  */
 
 import dotenv from 'dotenv';
+import { describe, it } from '@jest/globals';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import sequelize from '../../config/database.js';
@@ -29,6 +30,10 @@ for (const envPath of envPaths) {
         // Игнорируем ошибки
     }
 }
+
+describe.skip('auto-paper-trading routes manual script', () => {
+    it('manual script is excluded from jest unit run', () => {});
+});
 
 function log(message, color = 'reset') {
     const colors = {
@@ -276,5 +281,7 @@ async function runAllTests() {
     }
 }
 
-runAllTests();
+if (process.env.RUN_MANUAL_AUTO_PAPER_TESTS === 'true') {
+    runAllTests();
+}
 

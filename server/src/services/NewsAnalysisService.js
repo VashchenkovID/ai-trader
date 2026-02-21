@@ -1,4 +1,5 @@
 import { Op } from 'sequelize';
+import SectorClassifier from '../utils/sectorClassifier.js';
 
 /**
  * Сервис для анализа новостей
@@ -202,14 +203,36 @@ class NewsAnalysisService {
     /**
      * Расчет релевантности новости для инструмента
      */
-    calculateRelevance(article, figi) {
+    calculateRelevance(article, figi, options = {}) {
+        const {
+            sourceType = 'company',
+            ticker = null,
+            companyName = null,
+            sector = null
+        } = options;
+
         const text = (article.title + ' ' + (article.description || '')).toLowerCase();
-        const figiLower = figi.toLowerCase();
+        const figiLower = (figi || '').toLowerCase();
         
         let relevance = 0;
         
         if (text.includes(figiLower)) {
             relevance += 0.5;
+        }
+
+        const tickerLower = (ticker || '').toLowerCase();
+        if (tickerLower && text.includes(tickerLower)) {
+            relevance += 0.35;
+        }
+
+        const normalizedCompanyName = (companyName || '')
+            .toLowerCase()
+            .replace(/\b(пao|пао|оао|ооо|ао|зао|нпо|гк|холдинг)\b/gi, '')
+            .trim();
+        if (normalizedCompanyName) {
+            const companyParts = normalizedCompanyName.split(/\s+/).filter(p => p.length > 2);
+            const companyHits = companyParts.filter(part => text.includes(part)).length;
+            relevance += Math.min(0.35, companyHits * 0.12);
         }
         
         const financialKeywords = [
@@ -226,6 +249,36 @@ class NewsAnalysisService {
                 relevance += 0.1;
             }
         });
+
+        const sectorKeywords = SectorClassifier.getSectorKeywords(sector).slice(0, 8);
+        const sectorMatches = sectorKeywords.filter(keyword => text.includes(String(keyword).toLowerCase())).length;
+        if (sectorMatches > 0) {
+            relevance += Math.min(0.25, sectorMatches * 0.08);
+        }
+
+        const politicalKeywords = [
+            'санкции', 'политика', 'геополитика', 'цб', 'центробанк',
+            'ключевая ставка', 'правительство', 'регулятор', 'эмбарго'
+        ];
+        const politicalMatches = politicalKeywords.filter(keyword => text.includes(keyword)).length;
+
+        const sourceWeights = {
+            company: 1.0,
+            sector: 0.85,
+            political: 0.7
+        };
+        const baseRelevance = relevance;
+        relevance *= sourceWeights[sourceType] || 1.0;
+
+        if (sourceType === 'political') {
+            if (politicalMatches > 0) {
+                relevance += Math.min(0.2, politicalMatches * 0.05);
+            } else {
+                relevance *= 0.6; // Политические новости без политического контекста понижаем.
+            }
+            // Политический канал не должен перекрывать прямой company-сигнал для той же статьи.
+            relevance = Math.min(relevance, (baseRelevance * 0.75) + 0.02);
+        }
         
         return Math.min(1, relevance);
     }
@@ -881,12 +934,176 @@ class NewsAnalysisService {
     }
 
     /**
+     * Обработка статей NewsAPI в единый внутренний формат
+     */
+    async processNewsArticles(rawArticles, options = {}) {
+        const {
+            figi = null,
+            sourceType = 'company',
+            fallbackCategory = 'general',
+            companyName = null,
+            ticker = null,
+            sector = null
+        } = options;
+
+        if (!Array.isArray(rawArticles) || rawArticles.length === 0) {
+            return [];
+        }
+
+        const processed = await Promise.all(rawArticles
+            .filter(article => article?.title || article?.description || article?.content)
+            .map(async (article) => {
+                try {
+                    let newsText = article.description || article.content || '';
+                    const newsTitle = article.title || '';
+                    newsText = this.cleanNewsText(newsText);
+                    if (!this.isValidNewsText(newsText)) {
+                        return null;
+                    }
+
+                    let newsTime = new Date();
+                    if (article.publishedAt) {
+                        const parsed = new Date(article.publishedAt);
+                        if (!isNaN(parsed.getTime())) {
+                            newsTime = parsed;
+                        }
+                    }
+
+                    let sentiment = 0;
+                    try {
+                        sentiment = this.analyzeSentimentFallback(`${newsTitle} ${newsText}`);
+                    } catch (sentimentError) {
+                        sentiment = 0;
+                    }
+
+                    const normalizedArticle = { title: newsTitle, description: newsText };
+                    const eventCategory = this.classifyEventImportance(normalizedArticle)?.category || fallbackCategory;
+
+                    return {
+                        title: newsTitle,
+                        description: newsText,
+                        url: article.url || '',
+                        publishedAt: newsTime,
+                        source: article.source?.name || 'NewsAPI',
+                        sentiment,
+                        relevance: figi ? this.calculateRelevance(normalizedArticle, figi, { sourceType, sector, ticker, companyName }) : 0.5,
+                        keywords: this.extractKeywords(`${newsTitle} ${newsText}`),
+                        category: sourceType === 'political' ? 'political' : eventCategory,
+                        impact: this.calculateImpact(normalizedArticle),
+                        language: 'ru',
+                        newsSourceType: sourceType
+                    };
+                } catch (articleError) {
+                    return null;
+                }
+            }));
+
+        return processed.filter(Boolean);
+    }
+
+    mergeAndDeduplicateNews(newsItems = []) {
+        const deduped = new Map();
+        for (const article of newsItems) {
+            if (!article) continue;
+            const normalizedTitle = (article.title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+            const dayBucket = article.publishedAt
+                ? new Date(article.publishedAt).toISOString().split('T')[0]
+                : 'unknown';
+            const dedupeKey = article.url || `${normalizedTitle}|${dayBucket}`;
+            if (!deduped.has(dedupeKey)) {
+                deduped.set(dedupeKey, article);
+                continue;
+            }
+
+            // При конфликте сохраняем статью с большей релевантностью.
+            const existing = deduped.get(dedupeKey);
+            if ((article.relevance || 0) > (existing.relevance || 0)) {
+                deduped.set(dedupeKey, article);
+            }
+        }
+        return [...deduped.values()];
+    }
+
+    async fetchCompanyNews(companyName, fromDate, toDate, options = {}) {
+        const NewsApiService = (await import('./NewsApiService.js')).default;
+        const rawNews = await NewsApiService.fetchNewsByCompanyName(companyName, fromDate, toDate, {
+            ticker: options.ticker || null,
+            sector: options.sector || null,
+            apiData: options.apiData || null,
+            includeFinancialTerms: options.includeFinancialTerms !== false,
+            aliases: options.aliases || null,
+            pageSize: options.pageSize || 100,
+            queryType: 'company'
+        });
+
+        return this.processNewsArticles(rawNews, {
+            ...options,
+            companyName,
+            sourceType: 'company',
+            fallbackCategory: 'general'
+        });
+    }
+
+    async fetchSectorNews(companyName, fromDate, toDate, options = {}) {
+        if (!options.sector) {
+            return [];
+        }
+
+        const NewsApiService = (await import('./NewsApiService.js')).default;
+        const sectorQuery = NewsApiService.buildSearchQuery(options.ticker || null, companyName, {
+            sector: options.sector,
+            aliases: options.aliases || null,
+            includeFinancialTerms: true,
+            queryType: 'sector'
+        });
+
+        const rawNews = await NewsApiService.searchNews(sectorQuery, {
+            language: 'ru',
+            from: fromDate,
+            to: toDate,
+            sortBy: 'relevancy',
+            pageSize: Math.min(options.pageSize || 100, 100),
+            figi: options.figi
+        });
+
+        return this.processNewsArticles(rawNews, {
+            ...options,
+            companyName,
+            sourceType: 'sector',
+            fallbackCategory: 'macro'
+        });
+    }
+
+    async fetchPoliticalNews(companyName, fromDate, toDate, options = {}) {
+        const NewsApiService = (await import('./NewsApiService.js')).default;
+        const politicalQuery = NewsApiService.buildSearchQuery(options.ticker || null, companyName, {
+            sector: options.sector || null,
+            aliases: options.aliases || null,
+            includeFinancialTerms: false,
+            includePoliticalTerms: true,
+            queryType: 'political'
+        });
+
+        const rawNews = await NewsApiService.searchNews(politicalQuery, {
+            language: 'ru',
+            from: fromDate,
+            to: toDate,
+            sortBy: 'relevancy',
+            pageSize: Math.min(options.pageSize || 100, 100),
+            figi: options.figi
+        });
+
+        return this.processNewsArticles(rawNews, {
+            ...options,
+            companyName,
+            sourceType: 'political',
+            fallbackCategory: 'political'
+        });
+    }
+
+    /**
      * Запрос новостей по названию компании и периоду через NewsAPI.org
-     * @param {string} companyName - Название компании
-     * @param {Date} fromDate - Дата начала периода
-     * @param {Date} toDate - Дата окончания периода
-     * @param {object} options - Дополнительные опции (ticker, sector, apiData и т.д.)
-     * @returns {Promise<Array>} - Массив обработанных новостей
+     * Теперь использует multi-source подход: company + sector + political
      */
     async fetchNewsByCompanyNameAndPeriod(companyName, fromDate, toDate, options = {}) {
         try {
@@ -895,103 +1112,27 @@ class NewsAnalysisService {
             }
 
             const NewsApiService = (await import('./NewsApiService.js')).default;
-
             if (!NewsApiService.isInitialized) {
                 await NewsApiService.initialize();
             }
 
-            const news = await NewsApiService.fetchNewsByCompanyName(companyName, fromDate, toDate, {
-                ticker: options.ticker || null,
-                sector: options.sector || null,
-                apiData: options.apiData || null,
-                includeFinancialTerms: options.includeFinancialTerms !== false, // По умолчанию true
-                aliases: options.aliases || null,
-                pageSize: options.pageSize || 100
-            });
+            const includeCompanyNews = options.includeCompanyNews !== false;
+            const includeSectorNews = options.includeSectorNews !== false;
+            const includePoliticalNews = options.includePoliticalNews !== false;
 
-            if (!news || news.length === 0) {
-                return [];
-            }
+            const chunks = await Promise.all([
+                includeCompanyNews
+                    ? this.fetchCompanyNews(companyName, fromDate, toDate, options)
+                    : Promise.resolve([]),
+                includeSectorNews
+                    ? this.fetchSectorNews(companyName, fromDate, toDate, options)
+                    : Promise.resolve([]),
+                includePoliticalNews
+                    ? this.fetchPoliticalNews(companyName, fromDate, toDate, options)
+                    : Promise.resolve([])
+            ]);
 
-            const processedNewsPromises = news
-                .filter(article => article.title || article.description || article.content)
-                .map(async (article) => {
-                    try {
-                        let newsText = article.description || article.content || '';
-                        const newsTitle = article.title || '';
-                        
-                        // Очищаем и валидируем текст
-                        newsText = this.cleanNewsText(newsText);
-                        
-                        // Если текст невалидный, пропускаем статью
-                        if (!this.isValidNewsText(newsText)) {
-                            return null;
-                        }
-                        
-                        let newsTime = new Date();
-                        if (article.publishedAt) {
-                            try {
-                                newsTime = new Date(article.publishedAt);
-                                if (isNaN(newsTime.getTime())) {
-                                    newsTime = new Date();
-                                }
-                            } catch (e) {
-                                newsTime = new Date();
-                            }
-                        }
-
-                        // Отключаем анализ тональности через BERT модель для предотвращения segmentation fault
-                        // Используем только fallback метод, который безопасен
-                        let sentiment = 0;
-                        try {
-                            // Используем только fallback метод, не вызываем BERT модель
-                            sentiment = this.analyzeSentimentFallback(newsTitle + ' ' + newsText);
-                        } catch (sentimentError) {
-                            // Игнорируем ошибки анализа тональности, используем нейтральное значение
-                            sentiment = 0;
-                        }
-
-                        return {
-                            title: newsTitle,
-                            description: newsText,
-                            url: article.url || '',
-                            publishedAt: newsTime,
-                            source: article.source?.name || 'NewsAPI',
-                            sentiment: sentiment,
-                            relevance: options.figi ? this.calculateRelevance({ title: newsTitle, description: newsText }, options.figi) : 0.5,
-                            keywords: this.extractKeywords(newsTitle + ' ' + newsText),
-                            category: 'general',
-                            impact: this.calculateImpact({ title: newsTitle, description: newsText }),
-                            language: 'ru'
-                        };
-                    } catch (articleError) {
-                        try {
-                            const LoggerService = (await import('./LoggerService.js')).default;
-                            LoggerService.warn('Ошибка обработки статьи', {
-                                service: 'NewsAnalysisService',
-                                operation: 'fetchNewsByCompanyNameAndPeriod',
-                                companyName,
-                                articleTitle: article.title || 'unknown',
-                                error: {
-                                    message: articleError.message,
-                                    stack: articleError.stack,
-                                    name: articleError.name,
-                                    code: articleError.code
-                                }
-                            });
-                        } catch (logError) {
-                            console.warn(`⚠️ Ошибка обработки статьи:`, articleError.message);
-                        }
-                        return null;
-                    }
-                });
-
-            // Ждем завершения всех промисов
-            const processedNews = (await Promise.all(processedNewsPromises))
-                .filter(article => article !== null);
-
-            return processedNews;
-
+            return this.mergeAndDeduplicateNews(chunks.flat());
         } catch (error) {
             try {
                 const LoggerService = (await import('./LoggerService.js')).default;
@@ -1013,11 +1154,9 @@ class NewsAnalysisService {
             } catch (logError) {
                 console.error(`❌ Ошибка загрузки новостей для "${companyName}":`, error);
             }
-            
-            // Для ошибок 500, 502, 503, 504 (внешние API недоступны или временные ошибки) возвращаем пустой массив
-            // вместо throw, чтобы не вызывать unhandledRejection
+
             if (error.status === 500 || error.statusCode === 500 ||
-                error.status === 502 || error.statusCode === 502 || 
+                error.status === 502 || error.statusCode === 502 ||
                 error.status === 503 || error.statusCode === 503 ||
                 error.status === 504 || error.statusCode === 504 ||
                 error.message?.includes('status: 500') ||
@@ -1028,16 +1167,9 @@ class NewsAnalysisService {
                 error.message?.includes('HTTP 502') ||
                 error.message?.includes('HTTP 503') ||
                 error.message?.includes('HTTP 504')) {
-                const LoggerService = (await import('./LoggerService.js')).default;
-                LoggerService.warn(`⚠️ External News API error for "${companyName}": ${error.message}. Returning empty news.`, {
-                    service: 'NewsAnalysisService',
-                    operation: 'fetchNewsByCompanyNameAndPeriod',
-                    companyName,
-                    error: { message: error.message, stack: error.stack }
-                });
                 return [];
             }
-            
+
             throw error;
         }
     }
@@ -1098,17 +1230,14 @@ class NewsAnalysisService {
                 throw new Error(`Инструмент с тикером ${ticker} не найден в БД. Доступные тикеры: ${tickerList}`);
             }
 
-            // Формируем поисковый запрос с дополнительными данными
-            const searchQuery = NewsApiService.buildSearchQuery(
-                instrument.ticker, 
-                instrument.name,
-                {
-                    sector: instrument.sector,
-                    apiData: instrument.apiData,
-                    includeFinancialTerms: true,
-                    aliases: instrument.apiData?.aliases || null
-                }
-            );
+            // Формируем основной company query для отладки.
+            const searchQuery = NewsApiService.buildSearchQuery(instrument.ticker, instrument.name, {
+                sector: instrument.sector,
+                apiData: instrument.apiData,
+                includeFinancialTerms: true,
+                aliases: instrument.apiData?.aliases || null,
+                queryType: 'company'
+            });
 
             const to = options.to || new Date();
             const from = options.from || new Date();
@@ -1122,15 +1251,25 @@ class NewsAnalysisService {
             }
             to.setHours(23, 59, 59, 999);
 
-            const news = await NewsApiService.searchNews(searchQuery, {
-                language: 'ru',
-                from: from,
-                to: to,
-                sortBy: 'relevancy',
-                pageSize: Math.min(options.pageSize || 100, 100)
-            });
+            const processedNews = await this.fetchNewsByCompanyNameAndPeriod(
+                instrument.name,
+                from,
+                to,
+                {
+                    ticker: instrument.ticker,
+                    sector: instrument.sector,
+                    apiData: instrument.apiData,
+                    aliases: instrument.apiData?.aliases || null,
+                    includeFinancialTerms: true,
+                    figi: instrument.figi,
+                    pageSize: Math.min(options.pageSize || 100, 100),
+                    includeCompanyNews: true,
+                    includeSectorNews: true,
+                    includePoliticalNews: true
+                }
+            );
 
-            if (!news || news.length === 0) {
+            if (!processedNews || processedNews.length === 0) {
                 return {
                     success: true,
                     ticker,
@@ -1140,81 +1279,6 @@ class NewsAnalysisService {
                     searchQuery
                 };
             }
-
-            const processedNewsPromises = news
-                .filter(article => article.title || article.description || article.content)
-                .map(async (article) => {
-                    try {
-                        let newsText = article.description || article.content || '';
-                        const newsTitle = article.title || '';
-                        
-                        // Очищаем и валидируем текст
-                        newsText = this.cleanNewsText(newsText);
-                        
-                        // Если текст невалидный, пропускаем статью
-                        if (!this.isValidNewsText(newsText)) {
-                            return null;
-                        }
-                        
-                        let newsTime = new Date();
-                        if (article.publishedAt) {
-                            try {
-                                newsTime = new Date(article.publishedAt);
-                                if (isNaN(newsTime.getTime())) {
-                                    newsTime = new Date();
-                                }
-                            } catch (e) {
-                                newsTime = new Date();
-                            }
-                        }
-
-                        // Отключаем анализ тональности через BERT модель для предотвращения segmentation fault
-                        // Используем только fallback метод, который безопасен
-                        let sentiment = 0;
-                        try {
-                            // Используем только fallback метод, не вызываем BERT модель
-                            sentiment = this.analyzeSentimentFallback(newsTitle + ' ' + newsText);
-                        } catch (sentimentError) {
-                            // Игнорируем ошибки анализа тональности, используем нейтральное значение
-                            sentiment = 0;
-                        }
-
-                        return {
-                            title: newsTitle,
-                            description: newsText,
-                            url: article.url || '',
-                            publishedAt: newsTime,
-                            source: article.source?.name || 'NewsAPI',
-                            sentiment: sentiment,
-                            relevance: this.calculateRelevance({ title: newsTitle, description: newsText }, instrument.figi),
-                            keywords: this.extractKeywords(newsTitle + ' ' + newsText),
-                            category: 'general',
-                            impact: this.calculateImpact({ title: newsTitle, description: newsText })
-                        };
-                    } catch (articleError) {
-                        try {
-                            const LoggerService = (await import('./LoggerService.js')).default;
-                            LoggerService.error('Ошибка обработки статьи', {
-                                service: 'NewsAnalysisService',
-                                operation: 'fetchNewsFromNewsApiByTicker',
-                                ticker,
-                                articleTitle: article.title || 'unknown',
-                                error: {
-                                    message: articleError.message,
-                                    stack: articleError.stack,
-                                    name: articleError.name,
-                                    code: articleError.code
-                                }
-                            });
-                        } catch (logError) {
-                            console.error(`❌ Ошибка обработки статьи:`, articleError.message);
-                        }
-                        return null;
-                    }
-                });
-
-            const processedNews = (await Promise.all(processedNewsPromises))
-                .filter(article => article !== null);
 
             if (processedNews.length > 0) {
                 try {
@@ -2059,7 +2123,14 @@ class NewsAnalysisService {
                 CacheService = CacheServiceModule.default;
             }
 
-            const { onProgress, limit, startIndex = 0 } = options; // Добавляем поддержку limit и startIndex для ротации
+            const {
+                onProgress,
+                limit,
+                startIndex = 0,
+                requestsBudget = null,
+                requestsPerInstrument = null,
+                maxInstrumentsPerRun = null
+            } = options;
             
             if (!this.isInitialized) {
                 throw new Error('NewsAnalysisService не инициализирован');
@@ -2129,23 +2200,34 @@ class NewsAnalysisService {
                 });
             }
             
-            // Ограничиваем количество инструментов, если указан limit
+            const SettingsService = (await import('./SettingsService.js')).default;
+            const configuredBudget = requestsBudget ?? parseInt(await SettingsService.getSetting('news_daily_requests_budget', 90), 10);
+            const configuredRequestsPerInstrument = requestsPerInstrument ?? parseInt(await SettingsService.getSetting('news_requests_per_instrument', 3), 10);
+            const configuredMaxInstruments = maxInstrumentsPerRun ?? parseInt(await SettingsService.getSetting('news_daily_instruments_limit', 30), 10);
+
+            const safeRequestsPerInstrument = Math.max(1, configuredRequestsPerInstrument || 1);
+            const budgetInstruments = Math.max(1, Math.floor((configuredBudget || 1) / safeRequestsPerInstrument));
+            const explicitLimit = limit && limit > 0 ? limit : Infinity;
+            const effectiveLimit = Math.max(1, Math.min(explicitLimit, configuredMaxInstruments || Infinity, budgetInstruments, shares.length));
+            shares = shares.slice(0, effectiveLimit);
+
+            LoggerService.info(`Loading fresh news for ${shares.length} instruments with request budget`, {
+                service: 'NewsAnalysisService',
+                operation: 'loadFreshNewsForAllInstruments',
+                startIndex,
+                configuredBudget,
+                safeRequestsPerInstrument,
+                configuredMaxInstruments,
+                budgetInstruments,
+                effectiveLimit,
+                totalShares
+            });
+
             if (limit && limit > 0) {
-                shares = shares.slice(0, limit);
-                LoggerService.info(`Loading fresh news for ${shares.length} instruments (rotation: startIndex=${startIndex}, total=${totalShares}, limited to ${limit} for API limit)`, {
+                LoggerService.info(`External limit applied: ${limit}`, {
                     service: 'NewsAnalysisService',
                     operation: 'loadFreshNewsForAllInstruments',
-                    startIndex,
-                    limit,
-                    totalShares,
-                    sharesToProcess: shares.length
-                });
-            } else {
-                LoggerService.info(`Loading fresh news for ${shares.length} instruments (rotation: startIndex=${startIndex})`, {
-                    service: 'NewsAnalysisService',
-                    operation: 'loadFreshNewsForAllInstruments',
-                    startIndex,
-                    sharesToProcess: shares.length
+                    limit
                 });
             }
 
@@ -2158,6 +2240,11 @@ class NewsAnalysisService {
 
             let updated = 0;
             let totalNews = 0;
+            let requestsSpent = 0;
+            let instrumentsWithNews = 0;
+            let relevanceSum = 0;
+            let relevanceCount = 0;
+            const sourceCoverage = { company: 0, sector: 0, political: 0 };
 
             // Загружаем новости для каждого инструмента
             for (let i = 0; i < shares.length; i++) {
@@ -2190,14 +2277,35 @@ class NewsAnalysisService {
                             aliases: instrument.apiData?.aliases || null,
                             includeFinancialTerms: true,
                             figi: instrument.figi,
-                            pageSize: 100
+                            pageSize: 100,
+                            includeCompanyNews: true,
+                            includeSectorNews: safeRequestsPerInstrument >= 2,
+                            includePoliticalNews: safeRequestsPerInstrument >= 3
                         }
                     );
+                    requestsSpent += safeRequestsPerInstrument;
 
                     if (news.length > 0) {
                         await this.cacheNews(instrument.figi, news);
                         totalNews += news.length;
                         updated++;
+                        instrumentsWithNews++;
+
+                        for (const article of news) {
+                            const category = String(article.category || '').toLowerCase();
+                            const sourceBucket = article.newsSourceType || (
+                                category === 'political'
+                                    ? 'political'
+                                    : category === 'macro'
+                                        ? 'sector'
+                                        : 'company'
+                            );
+                            if (sourceCoverage[sourceBucket] !== undefined) {
+                                sourceCoverage[sourceBucket]++;
+                            }
+                            relevanceSum += article.relevance || 0;
+                            relevanceCount++;
+                        }
                         
                         LoggerService.info(`News loaded and cached for ${instrument.ticker}: ${news.length} articles`, {
                             service: 'NewsAnalysisService',
@@ -2228,6 +2336,16 @@ class NewsAnalysisService {
                             success: true,
                             count: news.length
                         });
+                    }
+
+                    if (requestsSpent >= configuredBudget) {
+                        LoggerService.warn('Stopping news update: request budget reached', {
+                            service: 'NewsAnalysisService',
+                            operation: 'loadFreshNewsForAllInstruments',
+                            requestsSpent,
+                            configuredBudget
+                        });
+                        break;
                     }
 
                     // Задержка между запросами (1 секунда для бесплатного плана)
@@ -2273,7 +2391,13 @@ class NewsAnalysisService {
                 updated,
                 total: totalShares, // Возвращаем общее количество инструментов для ротации
                 processed: shares.length, // Количество обработанных в этом запуске
-                totalNews
+                totalNews,
+                requestsSpent,
+                metrics: {
+                    coverage: sourceCoverage,
+                    hitRate: shares.length > 0 ? instrumentsWithNews / shares.length : 0,
+                    averageRelevance: relevanceCount > 0 ? relevanceSum / relevanceCount : 0
+                }
             };
             
             LoggerService.info(`Fresh news loading completed: ${updated} instruments updated, ${totalNews} news articles loaded`, {

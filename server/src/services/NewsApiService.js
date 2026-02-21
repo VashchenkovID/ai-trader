@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import FallbackService from './FallbackService.js';
+import SectorClassifier from '../utils/sectorClassifier.js';
 
 /**
  * Сервис для работы с NewsAPI.org
@@ -12,6 +13,67 @@ class NewsApiService {
         this.requestDelay = 1000; // 1 секунда между запросами (бесплатный план: 100 запросов/день)
         this.lastRequestTime = 0;
         this.isInitialized = false;
+        this.maxQueryLength = 500;
+        this.maxQueryParts = 18;
+        this.defaultFinancialTerms = [
+            'акции', 'биржа', 'котировки', 'дивиденды', 'отчетность',
+            'stock', 'shares', 'dividend', 'earnings'
+        ];
+        this.defaultPoliticalTerms = [
+            'санкции', 'геополитика', 'центробанк', 'ключевая ставка', 'инфляция',
+            'правительство', 'регулятор', 'политика', 'elections', 'sanctions'
+        ];
+    }
+
+    _sanitizeQueryPart(value, wrapInQuotes = false) {
+        if (value === null || value === undefined) return null;
+        const text = String(value)
+            .replace(/[()]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (!text || text === '[object Object]') return null;
+        return wrapInQuotes ? `"${text}"` : text;
+    }
+
+    _normalizeCompanyName(companyName) {
+        if (!companyName) return '';
+        return String(companyName)
+            // \b плохо работает с кириллицей, поэтому используем явные границы по пробелам/началу/концу.
+            .replace(/(^|\s)(ПАО|ОАО|ООО|АО|ЗАО|НПО|ГК|Холдинг)(?=\s|$)/gi, ' ')
+            .replace(/[«»"]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    _uniqueParts(parts = []) {
+        const seen = new Set();
+        const result = [];
+        for (const rawPart of parts) {
+            const part = this._sanitizeQueryPart(rawPart);
+            if (!part) continue;
+            const normalized = part.toLowerCase();
+            if (seen.has(normalized)) continue;
+            seen.add(normalized);
+            result.push(part);
+            if (result.length >= this.maxQueryParts) break;
+        }
+        return result;
+    }
+
+    _buildOrQuery(parts = []) {
+        const uniqueParts = this._uniqueParts(parts);
+        if (uniqueParts.length === 0) return '';
+
+        let query = uniqueParts.join(' OR ');
+        if (query.length <= this.maxQueryLength) return query;
+
+        // Ограничиваем длину запроса, удаляя наименее приоритетные части с конца.
+        while (query.length > this.maxQueryLength && uniqueParts.length > 1) {
+            uniqueParts.pop();
+            query = uniqueParts.join(' OR ');
+        }
+
+        return query.slice(0, this.maxQueryLength);
     }
 
     async initialize() {
@@ -303,53 +365,61 @@ class NewsApiService {
      * @returns {string} - Поисковый запрос
      */
     buildSearchQuery(ticker, companyName = null, options = {}) {
-        
+        const {
+            sector = null,
+            includeFinancialTerms = true,
+            includePoliticalTerms = false,
+            aliases = [],
+            queryType = 'company'
+        } = options;
+
         const parts = [];
-        
-        // 1. Основное название компании (самый важный элемент)
-        if (companyName) {
-            // Проверяем что это строка
-            if (typeof companyName !== 'string') {
-                companyName = String(companyName);
-            }
-            
-            // Очищаем название от лишних символов (ПАО, ОАО и т.д.)
-            let cleanName = companyName
-                .replace(/\b(ПАО|ОАО|ООО|АО|ЗАО|НПО|ГК|Холдинг)\b/gi, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-            
-            if (cleanName) {
-                parts.push(`"${cleanName}"`); // Кавычки для точного совпадения
+        const cleanName = this._normalizeCompanyName(companyName);
+        const tickerPart = this._sanitizeQueryPart(ticker);
+
+        // Основные части компании.
+        if (cleanName) {
+            parts.push(this._sanitizeQueryPart(cleanName, true));
+            const shortName = cleanName.split(' ').slice(0, 2).join(' ');
+            if (shortName && shortName !== cleanName) {
+                parts.push(this._sanitizeQueryPart(shortName, true));
             }
         }
-        
-        // 2. Тикер (важен для поиска новостей о котировках)
-        if (ticker) {
-            // Проверяем что это строка
-            if (typeof ticker !== 'string') {
-                ticker = String(ticker);
-            }
-            parts.push(ticker);
+        if (tickerPart) {
+            parts.push(tickerPart);
+            parts.push(this._sanitizeQueryPart(`${tickerPart} акции`, true));
         }
-        
-        
-        // Объединяем через OR для более широкого поиска
-        // Убираем дубликаты и некорректные значения
-        const uniqueParts = [...new Set(parts.filter(p => {
-            if (!p || typeof p !== 'string') {
-                return false;
+
+        // Алиасы компании.
+        if (Array.isArray(aliases)) {
+            for (const alias of aliases) {
+                const normalizedAlias = this._normalizeCompanyName(alias);
+                if (normalizedAlias) {
+                    parts.push(this._sanitizeQueryPart(normalizedAlias, true));
+                }
             }
-            const trimmed = p.trim();
-            if (trimmed === '' || trimmed === '[object Object]') {
-                return false;
+        }
+
+        // Секторные keywords.
+        if (sector) {
+            const sectorKeywords = SectorClassifier.getSectorKeywords(sector);
+            for (const keyword of sectorKeywords.slice(0, 6)) {
+                parts.push(this._sanitizeQueryPart(keyword, true));
             }
-            return true;
-        }))];
-        
-        const finalQuery = uniqueParts.join(' OR ');
-        
-        return finalQuery;
+        }
+
+        // Финансовые/политические термины в зависимости от типа запроса.
+        if (includeFinancialTerms || queryType === 'sector') {
+            this.defaultFinancialTerms.forEach(term => parts.push(this._sanitizeQueryPart(term, true)));
+        }
+        if (includePoliticalTerms || queryType === 'political') {
+            this.defaultPoliticalTerms.forEach(term => parts.push(this._sanitizeQueryPart(term, true)));
+        }
+
+        const query = this._buildOrQuery(parts);
+        if (query) return query;
+
+        return tickerPart || this._sanitizeQueryPart(companyName) || 'рынок акций';
     }
 }
 
