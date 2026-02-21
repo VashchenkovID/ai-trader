@@ -4380,6 +4380,56 @@ class NeuralNetworkService {
                         });
                     }
                 }
+
+                // Автоматическое создание SELL-заявки для рекомендаций по позициям портфеля.
+                // Ранее авто-создание работало только для buyRecommendations, из-за чего SELL-заявки не появлялись.
+                if (savedRecommendation && savedRecommendation.recommendation === 'SELL') {
+                    try {
+                        const SettingsService = (await import('./SettingsService.js')).default;
+                        const TradingRequestService = (await import('./TradingRequestService.js')).default;
+                        const TradingRequest = (await import('../models/TradingRequest.js')).default;
+                        const { Op } = await import('sequelize');
+
+                        const settings = await SettingsService.getSettings();
+                        let autoTradeEnabled = settings.auto_trade_enabled;
+                        if (typeof autoTradeEnabled === 'string') {
+                            autoTradeEnabled = autoTradeEnabled.toLowerCase() === 'true';
+                        }
+                        autoTradeEnabled = autoTradeEnabled !== false && autoTradeEnabled !== 'false';
+
+                        if (autoTradeEnabled) {
+                            const existingSellRequest = await TradingRequest.findOne({
+                                where: {
+                                    figi: savedRecommendation.figi,
+                                    action: 'SELL',
+                                    status: { [Op.in]: ['PENDING', 'APPROVED'] }
+                                }
+                            });
+
+                            if (!existingSellRequest) {
+                                await TradingRequestService.createTradingRequest(savedRecommendation.figi, {
+                                    action: 'SELL',
+                                    strategyId: strategyId || undefined
+                                });
+
+                                LoggerService.info('Auto-created SELL trading request', {
+                                    service: 'NeuralNetworkService',
+                                    figi: savedRecommendation.figi,
+                                    ticker: savedRecommendation.ticker,
+                                    confidence: savedRecommendation.confidence,
+                                    score: savedRecommendation.score
+                                });
+                            }
+                        }
+                    } catch (autoSellError) {
+                        LoggerService.warn('Could not auto-create SELL trading request', {
+                            service: 'NeuralNetworkService',
+                            operation: 'autoCreateSellTradingRequest',
+                            figi: savedRecommendation?.figi,
+                            error: { message: autoSellError.message }
+                        });
+                    }
+                }
             }
 
             // Отправляем уведомление через WebSocket о новых рекомендациях

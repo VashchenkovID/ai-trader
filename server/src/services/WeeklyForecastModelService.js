@@ -878,6 +878,57 @@ class WeeklyForecastModelService {
     }
 
     /**
+     * Удаление модели и её метаданных
+     * @param {string} figi - FIGI инструмента
+     * @param {string} modelType - Тип модели (по умолчанию 'seq2seq')
+     * @returns {Promise<boolean>} Успешность операции
+     */
+    async deleteModel(figi, modelType = 'seq2seq') {
+        try {
+            const modelPath = `weekly_forecast/${figi}/${modelType}`;
+            const modelDeleted = await ModelManager.deleteModel(modelPath);
+
+            // Метаданные хранятся отдельно, удаляем их best-effort
+            try {
+                const fs = await import('fs/promises');
+                const path = await import('path');
+                const { fileURLToPath } = await import('url');
+
+                const __filename = fileURLToPath(import.meta.url);
+                const __dirname = path.dirname(__filename);
+                const modelsDir = path.join(__dirname, '../../models');
+                const metadataPath = path.join(modelsDir, `weekly_forecast/${figi}/${modelType}_metadata.json`);
+                await fs.unlink(metadataPath);
+            } catch (metadataError) {
+                // Игнорируем отсутствие файла метаданных
+            }
+
+            if (LoggerService.isInitialized) {
+                LoggerService.warn('Model deleted', {
+                    service: 'WeeklyForecastModelService',
+                    operation: 'deleteModel',
+                    figi,
+                    modelType,
+                    success: modelDeleted
+                });
+            }
+
+            return modelDeleted;
+        } catch (error) {
+            if (LoggerService.isInitialized) {
+                LoggerService.error('Error deleting model', {
+                    service: 'WeeklyForecastModelService',
+                    operation: 'deleteModel',
+                    figi,
+                    modelType,
+                    error: { message: error.message, stack: error.stack }
+                });
+            }
+            return false;
+        }
+    }
+
+    /**
      * Загрузка метаданных модели
      * @param {string} figi - FIGI инструмента
      * @param {string} modelType - Тип модели (по умолчанию 'seq2seq')

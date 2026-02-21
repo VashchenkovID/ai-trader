@@ -211,6 +211,19 @@ class TradingRequestService {
             
             if (options.quantity && options.quantity > 0 && !isNaN(options.quantity)) {
                 quantity = Math.floor(Math.abs(options.quantity)); // Округляем вниз до целого числа
+            } else if (determinedAction === 'SELL') {
+                // Для SELL используем фактический доступный объем позиции, а не расчет от бюджета
+                const availableQuantity = await this.getAvailablePositionQuantity(recommendation.figi, currentMode);
+                if (availableQuantity <= 0) {
+                    throw new Error(`No available position to SELL for ${recommendation.figi}`);
+                }
+
+                if (options.maxAmount && options.maxAmount > 0 && !isNaN(options.maxAmount) && currentPrice > 0) {
+                    const maxByAmount = Math.floor(options.maxAmount / currentPrice);
+                    quantity = Math.min(availableQuantity, Math.max(1, maxByAmount));
+                } else {
+                    quantity = availableQuantity;
+                }
             } else if (positionSize && positionSize.amount > 0) {
                 // Используем размер позиции из стратегии
                 availableCapital = positionSize.amount;
@@ -474,6 +487,18 @@ class TradingRequestService {
             if (tradingRequest.status === 'PENDING' && tradingRequest.tradingMode === 'paper') {
                 try {
                     const AutoPaperTradingService = (await import('./AutoPaperTradingService.js')).default;
+                    if (!AutoPaperTradingService.isInitialized) {
+                        await AutoPaperTradingService.initialize();
+                    }
+
+                    if (!AutoPaperTradingService.isEnabled) {
+                        const settings = await SettingsService.getSettings();
+                        const autoTradeEnabled = settings.auto_trade_enabled !== false && settings.auto_trade_enabled !== 'false';
+                        if (autoTradeEnabled) {
+                            await AutoPaperTradingService.enable();
+                        }
+                    }
+
                     if (AutoPaperTradingService.isInitialized && AutoPaperTradingService.isEnabled) {
                         // Асинхронно обрабатываем заявку (не блокируем возврат)
                         setImmediate(async () => {
@@ -486,6 +511,12 @@ class TradingRequestService {
                                     error: error.message
                                 });
                             }
+                        });
+                    } else {
+                        LoggerService.debug('Auto-execution skipped: service disabled or not initialized', {
+                            requestId: tradingRequest.id,
+                            isInitialized: AutoPaperTradingService.isInitialized,
+                            isEnabled: AutoPaperTradingService.isEnabled
                         });
                     }
                 } catch (error) {
@@ -628,10 +659,28 @@ class TradingRequestService {
                 throw new Error(`Invalid price for ${recommendationData.figi}: ${currentPrice}. Cannot create trading request. Please provide a valid price.`);
             }
             
+            // Определяем action: приоритет у явно указанного options.action, иначе используем recommendationData
+            // Для HOLD рекомендаций создаем BUY заявку (пользователь хочет купить, несмотря на HOLD)
+            const action = options.action && (options.action === 'BUY' || options.action === 'SELL') 
+                ? options.action 
+                : (recommendationData.recommendation === 'HOLD' ? 'BUY' : recommendationData.recommendation);
+            
             // Используем указанное количество или рассчитываем автоматически
             let quantity;
             if (options.quantity && options.quantity > 0 && !isNaN(options.quantity)) {
                 quantity = Math.floor(Math.abs(options.quantity));
+            } else if (action === 'SELL') {
+                const availableQuantity = await this.getAvailablePositionQuantity(recommendationData.figi, currentMode);
+                if (availableQuantity <= 0) {
+                    throw new Error(`No available position to SELL for ${recommendationData.figi}`);
+                }
+
+                if (options.maxAmount && options.maxAmount > 0 && !isNaN(options.maxAmount) && currentPrice > 0) {
+                    const maxByAmount = Math.floor(options.maxAmount / currentPrice);
+                    quantity = Math.min(availableQuantity, Math.max(1, maxByAmount));
+                } else {
+                    quantity = availableQuantity;
+                }
             } else {
                 // Рассчитываем количество акций с учетом режима
                 quantity = await this.calculateQuantity(
@@ -728,12 +777,6 @@ class TradingRequestService {
                     console.warn('⚠️ Could not determine strategy for recommendation:', strategyError.message);
                 }
             }
-            
-            // Определяем action: приоритет у явно указанного options.action, иначе используем recommendationData
-            // Для HOLD рекомендаций создаем BUY заявку (пользователь хочет купить, несмотря на HOLD)
-            const action = options.action && (options.action === 'BUY' || options.action === 'SELL') 
-                ? options.action 
-                : (recommendationData.recommendation === 'HOLD' ? 'BUY' : recommendationData.recommendation);
             
             // Формируем reasoning с информацией о валидации стратегии
             let reasoning = this.generateReasoning(recommendationData);
@@ -1858,6 +1901,26 @@ class TradingRequestService {
             console.error('❌ Error calculating quantity:', error);
             // Возвращаем минимальное значение вместо NaN
             return 1; // Fallback к 1 акции
+        }
+    }
+
+    /**
+     * Получить доступное количество позиции для продажи
+     */
+    async getAvailablePositionQuantity(figi, tradingMode = null) {
+        try {
+            const mode = tradingMode || TradingModeManager.getCurrentMode().mode;
+            const portfolio = mode === 'paper'
+                ? await TradingEngine.getPortfolioValue()
+                : await TradingEngine.getRealPortfolioValue();
+
+            const positions = portfolio?.positions || {};
+            const rawQty = positions[figi] || 0;
+            const quantity = typeof rawQty === 'number' ? rawQty : parseFloat(rawQty) || 0;
+            return Math.max(0, Math.floor(quantity));
+        } catch (error) {
+            console.warn(`⚠️ Could not get available position quantity for ${figi}:`, error.message);
+            return 0;
         }
     }
 

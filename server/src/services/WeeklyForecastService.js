@@ -786,6 +786,7 @@ class WeeklyForecastService {
             let model = await WeeklyForecastModelService.loadModel(figi, modelType);
             let isNew = false;
             let version = null;
+            let deletedInvalidModelFromStorage = false;
             
             if (model) {
                 // Проверяем структуру модели - для Seq2Seq должна быть 2 входа
@@ -803,6 +804,8 @@ class WeeklyForecastService {
                     }
                     // Освобождаем неправильную модель
                     model.dispose();
+                    // Удаляем legacy/поврежденную модель из хранилища, чтобы не пытаться грузить её снова
+                    deletedInvalidModelFromStorage = await WeeklyForecastModelService.deleteModel(figi, modelType);
                     model = null;
                 } else {
                 // Проверяем метаданные для получения версии
@@ -835,6 +838,27 @@ class WeeklyForecastService {
                         modelType,
                         version
                     });
+                }
+
+                // Если мы удалили некорректную модель из storage, сразу сохраняем новую заготовку
+                // Это предотвращает повторную загрузку legacy-структуры после перезапуска процесса.
+                if (deletedInvalidModelFromStorage) {
+                    const saveSuccess = await WeeklyForecastModelService.saveModel(model, figi, modelType, {
+                        version,
+                        createdAt: new Date().toISOString(),
+                        migratedFromInvalidStructure: true
+                    });
+
+                    if (LoggerService.isInitialized) {
+                        LoggerService.warn('Recreated model persisted after invalid structure cleanup', {
+                            service: 'WeeklyForecastService',
+                            operation: 'getOrCreateModel',
+                            figi,
+                            modelType,
+                            version,
+                            saveSuccess
+                        });
+                    }
                 }
             }
             
