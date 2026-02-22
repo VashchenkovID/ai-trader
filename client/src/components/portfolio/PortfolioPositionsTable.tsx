@@ -684,6 +684,10 @@ const PortfolioPositionsTable: React.FC<PortfolioPositionsTableProps> = ({
             hoverable
             emptyMessage="Нет позиций в портфеле"
             className="portfolio-positions-table"
+            virtualized={positions.length > 30}
+            virtualHeight={560}
+            virtualRowHeight={62}
+            virtualOverscan={6}
           />
         )}
       </Card>

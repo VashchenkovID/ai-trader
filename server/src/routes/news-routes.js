@@ -14,7 +14,18 @@ router.get('/:figi', async (req, res) => {
         const limit = parseInt(req.query.limit) || 20;
         const days = parseInt(req.query.days) || 30;
         
-        const news = await NewsAnalysisService.getNewsByFigi(figi, { limit, days });
+        let news = await NewsAnalysisService.getNewsByFigi(figi, { limit, days });
+        let fallbackUsed = false;
+
+        // Если за короткий период новостей нет, пробуем расширенный период,
+        // чтобы пользователь видел исторические привязанные новости по FIGI.
+        if ((!news || news.length === 0) && days <= 30) {
+            const fallbackNews = await NewsAnalysisService.getNewsByFigi(figi, { limit, days: 3650 });
+            if (fallbackNews && fallbackNews.length > 0) {
+                news = fallbackNews;
+                fallbackUsed = true;
+            }
+        }
         const { formatModelsDates } = await import('../utils/dateFormatter.js');
         
         // Форматируем даты в новостях
@@ -24,13 +35,91 @@ router.get('/:figi', async (req, res) => {
         
         res.json({
             success: true,
-            data: formattedNews
+            data: formattedNews,
+            meta: {
+                figi,
+                requestedDays: days,
+                fallbackUsed
+            }
         });
     } catch (error) {
         console.error('Ошибка получения новостей:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения новостей',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Принудительная загрузка свежих новостей для конкретного FIGI
+ * POST /api/news/:figi/fresh
+ */
+router.post('/:figi/fresh', async (req, res) => {
+    try {
+        const { figi } = req.params;
+        const limit = parseInt(req.body?.limit) || 50;
+
+        const CacheService = (await import('../services/CacheService.js')).default;
+        const instrument = await CacheService.getInstrument(figi, true);
+
+        if (!instrument) {
+            return res.status(404).json({
+                success: false,
+                message: `Инструмент не найден: ${figi}`
+            });
+        }
+
+        const to = new Date();
+        const from = new Date();
+        from.setDate(from.getDate() - 30);
+        from.setHours(0, 0, 0, 0);
+        to.setHours(23, 59, 59, 999);
+
+        const news = await NewsAnalysisService.fetchNewsByCompanyNameAndPeriod(
+            instrument.name,
+            from,
+            to,
+            {
+                ticker: instrument.ticker,
+                sector: instrument.sector,
+                apiData: instrument.apiData,
+                aliases: instrument.apiData?.aliases || null,
+                includeFinancialTerms: true,
+                figi: instrument.figi,
+                pageSize: 100,
+                includeCompanyNews: true,
+                includeSectorNews: true,
+                includePoliticalNews: true
+            }
+        );
+
+        if (news && news.length > 0) {
+            await NewsAnalysisService.cacheNews(figi, news);
+        }
+
+        const cachedNews = await NewsAnalysisService.getNewsByFigi(figi, { limit, days: 30 });
+        const { formatModelsDates } = await import('../utils/dateFormatter.js');
+        const formattedNews = Array.isArray(cachedNews)
+            ? formatModelsDates(cachedNews, ['publishedAt', 'createdAt', 'updatedAt'])
+            : cachedNews;
+
+        res.json({
+            success: true,
+            message: `Свежие новости обновлены для ${instrument.ticker || figi}`,
+            data: {
+                figi,
+                ticker: instrument.ticker,
+                fetched: news?.length || 0,
+                news: formattedNews
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка принудительной загрузки свежих новостей:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка принудительной загрузки свежих новостей',
             error: error.message
         });
     }

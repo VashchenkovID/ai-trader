@@ -237,6 +237,10 @@ const StrategyPositionsTable: React.FC<StrategyPositionsTableProps> = ({
           hoverable
           emptyMessage={`Нет позиций в стратегии "${strategyName}"`}
           className="strategy-positions-table"
+          virtualized={positions.length > 25}
+          virtualHeight={500}
+          virtualRowHeight={60}
+          virtualOverscan={6}
         />
       )}
     </Card>

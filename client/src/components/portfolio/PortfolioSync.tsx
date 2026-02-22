@@ -351,6 +351,10 @@ const PortfolioSync: React.FC = () => {
                         rows={10}
                         emptyMessage="Нет данных"
                         size="sm"
+                        virtualized={mismatches.positionsWithoutStrategy.length > 20}
+                        virtualHeight={360}
+                        virtualRowHeight={50}
+                        virtualOverscan={5}
                       />
                     </>
                   )}
@@ -376,6 +380,10 @@ const PortfolioSync: React.FC = () => {
                         rows={10}
                         emptyMessage="Нет данных"
                         size="sm"
+                        virtualized={mismatches.requestsWithoutPosition.length > 20}
+                        virtualHeight={360}
+                        virtualRowHeight={50}
+                        virtualOverscan={5}
                       />
                     </>
                   )}
@@ -449,6 +457,10 @@ const PortfolioSync: React.FC = () => {
                       rows={5}
                       emptyMessage="Нет данных"
                       size="sm"
+                      virtualized={syncResult.unmatchedBuys.length > 20}
+                      virtualHeight={320}
+                      virtualRowHeight={48}
+                      virtualOverscan={5}
                     />
                   </div>
                 )}
@@ -469,6 +481,10 @@ const PortfolioSync: React.FC = () => {
                       rows={5}
                       emptyMessage="Нет данных"
                       size="sm"
+                      virtualized={syncResult.requestsWithoutPosition.length > 20}
+                      virtualHeight={320}
+                      virtualRowHeight={48}
+                      virtualOverscan={5}
                     />
                   </div>
                 )}

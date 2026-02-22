@@ -25,6 +25,10 @@ export interface TableProps<T = any> {
   className?: string;
   onRowClick?: (row: T) => void;
   emptyMessage?: string;
+  virtualized?: boolean;
+  virtualHeight?: number;
+  virtualRowHeight?: number;
+  virtualOverscan?: number;
 }
 
 export const Table = <T extends Record<string, any>>({
@@ -38,9 +42,14 @@ export const Table = <T extends Record<string, any>>({
   className = '',
   onRowClick,
   emptyMessage = 'Нет данных',
+  virtualized = false,
+  virtualHeight = 420,
+  virtualRowHeight = 56,
+  virtualOverscan = 5,
 }: TableProps<T>) => {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [scrollTop, setScrollTop] = useState(0);
 
   // Сортировка данных
   const sortedData = useMemo(() => {
@@ -119,8 +128,27 @@ export const Table = <T extends Record<string, any>>({
     .filter(Boolean)
     .join(' ');
 
+  const shouldVirtualize = virtualized && sortedData.length > 0;
+  const totalHeight = sortedData.length * virtualRowHeight;
+  const startIndex = shouldVirtualize
+    ? Math.max(0, Math.floor(scrollTop / virtualRowHeight) - virtualOverscan)
+    : 0;
+  const visibleCount = shouldVirtualize
+    ? Math.ceil(virtualHeight / virtualRowHeight) + virtualOverscan * 2
+    : sortedData.length;
+  const endIndex = shouldVirtualize
+    ? Math.min(sortedData.length, startIndex + visibleCount)
+    : sortedData.length;
+  const visibleRows = shouldVirtualize ? sortedData.slice(startIndex, endIndex) : sortedData;
+  const topSpacerHeight = shouldVirtualize ? startIndex * virtualRowHeight : 0;
+  const bottomSpacerHeight = shouldVirtualize ? totalHeight - topSpacerHeight - visibleRows.length * virtualRowHeight : 0;
+
   return (
-    <div className="table-wrapper">
+    <div
+      className="table-wrapper"
+      style={shouldVirtualize ? { maxHeight: virtualHeight, overflowY: 'auto' } : undefined}
+      onScroll={shouldVirtualize ? (e) => setScrollTop(e.currentTarget.scrollTop) : undefined}
+    >
       <table className={tableClasses}>
         <thead>
           <tr>
@@ -169,14 +197,21 @@ export const Table = <T extends Record<string, any>>({
               </td>
             </tr>
           ) : (
-            sortedData.map((row, rowIndex) => (
+            <>
+              {shouldVirtualize && topSpacerHeight > 0 && (
+                <tr>
+                  <td colSpan={columns.length} style={{ height: topSpacerHeight, padding: 0, border: 0 }} />
+                </tr>
+              )}
+              {visibleRows.map((row, rowIndex) => (
               <tr
-                key={rowIndex}
+                key={shouldVirtualize ? startIndex + rowIndex : rowIndex}
                 className={`${onRowClick ? 'table-row-clickable' : ''} ${hoverable ? 'table-hoverable-row' : ''}`}
                 onClick={() => onRowClick?.(row)}
                 style={{
-                  animationDelay: `${rowIndex * 0.05}s`,
-                  animationFillMode: 'both'
+                  animationDelay: shouldVirtualize ? undefined : `${rowIndex * 0.05}s`,
+                  animationFillMode: shouldVirtualize ? undefined : 'both',
+                  height: shouldVirtualize ? virtualRowHeight : undefined
                 }}
               >
                 {columns.map((column) => (
@@ -191,7 +226,13 @@ export const Table = <T extends Record<string, any>>({
                   </td>
                 ))}
               </tr>
-            ))
+              ))}
+              {shouldVirtualize && bottomSpacerHeight > 0 && (
+                <tr>
+                  <td colSpan={columns.length} style={{ height: bottomSpacerHeight, padding: 0, border: 0 }} />
+                </tr>
+              )}
+            </>
           )}
         </tbody>
       </table>

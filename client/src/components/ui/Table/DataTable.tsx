@@ -26,6 +26,10 @@ export interface DataTableProps<T = any> {
   emptyMessage?: string;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
+  virtualized?: boolean;
+  virtualHeight?: number;
+  virtualRowHeight?: number;
+  virtualOverscan?: number;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -44,6 +48,10 @@ export function DataTable<T extends Record<string, any>>({
   emptyMessage = 'Нет данных',
   className = '',
   size = 'md',
+  virtualized = false,
+  virtualHeight = 420,
+  virtualRowHeight = 56,
+  virtualOverscan = 5,
 }: DataTableProps<T>) {
   // Подавляем предупреждения о неиспользуемых параметрах
   void sortMode;
@@ -255,6 +263,10 @@ export function DataTable<T extends Record<string, any>>({
         hoverable={true}
         emptyMessage={emptyMessage}
         onRowClick={handleRowClick}
+        virtualized={virtualized}
+        virtualHeight={virtualHeight}
+        virtualRowHeight={virtualRowHeight}
+        virtualOverscan={virtualOverscan}
       />
 
       {paginator && totalPages > 1 && (

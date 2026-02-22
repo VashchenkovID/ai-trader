@@ -84,6 +84,13 @@ const StockDetailNew: React.FC = () => {
   }, []);
 
   // Пересчитываем индикаторы при изменении периода или свечей
+  const normalizeNewsResponse = (payload: any): any[] => {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.news)) return payload.news;
+    if (Array.isArray(payload?.data)) return payload.data;
+    return [];
+  };
+
   useEffect(() => {
     if (priceCandles.length > 0) {
       calculateIndicatorsFromCandles(priceCandles);
@@ -177,8 +184,8 @@ const StockDetailNew: React.FC = () => {
         const loadNews = async () => {
           if (!figi) return;
           try {
-            const newsData = await apiService.getNews(figi);
-            setNews(newsData?.news || []);
+            const newsData = await apiService.getNews(figi, 50, 30);
+            setNews(normalizeNewsResponse(newsData));
           } catch (e) {
             console.warn('Failed to load news:', e);
           }
@@ -541,14 +548,14 @@ const StockDetailNew: React.FC = () => {
                 const { newsService } = await import('../services/services/newsService');
                 await newsService.fetchFreshNews(figi);
                 // Затем загружаем обновленные новости
-                const newsData = await apiService.getNews(figi);
-                setNews(newsData?.news || []);
+                const newsData = await apiService.getNews(figi, 50, 30);
+                setNews(normalizeNewsResponse(newsData));
               } catch (e) {
                 console.error('Failed to refresh news:', e);
                 // Пробуем просто перезагрузить новости
                 try {
-                  const newsData = await apiService.getNews(figi);
-                  setNews(newsData?.news || []);
+                  const newsData = await apiService.getNews(figi, 50, 30);
+                  setNews(normalizeNewsResponse(newsData));
                 } catch (e2) {
                   console.error('Failed to reload news:', e2);
                 }
@@ -586,14 +593,14 @@ const StockDetailNew: React.FC = () => {
               const { newsService } = await import('../services/services/newsService');
               await newsService.fetchFreshNews(figi);
               // Затем загружаем обновленные новости
-              const newsData = await apiService.getNews(figi);
-              setNews(newsData?.news || []);
+              const newsData = await apiService.getNews(figi, 50, 30);
+              setNews(normalizeNewsResponse(newsData));
             } catch (e) {
               console.error('Failed to refresh news:', e);
               // Пробуем просто перезагрузить новости
               try {
-                const newsData = await apiService.getNews(figi);
-                setNews(newsData?.news || []);
+                const newsData = await apiService.getNews(figi, 50, 30);
+                setNews(normalizeNewsResponse(newsData));
               } catch (e2) {
                 console.error('Failed to reload news:', e2);
               }

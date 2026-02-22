@@ -1,11 +1,11 @@
-import {api, NewsAnalysis} from "../apiService.ts";
+import {api} from "../apiService.ts";
 
 
 export const newsService = {
     /**
      * Получить новости для инструмента
      */
-    async getNews(figi: string, limit: number = 10, days: number = 7): Promise<NewsAnalysis> {
+    async getNews(figi: string, limit: number = 10, days: number = 7): Promise<any[]> {
         try {
             const response = await api.get(`/api/news/${figi}?limit=${limit}&days=${days}`);
             return response.data.data;
