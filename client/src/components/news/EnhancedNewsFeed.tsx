@@ -101,15 +101,23 @@ export const EnhancedNewsFeed: React.FC<EnhancedNewsFeedProps> = ({
     }
   }, [figi]);
 
+  const normalizeNewsResponse = (payload: any): any[] => {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.news)) return payload.news;
+    if (Array.isArray(payload?.data)) return payload.data;
+    return [];
+  };
+
   const loadNews = async () => {
     setLoading(true);
     setError(null);
     try {
       const newsData = await apiService.getNews(figi, maxItems * 2, 30);
-      
-      if (newsData && newsData.news) {
+      const items = normalizeNewsResponse(newsData);
+
+      if (items.length > 0) {
         // Обрабатываем новости с учетом классификации и затухания
-        const processedNews = newsData.news.map((item: any) => {
+        const processedNews = items.map((item: any) => {
           // Определяем категорию и приоритет (если не указаны в API)
           const category = item.category || classifyNewsCategory(item.title, item.description);
           const priority = item.priority || determinePriority(category, item);
