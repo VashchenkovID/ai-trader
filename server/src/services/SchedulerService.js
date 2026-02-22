@@ -77,6 +77,7 @@ class SchedulerService {
         this.currentFullCacheUpdateWorker = null; // Текущий worker полного обновления кеша
         this.isCacheUpdateRunning = false; // Флаг для предотвращения параллельных обновлений кеша
         this.cacheUpdateLock = false; // Блокировка для атомарной проверки и установки флага
+        this.isPredictionsUpdateRunning = false; // Защита от зависших/дублирующихся апдейтов предсказаний
         this.pendingTriggeredSignals = []; // Накопленные сработавшие сигналы для отправки после анализа
         this.maxPendingSignals = 1000; // Максимальное количество накопленных сигналов (защита от утечки памяти)
         this.lastPendingRequestNotification = new Map(); // Время последнего уведомления для каждой ожидающей заявки (ID заявки -> timestamp)
@@ -5562,6 +5563,17 @@ class SchedulerService {
         if (this.isFullCacheUpdateRunning) {
             return;
         }
+
+        // Не запускаем параллельные инстансы задачи, чтобы не размножать зависшие воркеры.
+        if (this.isPredictionsUpdateRunning) {
+            LoggerService.warn('Predictions update already in progress, skipping duplicate run', {
+                service: 'SchedulerService',
+                operation: 'updateRecommendationsPredictions'
+            });
+            return;
+        }
+
+        this.isPredictionsUpdateRunning = true;
         
         let workerId = null;
         
@@ -5588,6 +5600,14 @@ class SchedulerService {
         
         try {
             const Recommendation = (await import('../models/Recommendation.js')).default;
+            const withTimeout = (promise, timeoutMs, label) => {
+                return Promise.race([
+                    promise,
+                    new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error(`${label} timeout after ${timeoutMs}ms`)), timeoutMs);
+                    })
+                ]);
+            };
             
             // Получаем IntegratedAIService через ServiceManager или прямой импорт
             let IntegratedAIService = getService('IntegratedAIService');
@@ -5641,7 +5661,11 @@ class SchedulerService {
                     batch.map(async (rec) => {
                         try {
                             // Получаем актуальное предсказание через IntegratedAIService
-                            const freshPrediction = await IntegratedAIService.getIntegratedRecommendation(rec.figi);
+                            const freshPrediction = await withTimeout(
+                                IntegratedAIService.getIntegratedRecommendation(rec.figi),
+                                45000,
+                                `Integrated recommendation request for ${rec.figi}`
+                            );
                             
                             if (freshPrediction && freshPrediction.score !== undefined) {
                                 // Обновляем рекомендацию актуальными данными
@@ -5671,13 +5695,17 @@ class SchedulerService {
                                     };
                                 }
                                 
-                                await rec.update({
-                                    score: freshPrediction.score,
-                                    confidence: freshPrediction.confidence ?? freshPrediction.score,
-                                    recommendation: freshPrediction.recommendation || rec.recommendation,
-                                    analysisDate: new Date(),
-                                    explanation: explanation
-                                });
+                                await withTimeout(
+                                    rec.update({
+                                        score: freshPrediction.score,
+                                        confidence: freshPrediction.confidence ?? freshPrediction.score,
+                                        recommendation: freshPrediction.recommendation || rec.recommendation,
+                                        analysisDate: new Date(),
+                                        explanation: explanation
+                                    }),
+                                    15000,
+                                    `Recommendation update for ${rec.figi}`
+                                );
 
                                 updatedCount++;
                             }
@@ -5758,6 +5786,8 @@ class SchedulerService {
                 error: { message: error.message, stack: error.stack }
             });
             throw error;
+        } finally {
+            this.isPredictionsUpdateRunning = false;
         }
     }
 
@@ -7042,6 +7072,7 @@ class SchedulerService {
         try {
             const CorrelationService = (await import('./CorrelationService.js')).default;
             const CachedInstrument = (await import('../models/CachedInstrument.js')).default;
+            let result = { calculated: 0, cached: 0, errors: 0, total: 0 };
             
             // Инициализируем сервис, если нужно
             if (!CorrelationService.isInitialized) {
@@ -7122,7 +7153,25 @@ class SchedulerService {
             const figis = popularInstruments.map(inst => inst.figi).filter(Boolean);
             
             if (figis.length >= 2) {
-                const result = await CorrelationService.precalculateCorrelations(figis, 30);
+                if (workerId) {
+                    try {
+                        const WorkerMonitoringService = (await import('./WorkerMonitoringService.js')).default;
+                        if (WorkerMonitoringService.isInitialized) {
+                            WorkerMonitoringService.updateWorkerStatus(workerId, {
+                                progress: 40,
+                                metadata: { stage: 'precalculating', totalInstruments: figis.length }
+                            });
+                        }
+                    } catch (e) {
+                        LoggerService.warn('Failed to update worker status', {
+                            service: 'SchedulerService',
+                            operation: 'updateWorkerStatus',
+                            error: { message: e.message }
+                        });
+                    }
+                }
+
+                result = await CorrelationService.precalculateCorrelations(figis, 30);
                 await OptimizedTelegramService.sendAlert(
                     'CORRELATION_PRECALC_COMPLETE',
                     `Предварительный расчет корреляций завершен: рассчитано ${result.calculated}, из кеша ${result.cached}, ошибок ${result.errors}`,

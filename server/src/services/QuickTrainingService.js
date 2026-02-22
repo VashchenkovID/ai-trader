@@ -294,16 +294,33 @@ class QuickTrainingService {
                         networksTrained++;
                     }
                 } catch (error) {
-                    networksFailed++;
+                    const isInsufficientDataError = error?.code === 'INSUFFICIENT_DATA'
+                        || String(error?.message || '').includes('Insufficient data for sequence generation')
+                        || String(error?.message || '').includes('Insufficient historical data');
+
                     const LoggerService = (await import('./LoggerService.js')).default;
-                    if (LoggerService.isInitialized) {
-                        LoggerService.error('Quick Weekly Forecast training failed', {
-                            service: 'QuickTrainingService',
-                            operation: 'trainQuickBatch',
-                            figi: instrument.figi,
-                            ticker: instrument.ticker,
-                            error: { message: error.message, stack: error.stack }
-                        });
+                    if (isInsufficientDataError) {
+                        // Недостаток исторических данных для weekly forecast - ожидаемый кейс, не считаем ошибкой обучения.
+                        if (LoggerService.isInitialized) {
+                            LoggerService.warn('Quick Weekly Forecast training skipped due to insufficient data', {
+                                service: 'QuickTrainingService',
+                                operation: 'trainQuickBatch',
+                                figi: instrument.figi,
+                                ticker: instrument.ticker,
+                                reason: error.message
+                            });
+                        }
+                    } else {
+                        networksFailed++;
+                        if (LoggerService.isInitialized) {
+                            LoggerService.error('Quick Weekly Forecast training failed', {
+                                service: 'QuickTrainingService',
+                                operation: 'trainQuickBatch',
+                                figi: instrument.figi,
+                                ticker: instrument.ticker,
+                                error: { message: error.message, stack: error.stack }
+                            });
+                        }
                     }
                 }
                 

@@ -476,49 +476,75 @@ class CorrelationService {
         let errors = 0;
 
 
-        // Рассчитываем корреляции для всех пар
-        const promises = [];
+        const withTimeout = (promise, timeoutMs, label) => {
+            return Promise.race([
+                promise,
+                new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error(`${label} timeout after ${timeoutMs}ms`)), timeoutMs);
+                })
+            ]);
+        };
 
+        // Формируем список всех пар и обрабатываем с ограниченным параллелизмом,
+        // чтобы не перегружать БД и не "подвешивать" джоб на больших массивах.
+        const pairs = [];
         for (let i = 0; i < figis.length; i++) {
             for (let j = i + 1; j < figis.length; j++) {
-                promises.push(
-                    (async () => {
-                        try {
-                            // Проверяем кеш перед расчетом
-                            const cachedCorr = await CorrelationCache.findOne({
+                pairs.push([figis[i], figis[j]]);
+            }
+        }
+
+        const maxConcurrency = 10;
+        for (let offset = 0; offset < pairs.length; offset += maxConcurrency) {
+            const batch = pairs.slice(offset, offset + maxConcurrency);
+
+            await Promise.all(
+                batch.map(async ([figi1, figi2]) => {
+                    try {
+                        // Проверяем кеш перед расчетом
+                        const cachedCorr = await withTimeout(
+                            CorrelationCache.findOne({
                                 where: {
-                                    figi1: figis[i] < figis[j] ? figis[i] : figis[j],
-                                    figi2: figis[i] < figis[j] ? figis[j] : figis[i],
+                                    figi1: figi1 < figi2 ? figi1 : figi2,
+                                    figi2: figi1 < figi2 ? figi2 : figi1,
                                     period: calcPeriod,
                                     expiresAt: {
                                         [Op.gt]: new Date()
                                     }
                                 }
-                            });
+                            }),
+                            30000,
+                            `Correlation cache lookup for ${figi1}-${figi2}`
+                        );
 
-                            if (cachedCorr) {
-                                cached++;
-                            } else {
-                                await this.calculateCorrelation(figis[i], figis[j], calcPeriod);
-                                calculated++;
-                            }
-                        } catch (error) {
-                            console.error(`❌ Ошибка предварительного расчета корреляции для ${figis[i]}-${figis[j]}:`, error.message);
-                            errors++;
+                        if (cachedCorr) {
+                            cached++;
+                        } else {
+                            await withTimeout(
+                                this.calculateCorrelation(figi1, figi2, calcPeriod),
+                                45000,
+                                `Correlation calculation for ${figi1}-${figi2}`
+                            );
+                            calculated++;
                         }
-                    })()
-                );
+                    } catch (error) {
+                        console.error(`❌ Ошибка предварительного расчета корреляции для ${figi1}-${figi2}:`, error.message);
+                        errors++;
+                    }
+                })
+            );
+
+            if (offset + maxConcurrency < pairs.length) {
+                await new Promise(resolve => setImmediate(resolve));
             }
         }
-
-        await Promise.all(promises);
 
 
         return {
             calculated,
             cached,
             errors,
-            total: figis.length * (figis.length - 1) / 2
+            total: pairs.length
         };
     }
 }
