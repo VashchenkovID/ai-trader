@@ -247,11 +247,19 @@ async function executeWorkerTaskInternal(workerFileName, workerData, options = {
             }
         }
         
-        return {
+        const finalResult = {
             ...result,
             duration,
-            success: true
+            taskSuccess: true
         };
+
+        // Не перетираем поле success, если воркер уже вернул его
+        // (например, как массив успешных элементов).
+        if (!Object.prototype.hasOwnProperty.call(result, 'success')) {
+            finalResult.success = true;
+        }
+
+        return finalResult;
     } catch (error) {
         // Завершаем воркер с ошибкой
         if (workerId) {
