@@ -586,6 +586,7 @@ class NewsAnalysisService {
 
     /**
      * Получение кешированных новостей из БД
+     * Если новостей с актуальным expiresAt нет, возвращает «устаревшие» (fallback для отображения)
      */
     async getCachedNews(figi, days, limit) {
         try {
@@ -594,29 +595,47 @@ class NewsAnalysisService {
             
             const fromDate = new Date();
             fromDate.setDate(fromDate.getDate() - days);
+            const now = new Date();
             
-            const cachedNews = await CachedNews.findAll({
+            const whereBase = {
+                figi,
+                publishedAt: {
+                    [Op.gte]: fromDate
+                }
+            };
+
+            let cachedNews = await CachedNews.findAll({
                 where: {
-                    figi,
-                    publishedAt: {
-                        [Op.gte]: fromDate
-                    },
+                    ...whereBase,
                     expiresAt: {
-                        [Op.gt]: new Date()
+                        [Op.gt]: now
                     }
                 },
                 order: [['publishedAt', 'DESC']],
                 limit
             });
 
+            // Fallback: если нет «свежих» по expiresAt — возвращаем устаревшие (пользователь всё равно увидит новости)
+            if (cachedNews.length === 0) {
+                cachedNews = await CachedNews.findAll({
+                    where: whereBase,
+                    order: [['publishedAt', 'DESC']],
+                    limit
+                });
+            }
+
             const { formatDateToISO } = await import('../utils/dateFormatter.js');
             
             return cachedNews.map(news => {
                 const newsData = news.toJSON ? news.toJSON() : news;
+                let url = newsData.url || news.url || '';
+                if (typeof url === 'string' && url.startsWith('__no_url_')) {
+                    url = '';
+                }
                 return {
                 title: newsData.title || news.title,
                 description: newsData.description || news.description,
-                url: newsData.url || news.url,
+                url,
                 source: newsData.source || news.source,
                 publishedAt: formatDateToISO(newsData.publishedAt || news.publishedAt),
                 sentiment: newsData.sentiment || news.sentiment,
@@ -1384,6 +1403,21 @@ class NewsAnalysisService {
                 return cleaned.trim();
             };
 
+            // При пустом url — уникальный placeholder, иначе unique (figi, url) отсечёт все кроме первой новости
+            const ensureUniqueUrl = (url, title, publishedAt, idx) => {
+                if (url && typeof url === 'string' && url.trim()) {
+                    return validator.isURL(url, { require_protocol: false }) ? url : '';
+                }
+                const str = `${title || ''}_${(publishedAt && publishedAt.getTime) ? publishedAt.getTime() : idx}`;
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    const c = str.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + c;
+                    hash = hash & hash;
+                }
+                return `__no_url_${Math.abs(hash).toString(36)}`;
+            };
+
             const BATCH_SIZE = 10;
             let savedCount = 0;
             let errorCount = 0;
@@ -1392,12 +1426,14 @@ class NewsAnalysisService {
                 const batch = news.slice(i, i + BATCH_SIZE);
                 
                 try {
-                    const newsToCache = batch.map(article => {
-                        let url = article.url || '';
-                        // Если URL невалидный, просто очищаем его (не экранируем, это портит данные)
-                        if (url && !validator.isURL(url, { require_protocol: false })) {
-                            url = ''; // Оставляем пустым вместо порчи данных
-                        }
+                    const newsToCache = batch.map((article, batchIdx) => {
+                        const globalIdx = i + batchIdx;
+                        const url = ensureUniqueUrl(
+                            article.url || '',
+                            article.title,
+                            article.publishedAt,
+                            globalIdx
+                        );
                         
                         return {
                             figi,
@@ -1442,12 +1478,15 @@ class NewsAnalysisService {
                         console.error(`❌ Ошибка сохранения батча новостей (${batch.length} шт.):`, batchError.message);
                     }
                     
-                    for (const article of batch) {
+                    for (let batchIdx = 0; batchIdx < batch.length; batchIdx++) {
+                        const article = batch[batchIdx];
                         try {
-                            let url = article.url || '';
-                            if (url && !validator.isURL(url, { require_protocol: false })) {
-                                url = '';
-                            }
+                            const url = ensureUniqueUrl(
+                                article.url || '',
+                                article.title,
+                                article.publishedAt,
+                                i + batchIdx
+                            );
                             
                             const newsData = {
                                 figi,
@@ -1651,6 +1690,54 @@ class NewsAnalysisService {
             const newsByFigi = {};
             for (const figi of figis) {
                 newsByFigi[figi] = [];
+            }
+
+            const ServiceManager = (await import('./ServiceManager.js')).default;
+            const CacheService = ServiceManager.getService('CacheService') || (await import('./CacheService.js')).default;
+
+            const fromDate = new Date(year, 0, 1, 0, 0, 0);
+            const toDate = new Date(year, 11, 31, 23, 59, 59);
+
+            for (const figi of figis) {
+                try {
+                    const instrument = await CacheService.getInstrument(figi, true);
+                    if (!instrument || !instrument.name) {
+                        continue;
+                    }
+                    const news = await this.fetchNewsByCompanyNameAndPeriod(
+                        instrument.name,
+                        fromDate,
+                        toDate,
+                        {
+                            ticker: instrument.ticker,
+                            sector: instrument.sector,
+                            apiData: instrument.apiData,
+                            aliases: instrument.apiData?.aliases || null,
+                            includeFinancialTerms: true,
+                            figi: instrument.figi,
+                            pageSize: 100,
+                            includeCompanyNews: true,
+                            includeSectorNews: true,
+                            includePoliticalNews: true
+                        }
+                    );
+                    if (news && news.length > 0) {
+                        newsByFigi[figi] = news;
+                    }
+                } catch (err) {
+                    try {
+                        const LoggerService = (await import('./LoggerService.js')).default;
+                        LoggerService.warn('Ошибка загрузки новостей за год для FIGI', {
+                            service: 'NewsAnalysisService',
+                            operation: 'fetchNewsForYear',
+                            figi,
+                            year,
+                            error: err.message
+                        });
+                    } catch (e) {
+                        console.warn(`fetchNewsForYear ${figi}:`, err.message);
+                    }
+                }
             }
 
             return newsByFigi;

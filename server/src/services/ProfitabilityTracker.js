@@ -665,13 +665,88 @@ class ProfitabilityTracker {
             grossLoss
         };
 
+        const baselineComparison = this.calculateBaselineComparisonFromTrades(period, stats, totalProfit);
+
         // Добавляем продвинутые метрики
         const advancedMetrics = this.calculateAdvancedMetrics(stats, period, baseMetrics);
         
         return {
             ...baseMetrics,
-            ...advancedMetrics
+            ...advancedMetrics,
+            baselineComparison
         };
+    }
+
+    calculateBaselineComparisonFromTrades(period, stats, totalProfit) {
+        try {
+            const trades = TradingEngine.virtualPortfolio?.trades || [];
+            const periodTrades = this.filterTradesByPeriod(trades, period, stats);
+            const initialCapital = TradingEngine.virtualPortfolio?.initialCapital || 1;
+            const aiReturnPct = initialCapital > 0 ? (totalProfit / initialCapital) * 100 : 0;
+
+            if (!periodTrades || periodTrades.length === 0) {
+                return {
+                    aiReturnPct,
+                    buyHoldReturnPct: 0,
+                    momentumReturnPct: 0,
+                    excessVsBuyHoldPct: aiReturnPct,
+                    excessVsMomentumPct: aiReturnPct,
+                    symbolsUsed: 0
+                };
+            }
+
+            const bySymbol = new Map();
+            for (const trade of periodTrades) {
+                const symbol = trade.symbol || trade.ticker || trade.figi;
+                const price = Number(trade.price);
+                const ts = new Date(trade.timestamp || trade.date).getTime();
+                if (!symbol || !Number.isFinite(price) || price <= 0 || !Number.isFinite(ts)) continue;
+                if (!bySymbol.has(symbol)) bySymbol.set(symbol, []);
+                bySymbol.get(symbol).push({ price, ts });
+            }
+
+            const average = (arr) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+            const buyHoldReturns = [];
+            const momentumReturns = [];
+
+            for (const points of bySymbol.values()) {
+                points.sort((a, b) => a.ts - b.ts);
+                if (points.length < 2) continue;
+                const buyHold = ((points[points.length - 1].price - points[0].price) / points[0].price) * 100;
+                buyHoldReturns.push(buyHold);
+
+                if (points.length >= 3) {
+                    let equity = 1.0;
+                    for (let i = 2; i < points.length; i++) {
+                        const prevMove = points[i - 1].price - points[i - 2].price;
+                        const ret = (points[i].price - points[i - 1].price) / points[i - 1].price;
+                        equity *= (1 + (prevMove >= 0 ? ret : -ret));
+                    }
+                    momentumReturns.push((equity - 1) * 100);
+                }
+            }
+
+            const buyHoldReturnPct = average(buyHoldReturns);
+            const momentumReturnPct = average(momentumReturns);
+            return {
+                aiReturnPct,
+                buyHoldReturnPct,
+                momentumReturnPct,
+                excessVsBuyHoldPct: aiReturnPct - buyHoldReturnPct,
+                excessVsMomentumPct: aiReturnPct - momentumReturnPct,
+                symbolsUsed: bySymbol.size
+            };
+        } catch (error) {
+            return {
+                aiReturnPct: 0,
+                buyHoldReturnPct: 0,
+                momentumReturnPct: 0,
+                excessVsBuyHoldPct: 0,
+                excessVsMomentumPct: 0,
+                symbolsUsed: 0,
+                error: error.message
+            };
+        }
     }
 
     /**

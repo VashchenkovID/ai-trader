@@ -35,6 +35,10 @@ class RealisticExecutionSimulator {
             // Частичное исполнение
             enablePartialFill: true,
             maxPartialFillPercent: 0.8,  // Максимум 80% исполнения для больших ордеров
+
+            // Защита от нереалистичных входных данных
+            minDailyVolume: 10000,       // Минимум 10к руб дневного объема для расчетов
+            maxDailyVolume: 5000000000,  // Ограничение сверху для защиты от выбросов
             
             // Комиссии
             commissionRate: 0.0005,     // 0.05% комиссия
@@ -73,16 +77,18 @@ class RealisticExecutionSimulator {
      */
     async simulateExecution(order, marketData = {}) {
         try {
-            const { figi, action, quantity, price } = order;
+            const validatedOrder = this.validateOrder(order);
+            const { figi, action, quantity, price } = validatedOrder;
+            const normalizedMarketData = this.normalizeMarketData(marketData);
             
             // 1. Определение ликвидности инструмента
-            const liquidityLevel = await this.getLiquidityLevel(figi, marketData);
+            const liquidityLevel = await this.getLiquidityLevel(figi, normalizedMarketData);
             
             // 2. Расчет спреда
             const spread = this.calculateSpread(price, liquidityLevel, action);
             
             // 3. Расчет проскальзывания на основе размера ордера
-            const dailyVolume = marketData.volume || await this.getDailyVolume(figi);
+            const dailyVolume = normalizedMarketData.volume || await this.getDailyVolume(figi);
             const slippage = this.calculateSlippage(quantity, price, dailyVolume);
             
             // 4. Расчет цены исполнения с учетом спреда и проскальзывания
@@ -96,7 +102,7 @@ class RealisticExecutionSimulator {
             }
             
             // 5. Проверка возможности частичного исполнения
-            const executedQuantity = this.checkPartialFill(quantity, dailyVolume);
+            const executedQuantity = this.checkPartialFill(quantity, price, dailyVolume);
             
             // 6. Расчет комиссии
             const dealAmount = executionPrice * executedQuantity;
@@ -113,7 +119,7 @@ class RealisticExecutionSimulator {
             };
         } catch (error) {
             LoggerService.warn('Failed to simulate execution, using defaults', {
-                figi: order.figi,
+                figi: order?.figi,
                 error: error.message
             });
             
@@ -141,6 +147,32 @@ class RealisticExecutionSimulator {
                 originalPrice: price
             };
         }
+    }
+
+    validateOrder(order = {}) {
+        const figi = order.figi || 'UNKNOWN';
+        const action = order.action === 'SELL' ? 'SELL' : 'BUY';
+        const quantity = Number.isFinite(Number(order.quantity)) ? Math.max(1, Math.floor(Number(order.quantity))) : 1;
+        const price = Number.isFinite(Number(order.price)) ? Math.max(0.01, Number(order.price)) : 0.01;
+
+        return { figi, action, quantity, price };
+    }
+
+    normalizeMarketData(marketData = {}) {
+        const rawVolume = marketData.dailyVolume ?? marketData.volume;
+        let volume = Number(rawVolume);
+        if (!Number.isFinite(volume) || volume <= 0) {
+            return {};
+        }
+
+        volume = Math.max(this.settings.minDailyVolume, volume);
+        volume = Math.min(this.settings.maxDailyVolume, volume);
+
+        return {
+            ...marketData,
+            volume,
+            dailyVolume: volume
+        };
     }
 
     /**
@@ -238,17 +270,33 @@ class RealisticExecutionSimulator {
     /**
      * Проверка частичного исполнения
      * @param {number} quantity - Запрошенное количество
+     * @param {number} price - Цена инструмента
      * @param {number} dailyVolume - Дневной объем в рублях
      * @returns {number} Фактически исполненное количество
      */
-    checkPartialFill(quantity, dailyVolume) {
+    checkPartialFill(quantity, price, dailyVolume) {
         if (!this.settings.enablePartialFill) {
             return quantity;
         }
-        
-        // Для больших ордеров (> 5% дневного объема) - частичное исполнение
-        // В реальной реализации здесь была бы более сложная логика
-        // Пока возвращаем полное количество
+
+        if (!quantity || quantity <= 0 || !price || price <= 0 || !dailyVolume || dailyVolume <= 0) {
+            return quantity;
+        }
+
+        // Эвристика частичного исполнения на основе доли ордера в дневном объеме:
+        // - >10% объема: агрессивное урезание
+        // - 5-10% объема: умеренное урезание
+        const orderValue = quantity * price;
+        const orderPercentOfVolume = (orderValue / dailyVolume) * 100;
+
+        if (orderPercentOfVolume > 10) {
+            return Math.max(1, Math.floor(quantity * Math.min(this.settings.maxPartialFillPercent, 0.6)));
+        }
+
+        if (orderPercentOfVolume > 5) {
+            return Math.max(1, Math.floor(quantity * this.settings.maxPartialFillPercent));
+        }
+
         return quantity;
     }
 }

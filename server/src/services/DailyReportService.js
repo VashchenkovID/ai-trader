@@ -98,7 +98,8 @@ class DailyReportService {
                 },
                 strategyStats: {},
                 dailyPnL: null,
-                totalPnL: null
+                totalPnL: null,
+                decisionQuality: null
             };
 
             // 1. Получаем все открытые позиции
@@ -136,11 +137,13 @@ class DailyReportService {
             }
 
             // 7. Сводка
+            report.decisionQuality = await this.getDecisionQualitySummary();
             report.summary = {
                 openPositions: openPositions.length,
                 closedToday: closedPositions.length,
                 dailyPnL: report.dailyPnL,
-                totalPnL: report.totalPnL
+                totalPnL: report.totalPnL,
+                decisionQuality: report.decisionQuality
             };
 
             LoggerService.info('✅ Daily report generated successfully');
@@ -149,6 +152,44 @@ class DailyReportService {
         } catch (error) {
             LoggerService.error('❌ Error generating daily report:', error);
             throw error;
+        }
+    }
+
+    async getDecisionQualitySummary() {
+        try {
+            const AutoPaperTradingService = ServiceManager.getServiceSafe('AutoPaperTradingService');
+            if (!AutoPaperTradingService || typeof AutoPaperTradingService.getStatus !== 'function') {
+                return null;
+            }
+
+            const status = AutoPaperTradingService.getStatus();
+            const dq = status?.stats?.decisionQuality;
+            const aq = status?.stats?.admissionQuality;
+            if (!dq) return null;
+
+            const considered = dq.considered || 0;
+            const approved = dq.approved || 0;
+            const blocked = dq.blocked || 0;
+            const passRate = considered > 0 ? approved / considered : 0;
+
+            return {
+                considered,
+                approved,
+                blocked,
+                passRate,
+                blockedByReason: dq.blockedByReason || {},
+                admissionQuality: aq ? {
+                    considered: aq.considered || 0,
+                    passed: aq.passed || 0,
+                    blocked: aq.blocked || 0,
+                    blockedByGate: aq.blockedByGate || {},
+                    recent: Array.isArray(aq.recent) ? aq.recent.slice(-10) : []
+                } : null,
+                gatesSnapshot: status?.gates || null
+            };
+        } catch (error) {
+            LoggerService.warn('⚠️ Failed to build decision quality summary:', error.message);
+            return null;
         }
     }
 

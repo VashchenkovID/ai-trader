@@ -243,6 +243,16 @@ class TradingRequestService {
                     console.warn('⚠️ Could not use TaxOptimizationService, using simple calculation:', error.message);
                     quantity = Math.floor(availableCapital / currentPrice);
                 }
+
+                // Если капитал стратегии недостаточен даже для 1 бумаги, пропускаем автосоздание
+                if (!quantity || quantity <= 0 || isNaN(quantity) || !isFinite(quantity)) {
+                    const minRequiredCapital = currentPrice * 1.1; // Цена + запас на комиссию
+                    const insufficientBudgetError = new Error(
+                        `INSUFFICIENT_STRATEGY_BUDGET: cannot buy 1 share. Available: ${availableCapital}, MinRequired: ${minRequiredCapital.toFixed(2)}, Price: ${currentPrice}`
+                    );
+                    insufficientBudgetError.code = 'INSUFFICIENT_STRATEGY_BUDGET';
+                    throw insufficientBudgetError;
+                }
             } else {
                 // Рассчитываем количество акций с учетом режима
                 quantity = await this.calculateQuantity(
@@ -892,6 +902,48 @@ class TradingRequestService {
                     // Игнорируем ошибки отправки в Telegram, не блокируем создание заявки
                 }
             })();
+
+            // Проверка возможности автоматического исполнения (только для paper режима)
+            if (tradingRequest.status === 'PENDING' && tradingRequest.tradingMode === 'paper') {
+                try {
+                    const AutoPaperTradingService = (await import('./AutoPaperTradingService.js')).default;
+                    if (!AutoPaperTradingService.isInitialized) {
+                        await AutoPaperTradingService.initialize();
+                    }
+
+                    if (!AutoPaperTradingService.isEnabled) {
+                        const settings = await SettingsService.getSettings();
+                        const autoTradeEnabled = settings.auto_trade_enabled !== false && settings.auto_trade_enabled !== 'false';
+                        if (autoTradeEnabled) {
+                            await AutoPaperTradingService.enable();
+                        }
+                    }
+
+                    if (AutoPaperTradingService.isInitialized && AutoPaperTradingService.isEnabled) {
+                        setImmediate(async () => {
+                            try {
+                                await AutoPaperTradingService.processNewRequest(tradingRequest);
+                            } catch (error) {
+                                LoggerService.warn('Auto-execution failed, request remains pending', {
+                                    requestId: tradingRequest.id,
+                                    error: error.message
+                                });
+                            }
+                        });
+                    } else {
+                        LoggerService.debug('Auto-execution skipped: service disabled or not initialized', {
+                            requestId: tradingRequest.id,
+                            isInitialized: AutoPaperTradingService.isInitialized,
+                            isEnabled: AutoPaperTradingService.isEnabled
+                        });
+                    }
+                } catch (error) {
+                    LoggerService.warn('Failed to check auto-execution', {
+                        requestId: tradingRequest.id,
+                        error: error.message
+                    });
+                }
+            }
             
             // Возвращаем заявку с предупреждением о стратегии, если есть
             const { formatModelDates } = await import('../utils/dateFormatter.js');

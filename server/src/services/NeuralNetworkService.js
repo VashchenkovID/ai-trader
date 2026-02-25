@@ -4036,6 +4036,116 @@ class NeuralNetworkService {
                                 });
 
                                 if (!existingRequest) {
+                                    // Unified admission-gates для paper-автотрейда:
+                                    // meta-policy + walk-forward + release-gate.
+                                    const currentMode = (await import('./TradingModeManager.js')).default.getCurrentMode().mode;
+                                    if (currentMode === 'paper') {
+                                        try {
+                                            const AutoPaperTradingService = (await import('./AutoPaperTradingService.js')).default;
+
+                                            const admissionTraceId = `auto-admission-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                                            const metaPolicy = await AutoPaperTradingService.evaluateMetaPolicy({
+                                                figi: savedRecommendation.figi,
+                                                action: savedRecommendation.recommendation,
+                                                confidence: savedRecommendation.confidence,
+                                                score: savedRecommendation.score
+                                            });
+                                            const walkForwardGate = await AutoPaperTradingService.evaluateWalkForwardGate();
+                                            const releaseGate = await AutoPaperTradingService.evaluateReleaseGate();
+
+                                            if (!walkForwardGate.passed || !releaseGate.passed) {
+                                                const blockedBy = !walkForwardGate.passed ? 'walkForwardGate' : 'releaseGate';
+                                                if (typeof AutoPaperTradingService.recordAdmissionDecision === 'function') {
+                                                    AutoPaperTradingService.recordAdmissionDecision({
+                                                        traceId: admissionTraceId,
+                                                        figi: savedRecommendation.figi,
+                                                        ticker: savedRecommendation.ticker,
+                                                        passed: false,
+                                                        blockedBy,
+                                                        checks: {
+                                                            metaPolicy: {
+                                                                regime: metaPolicy?.regime || 'normal',
+                                                                policyKey: metaPolicy?.policyKey || 'normal',
+                                                                adjustments: metaPolicy?.adjustments || null
+                                                            },
+                                                            walkForwardGate: {
+                                                                passed: walkForwardGate.passed,
+                                                                reason: walkForwardGate.reason,
+                                                                metrics: walkForwardGate.metrics || null
+                                                            },
+                                                            releaseGate: {
+                                                                passed: releaseGate.passed,
+                                                                reason: releaseGate.reason,
+                                                                metrics: releaseGate.metrics || null
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                                LoggerService.info('Skipped auto-create trading request by admission gates', {
+                                                    service: 'NeuralNetworkService',
+                                                    operation: 'autoCreateTradingRequest',
+                                                    traceId: admissionTraceId,
+                                                    mode: currentMode,
+                                                    figi: savedRecommendation.figi,
+                                                    ticker: savedRecommendation.ticker,
+                                                    blockedBy,
+                                                    checks: {
+                                                        metaPolicy: {
+                                                            regime: metaPolicy?.regime || 'normal',
+                                                            policyKey: metaPolicy?.policyKey || 'normal',
+                                                            adjustments: metaPolicy?.adjustments || null
+                                                        },
+                                                        walkForwardGate: {
+                                                            passed: walkForwardGate.passed,
+                                                            reason: walkForwardGate.reason,
+                                                            metrics: walkForwardGate.metrics || null
+                                                        },
+                                                        releaseGate: {
+                                                            passed: releaseGate.passed,
+                                                            reason: releaseGate.reason,
+                                                            metrics: releaseGate.metrics || null
+                                                        }
+                                                    }
+                                                });
+                                                continue;
+                                            }
+
+                                            if (typeof AutoPaperTradingService.recordAdmissionDecision === 'function') {
+                                                AutoPaperTradingService.recordAdmissionDecision({
+                                                    traceId: admissionTraceId,
+                                                    figi: savedRecommendation.figi,
+                                                    ticker: savedRecommendation.ticker,
+                                                    passed: true,
+                                                    checks: {
+                                                        metaPolicy: {
+                                                            regime: metaPolicy?.regime || 'normal',
+                                                            policyKey: metaPolicy?.policyKey || 'normal',
+                                                            adjustments: metaPolicy?.adjustments || null
+                                                        },
+                                                        walkForwardGate: {
+                                                            passed: walkForwardGate.passed,
+                                                            reason: walkForwardGate.reason,
+                                                            metrics: walkForwardGate.metrics || null
+                                                        },
+                                                        releaseGate: {
+                                                            passed: releaseGate.passed,
+                                                            reason: releaseGate.reason,
+                                                            metrics: releaseGate.metrics || null
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        } catch (gateError) {
+                                            LoggerService.warn('Failed to evaluate admission gates, skipping auto-create for safety', {
+                                                service: 'NeuralNetworkService',
+                                                operation: 'autoCreateTradingRequest',
+                                                figi: savedRecommendation.figi,
+                                                error: { message: gateError.message, stack: gateError.stack }
+                                            });
+                                            continue;
+                                        }
+                                    }
+
                                     // Автоматически создаем заявку
                                     // Для HOLD рекомендаций TradingRequestService автоматически создаст BUY заявку
                                     await TradingRequestService.createTradingRequest(savedRecommendation.figi, {
@@ -4087,12 +4197,29 @@ class NeuralNetworkService {
                             });
                         }
                     } catch (autoTradeError) {
-                        LoggerService.warn('Could not auto-create trading request', {
-                            service: 'NeuralNetworkService',
-                            operation: 'autoCreateTradingRequest',
-                            figi: savedRecommendation?.figi,
-                            error: { message: autoTradeError.message, stack: autoTradeError.stack }
-                        });
+                        // Бизнес-кейс: бюджета стратегии может не хватать на 1 бумагу
+                        // Это ожидаемая ситуация, не считаем технической ошибкой.
+                        const isInsufficientStrategyBudget =
+                            autoTradeError?.code === 'INSUFFICIENT_STRATEGY_BUDGET'
+                            || (typeof autoTradeError?.message === 'string'
+                                && autoTradeError.message.includes('INSUFFICIENT_STRATEGY_BUDGET'));
+
+                        if (isInsufficientStrategyBudget) {
+                            LoggerService.info('Skipped auto-create trading request: insufficient strategy budget', {
+                                service: 'NeuralNetworkService',
+                                operation: 'autoCreateTradingRequest',
+                                figi: savedRecommendation?.figi,
+                                ticker: savedRecommendation?.ticker,
+                                reason: autoTradeError.message
+                            });
+                        } else {
+                            LoggerService.warn('Could not auto-create trading request', {
+                                service: 'NeuralNetworkService',
+                                operation: 'autoCreateTradingRequest',
+                                figi: savedRecommendation?.figi,
+                                error: { message: autoTradeError.message, stack: autoTradeError.stack }
+                            });
+                        }
                         // Не прерываем выполнение, если не удалось создать заявку
                     }
                 }

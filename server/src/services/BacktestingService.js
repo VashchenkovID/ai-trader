@@ -52,6 +52,25 @@ class BacktestingService {
     }
 
     /**
+     * Проверка применимости рекомендации к текущей свече.
+     * Anti-leakage: рекомендация из будущего не может использоваться.
+     * @param {Date|string} recommendationDate
+     * @param {Date|string} candleDate
+     * @param {number} validityDays
+     * @returns {boolean}
+     */
+    isRecommendationEligibleForCandle(recommendationDate, candleDate, validityDays = 3) {
+        const recDate = new Date(recommendationDate);
+        const barDate = new Date(candleDate);
+        if (isNaN(recDate.getTime()) || isNaN(barDate.getTime())) {
+            return false;
+        }
+
+        const daysDiff = (barDate - recDate) / (1000 * 60 * 60 * 24);
+        return daysDiff >= 0 && daysDiff <= validityDays;
+    }
+
+    /**
      * Симуляция торговли на одном инструменте
      * @param {string} figi - FIGI инструмента
      * @param {Object} strategy - Объект стратегии
@@ -265,11 +284,11 @@ class BacktestingService {
                     // Если нет сигнала, проверяем рекомендации AI
                     if (!entrySignal) {
                         for (const rec of recommendations) {
-                            const recDate = new Date(rec.analysisDate);
-                            const daysDiff = Math.abs((candleDate - recDate) / (1000 * 60 * 60 * 24));
-
-                            // Рекомендация актуальна в течение 3 дней
-                            if (daysDiff <= 3 && rec.recommendation === 'BUY' && rec.confidence >= strategy.minConfidence && rec.score >= strategy.minScore) {
+                            // Anti-lookahead: используем только уже опубликованные рекомендации.
+                            if (this.isRecommendationEligibleForCandle(rec.analysisDate, candleDate, 3)
+                                && rec.recommendation === 'BUY'
+                                && rec.confidence >= strategy.minConfidence
+                                && rec.score >= strategy.minScore) {
                                 entryDirection = 'BUY';
                                 entryConfidence = rec.confidence;
                                 entryScore = rec.score;

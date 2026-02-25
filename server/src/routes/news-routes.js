@@ -5,6 +5,63 @@ import ServiceManager from '../services/ServiceManager.js';
 const router = express.Router();
 
 /**
+ * Диагностика новостей в БД (должен быть до /:figi)
+ * GET /api/news/debug?figi=BBG000SR0YS4
+ */
+router.get('/debug', async (req, res) => {
+    try {
+        const { figi } = req.query;
+        const CachedNewsModule = await import('../models/CachedNews.js');
+        const CachedNews = CachedNewsModule.default;
+        const { Op } = await import('sequelize');
+        const now = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const whereBase = figi ? { figi } : {};
+        const wherePublished = { ...whereBase, publishedAt: { [Op.gte]: thirtyDaysAgo } };
+        const whereNotExpired = { ...wherePublished, expiresAt: { [Op.gt]: now } };
+
+        const [total, withDate, withExpiry, figiRows] = await Promise.all([
+            CachedNews.count({ where: whereBase }),
+            CachedNews.count({ where: wherePublished }),
+            CachedNews.count({ where: whereNotExpired }),
+            CachedNews.findAll({
+                attributes: ['figi'],
+                raw: true,
+                limit: 100
+            })
+        ]);
+        const distinctFigis = [...new Set(figiRows.map(r => r.figi))];
+
+        const sample = await CachedNews.findAll({
+            where: whereBase,
+            order: [['publishedAt', 'DESC']],
+            limit: 5,
+            attributes: ['id', 'figi', 'title', 'publishedAt', 'expiresAt', 'category', 'url']
+        });
+
+        res.json({
+            success: true,
+            data: {
+                figi: figi || null,
+                totalInTable: total,
+                last30Days: withDate,
+                last30DaysNotExpired: withExpiry,
+                sampleFigisInDb: distinctFigis,
+                sampleRows: sample.map(s => s.toJSON ? s.toJSON() : s)
+            }
+        });
+    } catch (error) {
+        console.error('❌ Ошибка диагностики новостей:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
  * Новости по FIGI
  * GET /api/news/:figi?limit=20&days=30
  */

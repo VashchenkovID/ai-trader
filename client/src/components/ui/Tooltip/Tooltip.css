@@ -6,6 +6,24 @@
 .tooltip {
   position: absolute;
   z-index: 9999;
+}
+
+/* Портальная версия: position задаётся inline, z-index выше модалок */
+.tooltip-portal {
+  animation: tooltipFadeInPortal 0.15s ease-out;
+}
+.tooltip-portal.tooltip-top,
+.tooltip-portal.tooltip-bottom,
+.tooltip-portal.tooltip-left,
+.tooltip-portal.tooltip-right {
+  bottom: auto !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  transform: none !important;
+}
+
+.tooltip {
   padding: 8px 12px;
   background: var(--color-surface-elevated);
   color: var(--color-text-primary);
@@ -29,6 +47,11 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes tooltipFadeInPortal {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .tooltip-content {

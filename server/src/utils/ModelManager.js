@@ -380,17 +380,19 @@ class ModelManager {
             const modelPath = path.join(this.modelsDir, modelName);
             const jsonPath = `${modelPath}.json`;
             const binPath = `${modelPath}.weights.bin`;
+            const weightsJsonPath = `${modelPath}_weights.json`;
             
-            try {
-                await fs.unlink(jsonPath);
-                await fs.unlink(binPath);
-                return true;
-            } catch (error) {
-                if (error.code !== 'ENOENT') {
-                    throw error;
+            const toDelete = [jsonPath, binPath, weightsJsonPath];
+            for (const filePath of toDelete) {
+                try {
+                    await fs.unlink(filePath);
+                } catch (error) {
+                    if (error.code !== 'ENOENT') {
+                        throw error;
+                    }
                 }
-                return true; // Файлы уже не существуют
             }
+            return true;
         } catch (error) {
             console.error(`❌ Failed to delete model ${modelName}:`, error.message);
             return false;

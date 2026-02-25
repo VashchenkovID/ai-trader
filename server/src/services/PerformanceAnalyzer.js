@@ -380,6 +380,7 @@ class PerformanceAnalyzer {
 
             // Анализ максимальной просадки - рассчитываем в процентах от капитала (только закрытые сделки)
             const drawdown = this.calculateDrawdown(closedTradesForAnalysis, initialCapital);
+            const baselineComparison = this.calculateBaselineComparison(periodTrades, totalProfit, initialCapital);
 
             return {
                 totalProfit,
@@ -393,6 +394,7 @@ class PerformanceAnalyzer {
                 consistency, // Добавлена консистентность
                 maxDrawdown: drawdown.max, // Теперь в процентах
                 currentDrawdown: drawdown.current, // Теперь в процентах
+                baselineComparison,
                 symbolAnalysis,
                 timeAnalysis,
                 migrations: migrations.length,
@@ -402,6 +404,86 @@ class PerformanceAnalyzer {
         } catch (error) {
             console.error('❌ Ошибка анализа торговых результатов:', error);
             return { error: error.message };
+        }
+    }
+
+    /**
+     * Сравнение AI-результата с базовыми эталонами.
+     * Использует ценовые точки из фактической торговой истории за период.
+     */
+    calculateBaselineComparison(periodTrades = [], totalProfit = 0, initialCapital = 0) {
+        try {
+            if (!periodTrades || periodTrades.length === 0 || !initialCapital || initialCapital <= 0) {
+                return {
+                    aiReturnPct: 0,
+                    buyHoldReturnPct: 0,
+                    momentumReturnPct: 0,
+                    excessVsBuyHoldPct: 0,
+                    excessVsMomentumPct: 0,
+                    symbolsUsed: 0
+                };
+            }
+
+            const aiReturnPct = (totalProfit / initialCapital) * 100;
+            const bySymbol = new Map();
+            for (const trade of periodTrades) {
+                const symbol = trade.symbol || trade.ticker || trade.figi;
+                const price = Number(trade.price);
+                const ts = new Date(trade.timestamp || trade.date || trade.createdAt).getTime();
+                if (!symbol || !Number.isFinite(price) || price <= 0 || !Number.isFinite(ts)) continue;
+
+                if (!bySymbol.has(symbol)) bySymbol.set(symbol, []);
+                bySymbol.get(symbol).push({ price, ts });
+            }
+
+            const buyHoldReturns = [];
+            const momentumReturns = [];
+            for (const points of bySymbol.values()) {
+                points.sort((a, b) => a.ts - b.ts);
+                if (points.length < 2) continue;
+
+                const firstPrice = points[0].price;
+                const lastPrice = points[points.length - 1].price;
+                const buyHold = ((lastPrice - firstPrice) / firstPrice) * 100;
+                buyHoldReturns.push(buyHold);
+
+                if (points.length >= 3) {
+                    let momentumEq = 1.0;
+                    for (let i = 2; i < points.length; i++) {
+                        const prev = points[i - 1].price;
+                        const prevPrev = points[i - 2].price;
+                        const curr = points[i].price;
+                        const prevMove = prev - prevPrev;
+                        const ret = (curr - prev) / prev;
+                        const signedRet = prevMove >= 0 ? ret : -ret;
+                        momentumEq *= (1 + signedRet);
+                    }
+                    momentumReturns.push((momentumEq - 1) * 100);
+                }
+            }
+
+            const avg = (arr) => arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+            const buyHoldReturnPct = avg(buyHoldReturns);
+            const momentumReturnPct = avg(momentumReturns);
+
+            return {
+                aiReturnPct,
+                buyHoldReturnPct,
+                momentumReturnPct,
+                excessVsBuyHoldPct: aiReturnPct - buyHoldReturnPct,
+                excessVsMomentumPct: aiReturnPct - momentumReturnPct,
+                symbolsUsed: bySymbol.size
+            };
+        } catch (error) {
+            return {
+                aiReturnPct: 0,
+                buyHoldReturnPct: 0,
+                momentumReturnPct: 0,
+                excessVsBuyHoldPct: 0,
+                excessVsMomentumPct: 0,
+                symbolsUsed: 0,
+                error: error.message
+            };
         }
     }
 

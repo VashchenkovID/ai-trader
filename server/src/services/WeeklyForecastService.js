@@ -745,7 +745,7 @@ class WeeklyForecastService {
                 const cachedInputs = cachedModel?.inputs;
                 if (cachedInputs && cachedInputs.length === 2) {
                 if (LoggerService.isInitialized) {
-                    LoggerService.warn('Model loaded from cache', {
+                    LoggerService.debug('Model loaded from cache', {
                         service: 'WeeklyForecastService',
                         operation: 'getOrCreateModel',
                         figi,
@@ -770,7 +770,7 @@ class WeeklyForecastService {
                     }
                     this.modelCache.delete(cacheKey);
                     if (LoggerService.isInitialized) {
-                        LoggerService.warn('Cached model has incorrect structure, removed from cache', {
+                        LoggerService.info('Cached model has incorrect structure, removed from cache', {
                             service: 'WeeklyForecastService',
                             operation: 'getOrCreateModel',
                             figi,
@@ -793,7 +793,7 @@ class WeeklyForecastService {
                 const modelInputs = model.inputs;
                 if (!modelInputs || modelInputs.length !== 2) {
                     if (LoggerService.isInitialized) {
-                        LoggerService.warn('Loaded model has incorrect structure, creating new model', {
+                        LoggerService.info('Loaded model has incorrect structure (legacy format), creating new model', {
                             service: 'WeeklyForecastService',
                             operation: 'getOrCreateModel',
                             figi,
@@ -813,7 +813,7 @@ class WeeklyForecastService {
                 version = metadata?.version || this.generateModelVersion();
                 
                 if (LoggerService.isInitialized) {
-                    LoggerService.warn('Model loaded from storage', {
+                    LoggerService.debug('Model loaded from storage', {
                         service: 'WeeklyForecastService',
                         operation: 'getOrCreateModel',
                         figi,
@@ -831,7 +831,7 @@ class WeeklyForecastService {
                 isNew = true;
                 
                 if (LoggerService.isInitialized) {
-                    LoggerService.warn('New model created', {
+                    LoggerService.info('New model created', {
                         service: 'WeeklyForecastService',
                         operation: 'getOrCreateModel',
                         figi,
@@ -840,25 +840,26 @@ class WeeklyForecastService {
                     });
                 }
 
-                // Если мы удалили некорректную модель из storage, сразу сохраняем новую заготовку
-                // Это предотвращает повторную загрузку legacy-структуры после перезапуска процесса.
-                if (deletedInvalidModelFromStorage) {
-                    const saveSuccess = await WeeklyForecastModelService.saveModel(model, figi, modelType, {
-                        version,
-                        createdAt: new Date().toISOString(),
-                        migratedFromInvalidStructure: true
-                    });
+                // Сохраняем новую модель, чтобы при следующем вызове загружать с диска, а не пересоздавать
+                const saveSuccess = await WeeklyForecastModelService.saveModel(model, figi, modelType, {
+                    version,
+                    createdAt: new Date().toISOString(),
+                    ...(deletedInvalidModelFromStorage && { migratedFromInvalidStructure: true })
+                });
 
-                    if (LoggerService.isInitialized) {
-                        LoggerService.warn('Recreated model persisted after invalid structure cleanup', {
+                if (LoggerService.isInitialized && saveSuccess) {
+                    LoggerService.info(
+                        deletedInvalidModelFromStorage
+                            ? 'Model recreated and persisted after invalid structure cleanup'
+                            : 'New model persisted',
+                        {
                             service: 'WeeklyForecastService',
                             operation: 'getOrCreateModel',
                             figi,
                             modelType,
-                            version,
-                            saveSuccess
-                        });
-                    }
+                            version
+                        }
+                    );
                 }
             }
             
