@@ -4,6 +4,7 @@ This file collects all recommended features and improvements discussed in chat.
 Focus: long-term robustness, measurable edge, and safe real trading.
 
 ## Priority Legend
+
 - P0: Critical safety / correctness
 - P1: High impact on performance and stability
 - P2: Medium impact / scale-up
@@ -148,3 +149,210 @@ Focus: long-term robustness, measurable edge, and safe real trading.
   - robust risk controls
   - fast failure diagnostics
 
+TODO фаза 4
+План: AI-обучение на Python и контур LLM-жюри
+
+1. Текущий флоу приложения (кратко)
+
+flowchart LR
+subgraph data [Данные]
+Candles[Свечи]
+Macro[Макро]
+Fund[Фундаментал]
+Options[Опционы/IV]
+Div[Дивиденды]
+end
+subgraph prep [Подготовка]
+OptimizedData[OptimizedDataService]
+prepareTrainingData[prepareTrainingData]
+createFeatureVector[createFeatureVector]
+end
+subgraph models [Модели Node]
+NN[NeuralNetworkService]
+Ensemble[EnsembleService]
+Meta[MetaLearningService]
+RL[ReinforcementLearningService]
+Stack[StackingService]
+Weekly[WeeklyForecastService]
+end
+subgraph out [Выход]
+Rec[Recommendation BUY/SELL/HOLD]
+Weights[ModelWeightingService]
+Integrated[IntegratedAIService]
+end
+Candles --> OptimizedData
+Macro --> createFeatureVector
+Fund --> createFeatureVector
+Options --> createFeatureVector
+Div --> createFeatureVector
+OptimizedData --> prepareTrainingData
+prepareTrainingData --> NN
+prepareTrainingData --> Ensemble
+NN --> Integrated
+Ensemble --> Integrated
+Meta --> Integrated
+RL --> Integrated
+Stack --> Integrated
+Weekly --> Integrated
+Integrated --> Weights
+Weights --> Rec
+
+Вход: свечи (DAY), макро, фундаментал, опционы, дивиденды → один общий пайплайн фичей (OptimizedDataService.prepareTrainingData + createFeatureVector).
+
+Модели: LSTM/MLP (TensorFlow.js), ансамбль по горизонтам, мета-обучение, RL (Q-learning), стекинг, weekly forecast (encoder-decoder LSTM).
+
+Выход: рекомендации с confidence/score в БД; взвешивание моделей; единая рекомендация через IntegratedAIService.
+
+2. Рекомендуемый стек на Python
+
+Назначение
+
+Технология
+
+Обоснование
+
+Ядро обучения (LSTM, MLP, ансамбль)
+
+PyTorch + PyTorch Lightning
+
+Гибкость, нормальная работа с последовательностями и кастомными лоссами, удобные даталоадеры и чекпоинты. Lightning — меньше boilerplate, ранний стоп, логгирование.
+
+Временные ряды / фичи
+
+pandas, numpy, ta (или pandas-ta)
+
+Таблицы и индикаторы. ta — RSI, MACD, Bollinger и т.д. Альтернатива: sktime для единого API рядов.
+
+RL
+
+Stable-Baselines3 (или кастом на PyTorch)
+
+Готовые алгоритмы (PPO, DQN и т.д.), интеграция с Gym. Для точного воспроизведения текущего Q-learning можно обернуть своё окружение в Gym и взять DQN.
+
+Эксперименты и артефакты
+
+MLflow
+
+Версионирование датасетов, параметров, метрик, чекпоинтов. Удобно для ансамбля и стекинга (какая модель какая версия).
+
+Очереди обучения
+
+Celery + Redis (или ARQ)
+
+Долгие задачи (обучение по инструментам, батч). Не блокировать FastAPI. Альтернатива: отдельный воркер на FastAPI BackgroundTasks — проще, но без приоритетов и ретраев.
+
+LLM-жюри
+
+httpx (async) + единый слой промптов
+
+Минимум зависимостей: один промпт → запросы к разным API (Qwen, DeepSeek, Алиса и т.д.) → парсинг ответа в структуру «мнение» (BUY/SELL/HOLD + confidence). Без LangChain, если не нужны цепочки.
+
+Конфиг и секреты
+
+pydantic-settings
+
+Уже есть в FastAPI; те же настройки для воркеров обучения и ключей LLM.
+
+Не брать: TensorFlow/Keras — ты переписываешь с нуля, PyTorch даёт больше гибкости для кастомных контуров и RL. JAX — избыточен на старте.
+
+3. Архитектура: где что живёт
+
+Сервис обучения (отдельный процесс или подпакет в server_fastapi):
+
+Data: один модуль подготовки фичей (аналог OptimizedDataService): свечи из БД/кеша, макро, фундаментал, опционы, дивиденды → один пайплайн в pandas/numpy, затем тензоры для PyTorch.
+
+Models: пакеты по контурам: nn (LSTM/MLP), ensemble, meta, rl, stacking, weekly_forecast, llm_jury.
+
+Training jobs: Celery-таски (или аналог) по типам: train_nn, train_ensemble, train_weekly, train_meta, train_rl, run_llm_jury, run_stacking. Результат — артефакты в MLflow и/или сохранение весов/конфигов в хранилище (S3/локально + путь в БД).
+
+Inference: тонкий слой «загрузка модели + predict» по запросу API (или по расписанию для пайплайна рекомендаций). FastAPI вызывает этот слой или читает уже записанные рекомендации из БД.
+
+Контур LLM-жюри (новый):
+
+Вход: один и тот же промпт (например: краткое описание инструмента, последние N дней цен, объём, новости) в едином формате.
+
+Вызов: параллельные запросы к разным провайдерам (Qwen, DeepSeek, Алиса GPT и др.) через async httpx, таймауты и ретраи.
+
+Выход: список структур { model_id, action: BUY|SELL|HOLD, confidence, raw_text }. Нормализация в общий формат «мнения» (например 0–1 score и действие).
+
+Интеграция:
+
+Meta-learning: мнения LLM как дополнительные фичи или как «внешний эксперт» при определении режима/адаптации весов.
+
+Weekly forecast: мнения LLM как доп. вход в модель (фича «консенсус LLM») или как пост-обработка (коррекция прогноза по порогу согласия).
+
+Детали интеграции (фича vs пост-обработка) можно зафиксировать в инвариантах и тестах после первого прототипа LLM-жюри.
+
+4. Этапы реализации (логический порядок)
+
+Общая инфраструктура
+
+Репозиторий/пакет training в server_fastapi (или отдельный репо): конфиг (pydantic-settings), логирование, подключение к той же БД и при необходимости кешу свечей.
+
+Подготовка данных: модуль «фичи из свечей + макро + фундаментал + опционы + дивиденды» (аналог prepareTrainingData + createFeatureVector), вывод в таблицы/файлы или в датасет для PyTorch.
+
+MLflow: проект(ы) по контурам, логирование датасета (путь/версия), параметров и метрик.
+
+Базовый контур (NN)
+
+Модель LSTM/MLP на PyTorch Lightning, обучение на подготовленных фичах и метках (аналог текущего NeuralNetworkService).
+
+Сохранение чекпоинтов и конфига, регистрация в MLflow. Инференс: загрузка модели по версии/алиасу и предсказание score/confidence.
+
+Ансамбль и стекинг
+
+Несколько моделей с разными горизонтами/гиперпараметрами, обучение через те же данные (или подвыборки). Стекинг: мета-модель на предсказаниях базовых (как сейчас в Node).
+
+Версионирование ансамбля в MLflow.
+
+Weekly forecast
+
+Модель типа encoder-decoder (LSTM/Transformer) для прогноза на неделю; данные — те же фичи + скользящие окна. Обучение и сохранение аналогично NN.
+
+Опционально: вызов LLM-жюри по тому же инструменту/периоду и добавление фичи «консенсус LLM» или пост-коррекция.
+
+Meta-learning
+
+Реализация «базы паттернов» и адаптации весов/параметров под режим рынка. Вход может включать агрегированные мнения LLM (например, средний score по жюри) как признак режима или доверия.
+
+RL
+
+Окружение (Gym): состояние = портфель + фичи инструмента, действия = HOLD/BUY/SELL, награда = PnL/риск. Обучение через Stable-Baselines3 или свой DQN на PyTorch. Сохранение политики в MLflow.
+
+Контур LLM-жюри
+
+Модуль промптов: шаблон + подстановка инструмента, цен, объёмов, опционально новостей.
+
+Модуль провайдеров: адаптеры под API Qwen, DeepSeek, Алиса (и др.): один интерфейс «запрос-ответ» → нормализованное мнение.
+
+Планировщик/таск: по расписанию или по событию запрос ко всем провайдерам, сохранение результатов в БД (новая таблица или расширение существующей «рекомендаций»).
+
+Интеграция в meta-learning и weekly forecast (фичи или пост-обработка — по решению выше).
+
+Интеграция с FastAPI
+
+Запуск обучения по API (запуск Celery-таски или фоновых задач), статус и логи через существующий мониторинг.
+
+Пайплайн рекомендаций (аналог RecommendationPipelineService): при генерации рекомендаций читать предсказания всех контуров (включая LLM-жюри) и веса из ModelWeightingService; писать в таблицу recommendations в текущем формате.
+
+5. Ключевые файлы и места
+
+Текущий пайплайн фичей (Node): server/src/services/OptimizedDataService.js — prepareTrainingData, createFeatureVector (свечи, индикаторы, макро, фундаментал, опционы, дивиденды).
+
+Текущее обучение NN: server/src/workers/neuralNetworkWorker.js, server/src/services/NeuralNetworkService.js.
+
+Weekly forecast: server/src/workers/weeklyForecastTrainingWorker.js, server/src/utils/scheduler/weeklyForecastTrainingUtils.js.
+
+Рекомендации и ансамбль: server/src/services/IntegratedAIService.js, server/src/services/EnsembleService.js.
+
+FastAPI: рекомендации только потребляют БД — server_fastapi/app/services/recommendation_pipeline_service.py; модели обучения в Phase 4 пока не переносились.
+
+6. Риски и упрощения
+
+Данные: макро, фундаментал, опционы сейчас могут быть в Node-специфичном кеше/БД — нужен общий доступ (БД/API/файлы) для Python-воркеров.
+
+LLM: лимиты и стоимость API; необходимо единообразно парсить ответы (например, один формат JSON или помеченные блоки в тексте).
+
+Уместно сначала довести один контур (NN + подготовка данных) до конца, затем подключать ансамбль, weekly, meta, RL и в конце — LLM-жюри и его интеграцию в meta/weekly.
+
+Если нужно, следующий шаг — разбить один из этапов (например, «Подготовка данных» или «Контур LLM-жюри») в конкретные задачи по файлам и сигнатурам функций.

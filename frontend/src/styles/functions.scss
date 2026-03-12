@@ -1,0 +1,85 @@
+@use 'sass:math';
+@use 'sass:meta';
+@use 'sass:map';
+@use 'const.variables' as *;
+
+@function strip-unit($number) {
+  @if meta.type-of($number) == 'number' and not math.is-unitless($number) {
+    @return math.div($number, ($number * 0 + 1));
+  }
+
+  @return $number;
+}
+
+@function strip-units($number) {
+  @return math.div($number, ($number * 0 + 1));
+}
+
+@function px-to-rem($px) {
+  $rems: math.div($px, 16px) * 1rem;
+  @return $rems;
+}
+
+@function rem-to-px($val, $rem: strip-units(16px)) {
+  $val-unit: math.unit($val);
+
+  @if $val-unit == 'px' {
+    @return $val;
+  }
+
+  @return (strip-units($val) * $rem) * 1px;
+}
+
+@function px2vw($px, $base-width: map.get($grid-breakpoints, xl)) {
+  $factor: 1vw;
+
+  @if ($px == auto or $px == initial or $px == none) {
+    @return $px;
+  } @else {
+    $unit: math.unit($px);
+
+    @if $unit == 'rem' {
+      $px: rem-to-px($px);
+    }
+
+    @return calc((calc(strip-unit($px) / (strip-unit($base-width) / 100))) * $factor);
+  }
+}
+
+@function px2rem($px) {
+  @if ($px == auto or $px == initial or $px == none) {
+    @return $px;
+  } @else {
+    @return (calc(strip-unit($px) / 10)) * 1rem;
+  }
+}
+
+// Адаптивная функция: повторяет логику миксина fluid
+// Для мобильных (до 536px): px2vw относительно минимального брейкпоинта (320px) - но в CSS переменных используем минимальное rem
+// Для десктопных (от 537px): clamp с минимальным значением 0.01rem, vw относительно максимального брейкпоинта (1920px) и максимальным rem значением
+// Так как CSS переменные не поддерживают media queries, используем clamp для всех разрешений
+// Логика: clamp(min-rem, vw-относительно-1920px, max-rem)
+@function px-to-adaptive($px) {
+  @if ($px == auto or $px == initial or $px == none) {
+    @return $px;
+  }
+
+  // Проверка на ноль (как в fluid миксине)
+  @if (strip-units($px) == 0) {
+    $px: 0.1px;
+  }
+
+  // Минимальное значение для мобильных (как в fluid миксине - 0.01rem)
+  $min-value: 0.01rem;
+
+  // Для десктопных: clamp в диапазоне от md до xl.
+  // Mobile остается статичным за счет миксина fluid (до md).
+  $min-size: $px * 0.85;
+  $max-size: $px;
+  $slope: math.div($max-size - $min-size, $desktop-scale-max-width - $desktop-scale-min-width);
+  $slope-to-unit: $slope * 100;
+  $intercept-rem: px-to-rem($min-size - $slope * $desktop-scale-min-width);
+  $min-size-rem: px-to-rem($min-size);
+  $max-size-rem: px-to-rem($max-size);
+  @return clamp(#{$min-size-rem}, #{$slope-to-unit}vw + #{$intercept-rem}, #{$max-size-rem});
+}

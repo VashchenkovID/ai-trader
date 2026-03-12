@@ -1,0 +1,41 @@
+@use '../../../styles' as *;
+
+.ui-surface-card {
+  display: grid;
+  gap: var(--ds-space-md);
+  padding: var(--ds-space-lg);
+  border-radius: var(--ds-radius-xl);
+  border: 1px solid color-mix(in srgb, var(--ds-border) 72%, rgba(109, 148, 255, 0.32));
+  background:
+    linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--ds-surface) 78%, rgba(79, 117, 255, 0.22)),
+      color-mix(in srgb, var(--ds-surface-2) 80%, rgba(180, 84, 255, 0.2))
+    );
+  box-shadow:
+    0 14px 36px rgba(13, 19, 48, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.ui-surface-card__header {
+  margin: 0;
+}
+
+.ui-surface-card__body {
+  display: grid;
+  gap: var(--ds-space-md);
+}
+
+.ui-surface-card--elevated {
+  border-color: color-mix(in srgb, var(--ds-primary) 54%, var(--ds-border));
+  box-shadow:
+    0 20px 44px rgba(11, 17, 40, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+@include media-breakpoint-up(md) {
+  .ui-surface-card {
+    padding: #{px-to-adaptive(24px)};
+    border-radius: #{px-to-adaptive(24px)};
+  }
+}

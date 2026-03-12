@@ -6,3 +6,26 @@
 */logs
 server/logs
 node_modules
+
+# --- Python/FastAPI ---
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.coverage
+**/.coverage.*
+**/htmlcov/
+
+# --- Environment files ---
+**/.env
+**/.env.*
+!**/.env.example
+
+# --- IDE/local ---
+**/.idea/
+**/.vscode/
+**/.DS_Store
+*.egg-info/
+**/*.egg-info/

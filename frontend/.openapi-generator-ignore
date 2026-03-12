@@ -1,0 +1,5 @@
+# Игнорируем файлы, которые не нужны
+.gitignore
+.openapi-generator-ignore
+.openapi-generator/
+

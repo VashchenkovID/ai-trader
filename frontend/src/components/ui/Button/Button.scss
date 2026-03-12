@@ -1,0 +1,139 @@
+@use '../../../styles' as *;
+
+.ui-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-xs);
+  border-style: solid;
+  border-color: transparent;
+  @include fluid(border-width, 1px);
+  border-radius: var(--ds-radius-md);
+  padding: 0 var(--ds-space-lg);
+  @include fluid(min-height, 44px, 44px, 46px, 48px);
+  font-weight: 600;
+  @include fluid(font-size, 15px, 15px, 15px, 16px);
+  line-height: 1;
+  cursor: pointer;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    transform var(--ds-duration-fast) var(--ds-ease-standard),
+    background-color var(--ds-duration-fast) var(--ds-ease-standard),
+    border-color var(--ds-duration-fast) var(--ds-ease-standard),
+    color var(--ds-duration-fast) var(--ds-ease-standard),
+    box-shadow var(--ds-duration-fast) var(--ds-ease-standard);
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    opacity: 0;
+    background: linear-gradient(120deg, transparent 25%, rgba(255, 255, 255, 0.22), transparent 75%);
+    transform: translateX(-120%);
+    transition: opacity var(--ds-duration-fast) var(--ds-ease-standard);
+  }
+
+  @include media-breakpoint-up(md) {
+    border-radius: #{px-to-adaptive(14px)};
+  }
+
+  &:hover:not(:disabled) {
+    transform: translateY(#{px-to-rem(-1px)});
+
+    @include media-breakpoint-up(md) {
+      transform: translateY(#{px-to-adaptive(-1px)});
+    }
+
+    &::after {
+      opacity: 1;
+      animation: ui-button-sheen 0.95s ease;
+    }
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.ui-button--primary {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ds-primary) 92%, #fff),
+    color-mix(in srgb, var(--ds-primary) 72%, #5f6bff)
+  );
+  color: var(--ds-primary-contrast);
+  box-shadow: 0 12px 28px rgba(73, 115, 255, 0.34);
+}
+
+.ui-button--secondary {
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--ds-primary) 24%, var(--ds-surface-2)),
+    color-mix(in srgb, #7a8dff 22%, var(--ds-surface))
+  );
+  border-color: color-mix(in srgb, var(--ds-primary) 40%, var(--ds-border));
+  color: var(--ds-text);
+  box-shadow: 0 10px 24px rgba(69, 104, 228, 0.24);
+}
+
+.ui-button--ghost {
+  background: color-mix(in srgb, var(--ds-surface) 35%, transparent);
+  border-color: color-mix(in srgb, var(--ds-text) 20%, transparent);
+  color: color-mix(in srgb, var(--ds-text) 86%, #ffffff);
+  backdrop-filter: blur(8px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.ui-button--danger {
+  background: linear-gradient(140deg, rgba(255, 94, 125, 0.26), rgba(218, 56, 99, 0.18));
+  border-color: rgba(255, 94, 125, 0.45);
+  color: #ffd6df;
+  box-shadow: 0 10px 24px rgba(233, 64, 107, 0.24);
+}
+
+.ui-button--sm {
+  @include fluid(min-height, 36px);
+  padding: 0 var(--ds-space-md);
+  border-radius: var(--ds-radius-sm);
+}
+
+.ui-button--lg {
+  @include fluid(min-height, 52px);
+  padding: 0 var(--ds-space-xl);
+  border-radius: var(--ds-radius-lg);
+}
+
+.ui-button__loader {
+  @include fluid(width, 14px);
+  @include fluid(height, 14px);
+  border-radius: 50%;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.4);
+  @include fluid(border-width, 2px);
+  border-top-color: rgba(255, 255, 255, 1);
+  animation: ui-button-spin 0.7s linear infinite;
+}
+
+@keyframes ui-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ui-button-sheen {
+  from {
+    transform: translateX(-120%);
+  }
+
+  to {
+    transform: translateX(120%);
+  }
+}

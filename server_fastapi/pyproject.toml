@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-trader-fastapi"
+version = "0.1.0"
+description = "FastAPI rewrite for ai-trader server"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.116.0",
+  "uvicorn[standard]>=0.35.0",
+  "pydantic-settings>=2.10.0",
+  "sqlalchemy>=2.0.40",
+  "asyncpg>=0.30.0",
+  "alembic>=1.16.0",
+  "python-dotenv>=1.0.1",
+  "bcrypt>=4.2.0",
+  "PyJWT>=2.9.0",
+  "httpx>=0.28.0",
+  "apscheduler>=3.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-cov>=7.0.0",
+  "pytest-asyncio>=0.24.0",
+  "httpx>=0.28.0",
+  "ruff>=0.12.0",
+]
+training = [
+  "pandas>=2.0.0",
+  "numpy>=1.24.0",
+  "mlflow>=2.10.0",
+  "torch>=2.0.0",
+  "pytorch-lightning>=2.0.0",
+  "httpx>=0.28.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+markers = [
+  "training: marks tests that require [training] deps (torch, lightning, pandas)",
+  "live_llm: marks live integration tests for real LLM providers",
+  "live_telegram: marks live integration tests for Telegram bot API",
+  "live_tinkoff: marks live integration tests for real Tinkoff API (read-only)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "training*"]
+exclude = ["alembic*", "tests*"]

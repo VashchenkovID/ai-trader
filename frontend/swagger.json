@@ -1,0 +1,4579 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AI Trader API",
+    "description": "Русскоязычная документация API сервиса AI Trader на FastAPI.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Проверка доступности сервиса",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_HealthDTO_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Проверка здоровья API (v1)",
+        "operationId": "health_v1_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_HealthDTO_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Вход пользователя",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/AuthLoginRequest" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_AuthLoginData_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": ["auth"],
+        "summary": "Текущий пользователь",
+        "operationId": "me_api_v1_auth_me_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_UserDTO_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/verify": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Проверка токена",
+        "operationId": "verify_api_v1_auth_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/VerifyTokenRequest" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Выход пользователя",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__str__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "tags": ["settings"],
+        "summary": "Список системных настроек",
+        "operationId": "get_settings_api_v1_settings_get",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["settings"],
+        "summary": "Обновление настройки по ключу",
+        "operationId": "update_settings_api_v1_settings_put",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SettingsUpdateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_SettingItemDTO_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/kelly": {
+      "get": {
+        "tags": ["settings"],
+        "summary": "Текущие параметры Келли",
+        "operationId": "get_kelly_settings_api_v1_settings_kelly_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_KellySettingsDTO_" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["settings"],
+        "summary": "Обновление параметров Келли",
+        "operationId": "update_kelly_settings_api_v1_settings_kelly_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/KellySettingsUpdateRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_KellySettingsDTO_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metrics": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Технические метрики приложения",
+        "operationId": "metrics_api_v1_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/errors/demo": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Демо генерации ошибки",
+        "operationId": "demo_error_api_v1_errors_demo_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "default": "INVALID_STATE_TRANSITION",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/status": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Сводный статус подсистем",
+        "operationId": "system_status_api_v1_system_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/health": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Проверка состояния системы",
+        "operationId": "system_health_api_v1_system_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/settings": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Системные настройки",
+        "operationId": "system_settings_api_v1_system_settings_get",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/performance/metrics": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Метрики производительности системы",
+        "operationId": "performance_metrics_api_v1_performance_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/performance/metrics": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Метрики производительности системы",
+        "operationId": "performance_metrics_api_v1_system_performance_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/performance/baseline": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Базовые целевые показатели производительности",
+        "operationId": "performance_baseline_api_v1_system_performance_baseline_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/ops/status": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Текущий операционный режим cutover",
+        "operationId": "ops_status_api_v1_system_ops_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/ops/mode": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Переключить операционный режим cutover",
+        "operationId": "ops_set_mode_api_v1_system_ops_mode_post",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/OpsModeBody" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/ops/canary": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Включить canary и задать процент",
+        "operationId": "ops_set_canary_api_v1_system_ops_canary_post",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/CanaryBody" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/ops/rollback": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Экстренный rollback режим (блокирует write)",
+        "operationId": "ops_rollback_api_v1_system_ops_rollback_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/ops/backup": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Создать snapshot перед cutover/rollback",
+        "operationId": "ops_backup_api_v1_system_ops_backup_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/tasks": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Список фоновых задач",
+        "operationId": "system_tasks_api_v1_system_tasks_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/tasks/{task_id}": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Статус фоновой задачи",
+        "operationId": "system_task_api_v1_system_tasks__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Task Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/scheduler/status": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Статусы cron-задач планировщика",
+        "operationId": "system_scheduler_status_api_v1_system_scheduler_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/errors/registry": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Файловый реестр ошибок приложения",
+        "operationId": "system_errors_registry_api_v1_system_errors_registry_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/cache/update": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый запуск cache update",
+        "operationId": "system_cache_update_api_v1_system_cache_update_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/cache/full-update": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый запуск полного cache update",
+        "operationId": "system_cache_full_update_api_v1_system_cache_full_update_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assets/sync": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновая синхронизация ассетов",
+        "operationId": "assets_sync_api_v1_assets_sync_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fundamental-data/sync-and-fill": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый sync+fill фундаментала",
+        "operationId": "fundamental_sync_and_fill_api_v1_fundamental_data_sync_and_fill_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fundamental-data/fill-all": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновое заполнение фундаментала",
+        "operationId": "fundamental_fill_all_api_v1_fundamental_data_fill_all_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/macro-data/update": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновое обновление макро данных",
+        "operationId": "macro_update_api_v1_macro_data_update_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/macro-data/load-indices": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновая загрузка рыночных индексов",
+        "operationId": "macro_load_indices_api_v1_macro_data_load_indices_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/signals/update": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновое обновление сигналов",
+        "operationId": "signals_update_api_v1_signals_update_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/options-data/update-all": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновое обновление опционных данных",
+        "operationId": "options_update_all_api_v1_options_data_update_all_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-windows/update": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновое обновление торговых окон",
+        "operationId": "trading_windows_update_api_v1_trading_windows_update_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/price-loops/portfolio": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый price-loop портфеля",
+        "operationId": "portfolio_prices_update_api_v1_system_price_loops_portfolio_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/price-loops/signals": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый price-loop активных сигналов",
+        "operationId": "signals_prices_update_api_v1_system_price_loops_signals_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/price-loops/trading-requests": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый price-loop торговых заявок",
+        "operationId": "trading_requests_prices_update_api_v1_system_price_loops_trading_requests_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/governance/weekly-backtest": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый weekly backtest",
+        "operationId": "governance_weekly_backtest_api_v1_system_governance_weekly_backtest_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/governance/dynamic-budget": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый dynamic budget rebalance",
+        "operationId": "governance_dynamic_budget_api_v1_system_governance_dynamic_budget_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/governance/rebalancing": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый portfolio rebalancing",
+        "operationId": "governance_rebalancing_api_v1_system_governance_rebalancing_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/risk/position-monitoring": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый мониторинг позиций",
+        "operationId": "risk_position_monitoring_api_v1_system_risk_position_monitoring_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/risk/partial-exit": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновая проверка partial-exit",
+        "operationId": "risk_partial_exit_api_v1_system_risk_partial_exit_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/risk/trailing-stops": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновая проверка trailing-stops",
+        "operationId": "risk_trailing_stops_api_v1_system_risk_trailing_stops_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-windows/status": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Статус обновления торговых окон",
+        "operationId": "trading_windows_status_api_v1_trading_windows_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/monitoring/metrics": {
+      "get": {
+        "tags": ["monitoring"],
+        "summary": "Маршрутные метрики мониторинга",
+        "operationId": "monitoring_metrics_api_v1_monitoring_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/monitoring/alerts": {
+      "get": {
+        "tags": ["monitoring"],
+        "summary": "Список активных алертов",
+        "operationId": "monitoring_alerts_api_v1_monitoring_alerts_get",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Category" }
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Severity" }
+          },
+          {
+            "name": "resolved",
+            "in": "query",
+            "required": false,
+            "schema": { "anyOf": [{ "type": "boolean" }, { "type": "null" }], "title": "Resolved" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/monitoring/alerts/{alert_id}/resolve": {
+      "post": {
+        "tags": ["monitoring"],
+        "summary": "Пометить алерт как решенный",
+        "operationId": "resolve_alert_api_v1_monitoring_alerts__alert_id__resolve_post",
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Alert Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/monitoring/performance": {
+      "get": {
+        "tags": ["monitoring"],
+        "summary": "Агрегированные метрики производительности",
+        "operationId": "monitoring_performance_api_v1_monitoring_performance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/monitoring/health": {
+      "get": {
+        "tags": ["monitoring"],
+        "summary": "Проверка состояния мониторинга",
+        "operationId": "monitoring_health_api_v1_monitoring_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/monitoring/report": {
+      "get": {
+        "tags": ["monitoring"],
+        "summary": "Сводный отчет мониторинга",
+        "operationId": "monitoring_report_api_v1_monitoring_report_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/monitoring/reset": {
+      "post": {
+        "tags": ["monitoring"],
+        "summary": "Сброс собранных метрик",
+        "operationId": "monitoring_reset_api_v1_monitoring_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__str__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/instruments": {
+      "get": {
+        "tags": ["market"],
+        "summary": "Список инструментов",
+        "description": "Возвращает список рыночных инструментов.",
+        "operationId": "market_instruments_api_v1_market_instruments_get",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/recommendations": {
+      "get": {
+        "tags": ["market"],
+        "summary": "Список рекомендаций",
+        "description": "Возвращает рекомендации по инструментам.",
+        "operationId": "market_recommendations_api_v1_market_recommendations_get",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/stock/{figi}": {
+      "get": {
+        "tags": ["market"],
+        "summary": "Карточка инструмента по FIGI",
+        "description": "Возвращает детальную карточку инструмента.",
+        "operationId": "market_stock_api_v1_market_stock__figi__get",
+        "parameters": [
+          {
+            "name": "figi",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Figi" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/stock/{figi}/candles": {
+      "get": {
+        "tags": ["market"],
+        "summary": "Свечи инструмента по FIGI",
+        "description": "Возвращает историю свечей для инструмента.",
+        "operationId": "market_stock_candles_api_v1_market_stock__figi__candles_get",
+        "parameters": [
+          {
+            "name": "figi",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Figi" }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 3650,
+              "minimum": 1,
+              "default": 365,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/refresh": {
+      "post": {
+        "tags": ["market"],
+        "summary": "Фоновый refresh рыночных данных",
+        "operationId": "market_refresh_api_v1_market_refresh_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/news/status": {
+      "get": {
+        "tags": ["news"],
+        "summary": "Статус новостного контура",
+        "description": "Возвращает состояние новостного контура.",
+        "operationId": "news_status_api_v1_news_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/news/instruments": {
+      "get": {
+        "tags": ["news"],
+        "summary": "Инструменты для новостной выборки",
+        "description": "Возвращает инструменты, доступные для новостной выборки.",
+        "operationId": "news_instruments_api_v1_news_instruments_get",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/news/{figi}": {
+      "get": {
+        "tags": ["news"],
+        "summary": "Новости по FIGI",
+        "description": "Возвращает новости по FIGI и метаданные запроса.",
+        "operationId": "news_by_figi_api_v1_news__figi__get",
+        "parameters": [
+          {
+            "name": "figi",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Figi" }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 3650,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/performance/sector-analysis": {
+      "get": {
+        "tags": ["performance"],
+        "summary": "Анализ по секторам",
+        "description": "Возвращает доходность по секторам за период.",
+        "operationId": "performance_sector_analysis_api_v1_performance_sector_analysis_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 3650,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/performance/visualization/dashboard": {
+      "get": {
+        "tags": ["performance"],
+        "summary": "Данные для дашборда производительности",
+        "description": "Возвращает агрегированные данные дашборда.",
+        "operationId": "performance_dashboard_api_v1_performance_visualization_dashboard_get",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 3650,
+              "minimum": 1,
+              "default": 30,
+              "title": "Period"
+            }
+          },
+          {
+            "name": "strategy",
+            "in": "query",
+            "required": false,
+            "schema": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Strategy" }
+          },
+          {
+            "name": "sector",
+            "in": "query",
+            "required": false,
+            "schema": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Sector" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/performance/benchmark/list": {
+      "get": {
+        "tags": ["performance"],
+        "summary": "Список бенчмарков",
+        "description": "Возвращает список доступных бенчмарков.",
+        "operationId": "performance_benchmark_list_api_v1_performance_benchmark_list_get",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/performance/sectors": {
+      "get": {
+        "tags": ["performance"],
+        "summary": "Список секторов",
+        "description": "Возвращает список секторов для фильтров аналитики.",
+        "operationId": "performance_sectors_api_v1_performance_sectors_get",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profitability/status": {
+      "get": {
+        "tags": ["profitability"],
+        "summary": "Статус блока прибыльности",
+        "description": "Возвращает состояние трекера прибыльности.",
+        "operationId": "profitability_status_api_v1_profitability_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profitability/analysis": {
+      "get": {
+        "tags": ["profitability"],
+        "summary": "Агрегированный анализ прибыльности",
+        "description": "Возвращает агрегированный анализ прибыльности.",
+        "operationId": "profitability_analysis_api_v1_profitability_analysis_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profitability/report": {
+      "get": {
+        "tags": ["profitability"],
+        "summary": "Отчет по прибыльности",
+        "description": "Возвращает отчет о прибыльности для UI.",
+        "operationId": "profitability_report_api_v1_profitability_report_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-requests": {
+      "get": {
+        "tags": ["trading-requests"],
+        "summary": "Список торговых заявок",
+        "description": "Возвращает список торговых заявок с пагинацией.",
+        "operationId": "trading_requests_list_api_v1_trading_requests_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "description": "Фильтр по статусу",
+              "title": "Status"
+            },
+            "description": "Фильтр по статусу"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "description": "Фильтр по режиму",
+              "title": "Mode"
+            },
+            "description": "Фильтр по режиму"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-requests/pending": {
+      "get": {
+        "tags": ["trading-requests"],
+        "summary": "Ожидающие заявки",
+        "description": "Возвращает заявки со статусом PENDING.",
+        "operationId": "trading_requests_pending_api_v1_trading_requests_pending_get",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-requests/approved": {
+      "get": {
+        "tags": ["trading-requests"],
+        "summary": "Одобренные заявки",
+        "description": "Возвращает заявки со статусом APPROVED.",
+        "operationId": "trading_requests_approved_api_v1_trading_requests_approved_get",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "default": 0, "title": "Offset" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-requests/create": {
+      "post": {
+        "tags": ["trading-requests"],
+        "summary": "Создать заявку",
+        "description": "Создает заявку из рекомендации (FIGI) или из переданных данных.",
+        "operationId": "trading_request_create_api_v1_trading_requests_create_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TradingRequestCreateRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-requests/{request_id}/approve": {
+      "post": {
+        "tags": ["trading-requests"],
+        "summary": "Одобрить заявку",
+        "description": "Переводит заявку из PENDING в APPROVED.",
+        "operationId": "trading_request_approve_api_v1_trading_requests__request_id__approve_post",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ID заявки",
+              "title": "Request Id"
+            },
+            "description": "ID заявки"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  { "$ref": "#/components/schemas/TradingRequestApproveRequest" },
+                  { "type": "null" }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-requests/{request_id}/reject": {
+      "post": {
+        "tags": ["trading-requests"],
+        "summary": "Отклонить заявку",
+        "description": "Переводит заявку из PENDING в REJECTED.",
+        "operationId": "trading_request_reject_api_v1_trading_requests__request_id__reject_post",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ID заявки",
+              "title": "Request Id"
+            },
+            "description": "ID заявки"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  { "$ref": "#/components/schemas/TradingRequestRejectRequest" },
+                  { "type": "null" }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-requests/{request_id}/execute": {
+      "post": {
+        "tags": ["trading-requests"],
+        "summary": "Исполнить заявку",
+        "description": "Переводит заявку из APPROVED в EXECUTED.",
+        "operationId": "trading_request_execute_api_v1_trading_requests__request_id__execute_post",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ID заявки",
+              "title": "Request Id"
+            },
+            "description": "ID заявки"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  { "$ref": "#/components/schemas/TradingRequestExecuteRequest" },
+                  { "type": "null" }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-requests/{request_id}/cancel": {
+      "post": {
+        "tags": ["trading-requests"],
+        "summary": "Отменить заявку",
+        "description": "Отменяет заявку (PENDING или APPROVED).",
+        "operationId": "trading_request_cancel_api_v1_trading_requests__request_id__cancel_post",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ID заявки",
+              "title": "Request Id"
+            },
+            "description": "ID заявки"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-requests/stats": {
+      "get": {
+        "tags": ["trading-requests"],
+        "summary": "Статистика заявок",
+        "description": "Возвращает агрегаты по статусам заявок.",
+        "operationId": "trading_requests_stats_api_v1_trading_requests_stats_get",
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "description": "Фильтр по режиму",
+              "title": "Mode"
+            },
+            "description": "Фильтр по режиму"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/": {
+      "get": {
+        "tags": ["portfolio"],
+        "summary": "Портфель (реальный счёт Tinkoff)",
+        "description": "Возвращает данные реального портфеля из Tinkoff Invest API.\nКонтракт: cash, positions, totalValue, positionsValue (совместим с performRealPortfolioSync).",
+        "operationId": "get_portfolio_api_v1_portfolio__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio": {
+      "get": {
+        "tags": ["portfolio"],
+        "summary": "Портфель (реальный счёт Tinkoff)",
+        "description": "Возвращает данные реального портфеля из Tinkoff Invest API.\nКонтракт: cash, positions, totalValue, positionsValue (совместим с performRealPortfolioSync).",
+        "operationId": "get_portfolio_api_v1_portfolio_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/sync": {
+      "get": {
+        "tags": ["portfolio"],
+        "summary": "Синхронизация портфеля (то же что GET /portfolio)",
+        "description": "Явный запрос синхронизации портфеля — те же данные, что GET /portfolio.",
+        "operationId": "portfolio_sync_api_v1_portfolio_sync_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["portfolio"],
+        "summary": "Фоновый sync портфеля",
+        "operationId": "portfolio_sync_trigger_api_v1_portfolio_sync_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/real/sync": {
+      "post": {
+        "tags": ["portfolio"],
+        "summary": "Фоновый sync реального портфеля из Tinkoff",
+        "operationId": "real_portfolio_sync_trigger_api_v1_portfolio_real_sync_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portfolio/sync/status": {
+      "get": {
+        "tags": ["portfolio"],
+        "summary": "Статус последнего sync портфеля",
+        "operationId": "portfolio_sync_status_api_v1_portfolio_sync_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telegram/status": {
+      "get": {
+        "tags": ["telegram"],
+        "summary": "Статус Telegram подсистемы",
+        "operationId": "telegram_status_api_v1_telegram_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telegram/test": {
+      "post": {
+        "tags": ["telegram"],
+        "summary": "Проверка соединения с Telegram bot API",
+        "operationId": "telegram_test_api_v1_telegram_test_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telegram/send": {
+      "post": {
+        "tags": ["telegram"],
+        "summary": "Отправка произвольного сообщения в Telegram",
+        "operationId": "telegram_send_api_v1_telegram_send_post",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/TelegramMessageBody" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telegram/alerts/system": {
+      "post": {
+        "tags": ["telegram"],
+        "summary": "Отправка системного алерта в Telegram",
+        "operationId": "telegram_system_alert_api_v1_telegram_alerts_system_post",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/TelegramAlertBody" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/settings": {
+      "get": {
+        "tags": ["telegram"],
+        "summary": "Настройки telegram-уведомлений (DB)",
+        "operationId": "notifications_get_settings_api_v1_notifications_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["telegram"],
+        "summary": "Сохранить настройки telegram-уведомлений (DB)",
+        "operationId": "notifications_set_settings_api_v1_notifications_settings_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/NotificationSettingsBody" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tinkoff/accounts": {
+      "get": {
+        "tags": ["tinkoff"],
+        "summary": "Accounts",
+        "operationId": "accounts_api_v1_tinkoff_accounts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tinkoff/user-info": {
+      "get": {
+        "tags": ["tinkoff"],
+        "summary": "User Info",
+        "operationId": "user_info_api_v1_tinkoff_user_info_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tinkoff/operations": {
+      "get": {
+        "tags": ["tinkoff"],
+        "summary": "Operations",
+        "operationId": "operations_api_v1_tinkoff_operations_get",
+        "parameters": [
+          {
+            "name": "from_ts",
+            "in": "query",
+            "required": false,
+            "schema": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "From Ts" }
+          },
+          {
+            "name": "to_ts",
+            "in": "query",
+            "required": false,
+            "schema": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "To Ts" }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "default": "OPERATION_STATE_EXECUTED", "title": "State" }
+          },
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": false,
+            "schema": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Account Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tinkoff/instruments/currencies": {
+      "get": {
+        "tags": ["tinkoff"],
+        "summary": "Currencies",
+        "operationId": "currencies_api_v1_tinkoff_instruments_currencies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tinkoff/instruments/bonds": {
+      "get": {
+        "tags": ["tinkoff"],
+        "summary": "Bonds",
+        "operationId": "bonds_api_v1_tinkoff_instruments_bonds_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tinkoff/instruments/etfs": {
+      "get": {
+        "tags": ["tinkoff"],
+        "summary": "Etfs",
+        "operationId": "etfs_api_v1_tinkoff_instruments_etfs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tinkoff/instruments/dividends/{figi}": {
+      "get": {
+        "tags": ["tinkoff"],
+        "summary": "Dividends",
+        "operationId": "dividends_api_v1_tinkoff_instruments_dividends__figi__get",
+        "parameters": [
+          {
+            "name": "figi",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Figi" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tinkoff/instruments/find": {
+      "get": {
+        "tags": ["tinkoff"],
+        "summary": "Find Instrument",
+        "operationId": "find_instrument_api_v1_tinkoff_instruments_find_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1, "title": "Query" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tinkoff/trading-status/{figi}": {
+      "get": {
+        "tags": ["tinkoff"],
+        "summary": "Trading Status",
+        "operationId": "trading_status_api_v1_tinkoff_trading_status__figi__get",
+        "parameters": [
+          {
+            "name": "figi",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Figi" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__Any__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-mode/current": {
+      "get": {
+        "tags": ["trading-mode"],
+        "summary": "Текущий режим торговли",
+        "description": "Возвращает текущий режим торговли (paper, real, micro).",
+        "operationId": "trading_mode_current_api_v1_trading_mode_current_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-mode/switch": {
+      "post": {
+        "tags": ["trading-mode"],
+        "summary": "Переключить режим",
+        "description": "Переключает режим торговли.",
+        "operationId": "trading_mode_switch_api_v1_trading_mode_switch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TradingModeSwitchRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading-mode/can-switch/{mode}": {
+      "get": {
+        "tags": ["trading-mode"],
+        "summary": "Проверить возможность переключения",
+        "description": "Проверяет, можно ли переключиться на указанный режим.",
+        "operationId": "trading_mode_can_switch_api_v1_trading_mode_can_switch__mode__get",
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "description": "Целевой режим", "title": "Mode" },
+            "description": "Целевой режим"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auto-paper-trading/status": {
+      "get": {
+        "tags": ["auto-paper-trading"],
+        "summary": "Статус автоматической торговли",
+        "description": "Возвращает статус auto-paper: enabled, currentPhase, tradingMode.",
+        "operationId": "auto_paper_status_api_v1_auto_paper_trading_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auto-paper-trading/enable": {
+      "post": {
+        "tags": ["auto-paper-trading"],
+        "summary": "Включить автоторговлю",
+        "description": "Включает автоторговлю. Разрешено только в режиме paper.",
+        "operationId": "auto_paper_enable_api_v1_auto_paper_trading_enable_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auto-paper-trading/disable": {
+      "post": {
+        "tags": ["auto-paper-trading"],
+        "summary": "Выключить автоторговлю",
+        "description": "Выключает автоторговлю.",
+        "operationId": "auto_paper_disable_api_v1_auto_paper_trading_disable_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auto-paper-trading/can-execute/{request_id}": {
+      "get": {
+        "tags": ["auto-paper-trading"],
+        "summary": "Проверка возможности автоисполнения",
+        "description": "Проверяет, можно ли автоматически исполнить заявку (paper, enabled, PENDING, risk OK).",
+        "operationId": "auto_paper_can_execute_api_v1_auto_paper_trading_can_execute__request_id__get",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ID заявки",
+              "title": "Request Id"
+            },
+            "description": "ID заявки"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auto-paper-trading/execute/{request_id}": {
+      "post": {
+        "tags": ["auto-paper-trading"],
+        "summary": "Автоисполнение заявки",
+        "description": "Approve + Execute для PENDING заявки (только paper, auto-paper enabled).",
+        "operationId": "auto_paper_execute_api_v1_auto_paper_trading_execute__request_id__post",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ID заявки",
+              "title": "Request Id"
+            },
+            "description": "ID заявки"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auto-paper-trading/stats": {
+      "get": {
+        "tags": ["auto-paper-trading"],
+        "summary": "Статистика автоторговли",
+        "description": "Возвращает статистику исполненных заявок в paper-режиме.",
+        "operationId": "auto_paper_stats_api_v1_auto_paper_trading_stats_get",
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string", "format": "date" }, { "type": "null" }],
+              "description": "Начало периода",
+              "title": "Startdate"
+            },
+            "description": "Начало периода"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string", "format": "date" }, { "type": "null" }],
+              "description": "Конец периода",
+              "title": "Enddate"
+            },
+            "description": "Конец периода"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recommendation-pipeline/run": {
+      "post": {
+        "tags": ["recommendation-pipeline"],
+        "summary": "Запустить pipeline рекомендаций",
+        "description": "Обрабатывает рекомендации, проверяет пороги и дедупликацию, создает заявки.",
+        "operationId": "recommendation_pipeline_run_api_v1_recommendation_pipeline_run_post",
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Режим торговли",
+              "default": "paper",
+              "title": "Mode"
+            },
+            "description": "Режим торговли"
+          },
+          {
+            "name": "minConfidence",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "number" }, { "type": "null" }],
+              "description": "Минимальная уверенность (0-1)",
+              "title": "Minconfidence"
+            },
+            "description": "Минимальная уверенность (0-1)"
+          },
+          {
+            "name": "minScore",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "number" }, { "type": "null" }],
+              "description": "Минимальный скоринг (0-1)",
+              "title": "Minscore"
+            },
+            "description": "Минимальный скоринг (0-1)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/risk/status": {
+      "get": {
+        "tags": ["risk"],
+        "summary": "Статус риск-менеджмента",
+        "description": "Возвращает статус, лимиты и статистику.",
+        "operationId": "risk_status_api_v1_risk_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/risk/limits": {
+      "get": {
+        "tags": ["risk"],
+        "summary": "Лимиты риска",
+        "description": "Возвращает текущие лимиты.",
+        "operationId": "risk_limits_api_v1_risk_limits_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["risk"],
+        "summary": "Обновить лимиты",
+        "description": "Обновляет лимиты риск-менеджмента.",
+        "operationId": "risk_limits_update_api_v1_risk_limits_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "additionalProperties": true, "type": "object", "title": "Body" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/risk/validate": {
+      "post": {
+        "tags": ["risk"],
+        "summary": "Валидировать ордер",
+        "description": "Проверяет ордер по лимитам риска.",
+        "operationId": "risk_validate_api_v1_risk_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/RiskValidateRequest" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/preflight-check/run": {
+      "post": {
+        "tags": ["preflight-check"],
+        "summary": "Запустить проверку готовности",
+        "description": "Выполняет комплексную проверку готовности к торговле.",
+        "operationId": "preflight_run_api_v1_preflight_check_run_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/preflight-check/status": {
+      "get": {
+        "tags": ["preflight-check"],
+        "summary": "Статус последней проверки",
+        "description": "Возвращает статус последней выполненной проверки.",
+        "operationId": "preflight_status_api_v1_preflight_check_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/preflight-check/results": {
+      "get": {
+        "tags": ["preflight-check"],
+        "summary": "Результаты проверки",
+        "description": "Возвращает полные результаты последней проверки.",
+        "operationId": "preflight_results_api_v1_preflight_check_results_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/training/run-nn": {
+      "post": {
+        "tags": ["training"],
+        "summary": "Запустить обучение NN с conditioning",
+        "description": "Ставит в очередь фоновую задачу обучения базового контура NN. Чекпоинты сохраняются в MLflow и TRAINING_ARTIFACTS_DIR. Требует установки зависимости [training].",
+        "operationId": "run_nn_training_api_v1_training_run_nn_post",
+        "parameters": [
+          {
+            "name": "epochs",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 20, "title": "Epochs" }
+          },
+          {
+            "name": "resume_from_latest",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Продолжить обучение с последнего чекпоинта",
+              "default": false,
+              "title": "Resume From Latest"
+            },
+            "description": "Продолжить обучение с последнего чекпоинта"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Run Nn Training Api V1 Training Run Nn Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/training/run-nn-from-figi": {
+      "post": {
+        "tags": ["training"],
+        "summary": "Запустить обучение NN по свечам из БД (FIGI)",
+        "description": "Загружает свечи по FIGI из БД, преобразует в фичи и запускает обучение в executor.",
+        "operationId": "run_nn_from_figi_api_v1_training_run_nn_from_figi_post",
+        "parameters": [
+          {
+            "name": "figi",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "description": "FIGI инструмента", "title": "Figi" },
+            "description": "FIGI инструмента"
+          },
+          {
+            "name": "epochs",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 20,
+              "title": "Epochs"
+            }
+          },
+          {
+            "name": "lookback_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 120,
+              "minimum": 20,
+              "default": 60,
+              "title": "Lookback Days"
+            }
+          },
+          {
+            "name": "prediction_horizon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 30,
+              "minimum": 1,
+              "default": 5,
+              "title": "Prediction Horizon"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 100,
+              "default": 2000,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "resume_from_latest",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Продолжить обучение с последнего чекпоинта",
+              "default": false,
+              "title": "Resume From Latest"
+            },
+            "description": "Продолжить обучение с последнего чекпоинта"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Run Nn From Figi Api V1 Training Run Nn From Figi Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/training/run-nn-background": {
+      "post": {
+        "tags": ["training"],
+        "summary": "Запланировать обучение NN в фоне",
+        "description": "Добавляет задачу обучения в BackgroundTasks и сразу возвращает ответ. Результат обучения пишется в MLflow; для получения run_id смотрите логи приложения.",
+        "operationId": "schedule_nn_training_api_v1_training_run_nn_background_post",
+        "parameters": [
+          {
+            "name": "epochs",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 20, "title": "Epochs" }
+          },
+          {
+            "name": "resume_from_latest",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Продолжить обучение с последнего чекпоинта",
+              "default": false,
+              "title": "Resume From Latest"
+            },
+            "description": "Продолжить обучение с последнего чекпоинта"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Schedule Nn Training Api V1 Training Run Nn Background Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/training/run-weekly": {
+      "post": {
+        "tags": ["training"],
+        "summary": "Запустить обучение Weekly forecast (LSTM)",
+        "description": "Запускает обучение контура weekly в executor. Без FIGI используется синтетика. Чекпоинты в models_root/weekly/.",
+        "operationId": "run_weekly_training_api_v1_training_run_weekly_post",
+        "parameters": [
+          {
+            "name": "epochs",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 20,
+              "title": "Epochs"
+            }
+          },
+          {
+            "name": "seq_len",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 60,
+              "minimum": 10,
+              "default": 30,
+              "title": "Seq Len"
+            }
+          },
+          {
+            "name": "n_forecast",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 14,
+              "minimum": 1,
+              "default": 5,
+              "title": "N Forecast"
+            }
+          },
+          {
+            "name": "resume_from_latest",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Продолжить обучение с последнего weekly чекпоинта",
+              "default": false,
+              "title": "Resume From Latest"
+            },
+            "description": "Продолжить обучение с последнего weekly чекпоинта"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Run Weekly Training Api V1 Training Run Weekly Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/training/run-rl": {
+      "post": {
+        "tags": ["training"],
+        "summary": "Запустить обучение RL-агента (Q-learning)",
+        "description": "Запускает табличный RL-контур (HOLD/BUY/SELL), сохраняет артефакт агента в models_root/rl.",
+        "operationId": "run_rl_training_api_v1_training_run_rl_post",
+        "parameters": [
+          {
+            "name": "total_steps",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2000000,
+              "minimum": 100,
+              "default": 10000,
+              "title": "Total Steps"
+            }
+          },
+          {
+            "name": "env_name",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "default": "paper", "title": "Env Name" }
+          },
+          {
+            "name": "continue_from_latest",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Продолжить RL-обучение с последнего агента",
+              "default": false,
+              "title": "Continue From Latest"
+            },
+            "description": "Продолжить RL-обучение с последнего агента"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Run Rl Training Api V1 Training Run Rl Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/training/run-weekly-from-figi": {
+      "post": {
+        "tags": ["training"],
+        "summary": "Запустить обучение Weekly forecast по свечам из БД (FIGI)",
+        "description": "Загружает свечи по FIGI из БД и запускает обучение LSTM в executor.",
+        "operationId": "run_weekly_from_figi_api_v1_training_run_weekly_from_figi_post",
+        "parameters": [
+          {
+            "name": "figi",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "description": "FIGI инструмента", "title": "Figi" },
+            "description": "FIGI инструмента"
+          },
+          {
+            "name": "epochs",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 20,
+              "title": "Epochs"
+            }
+          },
+          {
+            "name": "seq_len",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 60,
+              "minimum": 10,
+              "default": 30,
+              "title": "Seq Len"
+            }
+          },
+          {
+            "name": "n_forecast",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 14,
+              "minimum": 1,
+              "default": 5,
+              "title": "N Forecast"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 100,
+              "default": 2000,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "resume_from_latest",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Продолжить обучение с последнего weekly чекпоинта",
+              "default": false,
+              "title": "Resume From Latest"
+            },
+            "description": "Продолжить обучение с последнего weekly чекпоинта"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Run Weekly From Figi Api V1 Training Run Weekly From Figi Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/training/run-backtest": {
+      "post": {
+        "tags": ["training"],
+        "summary": "Запустить walk-forward бэктест по чекпоинту NN",
+        "description": "Загружает данные (по FIGI из БД или синтетика), разбивает на n_splits окон, оценивает модель на каждом тестовом окне, возвращает средние метрики (test_mse, test_mae, test_direction_accuracy).",
+        "operationId": "run_backtest_api_v1_training_run_backtest_post",
+        "parameters": [
+          {
+            "name": "checkpoint",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Путь к чекпоинту CondMLP (например ./models/python_nn/cond_mlp-xx.ckpt)",
+              "title": "Checkpoint"
+            },
+            "description": "Путь к чекпоинту CondMLP (например ./models/python_nn/cond_mlp-xx.ckpt)"
+          },
+          {
+            "name": "n_splits",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 2,
+              "default": 5,
+              "title": "N Splits"
+            }
+          },
+          {
+            "name": "figi",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "description": "FIGI для загрузки свечей из БД; без указания — синтетика",
+              "title": "Figi"
+            },
+            "description": "FIGI для загрузки свечей из БД; без указания — синтетика"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 100,
+              "default": 2000,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Run Backtest Api V1 Training Run Backtest Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/training/run-stacking": {
+      "post": {
+        "tags": ["training"],
+        "summary": "Запустить обучение мета-модели стекинга поверх CondMLP",
+        "description": "Загружает базовый чекпоинт CondMLP, строит мета-признаки из 9×2 предсказаний, обучает StackingModel, сохраняет чекпоинт в models_root/stacking/.",
+        "operationId": "run_stacking_api_v1_training_run_stacking_post",
+        "parameters": [
+          {
+            "name": "base_checkpoint",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Путь к чекпоинту CondMLP",
+              "title": "Base Checkpoint"
+            },
+            "description": "Путь к чекпоинту CondMLP"
+          },
+          {
+            "name": "epochs",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 5,
+              "default": 20,
+              "title": "Epochs"
+            }
+          },
+          {
+            "name": "figi",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "description": "FIGI для загрузки свечей из БД; без указания — синтетика",
+              "title": "Figi"
+            },
+            "description": "FIGI для загрузки свечей из БД; без указания — синтетика"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 100,
+              "default": 2000,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Run Stacking Api V1 Training Run Stacking Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/training/release-gate": {
+      "post": {
+        "tags": ["training"],
+        "summary": "Проверить release-gate и принять решение о промоуте модели",
+        "description": "Сверяет метрики кандидата с порогами policy, возвращает approve/reject и список проваленных критериев.",
+        "operationId": "run_release_gate_api_v1_training_release_gate_post",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ReleaseGateBody" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Run Release Gate Api V1 Training Release Gate Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/training/run-jury": {
+      "post": {
+        "tags": ["training"],
+        "summary": "Запустить LLM-жюри по FIGI и сохранить мнения в БД",
+        "description": "Загружает инструмент и свечи из БД, вызывает всех провайдеров жюри, сохраняет мнения в llm_jury_opinions и агрегат в llm_jury_aggregates.",
+        "operationId": "run_jury_endpoint_api_v1_training_run_jury_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RunJuryBody", "default": {} }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Run Jury Endpoint Api V1 Training Run Jury Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": ["observability"],
+        "summary": "Снимок метрик приложения",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AuthLoginData": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "description": "Обязательное поле: JWT токен доступа"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserDTO",
+            "description": "Обязательное поле: профиль авторизованного пользователя"
+          }
+        },
+        "type": "object",
+        "required": ["token", "user"],
+        "title": "AuthLoginData"
+      },
+      "AuthLoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "description": "Обязательное поле: имя пользователя"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password",
+            "description": "Обязательное поле: пароль пользователя"
+          }
+        },
+        "type": "object",
+        "required": ["username", "password"],
+        "title": "AuthLoginRequest"
+      },
+      "CanaryBody": {
+        "properties": {
+          "percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Percent",
+            "description": "Доля canary-трафика в процентах"
+          }
+        },
+        "type": "object",
+        "required": ["percent"],
+        "title": "CanaryBody"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": { "$ref": "#/components/schemas/ValidationError" },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthDTO": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Обязательное поле: статус сервиса"
+          },
+          "service": {
+            "type": "string",
+            "title": "Service",
+            "description": "Обязательное поле: имя сервиса"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "Обязательное поле: время формирования ответа"
+          }
+        },
+        "type": "object",
+        "required": ["status", "service", "timestamp"],
+        "title": "HealthDTO"
+      },
+      "KellySettingsDTO": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Необязательное поле: включен ли расчет по формуле Келли",
+            "default": true
+          },
+          "conservativeFactor": {
+            "type": "number",
+            "title": "Conservativefactor",
+            "description": "Необязательное поле: консервативный коэффициент",
+            "default": 0.25
+          },
+          "minTrades": {
+            "type": "integer",
+            "title": "Mintrades",
+            "description": "Необязательное поле: минимальное число сделок",
+            "default": 10
+          },
+          "volatilityPeriod": {
+            "type": "integer",
+            "title": "Volatilityperiod",
+            "description": "Необязательное поле: период волатильности в днях",
+            "default": 30
+          }
+        },
+        "type": "object",
+        "title": "KellySettingsDTO"
+      },
+      "KellySettingsUpdateRequest": {
+        "properties": {
+          "enabled": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Enabled",
+            "description": "Включение/выключение расчета Келли"
+          },
+          "conservativeFactor": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Conservativefactor",
+            "description": "Новое значение консервативного коэффициента"
+          },
+          "minTrades": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Mintrades",
+            "description": "Новое минимальное число сделок"
+          },
+          "volatilityPeriod": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Volatilityperiod",
+            "description": "Новый период волатильности в днях"
+          }
+        },
+        "type": "object",
+        "title": "KellySettingsUpdateRequest"
+      },
+      "NotificationSettingsBody": {
+        "properties": {
+          "enabled": { "type": "boolean", "title": "Enabled" },
+          "default_chat_id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Default Chat Id"
+          }
+        },
+        "type": "object",
+        "required": ["enabled"],
+        "title": "NotificationSettingsBody"
+      },
+      "OpsModeBody": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "description": "normal | shadow | canary | rollback"
+          }
+        },
+        "type": "object",
+        "required": ["mode"],
+        "title": "OpsModeBody"
+      },
+      "ReleaseGateBody": {
+        "properties": {
+          "model_ref": {
+            "type": "string",
+            "title": "Model Ref",
+            "description": "Идентификатор или путь модели-кандидата"
+          },
+          "trades": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Trades",
+            "description": "Количество сделок в OOS-проверке"
+          },
+          "win_rate": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Win Rate",
+            "description": "Доля прибыльных сделок"
+          },
+          "profit_factor": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Profit Factor",
+            "description": "Profit factor"
+          },
+          "sharpe": { "type": "number", "title": "Sharpe", "description": "Sharpe ratio" },
+          "max_drawdown": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Max Drawdown",
+            "description": "Максимальная просадка (0..1)"
+          },
+          "consistency": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Consistency",
+            "description": "Стабильность OOS-результатов (0..1)"
+          },
+          "persist": {
+            "type": "boolean",
+            "title": "Persist",
+            "description": "Сохранять решение в JSONL-реестр release-gate",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_ref",
+          "trades",
+          "win_rate",
+          "profit_factor",
+          "sharpe",
+          "max_drawdown",
+          "consistency"
+        ],
+        "title": "ReleaseGateBody",
+        "description": "Вход release-gate для решения о промоуте модели."
+      },
+      "RiskValidateRequest": {
+        "properties": {
+          "figi": { "type": "string", "title": "Figi", "description": "FIGI инструмента" },
+          "action": { "type": "string", "title": "Action", "description": "BUY или SELL" },
+          "quantity": { "type": "integer", "minimum": 1.0, "title": "Quantity" },
+          "price": {
+            "anyOf": [
+              { "type": "number", "exclusiveMinimum": 0.0 },
+              { "type": "string", "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$" }
+            ],
+            "title": "Price"
+          },
+          "confidence": { "type": "number", "maximum": 1.0, "minimum": 0.0, "title": "Confidence" },
+          "score": { "type": "number", "maximum": 1.0, "minimum": 0.0, "title": "Score" },
+          "portfolioValue": {
+            "anyOf": [
+              { "type": "number" },
+              { "type": "string", "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$" }
+            ],
+            "title": "Portfoliovalue",
+            "description": "Стоимость портфеля",
+            "default": "1000000"
+          },
+          "currentExposure": {
+            "anyOf": [
+              { "type": "number" },
+              { "type": "string", "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$" }
+            ],
+            "title": "Currentexposure",
+            "description": "Текущая экспозиция",
+            "default": "0"
+          }
+        },
+        "type": "object",
+        "required": ["figi", "action", "quantity", "price", "confidence", "score"],
+        "title": "RiskValidateRequest"
+      },
+      "RunJuryBody": {
+        "properties": {
+          "figi": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Figi",
+            "description": "Один FIGI инструмента"
+          },
+          "figi_list": {
+            "anyOf": [{ "items": { "type": "string" }, "type": "array" }, { "type": "null" }],
+            "title": "Figi List",
+            "description": "Список FIGI для пакетного запуска"
+          }
+        },
+        "type": "object",
+        "title": "RunJuryBody",
+        "description": "Тело запроса запуска жюри по FIGI."
+      },
+      "SettingItemDTO": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Обязательное поле: ключ настройки"
+          },
+          "value": { "title": "Value", "description": "Обязательное поле: текущее значение" },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Необязательное поле: тип значения",
+            "default": "string"
+          },
+          "module": {
+            "type": "string",
+            "title": "Module",
+            "description": "Необязательное поле: модуль настройки",
+            "default": "other"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Необязательное поле: описание настройки",
+            "default": ""
+          },
+          "min": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Min",
+            "description": "Необязательное поле: минимально допустимое значение"
+          },
+          "max": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Max",
+            "description": "Необязательное поле: максимально допустимое значение"
+          },
+          "options": {
+            "anyOf": [{ "items": {}, "type": "array" }, { "type": "null" }],
+            "title": "Options",
+            "description": "Необязательное поле: допустимые варианты"
+          }
+        },
+        "type": "object",
+        "required": ["key", "value"],
+        "title": "SettingItemDTO"
+      },
+      "SettingsUpdateRequest": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Key",
+            "description": "Обязательное поле: ключ изменяемой настройки"
+          },
+          "value": {
+            "title": "Value",
+            "description": "Обязательное поле: новое значение настройки"
+          }
+        },
+        "type": "object",
+        "required": ["key", "value"],
+        "title": "SettingsUpdateRequest"
+      },
+      "SuccessEnvelope_AuthLoginData_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Флаг успешного ответа",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/AuthLoginData",
+            "description": "Обязательное поле: полезная нагрузка ответа"
+          }
+        },
+        "type": "object",
+        "required": ["data"],
+        "title": "SuccessEnvelope[AuthLoginData]"
+      },
+      "SuccessEnvelope_HealthDTO_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Флаг успешного ответа",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/HealthDTO",
+            "description": "Обязательное поле: полезная нагрузка ответа"
+          }
+        },
+        "type": "object",
+        "required": ["data"],
+        "title": "SuccessEnvelope[HealthDTO]"
+      },
+      "SuccessEnvelope_KellySettingsDTO_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Флаг успешного ответа",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/KellySettingsDTO",
+            "description": "Обязательное поле: полезная нагрузка ответа"
+          }
+        },
+        "type": "object",
+        "required": ["data"],
+        "title": "SuccessEnvelope[KellySettingsDTO]"
+      },
+      "SuccessEnvelope_SettingItemDTO_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Флаг успешного ответа",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/SettingItemDTO",
+            "description": "Обязательное поле: полезная нагрузка ответа"
+          }
+        },
+        "type": "object",
+        "required": ["data"],
+        "title": "SuccessEnvelope[SettingItemDTO]"
+      },
+      "SuccessEnvelope_UserDTO_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Флаг успешного ответа",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserDTO",
+            "description": "Обязательное поле: полезная нагрузка ответа"
+          }
+        },
+        "type": "object",
+        "required": ["data"],
+        "title": "SuccessEnvelope[UserDTO]"
+      },
+      "SuccessEnvelope_dict_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Флаг успешного ответа",
+            "default": true
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "description": "Обязательное поле: полезная нагрузка ответа"
+          }
+        },
+        "type": "object",
+        "required": ["data"],
+        "title": "SuccessEnvelope[dict]"
+      },
+      "SuccessEnvelope_dict_str__Any__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Флаг успешного ответа",
+            "default": true
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "description": "Обязательное поле: полезная нагрузка ответа"
+          }
+        },
+        "type": "object",
+        "required": ["data"],
+        "title": "SuccessEnvelope[dict[str, Any]]"
+      },
+      "SuccessEnvelope_dict_str__object__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Флаг успешного ответа",
+            "default": true
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "description": "Обязательное поле: полезная нагрузка ответа"
+          }
+        },
+        "type": "object",
+        "required": ["data"],
+        "title": "SuccessEnvelope[dict[str, object]]"
+      },
+      "SuccessEnvelope_dict_str__str__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Флаг успешного ответа",
+            "default": true
+          },
+          "data": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Data",
+            "description": "Обязательное поле: полезная нагрузка ответа"
+          }
+        },
+        "type": "object",
+        "required": ["data"],
+        "title": "SuccessEnvelope[dict[str, str]]"
+      },
+      "TelegramAlertBody": {
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "title": "Title" },
+          "message": { "type": "string", "minLength": 1, "title": "Message" },
+          "chat_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Chat Id" }
+        },
+        "type": "object",
+        "required": ["title", "message"],
+        "title": "TelegramAlertBody"
+      },
+      "TelegramMessageBody": {
+        "properties": {
+          "text": { "type": "string", "minLength": 1, "title": "Text" },
+          "chat_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "title": "Chat Id" }
+        },
+        "type": "object",
+        "required": ["text"],
+        "title": "TelegramMessageBody"
+      },
+      "TradingModeSwitchRequest": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "description": "Целевой режим: paper, real, micro"
+          }
+        },
+        "type": "object",
+        "required": ["mode"],
+        "title": "TradingModeSwitchRequest"
+      },
+      "TradingRequestApproveRequest": {
+        "properties": {
+          "comment": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Comment",
+            "description": "Комментарий к одобрению"
+          }
+        },
+        "type": "object",
+        "title": "TradingRequestApproveRequest"
+      },
+      "TradingRequestCreateOptions": {
+        "properties": {
+          "action": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Action",
+            "description": "Переопределить action (BUY/SELL)"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "description": "Режим торговли",
+            "default": "paper"
+          },
+          "quantity": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Quantity",
+            "description": "Переопределить количество"
+          }
+        },
+        "type": "object",
+        "title": "TradingRequestCreateOptions",
+        "description": "Опции при создании заявки из рекомендации."
+      },
+      "TradingRequestCreateRequest": {
+        "properties": {
+          "recommendationFigi": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Recommendationfigi",
+            "description": "FIGI рекомендации в БД"
+          },
+          "recommendationData": {
+            "anyOf": [{ "additionalProperties": true, "type": "object" }, { "type": "null" }],
+            "title": "Recommendationdata",
+            "description": "Данные рекомендации напрямую (если нет в БД)"
+          },
+          "options": {
+            "$ref": "#/components/schemas/TradingRequestCreateOptions",
+            "description": "Опции создания"
+          }
+        },
+        "type": "object",
+        "title": "TradingRequestCreateRequest",
+        "description": "Тело запроса создания заявки."
+      },
+      "TradingRequestExecuteRequest": {
+        "properties": {
+          "actualPrice": {
+            "anyOf": [
+              { "type": "number" },
+              { "type": "string", "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$" },
+              { "type": "null" }
+            ],
+            "title": "Actualprice",
+            "description": "Фактическая цена исполнения"
+          },
+          "actualAmount": {
+            "anyOf": [
+              { "type": "number" },
+              { "type": "string", "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$" },
+              { "type": "null" }
+            ],
+            "title": "Actualamount",
+            "description": "Фактическая сумма исполнения"
+          }
+        },
+        "type": "object",
+        "title": "TradingRequestExecuteRequest"
+      },
+      "TradingRequestRejectRequest": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "description": "Причина отклонения (необязательно)",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "TradingRequestRejectRequest"
+      },
+      "TriggerResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Флаг успешного ответа",
+            "default": true
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "description": "Обязательное поле: полезная нагрузка ответа"
+          }
+        },
+        "type": "object",
+        "required": ["data"],
+        "title": "TriggerResponse"
+      },
+      "UserDTO": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Обязательное поле: идентификатор пользователя"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "description": "Обязательное поле: логин пользователя"
+          },
+          "fullName": {
+            "type": "string",
+            "title": "Fullname",
+            "description": "Обязательное поле: полное имя пользователя"
+          },
+          "lastLogin": {
+            "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }],
+            "title": "Lastlogin",
+            "description": "Необязательное поле: время последнего входа"
+          }
+        },
+        "type": "object",
+        "required": ["id", "username", "fullName"],
+        "title": "UserDTO"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": { "anyOf": [{ "type": "string" }, { "type": "integer" }] },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": { "type": "string", "title": "Message" },
+          "type": { "type": "string", "title": "Error Type" },
+          "input": { "title": "Input" },
+          "ctx": { "type": "object", "title": "Context" }
+        },
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "title": "ValidationError"
+      },
+      "VerifyTokenRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "description": "Обязательное поле: JWT токен для проверки"
+          }
+        },
+        "type": "object",
+        "required": ["token"],
+        "title": "VerifyTokenRequest"
+      }
+    }
+  }
+}

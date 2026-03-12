@@ -1,0 +1,36 @@
+@use '../styles' as *;
+
+.dashboard-page {
+  background:
+    radial-gradient(circle at 10% -10%, rgba(94, 158, 255, 0.14), transparent 38%),
+    radial-gradient(circle at 95% 6%, rgba(179, 89, 255, 0.12), transparent 30%);
+}
+
+.dashboard-page__hero {
+  background:
+    linear-gradient(
+      130deg,
+      color-mix(in srgb, var(--ds-primary) 36%, transparent),
+      color-mix(in srgb, #9d63ff 30%, transparent)
+    ),
+    var(--ds-surface);
+}
+
+.dashboard-page__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-sm);
+}
+
+.dashboard-page__grid,
+.dashboard-page__stack {
+  display: grid;
+  gap: var(--ds-space-md);
+}
+
+@include media-breakpoint-up(md) {
+  .dashboard-page__grid,
+  .dashboard-page__stack {
+    gap: #{px-to-adaptive(16px)};
+  }
+}

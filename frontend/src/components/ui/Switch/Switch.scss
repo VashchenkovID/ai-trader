@@ -1,0 +1,72 @@
+@use '../../../styles' as *;
+
+.ui-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-md);
+}
+
+.ui-switch__meta {
+  display: flex;
+  flex-direction: column;
+  @include fluid(gap, 2px);
+}
+
+.ui-switch__label {
+  font-weight: 500;
+}
+
+.ui-switch__hint {
+  color: var(--ds-text-muted);
+}
+
+.ui-switch__track-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.ui-switch__native {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ui-switch__track {
+  @include fluid(width, 46px);
+  @include fluid(height, 28px);
+  border-radius: 999rem;
+  border-style: solid;
+  border-color: var(--ds-border);
+  @include fluid(border-width, 1px);
+  background: var(--ds-surface);
+  @include fluid(padding, 3px);
+  transition: all var(--ds-duration-fast) var(--ds-ease-standard);
+}
+
+.ui-switch__thumb {
+  display: block;
+  @include fluid(width, 20px);
+  @include fluid(height, 20px);
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--ds-duration-fast) var(--ds-ease-standard);
+}
+
+.ui-switch__native:checked + .ui-switch__track {
+  background: var(--ds-primary);
+  border-color: var(--ds-primary);
+}
+
+.ui-switch__native:checked + .ui-switch__track .ui-switch__thumb {
+  transform: translateX(#{px-to-rem(18px)});
+
+  @include media-breakpoint-up(md) {
+    transform: translateX(#{px-to-adaptive(18px)});
+  }
+}
+
+.ui-switch__native:disabled + .ui-switch__track {
+  opacity: 0.45;
+}

@@ -1,0 +1,6 @@
+// Главный файл для импорта всех стилевых утилит
+// Используйте: @use "../styles" или @use "../styles/index" в ваших компонентах
+
+@forward 'const.variables';
+@forward 'functions';
+@forward 'mixins';

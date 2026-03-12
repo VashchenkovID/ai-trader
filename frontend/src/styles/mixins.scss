@@ -1,0 +1,135 @@
+@use 'sass:math';
+@use 'sass:list';
+@use 'sass:map';
+@use 'const.variables' as *;
+@use 'functions' as *;
+
+@mixin media-breakpoint-mobile {
+  @media (max-width: $mobile-max-width) {
+    @content;
+  }
+}
+
+@mixin media-breakpoint-deckstop {
+  @media (min-width: $desktop-min-width) {
+    @content;
+  }
+}
+
+@mixin media-breakpoint-deckstop-small {
+  @media (min-width: $desktop-min-width) and (max-width: $desktop-small-max-width) {
+    @content;
+  }
+}
+
+@mixin media-hide-in-mobile {
+  @media (max-width: $mobile-max-width) {
+    display: none;
+  }
+}
+
+@mixin media-hide-in-deckstop {
+  @media (min-width: $desktop-min-width) {
+    display: none;
+  }
+}
+
+@function breakpoint-min($name, $breakpoints: $grid-breakpoints) {
+  // sass-lint:disable-block border-zero
+  $min: map.get($breakpoints, $name);
+  @if $min != 0 {
+    @return $min;
+  }
+  @return null;
+}
+
+@mixin media-breakpoint-up($name, $breakpoints: $grid-breakpoints) {
+  $min: breakpoint-min($name, $breakpoints);
+  @if $min {
+    @media (min-width: $min) {
+      @content;
+    }
+  } @else {
+    @content;
+  }
+}
+
+@mixin fluidImportant($prop, $xs, $md: $xs, $lg: $md, $xl: $lg) {
+  #{$prop}: px-to-rem($xs) !important;
+
+  @include media-breakpoint-up(md) {
+    @if ($md == $xl) {
+      #{$prop}: px-to-adaptive($xl) !important;
+    } @else {
+      #{$prop}: calc-clamp(
+        $md,
+        $xl,
+        map.get($grid-breakpoints, md),
+        map.get($grid-breakpoints, xl)
+      ) !important;
+    }
+  }
+}
+
+@function calc-clamp(
+  $min-size,
+  $max-size,
+  // sass-lint:disable-block border-zero
+  $min-breakpoint: map.get($grid-breakpoints, x),
+  // sass-lint:disable-block border-zero
+  $max-breakpoint: map.get($grid-breakpoints, xl),
+  $unit: vw
+) {
+  // проверяю только одно значение
+  // т.к. при не совпадении едениц все одно будет ошибка
+  $min-size-unit: math.unit($min-size);
+  @if ($min-size-unit == 'rem') {
+    $min-size: rem-to-px($min-size);
+    $max-size: rem-to-px($max-size);
+  }
+
+  $slope: math.div($max-size - $min-size, $max-breakpoint - $min-breakpoint);
+  $slope-to-unit: $slope * 100;
+  $intercept-rem: px-to-rem($min-size - $slope * $min-breakpoint);
+  $min-size-rem: px-to-rem($min-size);
+  $max-size-rem: px-to-rem($max-size);
+  @return clamp(#{$min-size-rem}, #{$slope-to-unit}#{$unit} + #{$intercept-rem}, #{$max-size-rem});
+}
+
+@mixin fluid($prop, $xs, $md: $xs, $lg: $md, $xl: $lg) {
+  @if (strip-units($xs) == 0) {
+    $xs: 0.1px;
+  }
+  @if (strip-units($md) == 0) {
+    $md: 0.1px;
+  }
+  @if (strip-units($lg) == 0) {
+    $lg: 0.1px;
+  }
+  @if (strip-units($xl) == 0) {
+    $xl: 0.1px;
+  }
+  // Mobile first: fixed rem value on small screens
+  #{$prop}: px-to-rem($xs);
+
+  @include media-breakpoint-up(md) {
+    // Desktop and larger: adaptive clamp from md to xl
+    @if ($md == $xl) {
+      #{$prop}: px-to-adaptive($xl);
+    } @else {
+      #{$prop}: calc-clamp(
+        $md,
+        $xl,
+        map.get($grid-breakpoints, md),
+        map.get($grid-breakpoints, xl)
+      );
+    }
+  }
+}
+
+// Alias with fixed spelling for new code
+@mixin media-breakpoint-desktop {
+  @include media-breakpoint-deckstop {
+    @content;
+  }
+}

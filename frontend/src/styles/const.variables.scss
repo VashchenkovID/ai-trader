@@ -1,0 +1,49 @@
+@use 'sass:map';
+
+// Брейкпоинты
+$grid-breakpoints: (
+  x: 320px,
+  xs: 375px,
+  sm: 537px,
+  md: 768px,
+  lg: 1024px,
+  xl: 1920px,
+);
+
+// Ширина макета для мобильных устройств
+$layout-width-xs: 375px;
+
+// Дополнительные константы
+$mobile-max-width: calc(map.get($grid-breakpoints, md) - 0.02px);
+$desktop-min-width: map.get($grid-breakpoints, md);
+$desktop-small-max-width: calc(map.get($grid-breakpoints, lg) - 0.02px);
+
+// Scale range for adaptive desktop values
+$desktop-scale-min-width: map.get($grid-breakpoints, md);
+$desktop-scale-max-width: map.get($grid-breakpoints, xl);
+
+// Semantic design tokens (base)
+$ds-radius-xs: 8px;
+$ds-radius-sm: 10px;
+$ds-radius-md: 14px;
+$ds-radius-lg: 18px;
+$ds-radius-xl: 24px;
+
+$ds-space-2xs: 4px;
+$ds-space-xs: 8px;
+$ds-space-sm: 12px;
+$ds-space-md: 16px;
+$ds-space-lg: 20px;
+$ds-space-xl: 24px;
+$ds-space-2xl: 32px;
+
+$ds-color-bg: #0b1020;
+$ds-color-surface: #121a30;
+$ds-color-surface-2: #1a2642;
+$ds-color-border: #2a3658;
+$ds-color-text: #f1f5ff;
+$ds-color-text-muted: #a6b3d1;
+$ds-color-primary: #5b8cff;
+$ds-color-primary-contrast: #ffffff;
+$ds-color-danger: #ff5e7d;
+$ds-color-success: #2dd4a7;

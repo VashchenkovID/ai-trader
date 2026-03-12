@@ -1,0 +1,436 @@
+/**
+ * Переменные темной темы Consta Design System
+ * Собраны из node_modules/@consta/uikit/__internal__/src/components/Theme/
+ * 
+ * Применяются через класс .Theme_color_gpnDark, который добавляется компонентом Theme
+ */
+
+@use 'functions' as *;
+@use 'mixins' as *;
+
+// Применяем переменные через класс темы Consta для переопределения дефолтных значений
+// Используем более специфичный селектор для гарантированного переопределения
+// body добавлен для увеличения специфичности и гарантии переопределения
+body .Theme.Theme_color_gpnDark,
+body .Theme_color_gpnDark,
+.Theme.Theme_color_gpnDark,
+.Theme_color_gpnDark {
+  // ============================================
+  // ЦВЕТА (Theme_color_gpnDark)
+  // ============================================
+
+  // Фоновые цвета
+  --color-bg-default: #22272b;
+  --color-bg-secondary: #161a1d;
+  --color-bg-brand: #0071b2;
+  --color-bg-link: #0078d2;
+  --color-bg-border: hsla(0, 0%, 100%, 0.2);
+  --color-bg-stripe: rgba(246, 251, 253, 0.06);
+  --color-bg-ghost: rgba(246, 251, 253, 0.1);
+  --color-bg-tone: rgba(6, 20, 25, 0.85);
+  --color-bg-soft: hsla(0, 0%, 100%, 0.9);
+  --color-bg-system: #4d525b;
+  --color-bg-normal: #0aa5ff;
+  --color-bg-success: #22c38e;
+  --color-bg-caution: #f2c94c;
+  --color-bg-warning: #f38b00;
+  --color-bg-alert: #fe4343;
+  --color-bg-critical: #33000f;
+
+  // Цвета текста
+  --color-typo-primary: #fafafa;
+  --color-typo-secondary: hsla(0, 0%, 100%, 0.6);
+  --color-typo-ghost: hsla(0, 0%, 100%, 0.3);
+  --color-typo-brand: #0071b2;
+  --color-typo-system: #636e83;
+  --color-typo-normal: #009bf5;
+  --color-typo-success: #0fae79;
+  --color-typo-caution: #f8c735;
+  --color-typo-warning: #e68200;
+  --color-typo-alert: #f73b3b;
+  --color-typo-critical: #61001d;
+  --color-typo-link: #0f9fff;
+  --color-typo-link-minor: #57bcff;
+  --color-typo-link-hover: #6fa5c8;
+
+  // Цвета скроллбара
+  --color-scroll-bg: rgba(246, 251, 253, 0.06);
+  --color-scroll-thumb: rgba(246, 251, 253, 0.24);
+  --color-scroll-thumb-hover: rgba(246, 251, 253, 0.32);
+
+  // Цвета контролов
+  --color-control-bg-default: #22272b;
+  --color-control-typo-default: hsla(0, 0%, 100%, 0.8);
+  --color-control-typo-placeholder: hsla(0, 0%, 100%, 0.35);
+  --color-control-bg-border-default: rgba(246, 251, 253, 0.28);
+  --color-control-bg-border-default-hover: rgba(246, 251, 253, 0.52);
+  --color-control-bg-border-focus: #0593ff;
+  --color-control-bg-focus: rgba(0, 120, 210, 0.4);
+  --color-control-bg-active: rgba(0, 120, 210, 0.7);
+  --color-control-bg-primary: #0078d2;
+  --color-control-bg-primary-hover: #0091ff;
+  --color-control-typo-primary: #fff;
+  --color-control-typo-primary-hover: #fff;
+  --color-control-bg-secondary: rgba(34, 39, 43, 0);
+  --color-control-bg-border-secondary: #0078d2;
+  --color-control-bg-border-secondary-hover: #0091ff;
+  --color-control-typo-secondary: #0f9fff;
+  --color-control-typo-secondary-hover: #57bcff;
+  --color-control-bg-ghost: hsla(0, 0%, 98%, 0.16);
+  --color-control-bg-ghost-hover: hsla(0, 0%, 98%, 0.23);
+  --color-control-typo-ghost: hsla(0, 0%, 100%, 0.75);
+  --color-control-typo-ghost-hover: hsla(0, 0%, 100%, 0.9);
+  --color-control-bg-clear: hsla(0, 0%, 98%, 0);
+  --color-control-bg-clear-hover: hsla(0, 0%, 98%, 0.23);
+  --color-control-typo-clear: hsla(0, 0%, 100%, 0.75);
+  --color-control-typo-clear-hover: hsla(0, 0%, 100%, 0.9);
+  --color-control-bg-disable: hsla(0, 0%, 98%, 0.16);
+  --color-control-bg-border-disable: hsla(0, 0%, 98%, 0);
+  --color-control-typo-disable: hsla(0, 0%, 100%, 0.24);
+
+  // Тени
+  --color-shadow-group-1: rgba(0, 0, 0, 0.08);
+  --color-shadow-group-2: rgba(0, 0, 0, 0.32);
+  --color-shadow-layer-1: rgba(0, 0, 0, 0.08);
+  --color-shadow-layer-2: rgba(0, 0, 0, 0.32);
+  --color-shadow-modal-1: rgba(0, 0, 0, 0.08);
+  --color-shadow-modal-2: rgba(0, 0, 0, 0.32);
+
+  // ============================================
+  // РАЗМЕРЫ ГРАФИКИ (Theme.css)
+  // Мобильные: фиксированные rem, Десктопные: адаптивные vw через px2vw
+  // ============================================
+  // Базовые значения для мобильных (фиксированные rem)
+  --graphics-size-xs: #{px-to-rem(12px)};
+  --graphics-size-s: #{px-to-rem(16px)};
+  --graphics-size-m: #{px-to-rem(24px)};
+  --graphics-size-l: #{px-to-rem(32px)};
+  --graphics-size-xl: #{px-to-rem(40px)};
+  --graphics-size-2xl: #{px-to-rem(60px)};
+  --graphics-size-3xl: #{px-to-rem(80px)};
+  --graphics-size-4xl: #{px-to-rem(120px)};
+
+  // ============================================
+  // КОНТРОЛЫ (Theme_control_gpnDefault)
+  // ============================================
+  --control-radius: #{px-to-rem(20px)};
+  --control-border-width: #{px-to-rem(1px)};
+  --control-height-l: var(--space-4xl);
+  --control-height-m: var(--space-3xl);
+  --control-height-s: var(--space-2xl);
+  --control-height-xs: var(--space-xl);
+  --control-box-size-s: var(--space-s);
+  --control-box-size-m: var(--space-m);
+  --control-box-size-l: var(--space-l);
+  --control-space-l: var(--space-xl);
+  --control-space-m: var(--space-l);
+  --control-space-s: var(--space-m);
+  --control-space-xs: var(--space-s);
+  --control-text-size-l: var(--size-text-l);
+  --control-text-size-m: var(--size-text-m);
+  --control-text-size-s: var(--size-text-s);
+  --control-text-size-xs: var(--size-text-xs);
+
+  // ============================================
+  // ШРИФТЫ (Theme_font_gpnDefault)
+  // ============================================
+  --font-primary:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell',
+    'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-mono: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+
+  // ============================================
+  // РАЗМЕРЫ ТЕКСТА (Theme_size_gpnDefault)
+  // Мобильные: фиксированные rem, Десктопные: адаптивные vw через px2vw
+  // ============================================
+  // Базовые значения для мобильных (фиксированные rem)
+  --size-text-2xs: #{px-to-rem(10px)};
+  --size-text-xs: #{px-to-rem(12px)};
+  --size-text-s: #{px-to-rem(14px)};
+  --size-text-m: #{px-to-rem(16px)};
+  --size-text-l: #{px-to-rem(18px)};
+  --size-text-xl: #{px-to-rem(20px)};
+  --size-text-2xl: #{px-to-rem(24px)};
+  --size-text-3xl: #{px-to-rem(32px)};
+  --size-text-4xl: #{px-to-rem(48px)};
+  --size-text-5xl: #{px-to-rem(72px)};
+  --size-text-6xl: #{px-to-rem(96px)};
+
+  // Высота строки
+  --line-height-text-2xs: 1.1em;
+  --line-height-text-xs: 1.2em;
+  --line-height-text-s: 1.4em;
+  --line-height-text-m: 1.5em;
+  --line-height-text-l: 1.6em;
+
+  // Толщина шрифта
+  --font-weight-text-thin: 100;
+  --font-weight-text-extralight: 100;
+  --font-weight-text-light: 300;
+  --font-weight-text-regular: normal;
+  --font-weight-text-medium: 500;
+  --font-weight-text-semibold: 600;
+  --font-weight-text-bold: bold;
+  --font-weight-text-extrabold: 800;
+  --font-weight-text-black: 900;
+
+  // ============================================
+  // ОТСТУПЫ (Theme_space_gpnDefault)
+  // Мобильные: фиксированные rem, Десктопные: адаптивные vw через px2vw
+  // ============================================
+  // Базовые значения для мобильных (фиксированные rem)
+  --space-3xs: #{px-to-rem(2px)};
+  --space-2xs: #{px-to-rem(4px)};
+  --space-xs: #{px-to-rem(8px)};
+  --space-s: #{px-to-rem(12px)};
+  --space-m: #{px-to-rem(16px)};
+  --space-l: #{px-to-rem(20px)};
+  --space-xl: #{px-to-rem(24px)};
+  --space-2xl: #{px-to-rem(32px)};
+  --space-3xl: #{px-to-rem(40px)};
+  --space-4xl: #{px-to-rem(48px)};
+  --space-5xl: #{px-to-rem(72px)};
+  --space-6xl: #{px-to-rem(96px)};
+}
+
+// Переопределяем переменные space для класса Theme_space_gpnDefault
+// так как presetGpnDark использует space: "gpnDefault"
+// Мобильные: фиксированные rem, Десктопные: адаптивные vw через px2vw
+// Для маленьких значений (2px, 4px) оставляем фиксированные rem
+body .Theme.Theme_space_gpnDefault,
+body .Theme_space_gpnDefault,
+.Theme.Theme_space_gpnDefault,
+.Theme_space_gpnDefault {
+  // Базовые значения для мобильных (фиксированные rem)
+  --space-3xs: #{px-to-rem(2px)};
+  --space-2xs: #{px-to-rem(4px)};
+  --space-xs: #{px-to-rem(8px)};
+  --space-s: #{px-to-rem(12px)};
+  --space-m: #{px-to-rem(16px)};
+  --space-l: #{px-to-rem(20px)};
+  --space-xl: #{px-to-rem(24px)};
+  --space-2xl: #{px-to-rem(32px)};
+  --space-3xl: #{px-to-rem(40px)};
+  --space-4xl: #{px-to-rem(48px)};
+  --space-5xl: #{px-to-rem(72px)};
+  --space-6xl: #{px-to-rem(96px)};
+}
+
+// Переопределяем переменные space для десктопных разрешений (от 537px)
+// Используем адаптивные значения через clamp с vw
+@include media-breakpoint-up(sm) {
+  body .Theme.Theme_space_gpnDefault,
+  body .Theme_space_gpnDefault,
+  .Theme.Theme_space_gpnDefault,
+  .Theme_space_gpnDefault {
+    --space-xs: #{px-to-adaptive(8px)};
+    --space-s: #{px-to-adaptive(12px)};
+    --space-m: #{px-to-adaptive(16px)};
+    --space-l: #{px-to-adaptive(20px)};
+    --space-xl: #{px-to-adaptive(24px)};
+    --space-2xl: #{px-to-adaptive(32px)};
+    --space-3xl: #{px-to-adaptive(40px)};
+    --space-4xl: #{px-to-adaptive(48px)};
+    --space-5xl: #{px-to-adaptive(72px)};
+    --space-6xl: #{px-to-adaptive(96px)};
+  }
+}
+
+// Переопределяем переменные size для класса Theme_size_gpnDefault
+// так как presetGpnDark использует size: "gpnDefault"
+// Мобильные: фиксированные rem, Десктопные: адаптивные vw через px2vw
+body .Theme.Theme_size_gpnDefault,
+body .Theme_size_gpnDefault,
+.Theme.Theme_size_gpnDefault,
+.Theme_size_gpnDefault {
+  // Базовые значения для мобильных (фиксированные rem)
+  --size-text-2xs: #{px-to-rem(10px)};
+  --size-text-xs: #{px-to-rem(12px)};
+  --size-text-s: #{px-to-rem(14px)};
+  --size-text-m: #{px-to-rem(16px)};
+  --size-text-l: #{px-to-rem(18px)};
+  --size-text-xl: #{px-to-rem(20px)};
+  --size-text-2xl: #{px-to-rem(24px)};
+  --size-text-3xl: #{px-to-rem(32px)};
+  --size-text-4xl: #{px-to-rem(48px)};
+  --size-text-5xl: #{px-to-rem(72px)};
+  --size-text-6xl: #{px-to-rem(96px)};
+
+  // Высота строки
+  --line-height-text-2xs: 1.1em;
+  --line-height-text-xs: 1.2em;
+  --line-height-text-s: 1.4em;
+  --line-height-text-m: 1.5em;
+  --line-height-text-l: 1.6em;
+
+  // Толщина шрифта
+  --font-weight-text-thin: 100;
+  --font-weight-text-extralight: 100;
+  --font-weight-text-light: 300;
+  --font-weight-text-regular: normal;
+  --font-weight-text-medium: 500;
+  --font-weight-text-semibold: 600;
+  --font-weight-text-bold: bold;
+  --font-weight-text-extrabold: 800;
+  --font-weight-text-black: 900;
+}
+
+// Переопределяем переменные size для десктопных разрешений (от 537px)
+// Используем адаптивные значения через clamp с vw
+@include media-breakpoint-up(sm) {
+  body .Theme.Theme_size_gpnDefault,
+  body .Theme_size_gpnDefault,
+  .Theme.Theme_size_gpnDefault,
+  .Theme_size_gpnDefault {
+    --size-text-2xs: #{px-to-adaptive(10px)};
+    --size-text-xs: #{px-to-adaptive(12px)};
+    --size-text-s: #{px-to-adaptive(14px)};
+    --size-text-m: #{px-to-adaptive(16px)};
+    --size-text-l: #{px-to-adaptive(18px)};
+    --size-text-xl: #{px-to-adaptive(20px)};
+    --size-text-2xl: #{px-to-adaptive(24px)};
+    --size-text-3xl: #{px-to-adaptive(32px)};
+    --size-text-4xl: #{px-to-adaptive(48px)};
+    --size-text-5xl: #{px-to-adaptive(72px)};
+    --size-text-6xl: #{px-to-adaptive(96px)};
+  }
+}
+
+// Переопределяем переменные control для класса Theme_control_gpnDefault
+// так как presetGpnDark использует control: "gpnDefault"
+body .Theme.Theme_control_gpnDefault,
+body .Theme_control_gpnDefault,
+.Theme.Theme_control_gpnDefault,
+.Theme_control_gpnDefault {
+  --control-radius: #{px-to-rem(20px)};
+  --control-border-width: #{px-to-rem(1px)};
+  --control-height-l: var(--space-4xl);
+  --control-height-m: var(--space-3xl);
+  --control-height-s: var(--space-2xl);
+  --control-height-xs: var(--space-xl);
+  --control-box-size-s: var(--space-s);
+  --control-box-size-m: var(--space-m);
+  --control-box-size-l: var(--space-l);
+  --control-space-l: var(--space-xl);
+  --control-space-m: var(--space-l);
+  --control-space-s: var(--space-m);
+  --control-space-xs: var(--space-s);
+  --control-text-size-l: var(--size-text-l);
+  --control-text-size-m: var(--size-text-m);
+  --control-text-size-s: var(--size-text-s);
+  --control-text-size-xs: var(--size-text-xs);
+}
+
+// Переопределяем переменные font для класса Theme_font_gpnDefault
+// так как presetGpnDark использует font: "gpnDefault"
+body .Theme.Theme_font_gpnDefault,
+body .Theme_font_gpnDefault,
+.Theme.Theme_font_gpnDefault,
+.Theme_font_gpnDefault {
+  --font-primary:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell',
+    'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-mono: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+// Переопределяем переменные shadow для класса Theme_shadow_gpnDefault
+// так как presetGpnDark использует shadow: "gpnDefault"
+body .Theme.Theme_shadow_gpnDefault,
+body .Theme_shadow_gpnDefault,
+.Theme.Theme_shadow_gpnDefault,
+.Theme_shadow_gpnDefault {
+  --shadow-group:
+    0 #{px-to-rem(2px)} #{px-to-rem(2px)} var(--color-shadow-group-1),
+    0 #{px-to-rem(2px)} #{px-to-rem(8px)} var(--color-shadow-group-2);
+  --shadow-layer:
+    0 #{px-to-rem(4px)} #{px-to-rem(4px)} var(--color-shadow-layer-1),
+    0 #{px-to-rem(8px)} #{px-to-rem(24px)} var(--color-shadow-layer-2);
+  --shadow-modal:
+    0 #{px-to-rem(8px)} #{px-to-rem(8px)} var(--color-shadow-modal-1),
+    0 #{px-to-rem(12px)} #{px-to-rem(28px)} var(--color-shadow-modal-2);
+}
+
+// Переопределяем переменные graphics для класса Theme
+// Мобильные: фиксированные rem, Десктопные: адаптивные vw через px2vw
+body .Theme,
+.Theme {
+  --graphics-size-xs: #{px-to-adaptive(12px)};
+  --graphics-size-s: #{px-to-adaptive(16px)};
+  --graphics-size-m: #{px-to-adaptive(24px)};
+  --graphics-size-l: #{px-to-adaptive(32px)};
+  --graphics-size-xl: #{px-to-adaptive(40px)};
+  --graphics-size-2xl: #{px-to-adaptive(60px)};
+  --graphics-size-3xl: #{px-to-adaptive(80px)};
+  --graphics-size-4xl: #{px-to-adaptive(120px)};
+}
+
+// Стили скроллбара (из Theme.css)
+::-webkit-scrollbar {
+  height: #{px-to-rem(8px)};
+  width: #{px-to-rem(8px)};
+}
+
+::-webkit-scrollbar-corner,
+::-webkit-scrollbar-track {
+  background-color: var(--color-scroll-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-scroll-thumb);
+  border-radius: #{px-to-rem(4px)};
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-scroll-thumb-hover);
+}
+
+// ============================================
+// BADGE (Consta Badge адаптация под проект)
+// ============================================
+// Badge в uikit не использует наши fluid-миксины напрямую,
+// поэтому доопределяем размеры глобально в теме.
+body .Theme .Badge,
+.Theme .Badge,
+body .Theme [class^='Badge'],
+body .Theme [class*=' Badge'],
+.Theme [class^='Badge'],
+.Theme [class*=' Badge'] {
+  border-radius: #{px-to-rem(999px)} !important;
+}
+
+body .Theme .Badge_size_s,
+.Theme .Badge_size_s,
+body .Theme [class*='Badge_size_s'],
+body .Theme [class*='Badge_size-xs'],
+.Theme [class*='Badge_size_s'],
+.Theme [class*='Badge_size-xs'] {
+  min-height: #{px-to-adaptive(16px)} !important;
+  padding-left: #{px-to-adaptive(6px)} !important;
+  padding-right: #{px-to-adaptive(6px)} !important;
+}
+
+body .Theme .Badge_size_m,
+.Theme .Badge_size_m,
+body .Theme [class*='Badge_size_m'],
+.Theme [class*='Badge_size_m'] {
+  min-height: #{px-to-adaptive(20px)} !important;
+  padding-left: #{px-to-adaptive(8px)} !important;
+  padding-right: #{px-to-adaptive(8px)} !important;
+}
+
+body .Theme .Badge_size_l,
+.Theme .Badge_size_l,
+body .Theme [class*='Badge_size_l'],
+.Theme [class*='Badge_size_l'] {
+  min-height: #{px-to-adaptive(24px)} !important;
+  padding-left: #{px-to-adaptive(10px)} !important;
+  padding-right: #{px-to-adaptive(10px)} !important;
+}
+
+body .Theme .Badge-Label,
+.Theme .Badge-Label,
+body .Theme [class*='Badge-Label'],
+.Theme [class*='Badge-Label'] {
+  font-size: #{px-to-adaptive(10px)} !important;
+  line-height: 1 !important;
+}
