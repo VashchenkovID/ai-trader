@@ -50,6 +50,7 @@ def train_agent(
     epsilon_end: float = 0.02,
     trade_cost: float = 0.0005,
     continue_from_latest: bool = False,
+    market_returns: list[float] | None = None,
 ) -> str | None:
     """
     Обучает tabular Q-learning агента и сохраняет артефакт в JSON.
@@ -60,10 +61,19 @@ def train_agent(
         steps = 100
 
     rng = np.random.default_rng(seed)
-    # Генерируем синтетический ряд доходностей: малый шум + редкие более сильные движения.
-    returns = rng.normal(loc=0.0002, scale=0.006, size=steps + 1)
-    shocks = rng.choice([0.0, -0.02, 0.02], size=steps + 1, p=[0.98, 0.01, 0.01])
-    returns = returns + shocks
+    if market_returns:
+        clean = [float(v) for v in market_returns if v is not None and np.isfinite(v)]
+        if len(clean) >= 2:
+            arr = np.array(clean, dtype=np.float64)
+            if len(arr) < steps + 1:
+                repeats = int(np.ceil((steps + 1) / len(arr)))
+                arr = np.tile(arr, repeats)
+            returns = arr[: steps + 1]
+        else:
+            returns = rng.normal(loc=0.0002, scale=0.006, size=steps + 1)
+    else:
+        # Fallback: синтетика только когда реальные доходности недоступны.
+        returns = rng.normal(loc=0.0002, scale=0.006, size=steps + 1)
 
     n_states, n_actions = 3, 3
     settings = get_training_settings()

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +26,8 @@ from training.data.loaders import load_candles_from_csv
 from training.experiments import init_mlflow
 from training.logs_rollup import append_lightning_rollup, prune_lightning_raw_dirs
 from training.models.weekly_lightning import WeeklyForecastLightning, build_weekly_dataloaders
+
+logger = logging.getLogger(__name__)
 
 
 def _synthetic_weekly_data(
@@ -56,6 +59,7 @@ def _synthetic_weekly_data(
 
 def _candles_to_weekly_tensors(
     candles: pd.DataFrame,
+    options_df: pd.DataFrame | None = None,
     llm_aggregates: pd.DataFrame | None = None,
     seq_len: int = 30,
     n_forecast: int = 5,
@@ -65,6 +69,7 @@ def _candles_to_weekly_tensors(
     """Строит последовательности из свечей и возвращает train/val тензоры."""
     X_seq, y = build_weekly_sequences(
         candles,
+        options=options_df,
         llm_aggregates=llm_aggregates,
         seq_len=seq_len,
         n_forecast=n_forecast,
@@ -81,6 +86,35 @@ def _candles_to_weekly_tensors(
     return X_t, y_t, X_v, y_v
 
 
+def _checkpoint_weekly_shape(path: Path) -> tuple[int, int] | None:
+    try:
+        payload = torch.load(path, map_location="cpu")
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    hp = payload.get("hyper_parameters")
+    if not isinstance(hp, dict):
+        return None
+    try:
+        return int(hp.get("input_size")), int(hp.get("seq_len"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _select_compatible_weekly_checkpoint(
+    ckpt_dir: Path, *, input_size: int, seq_len: int
+) -> str | None:
+    if not ckpt_dir.exists():
+        return None
+    latest = sorted(ckpt_dir.glob("*.ckpt"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for ckpt in latest:
+        shape = _checkpoint_weekly_shape(ckpt)
+        if shape == (int(input_size), int(seq_len)):
+            return str(ckpt)
+    return None
+
+
 def run(
     max_epochs: int = 20,
     batch_size: int = 32,
@@ -90,6 +124,7 @@ def run(
     seq_len: int = 30,
     n_forecast: int = 5,
     resume_from_latest: bool = False,
+    options_df: pd.DataFrame | None = None,
 ) -> str | None:
     """
     Запускает обучение Weekly forecast. Возвращает run_id MLflow или None.
@@ -105,6 +140,7 @@ def run(
     if candles_df is not None and not candles_df.empty:
         X_t, y_t, X_v, y_v = _candles_to_weekly_tensors(
             candles_df,
+            options_df=options_df,
             seq_len=seq_len,
             n_forecast=n_forecast,
         )
@@ -127,12 +163,18 @@ def run(
     models_root = Path(settings.models_root)
     models_root.mkdir(parents=True, exist_ok=True)
     ckpt_dir = models_root / "weekly"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = None
     if resume_from_latest:
-        latest = sorted(ckpt_dir.glob("*.ckpt"), key=lambda p: p.stat().st_mtime)
-        if latest:
-            ckpt_path = str(latest[-1])
-    ckpt_dir.mkdir(parents=True, exist_ok=True)
+        ckpt_path = _select_compatible_weekly_checkpoint(
+            ckpt_dir, input_size=input_size, seq_len=seq_len_actual
+        )
+        if ckpt_path is None:
+            logger.info(
+                "No compatible weekly checkpoint for input_size=%s seq_len=%s; start fresh",
+                input_size,
+                seq_len_actual,
+            )
     checkpoint_callback = ModelCheckpoint(
         dirpath=str(ckpt_dir),
         filename="weekly_lstm-{epoch:02d}-{val_loss:.4f}",
@@ -154,6 +196,7 @@ def run(
             "batch_size": batch_size,
             "lr": lr,
             "data_source": "csv" if candles_df is not None and not candles_df.empty else "synthetic",
+            "options_features_enabled": bool(options_df is not None and not options_df.empty),
         })
         trainer.fit(model, train_loader, val_loader, ckpt_path=ckpt_path)
         best_model_path = checkpoint_callback.best_model_path or None

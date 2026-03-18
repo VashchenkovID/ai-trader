@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { LoginPage } from '@/pages/LoginPage'
+import { SettingsPage } from '@/pages/SettingsPage'
 import { verifyStoredSession } from '@/services/auth'
 import { Text } from '@/components/ui'
 import { useSystemStatusStore } from '@/store/systemStatusStore'
@@ -14,6 +15,15 @@ function DashboardWithRealtime() {
   }, [])
 
   return <DashboardPage />
+}
+
+function SettingsWithRealtime() {
+  useEffect(() => {
+    useSystemStatusStore.getState().connect()
+    void useTradingCoreStore.getState().ensureLoaded()
+  }, [])
+
+  return <SettingsPage />
 }
 
 function RouteDataGuard() {
@@ -72,10 +82,46 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/dashboard" element={<ProtectedDashboardRoute />} />
+        <Route path="/settings" element={<ProtectedSettingsRoute />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </>
   )
+}
+
+function ProtectedSettingsRoute() {
+  const [status, setStatus] = useState<'checking' | 'allowed' | 'denied'>('checking')
+
+  useEffect(() => {
+    let active = true
+
+    const check = async () => {
+      const session = await verifyStoredSession()
+      if (!active) return
+      setStatus(session.ok ? 'allowed' : 'denied')
+    }
+
+    void check()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  if (status === 'checking') {
+    return (
+      <main>
+        <Text as="p" variant="body" tone="muted">
+          Проверяем токен...
+        </Text>
+      </main>
+    )
+  }
+
+  if (status === 'denied') {
+    return <Navigate to="/login" replace />
+  }
+
+  return <SettingsWithRealtime />
 }
 
 export default App

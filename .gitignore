@@ -4,6 +4,7 @@
 */models
 */backups
 */logs
+logs/*
 server/logs
 node_modules
 

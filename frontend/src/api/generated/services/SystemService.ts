@@ -313,6 +313,42 @@ limit?: number,
     }
 
     /**
+     * Фоновая полная загрузка данных за год
+     * @returns TriggerResponse Successful Response
+     * @throws ApiError
+     */
+    public static systemDataFullSyncYearApiV1SystemDataFullSyncYearPost(): CancelablePromise<TriggerResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/system/data/full-sync-year',
+        });
+    }
+
+    /**
+     * Фоновый запуск быстрого обучения
+     * @returns TriggerResponse Successful Response
+     * @throws ApiError
+     */
+    public static systemTrainingQuickApiV1SystemTrainingQuickPost(): CancelablePromise<TriggerResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/system/training/quick',
+        });
+    }
+
+    /**
+     * Фоновый запуск полного обучения
+     * @returns TriggerResponse Successful Response
+     * @throws ApiError
+     */
+    public static systemTrainingFullApiV1SystemTrainingFullPost(): CancelablePromise<TriggerResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/system/training/full',
+        });
+    }
+
+    /**
      * Фоновая синхронизация ассетов
      * @returns TriggerResponse Successful Response
      * @throws ApiError

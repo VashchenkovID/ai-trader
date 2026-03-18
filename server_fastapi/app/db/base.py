@@ -1,14 +1,17 @@
 from app.db.base_class import Base
 from app.db.models import (
     AppSetting,
+    Asset,
     Candle,
     Instrument,
     LlmJuryAggregate,
     LlmJuryOpinion,
     ModelPerformance,
     NewsItem,
+    Option,
     Recommendation,
     RealPortfolio,
+    Signal,
     TradingRequest,
     User,
 )
@@ -23,6 +26,9 @@ __all__ = [
     "NewsItem",
     "ModelPerformance",
     "AppSetting",
+    "Asset",
+    "Option",
+    "Signal",
     "LlmJuryOpinion",
     "LlmJuryAggregate",
     "RealPortfolio",

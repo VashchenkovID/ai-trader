@@ -216,7 +216,14 @@ async def system_tasks(limit: int = Query(default=100, ge=1, le=1000)) -> Succes
 async def system_task(task_id: str) -> SuccessEnvelope[dict[str, object]]:
     task = get_task(task_id)
     if task is None:
-        raise AppError("NOT_FOUND", message="Task not found")
+        return SuccessEnvelope(
+            data={
+                "taskId": task_id,
+                "taskType": "unknown",
+                "status": "not_found",
+                "error": "Task not found (possibly evicted or service restarted)",
+            }
+        )
     return SuccessEnvelope(data=task)
 
 
@@ -239,6 +246,21 @@ async def system_cache_update() -> TriggerResponse:
 @router.post("/system/cache/full-update", summary="Фоновый запуск полного cache update")
 async def system_cache_full_update() -> TriggerResponse:
     return TriggerResponse(data=trigger_named_job("cache_full_update"))
+
+
+@router.post("/system/data/full-sync-year", summary="Фоновая полная загрузка данных за год")
+async def system_data_full_sync_year() -> TriggerResponse:
+    return TriggerResponse(data=trigger_named_job("full_db_sync_year"))
+
+
+@router.post("/system/training/quick", summary="Фоновый запуск быстрого обучения")
+async def system_training_quick() -> TriggerResponse:
+    return TriggerResponse(data=trigger_named_job("training_quick"))
+
+
+@router.post("/system/training/full", summary="Фоновый запуск полного обучения")
+async def system_training_full() -> TriggerResponse:
+    return TriggerResponse(data=trigger_named_job("training_full"))
 
 
 @router.post("/assets/sync", summary="Фоновая синхронизация ассетов")

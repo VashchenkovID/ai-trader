@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import httpx
 
 from app.services.tinkoff_client import TinkoffApiClient
@@ -70,3 +72,44 @@ def test_get_analyst_signals_falls_back_to_legacy_on_404(monkeypatch) -> None:
     assert calls[0][0].endswith("SignalService/GetSignals")
     assert calls[0][1] == {"limit": 100}
     assert calls[1][0].endswith("AnalyticsService/GetAnalystRecommendations")
+
+
+def test_get_candles_serializes_datetime_and_uses_instrument_id(monkeypatch) -> None:
+    client = TinkoffApiClient("https://api.test", "token", "acc")
+    calls: list[tuple[str, dict]] = []
+
+    def _fake_request(path: str, body: dict):
+        calls.append((path, body))
+        return {"ok": True}
+
+    monkeypatch.setattr(client, "_request", _fake_request)
+    client.get_candles(
+        "FIGI1",
+        datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc),
+        datetime(2026, 1, 2, 0, 0, tzinfo=timezone.utc),
+        "CANDLE_INTERVAL_DAY",
+    )
+    assert calls
+    first_body = calls[0][1]
+    assert first_body["instrumentId"] == "FIGI1"
+    assert first_body["from"] == "2026-01-01T00:00:00Z"
+    assert first_body["to"] == "2026-01-02T00:00:00Z"
+
+
+def test_get_candles_fallbacks_to_figi_on_400(monkeypatch) -> None:
+    client = TinkoffApiClient("https://api.test", "token", "acc")
+    calls: list[tuple[str, dict]] = []
+
+    def _fake_request(path: str, body: dict):
+        calls.append((path, body))
+        if len(calls) == 1:
+            req = httpx.Request("POST", "https://api.test")
+            resp = httpx.Response(400, request=req, text="bad request")
+            raise httpx.HTTPStatusError("bad request", request=req, response=resp)
+        return {"candles": []}
+
+    monkeypatch.setattr(client, "_request", _fake_request)
+    out = client.get_candles("FIGI1", "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
+    assert out == {"candles": []}
+    assert calls[0][1].get("instrumentId") == "FIGI1"
+    assert calls[1][1].get("figi") == "FIGI1"

@@ -1,0 +1,133 @@
+@use '../styles' as *;
+
+.settings-page {
+  background:
+    radial-gradient(circle at 12% -8%, rgba(94, 158, 255, 0.12), transparent 36%),
+    radial-gradient(circle at 92% 6%, rgba(179, 89, 255, 0.1), transparent 28%);
+}
+
+.settings-page__hero {
+  background:
+    linear-gradient(
+      130deg,
+      color-mix(in srgb, var(--ds-primary) 30%, transparent),
+      color-mix(in srgb, #9d63ff 26%, transparent)
+    ),
+    var(--ds-surface);
+}
+
+.settings-page__tabs {
+  display: flex;
+  gap: var(--ds-space-sm);
+  flex-wrap: wrap;
+}
+
+.settings-page__actions {
+  display: grid;
+  gap: var(--ds-space-md);
+}
+
+.settings-page__running-banner {
+  padding: var(--ds-space-sm);
+  border: 1px solid color-mix(in srgb, var(--ds-primary) 45%, transparent);
+  border-radius: var(--ds-radius-md);
+  background: color-mix(in srgb, var(--ds-primary) 16%, transparent);
+}
+
+.settings-page__action {
+  display: grid;
+  gap: var(--ds-space-xs);
+  padding: var(--ds-space-sm);
+  border: 1px solid color-mix(in srgb, var(--ds-border) 80%, transparent);
+  border-radius: var(--ds-radius-md);
+}
+
+.settings-page__action-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-sm);
+}
+
+.settings-page__status-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.settings-page__status-badge--idle {
+  color: color-mix(in srgb, var(--ds-text) 78%, transparent);
+  background: color-mix(in srgb, var(--ds-text) 10%, transparent);
+}
+
+.settings-page__status-badge--queued,
+.settings-page__status-badge--running {
+  color: #4f2f00;
+  border-color: #ffcc7a;
+  background: linear-gradient(90deg, #ffd89a, #ffcf6f);
+}
+
+.settings-page__status-badge--completed {
+  color: #0f4a32;
+  border-color: #7fe0b9;
+  background: #a8f0cf;
+}
+
+.settings-page__status-badge--failed,
+.settings-page__status-badge--timeout {
+  color: #6f1a16;
+  border-color: #ff9d96;
+  background: #ffc7c3;
+}
+
+.settings-page__progress {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ds-border) 70%, transparent);
+}
+
+.settings-page__progress-bar {
+  position: absolute;
+  top: 0;
+  left: -36%;
+  width: 36%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--ds-primary), transparent);
+  animation: settings-progress-slide 1.2s linear infinite;
+}
+
+@keyframes settings-progress-slide {
+  from {
+    left: -36%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+.settings-page__meta {
+  padding: var(--ds-space-xs) 0;
+}
+
+.settings-page__settings-list {
+  display: grid;
+  gap: var(--ds-space-sm);
+}
+
+.settings-page__setting {
+  display: grid;
+  gap: 6px;
+  padding: var(--ds-space-sm);
+  border: 1px solid color-mix(in srgb, var(--ds-border) 80%, transparent);
+  border-radius: var(--ds-radius-md);
+}

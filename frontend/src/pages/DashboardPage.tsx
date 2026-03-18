@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Button,
   Checkbox,
@@ -32,6 +33,8 @@ const sidebarItems: SidebarItem[] = [
 ]
 
 export function DashboardPage() {
+  const navigate = useNavigate()
+  const location = useLocation()
   const [name, setName] = useState('')
   const [strategy, setStrategy] = useState('intraday')
   const [risk, setRisk] = useState<'conservative' | 'balanced'>('balanced')
@@ -52,6 +55,16 @@ export function DashboardPage() {
   const isCoreLoading = useTradingCoreStore(state => state.isLoading)
   const coreError = useTradingCoreStore(state => state.error)
 
+  const activeSidebarItemId = location.pathname.startsWith('/settings') ? 'settings' : 'overview'
+
+  const handleSidebarSelect = (itemId: string) => {
+    if (itemId === 'settings') {
+      navigate('/settings')
+      return
+    }
+    navigate('/dashboard')
+  }
+
   return (
     <PageLayout
       className="dashboard-page"
@@ -68,7 +81,14 @@ export function DashboardPage() {
           </Text>
         </SurfaceCard>
       }
-      sidebar={<Sidebar title="Navigation" items={sidebarItems} activeItemId="overview" />}
+      sidebar={
+        <Sidebar
+          title="Navigation"
+          items={sidebarItems}
+          activeItemId={activeSidebarItemId}
+          onSelect={handleSidebarSelect}
+        />
+      }
     >
       <SurfaceCard
         header={

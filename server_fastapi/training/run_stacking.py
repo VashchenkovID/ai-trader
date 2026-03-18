@@ -60,6 +60,8 @@ def run(
     batch_size: int = 32,
     lr: float = 1e-3,
     candles_df=None,
+    options_df=None,
+    signals_df=None,
     lookback_days: int = 60,
     prediction_horizon: int = 5,
 ) -> str | None:
@@ -82,7 +84,11 @@ def run(
 
     if candles_df is not None and not candles_df.empty:
         X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _candles_to_tensors(
-            candles_df, lookback=lookback_days, horizon=prediction_horizon
+            candles_df,
+            options_df=options_df,
+            signals_df=signals_df,
+            lookback=lookback_days,
+            horizon=prediction_horizon,
         )
     else:
         X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _synthetic_data(

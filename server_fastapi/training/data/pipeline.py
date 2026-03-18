@@ -15,11 +15,92 @@ import numpy as np
 import pandas as pd
 
 
+def _merge_options_features(base: pd.DataFrame, options: pd.DataFrame | None) -> pd.DataFrame:
+    """Добавляет опционные фичи через asof join (только прошлое/текущая дата)."""
+    if options is None or options.empty:
+        return base
+    opt = options.copy()
+    if not isinstance(opt.index, pd.DatetimeIndex):
+        for col in ("date", "snapshot_at", "created_at"):
+            if col in opt.columns:
+                opt = opt.set_index(col)
+                break
+        else:
+            return base
+    opt.index = pd.to_datetime(opt.index, errors="coerce")
+    opt = opt[~opt.index.isna()].sort_index()
+    if opt.empty:
+        return base
+    keep_cols = [c for c in opt.columns if str(c).startswith("opt_")]
+    if not keep_cols:
+        return base
+    opt = opt[keep_cols]
+    merged = pd.merge_asof(
+        base.sort_index(),
+        opt.sort_index(),
+        left_index=True,
+        right_index=True,
+        direction="backward",
+    )
+    defaults: dict[str, float] = {
+        "opt_contracts_total": 0.0,
+        "opt_call_share": 0.5,
+        "opt_put_share": 0.5,
+        "opt_days_to_expiry_mean": 0.0,
+        "opt_days_to_expiry_min": 0.0,
+        "opt_strike_mean": 0.0,
+        "opt_strike_std": 0.0,
+    }
+    for c in keep_cols:
+        merged[c] = merged[c].fillna(defaults.get(c, 0.0))
+    return merged
+
+
+def _merge_signals_features(base: pd.DataFrame, signals: pd.DataFrame | None) -> pd.DataFrame:
+    """Добавляет сигнальные фичи через asof join (только прошлое/текущая дата)."""
+    if signals is None or signals.empty:
+        return base
+    sig = signals.copy()
+    if not isinstance(sig.index, pd.DatetimeIndex):
+        for col in ("date", "created_at", "createDt"):
+            if col in sig.columns:
+                sig = sig.set_index(col)
+                break
+        else:
+            return base
+    sig.index = pd.to_datetime(sig.index, errors="coerce")
+    sig = sig[~sig.index.isna()].sort_index()
+    if sig.empty:
+        return base
+    keep_cols = [c for c in sig.columns if str(c).startswith("sig_")]
+    if not keep_cols:
+        return base
+    sig = sig[keep_cols]
+    merged = pd.merge_asof(
+        base.sort_index(),
+        sig.sort_index(),
+        left_index=True,
+        right_index=True,
+        direction="backward",
+    )
+    defaults: dict[str, float] = {
+        "sig_count": 0.0,
+        "sig_buy_share": 0.5,
+        "sig_sell_share": 0.5,
+        "sig_avg_probability": 0.5,
+        "sig_avg_horizon_days": 0.0,
+    }
+    for c in keep_cols:
+        merged[c] = merged[c].fillna(defaults.get(c, 0.0))
+    return merged
+
+
 def build_feature_pipeline(
     candles: pd.DataFrame,
     macro: pd.DataFrame | None = None,
     fundamental: pd.DataFrame | None = None,
     options: pd.DataFrame | None = None,
+    signals: pd.DataFrame | None = None,
     dividends: pd.DataFrame | None = None,
     llm_aggregates: pd.DataFrame | None = None,
     lookback_days: int = 60,
@@ -120,6 +201,8 @@ def build_feature_pipeline(
             if c in X.columns:
                 X[c] = X[c].fillna(0.5 if c != "llm_dispersion" else 0.0)
 
+    X = _merge_options_features(X, options)
+    X = _merge_signals_features(X, signals)
     return X, y
 
 
@@ -153,6 +236,8 @@ def time_based_split(
 
 def _daily_features_from_candles(
     candles: pd.DataFrame,
+    options: pd.DataFrame | None = None,
+    signals: pd.DataFrame | None = None,
     llm_aggregates: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
@@ -206,12 +291,16 @@ def _daily_features_from_candles(
                 for c in ["llm_consensus", "llm_confidence_avg", "llm_dispersion"]:
                     if c in daily.columns:
                         daily[c] = daily[c].fillna(0.5 if c != "llm_dispersion" else 0.0)
+    daily = _merge_options_features(daily, options)
+    daily = _merge_signals_features(daily, signals)
     close_aligned = close.iloc[min_idx:]
     return daily, close_aligned
 
 
 def build_weekly_sequences(
     candles: pd.DataFrame,
+    options: pd.DataFrame | None = None,
+    signals: pd.DataFrame | None = None,
     llm_aggregates: pd.DataFrame | None = None,
     seq_len: int = 30,
     n_forecast: int = 5,
@@ -241,7 +330,7 @@ def build_weekly_sequences(
         candles.index = pd.to_datetime(candles.index)
     candles = candles.sort_index()
 
-    daily, close_aligned = _daily_features_from_candles(candles, llm_aggregates)
+    daily, close_aligned = _daily_features_from_candles(candles, options, signals, llm_aggregates)
     n_daily = len(daily)
     if n_daily < seq_len + n_forecast:
         return np.zeros((0, seq_len, 0), dtype=np.float32), np.array([], dtype=np.float32)

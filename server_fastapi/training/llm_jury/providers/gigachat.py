@@ -14,6 +14,7 @@ import os
 import uuid
 from typing import Any
 
+from app.core.config import get_settings
 from training.llm_jury.parse_verdict import parse_verdict
 from training.llm_jury.providers.base import JuryOpinion, LLMProviderBase
 
@@ -36,9 +37,16 @@ class GigaChatProvider(LLMProviderBase):
         timeout: float = 60.0,
         ssl_verify: bool = False,
     ):
-        raw_client_id = os.environ.get("GIGACHAT_CLIENT_ID") if client_id is None else client_id
+        settings = get_settings()
+        raw_client_id = (
+            client_id
+            if client_id is not None
+            else (os.environ.get("GIGACHAT_CLIENT_ID") or settings.gigachat_client_id)
+        )
         raw_client_secret = (
-            os.environ.get("GIGACHAT_CLIENT_SECRET") if client_secret is None else client_secret
+            client_secret
+            if client_secret is not None
+            else (os.environ.get("GIGACHAT_CLIENT_SECRET") or settings.gigachat_client_secret)
         )
         raw_scope = os.environ.get("GIGACHAT_SCOPE") if scope is None else scope
         self._client_id = (raw_client_id or "").strip()

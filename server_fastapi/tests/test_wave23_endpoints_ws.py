@@ -11,6 +11,9 @@ async def test_wave2_trigger_endpoints_return_task_contract(client) -> None:
     endpoints = [
         "/api/v1/system/cache/update",
         "/api/v1/system/cache/full-update",
+        "/api/v1/system/data/full-sync-year",
+        "/api/v1/system/training/quick",
+        "/api/v1/system/training/full",
         "/api/v1/market/refresh",
         "/api/v1/portfolio/real/sync",
         "/api/v1/portfolio/sync",

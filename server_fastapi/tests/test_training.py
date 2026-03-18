@@ -71,6 +71,69 @@ def test_build_feature_pipeline_with_llm_aggregates_adds_columns() -> None:
 
 
 @pytest.mark.training
+def test_build_feature_pipeline_with_options_adds_option_columns() -> None:
+    pandas = pytest.importorskip("pandas")
+    numpy = pytest.importorskip("numpy")
+    from training.data.pipeline import build_feature_pipeline
+
+    n = 120
+    dates = pandas.date_range("2020-01-01", periods=n, freq="D")
+    close = 100 + numpy.cumsum(numpy.random.randn(n).astype(numpy.float32) * 0.5)
+    volume = numpy.ones(n, dtype=numpy.float32) * 1e6
+    candles = pandas.DataFrame({"close": close, "volume": volume}, index=dates)
+    options = pandas.DataFrame(
+        {
+            "date": pandas.date_range("2020-03-01", periods=4, freq="D"),
+            "opt_contracts_total": [200, 210, 220, 230],
+            "opt_call_share": [0.5, 0.6, 0.55, 0.52],
+            "opt_put_share": [0.5, 0.4, 0.45, 0.48],
+            "opt_days_to_expiry_mean": [30, 29, 28, 27],
+            "opt_days_to_expiry_min": [5, 5, 4, 4],
+            "opt_strike_mean": [100, 101, 102, 103],
+            "opt_strike_std": [10, 10, 9, 9],
+        }
+    ).set_index("date")
+    X, y = build_feature_pipeline(
+        candles, options=options, lookback_days=20, prediction_horizon=5
+    )
+    assert not X.empty
+    assert len(y) == len(X)
+    assert "opt_contracts_total" in X.columns
+    assert "opt_days_to_expiry_mean" in X.columns
+    assert "opt_strike_std" in X.columns
+
+
+@pytest.mark.training
+def test_build_feature_pipeline_with_signals_adds_signal_columns() -> None:
+    pandas = pytest.importorskip("pandas")
+    numpy = pytest.importorskip("numpy")
+    from training.data.pipeline import build_feature_pipeline
+
+    n = 120
+    dates = pandas.date_range("2020-01-01", periods=n, freq="D")
+    close = 100 + numpy.cumsum(numpy.random.randn(n).astype(numpy.float32) * 0.5)
+    volume = numpy.ones(n, dtype=numpy.float32) * 1e6
+    candles = pandas.DataFrame({"close": close, "volume": volume}, index=dates)
+    signals = pandas.DataFrame(
+        {
+            "date": pandas.date_range("2020-03-01", periods=4, freq="D"),
+            "sig_count": [4, 6, 5, 7],
+            "sig_buy_share": [0.5, 0.66, 0.6, 0.57],
+            "sig_sell_share": [0.5, 0.34, 0.4, 0.43],
+            "sig_avg_probability": [0.55, 0.58, 0.61, 0.63],
+            "sig_avg_horizon_days": [5, 6, 4, 7],
+        }
+    ).set_index("date")
+    X, y = build_feature_pipeline(
+        candles, signals=signals, lookback_days=20, prediction_horizon=5
+    )
+    assert not X.empty
+    assert len(y) == len(X)
+    assert "sig_count" in X.columns
+    assert "sig_avg_probability" in X.columns
+
+
+@pytest.mark.training
 def test_time_based_split_ratios() -> None:
     pandas = pytest.importorskip("pandas")
     from training.data.pipeline import time_based_split
@@ -105,6 +168,38 @@ def test_build_weekly_sequences_shapes_and_no_lookahead() -> None:
     assert y.ndim == 1
     n_expected = n_days - 20 - seq_len - n_forecast + 1
     assert X_seq.shape[0] == n_expected
+
+
+@pytest.mark.training
+def test_build_weekly_sequences_with_options_increases_feature_count() -> None:
+    pandas = pytest.importorskip("pandas")
+    numpy = pytest.importorskip("numpy")
+    from training.data.pipeline import build_weekly_sequences
+
+    seq_len, n_forecast = 30, 5
+    n_days = 120
+    dates = pandas.date_range("2020-01-01", periods=n_days, freq="D")
+    close = 100 + numpy.cumsum(numpy.random.randn(n_days).astype(numpy.float32) * 0.5)
+    volume = numpy.ones(n_days, dtype=numpy.float32) * 1e6
+    candles = pandas.DataFrame({"close": close, "volume": volume}, index=dates)
+    options = pandas.DataFrame(
+        {
+            "date": pandas.date_range("2020-03-01", periods=3, freq="D"),
+            "opt_contracts_total": [200, 210, 220],
+            "opt_call_share": [0.5, 0.6, 0.55],
+            "opt_put_share": [0.5, 0.4, 0.45],
+            "opt_days_to_expiry_mean": [30, 29, 28],
+            "opt_days_to_expiry_min": [5, 5, 4],
+            "opt_strike_mean": [100, 101, 102],
+            "opt_strike_std": [10, 10, 9],
+        }
+    ).set_index("date")
+    X_seq, y = build_weekly_sequences(
+        candles, options=options, seq_len=seq_len, n_forecast=n_forecast
+    )
+    assert X_seq.ndim == 3
+    assert len(y) == X_seq.shape[0]
+    assert X_seq.shape[2] > 4
 
 
 @pytest.mark.training

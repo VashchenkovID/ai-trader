@@ -750,6 +750,51 @@
         }
       }
     },
+    "/api/v1/system/data/full-sync-year": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновая полная загрузка данных за год",
+        "operationId": "system_data_full_sync_year_api_v1_system_data_full_sync_year_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/training/quick": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый запуск быстрого обучения",
+        "operationId": "system_training_quick_api_v1_system_training_quick_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/training/full": {
+      "post": {
+        "tags": ["system"],
+        "summary": "Фоновый запуск полного обучения",
+        "operationId": "system_training_full_api_v1_system_training_full_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TriggerResponse" } }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assets/sync": {
       "post": {
         "tags": ["system"],

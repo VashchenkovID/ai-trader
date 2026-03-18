@@ -129,6 +129,63 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class Asset(TimestampedUUIDModel):
+    """Сырые asset-данные из Tinkoff API."""
+    __tablename__ = "assets"
+
+    uid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    figi: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ticker: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    instrument_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    raw_payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    __table_args__ = (
+        Index("ix_assets_uid", "uid"),
+        Index("ix_assets_figi", "figi"),
+        Index("ix_assets_ticker", "ticker"),
+    )
+
+
+class Option(TimestampedUUIDModel):
+    """Сырые option-данные из Tinkoff API."""
+    __tablename__ = "options"
+
+    uid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    position_uid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    figi: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ticker: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    basic_asset_uid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    raw_payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    __table_args__ = (
+        Index("ix_options_uid", "uid"),
+        Index("ix_options_figi", "figi"),
+        Index("ix_options_ticker", "ticker"),
+    )
+
+
+class Signal(TimestampedUUIDModel):
+    """Сырые analyst signals из Tinkoff API."""
+    __tablename__ = "signals"
+
+    signal_uid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    figi: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ticker: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    direction: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    raw_payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    __table_args__ = (
+        Index("ix_signals_signal_uid", "signal_uid"),
+        Index("ix_signals_figi", "figi"),
+        Index("ix_signals_ticker", "ticker"),
+    )
+
+
 class LlmJuryOpinion(TimestampedUUIDModel):
     """Мнение одного провайдера LLM-жюри по инструменту."""
     __tablename__ = "llm_jury_opinions"

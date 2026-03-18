@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import sys
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -79,6 +80,20 @@ async def test_publish_drops_full_queue() -> None:
 def test_trigger_named_job_unsupported() -> None:
     with pytest.raises(ValueError):
         scheduler.trigger_named_job("does-not-exist")
+
+
+def test_extract_option_figi_supports_basic_asset_and_position_uid() -> None:
+    ticker_to_figi = {"SBER": "FIGI_SBER"}
+    uid_to_figi = {"POS123": "FIGI_POS"}
+    by_basic_asset = scheduler._extract_option_figi({"basicAsset": "SBER"}, ticker_to_figi, uid_to_figi)
+    by_position_uid = scheduler._extract_option_figi({"basicAssetPositionUid": "POS123"}, ticker_to_figi, uid_to_figi)
+    assert by_basic_asset == "FIGI_SBER"
+    assert by_position_uid == "FIGI_POS"
+
+
+def test_extract_signal_figi_uses_instrument_uid_lookup() -> None:
+    out = scheduler._extract_signal_figi({"instrumentUid": "UID42"}, {}, {"UID42": "FIGI42"})
+    assert out == "FIGI42"
 
 
 @pytest.mark.asyncio
@@ -163,6 +178,97 @@ async def test_assets_sync_job_reports_written_to_db(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
+async def test_full_db_sync_year_job_aggregates_steps(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(scheduler, "_assets_sync_job", lambda: asyncio.sleep(0, result={"degraded": False}))
+    monkeypatch.setattr(scheduler, "_fundamental_sync_fill_job", lambda: asyncio.sleep(0, result={"degraded": False}))
+    monkeypatch.setattr(scheduler, "_candles_sync_year_job", lambda: asyncio.sleep(0, result={"degraded": False}))
+    monkeypatch.setattr(scheduler, "_dividends_sync_year_job", lambda: asyncio.sleep(0, result={"degraded": True}))
+    monkeypatch.setattr(scheduler, "_options_update_job", lambda: asyncio.sleep(0, result={"degraded": False}))
+    monkeypatch.setattr(scheduler, "_signals_update_job", lambda: asyncio.sleep(0, result={"degraded": False}))
+
+    out = await scheduler._full_db_sync_year_job()
+    assert out["message"] == "full db sync year completed"
+    assert out["degraded"] is True
+    assert set(out["steps"].keys()) == {
+        "assets",
+        "fundamentals",
+        "candles",
+        "dividends",
+        "options",
+        "signals",
+    }
+
+
+@pytest.mark.asyncio
+async def test_dividends_sync_year_job_empty_universe(monkeypatch: pytest.MonkeyPatch) -> None:
+    scheduler._container = SimpleNamespace(
+        tinkoff_client=SimpleNamespace(get_dividends=lambda _figi: {"dividends": []}),
+        market_repository=SimpleNamespace(list_figi=lambda _session, limit=100: asyncio.sleep(0, result=[])),
+    )
+    monkeypatch.setattr(scheduler, "SessionLocal", lambda: _SessionCtx(_FakeSession()))
+    out = await scheduler._dividends_sync_year_job()
+    assert out["count"] == 0
+    assert out["writtenToDb"] is False
+
+
+@pytest.mark.asyncio
+async def test_candles_sync_year_job_partial_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _ReadSession:
+        async def scalar(self, _stmt):
+            return None
+
+    class _WriteSession:
+        def __init__(self) -> None:
+            self.committed = False
+
+        async def scalar(self, _stmt):
+            return None
+
+        def add(self, _row):
+            return None
+
+        async def commit(self):
+            self.committed = True
+
+    write_session = _WriteSession()
+    sessions = [_ReadSession(), write_session]
+
+    def _session_local():
+        return _SessionCtx(sessions.pop(0))
+
+    async def _list_figi(_session, limit=100):
+        return ["F_OK", "F_BAD"]
+
+    def _get_candles(figi, *_args, **_kwargs):
+        if figi == "F_BAD":
+            raise RuntimeError("upstream")
+        return {
+            "candles": [
+                {
+                    "time": "2026-01-01T00:00:00Z",
+                    "open": {"units": "1", "nano": 0},
+                    "high": {"units": "2", "nano": 0},
+                    "low": {"units": "1", "nano": 0},
+                    "close": {"units": "2", "nano": 0},
+                    "volume": 100,
+                }
+            ]
+        }
+
+    scheduler._container = SimpleNamespace(
+        tinkoff_client=SimpleNamespace(get_candles=_get_candles),
+        market_repository=SimpleNamespace(list_figi=_list_figi),
+    )
+    monkeypatch.setattr(scheduler, "SessionLocal", _session_local)
+
+    out = await scheduler._candles_sync_year_job()
+    assert out["count"] == 1
+    assert out["failed"] == 1
+    assert out["degraded"] is True
+    assert write_session.committed is True
+
+
+@pytest.mark.asyncio
 async def test_analysis_market_portfolio_job_uses_supported_pipeline_signature(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -187,6 +293,91 @@ async def test_analysis_market_portfolio_job_uses_supported_pipeline_signature(
         "min_confidence": Decimal("0"),
         "min_score": Decimal("0"),
         "limit": 50,
+    }
+
+
+@pytest.mark.asyncio
+async def test_training_quick_job_retries_without_resume(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[bool] = []
+
+    def _fake_run(*args, **_kwargs):
+        # 8-й параметр: resume_from_latest
+        resume_flag = bool(args[7]) if len(args) > 7 else False
+        calls.append(resume_flag)
+        if resume_flag:
+            raise RuntimeError("You restored a checkpoint with current_epoch=2, but you have set Trainer(max_epochs=1).")
+        return "run-ok"
+
+    fake_module = SimpleNamespace(run=_fake_run)
+    monkeypatch.setitem(sys.modules, "training.run_nn", fake_module)
+    monkeypatch.setitem(sys.modules, "training.run_stacking", SimpleNamespace(run=lambda *_a, **_k: None))
+    monkeypatch.setitem(sys.modules, "training.rl", SimpleNamespace(train_agent=lambda **_k: "rl-ok"))
+    scheduler._container = SimpleNamespace(market_repository=SimpleNamespace(), tinkoff_client=None)
+    monkeypatch.setattr(scheduler, "_list_training_figi", lambda limit=5000: asyncio.sleep(0, result=["F1"]))
+    monkeypatch.setattr(
+        scheduler,
+        "_load_training_candles_with_backfill",
+        lambda *_args, **_kwargs: asyncio.sleep(0, result=([1] * 30, 1)),
+    )
+    monkeypatch.setattr(scheduler, "_load_intraday_candles_last_day", lambda _figi: asyncio.sleep(0, result=None))
+    monkeypatch.setattr(scheduler, "_options_features_for_figi", lambda _figi: asyncio.sleep(0, result=None))
+    monkeypatch.setattr(scheduler, "_signals_features_for_figi", lambda _figi: asyncio.sleep(0, result=None))
+
+    out = await scheduler._training_quick_job()
+    assert out["message"] == "quick training completed"
+    assert out["mlflowRunId"] == "run-ok"
+    assert calls == [True, False]
+
+
+@pytest.mark.asyncio
+async def test_training_quick_job_empty_pipeline_returns_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "training.run_nn", SimpleNamespace(run=lambda *_args, **_kwargs: "run-ok"))
+    monkeypatch.setitem(sys.modules, "training.run_stacking", SimpleNamespace(run=lambda *_a, **_k: None))
+    monkeypatch.setitem(sys.modules, "training.rl", SimpleNamespace(train_agent=lambda **_k: "rl-ok"))
+    scheduler._container = SimpleNamespace(market_repository=SimpleNamespace(), tinkoff_client=None)
+    monkeypatch.setattr(scheduler, "_list_training_figi", lambda limit=5000: asyncio.sleep(0, result=["F1"]))
+    monkeypatch.setattr(
+        scheduler,
+        "_load_training_candles_with_backfill",
+        lambda *_args, **_kwargs: asyncio.sleep(0, result=(None, 1)),
+    )
+    monkeypatch.setattr(scheduler, "_load_intraday_candles_last_day", lambda _figi: asyncio.sleep(0, result=None))
+    monkeypatch.setattr(scheduler, "_signals_features_for_figi", lambda _figi: asyncio.sleep(0, result=None))
+    out = await scheduler._training_quick_job()
+    assert out["message"] == "quick training skipped: insufficient candles on all instruments"
+    assert out["windowDays"] == 1
+
+
+@pytest.mark.asyncio
+async def test_training_full_job_calls_train_agent_with_keywords(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_run_nn(*_args, **_kwargs):
+        return "nn-run"
+
+    def _fake_run_weekly(*_args, **_kwargs):
+        return "weekly-run"
+
+    captured: dict[str, object] = {}
+
+    def _fake_train_agent(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return "rl-ckpt"
+
+    monkeypatch.setitem(sys.modules, "training.run_nn", SimpleNamespace(run=_fake_run_nn))
+    monkeypatch.setitem(sys.modules, "training.run_weekly", SimpleNamespace(run=_fake_run_weekly))
+    monkeypatch.setitem(sys.modules, "training.rl", SimpleNamespace(train_agent=_fake_train_agent))
+    scheduler._container = None
+
+    out = await scheduler._training_full_job()
+    assert out["message"] == "full training completed"
+    assert out["rlCheckpoint"] == "rl-ckpt"
+    assert captured["args"] == ()
+    assert captured["kwargs"] == {
+        "env_name": "paper",
+        "total_steps": 10_000,
+        "checkpoint_dir": None,
+        "continue_from_latest": True,
+        "market_returns": [],
     }
 
 

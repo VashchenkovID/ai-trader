@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from app.core.config import get_settings
 from training.llm_jury.parse_verdict import parse_verdict
 from training.llm_jury.providers.base import JuryOpinion, LLMProviderBase
 
@@ -32,9 +33,18 @@ class AlisaGptProvider(LLMProviderBase):
         model_uri: str | None = None,
         timeout: float = 60.0,
     ):
-        raw_api_key = os.environ.get("YANDEX_API_KEY") if api_key is None else api_key
+        settings = get_settings()
+        raw_api_key = (
+            api_key
+            if api_key is not None
+            else (os.environ.get("YANDEX_API_KEY") or settings.yandex_api_key)
+        )
         raw_iam_token = os.environ.get("YANDEX_IAM_TOKEN") if iam_token is None else iam_token
-        raw_folder_id = os.environ.get("YANDEX_FOLDER_ID") if folder_id is None else folder_id
+        raw_folder_id = (
+            folder_id
+            if folder_id is not None
+            else (os.environ.get("YANDEX_FOLDER_ID") or settings.yandex_folder_id)
+        )
         self._api_key = (raw_api_key or "").strip()
         self._iam_token = (raw_iam_token or "").strip()
         self._folder_id = (raw_folder_id or "").strip()

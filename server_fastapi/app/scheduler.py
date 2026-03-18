@@ -7,22 +7,25 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
+import json
 import os
 import time
 import uuid
 import logging
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 
 from app.core.config import Settings
 from app.core.error_registry import get_error_registry
 from app.core.time_utils import iso_now_msk, now_msk
-from app.db.models import AppSetting, RealPortfolio, TradingRequest
+from app.db.models import AppSetting, Asset, Candle, Instrument, Option, RealPortfolio, Signal, TradingRequest
 from app.db.session import SessionLocal
 from app.services.container import AppContainer
 from app.services.tinkoff_client import price_units_nano_to_float
@@ -60,6 +63,12 @@ _tasks: dict[str, TaskRecord] = {}
 _job_states: dict[str, JobState] = {}
 _ws_subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
 _MAX_TASK_RECORDS = 2000
+_MAX_CONCURRENT_BACKGROUND_JOBS = 4
+_background_job_slots = asyncio.Semaphore(_MAX_CONCURRENT_BACKGROUND_JOBS)
+_current_task_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "current_task_id",
+    default=None,
+)
 
 
 def _iso_now() -> str:
@@ -261,6 +270,16 @@ def _set_task_status(
     rec.result = result
 
 
+async def _update_current_task_progress(progress: dict[str, Any]) -> None:
+    task_id = _current_task_id_var.get()
+    if not task_id or task_id not in _tasks:
+        return
+    rec = _tasks[task_id]
+    current = rec.result if isinstance(rec.result, dict) else {}
+    rec.result = {**current, **progress}
+    await _publish("task.update", {"task": _task_to_dict(rec)})
+
+
 def schedule_background_job(
     task_type: str,
     fn: Callable[[], Awaitable[dict[str, Any] | None]],
@@ -270,14 +289,18 @@ def schedule_background_job(
     rec = _create_task_record(task_type, source=source)
 
     async def _runner() -> None:
-        _set_task_status(rec.task_id, status="running")
-        await _publish("task.update", {"task": _task_to_dict(rec)})
-        try:
-            result = await _run_job_with_state(task_type, fn)
-            _set_task_status(rec.task_id, status="completed", result=result)
-        except Exception as e:
-            _set_task_status(rec.task_id, status="failed", error=str(e))
-        await _publish("task.update", {"task": _task_to_dict(rec)})
+        async with _background_job_slots:
+            _set_task_status(rec.task_id, status="running")
+            await _publish("task.update", {"task": _task_to_dict(rec)})
+            token = _current_task_id_var.set(rec.task_id)
+            try:
+                result = await _run_job_with_state(task_type, fn)
+                _set_task_status(rec.task_id, status="completed", result=result)
+            except Exception as e:
+                _set_task_status(rec.task_id, status="failed", error=str(e))
+            finally:
+                _current_task_id_var.reset(token)
+            await _publish("task.update", {"task": _task_to_dict(rec)})
 
     asyncio.create_task(_runner())
     return {
@@ -296,6 +319,367 @@ def _positions_value(positions: list[dict]) -> float:
         val = price_units_nano_to_float(cur) if isinstance(cur, dict) else float(cur or 0)
         total += qty * val
     return total
+
+
+def _parse_tinkoff_datetime(raw: Any) -> datetime | None:
+    if not raw:
+        return None
+    if isinstance(raw, datetime):
+        return raw if raw.tzinfo is not None else raw.replace(tzinfo=timezone.utc)
+    text = str(raw).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    with contextlib.suppress(Exception):
+        dt = datetime.fromisoformat(text)
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    return None
+
+
+def _decimal_price(value: Any) -> Decimal:
+    if isinstance(value, dict):
+        return Decimal(str(price_units_nano_to_float(value)))
+    with contextlib.suppress(Exception):
+        return Decimal(str(value))
+    return Decimal("0")
+
+
+async def _options_features_for_figi(figi: str) -> Any | None:
+    """Агрегирует snapshot опционов в дневные фичи для обучения."""
+    if not figi:
+        return None
+    try:
+        import pandas as pd
+    except Exception:
+        return None
+    async with SessionLocal() as session:
+        if not hasattr(session, "execute"):
+            return None
+        rows = (
+            await session.execute(
+                select(Option.created_at, Option.raw_payload).where(Option.figi == figi)
+            )
+        ).all()
+    if not rows:
+        return None
+
+    enriched: list[dict[str, Any]] = []
+    for created_at, payload in rows:
+        if not isinstance(payload, dict):
+            continue
+        direction = str(payload.get("direction") or "").upper()
+        expiration_dt = _parse_tinkoff_datetime(payload.get("expirationDate"))
+        strike_price = float(_decimal_price(payload.get("strikePrice")))
+        snapshot_at = created_at if isinstance(created_at, datetime) else None
+        if snapshot_at is None:
+            snapshot_at = datetime.now(timezone.utc)
+        days_to_expiry = 0.0
+        if expiration_dt is not None:
+            delta = expiration_dt - snapshot_at
+            days_to_expiry = max(delta.total_seconds() / 86_400.0, 0.0)
+        enriched.append(
+            {
+                "date": snapshot_at,
+                "is_call": 1.0 if "CALL" in direction else 0.0,
+                "is_put": 1.0 if "PUT" in direction else 0.0,
+                "days_to_expiry": days_to_expiry,
+                "strike_price": strike_price,
+            }
+        )
+    if not enriched:
+        return None
+
+    df = pd.DataFrame(enriched)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date"])
+    if df.empty:
+        return None
+    df["date"] = df["date"].dt.floor("D")
+    grouped = (
+        df.groupby("date", as_index=True)
+        .agg(
+            opt_contracts_total=("is_call", "count"),
+            opt_call_share=("is_call", "mean"),
+            opt_put_share=("is_put", "mean"),
+            opt_days_to_expiry_mean=("days_to_expiry", "mean"),
+            opt_days_to_expiry_min=("days_to_expiry", "min"),
+            opt_strike_mean=("strike_price", "mean"),
+            opt_strike_std=("strike_price", "std"),
+        )
+        .sort_index()
+    )
+    grouped["opt_strike_std"] = grouped["opt_strike_std"].fillna(0.0)
+    return grouped
+
+
+async def _signals_features_for_figi(figi: str) -> Any | None:
+    """Агрегирует сигналы аналитиков в дневные признаки для мета-обучения."""
+    if not figi:
+        return None
+    try:
+        import pandas as pd
+    except Exception:
+        return None
+    async with SessionLocal() as session:
+        if not hasattr(session, "execute"):
+            return None
+        rows = (
+            await session.execute(
+                select(Signal.created_at, Signal.raw_payload).where(Signal.figi == figi)
+            )
+        ).all()
+    if not rows:
+        return None
+    enriched: list[dict[str, Any]] = []
+    for created_at, payload in rows:
+        if not isinstance(payload, dict):
+            continue
+        direction = str(payload.get("direction") or "").upper()
+        probability = payload.get("probability")
+        p = 0.5
+        with contextlib.suppress(Exception):
+            if probability is not None:
+                p = float(probability)
+        p = min(1.0, max(0.0, p))
+        start_dt = _parse_tinkoff_datetime(payload.get("createDt")) or (
+            created_at if isinstance(created_at, datetime) else None
+        )
+        end_dt = _parse_tinkoff_datetime(payload.get("endDt"))
+        if start_dt is None:
+            start_dt = datetime.now(timezone.utc)
+        horizon_days = 0.0
+        if end_dt is not None:
+            horizon_days = max((end_dt - start_dt).total_seconds() / 86_400.0, 0.0)
+        enriched.append(
+            {
+                "date": start_dt,
+                "is_buy": 1.0 if "BUY" in direction or "UP" in direction else 0.0,
+                "is_sell": 1.0 if "SELL" in direction or "DOWN" in direction else 0.0,
+                "probability": p,
+                "horizon_days": horizon_days,
+            }
+        )
+    if not enriched:
+        return None
+    df = pd.DataFrame(enriched)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date"])
+    if df.empty:
+        return None
+    df["date"] = df["date"].dt.floor("D")
+    grouped = (
+        df.groupby("date", as_index=True)
+        .agg(
+            sig_count=("is_buy", "count"),
+            sig_buy_share=("is_buy", "mean"),
+            sig_sell_share=("is_sell", "mean"),
+            sig_avg_probability=("probability", "mean"),
+            sig_avg_horizon_days=("horizon_days", "mean"),
+        )
+        .sort_index()
+    )
+    return grouped
+
+
+def _returns_from_candles_df(candles_df: Any) -> list[float]:
+    if candles_df is None:
+        return []
+    with contextlib.suppress(Exception):
+        close = candles_df["close"]
+        ret = close.pct_change().dropna()
+        return [float(v) for v in ret.tolist() if v is not None]
+    return []
+
+
+async def _pick_best_training_figi(limit: int = 30) -> str | None:
+    """Выбирает FIGI с максимальным числом свечей, чтобы обучение не было тривиально коротким."""
+    async with SessionLocal() as session:
+        if not hasattr(session, "execute"):
+            return None
+        rows = (
+            await session.execute(
+                select(Candle.figi, func.count(Candle.id).label("c"))
+                .group_by(Candle.figi)
+                .order_by(func.count(Candle.id).desc())
+                .limit(limit)
+            )
+        ).all()
+    for figi, cnt in rows:
+        if isinstance(figi, str) and figi and int(cnt or 0) > 120:
+            return figi
+    for figi, _cnt in rows:
+        if isinstance(figi, str) and figi:
+            return figi
+    return None
+
+
+async def _list_training_figi(limit: int = 5000) -> list[str]:
+    """Список FIGI для обучения (по убыванию количества свечей)."""
+    async with SessionLocal() as session:
+        if not hasattr(session, "execute"):
+            return []
+        rows = (
+            await session.execute(
+                select(Candle.figi, func.count(Candle.id).label("c"))
+                .group_by(Candle.figi)
+                .order_by(func.count(Candle.id).desc())
+                .limit(limit)
+            )
+        ).all()
+    return [str(figi) for figi, _cnt in rows if isinstance(figi, str) and figi]
+
+
+async def _load_training_candles_dataframe(
+    figi: str,
+    *,
+    window_days: int,
+    max_rows: int = 20_000,
+) -> Any | None:
+    """
+    Загружает свечи только за нужное окно:
+    - quick: 1 день
+    - full: 365 дней
+    Окно строится от последней доступной свечи FIGI (а не от wall-clock now),
+    чтобы корректно работать даже на историческом датасете.
+    """
+    if not figi:
+        return None
+    try:
+        from training.data.loaders import candles_to_dataframe
+    except Exception:
+        return None
+    async with SessionLocal() as session:
+        max_dt = await session.scalar(
+            select(func.max(Candle.candle_time)).where(Candle.figi == figi)
+        )
+        if max_dt is None:
+            return None
+        end_dt = max_dt if max_dt.tzinfo is not None else max_dt.replace(tzinfo=timezone.utc)
+        start_dt = end_dt - timedelta(days=window_days)
+        rows = list(
+            await session.scalars(
+                select(Candle)
+                .where(
+                    Candle.figi == figi,
+                    Candle.candle_time >= start_dt,
+                    Candle.candle_time <= end_dt,
+                )
+                .order_by(Candle.candle_time.asc())
+                .limit(max_rows)
+            )
+        )
+    df = candles_to_dataframe(rows)
+    return None if df.empty else df
+
+
+async def _load_training_candles_with_backfill(
+    figi: str,
+    *,
+    preferred_window_days: int,
+    min_rows: int,
+    max_window_days: int,
+    max_rows: int = 20_000,
+) -> tuple[Any | None, int]:
+    """
+    Пытается загрузить свечи в целевом окне и автоматически расширяет окно,
+    пока не наберётся минимум строк.
+    """
+    window = max(1, int(preferred_window_days))
+    max_window = max(window, int(max_window_days))
+    while window <= max_window:
+        df = await _load_training_candles_dataframe(
+            figi,
+            window_days=window,
+            max_rows=max_rows,
+        )
+        if df is not None and len(df) >= int(min_rows):
+            return df, window
+        if window == max_window:
+            break
+        window = min(max_window, window * 2)
+    return None, window
+
+
+async def _load_intraday_candles_last_day(figi: str) -> Any | None:
+    """Пробует загрузить внутридневные свечи за последние сутки через Tinkoff API."""
+    if not figi or _container is None or getattr(_container, "tinkoff_client", None) is None:
+        return None
+    try:
+        import pandas as pd
+    except Exception:
+        return None
+    client = _container.tinkoff_client
+    from_dt = datetime.now(timezone.utc) - timedelta(days=1)
+    to_dt = datetime.now(timezone.utc)
+    payload = await _sync_call(client.get_candles, figi, from_dt, to_dt, "CANDLE_INTERVAL_5_MIN")
+    candles = payload.get("candles") or []
+    if not candles:
+        return None
+    rows: list[dict[str, Any]] = []
+    for c in candles:
+        if not isinstance(c, dict):
+            continue
+        dt = _parse_tinkoff_datetime(c.get("time"))
+        if dt is None:
+            continue
+        close = float(_decimal_price(c.get("close")))
+        open_ = float(_decimal_price(c.get("open")))
+        high = float(_decimal_price(c.get("high")))
+        low = float(_decimal_price(c.get("low")))
+        volume = int(c.get("volume") or 0)
+        if close <= 0:
+            continue
+        rows.append(
+            {
+                "candle_time": dt,
+                "close": close,
+                "open": open_ if open_ > 0 else close,
+                "high": high if high > 0 else close,
+                "low": low if low > 0 else close,
+                "volume": volume,
+            }
+        )
+    if not rows:
+        return None
+    df = pd.DataFrame(rows).sort_values("candle_time").set_index("candle_time")
+    return None if df.empty else df
+
+
+def _latest_checkpoint_path(dir_path: str) -> str | None:
+    with contextlib.suppress(Exception):
+        files = [
+            os.path.join(dir_path, f)
+            for f in os.listdir(dir_path)
+            if f.endswith(".ckpt")
+        ]
+        if not files:
+            return None
+        files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        return files[0]
+    return None
+
+
+def _write_ensemble_weights_artifact(tag: str) -> str | None:
+    """Сохраняет artifact с текущими ensemble-весами для прозрачности пайплайна."""
+    try:
+        from training.models.meta import get_meta_weights
+        import torch
+    except Exception:
+        return None
+    h, s = get_meta_weights(device=torch.device("cpu"))
+    payload = {
+        "tag": tag,
+        "horizon_weights": [float(x) for x in h.tolist()],
+        "strategy_weights": [float(x) for x in s.tolist()],
+        "updatedAt": _iso_now(),
+    }
+    out_dir = os.path.join("models", "ensemble")
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, "weights.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    return out_path
 
 
 async def _upsert_app_setting(
@@ -323,6 +707,183 @@ async def _upsert_app_setting(
             row.module = module
             row.description = description
         await session.commit()
+
+
+async def _replace_assets_rows(assets: list[dict[str, Any]]) -> int:
+    async with SessionLocal() as session:
+        ticker_to_figi: dict[str, str] = {}
+        if hasattr(session, "execute"):
+            instrument_rows = await session.execute(select(Instrument.ticker, Instrument.figi))
+            for ticker, figi in instrument_rows:
+                if ticker and figi and isinstance(ticker, str) and isinstance(figi, str):
+                    ticker_to_figi[ticker.upper()] = figi
+        # Для real DB очищаем предыдущий snapshot, в unit-тестах fake session
+        # может не иметь execute.
+        if hasattr(session, "execute"):
+            await session.execute(delete(Asset))
+        for item in assets:
+            if not isinstance(item, dict):
+                continue
+            ticker = item.get("ticker")
+            figi = (
+                item.get("figi")
+                or item.get("instrumentFigi")
+                or ((item.get("instrument") or {}).get("figi") if isinstance(item.get("instrument"), dict) else None)
+            )
+            if isinstance(item.get("instrument"), dict):
+                instrument = item.get("instrument") or {}
+                if not figi:
+                    figi = instrument.get("figi") or instrument.get("instrumentFigi")
+                if not ticker:
+                    ticker = instrument.get("ticker")
+            instruments = item.get("instruments")
+            if isinstance(instruments, list):
+                for instrument in instruments:
+                    if not isinstance(instrument, dict):
+                        continue
+                    if not figi:
+                        figi = instrument.get("figi") or instrument.get("instrumentFigi")
+                    if not ticker:
+                        ticker = instrument.get("ticker")
+                    if figi and ticker:
+                        break
+            if not figi and isinstance(ticker, str) and ticker:
+                figi = ticker_to_figi.get(ticker.upper())
+            session.add(
+                Asset(
+                    uid=item.get("uid"),
+                    figi=figi,
+                    ticker=ticker,
+                    name=item.get("name"),
+                    instrument_type=item.get("instrumentType"),
+                    currency=item.get("currency"),
+                    raw_payload=item,
+                )
+            )
+        await session.commit()
+    return len(assets)
+
+
+async def _build_lookup_maps() -> tuple[dict[str, str], dict[str, str]]:
+    async with SessionLocal() as session:
+        ticker_to_figi: dict[str, str] = {}
+        uid_to_figi: dict[str, str] = {}
+        if not hasattr(session, "execute"):
+            return ticker_to_figi, uid_to_figi
+        instrument_rows = await session.execute(select(Instrument.ticker, Instrument.figi))
+        for ticker, figi in instrument_rows:
+            if ticker and figi and isinstance(ticker, str) and isinstance(figi, str):
+                ticker_to_figi[ticker.upper()] = figi
+        asset_rows = await session.execute(select(Asset.uid, Asset.ticker, Asset.figi, Asset.raw_payload))
+        for uid, ticker, figi, raw_payload in asset_rows:
+            if figi and isinstance(figi, str):
+                if ticker and isinstance(ticker, str):
+                    ticker_to_figi.setdefault(ticker.upper(), figi)
+                if uid and isinstance(uid, str):
+                    uid_to_figi[uid] = figi
+            if isinstance(raw_payload, dict):
+                instruments = raw_payload.get("instruments")
+                if isinstance(instruments, list):
+                    for instrument in instruments:
+                        if not isinstance(instrument, dict):
+                            continue
+                        nested_figi = instrument.get("figi") or instrument.get("instrumentFigi")
+                        if not (nested_figi and isinstance(nested_figi, str)):
+                            continue
+                        nested_ticker = instrument.get("ticker")
+                        if nested_ticker and isinstance(nested_ticker, str):
+                            ticker_to_figi.setdefault(nested_ticker.upper(), nested_figi)
+                        nested_uid = instrument.get("uid") or instrument.get("instrumentUid")
+                        if nested_uid and isinstance(nested_uid, str):
+                            uid_to_figi.setdefault(nested_uid, nested_figi)
+        return ticker_to_figi, uid_to_figi
+
+
+def _extract_option_figi(item: dict[str, Any], ticker_to_figi: dict[str, str], uid_to_figi: dict[str, str]) -> str | None:
+    direct = item.get("figi") or item.get("instrumentFigi")
+    if isinstance(direct, str) and direct:
+        return direct
+    ticker = item.get("ticker")
+    if isinstance(ticker, str) and ticker:
+        by_ticker = ticker_to_figi.get(ticker.upper())
+        if by_ticker:
+            return by_ticker
+    basic_asset = item.get("basicAsset")
+    if isinstance(basic_asset, str) and basic_asset:
+        by_basic_asset = ticker_to_figi.get(basic_asset.upper())
+        if by_basic_asset:
+            return by_basic_asset
+    for key in ("basicAssetUid", "underlyingAssetUid", "assetUid", "instrumentUid", "basicAssetPositionUid", "positionUid"):
+        uid = item.get(key)
+        if isinstance(uid, str) and uid:
+            by_uid = uid_to_figi.get(uid)
+            if by_uid:
+                return by_uid
+    return None
+
+
+async def _replace_options_rows(options: list[dict[str, Any]]) -> int:
+    ticker_to_figi, uid_to_figi = await _build_lookup_maps()
+    async with SessionLocal() as session:
+        if hasattr(session, "execute"):
+            await session.execute(delete(Option))
+        for item in options:
+            if not isinstance(item, dict):
+                continue
+            figi = _extract_option_figi(item, ticker_to_figi, uid_to_figi)
+            session.add(
+                Option(
+                    uid=item.get("uid"),
+                    position_uid=item.get("positionUid"),
+                    figi=figi,
+                    ticker=item.get("ticker"),
+                    basic_asset_uid=item.get("basicAssetUid"),
+                    raw_payload=item,
+                )
+            )
+        await session.commit()
+    return len(options)
+
+
+def _extract_signal_figi(item: dict[str, Any], ticker_to_figi: dict[str, str], uid_to_figi: dict[str, str]) -> str | None:
+    for key in ("figi", "instrumentFigi", "securityFigi"):
+        value = item.get(key)
+        if isinstance(value, str) and value:
+            return value
+    ticker = item.get("ticker")
+    if isinstance(ticker, str) and ticker:
+        by_ticker = ticker_to_figi.get(ticker.upper())
+        if by_ticker:
+            return by_ticker
+    for key in ("instrumentUid", "assetUid", "uid"):
+        uid = item.get(key)
+        if isinstance(uid, str) and uid:
+            by_uid = uid_to_figi.get(uid)
+            if by_uid:
+                return by_uid
+    return None
+
+
+async def _replace_signals_rows(signals: list[dict[str, Any]]) -> int:
+    ticker_to_figi, uid_to_figi = await _build_lookup_maps()
+    async with SessionLocal() as session:
+        if hasattr(session, "execute"):
+            await session.execute(delete(Signal))
+        for item in signals:
+            if not isinstance(item, dict):
+                continue
+            figi = _extract_signal_figi(item, ticker_to_figi, uid_to_figi)
+            session.add(
+                Signal(
+                    signal_uid=str(item.get("signalId") or item.get("id") or item.get("uid") or ""),
+                    figi=figi,
+                    ticker=item.get("ticker"),
+                    direction=item.get("direction") or item.get("signalType"),
+                    raw_payload=item,
+                )
+            )
+        await session.commit()
+    return len(signals)
 
 
 async def _portfolio_sync_job(container: AppContainer) -> dict[str, Any]:
@@ -535,9 +1096,15 @@ async def _market_refresh_job() -> dict[str, Any]:
 
 
 async def _assets_sync_job() -> dict[str, Any]:
-    # В текущем контуре assets ~= instruments из Tinkoff shares.
+    # В текущем контуре assets ~= instruments из Tinkoff shares + сырой snapshot assets.
     out = await _instruments_update_job_wrapped()
-    return {**out, "writtenToDb": True}
+    client = _container.tinkoff_client if _container else None
+    assets_count = 0
+    if client and hasattr(client, "get_assets"):
+        assets_resp = await _sync_call(client.get_assets)
+        assets = [a for a in (assets_resp.get("assets") or assets_resp.get("instruments") or []) if isinstance(a, dict)]
+        assets_count = await _replace_assets_rows(assets)
+    return {**out, "assetsCount": assets_count, "writtenToDb": True}
 
 
 async def _fundamental_sync_fill_job() -> dict[str, Any]:
@@ -610,6 +1177,8 @@ async def _signals_update_job() -> dict[str, Any]:
     payload: dict[str, Any] = {"signals": []}
     if _container.tinkoff_client:
         payload = await _sync_call(_container.tinkoff_client.get_analyst_signals)
+    signals_rows = [s for s in (payload.get("signals") or []) if isinstance(s, dict)]
+    written_count = await _replace_signals_rows(signals_rows)
     async with SessionLocal() as session:
         row = await session.scalar(select(AppSetting).where(AppSetting.key == "signals.last_payload").limit(1))
         now = _iso_now()
@@ -626,7 +1195,11 @@ async def _signals_update_job() -> dict[str, Any]:
         else:
             row.value = str(value)
         await session.commit()
-    return {"message": "signals update completed", "count": len(payload.get("signals") or [])}
+    return {
+        "message": "signals update completed",
+        "count": len(payload.get("signals") or []),
+        "writtenToDb": written_count > 0,
+    }
 
 
 async def _options_update_job() -> dict[str, Any]:
@@ -637,6 +1210,8 @@ async def _options_update_job() -> dict[str, Any]:
         raw_payload = await _sync_call(_container.tinkoff_client.get_options)
         instruments = raw_payload.get("instruments") or []
         payload = {"instruments": [i for i in instruments if isinstance(i, dict)]}
+    options_rows = payload.get("instruments") or []
+    written_count = await _replace_options_rows([i for i in options_rows if isinstance(i, dict)])
     async with SessionLocal() as session:
         row = await session.scalar(select(AppSetting).where(AppSetting.key == "options.last_payload").limit(1))
         now = _iso_now()
@@ -656,8 +1231,162 @@ async def _options_update_job() -> dict[str, Any]:
     return {
         "message": "options update completed",
         "count": len(payload.get("instruments") or []),
+        "writtenToDb": written_count > 0,
+    }
+
+
+async def _candles_sync_year_job() -> dict[str, Any]:
+    if not _container:
+        raise RuntimeError("Container is not initialized")
+    client = _container.tinkoff_client
+    if not client:
+        return {"message": "candles sync year skipped", "count": 0, "writtenToDb": False}
+    async with SessionLocal() as session:
+        figi_list = await _container.market_repository.list_figi(session, limit=100)
+    if not figi_list:
+        return {"message": "candles sync year completed", "count": 0, "writtenToDb": False}
+
+    from_dt = datetime.now(timezone.utc) - timedelta(days=365)
+    to_dt = datetime.now(timezone.utc)
+    upserted = 0
+    failed = 0
+    for figi in figi_list:
+        try:
+            payload = await _sync_call(
+                client.get_candles,
+                figi,
+                from_dt,
+                to_dt,
+                "CANDLE_INTERVAL_DAY",
+            )
+            candles = payload.get("candles") or []
+            if not candles:
+                continue
+            async with SessionLocal() as session:
+                for item in candles:
+                    if not isinstance(item, dict):
+                        continue
+                    dt = _parse_tinkoff_datetime(item.get("time"))
+                    if dt is None:
+                        continue
+                    row = await session.scalar(
+                        select(Candle).where(Candle.figi == figi, Candle.candle_time == dt).limit(1)
+                    )
+                    open_price = _decimal_price(item.get("open"))
+                    high_price = _decimal_price(item.get("high"))
+                    low_price = _decimal_price(item.get("low"))
+                    close_price = _decimal_price(item.get("close"))
+                    volume = int(item.get("volume") or 0)
+                    if row is None:
+                        session.add(
+                            Candle(
+                                figi=figi,
+                                candle_time=dt,
+                                open=open_price,
+                                high=high_price,
+                                low=low_price,
+                                close=close_price,
+                                volume=volume,
+                            )
+                        )
+                    else:
+                        row.open = open_price
+                        row.high = high_price
+                        row.low = low_price
+                        row.close = close_price
+                        row.volume = volume
+                    upserted += 1
+                await session.commit()
+        except Exception as exc:
+            failed += 1
+            logger.warning("candles sync failed for %s: %s", figi, exc)
+    return {
+        "message": "candles sync year completed",
+        "count": upserted,
+        "failed": failed,
+        "degraded": failed > 0,
+        "writtenToDb": upserted > 0,
+    }
+
+
+async def _dividends_sync_year_job() -> dict[str, Any]:
+    if not _container:
+        raise RuntimeError("Container is not initialized")
+    client = _container.tinkoff_client
+    if not client:
+        return {"message": "dividends sync year skipped", "count": 0, "writtenToDb": False}
+    async with SessionLocal() as session:
+        figi_list = await _container.market_repository.list_figi(session, limit=100)
+    if not figi_list:
+        return {"message": "dividends sync year completed", "count": 0, "writtenToDb": False}
+
+    aggregated: dict[str, list[dict[str, Any]]] = {}
+    failed = 0
+    for figi in figi_list:
+        try:
+            payload = await _sync_call(client.get_dividends, figi)
+            dividends = payload.get("dividends") or []
+            aggregated[figi] = [item for item in dividends if isinstance(item, dict)]
+        except Exception as exc:
+            failed += 1
+            logger.warning("dividends sync failed for %s: %s", figi, exc)
+    value = {"updatedAt": _iso_now(), "payload": aggregated}
+    await _upsert_app_setting(
+        "dividends.last_payload",
+        str(value),
+        value_type="json",
+        module="dividends",
+        description="Последний годовой payload дивидендов по FIGI",
+    )
+    count = sum(len(v) for v in aggregated.values())
+    return {
+        "message": "dividends sync year completed",
+        "count": count,
+        "figiCount": len(aggregated),
+        "failed": failed,
+        "degraded": failed > 0,
         "writtenToDb": True,
     }
+
+
+async def _full_db_sync_year_job() -> dict[str, Any]:
+    assets = await _assets_sync_job()
+
+    # После актуализации universe (assets/instruments) запускаем остальные шаги
+    # параллельно, но не более 4 одновременно.
+    semaphore = asyncio.Semaphore(4)
+
+    async def _run_limited(name: str, fn: Callable[[], Awaitable[dict[str, Any]]]) -> tuple[str, dict[str, Any]]:
+        async with semaphore:
+            try:
+                return name, await fn()
+            except Exception as e:
+                return name, {"degraded": True, "error": str(e)}
+
+    parallel_results = await asyncio.gather(
+        _run_limited("fundamentals", _fundamental_sync_fill_job),
+        _run_limited("candles", _candles_sync_year_job),
+        _run_limited("dividends", _dividends_sync_year_job),
+        _run_limited("options", _options_update_job),
+        _run_limited("signals", _signals_update_job),
+    )
+
+    result_map = dict(parallel_results)
+    fundamentals = result_map["fundamentals"]
+    candles = result_map["candles"]
+    dividends = result_map["dividends"]
+    options = result_map["options"]
+    signals = result_map["signals"]
+    steps = {
+        "assets": assets,
+        "fundamentals": fundamentals,
+        "candles": candles,
+        "dividends": dividends,
+        "options": options,
+        "signals": signals,
+    }
+    degraded = any(bool((step or {}).get("degraded")) for step in steps.values())
+    return {"message": "full db sync year completed", "degraded": degraded, "steps": steps}
 
 
 async def _trading_windows_update_job() -> dict[str, Any]:
@@ -688,16 +1417,199 @@ async def _training_full_job() -> dict[str, Any]:
     try:
         from training.run_nn import run as run_nn
         from training.run_weekly import run as run_weekly
+        from training.run_stacking import run as run_stacking
         from training.rl import train_agent
     except Exception:
         return {"message": "training deps unavailable"}
-    nn_run_id = await asyncio.to_thread(run_nn, 3, 32, 1e-3, None, None, 60, 5, True)
-    weekly_run_id = await asyncio.to_thread(run_weekly, 3, 32, 1e-3, None, None, 30, 5, True)
-    rl_checkpoint = await asyncio.to_thread(train_agent, "paper", 10_000, None, True)
+    target_figi: str | None = None
+    market_repo = getattr(_container, "market_repository", None) if _container is not None else None
+    if market_repo is not None:
+        figi_list = await _list_training_figi(limit=5000)
+        if not figi_list:
+            async with SessionLocal() as session:
+                figi_list = await market_repo.list_figi(session, limit=5000)
+        if not figi_list:
+            return {
+                "message": "full training skipped: no DB candles for instruments",
+                "windowDays": 365,
+            }
+        prepared: list[tuple[str, Any, Any, Any, int]] = []
+        for figi in figi_list:
+            df, used_window_days = await _load_training_candles_with_backfill(
+                figi,
+                preferred_window_days=365,
+                min_rows=80,
+                max_window_days=365 * 5,
+                max_rows=20_000,
+            )
+            if df is None:
+                continue
+            prepared.append(
+                (
+                    figi,
+                    df,
+                    await _options_features_for_figi(figi),
+                    await _signals_features_for_figi(figi),
+                    used_window_days,
+                )
+            )
+        if not prepared:
+            return {
+                "message": "full training skipped: insufficient candles on all instruments",
+                "windowDays": 365,
+                "totalInstruments": len(figi_list),
+                "trainedInstruments": 0,
+                "skippedInstruments": len(figi_list),
+            }
+
+        nn_runs: list[dict[str, Any]] = []
+        meta_runs: list[dict[str, Any]] = []
+        weekly_runs: list[dict[str, Any]] = []
+        total = len(prepared)
+        for idx, (figi, df, opt_df, sig_df, used_window_days) in enumerate(prepared, start=1):
+            await _update_current_task_progress(
+                {
+                    "progress": {
+                        "phase": "nn",
+                        "phaseIndex": 1,
+                        "phaseTotal": 4,
+                        "message": f"Этап 1/3: NN [{idx}/{total}] FIGI {figi} (окно: {used_window_days} дн.)",
+                        "figi": figi,
+                        "instrumentIndex": idx,
+                        "instrumentTotal": total,
+                    }
+                }
+            )
+            nn_run_id = await asyncio.to_thread(
+                run_nn, 12, 32, 1e-3, None, df, 60, 5, True, options_df=opt_df
+            )
+            nn_runs.append({"figi": figi, "runId": nn_run_id})
+            await _update_current_task_progress(
+                {
+                    "progress": {
+                        "phase": "meta_ensemble",
+                        "phaseIndex": 2,
+                        "phaseTotal": 4,
+                        "message": f"Этап 2/4: meta/ensemble [{idx}/{total}] FIGI {figi}",
+                        "figi": figi,
+                        "instrumentIndex": idx,
+                        "instrumentTotal": total,
+                    }
+                }
+            )
+            nn_ckpt = _latest_checkpoint_path(os.path.join("models", "python_nn"))
+            meta_ckpt = None
+            if nn_ckpt:
+                meta_ckpt = await asyncio.to_thread(
+                    run_stacking,
+                    nn_ckpt,
+                    8,
+                    32,
+                    1e-3,
+                    df,
+                    sig_df,
+                    60,
+                    5,
+                )
+            meta_runs.append({"figi": figi, "checkpoint": meta_ckpt})
+
+        for idx, (figi, df, opt_df, _sig_df, used_window_days) in enumerate(prepared, start=1):
+            await _update_current_task_progress(
+                {
+                    "progress": {
+                        "phase": "weekly",
+                        "phaseIndex": 3,
+                        "phaseTotal": 4,
+                        "message": f"Этап 3/4: weekly [{idx}/{total}] FIGI {figi} (окно: {used_window_days} дн.)",
+                        "figi": figi,
+                        "instrumentIndex": idx,
+                        "instrumentTotal": total,
+                    }
+                }
+            )
+            weekly_run_id = await asyncio.to_thread(
+                run_weekly, 12, 32, 1e-3, None, df, 30, 5, True, options_df=opt_df
+            )
+            weekly_runs.append({"figi": figi, "runId": weekly_run_id})
+        target_figi = prepared[0][0]
+        nn_run_id = nn_runs[0]["runId"] if nn_runs else None
+        weekly_run_id = weekly_runs[0]["runId"] if weekly_runs else None
+        total_instruments = len(figi_list)
+        trained_instruments = len(prepared)
+    else:
+        await _update_current_task_progress(
+            {
+                "progress": {
+                    "phase": "nn",
+                    "phaseIndex": 1,
+                    "phaseTotal": 4,
+                    "message": "Этап 1/3: обучение NN (fallback synthetic)",
+                    "figi": None,
+                }
+            }
+        )
+        nn_run_id = await asyncio.to_thread(
+            run_nn, 12, 32, 1e-3, None, None, 60, 5, True, options_df=None
+        )
+        await _update_current_task_progress(
+            {
+                "progress": {
+                    "phase": "weekly",
+                    "phaseIndex": 3,
+                    "phaseTotal": 4,
+                    "message": "Этап 3/4: обучение weekly-модели (fallback synthetic)",
+                    "nnRunId": nn_run_id,
+                    "figi": None,
+                }
+            }
+        )
+        weekly_run_id = await asyncio.to_thread(
+            run_weekly, 12, 32, 1e-3, None, None, 30, 5, True, options_df=None
+        )
+        meta_runs = []
+        total_instruments = 1
+        trained_instruments = 1
+    await _update_current_task_progress(
+        {
+            "progress": {
+                "phase": "rl",
+                "phaseIndex": 4,
+                "phaseTotal": 4,
+                "message": (
+                    f"Этап 4/4: обучение RL-агента (контур по БД, FIGI {target_figi})"
+                    if target_figi
+                    else "Этап 4/4: обучение RL-агента (fallback synthetic)"
+                ),
+                "nnRunId": nn_run_id,
+                "weeklyRunId": weekly_run_id,
+                "figi": target_figi,
+            }
+        }
+    )
+    rl_returns: list[float] = []
+    if market_repo is not None:
+        for _figi, df, _opt, _sig, _win in prepared:
+            rl_returns.extend(_returns_from_candles_df(df))
+    rl_checkpoint = await asyncio.to_thread(
+        lambda: train_agent(
+            env_name="paper",
+            total_steps=10_000,
+            checkpoint_dir=None,
+            continue_from_latest=True,
+            market_returns=rl_returns,
+        )
+    )
+    ensemble_weights_path = _write_ensemble_weights_artifact("full")
     return {
         "message": "full training completed",
+        "figi": target_figi,
         "mlflowRunId": nn_run_id,
         "weeklyRunId": weekly_run_id,
+        "metaRuns": meta_runs,
+        "ensembleWeightsPath": ensemble_weights_path,
+        "totalInstruments": total_instruments,
+        "trainedInstruments": trained_instruments,
+        "skippedInstruments": max(0, total_instruments - trained_instruments),
         "rlCheckpoint": rl_checkpoint,
     }
 
@@ -705,10 +1617,155 @@ async def _training_full_job() -> dict[str, Any]:
 async def _training_quick_job() -> dict[str, Any]:
     try:
         from training.run_nn import run as run_nn
+        from training.run_stacking import run as run_stacking
+        from training.rl import train_agent
     except Exception:
         return {"message": "training deps unavailable"}
-    run_id = await asyncio.to_thread(run_nn, 1, 16, 1e-3, None, None, 40, 3, True)
-    return {"message": "quick training completed", "mlflowRunId": run_id}
+    target_figi: str | None = None
+    market_repo = getattr(_container, "market_repository", None) if _container is not None else None
+    if market_repo is not None:
+        figi_list = await _list_training_figi(limit=5000)
+        if not figi_list:
+            async with SessionLocal() as session:
+                figi_list = await market_repo.list_figi(session, limit=5000)
+        if not figi_list:
+            return {
+                "message": "quick training skipped: no instruments for training",
+                "windowDays": 1,
+            }
+
+        run_ids: list[dict[str, Any]] = []
+        meta_runs: list[dict[str, Any]] = []
+        rl_returns: list[float] = []
+        skipped = 0
+        total = len(figi_list)
+        for idx, figi in enumerate(figi_list, start=1):
+            target_figi = figi
+            candles_df, used_window_days = await _load_training_candles_with_backfill(
+                figi,
+                preferred_window_days=1,
+                min_rows=24,
+                max_window_days=365,
+                max_rows=20_000,
+            )
+            if candles_df is None or len(candles_df) < 24:
+                intraday_df = await _load_intraday_candles_last_day(figi)
+                if intraday_df is not None and len(intraday_df) >= 24:
+                    candles_df = intraday_df
+                    used_window_days = 1
+            if candles_df is None:
+                skipped += 1
+                continue
+            options_df = await _options_features_for_figi(figi)
+            signals_df = await _signals_features_for_figi(figi)
+            rl_returns.extend(_returns_from_candles_df(candles_df))
+            await _update_current_task_progress(
+                {
+                    "progress": {
+                        "phase": "nn",
+                        "phaseIndex": 1,
+                        "phaseTotal": 3,
+                        "message": f"Быстрое обучение [{idx}/{total}] FIGI {figi} (окно: {used_window_days} дн.)",
+                        "figi": figi,
+                        "instrumentIndex": idx,
+                        "instrumentTotal": total,
+                    }
+                }
+            )
+            try:
+                run_id = await asyncio.to_thread(
+                    run_nn, 6, 24, 1e-3, None, candles_df, 5, 1, True, options_df=options_df
+                )
+            except Exception as e:
+                msg = str(e)
+                if "current_epoch" in msg and "max_epochs" in msg:
+                    logger.warning("Quick training resume failed; retrying without resume: %s", e)
+                    run_id = await asyncio.to_thread(
+                        run_nn, 6, 24, 1e-3, None, candles_df, 5, 1, False, options_df=options_df
+                    )
+                elif "Pipeline produced empty X" in msg:
+                    skipped += 1
+                    continue
+                else:
+                    raise
+            run_ids.append({"figi": figi, "runId": run_id})
+            await _update_current_task_progress(
+                {
+                    "progress": {
+                        "phase": "meta_ensemble",
+                        "phaseIndex": 2,
+                        "phaseTotal": 3,
+                        "message": f"Быстрое meta/ensemble [{idx}/{total}] FIGI {figi}",
+                        "figi": figi,
+                        "instrumentIndex": idx,
+                        "instrumentTotal": total,
+                    }
+                }
+            )
+            nn_ckpt = _latest_checkpoint_path(os.path.join("models", "python_nn"))
+            meta_ckpt = None
+            if nn_ckpt:
+                meta_ckpt = await asyncio.to_thread(
+                    run_stacking,
+                    nn_ckpt,
+                    3,
+                    16,
+                    1e-3,
+                    candles_df,
+                    signals_df,
+                    5,
+                    1,
+                )
+            meta_runs.append({"figi": figi, "checkpoint": meta_ckpt})
+
+        if not run_ids:
+            return {
+                "message": "quick training skipped: insufficient candles on all instruments",
+                "windowDays": 1,
+                "totalInstruments": total,
+                "trainedInstruments": 0,
+                "skippedInstruments": total,
+            }
+        await _update_current_task_progress(
+            {
+                "progress": {
+                    "phase": "rl",
+                    "phaseIndex": 3,
+                    "phaseTotal": 3,
+                    "message": "Быстрое обучение: RL fine-tune",
+                }
+            }
+        )
+        rl_checkpoint = await asyncio.to_thread(
+            lambda: train_agent(
+                env_name="paper",
+                total_steps=2_000,
+                checkpoint_dir=None,
+                continue_from_latest=True,
+                market_returns=rl_returns,
+            )
+        )
+        ensemble_weights_path = _write_ensemble_weights_artifact("quick")
+        return {
+            "message": "quick training completed",
+            "figi": run_ids[0]["figi"],
+            "mlflowRunId": run_ids[0]["runId"],
+            "metaRuns": meta_runs,
+            "rlCheckpoint": rl_checkpoint,
+            "ensembleWeightsPath": ensemble_weights_path,
+            "totalInstruments": total,
+            "trainedInstruments": len(run_ids),
+            "skippedInstruments": skipped,
+            "runIds": run_ids,
+        }
+
+    return {
+        "message": "quick training skipped: market repository unavailable",
+        "windowDays": 1,
+        "totalInstruments": 0,
+        "trainedInstruments": 0,
+        "skippedInstruments": 0,
+    }
 
 
 async def _analysis_market_portfolio_job() -> dict[str, Any]:
@@ -937,6 +1994,9 @@ def _job_handlers() -> dict[str, Callable[[], Awaitable[dict[str, Any] | None]]]
         "macro_load_indices": _macro_load_indices_job,
         "signals_update": _signals_update_job,
         "options_update": _options_update_job,
+        "candles_sync_year": _candles_sync_year_job,
+        "dividends_sync_year": _dividends_sync_year_job,
+        "full_db_sync_year": _full_db_sync_year_job,
         "trading_windows_update": _trading_windows_update_job,
         "tinkoff_instruments": _instruments_update_job_wrapped,
         "tinkoff_last_prices": _last_prices_job_wrapped,
@@ -989,7 +2049,8 @@ def _register_job(
     fn: Callable[[], Awaitable[dict[str, Any] | None]],
 ) -> None:
     async def _runner() -> None:
-        await _run_job_with_state(job_id, fn)
+        async with _background_job_slots:
+            await _run_job_with_state(job_id, fn)
 
     scheduler.add_job(
         _runner,

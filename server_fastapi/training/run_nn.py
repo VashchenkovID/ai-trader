@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +29,8 @@ from training.models.nn import CondMLP
 from training.models.lightning_module import CondMLPLightning, build_dataloaders
 from training.backtest import evaluate_model_on_test
 
+logger = logging.getLogger(__name__)
+
 
 def _synthetic_data(n_samples: int = 500, lookback: int = 60, horizon: int = 5):
     """Синтетические X, y и случайные strategy_id, horizon_id для теста обучения."""
@@ -40,11 +43,19 @@ def _synthetic_data(n_samples: int = 500, lookback: int = 60, horizon: int = 5):
 
 def _candles_to_tensors(
     candles: pd.DataFrame,
+    options_df: pd.DataFrame | None = None,
+    signals_df: pd.DataFrame | None = None,
     lookback: int = 60,
     horizon: int = 5,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Строит фичи из свечей и возвращает тензоры train/val/test для обучения и бэктеста."""
-    X, y = build_feature_pipeline(candles, lookback_days=lookback, prediction_horizon=horizon)
+    X, y = build_feature_pipeline(
+        candles,
+        options=options_df,
+        signals=signals_df,
+        lookback_days=lookback,
+        prediction_horizon=horizon,
+    )
     if X.empty:
         raise RuntimeError("Pipeline produced empty X from candles")
     X_train, y_train, X_val, y_val, X_test, y_test = time_based_split(X, y)
@@ -64,6 +75,33 @@ def _candles_to_tensors(
     return X_t, y_t, strategy_train, horizon_train, X_v, y_v, strategy_val, horizon_val, X_te, y_te, strategy_test, horizon_test
 
 
+def _checkpoint_input_size(path: Path) -> int | None:
+    try:
+        payload = torch.load(path, map_location="cpu")
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    hp = payload.get("hyper_parameters")
+    if not isinstance(hp, dict):
+        return None
+    value = hp.get("input_size")
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _select_compatible_checkpoint(ckpt_dir: Path, *, input_size: int) -> str | None:
+    if not ckpt_dir.exists():
+        return None
+    latest = sorted(ckpt_dir.glob("*.ckpt"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for ckpt in latest:
+        if _checkpoint_input_size(ckpt) == int(input_size):
+            return str(ckpt)
+    return None
+
+
 def run(
     max_epochs: int = 20,
     batch_size: int = 32,
@@ -73,6 +111,8 @@ def run(
     lookback_days: int = 60,
     prediction_horizon: int = 5,
     resume_from_latest: bool = False,
+    options_df: pd.DataFrame | None = None,
+    signals_df: pd.DataFrame | None = None,
 ) -> str | None:
     """
     Запускает обучение NN с conditioning. Возвращает run_id MLflow или None.
@@ -87,7 +127,11 @@ def run(
 
     if candles_df is not None and not candles_df.empty:
         X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _candles_to_tensors(
-            candles_df, lookback=lookback_days, horizon=prediction_horizon
+            candles_df,
+            options_df=options_df,
+            signals_df=signals_df,
+            lookback=lookback_days,
+            horizon=prediction_horizon,
         )
     else:
         X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _synthetic_data(
@@ -101,12 +145,12 @@ def run(
     models_root = Path(settings.models_root)
     models_root.mkdir(parents=True, exist_ok=True)
     ckpt_dir = models_root / "python_nn"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = None
     if resume_from_latest:
-        latest = sorted(ckpt_dir.glob("*.ckpt"), key=lambda p: p.stat().st_mtime)
-        if latest:
-            ckpt_path = str(latest[-1])
-    ckpt_dir.mkdir(parents=True, exist_ok=True)
+        ckpt_path = _select_compatible_checkpoint(ckpt_dir, input_size=input_size)
+        if ckpt_path is None:
+            logger.info("No compatible NN checkpoint for input_size=%s; start fresh", input_size)
     checkpoint_callback = ModelCheckpoint(
         dirpath=str(ckpt_dir),
         filename="cond_mlp-{epoch:02d}-{val_loss:.4f}",
@@ -126,6 +170,7 @@ def run(
             "batch_size": batch_size,
             "lr": lr,
             "data_source": "csv" if candles_df is not None and not candles_df.empty else "synthetic",
+            "options_features_enabled": bool(options_df is not None and not options_df.empty),
         })
         trainer.fit(model, train_loader, val_loader, ckpt_path=ckpt_path)
         best_model_path = checkpoint_callback.best_model_path or None

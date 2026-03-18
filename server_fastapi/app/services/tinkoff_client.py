@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -26,6 +27,13 @@ INITIAL_DELAY = 1.0
 MAX_DELAY = 15.0
 EXPONENTIAL_BASE = 1.5
 REQUEST_DELAY = 0.5
+
+
+def _to_iso8601_utc(value: str | datetime) -> str:
+    if isinstance(value, datetime):
+        dt = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return value
 
 
 def _is_ssl_verify_error(exc: Exception) -> bool:
@@ -140,7 +148,14 @@ class TinkoffApiClient:
                 time.sleep(delay)
 
         if last_error:
+            logger.error(
+                "Tinkoff API request failed: path=%s error_type=%s error=%s",
+                path,
+                last_error.__class__.__name__,
+                str(last_error),
+            )
             raise last_error
+        logger.error("Tinkoff API request failed without captured error: path=%s", path)
         raise TinkoffApiError("Request failed after retries")
 
     def get_last_prices(self, figi_list: list[str]) -> dict[str, Any]:
@@ -172,7 +187,8 @@ class TinkoffApiClient:
                 "/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssets",
                 {"instrumentStatus": "INSTRUMENT_STATUS_BASE"},
             )
-        except Exception:
+        except Exception as e:
+            logger.exception("get_assets failed: %s", e)
             # Не все тарифы/версии API поддерживают Assets endpoint.
             shares = self.get_shares()
             return {"assets": shares.get("instruments") or []}
@@ -223,16 +239,29 @@ class TinkoffApiClient:
     def get_candles(
         self,
         figi: str,
-        from_ts: str,
-        to_ts: str,
+        from_ts: str | datetime,
+        to_ts: str | datetime,
         interval: str = "DAY",
     ) -> dict[str, Any]:
         """Исторические свечи. from_ts, to_ts — ISO 8601."""
         interval_val = f"CANDLE_INTERVAL_{interval}" if not interval.startswith("CANDLE_") else interval
-        return self._request(
-            "/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles",
-            {"figi": figi, "from": from_ts, "to": to_ts, "interval": interval_val},
-        )
+        from_iso = _to_iso8601_utc(from_ts)
+        to_iso = _to_iso8601_utc(to_ts)
+        path = "/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles"
+        try:
+            # По актуальной документации T-Bank используется поле instrumentId.
+            return self._request(
+                path,
+                {"instrumentId": figi, "from": from_iso, "to": to_iso, "interval": interval_val},
+            )
+        except httpx.HTTPStatusError as e:
+            # Fallback для старых контрактов/проксей, где ждут поле figi.
+            if e.response is not None and e.response.status_code == 400:
+                return self._request(
+                    path,
+                    {"figi": figi, "from": from_iso, "to": to_iso, "interval": interval_val},
+                )
+            raise
 
     def get_shares(self) -> dict[str, Any]:
         """Список акций (InstrumentsService/Shares). Для задачи обновления инструментов."""
