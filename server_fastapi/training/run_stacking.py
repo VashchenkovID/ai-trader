@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 import torch
@@ -22,6 +23,8 @@ from training.data.loaders import load_candles_from_csv
 from training.inference_nn import load_cond_mlp
 from training.models.nn import N_HORIZONS, N_STRATEGIES
 from training.models.stacking import StackingModel, STACKING_INPUT_SIZE
+
+logger = logging.getLogger(__name__)
 
 
 def _synthetic_data(n_samples: int = 500, lookback: int = 60, horizon: int = 5):
@@ -54,6 +57,36 @@ def build_meta_features(base_model: torch.nn.Module, X: torch.Tensor, device: to
     return torch.stack(meta_list, dim=1)
 
 
+def _checkpoint_input_size(path: Path) -> int | None:
+    try:
+        payload = torch.load(path, map_location="cpu")
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    hp = payload.get("hyper_parameters")
+    if not isinstance(hp, dict):
+        return None
+    value = hp.get("input_size")
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _find_compatible_base_checkpoint(base_path: Path, expected_input_size: int) -> Path | None:
+    if _checkpoint_input_size(base_path) == expected_input_size:
+        return base_path
+    parent = base_path.parent
+    if not parent.exists():
+        return None
+    candidates = sorted(parent.glob("*.ckpt"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for ckpt in candidates:
+        if _checkpoint_input_size(ckpt) == expected_input_size:
+            return ckpt
+    return None
+
+
 def run(
     base_checkpoint_path: str | Path,
     max_epochs: int = 20,
@@ -78,10 +111,6 @@ def run(
     if not base_path.is_file():
         return None
 
-    base_model = load_cond_mlp(base_path)
-    base_model.to(device)
-    base_model.eval()
-
     if candles_df is not None and not candles_df.empty:
         X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _candles_to_tensors(
             candles_df,
@@ -94,6 +123,20 @@ def run(
         X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _synthetic_data(
             lookback=lookback_days, horizon=prediction_horizon
         )
+
+    expected_input_size = int(X_t.shape[1]) if len(X_t.shape) >= 2 else 0
+    compatible_path = _find_compatible_base_checkpoint(base_path, expected_input_size)
+    if compatible_path is None:
+        logger.warning(
+            "Stacking skipped: no compatible base checkpoint (expected input_size=%s, base=%s)",
+            expected_input_size,
+            base_path,
+        )
+        return None
+
+    base_model = load_cond_mlp(compatible_path)
+    base_model.to(device)
+    base_model.eval()
 
     X_t = X_t.to(device)
     X_v = X_v.to(device)

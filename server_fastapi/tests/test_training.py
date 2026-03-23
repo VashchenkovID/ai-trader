@@ -8,6 +8,8 @@ Unit- и интеграционные тесты контуров обучени
 from __future__ import annotations
 
 import asyncio
+import os
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -508,3 +510,64 @@ async def test_training_run_weekly_returns_200_with_mlflow_run_id(client) -> Non
     if data["status"] == "completed":
         assert "mlflow_run_id" in data
         assert isinstance(data["mlflow_run_id"], str)
+
+
+@pytest.mark.training
+def test_run_backtest_on_progress_called_on_missing_checkpoint() -> None:
+    """Синхронный run_backtest вызывает on_progress (для проброса в WS из scheduler)."""
+    pytest.importorskip("torch")
+    from training.run_backtest import run
+
+    messages: list[dict[str, object]] = []
+
+    def on_progress(payload: dict[str, object]) -> None:
+        messages.append(payload)
+
+    run("/nonexistent/missing.ckpt", on_progress=on_progress)
+    assert messages
+    assert any("message" in m for m in messages)
+
+
+@pytest.mark.training
+def test_run_backtest_forwards_options_and_signals_to_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """run_backtest передаёт options/signals в build_feature_pipeline (согласованность с run_nn)."""
+    pandas = pytest.importorskip("pandas")
+    from training import run_backtest
+
+    captured: dict[str, object] = {}
+
+    def fake_build(
+        candles,
+        *,
+        options=None,
+        signals=None,
+        lookback_days: int = 60,
+        prediction_horizon: int = 5,
+        **kwargs: object,
+    ):
+        captured["options"] = options
+        captured["signals"] = signals
+        return pandas.DataFrame(), pandas.Series(dtype=float)
+
+    monkeypatch.setattr(run_backtest, "build_feature_pipeline", fake_build)
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".ckpt")
+    tmp.write(b"x")
+    tmp.close()
+    try:
+        idx = pandas.date_range("2020-01-01", periods=200, freq="D")
+        candles = pandas.DataFrame({"close": [100.0] * 200, "volume": [1e6] * 200}, index=idx)
+        opt = pandas.DataFrame({"opt_contracts_total": [1.0]}, index=pandas.date_range("2020-01-01", periods=1))
+        sig = pandas.DataFrame({"sig_count": [2.0]}, index=pandas.date_range("2020-01-01", periods=1))
+        run_backtest.run(
+            tmp.name,
+            candles_df=candles,
+            options=opt,
+            signals=sig,
+            log_mlflow=False,
+        )
+    finally:
+        os.unlink(tmp.name)
+
+    assert captured.get("options") is opt
+    assert captured.get("signals") is sig

@@ -16,7 +16,7 @@ router = APIRouter(prefix="/auto-paper-trading", tags=["auto-paper-trading"])
 async def auto_paper_status(
     container: AppContainer = Depends(get_container),
 ) -> SuccessEnvelope[dict]:
-    """Возвращает статус auto-paper: enabled, currentPhase, tradingMode."""
+    """Возвращает статус auto-paper: enabled, tradingMode."""
     data = container.auto_paper_service.get_status()
     return SuccessEnvelope(data=data)
 

@@ -43,12 +43,9 @@ class AutoPaperService:
     def get_status(self) -> dict[str, object]:
         """Возвращает статус auto-paper."""
         enabled_item = self._settings._settings.get("auto_paper_enabled")
-        phase_item = self._settings._settings.get("auto_paper_phase")
         enabled = self._coerce_bool(enabled_item.value) if enabled_item else False
-        phase = str(phase_item.value) if phase_item else "phase1"
         return {
             "enabled": enabled,
-            "currentPhase": phase,
             "tradingMode": self._mode.get_current_mode(),
         }
 

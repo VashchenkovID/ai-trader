@@ -119,15 +119,176 @@
   padding: var(--ds-space-xs) 0;
 }
 
+.settings-page__settings-header {
+  display: grid;
+  gap: var(--ds-space-xs);
+  max-width: 52rem;
+}
+
+.settings-page__insights-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-sm);
+  margin-bottom: var(--ds-space-sm);
+}
+
+.settings-page__insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--ds-space-sm);
+  margin-bottom: var(--ds-space-md);
+}
+
+.settings-page__insight-card {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--ds-border) 80%, transparent);
+  border-radius: var(--ds-radius-md);
+  background: color-mix(in srgb, var(--ds-surface) 92%, transparent);
+}
+
+.settings-page__insight-card .ui-text--title {
+  margin: 0 0 4px;
+}
+
+.settings-page__insight-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35em;
+  margin: 0 0 3px;
+}
+
+.settings-page__insight-line:last-child {
+  margin-bottom: 0;
+}
+
+.settings-page__insight-label {
+  flex: 0 0 auto;
+}
+
+.settings-page__insight-value {
+  font-weight: 700;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.settings-page__insight-value--accent {
+  color: var(--ds-primary);
+}
+
+.settings-page__insight-value--good {
+  color: color-mix(in srgb, #7fe0b9 88%, var(--ds-text));
+}
+
+.settings-page__insight-value--bad {
+  color: var(--ds-danger);
+}
+
+.settings-page__insight-value--warn {
+  color: color-mix(in srgb, #ffcc7a 82%, var(--ds-text));
+}
+
+.settings-page__insight-value--neutral {
+  color: color-mix(in srgb, var(--ds-text-muted) 92%, var(--ds-text));
+}
+
 .settings-page__settings-list {
   display: grid;
-  gap: var(--ds-space-sm);
+  gap: var(--ds-space-md);
 }
 
 .settings-page__setting {
   display: grid;
   gap: 6px;
-  padding: var(--ds-space-sm);
+  padding: var(--ds-space-md);
   border: 1px solid color-mix(in srgb, var(--ds-border) 80%, transparent);
   border-radius: var(--ds-radius-md);
+}
+
+.settings-page__setting-value-row {
+  display: grid;
+  gap: 4px;
+  padding-top: var(--ds-space-xs);
+}
+
+.settings-page__code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ds-text) 8%, transparent);
+}
+
+.settings-page__setting-toggle {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto;
+  gap: var(--ds-space-md);
+}
+
+.settings-page__setting-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.settings-page__trading-mode-panel {
+  display: grid;
+  gap: var(--ds-space-sm);
+  padding-top: var(--ds-space-xs);
+}
+
+.settings-page__trading-mode-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-xs);
+}
+
+.settings-page__trading-mode-actions {
+  display: grid;
+  gap: var(--ds-space-xs);
+}
+
+.settings-page__validation {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--ds-radius-sm);
+  border: 1px solid transparent;
+}
+
+.settings-page__validation--ok {
+  border-color: #7fe0b9;
+  background: color-mix(in srgb, #7fe0b9 20%, transparent);
+}
+
+.settings-page__validation--error {
+  border-color: #ff9d96;
+  background: color-mix(in srgb, #ff9d96 18%, transparent);
+}
+
+@media (max-width: 900px) {
+  .settings-page__insights-grid {
+    grid-template-columns: 1fr;
+    gap: var(--ds-space-xs);
+  }
+
+  .settings-page__insights-controls {
+    gap: var(--ds-space-xs);
+  }
+
+  .settings-page__insight-card {
+    padding: 8px;
+  }
+
+  .settings-page__settings-list {
+    gap: var(--ds-space-sm);
+  }
+
+  .settings-page__setting-toggle {
+    grid-template-columns: 1fr;
+  }
 }

@@ -43,7 +43,6 @@ class PreflightService:
         checks["autoPaper"] = {
             "status": "ok",
             "enabled": ap_status.get("enabled", False),
-            "phase": ap_status.get("currentPhase", "phase1"),
         }
         if ap_status.get("enabled") and mode != "paper":
             errors.append("Auto-paper включен, но режим не paper")

@@ -2826,7 +2826,7 @@
       "get": {
         "tags": ["auto-paper-trading"],
         "summary": "Статус автоматической торговли",
-        "description": "Возвращает статус auto-paper: enabled, currentPhase, tradingMode.",
+        "description": "Возвращает статус auto-paper: enabled, tradingMode.",
         "operationId": "auto_paper_status_api_v1_auto_paper_trading_status_get",
         "responses": {
           "200": {

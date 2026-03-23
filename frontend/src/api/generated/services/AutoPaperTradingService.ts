@@ -12,7 +12,7 @@ export class AutoPaperTradingService {
 
     /**
      * Статус автоматической торговли
-     * Возвращает статус auto-paper: enabled, currentPhase, tradingMode.
+     * Возвращает статус auto-paper: enabled, tradingMode.
      * @returns SuccessEnvelope_dict_ Successful Response
      * @throws ApiError
      */

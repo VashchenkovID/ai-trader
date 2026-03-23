@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import contextvars
 import json
+import math
 import os
 import time
 import uuid
@@ -1481,7 +1482,7 @@ async def _training_full_job() -> dict[str, Any]:
                 }
             )
             nn_run_id = await asyncio.to_thread(
-                run_nn, 12, 32, 1e-3, None, df, 60, 5, True, options_df=opt_df
+                run_nn, 12, 32, 1e-3, None, df, 60, 5, True, options_df=opt_df, signals_df=sig_df
             )
             nn_runs.append({"figi": figi, "runId": nn_run_id})
             await _update_current_task_progress(
@@ -1502,14 +1503,15 @@ async def _training_full_job() -> dict[str, Any]:
             if nn_ckpt:
                 meta_ckpt = await asyncio.to_thread(
                     run_stacking,
-                    nn_ckpt,
-                    8,
-                    32,
-                    1e-3,
-                    df,
-                    sig_df,
-                    60,
-                    5,
+                    base_checkpoint_path=nn_ckpt,
+                    max_epochs=8,
+                    batch_size=32,
+                    lr=1e-3,
+                    candles_df=df,
+                    options_df=opt_df,
+                    signals_df=sig_df,
+                    lookback_days=60,
+                    prediction_horizon=5,
                 )
             meta_runs.append({"figi": figi, "checkpoint": meta_ckpt})
 
@@ -1674,14 +1676,34 @@ async def _training_quick_job() -> dict[str, Any]:
             )
             try:
                 run_id = await asyncio.to_thread(
-                    run_nn, 6, 24, 1e-3, None, candles_df, 5, 1, True, options_df=options_df
+                    run_nn,
+                    6,
+                    24,
+                    1e-3,
+                    None,
+                    candles_df,
+                    5,
+                    1,
+                    True,
+                    options_df=options_df,
+                    signals_df=signals_df,
                 )
             except Exception as e:
                 msg = str(e)
                 if "current_epoch" in msg and "max_epochs" in msg:
                     logger.warning("Quick training resume failed; retrying without resume: %s", e)
                     run_id = await asyncio.to_thread(
-                        run_nn, 6, 24, 1e-3, None, candles_df, 5, 1, False, options_df=options_df
+                        run_nn,
+                        6,
+                        24,
+                        1e-3,
+                        None,
+                        candles_df,
+                        5,
+                        1,
+                        False,
+                        options_df=options_df,
+                        signals_df=signals_df,
                     )
                 elif "Pipeline produced empty X" in msg:
                     skipped += 1
@@ -1707,14 +1729,15 @@ async def _training_quick_job() -> dict[str, Any]:
             if nn_ckpt:
                 meta_ckpt = await asyncio.to_thread(
                     run_stacking,
-                    nn_ckpt,
-                    3,
-                    16,
-                    1e-3,
-                    candles_df,
-                    signals_df,
-                    5,
-                    1,
+                    base_checkpoint_path=nn_ckpt,
+                    max_epochs=3,
+                    batch_size=16,
+                    lr=1e-3,
+                    candles_df=candles_df,
+                    options_df=options_df,
+                    signals_df=signals_df,
+                    lookback_days=5,
+                    prediction_horizon=1,
                 )
             meta_runs.append({"figi": figi, "checkpoint": meta_ckpt})
 
@@ -1907,22 +1930,221 @@ async def _trading_requests_prices_update_job() -> dict[str, Any]:
     return {"message": "trading requests prices updated", "updated": updated}
 
 
+def _backtest_metrics_all_nan(metrics: dict[str, Any]) -> bool:
+    """True, если все ключевые метрики NaN — пропуск инструмента."""
+    for key in ("test_mse", "test_mae", "test_direction_accuracy"):
+        v = metrics.get(key)
+        if not isinstance(v, (int, float)):
+            return True
+        if not math.isnan(float(v)):
+            return False
+    return True
+
+
 async def _weekly_backtest_job() -> dict[str, Any]:
+    """Walk-forward по всем инструментам из БД (как quick training); прогресс в task.update (WS)."""
+    backtest_timeout_sec = 180
+    heartbeat_interval_sec = 15
+
     try:
         from training.run_backtest import run
     except Exception:
         return {"message": "backtest deps unavailable"}
-    return await asyncio.to_thread(
-        run,
-        "./models/python_nn/cond_mlp-latest.ckpt",
-        3,
-        1,
-        1,
-        None,
-        60,
-        5,
-        False,
-    )
+
+    market_repo = getattr(_container, "market_repository", None) if _container is not None else None
+    figi_list = await _list_training_figi(limit=5000)
+    if not figi_list and market_repo is not None:
+        async with SessionLocal() as session:
+            figi_list = await market_repo.list_figi(session, limit=5000)
+    if not figi_list:
+        return {
+            "message": "degradation backtest skipped: no instruments",
+            "totalInstruments": 0,
+            "processedInstruments": 0,
+            "skippedInstruments": 0,
+            "results": [],
+        }
+
+    models_dir = os.path.join("models", "python_nn")
+    ckpt_path = _latest_checkpoint_path(models_dir) or "./models/python_nn/cond_mlp-latest.ckpt"
+
+    loop = asyncio.get_running_loop()
+    progress_queue: asyncio.Queue[Any] = asyncio.Queue()
+
+    def push_progress(payload: dict[str, Any]) -> None:
+        try:
+            asyncio.run_coroutine_threadsafe(progress_queue.put(payload), loop)
+        except Exception:
+            pass
+
+    async def pump_progress() -> None:
+        while True:
+            payload = await progress_queue.get()
+            if payload is None:
+                break
+            await _update_current_task_progress({"progress": payload})
+
+    pump_task = asyncio.create_task(pump_progress())
+    results: list[dict[str, Any]] = []
+    skipped = 0
+    total = len(figi_list)
+
+    try:
+        await _update_current_task_progress(
+            {
+                "progress": {
+                    "message": f"Проверка деградации: walk-forward по {total} инструментам",
+                    "phase": "backtest",
+                    "instrumentTotal": total,
+                }
+            }
+        )
+
+        for idx, figi in enumerate(figi_list, start=1):
+            candles_df, used_window_days = await _load_training_candles_with_backfill(
+                figi,
+                preferred_window_days=1,
+                min_rows=120,
+                max_window_days=365,
+                max_rows=20_000,
+            )
+            if candles_df is None or len(candles_df) < 24:
+                intraday_df = await _load_intraday_candles_last_day(figi)
+                if intraday_df is not None and len(intraday_df) >= 24:
+                    candles_df = intraday_df
+                    used_window_days = 1
+            if candles_df is None:
+                skipped += 1
+                continue
+
+            options_df = await _options_features_for_figi(figi)
+            signals_df = await _signals_features_for_figi(figi)
+
+            await _update_current_task_progress(
+                {
+                    "progress": {
+                        "message": (
+                            f"Деградация [{idx}/{total}] FIGI {figi} "
+                            f"(окно: {used_window_days} дн.)"
+                        ),
+                        "phase": "backtest",
+                        "figi": figi,
+                        "instrumentIndex": idx,
+                        "instrumentTotal": total,
+                    }
+                }
+            )
+
+            def _run_one(
+                f: str = figi,
+                i: int = idx,
+                cdf: Any = candles_df,
+                opt: Any = options_df,
+                sig: Any = signals_df,
+            ) -> dict[str, Any]:
+                def _wrap(p: dict[str, Any]) -> None:
+                    push_progress(
+                        {
+                            **p,
+                            "figi": f,
+                            "instrumentIndex": i,
+                            "instrumentTotal": total,
+                        }
+                    )
+
+                return run(
+                    ckpt_path,
+                    3,
+                    1,
+                    1,
+                    cdf,
+                    60,
+                    5,
+                    False,
+                    options=opt,
+                    signals=sig,
+                    on_progress=_wrap,
+                )
+
+            stop_heartbeat = asyncio.Event()
+
+            async def _emit_heartbeat() -> None:
+                while not stop_heartbeat.is_set():
+                    await asyncio.sleep(heartbeat_interval_sec)
+                    if stop_heartbeat.is_set():
+                        break
+                    await _update_current_task_progress(
+                        {
+                            "progress": {
+                                "message": (
+                                    f"Деградация [{idx}/{total}] FIGI {figi}: "
+                                    "оценка продолжается..."
+                                ),
+                                "phase": "backtest",
+                                "figi": figi,
+                                "instrumentIndex": idx,
+                                "instrumentTotal": total,
+                            }
+                        }
+                    )
+
+            heartbeat_task = asyncio.create_task(_emit_heartbeat())
+            try:
+                metrics = await asyncio.wait_for(
+                    asyncio.to_thread(_run_one),
+                    timeout=backtest_timeout_sec,
+                )
+            except asyncio.TimeoutError:
+                skipped += 1
+                await _update_current_task_progress(
+                    {
+                        "progress": {
+                            "message": (
+                                f"Деградация [{idx}/{total}] FIGI {figi}: "
+                                f"таймаут {backtest_timeout_sec}s, инструмент пропущен"
+                            ),
+                            "phase": "skipped",
+                            "figi": figi,
+                            "instrumentIndex": idx,
+                            "instrumentTotal": total,
+                        }
+                    }
+                )
+                continue
+            finally:
+                stop_heartbeat.set()
+                with contextlib.suppress(Exception):
+                    await heartbeat_task
+
+            if _backtest_metrics_all_nan(metrics):
+                skipped += 1
+                continue
+            results.append({"figi": figi, "metrics": metrics, "windowDays": used_window_days})
+
+    finally:
+        try:
+            await progress_queue.put(None)
+        except Exception:
+            pass
+        await pump_task
+
+    if not results:
+        return {
+            "message": "degradation backtest skipped: insufficient data on all instruments",
+            "totalInstruments": total,
+            "processedInstruments": 0,
+            "skippedInstruments": skipped,
+            "results": [],
+        }
+
+    return {
+        "message": "degradation backtest completed",
+        "checkpoint": ckpt_path,
+        "totalInstruments": total,
+        "processedInstruments": len(results),
+        "skippedInstruments": skipped,
+        "results": results,
+    }
 
 
 async def _dynamic_budget_rebalance_job() -> dict[str, Any]:

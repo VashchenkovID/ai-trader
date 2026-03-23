@@ -34,11 +34,17 @@
 
 @include media-breakpoint-mobile {
   .ui-page-layout {
-    padding: var(--ds-space-lg);
+    padding: var(--ds-space-sm);
+    gap: var(--ds-space-sm);
   }
 
   .ui-page-layout__body {
     grid-template-columns: 1fr;
+    gap: var(--ds-space-sm);
+  }
+
+  .ui-page-layout__content {
+    gap: var(--ds-space-sm);
   }
 }
 

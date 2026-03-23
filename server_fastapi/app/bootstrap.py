@@ -45,7 +45,6 @@ def _seed_setting_defaults() -> list[tuple[str, str, str, str]]:
         ("trading_mode", "paper", "trading", "Режим торговли: paper/real/micro"),
         ("system.mode", "paper", "system", "Текущий режим системы"),
         ("auto_paper_enabled", "false", "trading", "Флаг auto paper"),
-        ("auto_paper_phase", "phase1", "trading", "Фаза auto paper"),
         ("risk.maxPositionSize", "0.1", "risk", "Максимальный размер позиции"),
         (
             "portfolio.virtual.initial_capital",

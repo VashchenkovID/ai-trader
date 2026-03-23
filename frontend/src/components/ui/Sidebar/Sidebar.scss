@@ -68,6 +68,39 @@
   margin-top: var(--ds-space-sm);
 }
 
+@include media-breakpoint-mobile {
+  .ui-sidebar {
+    padding: var(--ds-space-sm);
+    border-radius: var(--ds-radius-lg);
+    gap: var(--ds-space-xs);
+  }
+
+  .ui-sidebar__title {
+    display: none;
+  }
+
+  .ui-sidebar__list {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--ds-space-xs);
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+
+  .ui-sidebar__list li {
+    flex: 0 0 auto;
+  }
+
+  .ui-sidebar__item {
+    width: auto;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+}
+
 @include media-breakpoint-up(md) {
   .ui-sidebar {
     padding: #{px-to-adaptive(20px)};

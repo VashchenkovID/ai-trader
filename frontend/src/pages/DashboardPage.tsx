@@ -26,10 +26,8 @@ const strategyOptions: SelectOption[] = [
 ]
 
 const sidebarItems: SidebarItem[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'signals', label: 'Signals' },
-  { id: 'portfolio', label: 'Portfolio' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'dashboard', label: 'Главная' },
+  { id: 'settings', label: 'Настройки' },
 ]
 
 export function DashboardPage() {
@@ -55,7 +53,7 @@ export function DashboardPage() {
   const isCoreLoading = useTradingCoreStore(state => state.isLoading)
   const coreError = useTradingCoreStore(state => state.error)
 
-  const activeSidebarItemId = location.pathname.startsWith('/settings') ? 'settings' : 'overview'
+  const activeSidebarItemId = location.pathname.startsWith('/settings') ? 'settings' : 'dashboard'
 
   const handleSidebarSelect = (itemId: string) => {
     if (itemId === 'settings') {
@@ -71,10 +69,10 @@ export function DashboardPage() {
       header={
         <SurfaceCard className="dashboard-page__hero" tone="elevated">
           <Text as="p" variant="eyebrow" tone="muted">
-            AI Trader UI Foundation
+            Система управления
           </Text>
           <Text as="h1" variant="display">
-            Dashboard shell
+            Главная панель
           </Text>
           <Text as="p" variant="body" tone="muted">
             Переиспользуемый каркас страниц для следующего шага с авторизацией.
@@ -83,7 +81,7 @@ export function DashboardPage() {
       }
       sidebar={
         <Sidebar
-          title="Navigation"
+          title="Навигация"
           items={sidebarItems}
           activeItemId={activeSidebarItemId}
           onSelect={handleSidebarSelect}

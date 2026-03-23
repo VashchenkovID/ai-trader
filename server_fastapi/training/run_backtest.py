@@ -11,16 +11,19 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import torch
 
 from training.config import get_training_settings
-from training.data.pipeline import build_feature_pipeline, time_based_split
+from training.data.pipeline import build_feature_pipeline
 from training.data.loaders import load_candles_from_csv
 from training.backtest import walk_forward_split, evaluate_model_on_test
+from training.run_stacking import _checkpoint_input_size, _find_compatible_base_checkpoint
 
 
 def _synthetic_data(n_samples: int = 500, lookback: int = 60, horizon: int = 5):
@@ -42,6 +45,10 @@ def run(
     lookback_days: int = 60,
     prediction_horizon: int = 5,
     log_mlflow: bool = True,
+    *,
+    options: pd.DataFrame | None = None,
+    signals: pd.DataFrame | None = None,
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, float]:
     """
     Выполняет walk-forward бэктест: разбивает данные на n_splits окон, на каждом тесте
@@ -49,20 +56,91 @@ def run(
     """
     path = Path(checkpoint_path)
     if not path.is_file():
+        if on_progress:
+            on_progress({"message": "Чекпоинт не найден", "phase": "error"})
         return {"test_mse": float("nan"), "test_mae": float("nan"), "test_direction_accuracy": float("nan")}
+
+    if on_progress:
+        on_progress({"message": "Подготовка данных для walk-forward...", "phase": "prepare"})
 
     if candles_df is not None and not candles_df.empty:
         X, y = build_feature_pipeline(
-            candles_df, lookback_days=lookback_days, prediction_horizon=prediction_horizon
+            candles_df,
+            options=options,
+            signals=signals,
+            lookback_days=lookback_days,
+            prediction_horizon=prediction_horizon,
         )
     else:
         X, y = _synthetic_data(lookback=lookback_days, horizon=prediction_horizon)
 
     if X.empty or len(X) < n_splits + 1:
+        if on_progress:
+            on_progress({"message": "Недостаточно данных для walk-forward", "phase": "skipped"})
         return {"test_mse": float("nan"), "test_mae": float("nan"), "test_direction_accuracy": float("nan")}
 
+    # Согласовать размерность фич с CondMLP: сначала ищем чекпоинт под фактический n_features,
+    # иначе обрезаем X до input_size из переданного чекпоинта (типично 4+5 opt без лишних sig).
+    n_features = int(X.shape[1])
+    ckpt_in = _checkpoint_input_size(path)
+    if ckpt_in is not None and n_features != ckpt_in:
+        alt = _find_compatible_base_checkpoint(path, n_features)
+        if alt is not None:
+            path = alt
+            if on_progress:
+                on_progress(
+                    {
+                        "message": f"Чекпоинт заменён на совместимый с input_size={n_features}",
+                        "phase": "checkpoint",
+                        "checkpoint": str(path),
+                    }
+                )
+        elif n_features > ckpt_in:
+            X = X.iloc[:, :ckpt_in]
+            if on_progress:
+                on_progress(
+                    {
+                        "message": (
+                            f"Фичи обрезаны с {n_features} до {ckpt_in} под веса чекпоинта"
+                        ),
+                        "phase": "features_trim",
+                        "inputSize": ckpt_in,
+                    }
+                )
+        else:
+            if on_progress:
+                on_progress(
+                    {
+                        "message": (
+                            f"Несовпадение фич: X={n_features}, чекпоинт ожидает {ckpt_in}"
+                        ),
+                        "phase": "skipped",
+                    }
+                )
+            return {"test_mse": float("nan"), "test_mae": float("nan"), "test_direction_accuracy": float("nan")}
+
+    if on_progress:
+        on_progress(
+            {
+                "message": f"Walk-forward: {n_splits} окон, оценка модели по тестовым окнам",
+                "phase": "walk_forward",
+                "splitTotal": n_splits,
+            }
+        )
+
     results: list[dict[str, float]] = []
-    for X_train, y_train, X_test, y_test in walk_forward_split(X, y, n_splits=n_splits):
+    for split_idx, (X_train, y_train, X_test, y_test) in enumerate(
+        walk_forward_split(X, y, n_splits=n_splits), start=1
+    ):
+        if on_progress:
+            on_progress(
+                {
+                    "message": f"Окно {split_idx}/{n_splits}: оценка на тесте",
+                    "phase": "eval",
+                    "splitIndex": split_idx,
+                    "splitTotal": n_splits,
+                }
+            )
         X_te = torch.tensor(X_test.values, dtype=torch.float32)
         y_te = torch.tensor(y_test.values, dtype=torch.float32)
         metrics = evaluate_model_on_test(
@@ -73,10 +151,39 @@ def run(
     if not results:
         return {"test_mse": float("nan"), "test_mae": float("nan"), "test_direction_accuracy": float("nan")}
 
-    mean_mse = float(np.nanmean([r["test_mse"] for r in results]))
-    mean_mae = float(np.nanmean([r["test_mae"] for r in results]))
-    mean_dir = float(np.nanmean([r["test_direction_accuracy"] for r in results]))
+    mse_values = [float(r.get("test_mse", float("nan"))) for r in results]
+    mae_values = [float(r.get("test_mae", float("nan"))) for r in results]
+    dir_values = [float(r.get("test_direction_accuracy", float("nan"))) for r in results]
+
+    has_any_mse = any(not np.isnan(v) for v in mse_values)
+    has_any_mae = any(not np.isnan(v) for v in mae_values)
+    has_any_dir = any(not np.isnan(v) for v in dir_values)
+    if not (has_any_mse or has_any_mae or has_any_dir):
+        if on_progress:
+            on_progress(
+                {
+                    "message": "Все окна дали NaN-метрики: инструмент пропущен",
+                    "phase": "skipped",
+                }
+            )
+        return {"test_mse": float("nan"), "test_mae": float("nan"), "test_direction_accuracy": float("nan")}
+
+    mean_mse = float(np.nanmean(mse_values)) if has_any_mse else float("nan")
+    mean_mae = float(np.nanmean(mae_values)) if has_any_mae else float("nan")
+    mean_dir = float(np.nanmean(dir_values)) if has_any_dir else float("nan")
     out = {"test_mse": mean_mse, "test_mae": mean_mae, "test_direction_accuracy": mean_dir}
+
+    if on_progress:
+        on_progress(
+            {
+                "message": (
+                    f"Итог: MSE={mean_mse:.6f}, MAE={mean_mae:.6f}, "
+                    f"dir_acc={mean_dir:.4f}"
+                ),
+                "phase": "done",
+                "metrics": out,
+            }
+        )
 
     if log_mlflow:
         try:

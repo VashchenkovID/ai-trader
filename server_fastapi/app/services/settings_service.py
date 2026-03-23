@@ -20,13 +20,6 @@ class SettingsService:
                 module="trading",
                 description="Включена ли автоматическая торговля в paper-режиме",
             ),
-            "auto_paper_phase": SettingItemDTO(
-                key="auto_paper_phase",
-                value="phase1",
-                type="string",
-                module="trading",
-                description="Текущая фаза auto-paper: phase1, phase2, phase3",
-            ),
             "system.mode": SettingItemDTO(
                 key="system.mode",
                 value="paper",
