@@ -109,21 +109,17 @@
   @if (strip-units($xl) == 0) {
     $xl: 0.1px;
   }
-  // Mobile first: fixed rem value on small screens
-  #{$prop}: px-to-rem($xs);
-
-  @include media-breakpoint-up(md) {
-    // Desktop and larger: adaptive clamp from md to xl
-    @if ($md == $xl) {
-      #{$prop}: px-to-adaptive($xl);
-    } @else {
-      #{$prop}: calc-clamp(
-        $md,
-        $xl,
-        map.get($grid-breakpoints, md),
-        map.get($grid-breakpoints, xl)
-      );
-    }
+  // Unified scaling across viewport: from xs to xl.
+  // This keeps typography/spacing/components shrinking and growing together.
+  @if ($xs == $xl) {
+    #{$prop}: px-to-adaptive($xl);
+  } @else {
+    #{$prop}: calc-clamp(
+      $xs,
+      $xl,
+      map.get($grid-breakpoints, x),
+      map.get($grid-breakpoints, xl)
+    );
   }
 }
 

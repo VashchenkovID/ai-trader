@@ -1,238 +1,237 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import {
-  Button,
-  Checkbox,
-  Input,
-  PageLayout,
-  Radio,
-  Select,
-  Sidebar,
-  SurfaceCard,
-  Switch,
-  Text,
-  Textarea,
-  type SelectOption,
-  type SidebarItem,
-} from '@/components/ui'
+import { MarketService } from '@/api/generated/services/MarketService'
+import { MonitoringService } from '@/api/generated/services/MonitoringService'
+import { RiskService } from '@/api/generated/services/RiskService'
+import { Button, PageLayout, Sidebar, SurfaceCard, Text } from '@/components/ui'
+import { APP_SIDEBAR_ITEMS, getActiveSidebarItemId, navigateFromSidebar } from '@/navigation/appSidebar'
+import { DashboardHero } from '@/pages/DashboardPage/components/DashboardHero'
+import { DashboardKpiRow } from '@/pages/DashboardPage/components/DashboardKpiRow'
+import { DashboardRiskAlerts } from '@/pages/DashboardPage/components/DashboardRiskAlerts'
+import { DashboardSystemStatus } from '@/pages/DashboardPage/components/DashboardSystemStatus'
+import { DashboardTasksPanel } from '@/pages/DashboardPage/components/DashboardTasksPanel'
+import { DashboardTopRecommendations } from '@/pages/DashboardPage/components/DashboardTopRecommendations'
 import { useSystemStatusStore } from '@/store/systemStatusStore'
 import { useTradingCoreStore } from '@/store/tradingCoreStore'
+import type { DashboardRecommendation, DashboardTask } from './DashboardPage/types'
 import './DashboardPage.scss'
 
-const strategyOptions: SelectOption[] = [
-  { value: 'scalping', label: 'Scalping' },
-  { value: 'intraday', label: 'Intraday' },
-  { value: 'swing', label: 'Swing' },
-]
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
 
-const sidebarItems: SidebarItem[] = [
-  { id: 'dashboard', label: 'Главная' },
-  { id: 'settings', label: 'Настройки' },
-]
+function asNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
 
 export function DashboardPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [name, setName] = useState('')
-  const [strategy, setStrategy] = useState('intraday')
-  const [risk, setRisk] = useState<'conservative' | 'balanced'>('balanced')
-  const [autoTrade, setAutoTrade] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [recommendations, setRecommendations] = useState<DashboardRecommendation[]>([])
+  const [recommendationsTotal, setRecommendationsTotal] = useState<number>(0)
+  const [alertsTotal, setAlertsTotal] = useState<number>(0)
+  const [riskEmergencyStop, setRiskEmergencyStop] = useState<boolean | null>(null)
+  const [riskMaxPositionSize, setRiskMaxPositionSize] = useState<number | null>(null)
+  const [isRefreshBusy, setIsRefreshBusy] = useState(false)
   const connectionStatus = useSystemStatusStore(state => state.connectionStatus)
   const lastEventAt = useSystemStatusStore(state => state.lastEventAt)
-  const tasksCount = useSystemStatusStore(state => state.tasks.length)
-  const schedulerCount = useSystemStatusStore(state => Object.keys(state.scheduler).length)
+  const tasks = useSystemStatusStore(state => state.tasks)
+  const scheduler = useSystemStatusStore(state => state.scheduler)
   const profile = useTradingCoreStore(state => state.profile)
   const tradingMode = useTradingCoreStore(state => state.tradingMode)
-  const portfolio = useTradingCoreStore(state => state.portfolio)
   const portfolioKind = useTradingCoreStore(state => state.portfolioKind)
   const totalBalance = useTradingCoreStore(state => state.totalBalance)
-  const stocksValue = useTradingCoreStore(state => state.stocksValue)
   const profitLoss = useTradingCoreStore(state => state.profitLoss)
   const lastPortfolioUpdatedAt = useTradingCoreStore(state => state.lastPortfolioUpdatedAt)
-  const lastPortfolioUpdateSource = useTradingCoreStore(state => state.lastPortfolioUpdateSource)
+  const refreshPortfolio = useTradingCoreStore(state => state.refreshPortfolio)
   const isCoreLoading = useTradingCoreStore(state => state.isLoading)
   const coreError = useTradingCoreStore(state => state.error)
+  const taskActiveCount = useMemo(
+    () => tasks.filter(t => t.status === 'queued' || t.status === 'running').length,
+    [tasks]
+  )
+  const taskFailedCount = useMemo(() => tasks.filter(t => t.status === 'failed').length, [tasks])
+  const schedulerCount = Object.keys(scheduler).length
+  const modeText = String(tradingMode?.mode ?? 'paper').toLowerCase()
+  const topTasks: DashboardTask[] = tasks.slice(0, 5).map(task => ({
+    taskId: task.taskId,
+    taskType: task.taskType,
+    status: task.status,
+  }))
 
-  const activeSidebarItemId = location.pathname.startsWith('/settings') ? 'settings' : 'dashboard'
+  const activeSidebarItemId = getActiveSidebarItemId(location.pathname)
+
+  const loadDashboard = async () => {
+    setIsLoading(true)
+    setLoadError(null)
+    try {
+      const [recRes, alertsRes, riskRes] = await Promise.all([
+        MarketService.marketRecommendationsApiV1MarketRecommendationsGet({ offset: 0, limit: 5 }),
+        MonitoringService.monitoringAlertsApiV1MonitoringAlertsGet({ resolved: false, limit: 50 }),
+        RiskService.riskStatusApiV1RiskStatusGet(),
+      ])
+
+      const recData = asRecord(recRes.data)
+      const recItems = Array.isArray(recData.items) ? recData.items : []
+      const recMapped = recItems.map((item, index) => {
+        const rec = asRecord(item)
+        return {
+          id: String(rec.id ?? rec.figi ?? `rec-${index}`),
+          figi: String(rec.figi ?? ''),
+          ticker: String(rec.ticker ?? '—'),
+          name: String(rec.name ?? 'Без названия'),
+          recommendation: String(rec.recommendation ?? 'UNKNOWN'),
+          confidence: asNumber(rec.confidence),
+          score: asNumber(rec.score),
+        }
+      })
+      const recMeta = asRecord(recData.meta)
+
+      const alertsData = asRecord(alertsRes.data)
+      const alertsItems = Array.isArray(alertsData.items) ? alertsData.items : []
+
+      const riskData = asRecord(riskRes.data)
+      const riskLimits = asRecord(riskData.limits)
+
+      setRecommendations(recMapped)
+      setRecommendationsTotal(asNumber(recMeta.total) ?? recMapped.length)
+      setAlertsTotal(alertsItems.length)
+      setRiskEmergencyStop(Boolean(riskData.emergencyStop))
+      setRiskMaxPositionSize(asNumber(riskLimits.maxPositionSize))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось загрузить данные главной страницы'
+      setLoadError(message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadDashboard()
+  }, [])
+
+  const handleRefreshAll = async () => {
+    if (isRefreshBusy) return
+    setIsRefreshBusy(true)
+    setLoadError(null)
+    try {
+      await MarketService.marketRefreshApiV1MarketRefreshPost()
+      await refreshPortfolio('api')
+      await loadDashboard()
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Не удалось обновить данные. Повторите позже.'
+      setLoadError(message)
+    } finally {
+      setIsRefreshBusy(false)
+    }
+  }
 
   const handleSidebarSelect = (itemId: string) => {
-    if (itemId === 'settings') {
-      navigate('/settings')
-      return
-    }
-    navigate('/dashboard')
+    navigateFromSidebar(navigate, itemId)
   }
 
   return (
     <PageLayout
       className="dashboard-page"
-      header={
-        <SurfaceCard className="dashboard-page__hero" tone="elevated">
-          <Text as="p" variant="eyebrow" tone="muted">
-            Система управления
-          </Text>
-          <Text as="h1" variant="display">
-            Главная панель
-          </Text>
-          <Text as="p" variant="body" tone="muted">
-            Переиспользуемый каркас страниц для следующего шага с авторизацией.
-          </Text>
-        </SurfaceCard>
-      }
+      header={<DashboardHero />}
       sidebar={
         <Sidebar
           title="Навигация"
-          items={sidebarItems}
+          items={APP_SIDEBAR_ITEMS}
           activeItemId={activeSidebarItemId}
           onSelect={handleSidebarSelect}
         />
       }
     >
-      <SurfaceCard
-        header={
-          <Text as="h2" variant="title">
-            Buttons
-          </Text>
-        }
-      >
-        <div className="dashboard-page__row">
-          <Button>Primary</Button>
-          <Button variant="secondary">Secondary</Button>
-          <Button variant="ghost">Ghost</Button>
-          <Button variant="danger">Danger</Button>
-          <Button loading>Loading</Button>
-        </div>
-      </SurfaceCard>
-
-      <SurfaceCard
-        header={
-          <Text as="h2" variant="title">
-            Form primitives
-          </Text>
-        }
-      >
-        <div className="dashboard-page__grid">
-          <Input
-            label="Название портфеля"
-            value={name}
-            onChange={event => setName(event.target.value)}
-            placeholder="Например, Smart Growth"
-            hint="Используется в отчетах и телеграм-уведомлениях"
-          />
-          <Select
-            label="Стратегия"
-            value={strategy}
-            onChange={event => setStrategy(event.target.value)}
-            options={strategyOptions}
-          />
-          <Textarea
-            label="Комментарий"
-            placeholder="Опиши гипотезу, по которой запускается обучение..."
-            hint="Полезно для ретроспективы и команды"
+      <div className="dashboard-page__quick-links">
+        <Button variant="secondary" onClick={() => navigate('/portfolio')}>
+          Портфель
+        </Button>
+        <Button variant="secondary" onClick={() => navigate('/monitoring/alerts')}>
+          Алерты
+        </Button>
+        <Button variant="secondary" onClick={() => navigate('/trading-requests')}>
+          Заявки
+        </Button>
+        <Button variant="secondary" onClick={() => navigate('/auto-paper')}>
+          Автоторговля
+        </Button>
+        <Button variant="secondary" onClick={() => navigate('/performance')}>
+          Производительность
+        </Button>
+      </div>
+      <DashboardKpiRow
+        totalBalance={totalBalance}
+        profitLoss={profitLoss}
+        taskActiveCount={taskActiveCount}
+        alertsTotal={alertsTotal}
+      />
+      <div className="dashboard-page__main-grid">
+        <div className="dashboard-page__slot dashboard-page__slot--system">
+          <DashboardSystemStatus
+            username={profile?.username ?? null}
+            modeText={modeText}
+            portfolioKind={portfolioKind}
+            connectionStatus={connectionStatus}
+            taskFailedCount={taskFailedCount}
+            schedulerCount={schedulerCount}
+            lastEventAt={lastEventAt}
+            lastPortfolioUpdatedAt={lastPortfolioUpdatedAt}
+            isRefreshBusy={isRefreshBusy}
+            onRefresh={() => void handleRefreshAll()}
           />
         </div>
-      </SurfaceCard>
-
-      <SurfaceCard
-        header={
-          <Text as="h2" variant="title">
-            Realtime status
-          </Text>
-        }
-      >
-        <div className="dashboard-page__grid">
-          <Text as="p" variant="body">
-            Socket: <strong>{connectionStatus}</strong>
-          </Text>
-          <Text as="p" variant="body">
-            Scheduler jobs in store: <strong>{schedulerCount}</strong>
-          </Text>
-          <Text as="p" variant="body">
-            Tasks in store: <strong>{tasksCount}</strong>
-          </Text>
-          <Text as="p" variant="hint" tone="muted">
-            Last event: {lastEventAt ?? 'no events yet'}
-          </Text>
+        <div className="dashboard-page__slot dashboard-page__slot--risk">
+          <DashboardRiskAlerts
+            riskEmergencyStop={riskEmergencyStop}
+            riskMaxPositionSize={riskMaxPositionSize}
+            alertsTotal={alertsTotal}
+          />
         </div>
-      </SurfaceCard>
+        <div className="dashboard-page__slot dashboard-page__slot--recommendations">
+          <DashboardTopRecommendations
+            recommendations={recommendations}
+            recommendationsTotal={recommendationsTotal}
+            isLoading={isLoading}
+            onOpenAll={() => navigate('/recommendations')}
+            onOpenOne={figi => navigate(`/recommendations/${encodeURIComponent(figi)}`)}
+          />
+        </div>
+        <div className="dashboard-page__slot dashboard-page__slot--tasks">
+          <DashboardTasksPanel tasks={topTasks} />
+        </div>
+      </div>
 
-      <SurfaceCard
-        header={
-          <Text as="h2" variant="title">
-            Core data (single Zustand store)
+      {(isLoading || isCoreLoading) && (
+        <SurfaceCard>
+          <Text as="p" variant="body" tone="muted">
+            Загрузка данных дашборда...
           </Text>
-        }
-      >
-        <div className="dashboard-page__grid">
-          <Text as="p" variant="body">
-            Profile: <strong>{profile ? profile.username : 'not loaded'}</strong>
-          </Text>
-          <Text as="p" variant="body">
-            Trading mode:{' '}
-            <strong>
-              {tradingMode
-                ? JSON.stringify(tradingMode)
-                : isCoreLoading
-                  ? 'loading...'
-                  : 'not loaded'}
-            </strong>
-          </Text>
-          <Text as="p" variant="body">
-            Portfolio type: <strong>{portfolioKind ?? 'n/a'}</strong>
-          </Text>
-          <Text as="p" variant="body">
-            Portfolio balance/value:{' '}
-            <strong>
-              {portfolio ? totalBalance.toFixed(2) : isCoreLoading ? 'loading...' : 'not loaded'}
-            </strong>
-          </Text>
-          <Text as="p" variant="body">
-            Stocks value: <strong>{portfolio ? stocksValue.toFixed(2) : 'n/a'}</strong>
-          </Text>
-          <Text as="p" variant="body">
-            Profit / Loss: <strong>{portfolio ? profitLoss.toFixed(2) : 'n/a'}</strong>
-          </Text>
-          <Text as="p" variant="hint" tone="muted">
-            Portfolio updated: {lastPortfolioUpdatedAt ?? 'never'} (
-            {lastPortfolioUpdateSource ?? 'n/a'})
-          </Text>
-          {coreError && (
-            <Text as="p" variant="hint" tone="danger">
-              Core load error: {coreError}
+        </SurfaceCard>
+      )}
+
+      {(loadError || coreError) && (
+        <SurfaceCard>
+          {loadError && (
+            <Text as="p" variant="body" tone="danger">
+              Ошибка загрузки dashboard API: {loadError}
             </Text>
           )}
-        </div>
-      </SurfaceCard>
-
-      <SurfaceCard
-        header={
-          <Text as="h2" variant="title">
-            Selection controls
-          </Text>
-        }
-      >
-        <div className="dashboard-page__stack">
-          <Checkbox label="Включить уведомления о просадке" defaultChecked />
-          <Radio
-            name="risk-profile"
-            label="Консервативный профиль риска"
-            checked={risk === 'conservative'}
-            onChange={() => setRisk('conservative')}
-          />
-          <Radio
-            name="risk-profile"
-            label="Сбалансированный профиль риска"
-            checked={risk === 'balanced'}
-            onChange={() => setRisk('balanced')}
-          />
-          <Switch
-            label="Auto-trading"
-            hint="Разрешить автоматическое исполнение одобренных заявок"
-            checked={autoTrade}
-            onChange={event => setAutoTrade(event.target.checked)}
-          />
-        </div>
-      </SurfaceCard>
+          {coreError && (
+            <Text as="p" variant="body" tone="danger">
+              Ошибка core данных: {coreError}
+            </Text>
+          )}
+        </SurfaceCard>
+      )}
     </PageLayout>
   )
 }

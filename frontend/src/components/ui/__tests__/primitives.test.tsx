@@ -34,9 +34,10 @@ describe('UI primitives', () => {
       />
     )
 
-    const select = screen.getByLabelText('Mode')
-    fireEvent.change(select, { target: { value: 'real' } })
-    expect(select).toHaveValue('real')
+    const nativeSelect = screen.getAllByLabelText('Mode').find(el => el.tagName === 'SELECT')
+    expect(nativeSelect).toBeDefined()
+    fireEvent.change(nativeSelect!, { target: { value: 'real' } })
+    expect(nativeSelect).toHaveValue('real')
   })
 
   test('checkbox and switch change checked state', () => {

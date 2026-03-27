@@ -1,0 +1,60 @@
+.app-tool-page {
+  &__hero {
+    margin-bottom: var(--ds-space-4);
+  }
+
+  &__section {
+    margin-bottom: var(--ds-space-4);
+  }
+
+  &__section-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ds-space-3);
+    margin-bottom: var(--ds-space-3);
+  }
+
+  &__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ds-space-3);
+    align-items: flex-end;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: inherit;
+
+    th,
+    td {
+      padding: var(--ds-space-2) var(--ds-space-3);
+      text-align: left;
+      border-bottom: 1px solid var(--ds-color-border-subtle, rgba(255, 255, 255, 0.08));
+    }
+
+    th {
+      font-weight: 600;
+      color: var(--ds-color-text-muted, inherit);
+    }
+  }
+
+  &__mono {
+    font-family: ui-monospace, monospace;
+    font-size: 0.9em;
+    word-break: break-all;
+  }
+
+  &__json {
+    margin: 0;
+    padding: var(--ds-space-3);
+    overflow: auto;
+    max-height: 24rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.85em;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}

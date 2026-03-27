@@ -317,9 +317,11 @@ def test_load_ensemble_weights_from_json(tmp_path: Path) -> None:
 def test_run_weekly_returns_mlflow_run_id() -> None:
     pytest.importorskip("torch")
     pytest.importorskip("pytorch_lightning")
+    pandas = pytest.importorskip("pandas")
     from training.run_weekly import run
 
-    run_id = run(max_epochs=1, batch_size=8)
+    candles = pandas.DataFrame({"close": [100.0 + i * 0.1 for i in range(220)], "volume": [1e6] * 220})
+    run_id = run(max_epochs=1, batch_size=8, candles_df=candles)
     assert run_id is not None
     assert isinstance(run_id, str)
     assert len(run_id) > 0
@@ -480,11 +482,9 @@ def test_candles_to_dataframe_from_dicts() -> None:
 @pytest.mark.asyncio
 async def test_training_run_nn_background_returns_200_and_status(client) -> None:
     response = await client.post("/api/v1/training/run-nn-background", params={"epochs": 2})
-    assert response.status_code == 200
+    assert response.status_code == 400
     data = response.json()
-    assert "status" in data
-    assert data["status"] in ("scheduled", "rejected")
-    assert "message" in data
+    assert data["error"]["code"] == "BAD_REQUEST"
 
 
 @pytest.mark.asyncio
@@ -503,13 +503,9 @@ async def test_training_run_weekly_returns_200_with_mlflow_run_id(client) -> Non
         "/api/v1/training/run-weekly",
         params={"epochs": 1, "seq_len": 30, "n_forecast": 5},
     )
-    assert response.status_code == 200
+    assert response.status_code == 400
     data = response.json()
-    assert "status" in data
-    assert data["status"] in ("completed", "unavailable")
-    if data["status"] == "completed":
-        assert "mlflow_run_id" in data
-        assert isinstance(data["mlflow_run_id"], str)
+    assert data["error"]["code"] == "BAD_REQUEST"
 
 
 @pytest.mark.training

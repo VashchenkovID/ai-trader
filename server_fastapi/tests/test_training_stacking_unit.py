@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import torch
+import pandas as pd
 
 from training.models.nn import N_HORIZONS, N_STRATEGIES
 from training.run_stacking import build_meta_features, run
@@ -55,7 +56,8 @@ def test_run_stacking_happy_path_with_mocks(tmp_path: Path, monkeypatch) -> None
     )
 
     monkeypatch.setattr("training.run_stacking.load_cond_mlp", lambda *_args, **_kwargs: _FakeBase())
-    monkeypatch.setattr("training.run_stacking._synthetic_data", _fake_tensors)
+    monkeypatch.setattr("training.run_nn._candles_to_tensors", _fake_tensors)
+    monkeypatch.setattr("training.run_stacking._find_compatible_base_checkpoint", lambda *_a, **_k: base_ckpt)
     monkeypatch.setattr("training.experiments.init_mlflow", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         "training.run_stacking.get_training_settings",
@@ -67,7 +69,8 @@ def test_run_stacking_happy_path_with_mocks(tmp_path: Path, monkeypatch) -> None
     )
     monkeypatch.setitem(__import__("sys").modules, "mlflow", fake_mlflow)
 
-    out = run(base_checkpoint_path=base_ckpt, max_epochs=1, batch_size=2)
+    candles = pd.DataFrame({"close": [100.0] * 120, "volume": [1_000_000] * 120})
+    out = run(base_checkpoint_path=base_ckpt, max_epochs=1, batch_size=2, candles_df=candles)
     assert out is not None
     assert out.endswith(".pt")
 
@@ -93,10 +96,12 @@ def test_run_stacking_returns_none_on_empty_train_loader(tmp_path: Path, monkeyp
         )
 
     monkeypatch.setattr("training.run_stacking.load_cond_mlp", lambda *_args, **_kwargs: _FakeBase())
-    monkeypatch.setattr("training.run_stacking._synthetic_data", _tiny_tensors)
+    monkeypatch.setattr("training.run_nn._candles_to_tensors", _tiny_tensors)
+    monkeypatch.setattr("training.run_stacking._find_compatible_base_checkpoint", lambda *_a, **_k: base_ckpt)
     monkeypatch.setattr(
         "training.run_stacking.get_training_settings",
         lambda: SimpleNamespace(models_root=str(tmp_path), mlflow_experiment_name="exp"),
     )
-    out = run(base_checkpoint_path=base_ckpt, max_epochs=1, batch_size=2)
+    candles = pd.DataFrame({"close": [100.0] * 120, "volume": [1_000_000] * 120})
+    out = run(base_checkpoint_path=base_ckpt, max_epochs=1, batch_size=2, candles_df=candles)
     assert out is None

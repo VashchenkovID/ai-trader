@@ -172,9 +172,15 @@ async def test_market_repository_upsert_recommendation_with_llm_payload(
         confidence=Decimal("0.5000"),
         score=Decimal("0.5000"),
         llm_jury_payload={"providers": {"gigachat": {"action": "HOLD"}}},
+        nn_score=Decimal("0.5200"),
+        nn_confidence=Decimal("0.6100"),
+        nn_checkpoint="models/python_nn/test.ckpt",
+        nn_payload={"featureCount": 4},
     )
     assert created.figi == figi
     assert created.llm_jury_payload is not None
+    assert created.nn_score == Decimal("0.5200")
+    assert created.nn_checkpoint == "models/python_nn/test.ckpt"
     updated = await repo.upsert_recommendation(
         db_session,
         figi=figi,
@@ -182,9 +188,40 @@ async def test_market_repository_upsert_recommendation_with_llm_payload(
         confidence=Decimal("0.7300"),
         score=Decimal("0.6200"),
         llm_jury_payload={"providers": {"alisa_gpt": {"action": "BUY"}}},
+        nn_score=Decimal("0.7100"),
+        nn_confidence=Decimal("0.8100"),
+        nn_payload={"featureCount": 9},
     )
     assert updated.recommendation == "BUY"
     assert (updated.llm_jury_payload or {}).get("providers") is not None
+    assert updated.nn_score == Decimal("0.7100")
+    assert updated.nn_confidence == Decimal("0.8100")
+    await db_session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_market_repository_update_recommendation_weekly_forecast(
+    db_session: AsyncSession,
+) -> None:
+    repo = MarketRepository()
+    figi = f"TEST-WF-{uuid4().hex[:10]}"
+    await repo.upsert_recommendation(
+        db_session,
+        figi=figi,
+        recommendation="HOLD",
+        confidence=Decimal("0.5000"),
+        score=Decimal("0.5000"),
+    )
+    await repo.update_recommendation_weekly_forecast(
+        db_session,
+        figi=figi,
+        payload={"ok": True, "forecastRaw": [0.01, 0.02]},
+    )
+    row = await repo.get_recommendation_by_figi(db_session, figi)
+    assert row is not None
+    assert row.weekly_forecast is not None
+    assert row.weekly_forecast.get("ok") is True
+    assert row.weekly_forecast_at is not None
     await db_session.rollback()
 
 

@@ -12,8 +12,8 @@ import {
   SurfaceCard,
   Switch,
   Text,
-  type SidebarItem,
 } from '@/components/ui'
+import { APP_SIDEBAR_ITEMS, getActiveSidebarItemId, navigateFromSidebar } from '@/navigation/appSidebar'
 import { useSystemStatusStore } from '@/store/systemStatusStore'
 import { cn } from '@/utils/cn'
 import './SettingsPage.scss'
@@ -24,6 +24,9 @@ type ActionKey =
   | 'cacheUpdate'
   | 'trainingQuick'
   | 'trainingFull'
+  | 'weeklyForecastGeneration'
+  | 'weeklyForecastUpdate'
+  | 'marketAnalysis'
   | 'degradationCheck'
 type TaskStatus = 'idle' | 'queued' | 'running' | 'completed' | 'failed' | 'timeout'
 
@@ -31,7 +34,12 @@ type ActionState = {
   taskId: string | null
   status: TaskStatus
   error: string | null
+  errorCode: string | null
+  reason: string | null
+  durationMs: number | null
   progressMessage: string | null
+  progressStage: string | null
+  resultLines: string[]
 }
 
 type SystemSetting = {
@@ -82,13 +90,28 @@ type SchedulerSnapshot = {
   failed: number
 }
 
+type AnalysisKpiSnapshot = {
+  window: '24h' | '7d' | '30d'
+  coverage: number
+  taskSuccessRate: number
+  fallbackRate: number
+  latencyP95Ms: number
+  directionAccuracyFusion: number
+  marginalGainLlmOverNn: number
+  llmSkippedUnavailable: number
+  alertsCount: number
+}
+
 /** Порядок вывода известных ключей; остальные — по алфавиту после них. */
 const SETTINGS_DISPLAY_ORDER = [
   'trading_mode',
   'auto_paper_enabled',
   'system.mode',
   'risk.maxPositionSize',
+  'portfolio.virtual.initial_capital',
 ] as const
+
+const TARGET_VIRTUAL_CAPITAL = 50_000_000
 
 /**
  * Человекочитаемые заголовки и пояснения (как блоки на вкладке «Данные»).
@@ -114,6 +137,11 @@ const SETTING_USER_COPY: Record<string, { title: string; details: string }> = {
     title: 'Максимальный размер позиции',
     details:
       'Верхняя доля капитала, которую можно использовать под одну позицию (доля от 0 до 1). Снижает переконцентрацию риска в одном инструменте.',
+  },
+  'portfolio.virtual.initial_capital': {
+    title: 'Виртуальный капитал портфеля',
+    details:
+      'Бюджет виртуального портфеля для paper-режима. Используется как базовая величина для симуляции и расчетов в тестовом торговом контуре.',
   },
 }
 
@@ -165,11 +193,18 @@ function formatSettingValueLabel(key: string, value: unknown): string {
       const pct = Math.round(value * 1000) / 10
       return `${value} (${pct}% капитала на одну позицию)`
     }
+    if (key === 'portfolio.virtual.initial_capital') {
+      return new Intl.NumberFormat('ru-RU').format(value)
+    }
     return String(value)
   }
   if (typeof value === 'string') {
     if (key === 'trading_mode' || key === 'system.mode') {
       return formatTradingModeValue(value)
+    }
+    if (key === 'portfolio.virtual.initial_capital') {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return new Intl.NumberFormat('ru-RU').format(parsed)
     }
     return value
   }
@@ -212,6 +247,11 @@ function formatPercentLabel(raw: string): string {
   const n = Number(String(raw).replace(',', '.'))
   if (!Number.isFinite(n)) return raw
   return `${Math.round(n)}%`
+}
+
+function formatRatioPercent(ratio: number | undefined): string {
+  if (ratio == null || !Number.isFinite(ratio)) return '—'
+  return `${Math.round(ratio * 1000) / 10}%`
 }
 
 /** HTTP /system/status часто не отдаёт CPU/RAM — подмешиваем числа из WS snapshot.system. */
@@ -265,6 +305,8 @@ function translateSubsystemStatus(raw: string): { text: string; tone: InsightVal
   const s = raw.trim().toLowerCase()
   if (s === '' || s === '—') return { text: 'нет данных', tone: 'neutral' }
   if (s === 'idle' || s === 'waiting') return { text: 'ожидание', tone: 'neutral' }
+  if (s === 'connecting') return { text: 'подключение', tone: 'warn' }
+  if (s === 'reconnecting') return { text: 'переподключение', tone: 'warn' }
   if (s === 'running') return { text: 'работает', tone: 'good' }
   if (s === 'ready') return { text: 'готов', tone: 'good' }
   if (s === 'connected' || s === 'healthy') return { text: 'в норме', tone: 'good' }
@@ -314,12 +356,188 @@ function orderedSettingsItems(items: SystemSetting[]): SystemSetting[] {
   })
 }
 
+function formatProgressStage(progress: Record<string, unknown> | null): string | null {
+  if (!progress) return null
+  const stageLabel = progress.stageLabel ? String(progress.stageLabel) : ''
+  const stageIndexRaw = Number(progress.stageIndex)
+  const stageTotalRaw = Number(progress.stageTotal)
+  const hasIdx = Number.isFinite(stageIndexRaw) && stageIndexRaw > 0
+  const hasTotal = Number.isFinite(stageTotalRaw) && stageTotalRaw > 0
+  if (hasIdx && hasTotal && stageLabel) {
+    return `Этап ${Math.round(stageIndexRaw)}/${Math.round(stageTotalRaw)} · ${stageLabel}`
+  }
+  if (hasIdx && hasTotal) {
+    return `Этап ${Math.round(stageIndexRaw)}/${Math.round(stageTotalRaw)}`
+  }
+  if (stageLabel) return stageLabel
+  return null
+}
+
+function extractTaskPayload(resultObj: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!resultObj) return null
+  const nested = resultObj.result
+  if (nested && typeof nested === 'object') return nested as Record<string, unknown>
+  return resultObj
+}
+
+function formatActionResultLines(
+  actionKey: ActionKey,
+  payload: Record<string, unknown> | null
+): string[] {
+  if (!payload) return []
+  if (actionKey === 'marketAnalysis') {
+    const lines: string[] = []
+    const summary = (payload.summary || {}) as Record<string, unknown>
+    const createdList = Array.isArray(summary.created) ? summary.created : []
+    const skippedList = Array.isArray(summary.skipped) ? summary.skipped : []
+    const created = createdList.length
+    const skipped = skippedList.length
+    const totalTargets = Number(payload.totalTargets || 0)
+    const canaryProcessed = Number(payload.canaryProcessed || 0)
+    const canarySkipped = Number(payload.canarySkipped || 0)
+    const recommendationBuy = Number(payload.recommendationBuy || 0)
+    const recommendationSell = Number(payload.recommendationSell || 0)
+    const recommendationHold = Number(payload.recommendationHold || 0)
+    const recommendationTotal = recommendationBuy + recommendationSell + recommendationHold
+
+    lines.push(`Всего инструментов в контуре анализа: ${totalTargets}`)
+    lines.push(`Обработано в текущем прогоне: ${canaryProcessed} (вне canary: ${canarySkipped})`)
+    lines.push(
+      `Получены рекомендации: BUY ${recommendationBuy}, SELL ${recommendationSell}, HOLD ${recommendationHold} (всего ${recommendationTotal})`
+    )
+    lines.push(`Заявок создано: ${created}`)
+    lines.push(`Рекомендаций пропущено: ${skipped}`)
+    if (created > 0) {
+      lines.push(`FIGI, по которым созданы заявки: ${createdList.slice(0, 10).join(', ')}`)
+    }
+
+    if (skipped > 0) {
+      const reasonCounts: Record<string, number> = {}
+      for (const raw of skippedList) {
+        if (!raw || typeof raw !== 'object') continue
+        const reason = String((raw as Record<string, unknown>).reason || 'other')
+        reasonCounts[reason] = (reasonCounts[reason] || 0) + 1
+      }
+      const skippedByReason = Object.entries(reasonCounts)
+        .map(([reason, count]) => `${reason}: ${count}`)
+        .join(', ')
+      if (skippedByReason) {
+        lines.push(`Причины пропуска: ${skippedByReason}`)
+      }
+    }
+
+    lines.push(
+      `Fusion NN+LLM: ${Number(payload.fusionBoth || 0)}, NN-only: ${Number(payload.fusionNnOnly || 0)}, LLM-only: ${Number(payload.fusionLlmOnly || 0)}`
+    )
+    lines.push(
+      `LLM обновлено: ${Number(payload.llmEnriched || 0)} / ${Number(payload.llmTotalTargets || 0)}`
+    )
+    if (Number(payload.skippedNoSignal || 0) > 0) {
+      lines.push(`Пропущено без сигнала: ${Number(payload.skippedNoSignal || 0)}`)
+    }
+    return lines
+  }
+  if (actionKey === 'weeklyForecastGeneration' || actionKey === 'weeklyForecastUpdate') {
+    const lines: string[] = []
+    const runId = String(payload.mlflowRunId || '').trim()
+    const totalInstruments = Number(payload.totalInstruments || payload.instrumentTotal || 0)
+    const eligible = Number(payload.instrumentEligible || 0)
+    const skipped = Number(payload.instrumentSkipped || 0)
+    const rowsTotal = Number(payload.rowsTotal || 0)
+    const rowsUsed = Number(payload.rowsUsed || 0)
+    const rowsSkipped = Number(payload.rowsSkipped || 0)
+    const resumeFromLatest = Boolean(payload.resumeFromLatest)
+    const universe = String(payload.processedUniverse || '').trim()
+    const params =
+      payload.parameters && typeof payload.parameters === 'object'
+        ? (payload.parameters as Record<string, unknown>)
+        : null
+    const skipReasons =
+      payload.skipReasons && typeof payload.skipReasons === 'object'
+        ? (payload.skipReasons as Record<string, unknown>)
+        : null
+    if (actionKey === 'weeklyForecastGeneration') {
+      lines.push('Weekly forecast: генерация завершена')
+    } else {
+      lines.push('Weekly forecast: обновление завершено')
+    }
+    lines.push(`Охват universe: ${totalInstruments} инструментов`)
+    if (eligible > 0 || skipped > 0) {
+      lines.push(`Подошло к обучению: ${eligible}, пропущено: ${skipped}`)
+    }
+    if (rowsTotal > 0 || rowsUsed > 0) {
+      lines.push(`Свечей: собрано ${rowsTotal}, использовано ${rowsUsed}, пропущено ${rowsSkipped}`)
+    }
+    if (universe === 'all_instruments') {
+      lines.push('Контур: все инструменты из справочника')
+    }
+    lines.push(
+      `Режим обучения: ${resumeFromLatest ? 'инкрементальный (resume from latest)' : 'полный retrain'}`
+    )
+    if (skipReasons) {
+      const reasonText = Object.entries(skipReasons)
+        .map(([k, v]) => `${k}: ${Number(v || 0)}`)
+        .join(', ')
+      if (reasonText) {
+        lines.push(`Причины пропусков: ${reasonText}`)
+      }
+    }
+    if (params) {
+      const paramParts: string[] = []
+      if (params.epochs !== undefined) paramParts.push(`epochs=${String(params.epochs)}`)
+      if (params.batchSize !== undefined) paramParts.push(`batchSize=${String(params.batchSize)}`)
+      if (params.lr !== undefined) paramParts.push(`lr=${String(params.lr)}`)
+      if (params.seqLen !== undefined) paramParts.push(`seqLen=${String(params.seqLen)}`)
+      if (params.nForecast !== undefined) paramParts.push(`nForecast=${String(params.nForecast)}`)
+      if (paramParts.length > 0) {
+        lines.push(`Параметры: ${paramParts.join(', ')}`)
+      }
+    }
+    if (runId) {
+      lines.push(`MLflow run: ${runId}`)
+    }
+    return lines
+  }
+  if (actionKey === 'trainingQuick' || actionKey === 'trainingFull') {
+    const lines: string[] = []
+    const totalInstruments = Number(payload.totalInstruments || 0)
+    const trainedInstruments = Number(payload.trainedInstruments || 0)
+    const skippedInstruments = Number(payload.skippedInstruments || 0)
+    const metaSucceeded = Number(payload.metaSucceeded || 0)
+    const metaFailed = Number(payload.metaFailed || 0)
+    const runId = String(payload.mlflowRunId || '').trim()
+    if (totalInstruments > 0 || trainedInstruments > 0 || skippedInstruments > 0) {
+      lines.push(
+        `Инструменты: всего ${totalInstruments}, обучено ${trainedInstruments}, пропущено ${skippedInstruments}`
+      )
+    }
+    if (metaSucceeded > 0 || metaFailed > 0) {
+      lines.push(`Meta/ensemble: успешно ${metaSucceeded}, с ошибкой ${metaFailed}`)
+    }
+    if (runId) {
+      lines.push(`MLflow run: ${runId}`)
+    }
+    if (lines.length > 0) return lines
+  }
+  const msgRaw = String(payload.message || '').trim()
+  const msg =
+    msgRaw === 'weekly generation completed'
+      ? 'Weekly forecast: генерация завершена'
+      : msgRaw === 'weekly update completed'
+        ? 'Weekly forecast: обновление завершено'
+        : msgRaw
+  return msg ? [msg] : []
+}
+
 /** Типы фоновых задач (вкладка «Данные» / system-status WS). */
 const MONITORED_BACKGROUND_TASK_TYPES = new Set([
   'full_db_sync_year',
   'cache_update',
   'training_quick',
   'training_full',
+  'weekly_generation',
+  'weekly_update',
+  'analysis_market_portfolio',
   'weekly_backtest',
 ])
 
@@ -368,16 +586,16 @@ function isSocketTaskBlockingBackground(task: {
 const POLL_INTERVAL_MS = 2000
 const POLL_MAX_ATTEMPTS = 180
 
-const sidebarItems: SidebarItem[] = [
-  { id: 'dashboard', label: 'Главная' },
-  { id: 'settings', label: 'Настройки' },
-]
-
 const initialActionState: ActionState = {
   taskId: null,
   status: 'idle',
   error: null,
+  errorCode: null,
+  reason: null,
+  durationMs: null,
   progressMessage: null,
+  progressStage: null,
+  resultLines: [],
 }
 
 const statusLabel: Record<TaskStatus, string> = {
@@ -399,6 +617,9 @@ export function SettingsPage() {
     cacheUpdate: 0,
     trainingQuick: 0,
     trainingFull: 0,
+    weeklyForecastGeneration: 0,
+    weeklyForecastUpdate: 0,
+    marketAnalysis: 0,
     degradationCheck: 0,
   })
   const [activeTab, setActiveTab] = useState<TabId>('data')
@@ -417,8 +638,11 @@ export function SettingsPage() {
   const [riskSnapshot, setRiskSnapshot] = useState<RiskSnapshot | null>(null)
   const [preflightSnapshot, setPreflightSnapshot] = useState<PreflightSnapshot | null>(null)
   const [schedulerSnapshot, setSchedulerSnapshot] = useState<SchedulerSnapshot | null>(null)
+  const [analysisKpiSnapshot, setAnalysisKpiSnapshot] = useState<AnalysisKpiSnapshot | null>(null)
+  const [analysisKpiWindow, setAnalysisKpiWindow] = useState<'24h' | '7d' | '30d'>('7d')
   const [pendingTradingMode, setPendingTradingMode] = useState<TradingMode>('paper')
   const [isTradingModeBusy, setIsTradingModeBusy] = useState(false)
+  const [isVirtualCapitalBusy, setIsVirtualCapitalBusy] = useState(false)
   const [tradingModeValidation, setTradingModeValidation] = useState<string[]>([])
   const [tradingModeValidationPassed, setTradingModeValidationPassed] = useState(false)
   const [actions, setActions] = useState<Record<ActionKey, ActionState>>({
@@ -426,12 +650,16 @@ export function SettingsPage() {
     cacheUpdate: initialActionState,
     trainingQuick: initialActionState,
     trainingFull: initialActionState,
+    weeklyForecastGeneration: initialActionState,
+    weeklyForecastUpdate: initialActionState,
+    marketAnalysis: initialActionState,
     degradationCheck: initialActionState,
   })
   const socketTasks = useSystemStatusStore(state => state.tasks)
   const wsSystemMetrics = useSystemStatusStore(state => state.snapshot?.system)
+  const wsConnectionStatus = useSystemStatusStore(state => state.connectionStatus)
 
-  const activeSidebarItemId = location.pathname.startsWith('/settings') ? 'settings' : 'dashboard'
+  const activeSidebarItemId = getActiveSidebarItemId(location.pathname)
   const hasActiveTasks = Object.values(actions).some(isLocalActionActivelyRunning)
   const hasActiveSocketTasks = socketTasks.some(isSocketTaskBlockingBackground)
 
@@ -452,6 +680,9 @@ export function SettingsPage() {
         cache_update: 'cacheUpdate',
         training_quick: 'trainingQuick',
         training_full: 'trainingFull',
+        weekly_generation: 'weeklyForecastGeneration',
+        weekly_update: 'weeklyForecastUpdate',
+        analysis_market_portfolio: 'marketAnalysis',
         weekly_backtest: 'degradationCheck',
       }
       let changed = false
@@ -480,17 +711,45 @@ export function SettingsPage() {
         const resultObj = task.result as Record<string, unknown> | null | undefined
         const progressObj = (resultObj?.progress || null) as Record<string, unknown> | null
         const progressMessage = progressObj?.message ? String(progressObj.message) : null
+        const progressStage = formatProgressStage(progressObj)
+        const reason = resultObj?.reason ? String(resultObj.reason) : null
+        const errorCode =
+          (task as Record<string, unknown>).errorCode != null
+            ? String((task as Record<string, unknown>).errorCode)
+            : null
+        const timingObj =
+          (task as Record<string, unknown>).timing &&
+          typeof (task as Record<string, unknown>).timing === 'object'
+            ? ((task as Record<string, unknown>).timing as Record<string, unknown>)
+            : null
+        const durationRaw = Number(timingObj?.durationMs ?? Number.NaN)
+        const durationMs = Number.isFinite(durationRaw) ? durationRaw : null
+        const resultPayload = extractTaskPayload(resultObj ?? null)
+        const resultLines =
+          mappedStatus === 'completed'
+            ? formatActionResultLines(actionKey, resultPayload)
+            : current.resultLines
         if (
           current.taskId !== task.taskId ||
           current.status !== mappedStatus ||
           current.error !== nextError ||
-          current.progressMessage !== progressMessage
+          current.errorCode !== errorCode ||
+          current.reason !== reason ||
+          current.durationMs !== durationMs ||
+          current.progressMessage !== progressMessage ||
+          current.progressStage !== progressStage ||
+          current.resultLines.join('\n') !== resultLines.join('\n')
         ) {
           next[actionKey] = {
             taskId: task.taskId,
             status: mappedStatus,
             error: nextError,
+            errorCode,
+            reason,
+            durationMs,
             progressMessage,
+            progressStage,
+            resultLines,
           }
           changed = true
         }
@@ -508,11 +767,7 @@ export function SettingsPage() {
   }
 
   const handleSidebarSelect = (itemId: string) => {
-    if (itemId === 'settings') {
-      navigate('/settings')
-      return
-    }
-    navigate('/dashboard')
+    navigateFromSidebar(navigate, itemId)
   }
 
   const refreshCacheUpdatedAt = async () => {
@@ -543,13 +798,14 @@ export function SettingsPage() {
     setInsightsLoading(true)
     setInsightsError(null)
     try {
-      const [healthRes, statusRes, schedulerRes, kellyRes, riskRes, preflightRes] = await Promise.all([
+      const [healthRes, statusRes, schedulerRes, kellyRes, riskRes, preflightRes, kpiRes] = await Promise.all([
         SystemService.systemHealthApiV1SystemHealthGet(),
         SystemService.systemStatusApiV1SystemStatusGet(),
         SystemService.systemSchedulerStatusApiV1SystemSchedulerStatusGet(),
         SettingsService.getKellySettingsApiV1SettingsKellyGet(),
         RiskService.riskStatusApiV1RiskStatusGet(),
         PreflightCheckService.preflightResultsApiV1PreflightCheckResultsGet(),
+        SystemService.analysisKpiApiV1SystemAnalysisKpiGet({ window: analysisKpiWindow }),
       ])
 
       const healthData = (healthRes.data || {}) as Record<string, unknown>
@@ -625,6 +881,25 @@ export function SettingsPage() {
         lastCheck: asText(preflightData.timestamp, '—'),
         errorsCount: errors.length,
       })
+
+      const kpiData = (kpiRes.data || {}) as Record<string, unknown>
+      const report = (kpiData.report || {}) as Record<string, unknown>
+      const operability = (report.operability || {}) as Record<string, unknown>
+      const quality = (report.quality || {}) as Record<string, unknown>
+      const fusion = (report.fusion || {}) as Record<string, unknown>
+      const summary = (report.summary || {}) as Record<string, unknown>
+      const alerts = (kpiData.alerts || {}) as Record<string, unknown>
+      setAnalysisKpiSnapshot({
+        window: (asText(kpiData.window, analysisKpiWindow) as '24h' | '7d' | '30d') ?? analysisKpiWindow,
+        coverage: Number(operability.coverage ?? 0),
+        taskSuccessRate: Number(operability.taskSuccessRate ?? 0),
+        fallbackRate: Number(fusion.fallbackRate ?? 0),
+        latencyP95Ms: Number(summary.latencyP95Ms ?? 0),
+        directionAccuracyFusion: Number(quality.directionAccuracyFusion ?? 0),
+        marginalGainLlmOverNn: Number(fusion.marginalGainLlmOverNn ?? 0),
+        llmSkippedUnavailable: Number(fusion.llmSkippedUnavailable ?? 0),
+        alertsCount: Number(alerts.count ?? 0),
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Ошибка загрузки сводки системы'
       setInsightsError(message)
@@ -651,8 +926,11 @@ export function SettingsPage() {
   useEffect(() => {
     void refreshCacheUpdatedAt()
     void loadSettings()
-    void loadSettingsInsights()
   }, [])
+
+  useEffect(() => {
+    void loadSettingsInsights()
+  }, [analysisKpiWindow])
 
   useEffect(() => {
     const current = settingsItems.find(setting => setting.key === 'trading_mode')
@@ -776,6 +1054,23 @@ export function SettingsPage() {
     }
   }
 
+  const applyVirtualCapitalTarget = async () => {
+    if (isVirtualCapitalBusy) return
+    setSettingActionError(null)
+    setIsVirtualCapitalBusy(true)
+    try {
+      await SettingsService.updateSettingsApiV1SettingsPut({
+        requestBody: { key: 'portfolio.virtual.initial_capital', value: TARGET_VIRTUAL_CAPITAL },
+      })
+      setSettingValue('portfolio.virtual.initial_capital', TARGET_VIRTUAL_CAPITAL)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Ошибка обновления виртуального капитала'
+      setSettingActionError(message)
+    } finally {
+      setIsVirtualCapitalBusy(false)
+    }
+  }
+
   const pollTaskStatus = async (actionKey: ActionKey, taskId: string, generation: number) => {
     for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt += 1) {
       if (pollGenerationRef.current[actionKey] !== generation) {
@@ -785,22 +1080,60 @@ export function SettingsPage() {
       const data = taskResponse.data as Record<string, unknown>
       const status = String(data.status || 'unknown')
       const error = data.error ? String(data.error) : null
+      const errorCode = data.errorCode ? String(data.errorCode) : null
+      const timingObj =
+        data.timing && typeof data.timing === 'object'
+          ? (data.timing as Record<string, unknown>)
+          : null
+      const durationRaw = Number(timingObj?.durationMs ?? Number.NaN)
+      const durationMs = Number.isFinite(durationRaw) ? durationRaw : null
       const resultObj = (data.result || null) as Record<string, unknown> | null
       const progressObj = (resultObj?.progress || null) as Record<string, unknown> | null
       const progressMessage = progressObj?.message ? String(progressObj.message) : null
+      const progressStage = formatProgressStage(progressObj)
+      const reason = resultObj?.reason ? String(resultObj.reason) : null
+      const resultPayload = extractTaskPayload(resultObj)
+      const resultLines = formatActionResultLines(actionKey, resultPayload)
       if (pollGenerationRef.current[actionKey] !== generation) {
         return
       }
       if (status === 'queued' || status === 'running') {
-        updateAction(actionKey, { status: status as TaskStatus, error, progressMessage })
+        updateAction(actionKey, {
+          status: status as TaskStatus,
+          error,
+          errorCode,
+          reason,
+          durationMs,
+          progressMessage,
+          progressStage,
+          resultLines: [],
+        })
         await new Promise(resolve => window.setTimeout(resolve, POLL_INTERVAL_MS))
         continue
       }
       if (status === 'completed') {
-        updateAction(actionKey, { status: 'completed', error: null, progressMessage: null })
+        updateAction(actionKey, {
+          status: 'completed',
+          error: null,
+          errorCode,
+          reason,
+          durationMs,
+          progressMessage: progressMessage || 'Задача завершена',
+          progressStage: progressStage || null,
+          resultLines,
+        })
         return
       }
-      updateAction(actionKey, { status: 'failed', error: error || 'Task failed', progressMessage })
+      updateAction(actionKey, {
+        status: 'failed',
+        error: error || 'Task failed',
+        errorCode,
+        reason,
+        durationMs,
+        progressMessage,
+        progressStage,
+        resultLines: [],
+      })
       return
     }
     if (pollGenerationRef.current[actionKey] !== generation) {
@@ -809,7 +1142,12 @@ export function SettingsPage() {
     updateAction(actionKey, {
       status: 'timeout',
       error: 'Polling timeout exceeded',
+      errorCode: 'POLL_TIMEOUT',
+      reason: 'timeout',
+      durationMs: null,
       progressMessage: null,
+      progressStage: null,
+      resultLines: [],
     })
   }
 
@@ -824,9 +1162,16 @@ export function SettingsPage() {
       updateAction(actionKey, {
         status: 'queued',
         error: null,
+        errorCode: null,
+        reason: null,
+        durationMs: null,
         taskId: null,
-        progressMessage: null,
+        progressMessage: 'Запускаем задачу...',
+        progressStage: null,
+        resultLines: [],
       })
+      // Даем React отрисовать loader/queued badge до сетевого запроса.
+      await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
       const response = await trigger()
       if (pollGenerationRef.current[actionKey] !== generation) {
         return
@@ -840,7 +1185,12 @@ export function SettingsPage() {
         taskId,
         status: 'queued',
         error: null,
+        errorCode: null,
+        reason: null,
+        durationMs: null,
         progressMessage: 'Задача поставлена в очередь',
+        progressStage: null,
+        resultLines: [],
       })
       // Основной источник статуса — websocket task.update.
       // Но polling всегда держим как "страховку", чтобы гарантировать terminal status.
@@ -853,7 +1203,16 @@ export function SettingsPage() {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Ошибка запуска фоновой задачи'
-      updateAction(actionKey, { status: 'failed', error: message, progressMessage: null })
+      updateAction(actionKey, {
+        status: 'failed',
+        error: message,
+        errorCode: null,
+        reason: null,
+        durationMs: null,
+        progressMessage: null,
+        progressStage: null,
+        resultLines: [],
+      })
     }
   }
 
@@ -874,8 +1233,12 @@ export function SettingsPage() {
           {description}
         </Text>
         <div className="settings-page__action-controls">
-          <Button onClick={onClick} loading={isActive}>
-            {isActive ? 'Выполняется...' : 'Запустить'}
+          <Button onClick={onClick} loading={isActive} disabled={isActive}>
+            {action.status === 'queued'
+              ? 'Запускаем...'
+              : action.status === 'running'
+                ? 'Выполняется...'
+                : 'Запустить'}
           </Button>
           <span
             className={`settings-page__status-badge settings-page__status-badge--${action.status}`}
@@ -900,6 +1263,32 @@ export function SettingsPage() {
         {action.progressMessage && (
           <Text as="p" variant="hint" tone="muted">
             {action.progressMessage}
+          </Text>
+        )}
+        {action.progressStage && (
+          <Text as="p" variant="hint" tone="muted">
+            {action.progressStage}
+          </Text>
+        )}
+        {action.resultLines.length > 0 &&
+          action.resultLines.map((line, idx) => (
+            <Text key={`${key}-result-${idx}`} as="p" variant="hint" tone="muted">
+              {line}
+            </Text>
+          ))}
+        {action.reason && (
+          <Text as="p" variant="hint" tone="muted">
+            Причина: {action.reason}
+          </Text>
+        )}
+        {action.durationMs != null && action.durationMs >= 0 && (
+          <Text as="p" variant="hint" tone="muted">
+            Длительность: {(action.durationMs / 1000).toFixed(1)}с
+          </Text>
+        )}
+        {action.errorCode && (
+          <Text as="p" variant="hint" tone="danger">
+            Код ошибки: {action.errorCode}
           </Text>
         )}
         {action.error && (
@@ -930,7 +1319,7 @@ export function SettingsPage() {
       sidebar={
         <Sidebar
           title="Навигация"
-          items={sidebarItems}
+          items={APP_SIDEBAR_ITEMS}
           activeItemId={activeSidebarItemId}
           onSelect={handleSidebarSelect}
         />
@@ -1013,6 +1402,33 @@ export function SettingsPage() {
                 )
             )}
             {renderAction(
+              'Weekly forecast: генерация',
+              'Фоновый запуск weekly_generation: генерация weekly forecast через планировщик.',
+              'weeklyForecastGeneration',
+              () =>
+                void runAction('weeklyForecastGeneration', () =>
+                  SystemService.systemTrainingWeeklyGenerationApiV1SystemTrainingWeeklyGenerationPost()
+                )
+            )}
+            {renderAction(
+              'Weekly forecast: обновление',
+              'Фоновый запуск weekly_update: обновление weekly forecast через планировщик.',
+              'weeklyForecastUpdate',
+              () =>
+                void runAction('weeklyForecastUpdate', () =>
+                  SystemService.systemTrainingWeeklyUpdateApiV1SystemTrainingWeeklyUpdatePost()
+                )
+            )}
+            {renderAction(
+              'Провести анализ',
+              'Фоновый анализ рынка и портфеля для подготовки рекомендаций и обновления аналитического контура.',
+              'marketAnalysis',
+              () =>
+                void runAction('marketAnalysis', () =>
+                  SystemService.analysisMarketPortfolioApiV1SystemAnalysisMarketPortfolioPost()
+                )
+            )}
+            {renderAction(
               'Проверка деградации моделей',
               'Фоновый weekly backtest для контроля деградации модели.',
               'degradationCheck',
@@ -1064,6 +1480,29 @@ export function SettingsPage() {
                 >
                   Запустить preflight-проверку
                 </Button>
+                <div className="settings-page__kpi-periods">
+                  <Button
+                    variant={analysisKpiWindow === '24h' ? 'primary' : 'secondary'}
+                    disabled={insightsLoading}
+                    onClick={() => setAnalysisKpiWindow('24h')}
+                  >
+                    KPI 24ч
+                  </Button>
+                  <Button
+                    variant={analysisKpiWindow === '7d' ? 'primary' : 'secondary'}
+                    disabled={insightsLoading}
+                    onClick={() => setAnalysisKpiWindow('7d')}
+                  >
+                    KPI 7д
+                  </Button>
+                  <Button
+                    variant={analysisKpiWindow === '30d' ? 'primary' : 'secondary'}
+                    disabled={insightsLoading}
+                    onClick={() => setAnalysisKpiWindow('30d')}
+                  >
+                    KPI 30д
+                  </Button>
+                </div>
               </div>
 
               {insightsError && (
@@ -1073,6 +1512,87 @@ export function SettingsPage() {
               )}
 
               <div className="settings-page__insights-grid">
+                <div className="settings-page__insight-card">
+                  <Text as="h3" variant="title">
+                    Эффективность анализа
+                  </Text>
+                  <InsightLine
+                    label="Окно:"
+                    value={analysisKpiSnapshot?.window ?? analysisKpiWindow}
+                    tone="accent"
+                  />
+                  <InsightLine
+                    label="Coverage:"
+                    value={formatRatioPercent(analysisKpiSnapshot?.coverage)}
+                    tone={
+                      (analysisKpiSnapshot?.coverage ?? 0) >= 0.9
+                        ? 'good'
+                        : (analysisKpiSnapshot?.coverage ?? 0) >= 0.75
+                          ? 'warn'
+                          : 'bad'
+                    }
+                  />
+                  <InsightLine
+                    label="Task success rate:"
+                    value={formatRatioPercent(analysisKpiSnapshot?.taskSuccessRate)}
+                    tone={
+                      (analysisKpiSnapshot?.taskSuccessRate ?? 0) >= 0.99
+                        ? 'good'
+                        : (analysisKpiSnapshot?.taskSuccessRate ?? 0) >= 0.95
+                          ? 'warn'
+                          : 'bad'
+                    }
+                  />
+                  <InsightLine
+                    label="Fallback rate:"
+                    value={formatRatioPercent(analysisKpiSnapshot?.fallbackRate)}
+                    tone={
+                      (analysisKpiSnapshot?.fallbackRate ?? 0) <= 0.2
+                        ? 'good'
+                        : (analysisKpiSnapshot?.fallbackRate ?? 0) <= 0.35
+                          ? 'warn'
+                          : 'bad'
+                    }
+                  />
+                  <InsightLine
+                    label="Latency p95:"
+                    value={
+                      analysisKpiSnapshot?.latencyP95Ms != null
+                        ? `${Math.round((analysisKpiSnapshot.latencyP95Ms / 1000) * 10) / 10}с`
+                        : '—'
+                    }
+                    tone={
+                      (analysisKpiSnapshot?.latencyP95Ms ?? 0) <= 300_000
+                        ? 'good'
+                        : (analysisKpiSnapshot?.latencyP95Ms ?? 0) <= 900_000
+                          ? 'warn'
+                          : 'bad'
+                    }
+                  />
+                  <InsightLine
+                    label="Fusion accuracy:"
+                    value={formatRatioPercent(analysisKpiSnapshot?.directionAccuracyFusion)}
+                    tone="accent"
+                  />
+                  <InsightLine
+                    label="Marginal gain LLM:"
+                    value={formatRatioPercent(analysisKpiSnapshot?.marginalGainLlmOverNn)}
+                    tone={(analysisKpiSnapshot?.marginalGainLlmOverNn ?? 0) >= 0 ? 'good' : 'warn'}
+                  />
+                  <InsightLine
+                    label="LLM skipped unavailable:"
+                    value={analysisKpiSnapshot?.llmSkippedUnavailable ?? '—'}
+                    tone={
+                      (analysisKpiSnapshot?.llmSkippedUnavailable ?? 0) > 0 ? 'warn' : 'good'
+                    }
+                  />
+                  <InsightLine
+                    label="Алертов:"
+                    value={analysisKpiSnapshot?.alertsCount ?? '—'}
+                    tone={(analysisKpiSnapshot?.alertsCount ?? 0) > 0 ? 'bad' : 'good'}
+                  />
+                </div>
+
                 <div className="settings-page__insight-card">
                   <Text as="h3" variant="title">
                     Состояние сервиса
@@ -1105,9 +1625,11 @@ export function SettingsPage() {
                     const db = translateSubsystemStatus(runtimeSummary?.databaseStatus ?? '—')
                     const train = translateSubsystemStatus(runtimeSummary?.activeTraining ?? '—')
                     const trade = translateSubsystemStatus(runtimeSummary?.activeTrading ?? '—')
+                    const socketState = translateSubsystemStatus(wsConnectionStatus ?? '—')
                     return (
                       <>
                         <InsightLine label="База данных:" value={db.text} tone={db.tone} />
+                        <InsightLine label="WebSocket:" value={socketState.text} tone={socketState.tone} />
                         <InsightLine
                           label="Задач в планировщике (сводка):"
                           value={runtimeSummary?.schedulerJobsCount ?? '—'}
@@ -1164,6 +1686,11 @@ export function SettingsPage() {
                     )}
                     tone="accent"
                   />
+                  <div className="settings-page__insight-card-actions">
+                    <Button variant="secondary" size="sm" onClick={() => navigate('/risk')}>
+                      Страница риск-менеджмента
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="settings-page__insight-card">
@@ -1345,6 +1872,28 @@ export function SettingsPage() {
                                   ))}
                                 </div>
                               )}
+                            </div>
+                          </div>
+                        )}
+                        {item.key === 'portfolio.virtual.initial_capital' && (
+                          <div className="settings-page__trading-mode-panel">
+                            <div className="settings-page__setting-value-row">
+                              <Text as="span" variant="label">
+                                Целевое значение
+                              </Text>
+                              <Text as="span" variant="body">
+                                {new Intl.NumberFormat('ru-RU').format(TARGET_VIRTUAL_CAPITAL)}
+                              </Text>
+                            </div>
+                            <div className="settings-page__trading-mode-actions">
+                              <Button
+                                variant="secondary"
+                                loading={isVirtualCapitalBusy}
+                                disabled={isVirtualCapitalBusy}
+                                onClick={() => void applyVirtualCapitalTarget()}
+                              >
+                                Установить 50 000 000
+                              </Button>
                             </div>
                           </div>
                         )}

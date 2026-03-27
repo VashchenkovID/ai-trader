@@ -1334,6 +1334,40 @@
         }
       }
     },
+    "/api/v1/market/recommendations/{figi}": {
+      "get": {
+        "tags": ["market"],
+        "summary": "Рекомендация по FIGI",
+        "description": "Последняя рекомендация по инструменту (тот же DTO, что в списке).",
+        "operationId": "market_recommendation_by_figi_api_v1_market_recommendations__figi__get",
+        "parameters": [
+          {
+            "name": "figi",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Figi" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/market/stock/{figi}": {
       "get": {
         "tags": ["market"],
@@ -1398,6 +1432,81 @@
               "default": 365,
               "title": "Limit"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/stock/{figi}/analyst-signals": {
+      "get": {
+        "tags": ["market"],
+        "summary": "Сигналы аналитиков по FIGI",
+        "description": "Сигналы из БД (синхронизация scheduler signals_update).",
+        "operationId": "market_stock_analyst_signals_api_v1_market_stock__figi__analyst_signals_get",
+        "parameters": [
+          {
+            "name": "figi",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Figi" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope_dict_str__object__" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/stock/{figi}/weekly-forecast": {
+      "get": {
+        "tags": ["market"],
+        "summary": "Weekly LSTM: прогноз (из БД или refresh)",
+        "description": "Сохранённый weekly-прогноз по рекомендации; при refresh — повторный инференс.",
+        "operationId": "market_stock_weekly_forecast_api_v1_market_stock__figi__weekly_forecast_get",
+        "parameters": [
+          {
+            "name": "figi",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Figi" }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": false, "title": "Refresh" },
+            "description": "Пересчитать модель и записать в БД"
           }
         ],
         "responses": {

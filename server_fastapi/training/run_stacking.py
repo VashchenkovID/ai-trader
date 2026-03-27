@@ -18,25 +18,12 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from training.config import get_training_settings
-from training.data.pipeline import build_feature_pipeline, time_based_split
 from training.data.loaders import load_candles_from_csv
 from training.inference_nn import load_cond_mlp
 from training.models.nn import N_HORIZONS, N_STRATEGIES
 from training.models.stacking import StackingModel, STACKING_INPUT_SIZE
 
 logger = logging.getLogger(__name__)
-
-
-def _synthetic_data(n_samples: int = 500, lookback: int = 60, horizon: int = 5):
-    """Синтетические X, y для генерации мета-признаков."""
-    import pandas as pd
-    import numpy as np
-    from training.run_nn import _candles_to_tensors
-    dates = pd.date_range("2020-01-01", periods=n_samples + lookback + horizon, freq="D")
-    close = 100 + np.cumsum(np.random.randn(len(dates)).astype(np.float32) * 0.5)
-    volume = np.ones(len(dates), dtype=np.float32) * 1e6
-    candles = pd.DataFrame({"close": close, "volume": volume}, index=dates)
-    return _candles_to_tensors(candles, lookback=lookback, horizon=horizon)
 
 
 def build_meta_features(base_model: torch.nn.Module, X: torch.Tensor, device: torch.device) -> torch.Tensor:
@@ -111,18 +98,15 @@ def run(
     if not base_path.is_file():
         return None
 
-    if candles_df is not None and not candles_df.empty:
-        X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _candles_to_tensors(
-            candles_df,
-            options_df=options_df,
-            signals_df=signals_df,
-            lookback=lookback_days,
-            horizon=prediction_horizon,
-        )
-    else:
-        X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _synthetic_data(
-            lookback=lookback_days, horizon=prediction_horizon
-        )
+    if candles_df is None or candles_df.empty:
+        raise RuntimeError("Synthetic data is disabled: stacking requires real candles_df")
+    X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _candles_to_tensors(
+        candles_df,
+        options_df=options_df,
+        signals_df=signals_df,
+        lookback=lookback_days,
+        horizon=prediction_horizon,
+    )
 
     expected_input_size = int(X_t.shape[1]) if len(X_t.shape) >= 2 else 0
     compatible_path = _find_compatible_base_checkpoint(base_path, expected_input_size)
@@ -223,11 +207,11 @@ def main() -> None:
     parser.add_argument("--lookback", type=int, default=60)
     parser.add_argument("--horizon", type=int, default=5)
     args = parser.parse_args()
-    candles_df = None
-    if args.csv:
-        candles_df = load_candles_from_csv(args.csv)
-        if candles_df.empty:
-            raise SystemExit(f"Не удалось загрузить свечи из {args.csv}")
+    if not args.csv:
+        raise SystemExit("Synthetic data is disabled: pass --csv with real candles")
+    candles_df = load_candles_from_csv(args.csv)
+    if candles_df.empty:
+        raise SystemExit(f"Не удалось загрузить свечи из {args.csv}")
     path = run(
         base_checkpoint_path=args.base_checkpoint,
         max_epochs=args.epochs,

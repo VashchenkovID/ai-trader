@@ -52,10 +52,11 @@
 .settings-page__status-badge {
   display: inline-flex;
   align-items: center;
-  height: 30px;
-  padding: 0 12px;
+  @include fluid(height, 30px);
+  @include fluid(padding-left, 12px);
+  @include fluid(padding-right, 12px);
   border-radius: 999px;
-  font-size: 12px;
+  @include fluid(font-size, 12px);
   font-weight: 700;
   letter-spacing: 0.02em;
   border: 1px solid transparent;
@@ -90,7 +91,7 @@
   position: relative;
   overflow: hidden;
   width: 100%;
-  height: 6px;
+  @include fluid(height, 6px);
   border-radius: 999px;
   background: color-mix(in srgb, var(--ds-border) 70%, transparent);
 }
@@ -132,24 +133,34 @@
   margin-bottom: var(--ds-space-sm);
 }
 
+.settings-page__kpi-periods {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-xs);
+}
+
 .settings-page__insights-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(#{px-to-adaptive(240px)}, 1fr));
   gap: var(--ds-space-sm);
   margin-bottom: var(--ds-space-md);
 }
 
 .settings-page__insight-card {
   display: grid;
-  gap: 4px;
-  padding: 8px 10px;
+  gap: var(--ds-space-2xs);
+  padding: var(--ds-space-xs) var(--ds-space-sm);
   border: 1px solid color-mix(in srgb, var(--ds-border) 80%, transparent);
   border-radius: var(--ds-radius-md);
   background: color-mix(in srgb, var(--ds-surface) 92%, transparent);
 }
 
 .settings-page__insight-card .ui-text--title {
-  margin: 0 0 4px;
+  margin: 0 0 var(--ds-space-2xs);
+}
+
+.settings-page__insight-card-actions {
+  margin-top: var(--ds-space-2xs);
 }
 
 .settings-page__insight-line {
@@ -157,7 +168,7 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.35em;
-  margin: 0 0 3px;
+  margin: 0 0 2px;
 }
 
 .settings-page__insight-line:last-child {
@@ -201,7 +212,7 @@
 
 .settings-page__setting {
   display: grid;
-  gap: 6px;
+  gap: var(--ds-space-xs);
   padding: var(--ds-space-md);
   border: 1px solid color-mix(in srgb, var(--ds-border) 80%, transparent);
   border-radius: var(--ds-radius-md);
@@ -209,7 +220,7 @@
 
 .settings-page__setting-value-row {
   display: grid;
-  gap: 4px;
+  gap: var(--ds-space-2xs);
   padding-top: var(--ds-space-xs);
 }
 
@@ -218,7 +229,7 @@
     'Courier New', monospace;
   font-size: 0.9em;
   padding: 0.1em 0.35em;
-  border-radius: 4px;
+  border-radius: var(--ds-radius-xs);
   background: color-mix(in srgb, var(--ds-text) 8%, transparent);
 }
 
@@ -231,7 +242,7 @@
 
 .settings-page__setting-main {
   display: grid;
-  gap: 6px;
+  gap: var(--ds-space-xs);
   min-width: 0;
 }
 
@@ -254,8 +265,8 @@
 
 .settings-page__validation {
   display: grid;
-  gap: 4px;
-  padding: 8px 10px;
+  gap: var(--ds-space-2xs);
+  padding: var(--ds-space-xs) var(--ds-space-sm);
   border-radius: var(--ds-radius-sm);
   border: 1px solid transparent;
 }
@@ -270,7 +281,7 @@
   background: color-mix(in srgb, #ff9d96 18%, transparent);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 56.25rem) {
   .settings-page__insights-grid {
     grid-template-columns: 1fr;
     gap: var(--ds-space-xs);
@@ -281,7 +292,7 @@
   }
 
   .settings-page__insight-card {
-    padding: 8px;
+    padding: var(--ds-space-xs);
   }
 
   .settings-page__settings-list {

@@ -26,16 +26,6 @@ from training.backtest import walk_forward_split, evaluate_model_on_test
 from training.run_stacking import _checkpoint_input_size, _find_compatible_base_checkpoint
 
 
-def _synthetic_data(n_samples: int = 500, lookback: int = 60, horizon: int = 5):
-    """Синтетические X (DataFrame с индексом), y (Series) для walk-forward."""
-    dates = pd.date_range("2020-01-01", periods=n_samples + lookback + horizon, freq="D")
-    close = 100 + np.cumsum(np.random.randn(len(dates)).astype(np.float32) * 0.5)
-    volume = np.ones(len(dates), dtype=np.float32) * 1e6
-    candles = pd.DataFrame({"close": close, "volume": volume}, index=dates)
-    X, y = build_feature_pipeline(candles, lookback_days=lookback, prediction_horizon=horizon)
-    return X, y
-
-
 def run(
     checkpoint_path: str | Path,
     n_splits: int = 5,
@@ -63,16 +53,22 @@ def run(
     if on_progress:
         on_progress({"message": "Подготовка данных для walk-forward...", "phase": "prepare"})
 
-    if candles_df is not None and not candles_df.empty:
-        X, y = build_feature_pipeline(
-            candles_df,
-            options=options,
-            signals=signals,
-            lookback_days=lookback_days,
-            prediction_horizon=prediction_horizon,
-        )
-    else:
-        X, y = _synthetic_data(lookback=lookback_days, horizon=prediction_horizon)
+    if candles_df is None or candles_df.empty:
+        if on_progress:
+            on_progress(
+                {
+                    "message": "Backtest skipped: synthetic disabled, real candles_df required",
+                    "phase": "skipped",
+                }
+            )
+        return {"test_mse": float("nan"), "test_mae": float("nan"), "test_direction_accuracy": float("nan")}
+    X, y = build_feature_pipeline(
+        candles_df,
+        options=options,
+        signals=signals,
+        lookback_days=lookback_days,
+        prediction_horizon=prediction_horizon,
+    )
 
     if X.empty or len(X) < n_splits + 1:
         if on_progress:

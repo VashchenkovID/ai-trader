@@ -127,21 +127,17 @@ def _run_nn_sync(
 @router.post(
     "/run-nn",
     summary="Запустить обучение NN с conditioning",
-    description="Ставит в очередь фоновую задачу обучения базового контура NN. Чекпоинты сохраняются в MLflow и TRAINING_ARTIFACTS_DIR. Требует установки зависимости [training].",
+    description="Deprecated: synthetic-only сценарий отключен. Используйте /run-nn-from-figi или scheduler jobs.",
 )
 async def run_nn_training(
     background_tasks: BackgroundTasks,
     epochs: int = 20,
     resume_from_latest: bool = Query(False, description="Продолжить обучение с последнего чекпоинта"),
 ) -> dict[str, Any]:
-    loop = asyncio.get_event_loop()
-    run_id = await loop.run_in_executor(None, _run_nn_sync, epochs, None, 60, 5, resume_from_latest)
-    if run_id is None:
-        return {
-            "status": "unavailable",
-            "message": "Training package not installed. Install with: pip install -e \".[training]\"",
-        }
-    return {"status": "completed", "mlflow_run_id": run_id}
+    raise AppError(
+        "BAD_REQUEST",
+        message="Synthetic training is disabled. Use /api/v1/training/run-nn-from-figi with real DB candles.",
+    )
 
 
 @router.post(
@@ -220,25 +216,17 @@ async def run_nn_from_figi(
 @router.post(
     "/run-nn-background",
     summary="Запланировать обучение NN в фоне",
-    description="Добавляет задачу обучения в BackgroundTasks и сразу возвращает ответ. Результат обучения пишется в MLflow; для получения run_id смотрите логи приложения.",
+    description="Deprecated: synthetic-only сценарий отключен. Используйте scheduler training jobs с реальными данными.",
 )
 async def schedule_nn_training(
     background_tasks: BackgroundTasks,
     epochs: int = 20,
     resume_from_latest: bool = Query(False, description="Продолжить обучение с последнего чекпоинта"),
 ) -> dict[str, Any]:
-    def _task() -> None:
-        _run_nn_sync(epochs=epochs, resume_from_latest=resume_from_latest)
-
-    try:
-        from training.run_nn import run  # noqa: F401
-    except ImportError:
-        return {
-            "status": "rejected",
-            "message": "Training package not installed. Install with: pip install -e \".[training]\"",
-        }
-    background_tasks.add_task(_task)
-    return {"status": "scheduled", "message": "NN training started in background.", "epochs": epochs}
+    raise AppError(
+        "BAD_REQUEST",
+        message="Synthetic background training is disabled. Use scheduler quick/full training with real DB data.",
+    )
 
 
 def _run_backtest_sync(
@@ -316,7 +304,7 @@ def _run_rl_sync(
 @router.post(
     "/run-weekly",
     summary="Запустить обучение Weekly forecast (LSTM)",
-    description="Запускает обучение контура weekly в executor. Без FIGI используется синтетика. Чекпоинты в models_root/weekly/.",
+    description="Deprecated: synthetic-only сценарий отключен. Используйте /run-weekly-from-figi или scheduler weekly jobs.",
 )
 async def run_weekly_training(
     epochs: int = Query(20, ge=1, le=500),
@@ -324,22 +312,10 @@ async def run_weekly_training(
     n_forecast: int = Query(5, ge=1, le=14),
     resume_from_latest: bool = Query(False, description="Продолжить обучение с последнего weekly чекпоинта"),
 ) -> dict[str, Any]:
-    loop = asyncio.get_event_loop()
-    run_id = await loop.run_in_executor(
-        None,
-        lambda: _run_weekly_sync(
-            epochs=epochs,
-            seq_len=seq_len,
-            n_forecast=n_forecast,
-            resume_from_latest=resume_from_latest,
-        ),
+    raise AppError(
+        "BAD_REQUEST",
+        message="Synthetic weekly training is disabled. Use /api/v1/training/run-weekly-from-figi or scheduler weekly jobs.",
     )
-    if run_id is None:
-        return {
-            "status": "unavailable",
-            "message": "Training package not installed. Install with: pip install -e \".[training]\"",
-        }
-    return {"status": "completed", "mlflow_run_id": run_id}
 
 
 @router.post(
@@ -450,37 +426,41 @@ async def run_weekly_from_figi(
 @router.post(
     "/run-backtest",
     summary="Запустить walk-forward бэктест по чекпоинту NN",
-    description="Загружает данные (по FIGI из БД или синтетика), разбивает на n_splits окон, оценивает модель на каждом тестовом окне, возвращает средние метрики (test_mse, test_mae, test_direction_accuracy).",
+    description="Загружает данные по FIGI из БД, разбивает на n_splits окон, оценивает модель на каждом тестовом окне.",
 )
 async def run_backtest(
     checkpoint: str = Query(..., description="Путь к чекпоинту CondMLP (например ./models/python_nn/cond_mlp-xx.ckpt)"),
     n_splits: int = Query(5, ge=2, le=20),
-    figi: str | None = Query(None, description="FIGI для загрузки свечей из БД; без указания — синтетика"),
+    figi: str | None = Query(None, description="FIGI для загрузки свечей из БД"),
     limit: int = Query(2000, ge=100, le=5000),
     container: AppContainer = Depends(get_container),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    candles_df = None
-    if figi:
-        try:
-            from training.data.loaders import candles_to_dataframe
-        except ImportError:
-            raise AppError(
-                "SERVICE_UNAVAILABLE",
-                message='Training package not installed. Install with: pip install -e ".[training]"',
-            )
-        rows = await container.market_repository.get_candles_by_figi(
-            db_session, figi=figi, offset=0, limit=limit
+    if not figi:
+        raise AppError(
+            "BAD_REQUEST",
+            message="Synthetic backtest is disabled. Pass figi to use real DB candles.",
         )
-        if not rows:
-            raise AppError("NOT_FOUND", message=f"Свечи по FIGI {figi} не найдены")
-        candles_df = candles_to_dataframe(rows)
-        min_rows = 60 + 5 + 50
-        if candles_df.empty or len(candles_df) < min_rows:
-            raise AppError(
-                "BAD_REQUEST",
-                message=f"Недостаточно свечей для backtest (нужно >= {min_rows}, получено {len(candles_df)})",
-            )
+    candles_df = None
+    try:
+        from training.data.loaders import candles_to_dataframe
+    except ImportError:
+        raise AppError(
+            "SERVICE_UNAVAILABLE",
+            message='Training package not installed. Install with: pip install -e ".[training]"',
+        )
+    rows = await container.market_repository.get_candles_by_figi(
+        db_session, figi=figi, offset=0, limit=limit
+    )
+    if not rows:
+        raise AppError("NOT_FOUND", message=f"Свечи по FIGI {figi} не найдены")
+    candles_df = candles_to_dataframe(rows)
+    min_rows = 60 + 5 + 50
+    if candles_df.empty or len(candles_df) < min_rows:
+        raise AppError(
+            "BAD_REQUEST",
+            message=f"Недостаточно свечей для backtest (нужно >= {min_rows}, получено {len(candles_df)})",
+        )
     loop = asyncio.get_event_loop()
     metrics = await loop.run_in_executor(
         None,
@@ -499,37 +479,41 @@ async def run_backtest(
 @router.post(
     "/run-stacking",
     summary="Запустить обучение мета-модели стекинга поверх CondMLP",
-    description="Загружает базовый чекпоинт CondMLP, строит мета-признаки из 9×2 предсказаний, обучает StackingModel, сохраняет чекпоинт в models_root/stacking/.",
+    description="Загружает базовый чекпоинт CondMLP и реальные свечи по FIGI из БД, обучает StackingModel.",
 )
 async def run_stacking(
     base_checkpoint: str = Query(..., description="Путь к чекпоинту CondMLP"),
     epochs: int = Query(20, ge=5, le=200),
-    figi: str | None = Query(None, description="FIGI для загрузки свечей из БД; без указания — синтетика"),
+    figi: str | None = Query(None, description="FIGI для загрузки свечей из БД"),
     limit: int = Query(2000, ge=100, le=5000),
     container: AppContainer = Depends(get_container),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    candles_df = None
-    if figi:
-        try:
-            from training.data.loaders import candles_to_dataframe
-        except ImportError:
-            raise AppError(
-                "SERVICE_UNAVAILABLE",
-                message='Training package not installed. Install with: pip install -e ".[training]"',
-            )
-        rows = await container.market_repository.get_candles_by_figi(
-            db_session, figi=figi, offset=0, limit=limit
+    if not figi:
+        raise AppError(
+            "BAD_REQUEST",
+            message="Synthetic stacking is disabled. Pass figi to use real DB candles.",
         )
-        if not rows:
-            raise AppError("NOT_FOUND", message=f"Свечи по FIGI {figi} не найдены")
-        candles_df = candles_to_dataframe(rows)
-        min_rows = 60 + 5 + 50
-        if candles_df.empty or len(candles_df) < min_rows:
-            raise AppError(
-                "BAD_REQUEST",
-                message=f"Недостаточно свечей для stacking (нужно >= {min_rows}, получено {len(candles_df)})",
-            )
+    candles_df = None
+    try:
+        from training.data.loaders import candles_to_dataframe
+    except ImportError:
+        raise AppError(
+            "SERVICE_UNAVAILABLE",
+            message='Training package not installed. Install with: pip install -e ".[training]"',
+        )
+    rows = await container.market_repository.get_candles_by_figi(
+        db_session, figi=figi, offset=0, limit=limit
+    )
+    if not rows:
+        raise AppError("NOT_FOUND", message=f"Свечи по FIGI {figi} не найдены")
+    candles_df = candles_to_dataframe(rows)
+    min_rows = 60 + 5 + 50
+    if candles_df.empty or len(candles_df) < min_rows:
+        raise AppError(
+            "BAD_REQUEST",
+            message=f"Недостаточно свечей для stacking (нужно >= {min_rows}, получено {len(candles_df)})",
+        )
     loop = asyncio.get_event_loop()
     stacking_path = await loop.run_in_executor(
         None,

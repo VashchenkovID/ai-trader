@@ -69,12 +69,15 @@ async def test_run_job_with_state_failure_sets_failed() -> None:
 
 
 @pytest.mark.asyncio
-async def test_publish_drops_full_queue() -> None:
+async def test_publish_replaces_oldest_when_queue_full() -> None:
     q = asyncio.Queue(maxsize=1)
     q.put_nowait({"full": True})
     scheduler._ws_subscribers.add(q)
     await scheduler._publish("task.update", {"a": 1})
-    assert q not in scheduler._ws_subscribers
+    assert q in scheduler._ws_subscribers
+    assert q.qsize() == 1
+    item = await q.get()
+    assert item["event"] == "task.update"
 
 
 def test_trigger_named_job_unsupported() -> None:
@@ -94,6 +97,25 @@ def test_extract_option_figi_supports_basic_asset_and_position_uid() -> None:
 def test_extract_signal_figi_uses_instrument_uid_lookup() -> None:
     out = scheduler._extract_signal_figi({"instrumentUid": "UID42"}, {}, {"UID42": "FIGI42"})
     assert out == "FIGI42"
+
+
+def test_adaptive_fusion_params_and_recommendation_thresholds() -> None:
+    low = scheduler._adaptive_fusion_params("low")
+    high = scheduler._adaptive_fusion_params("high")
+    normal = scheduler._adaptive_fusion_params("normal")
+    assert low[0] > normal[0]  # NN weight
+    assert high[1] > normal[1]  # LLM weight in high vol
+    assert scheduler._score_to_recommendation(0.9) == "BUY"
+    assert scheduler._score_to_recommendation(0.1) == "SELL"
+
+
+def test_canary_bucket_and_confidence_calibration() -> None:
+    assert scheduler._is_canary_enabled_for_figi("FIGI1", 0) is False
+    assert scheduler._is_canary_enabled_for_figi("FIGI1", 100) is True
+    raw = 0.8
+    calibrated = scheduler._calibrate_confidence(raw, mode="nn_only", temperature=1.2)
+    assert 0.0 <= calibrated <= 1.0
+    assert calibrated < raw
 
 
 @pytest.mark.asyncio
@@ -281,10 +303,22 @@ async def test_analysis_market_portfolio_job_uses_supported_pipeline_signature(
             return {"created": [], "skipped": [], "total": 0}
 
     class _Session:
-        pass
+        def __init__(self) -> None:
+            self.committed = False
 
-    scheduler._container = SimpleNamespace(recommendation_pipeline_service=_Pipeline())
-    monkeypatch.setattr("app.db.session.SessionLocal", lambda: _SessionCtx(_Session()))
+        async def commit(self):
+            self.committed = True
+
+    class _MarketRepo:
+        async def list_instruments(self, *_args, **_kwargs):
+            return []
+
+    scheduler._container = SimpleNamespace(
+        recommendation_pipeline_service=_Pipeline(),
+        market_repository=_MarketRepo(),
+    )
+    fake_session = _Session()
+    monkeypatch.setattr("app.db.session.SessionLocal", lambda: _SessionCtx(fake_session))
 
     out = await scheduler._analysis_market_portfolio_job()
     assert out["message"] == "analysis completed"
@@ -294,6 +328,59 @@ async def test_analysis_market_portfolio_job_uses_supported_pipeline_signature(
         "min_score": Decimal("0"),
         "limit": 50,
     }
+    assert fake_session.committed is True
+
+
+@pytest.mark.asyncio
+async def test_analysis_market_portfolio_job_nn_only_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _Pipeline:
+        async def run(self, _session, **_kwargs):
+            return {"created": [], "skipped": [], "total": 0}
+
+    class _Repo:
+        async def list_instruments(self, _session, offset=0, limit=500):
+            if offset > 0:
+                return []
+            return [SimpleNamespace(figi="F1", ticker="T1", sector="Tech")]
+
+        async def get_recommendation_by_figi(self, _session, _figi):
+            return None
+
+        async def upsert_recommendation(self, _session, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(figi=kwargs["figi"])
+
+    class _Session:
+        async def commit(self):
+            return None
+
+    scheduler._container = SimpleNamespace(recommendation_pipeline_service=_Pipeline(), market_repository=_Repo())
+    monkeypatch.setattr("app.db.session.SessionLocal", lambda: _SessionCtx(_Session()))
+    monkeypatch.setattr("app.api.v1.training._default_jury_providers", lambda: [])
+    monkeypatch.setattr(
+        scheduler,
+        "_run_nn_inference_for_figi",
+        lambda _figi, _ckpt: asyncio.sleep(
+            0,
+            result={
+                "ok": True,
+                "score": 0.74,
+                "confidence": 0.83,
+                "checkpoint": "models/python_nn/test.ckpt",
+                "payload": {"featureCount": 9},
+            },
+        ),
+    )
+    monkeypatch.setattr(scheduler, "_latest_checkpoint_path", lambda _p: "models/python_nn/test.ckpt")
+
+    out = await scheduler._analysis_market_portfolio_job()
+    assert out["message"] == "analysis completed"
+    assert out["fusionNnOnly"] == 1
+    assert captured["recommendation"] == "BUY"
+    assert captured["nn_checkpoint"] == "models/python_nn/test.ckpt"
+    assert captured["nn_payload"]["featureCount"] == 9
 
 
 @pytest.mark.asyncio
@@ -326,6 +413,8 @@ async def test_training_quick_job_retries_without_resume(monkeypatch: pytest.Mon
     out = await scheduler._training_quick_job()
     assert out["message"] == "quick training completed"
     assert out["mlflowRunId"] == "run-ok"
+    assert out["metaSucceeded"] == 0
+    assert out["metaFailed"] == 1
     assert calls == [True, False]
 
 
@@ -349,36 +438,138 @@ async def test_training_quick_job_empty_pipeline_returns_skipped(monkeypatch: py
 
 
 @pytest.mark.asyncio
-async def test_training_full_job_calls_train_agent_with_keywords(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake_run_nn(*_args, **_kwargs):
-        return "nn-run"
-
-    def _fake_run_weekly(*_args, **_kwargs):
-        return "weekly-run"
+async def test_training_quick_job_uses_compatible_checkpoint_for_meta(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "training.run_nn", SimpleNamespace(run=lambda *_args, **_kwargs: "run-ok"))
 
     captured: dict[str, object] = {}
 
-    def _fake_train_agent(*args, **kwargs):
-        captured["args"] = args
-        captured["kwargs"] = kwargs
-        return "rl-ckpt"
+    def _fake_stacking(*_args, **kwargs):
+        captured["base_checkpoint_path"] = kwargs.get("base_checkpoint_path")
+        return "meta-ok"
 
-    monkeypatch.setitem(sys.modules, "training.run_nn", SimpleNamespace(run=_fake_run_nn))
-    monkeypatch.setitem(sys.modules, "training.run_weekly", SimpleNamespace(run=_fake_run_weekly))
-    monkeypatch.setitem(sys.modules, "training.rl", SimpleNamespace(train_agent=_fake_train_agent))
+    monkeypatch.setitem(sys.modules, "training.run_stacking", SimpleNamespace(run=_fake_stacking))
+    monkeypatch.setitem(sys.modules, "training.rl", SimpleNamespace(train_agent=lambda **_k: "rl-ok"))
+    scheduler._container = SimpleNamespace(market_repository=SimpleNamespace(), tinkoff_client=None)
+    monkeypatch.setattr(scheduler, "_list_training_figi", lambda limit=5000: asyncio.sleep(0, result=["F1"]))
+    monkeypatch.setattr(
+        scheduler,
+        "_load_training_candles_with_backfill",
+        lambda *_args, **_kwargs: asyncio.sleep(0, result=([1] * 30, 1)),
+    )
+    monkeypatch.setattr(scheduler, "_load_intraday_candles_last_day", lambda _figi: asyncio.sleep(0, result=None))
+    monkeypatch.setattr(scheduler, "_options_features_for_figi", lambda _figi: asyncio.sleep(0, result=None))
+    monkeypatch.setattr(scheduler, "_signals_features_for_figi", lambda _figi: asyncio.sleep(0, result=None))
+    monkeypatch.setattr(
+        scheduler,
+        "_select_meta_base_checkpoint",
+        lambda **_kwargs: "models/python_nn/compatible.ckpt",
+    )
+
+    out = await scheduler._training_quick_job()
+    assert out["message"] == "quick training completed"
+    assert out["metaSucceeded"] == 1
+    assert out["metaFailed"] == 0
+    assert captured["base_checkpoint_path"] == "models/python_nn/compatible.ckpt"
+
+
+@pytest.mark.asyncio
+async def test_training_full_job_skips_when_market_repo_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "training.run_nn", SimpleNamespace(run=lambda *_a, **_k: "nn-run"))
+    monkeypatch.setitem(
+        sys.modules, "training.run_weekly", SimpleNamespace(run=lambda *_a, **_k: "weekly-run")
+    )
+    monkeypatch.setitem(sys.modules, "training.rl", SimpleNamespace(train_agent=lambda **_k: "rl-ckpt"))
     scheduler._container = None
 
     out = await scheduler._training_full_job()
-    assert out["message"] == "full training completed"
-    assert out["rlCheckpoint"] == "rl-ckpt"
-    assert captured["args"] == ()
-    assert captured["kwargs"] == {
-        "env_name": "paper",
-        "total_steps": 10_000,
-        "checkpoint_dir": None,
-        "continue_from_latest": True,
-        "market_returns": [],
-    }
+    assert out["message"] == "full training skipped: market repository unavailable (real-data only)"
+    assert out["reason"] == "market_repo_unavailable"
+    assert out["metaSucceeded"] == 0
+    assert out["metaFailed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_weekly_generation_uses_real_db_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def _fake_run(*args, **kwargs):
+        calls.append({"args": args, "kwargs": kwargs})
+        return "weekly-real-run"
+
+    monkeypatch.setitem(sys.modules, "training.run_weekly", SimpleNamespace(run=_fake_run))
+    monkeypatch.setattr(scheduler, "_list_training_figi", lambda limit=5000: asyncio.sleep(0, result=["F1", "F2"]))
+    monkeypatch.setattr(
+        scheduler,
+        "_load_training_candles_with_backfill",
+        lambda figi, **_kwargs: asyncio.sleep(
+            0,
+            result=(
+                __import__("pandas").DataFrame(
+                    {
+                        "close": [100.0 + i for i in range(130)],
+                        "volume": [1_000_000 for _ in range(130)],
+                    },
+                    index=__import__("pandas").date_range("2025-01-01", periods=130, freq="D"),
+                ),
+                365,
+            ),
+        ),
+    )
+    out = await scheduler._weekly_generation_job()
+    assert out["message"] == "weekly generation completed"
+    assert out["mode"] == "generation"
+    assert out["dataSource"] == "real_db"
+    assert out["processedUniverse"] == "all_instruments"
+    assert out["resumeFromLatest"] is False
+    assert out["instrumentTotal"] == 2
+    assert out["instrumentEligible"] == 2
+    assert out["rowsUsed"] > 0
+    assert calls
+    args = calls[0]["args"]
+    assert len(args) >= 8
+    assert args[4] is not None  # candles_df
+    assert args[7] is False  # resume_from_latest
+
+
+@pytest.mark.asyncio
+async def test_weekly_update_uses_incremental_resume(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def _fake_run(*args, **kwargs):
+        calls.append({"args": args, "kwargs": kwargs})
+        return "weekly-update-run"
+
+    monkeypatch.setitem(sys.modules, "training.run_weekly", SimpleNamespace(run=_fake_run))
+    monkeypatch.setattr(scheduler, "_list_training_figi", lambda limit=5000: asyncio.sleep(0, result=["F1"]))
+    monkeypatch.setattr(
+        scheduler,
+        "_load_training_candles_with_backfill",
+        lambda figi, **_kwargs: asyncio.sleep(
+            0,
+            result=(
+                __import__("pandas").DataFrame(
+                    {
+                        "close": [200.0 + i for i in range(120)],
+                        "volume": [500_000 for _ in range(120)],
+                    },
+                    index=__import__("pandas").date_range("2025-06-01", periods=120, freq="D"),
+                ),
+                45,
+            ),
+        ),
+    )
+    out = await scheduler._weekly_update_job()
+    assert out["message"] == "weekly update completed"
+    assert out["mode"] == "update"
+    assert out["resumeFromLatest"] is True
+    assert out["instrumentTotal"] == 1
+    assert out["instrumentEligible"] == 1
+    assert out["parameters"]["updateMode"] is True
+    assert calls
+    args = calls[0]["args"]
+    assert len(args) >= 8
+    assert args[4] is not None  # candles_df
+    assert args[7] is True  # resume_from_latest
 
 
 class _Response:

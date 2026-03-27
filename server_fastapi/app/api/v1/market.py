@@ -41,6 +41,19 @@ async def market_recommendations(
     )
 
 
+@router.get("/recommendations/{figi}", summary="Рекомендация по FIGI")
+async def market_recommendation_by_figi(
+    figi: str,
+    container: AppContainer = Depends(get_container),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> SuccessEnvelope[dict[str, object]]:
+    """Последняя рекомендация по инструменту (тот же DTO, что в списке)."""
+    item = await container.market_service.get_recommendation_for_figi(db_session, figi)
+    if item is None:
+        raise AppError("NOT_FOUND", message="Рекомендация не найдена")
+    return SuccessEnvelope(data=item)
+
+
 @router.get("/stock/{figi}", summary="Карточка инструмента по FIGI")
 async def market_stock(
     figi: str,
@@ -74,6 +87,31 @@ async def market_stock_candles(
     return SuccessEnvelope(
         data={"items": candles, "meta": {"offset": offset, "limit": limit, "total": total}}
     )
+
+
+@router.get("/stock/{figi}/analyst-signals", summary="Сигналы аналитиков по FIGI")
+async def market_stock_analyst_signals(
+    figi: str,
+    container: AppContainer = Depends(get_container),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> SuccessEnvelope[dict[str, object]]:
+    """Сигналы из БД (синхронизация scheduler signals_update)."""
+    items = await container.market_service.get_analyst_signals_for_figi(db_session, figi)
+    return SuccessEnvelope(data={"items": items, "meta": {"figi": figi, "total": len(items)}})
+
+
+@router.get("/stock/{figi}/weekly-forecast", summary="Weekly LSTM: прогноз (из БД или refresh)")
+async def market_stock_weekly_forecast(
+    figi: str,
+    refresh: bool = Query(default=False, description="Пересчитать модель и записать в БД (лимит параллелизма на сервере)"),
+    container: AppContainer = Depends(get_container),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> SuccessEnvelope[dict[str, object]]:
+    """Сохранённый weekly-прогноз по рекомендации; при refresh — повторный инференс."""
+    data = await container.market_service.get_weekly_forecast_for_figi(
+        db_session, figi, refresh=refresh
+    )
+    return SuccessEnvelope(data=data)
 
 
 @router.post("/refresh", summary="Фоновый refresh рыночных данных")

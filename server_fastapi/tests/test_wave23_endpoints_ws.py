@@ -54,7 +54,10 @@ async def test_wave2_task_status_endpoints(client) -> None:
 
     task_get = await client.get(f"/api/v1/system/tasks/{task_id}")
     assert task_get.status_code == 200
-    assert task_get.json()["data"]["taskId"] == task_id
+    task_payload = task_get.json()["data"]
+    assert task_payload["taskId"] == task_id
+    assert "timing" in task_payload
+    assert "errorCode" in task_payload
 
     tasks_list = await client.get("/api/v1/system/tasks", params={"limit": 10})
     assert tasks_list.status_code == 200
@@ -63,6 +66,13 @@ async def test_wave2_task_status_endpoints(client) -> None:
     scheduler_status = await client.get("/api/v1/system/scheduler/status")
     assert scheduler_status.status_code == 200
     assert "jobs" in scheduler_status.json()["data"]
+    assert "coreTrainingAnalysisJobs" in scheduler_status.json()["data"]
+
+    missing_task_get = await client.get("/api/v1/system/tasks/unknown-task-id")
+    assert missing_task_get.status_code == 200
+    missing_payload = missing_task_get.json()["data"]
+    assert missing_payload["status"] == "not_found"
+    assert missing_payload["errorCode"] == "TASK_NOT_FOUND"
 
     portfolio_sync_status = await client.get("/api/v1/portfolio/sync/status")
     assert portfolio_sync_status.status_code == 200

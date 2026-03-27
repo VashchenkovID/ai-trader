@@ -66,35 +66,17 @@ def test_stacking_weekly_rl_sync_importerror(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.asyncio
-async def test_run_nn_training_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(training_api.asyncio, "get_event_loop", lambda: _FakeLoop())
-    monkeypatch.setattr(training_api, "_run_nn_sync", lambda *args, **kwargs: None)
-
-    out = await training_api.run_nn_training(background_tasks=BackgroundTasks(), epochs=2)
-    assert out["status"] == "unavailable"
-
-
-@pytest.mark.asyncio
-async def test_run_nn_training_completed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(training_api.asyncio, "get_event_loop", lambda: _FakeLoop())
-    monkeypatch.setattr(training_api, "_run_nn_sync", lambda *args, **kwargs: "mlf-1")
-    out = await training_api.run_nn_training(background_tasks=BackgroundTasks(), epochs=2)
-    assert out["status"] == "completed"
-    assert out["mlflow_run_id"] == "mlf-1"
+async def test_run_nn_training_rejected_without_real_dataset() -> None:
+    with pytest.raises(AppError) as err:
+        await training_api.run_nn_training(background_tasks=BackgroundTasks(), epochs=2)
+    assert err.value.error_code == "BAD_REQUEST"
 
 
 @pytest.mark.asyncio
 async def test_schedule_nn_training_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    _force_import_error(monkeypatch, "training.run_nn")
-    out = await training_api.schedule_nn_training(background_tasks=BackgroundTasks(), epochs=2)
-    assert out["status"] == "rejected"
-
-
-@pytest.mark.asyncio
-async def test_schedule_nn_training_scheduled() -> None:
-    out = await training_api.schedule_nn_training(background_tasks=BackgroundTasks(), epochs=2)
-    assert out["status"] == "scheduled"
-    assert out["epochs"] == 2
+    with pytest.raises(AppError) as err:
+        await training_api.schedule_nn_training(background_tasks=BackgroundTasks(), epochs=2)
+    assert err.value.error_code == "BAD_REQUEST"
 
 
 @pytest.mark.asyncio
@@ -201,14 +183,10 @@ async def test_run_weekly_from_figi_unavailable(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.asyncio
-async def test_run_weekly_training_completed_and_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(training_api.asyncio, "get_event_loop", lambda: _FakeLoop())
-    monkeypatch.setattr(training_api, "_run_weekly_sync", lambda *args, **kwargs: "weekly-1")
-    out_ok = await training_api.run_weekly_training(epochs=1, seq_len=30, n_forecast=5)
-    assert out_ok["status"] == "completed"
-    monkeypatch.setattr(training_api, "_run_weekly_sync", lambda *args, **kwargs: None)
-    out_un = await training_api.run_weekly_training(epochs=1, seq_len=30, n_forecast=5)
-    assert out_un["status"] == "unavailable"
+async def test_run_weekly_training_rejected_without_real_dataset() -> None:
+    with pytest.raises(AppError) as err:
+        await training_api.run_weekly_training(epochs=1, seq_len=30, n_forecast=5)
+    assert err.value.error_code == "BAD_REQUEST"
 
 
 @pytest.mark.asyncio
@@ -350,15 +328,16 @@ async def test_run_backtest_nan_metrics_marked_failed(monkeypatch: pytest.Monkey
             "test_direction_accuracy": float("nan"),
         },
     )
-    out = await training_api.run_backtest(
-        checkpoint="m.ckpt",
-        n_splits=2,
-        figi=None,
-        limit=200,
-        container=SimpleNamespace(market_repository=_Repo(rows=[])),
-        db_session=None,
-    )
-    assert out["status"] == "failed"
+    with pytest.raises(AppError) as err:
+        await training_api.run_backtest(
+            checkpoint="m.ckpt",
+            n_splits=2,
+            figi=None,
+            limit=200,
+            container=SimpleNamespace(market_repository=_Repo(rows=[])),
+            db_session=None,
+        )
+    assert err.value.error_code == "BAD_REQUEST"
 
 
 @pytest.mark.asyncio
@@ -379,19 +358,17 @@ async def test_run_backtest_figi_importerror(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.asyncio
 async def test_run_stacking_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(training_api.asyncio, "get_event_loop", lambda: _FakeLoop())
-    monkeypatch.setattr(training_api, "_run_stacking_sync", lambda *args, **kwargs: None)
     container = SimpleNamespace(market_repository=_Repo(rows=[]))
-
-    out = await training_api.run_stacking(
-        base_checkpoint="base.ckpt",
-        epochs=10,
-        figi=None,
-        limit=100,
-        container=container,
-        db_session=None,
-    )
-    assert out["status"] == "unavailable"
+    with pytest.raises(AppError) as err:
+        await training_api.run_stacking(
+            base_checkpoint="base.ckpt",
+            epochs=10,
+            figi=None,
+            limit=100,
+            container=container,
+            db_session=None,
+        )
+    assert err.value.error_code == "BAD_REQUEST"
 
 
 @pytest.mark.asyncio
@@ -414,11 +391,15 @@ async def test_run_stacking_figi_importerror(monkeypatch: pytest.MonkeyPatch) ->
 async def test_run_stacking_completed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(training_api.asyncio, "get_event_loop", lambda: _FakeLoop())
     monkeypatch.setattr(training_api, "_run_stacking_sync", lambda *args, **kwargs: "models/stacking/meta.pt")
-    container = SimpleNamespace(market_repository=_Repo(rows=[]))
+    monkeypatch.setattr(
+        "training.data.loaders.candles_to_dataframe",
+        lambda _rows: pd.DataFrame({"close": [1.0] * 150, "volume": [1.0] * 150}),
+    )
+    container = SimpleNamespace(market_repository=_Repo(rows=[{"x": 1}] * 150))
     out = await training_api.run_stacking(
         base_checkpoint="base.ckpt",
         epochs=10,
-        figi=None,
+        figi="FIGI",
         limit=100,
         container=container,
         db_session=None,

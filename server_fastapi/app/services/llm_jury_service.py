@@ -37,11 +37,15 @@ async def run_jury_for_figi(
 
     for o in opinions:
         model_key = _provider_key(o.model_id)
+        raw_text = (o.raw_text[:2000] if o.raw_text else "")
+        # Не сохраняем mock и пустые fallback-ответы провайдеров в payload рекомендаций.
+        if _is_mock_model_id(o.model_id) or not raw_text.strip():
+            continue
         provider_payload[model_key] = {
             "modelId": o.model_id,
             "action": o.action,
             "confidence": round(float(o.confidence), 4),
-            "rawText": (o.raw_text[:2000] if o.raw_text else ""),
+            "rawText": raw_text,
             "createdAt": payload_ts,
         }
         row = LlmJuryOpinion(
@@ -49,7 +53,7 @@ async def run_jury_for_figi(
             model_id=o.model_id,
             action=o.action,
             confidence=Decimal(str(round(o.confidence, 4))),
-            raw_text=(o.raw_text[:2000] if o.raw_text else None),
+            raw_text=raw_text,
         )
         db_session.add(row)
 
@@ -88,3 +92,8 @@ def _provider_key(model_id: str) -> str:
         "yandexgpt": "alisa_gpt",
     }
     return aliases.get(normalized, normalized)
+
+
+def _is_mock_model_id(model_id: str) -> bool:
+    normalized = (model_id or "").strip().lower().replace("-", "_")
+    return normalized in {"mock", "mock_llm", "mock_provider"}

@@ -14,6 +14,7 @@ import os
 import time
 import uuid
 import logging
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from dataclasses import dataclass
@@ -35,6 +36,12 @@ logger = logging.getLogger(__name__)
 
 _scheduler: AsyncIOScheduler | None = None
 _container: AppContainer | None = None
+_ANALYSIS_FUSION_W_NN = 0.7
+_ANALYSIS_FUSION_W_LLM = 0.3
+_ANALYSIS_BUY_THRESHOLD = 0.6
+_ANALYSIS_SELL_THRESHOLD = 0.4
+_LLM_CACHE_TTL_HOURS = 6
+_llm_cache: dict[str, dict[str, Any]] = {}
 
 
 @dataclass
@@ -46,6 +53,7 @@ class TaskRecord:
     started_at: str | None = None
     finished_at: str | None = None
     error: str | None = None
+    error_code: str | None = None
     result: dict[str, Any] | None = None
     source: str = "manual"
 
@@ -60,6 +68,18 @@ class JobState:
     last_duration_ms: int | None = None
 
 
+@dataclass(frozen=True)
+class AnalysisRuntimeSettings:
+    feature_enabled: bool
+    canary_percent: int
+    conf_temp_nn_only: float
+    conf_temp_llm_only: float
+    conf_temp_nn_llm: float
+    llm_margin: float
+    llm_cache_ttl_h: int
+    quality_gates_enabled: bool
+
+
 _tasks: dict[str, TaskRecord] = {}
 _job_states: dict[str, JobState] = {}
 _ws_subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
@@ -69,6 +89,15 @@ _background_job_slots = asyncio.Semaphore(_MAX_CONCURRENT_BACKGROUND_JOBS)
 _current_task_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "current_task_id",
     default=None,
+)
+
+_CORE_TRAINING_ANALYSIS_JOBS: tuple[str, ...] = (
+    "training_quick",
+    "training_full",
+    "weekly_generation",
+    "weekly_update",
+    "analysis_market_portfolio",
+    "weekly_backtest",
 )
 
 
@@ -88,6 +117,12 @@ def _state_to_dict(state: JobState) -> dict[str, Any]:
 
 
 def _task_to_dict(task: TaskRecord) -> dict[str, Any]:
+    duration_ms: int | None = None
+    if task.started_at and task.finished_at:
+        with contextlib.suppress(Exception):
+            started = datetime.fromisoformat(task.started_at)
+            finished = datetime.fromisoformat(task.finished_at)
+            duration_ms = max(0, int((finished - started).total_seconds() * 1000))
     return {
         "taskId": task.task_id,
         "taskType": task.task_type,
@@ -96,6 +131,13 @@ def _task_to_dict(task: TaskRecord) -> dict[str, Any]:
         "startedAt": task.started_at,
         "finishedAt": task.finished_at,
         "error": task.error,
+        "errorCode": task.error_code,
+        "timing": {
+            "queuedAt": task.queued_at,
+            "startedAt": task.started_at,
+            "finishedAt": task.finished_at,
+            "durationMs": duration_ms,
+        },
         "result": task.result,
         "source": task.source,
     }
@@ -120,7 +162,17 @@ async def _publish(event_type: str, payload: dict[str, Any]) -> None:
         try:
             queue.put_nowait(event)
         except asyncio.QueueFull:
-            dead.append(queue)
+            # Вместо отписки подписчика отбрасываем самое старое сообщение и
+            # пушим самое новое (особенно важно для частых progress update).
+            replaced = False
+            with contextlib.suppress(Exception):
+                _ = queue.get_nowait()
+            with contextlib.suppress(Exception):
+                queue.put_nowait(event)
+                replaced = True
+            # Если и после этого не удалось — считаем подписчика невалидным.
+            if not replaced:
+                dead.append(queue)
     for queue in dead:
         _ws_subscribers.discard(queue)
 
@@ -238,6 +290,10 @@ def list_job_states() -> list[dict[str, Any]]:
     return [_state_to_dict(state) for state in _job_states.values()]
 
 
+def list_core_training_analysis_jobs() -> list[str]:
+    return list(_CORE_TRAINING_ANALYSIS_JOBS)
+
+
 def _create_task_record(task_type: str, source: str) -> TaskRecord:
     rec = TaskRecord(
         task_id=str(uuid.uuid4()),
@@ -262,13 +318,44 @@ def _set_task_status(
     result: dict[str, Any] | None = None,
 ) -> None:
     rec = _tasks[task_id]
+    current_result = rec.result if isinstance(rec.result, dict) else {}
     rec.status = status
     if status == "running":
         rec.started_at = _iso_now()
     if status in {"failed", "completed"}:
         rec.finished_at = _iso_now()
     rec.error = error
-    rec.result = result
+    rec.error_code = "JOB_FAILED" if status == "failed" else None
+
+    merged_result: dict[str, Any] = {**current_result}
+    if isinstance(result, dict):
+        merged_result.update(result)
+
+    reason = merged_result.get("reason")
+    if reason is None and isinstance(merged_result.get("message"), str):
+        msg = str(merged_result.get("message", "")).lower()
+        if "skipped" in msg:
+            reason = "skipped"
+
+    duration_ms: int | None = None
+    if rec.started_at and rec.finished_at:
+        with contextlib.suppress(Exception):
+            started = datetime.fromisoformat(rec.started_at)
+            finished = datetime.fromisoformat(rec.finished_at)
+            duration_ms = max(0, int((finished - started).total_seconds() * 1000))
+    merged_result["timing"] = {
+        "queuedAt": rec.queued_at,
+        "startedAt": rec.started_at,
+        "finishedAt": rec.finished_at,
+        "durationMs": duration_ms,
+    }
+    if reason is not None:
+        merged_result["reason"] = str(reason)
+    if status == "failed":
+        merged_result["errorCode"] = "JOB_FAILED"
+        if error:
+            merged_result["errorMessage"] = error
+    rec.result = merged_result
 
 
 async def _update_current_task_progress(progress: dict[str, Any]) -> None:
@@ -681,6 +768,241 @@ def _write_ensemble_weights_artifact(tag: str) -> str | None:
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     return out_path
+
+
+def _clamp01(value: float, default: float = 0.5) -> float:
+    with contextlib.suppress(Exception):
+        return min(1.0, max(0.0, float(value)))
+    return default
+
+
+def _score_to_recommendation(score: float) -> str:
+    if score >= _ANALYSIS_BUY_THRESHOLD:
+        return "BUY"
+    if score <= _ANALYSIS_SELL_THRESHOLD:
+        return "SELL"
+    return "HOLD"
+
+
+def _stable_rollout_bucket(figi: str) -> int:
+    return abs(hash(figi or "")) % 100
+
+
+def _is_canary_enabled_for_figi(figi: str, percent: int) -> bool:
+    p = max(0, min(100, int(percent)))
+    if p >= 100:
+        return True
+    if p <= 0:
+        return False
+    return _stable_rollout_bucket(figi) < p
+
+
+def _calibrate_confidence(raw_confidence: float, *, mode: str, temperature: float) -> float:
+    """Temperature scaling для confidence; mode оставлен для раздельной телеметрии."""
+    conf = _clamp01(raw_confidence)
+    temp = max(0.05, float(temperature))
+    eps = 1e-6
+    p = min(1.0 - eps, max(eps, conf))
+    logit = math.log(p / (1.0 - p))
+    calibrated = 1.0 / (1.0 + math.exp(-logit / temp))
+    return _clamp01(calibrated)
+
+
+def _detect_market_regime(candles_df: Any) -> str:
+    try:
+        close = candles_df["close"]
+        ret = close.pct_change().dropna()
+        if len(ret) < 20:
+            return "normal"
+        vol = float(ret.tail(30).std())
+        if vol < 0.008:
+            return "low"
+        if vol > 0.02:
+            return "high"
+        return "normal"
+    except Exception:
+        return "normal"
+
+
+def _adaptive_fusion_params(regime: str) -> tuple[float, float, float, float]:
+    if regime == "low":
+        return 0.75, 0.25, 0.58, 0.42
+    if regime == "high":
+        return 0.62, 0.38, 0.64, 0.36
+    return 0.70, 0.30, 0.60, 0.40
+
+
+def _is_fresh_enough(candles_df: Any, *, max_age_days: int = 7) -> bool:
+    try:
+        idx = candles_df.index
+        if len(idx) == 0:
+            return False
+        last_ts = idx[-1]
+        if hasattr(last_ts, "to_pydatetime"):
+            last_ts = last_ts.to_pydatetime()
+        if not isinstance(last_ts, datetime):
+            return False
+        now = datetime.now(timezone.utc)
+        ts = last_ts if last_ts.tzinfo is not None else last_ts.replace(tzinfo=timezone.utc)
+        return (now - ts).days <= max_age_days
+    except Exception:
+        return False
+
+
+def _align_features_for_checkpoint(x_row: Any, checkpoint_path: str) -> tuple[Any, str]:
+    """Подгоняет размерность row под ожидаемый input_size чекпоинта."""
+    ckpt_path = Path(checkpoint_path)
+    expected = None
+    with contextlib.suppress(Exception):
+        from training.run_stacking import _checkpoint_input_size
+
+        expected = _checkpoint_input_size(ckpt_path)
+    if expected is None:
+        return x_row, checkpoint_path
+    n_features = int(getattr(x_row, "shape", [0, 0])[1] or 0)
+    if n_features == expected:
+        return x_row, checkpoint_path
+    with contextlib.suppress(Exception):
+        from training.run_stacking import _find_compatible_base_checkpoint
+
+        compatible = _find_compatible_base_checkpoint(ckpt_path, n_features)
+        if compatible is not None:
+            return x_row, str(compatible)
+    if n_features > expected:
+        return x_row.iloc[:, :expected], checkpoint_path
+    return None, checkpoint_path
+
+
+def _select_meta_base_checkpoint(
+    *,
+    candles_df: Any,
+    options_df: Any,
+    signals_df: Any,
+    lookback_days: int,
+    prediction_horizon: int,
+) -> str | None:
+    """Выбирает совместимый NN-чекпоинт для этапа stacking/meta."""
+    latest = _latest_checkpoint_path(os.path.join("models", "python_nn"))
+    if not latest:
+        return None
+    try:
+        from training.data.pipeline import build_feature_pipeline
+        from training.run_stacking import _find_compatible_base_checkpoint
+
+        x, _ = build_feature_pipeline(
+            candles_df,
+            options=options_df,
+            signals=signals_df,
+            lookback_days=lookback_days,
+            prediction_horizon=prediction_horizon,
+        )
+        if x is None or getattr(x, "empty", True):
+            return latest
+        expected_input = int(x.shape[1])
+        compatible = _find_compatible_base_checkpoint(Path(latest), expected_input)
+        return str(compatible) if compatible is not None else latest
+    except Exception:
+        return latest
+
+
+def _analysis_runtime_settings(app_settings: dict[str, str]) -> AnalysisRuntimeSettings:
+    def _sfloat(key: str, fallback: float) -> float:
+        try:
+            return float(app_settings.get(key, fallback))
+        except (TypeError, ValueError):
+            return fallback
+
+    def _sint(key: str, fallback: int) -> int:
+        try:
+            return int(float(app_settings.get(key, fallback)))
+        except (TypeError, ValueError):
+            return fallback
+
+    return AnalysisRuntimeSettings(
+        feature_enabled=str(app_settings.get("analysis_v2_enabled", "true")).lower()
+        not in {"0", "false", "off"},
+        canary_percent=_sint("analysis_v2_canary_percent", 20),
+        conf_temp_nn_only=_sfloat("analysis_v2_conf_temp_nn_only", 1.0),
+        conf_temp_llm_only=_sfloat("analysis_v2_conf_temp_llm_only", 1.0),
+        conf_temp_nn_llm=_sfloat("analysis_v2_conf_temp_nn_llm", 1.0),
+        llm_margin=_sfloat("analysis_v2_llm_uncertainty_margin", 0.08),
+        llm_cache_ttl_h=_sint("analysis_v2_llm_cache_ttl_hours", _LLM_CACHE_TTL_HOURS),
+        quality_gates_enabled=str(app_settings.get("analysis_v2_quality_gates_enabled", "true")).lower()
+        not in {"0", "false", "off"},
+    )
+
+
+async def _run_nn_inference_for_figi(figi: str, checkpoint_path: str) -> dict[str, Any]:
+    """Готовит фичи и считает NN score/confidence для одного FIGI."""
+    import numpy as np
+    import torch
+    from training.data.pipeline import build_feature_pipeline
+    from training.inference_nn import load_cond_mlp
+    from training.models.ensemble import EnsemblePredictor
+
+    candles_df, used_window_days = await _load_training_candles_with_backfill(
+        figi,
+        preferred_window_days=365,
+        min_rows=120,
+        max_window_days=365,
+        max_rows=20_000,
+    )
+    if candles_df is None or len(candles_df) < 70:
+        return {"ok": False, "reason": "insufficient_candles", "windowDays": used_window_days}
+    if not _is_fresh_enough(candles_df, max_age_days=14):
+        return {"ok": False, "reason": "stale_candles", "windowDays": used_window_days}
+
+    regime = _detect_market_regime(candles_df)
+
+    options_df = await _options_features_for_figi(figi)
+    signals_df = await _signals_features_for_figi(figi)
+    x, _ = build_feature_pipeline(
+        candles_df,
+        options=options_df,
+        signals=signals_df,
+        lookback_days=60,
+        prediction_horizon=5,
+    )
+    if x.empty:
+        return {"ok": False, "reason": "empty_features", "windowDays": used_window_days}
+    with contextlib.suppress(Exception):
+        nan_ratio = float(np.isnan(x.values).sum()) / float(max(1, x.size))
+        if nan_ratio > 0.15:
+            return {
+                "ok": False,
+                "reason": "feature_nan_ratio_high",
+                "windowDays": used_window_days,
+                "nanRatio": round(nan_ratio, 4),
+            }
+    x_row = x.iloc[[-1]].copy()
+    x_row, adjusted_ckpt = _align_features_for_checkpoint(x_row, checkpoint_path)
+    if x_row is None:
+        return {"ok": False, "reason": "checkpoint_mismatch", "windowDays": used_window_days}
+
+    x_tensor = torch.tensor(x_row.values, dtype=torch.float32)
+    model = load_cond_mlp(adjusted_ckpt)
+    model.eval()
+    ensemble = EnsemblePredictor(model)
+    with torch.no_grad():
+        score_t, conf_t = ensemble.forward(x_tensor, aggregate=True)
+    nn_score = _clamp01(float(score_t.detach().cpu().numpy().reshape(-1)[0]), default=0.5)
+    nn_conf = _clamp01(float(conf_t.detach().cpu().numpy().reshape(-1)[0]), default=0.5)
+    feature_columns = [str(c) for c in x_row.columns.tolist()]
+    feature_values = [float(v) for v in np.asarray(x_row.values[0], dtype=np.float32).tolist()]
+    return {
+        "ok": True,
+        "score": nn_score,
+        "confidence": nn_conf,
+        "checkpoint": adjusted_ckpt,
+        "payload": {
+            "featureCount": len(feature_columns),
+            "featureColumns": feature_columns,
+            "featureValues": feature_values,
+            "windowDays": used_window_days,
+            "marketRegime": regime,
+            "generatedAt": _iso_now(),
+        },
+    }
 
 
 async def _upsert_app_setting(
@@ -1498,7 +1820,13 @@ async def _training_full_job() -> dict[str, Any]:
                     }
                 }
             )
-            nn_ckpt = _latest_checkpoint_path(os.path.join("models", "python_nn"))
+            nn_ckpt = _select_meta_base_checkpoint(
+                candles_df=df,
+                options_df=opt_df,
+                signals_df=sig_df,
+                lookback_days=60,
+                prediction_horizon=5,
+            )
             meta_ckpt = None
             if nn_ckpt:
                 meta_ckpt = await asyncio.to_thread(
@@ -1539,38 +1867,16 @@ async def _training_full_job() -> dict[str, Any]:
         total_instruments = len(figi_list)
         trained_instruments = len(prepared)
     else:
-        await _update_current_task_progress(
-            {
-                "progress": {
-                    "phase": "nn",
-                    "phaseIndex": 1,
-                    "phaseTotal": 4,
-                    "message": "Этап 1/3: обучение NN (fallback synthetic)",
-                    "figi": None,
-                }
-            }
-        )
-        nn_run_id = await asyncio.to_thread(
-            run_nn, 12, 32, 1e-3, None, None, 60, 5, True, options_df=None
-        )
-        await _update_current_task_progress(
-            {
-                "progress": {
-                    "phase": "weekly",
-                    "phaseIndex": 3,
-                    "phaseTotal": 4,
-                    "message": "Этап 3/4: обучение weekly-модели (fallback synthetic)",
-                    "nnRunId": nn_run_id,
-                    "figi": None,
-                }
-            }
-        )
-        weekly_run_id = await asyncio.to_thread(
-            run_weekly, 12, 32, 1e-3, None, None, 30, 5, True, options_df=None
-        )
-        meta_runs = []
-        total_instruments = 1
-        trained_instruments = 1
+        return {
+            "message": "full training skipped: market repository unavailable (real-data only)",
+            "reason": "market_repo_unavailable",
+            "totalInstruments": 0,
+            "trainedInstruments": 0,
+            "skippedInstruments": 0,
+            "metaRuns": [],
+            "metaSucceeded": 0,
+            "metaFailed": 0,
+        }
     await _update_current_task_progress(
         {
             "progress": {
@@ -1580,7 +1886,7 @@ async def _training_full_job() -> dict[str, Any]:
                 "message": (
                     f"Этап 4/4: обучение RL-агента (контур по БД, FIGI {target_figi})"
                     if target_figi
-                    else "Этап 4/4: обучение RL-агента (fallback synthetic)"
+                    else "Этап 4/4: обучение RL-агента"
                 ),
                 "nnRunId": nn_run_id,
                 "weeklyRunId": weekly_run_id,
@@ -1602,12 +1908,16 @@ async def _training_full_job() -> dict[str, Any]:
         )
     )
     ensemble_weights_path = _write_ensemble_weights_artifact("full")
+    meta_succeeded = sum(1 for item in meta_runs if item.get("checkpoint"))
+    meta_failed = max(0, len(meta_runs) - meta_succeeded)
     return {
         "message": "full training completed",
         "figi": target_figi,
         "mlflowRunId": nn_run_id,
         "weeklyRunId": weekly_run_id,
         "metaRuns": meta_runs,
+        "metaSucceeded": meta_succeeded,
+        "metaFailed": meta_failed,
         "ensembleWeightsPath": ensemble_weights_path,
         "totalInstruments": total_instruments,
         "trainedInstruments": trained_instruments,
@@ -1724,7 +2034,13 @@ async def _training_quick_job() -> dict[str, Any]:
                     }
                 }
             )
-            nn_ckpt = _latest_checkpoint_path(os.path.join("models", "python_nn"))
+            nn_ckpt = _select_meta_base_checkpoint(
+                candles_df=candles_df,
+                options_df=options_df,
+                signals_df=signals_df,
+                lookback_days=5,
+                prediction_horizon=1,
+            )
             meta_ckpt = None
             if nn_ckpt:
                 meta_ckpt = await asyncio.to_thread(
@@ -1769,11 +2085,15 @@ async def _training_quick_job() -> dict[str, Any]:
             )
         )
         ensemble_weights_path = _write_ensemble_weights_artifact("quick")
+        meta_succeeded = sum(1 for item in meta_runs if item.get("checkpoint"))
+        meta_failed = max(0, len(meta_runs) - meta_succeeded)
         return {
             "message": "quick training completed",
             "figi": run_ids[0]["figi"],
             "mlflowRunId": run_ids[0]["runId"],
             "metaRuns": meta_runs,
+            "metaSucceeded": meta_succeeded,
+            "metaFailed": meta_failed,
             "rlCheckpoint": rl_checkpoint,
             "ensembleWeightsPath": ensemble_weights_path,
             "totalInstruments": total,
@@ -1788,71 +2108,413 @@ async def _training_quick_job() -> dict[str, Any]:
         "totalInstruments": 0,
         "trainedInstruments": 0,
         "skippedInstruments": 0,
+        "metaSucceeded": 0,
+        "metaFailed": 0,
     }
 
 
 async def _analysis_market_portfolio_job() -> dict[str, Any]:
     if not _container:
         raise RuntimeError("Container is not initialized")
-    # Анализ: обновляем LLM-пэйлоад рекомендаций (GigaChat/Alisa) и затем
-    # прогоняем recommendation pipeline.
+    # Анализ: считаем NN-сигнал по каждому FIGI, опционально обогащаем LLM
+    # и объединяем через weighted fusion в итоговую рекомендацию.
     from app.db.session import SessionLocal as _Session
     from app.services.llm_jury_service import run_jury_for_figi
-    from app.api.v1.training import _default_jury_providers, _consensus_to_recommendation
+    from app.api.v1.training import _default_jury_providers
+
+    await _update_current_task_progress(
+        {
+            "progress": {
+                "message": "Этап 1/3: запуск анализа рынка и портфеля",
+                "phase": "analysis",
+                "stage": "prepare",
+                "stageLabel": "Подготовка",
+                "stageIndex": 1,
+                "stageTotal": 3,
+            }
+        }
+    )
 
     async with _Session() as session:
-        providers = _default_jury_providers()
-        llm_enriched = 0
         market_repo = getattr(_container, "market_repository", None)
-        if providers and market_repo is not None:
-            rec_rows = await market_repo.list_recommendations(session, offset=0, limit=50)
-            figi_targets = [r.figi for r in rec_rows if getattr(r, "figi", None)]
-            if not figi_targets:
-                inst_rows = await market_repo.list_instruments(session, offset=0, limit=20)
-                figi_targets = [i.figi for i in inst_rows if getattr(i, "figi", None)]
-            for figi in figi_targets[:20]:
-                try:
-                    inst = await market_repo.get_instrument_by_figi(session, figi)
-                    ticker = getattr(inst, "ticker", None) or figi
-                    sector = getattr(inst, "sector", None) or "—"
-                    candles = await market_repo.get_candles_by_figi(
-                        session,
-                        figi=figi,
-                        offset=0,
-                        limit=30,
-                    )
-                    if candles:
-                        parts = [f"close: {c.close}" for c in candles[-5:]]
-                        context = f"Тикер {ticker}, сектор {sector}. Последние свечи: {', '.join(parts)}."
-                    else:
-                        context = f"Тикер {ticker}, сектор {sector}."
-                    summary = await run_jury_for_figi(
-                        session,
-                        figi=figi,
-                        ticker=str(ticker),
-                        context=context,
-                        providers=providers,
-                    )
-                    payload = {
-                        "providers": summary.get("provider_payload") or {},
-                        "consensus": float(summary["consensus"]),
-                        "dispersion": float(summary["dispersion"]),
-                        "confidenceAvg": float(summary["confidence_avg"]),
-                        "requiredProvidersPresent": bool(summary.get("required_providers_present")),
-                        "source": "scheduler_analysis",
+        if market_repo is None:
+            raise RuntimeError("Market repository is unavailable")
+        app_settings: dict[str, str] = {}
+        if hasattr(session, "execute"):
+            app_settings_rows = (
+                await session.execute(select(AppSetting.key, AppSetting.value))
+            ).all()
+            app_settings = {
+                str(k): str(v) for k, v in app_settings_rows if isinstance(k, str)
+            }
+
+        runtime = _analysis_runtime_settings(app_settings)
+        feature_enabled = runtime.feature_enabled
+        canary_percent = runtime.canary_percent
+        conf_temp_nn_only = runtime.conf_temp_nn_only
+        conf_temp_llm_only = runtime.conf_temp_llm_only
+        conf_temp_nn_llm = runtime.conf_temp_nn_llm
+        llm_margin = runtime.llm_margin
+        llm_cache_ttl_h = runtime.llm_cache_ttl_h
+        quality_gates_enabled = runtime.quality_gates_enabled
+
+        inst_rows: list[Any] = []
+        offset = 0
+        batch_size = 500
+        while True:
+            batch = await market_repo.list_instruments(session, offset=offset, limit=batch_size)
+            if not batch:
+                break
+            inst_rows.extend(batch)
+            offset += len(batch)
+            if len(batch) < batch_size:
+                break
+        targets: list[tuple[str, str, str]] = []
+        for inst in inst_rows:
+            figi = getattr(inst, "figi", None)
+            if not figi:
+                continue
+            ticker = str(getattr(inst, "ticker", None) or figi)
+            sector = str(getattr(inst, "sector", None) or "—")
+            targets.append((str(figi), ticker, sector))
+        total_targets = len(targets)
+
+        providers = _default_jury_providers()
+        llm_total = total_targets if providers else 0
+        llm_enriched = 0
+        nn_enriched = 0
+        skipped_daily = 0
+        skipped_unavailable = 0
+        fusion_nn_only = 0
+        fusion_llm_only = 0
+        fusion_both = 0
+        skipped_no_signal = 0
+        nn_failures = 0
+        llm_calls_saved = 0
+        llm_cache_hits = 0
+        llm_calls_total = 0
+        canary_processed = 0
+        canary_skipped = 0
+        recommendation_buy = 0
+        recommendation_sell = 0
+        recommendation_hold = 0
+
+        await _update_current_task_progress(
+            {
+                "progress": {
+                    "message": f"Этап 2/3: NN-инференс по {total_targets} инструментам",
+                    "phase": "analysis",
+                    "stage": "nn_prepare",
+                    "stageLabel": "NN-анализ",
+                    "stageIndex": 2,
+                    "stageTotal": 3,
+                }
+            }
+        )
+
+        models_dir = os.path.join("models", "python_nn")
+        nn_ckpt = _latest_checkpoint_path(models_dir)
+        if not nn_ckpt:
+            nn_ckpt = "./models/python_nn/cond_mlp-latest.ckpt"
+            if not os.path.exists(nn_ckpt):
+                nn_ckpt = None
+
+        today = now_msk().date()
+
+        def _has_real_llm_payload(payload: Any) -> bool:
+            if not isinstance(payload, dict):
+                return False
+            source = str(payload.get("source") or "")
+            providers_payload = payload.get("providers")
+            if source == "scheduler_analysis_hybrid" and isinstance(payload.get("llm"), dict):
+                providers_payload = (payload.get("llm") or {}).get("providers")
+            if not isinstance(providers_payload, dict):
+                return False
+            required = ("gigachat", "alisa_gpt")
+            return all(
+                isinstance(providers_payload.get(key), dict)
+                and str((providers_payload.get(key) or {}).get("rawText", "")).strip() != ""
+                for key in required
+            )
+
+        for idx, (figi, ticker, sector) in enumerate(targets, start=1):
+            if not feature_enabled:
+                canary_skipped += 1
+                continue
+            if not _is_canary_enabled_for_figi(figi, canary_percent):
+                canary_skipped += 1
+                continue
+            canary_processed += 1
+            await _update_current_task_progress(
+                {
+                    "progress": {
+                        "message": f"Этап 2/3: NN [{idx}/{total_targets}] FIGI {figi}",
+                        "phase": "analysis",
+                        "stage": "nn_inference",
+                        "substage": "NN",
+                        "stageLabel": "NN-анализ",
+                        "stageIndex": 2,
+                        "stageTotal": 3,
+                        "instrumentIndex": idx,
+                        "instrumentTotal": total_targets,
+                        "figi": figi,
                     }
-                    await market_repo.upsert_recommendation(
-                        session,
-                        figi=figi,
-                        recommendation=_consensus_to_recommendation(float(summary["consensus"])),
-                        confidence=Decimal(str(round(float(summary["confidence_avg"]), 4))),
-                        score=Decimal(str(round(float(summary["consensus"]), 4))),
-                        llm_jury_payload=payload,
-                    )
-                    llm_enriched += 1
-                    await session.commit()
+                }
+            )
+
+            nn_data: dict[str, Any] | None = None
+            if nn_ckpt:
+                try:
+                    nn_data = await _run_nn_inference_for_figi(figi, nn_ckpt)
+                except Exception as e:
+                    logger.warning("NN inference failed for %s: %s", figi, e)
+                    nn_data = {"ok": False, "reason": "exception", "detail": str(e)}
+            else:
+                nn_data = {"ok": False, "reason": "checkpoint_missing"}
+
+            nn_ok = bool(nn_data and nn_data.get("ok"))
+            if nn_ok:
+                nn_enriched += 1
+            else:
+                nn_failures += 1
+
+            llm_payload: dict[str, Any] | None = None
+            llm_consensus: float | None = None
+            llm_confidence: float | None = None
+            llm_reason = "providers_missing"
+            regime = str(((nn_data or {}).get("payload") or {}).get("marketRegime") or "normal")
+            w_nn, w_llm, buy_threshold, sell_threshold = _adaptive_fusion_params(regime)
+            nn_score_preview = _clamp01(float(nn_data.get("score")), default=0.5) if nn_ok else None
+            should_call_llm = True
+            if nn_score_preview is not None:
+                should_call_llm = abs(nn_score_preview - 0.5) <= max(0.01, llm_margin)
+                if not should_call_llm:
+                    llm_calls_saved += 1
+                    llm_reason = "skipped_confident_nn"
+            if providers:
+                cache_key = f"{figi}:{now_msk().date().isoformat()}"
+                cached = _llm_cache.get(cache_key)
+                if (
+                    should_call_llm
+                    and cached is not None
+                    and isinstance(cached.get("expiresAt"), datetime)
+                    and cached["expiresAt"] > datetime.now(timezone.utc)
+                ):
+                    llm_payload = cached.get("payload")
+                    llm_consensus = _clamp01(float(cached.get("consensus", 0.5)))
+                    llm_confidence = _clamp01(float(cached.get("confidence", 0.5)))
+                    llm_reason = "cache_hit"
+                    llm_cache_hits += 1
+                    should_call_llm = False
+                if should_call_llm:
+                    llm_calls_total += 1
+                await _update_current_task_progress(
+                    {
+                        "progress": {
+                            "message": f"Этап 2/3: LLM [{idx}/{total_targets}] FIGI {figi}",
+                            "phase": "analysis",
+                            "stage": "llm_enrich",
+                            "substage": "LLM",
+                            "stageLabel": "LLM-анализ",
+                            "stageIndex": 2,
+                            "stageTotal": 3,
+                            "instrumentIndex": idx,
+                            "instrumentTotal": total_targets,
+                            "figi": figi,
+                        }
+                    }
+                )
+                try:
+                    if not should_call_llm and llm_reason in {"skipped_confident_nn", "cache_hit"}:
+                        pass
+                    elif not should_call_llm:
+                        llm_reason = "skipped"
+                    else:
+                        # Daily limit and real LLM payload reuse.
+                        current_rec = await market_repo.get_recommendation_by_figi(session, figi)
+                        current_date = getattr(current_rec, "analysis_date", None)
+                        current_payload = getattr(current_rec, "llm_jury_payload", None)
+                        if (
+                            current_date is not None
+                            and getattr(current_date, "date", lambda: None)() == today
+                            and _has_real_llm_payload(current_payload)
+                        ):
+                            skipped_daily += 1
+                            if isinstance(current_payload, dict):
+                                llm_payload = current_payload
+                                llm_root = (
+                                    current_payload.get("llm")
+                                    if isinstance(current_payload.get("llm"), dict)
+                                    else current_payload
+                                )
+                                llm_consensus = _clamp01(float((llm_root or {}).get("consensus", 0.5)))
+                                llm_confidence = _clamp01(float((llm_root or {}).get("confidenceAvg", 0.5)))
+                            llm_reason = "daily_limit"
+                        else:
+                            candles = await market_repo.get_candles_by_figi(
+                                session,
+                                figi=figi,
+                                offset=0,
+                                limit=30,
+                            )
+                            if candles:
+                                parts = [f"close: {c.close}" for c in candles[-5:]]
+                                context = f"Тикер {ticker}, сектор {sector}. Последние свечи: {', '.join(parts)}."
+                            else:
+                                context = f"Тикер {ticker}, сектор {sector}."
+                            summary = await run_jury_for_figi(
+                                session,
+                                figi=figi,
+                                ticker=str(ticker),
+                                context=context,
+                                providers=providers,
+                            )
+                            llm_payload = {
+                                "providers": summary.get("provider_payload") or {},
+                                "consensus": float(summary["consensus"]),
+                                "dispersion": float(summary["dispersion"]),
+                                "confidenceAvg": float(summary["confidence_avg"]),
+                                "requiredProvidersPresent": bool(summary.get("required_providers_present")),
+                                "source": "scheduler_analysis",
+                            }
+                            if bool(summary.get("required_providers_present")):
+                                llm_consensus = _clamp01(float(summary["consensus"]))
+                                llm_confidence = _clamp01(float(summary["confidence_avg"]))
+                                llm_enriched += 1
+                                llm_reason = "ok"
+                            else:
+                                skipped_unavailable += 1
+                                llm_reason = "unavailable"
+                            if llm_consensus is not None and llm_confidence is not None and llm_payload is not None:
+                                _llm_cache[cache_key] = {
+                                    "payload": llm_payload,
+                                    "consensus": llm_consensus,
+                                    "confidence": llm_confidence,
+                                    "expiresAt": datetime.now(timezone.utc) + timedelta(hours=llm_cache_ttl_h),
+                                }
                 except Exception as e:
                     logger.warning("LLM jury enrich failed for %s: %s", figi, e)
+                    llm_reason = "exception"
+
+            await _update_current_task_progress(
+                {
+                    "progress": {
+                        "message": f"Этап 2/3: Fusion [{idx}/{total_targets}] FIGI {figi}",
+                        "phase": "analysis",
+                        "stage": "fusion",
+                        "substage": "Fusion",
+                        "stageLabel": "NN+LLM Fusion",
+                        "stageIndex": 2,
+                        "stageTotal": 3,
+                        "instrumentIndex": idx,
+                        "instrumentTotal": total_targets,
+                        "figi": figi,
+                    }
+                }
+            )
+
+            nn_score = _clamp01(float(nn_data.get("score")), default=0.5) if nn_ok else None
+            nn_conf = _clamp01(float(nn_data.get("confidence")), default=0.5) if nn_ok else None
+            llm_ok = llm_consensus is not None and llm_confidence is not None
+            final_score: float | None = None
+            final_conf: float | None = None
+            fusion_mode = "none"
+
+            if nn_ok and llm_ok:
+                final_score = _clamp01(w_nn * nn_score + w_llm * llm_consensus)
+                raw_conf = _clamp01(w_nn * nn_conf + w_llm * llm_confidence)
+                final_conf = _calibrate_confidence(raw_conf, mode="nn_llm", temperature=conf_temp_nn_llm)
+                fusion_mode = "nn_llm"
+                fusion_both += 1
+            elif nn_ok:
+                final_score = nn_score
+                final_conf = _calibrate_confidence(nn_conf, mode="nn_only", temperature=conf_temp_nn_only)
+                fusion_mode = "nn_only"
+                fusion_nn_only += 1
+            elif llm_ok:
+                final_score = llm_consensus
+                final_conf = _calibrate_confidence(
+                    llm_confidence, mode="llm_only", temperature=conf_temp_llm_only
+                )
+                fusion_mode = "llm_only"
+                fusion_llm_only += 1
+            else:
+                if quality_gates_enabled:
+                    # При полном отсутствии валидных сигналов сохраняем нейтральный HOLD вместо silent skip.
+                    final_score = 0.5
+                    final_conf = 0.5
+                    fusion_mode = "degrade_to_hold"
+                else:
+                    skipped_no_signal += 1
+                    continue
+
+            fusion_payload = {
+                "source": "scheduler_analysis_hybrid",
+                "weights": {"nn": w_nn, "llm": w_llm},
+                "thresholds": {"buy": buy_threshold, "sell": sell_threshold},
+                "marketRegime": regime,
+                "mode": fusion_mode,
+                "nnAvailable": nn_ok,
+                "llmAvailable": llm_ok,
+                "llmReason": llm_reason,
+                "finalScore": final_score,
+                "finalConfidence": final_conf,
+                "calibration": {
+                    "nnOnlyTemperature": conf_temp_nn_only,
+                    "llmOnlyTemperature": conf_temp_llm_only,
+                    "nnLlmTemperature": conf_temp_nn_llm,
+                },
+            }
+            if nn_data is not None:
+                fusion_payload["nn"] = nn_data
+            if llm_payload is not None:
+                fusion_payload["llm"] = llm_payload
+
+            final_recommendation = (
+                "BUY" if final_score >= buy_threshold else "SELL" if final_score <= sell_threshold else "HOLD"
+            )
+            if final_recommendation == "BUY":
+                recommendation_buy += 1
+            elif final_recommendation == "SELL":
+                recommendation_sell += 1
+            else:
+                recommendation_hold += 1
+
+            await market_repo.upsert_recommendation(
+                session,
+                figi=figi,
+                recommendation=final_recommendation,
+                confidence=Decimal(str(round(float(final_conf), 4))),
+                score=Decimal(str(round(float(final_score), 4))),
+                llm_jury_payload=fusion_payload,
+                nn_score=Decimal(str(round(float(nn_score), 4))) if nn_score is not None else None,
+                nn_confidence=Decimal(str(round(float(nn_conf), 4))) if nn_conf is not None else None,
+                nn_checkpoint=str(nn_data.get("checkpoint")) if nn_ok else None,
+                nn_payload=(
+                    nn_data.get("payload")
+                    if nn_ok
+                    else {"ok": False, "reason": (nn_data or {}).get("reason", "unavailable")}
+                ),
+            )
+            try:
+                if _container is not None:
+                    await _container.market_service.compute_and_store_weekly_forecast(session, figi)
+            except Exception as wf_exc:
+                logger.warning("weekly forecast persist failed for %s: %s", figi, wf_exc)
+            await session.commit()
+
+        await _update_current_task_progress(
+            {
+                "progress": {
+                    "message": "Этап 3/3: расчет recommendation pipeline",
+                    "phase": "analysis",
+                    "stage": "pipeline",
+                    "stageLabel": "Расчет рекомендаций",
+                    "stageIndex": 3,
+                    "stageTotal": 3,
+                }
+            }
+        )
         data = await _container.recommendation_pipeline_service.run(
             session,
             mode="paper",
@@ -1860,25 +2522,401 @@ async def _analysis_market_portfolio_job() -> dict[str, Any]:
             min_score=Decimal("0"),
             limit=50,
         )
-        return {"message": "analysis completed", "summary": data, "llmEnriched": llm_enriched}
+        # Фиксируем созданные pipeline-заявки в БД, иначе created в summary может
+        # быть > 0 при фактическом rollback на выходе из сессии.
+        await session.commit()
+
+        await _update_current_task_progress(
+            {
+                "progress": {
+                    "message": (
+                        "Анализ завершен: "
+                        f"NN обновлено {nn_enriched}, "
+                        f"LLM обновлено {llm_enriched}, "
+                        f"fusion NN+LLM {fusion_both}, "
+                        f"fallback NN-only {fusion_nn_only}, "
+                        f"fallback LLM-only {fusion_llm_only}, "
+                        f"LLM cache hit {llm_cache_hits}, "
+                        f"LLM вызовов сэкономлено {llm_calls_saved}, "
+                        f"пропущено по суточному лимиту {skipped_daily}, "
+                        f"пропущено без реальных LLM-данных {skipped_unavailable}, "
+                        f"пропущено без сигналов {skipped_no_signal}, "
+                        f"canary processed {canary_processed}, skipped {canary_skipped}, "
+                        f"BUY {recommendation_buy}, SELL {recommendation_sell}, HOLD {recommendation_hold}"
+                    ),
+                    "phase": "done",
+                    "stage": "done",
+                    "stageLabel": "Завершено",
+                    "stageIndex": 3,
+                    "stageTotal": 3,
+                    "nnEnriched": nn_enriched,
+                    "llmEnriched": llm_enriched,
+                    "fusionBoth": fusion_both,
+                    "fusionNnOnly": fusion_nn_only,
+                    "fusionLlmOnly": fusion_llm_only,
+                    "skippedDaily": skipped_daily,
+                    "skippedUnavailable": skipped_unavailable,
+                    "skippedNoSignal": skipped_no_signal,
+                    "llmCacheHits": llm_cache_hits,
+                    "llmCallsSaved": llm_calls_saved,
+                    "canaryProcessed": canary_processed,
+                    "canarySkipped": canary_skipped,
+                    "totalTargets": total_targets,
+                    "recommendationBuy": recommendation_buy,
+                    "recommendationSell": recommendation_sell,
+                    "recommendationHold": recommendation_hold,
+                }
+            }
+        )
+        return {
+            "message": "analysis completed",
+            "summary": data,
+            "nnEnriched": nn_enriched,
+            "nnFailures": nn_failures,
+            "llmEnriched": llm_enriched,
+            "llmTotalTargets": llm_total,
+            "fusionBoth": fusion_both,
+            "fusionNnOnly": fusion_nn_only,
+            "fusionLlmOnly": fusion_llm_only,
+            "skippedDaily": skipped_daily,
+            "skippedUnavailable": skipped_unavailable,
+            "skippedNoSignal": skipped_no_signal,
+            "llmCacheHits": llm_cache_hits,
+            "llmCallsSaved": llm_calls_saved,
+            "llmCallsTotal": llm_calls_total,
+            "canaryProcessed": canary_processed,
+            "canarySkipped": canary_skipped,
+            "totalTargets": total_targets,
+            "recommendationBuy": recommendation_buy,
+            "recommendationSell": recommendation_sell,
+            "recommendationHold": recommendation_hold,
+            "featureEnabled": feature_enabled,
+            "canaryPercent": canary_percent,
+        }
+
+
+async def _collect_weekly_training_dataset(
+    *,
+    mode: str,
+    seq_len: int,
+    n_forecast: int,
+    preferred_window_days: int,
+    max_window_days: int,
+    max_figi: int = 5000,
+) -> dict[str, Any]:
+    try:
+        import pandas as pd
+    except Exception:
+        return {
+            "ok": False,
+            "error": "pandas_unavailable",
+            "instrumentTotal": 0,
+            "instrumentEligible": 0,
+            "instrumentSkipped": 0,
+            "rowsTotal": 0,
+            "rowsUsed": 0,
+            "rowsSkipped": 0,
+            "skipReasons": {"pandas_unavailable": 1},
+        }
+
+    await _update_current_task_progress(
+        {
+            "progress": {
+                "message": "Weekly forecast: этап 1/4 — сбор списка инструментов",
+                "phase": "weekly_forecast",
+                "stage": "collect_universe",
+                "stageLabel": "Сбор universe",
+                "stageIndex": 1,
+                "stageTotal": 4,
+            }
+        }
+    )
+    figi_list = await _list_training_figi(limit=max_figi)
+    instrument_total = len(figi_list)
+    min_rows = 20 + int(seq_len) + int(n_forecast) + 50
+    skip_reasons: dict[str, int] = {}
+    used_frames: list[Any] = []
+    rows_total = 0
+    rows_used = 0
+
+    if instrument_total == 0:
+        return {
+            "ok": False,
+            "error": "no_instruments",
+            "instrumentTotal": 0,
+            "instrumentEligible": 0,
+            "instrumentSkipped": 0,
+            "rowsTotal": 0,
+            "rowsUsed": 0,
+            "rowsSkipped": 0,
+            "skipReasons": {"no_instruments": 1},
+        }
+
+    await _update_current_task_progress(
+        {
+            "progress": {
+                "message": (
+                    f"Weekly forecast: этап 2/4 — загрузка свечей ({instrument_total} инструментов)"
+                ),
+                "phase": "weekly_forecast",
+                "stage": "load_candles",
+                "stageLabel": "Загрузка свечей",
+                "stageIndex": 2,
+                "stageTotal": 4,
+                "instrumentTotal": instrument_total,
+            }
+        }
+    )
+    for idx, figi in enumerate(figi_list, start=1):
+        if idx == 1 or idx % 25 == 0 or idx == instrument_total:
+            await _update_current_task_progress(
+                {
+                    "progress": {
+                        "message": f"Weekly forecast: свечи [{idx}/{instrument_total}] FIGI {figi}",
+                        "phase": "weekly_forecast",
+                        "stage": "load_candles",
+                        "substage": "per_figi",
+                        "stageLabel": "Загрузка свечей",
+                        "stageIndex": 2,
+                        "stageTotal": 4,
+                        "instrumentIndex": idx,
+                        "instrumentTotal": instrument_total,
+                        "figi": figi,
+                    }
+                }
+            )
+        try:
+            df, _window = await _load_training_candles_with_backfill(
+                figi,
+                preferred_window_days=preferred_window_days,
+                min_rows=min_rows,
+                max_window_days=max_window_days,
+            )
+        except Exception:
+            skip_reasons["load_exception"] = int(skip_reasons.get("load_exception", 0)) + 1
+            continue
+        if df is None or len(df) <= 0:
+            skip_reasons["missing_data"] = int(skip_reasons.get("missing_data", 0)) + 1
+            continue
+        rows_total += int(len(df))
+        if len(df) < min_rows:
+            skip_reasons["insufficient_candles"] = int(skip_reasons.get("insufficient_candles", 0)) + 1
+            continue
+        dfx = df.copy()
+        dfx["figi"] = figi
+        used_frames.append(dfx)
+        rows_used += int(len(dfx))
+
+    instrument_eligible = len(used_frames)
+    instrument_skipped = max(0, instrument_total - instrument_eligible)
+    rows_skipped = max(0, rows_total - rows_used)
+    if not used_frames:
+        return {
+            "ok": False,
+            "error": "insufficient_data",
+            "instrumentTotal": instrument_total,
+            "instrumentEligible": 0,
+            "instrumentSkipped": instrument_skipped,
+            "rowsTotal": rows_total,
+            "rowsUsed": 0,
+            "rowsSkipped": rows_total,
+            "skipReasons": skip_reasons or {"insufficient_data": instrument_total},
+        }
+
+    await _update_current_task_progress(
+        {
+            "progress": {
+                "message": "Weekly forecast: этап 3/4 — формирование обучающего набора",
+                "phase": "weekly_forecast",
+                "stage": "prepare_dataset",
+                "stageLabel": "Подготовка датасета",
+                "stageIndex": 3,
+                "stageTotal": 4,
+                "instrumentTotal": instrument_total,
+                "instrumentEligible": instrument_eligible,
+                "instrumentSkipped": instrument_skipped,
+            }
+        }
+    )
+    candles_df = pd.concat(used_frames).sort_index()
+    return {
+        "ok": True,
+        "mode": mode,
+        "candlesDf": candles_df,
+        "instrumentTotal": instrument_total,
+        "instrumentEligible": instrument_eligible,
+        "instrumentSkipped": instrument_skipped,
+        "rowsTotal": rows_total,
+        "rowsUsed": rows_used,
+        "rowsSkipped": rows_skipped,
+        "skipReasons": skip_reasons,
+    }
 
 
 async def _weekly_generation_job() -> dict[str, Any]:
+    mode = "generation"
+    epochs = 12
+    seq_len = 30
+    n_forecast = 5
+    batch_size = 32
+    lr = 1e-3
+    resume_from_latest = False
+    dataset = await _collect_weekly_training_dataset(
+        mode=mode,
+        seq_len=seq_len,
+        n_forecast=n_forecast,
+        preferred_window_days=365,
+        max_window_days=1825,
+    )
+    if not dataset.get("ok"):
+        return {
+            "message": "weekly generation skipped: insufficient real DB data",
+            "mode": mode,
+            "dataSource": "real_db",
+            "processedUniverse": "all_instruments",
+            **{k: v for k, v in dataset.items() if k != "candlesDf"},
+            "resumeFromLatest": resume_from_latest,
+            "effectiveMaxEpochs": epochs,
+        }
+
+    await _update_current_task_progress(
+        {
+            "progress": {
+                "message": "Weekly forecast: этап 4/4 — обучение global weekly модели",
+                "phase": "weekly_forecast",
+                "stage": "train",
+                "stageLabel": "Обучение модели",
+                "stageIndex": 4,
+                "stageTotal": 4,
+                "mode": mode,
+            }
+        }
+    )
     try:
         from training.run_weekly import run
     except Exception:
-        return {"message": "weekly deps unavailable"}
-    run_id = await asyncio.to_thread(run, 1)
-    return {"message": "weekly generation completed", "mlflowRunId": run_id}
+        return {
+            "message": "weekly deps unavailable",
+            "mode": mode,
+            "dataSource": "real_db",
+            "processedUniverse": "all_instruments",
+            **{k: v for k, v in dataset.items() if k != "candlesDf"},
+            "resumeFromLatest": resume_from_latest,
+            "effectiveMaxEpochs": epochs,
+        }
+    run_id = await asyncio.to_thread(
+        run,
+        epochs,
+        batch_size,
+        lr,
+        None,
+        dataset["candlesDf"],
+        seq_len,
+        n_forecast,
+        resume_from_latest,
+        None,
+    )
+    return {
+        "message": "weekly generation completed",
+        "mode": mode,
+        "dataSource": "real_db",
+        "processedUniverse": "all_instruments",
+        "mlflowRunId": run_id,
+        "resumeFromLatest": resume_from_latest,
+        "effectiveMaxEpochs": epochs,
+        **{k: v for k, v in dataset.items() if k not in {"candlesDf", "ok", "mode"}},
+        "parameters": {
+            "epochs": epochs,
+            "batchSize": batch_size,
+            "lr": lr,
+            "seqLen": seq_len,
+            "nForecast": n_forecast,
+            "updateMode": False,
+        },
+    }
 
 
 async def _weekly_update_job() -> dict[str, Any]:
+    mode = "update"
+    epochs = 4
+    seq_len = 30
+    n_forecast = 5
+    batch_size = 16
+    lr = 1e-3
+    resume_from_latest = True
+    dataset = await _collect_weekly_training_dataset(
+        mode=mode,
+        seq_len=seq_len,
+        n_forecast=n_forecast,
+        preferred_window_days=45,
+        max_window_days=365,
+    )
+    if not dataset.get("ok"):
+        return {
+            "message": "weekly update skipped: insufficient recent DB data",
+            "mode": mode,
+            "dataSource": "real_db",
+            "processedUniverse": "all_instruments",
+            **{k: v for k, v in dataset.items() if k != "candlesDf"},
+            "resumeFromLatest": resume_from_latest,
+            "effectiveMaxEpochs": epochs,
+        }
+
+    await _update_current_task_progress(
+        {
+            "progress": {
+                "message": "Weekly forecast: этап 4/4 — инкрементальное дообучение",
+                "phase": "weekly_forecast",
+                "stage": "train",
+                "stageLabel": "Дообучение модели",
+                "stageIndex": 4,
+                "stageTotal": 4,
+                "mode": mode,
+            }
+        }
+    )
     try:
         from training.run_weekly import run
     except Exception:
-        return {"message": "weekly deps unavailable"}
-    run_id = await asyncio.to_thread(run, 1, 16, 1e-3, None, None, 30, 5, True)
-    return {"message": "weekly update completed", "mlflowRunId": run_id}
+        return {
+            "message": "weekly deps unavailable",
+            "mode": mode,
+            "dataSource": "real_db",
+            "processedUniverse": "all_instruments",
+            **{k: v for k, v in dataset.items() if k != "candlesDf"},
+            "resumeFromLatest": resume_from_latest,
+            "effectiveMaxEpochs": epochs,
+        }
+    run_id = await asyncio.to_thread(
+        run,
+        epochs,
+        batch_size,
+        lr,
+        None,
+        dataset["candlesDf"],
+        seq_len,
+        n_forecast,
+        resume_from_latest,
+        None,
+    )
+    return {
+        "message": "weekly update completed",
+        "mode": mode,
+        "dataSource": "real_db",
+        "processedUniverse": "all_instruments",
+        "mlflowRunId": run_id,
+        "resumeFromLatest": resume_from_latest,
+        "effectiveMaxEpochs": epochs,
+        **{k: v for k, v in dataset.items() if k not in {"candlesDf", "ok", "mode"}},
+        "parameters": {
+            "epochs": epochs,
+            "batchSize": batch_size,
+            "lr": lr,
+            "seqLen": seq_len,
+            "nForecast": n_forecast,
+            "updateMode": True,
+        },
+    }
 
 
 async def _weekly_training_job() -> dict[str, Any]:

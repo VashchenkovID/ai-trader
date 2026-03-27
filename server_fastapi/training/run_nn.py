@@ -4,7 +4,7 @@
 Использование:
   python -m training.run_nn [--epochs 20] [--figi FIGI]
 
-Читает данные из пайплайна (пока можно передать путь к CSV или сгенерировать синтетику),
+Читает данные из пайплайна по реальным свечам (CSV/DB),
 обучает CondMLP с strategy_id/horizon_id, сохраняет чекпоинт и логирует в MLflow.
 """
 
@@ -30,15 +30,6 @@ from training.models.lightning_module import CondMLPLightning, build_dataloaders
 from training.backtest import evaluate_model_on_test
 
 logger = logging.getLogger(__name__)
-
-
-def _synthetic_data(n_samples: int = 500, lookback: int = 60, horizon: int = 5):
-    """Синтетические X, y и случайные strategy_id, horizon_id для теста обучения."""
-    dates = pd.date_range("2020-01-01", periods=n_samples + lookback + horizon, freq="D")
-    close = 100 + np.cumsum(np.random.randn(len(dates)).astype(np.float32) * 0.5)
-    volume = np.ones(len(dates), dtype=np.float32) * 1e6
-    candles = pd.DataFrame({"close": close, "volume": volume}, index=dates)
-    return _candles_to_tensors(candles, lookback=lookback, horizon=horizon)
 
 
 def _candles_to_tensors(
@@ -117,26 +108,22 @@ def run(
     """
     Запускает обучение NN с conditioning. Возвращает run_id MLflow или None.
 
-    Если передан candles_df (свечи с колонками close, volume и индексом-датой),
-    обучение идёт по реальным данным; иначе используется синтетика.
+    Обучение допустимо только по реальным данным (candles_df).
     """
     settings = get_training_settings()
     init_mlflow(experiment_name=experiment_name or settings.mlflow_experiment_name)
     import mlflow
     mlflow.set_experiment(experiment_name or settings.mlflow_experiment_name)
 
-    if candles_df is not None and not candles_df.empty:
-        X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _candles_to_tensors(
-            candles_df,
-            options_df=options_df,
-            signals_df=signals_df,
-            lookback=lookback_days,
-            horizon=prediction_horizon,
-        )
-    else:
-        X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _synthetic_data(
-            lookback=lookback_days, horizon=prediction_horizon
-        )
+    if candles_df is None or candles_df.empty:
+        raise RuntimeError("Synthetic data is disabled: NN training requires real candles_df")
+    X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _candles_to_tensors(
+        candles_df,
+        options_df=options_df,
+        signals_df=signals_df,
+        lookback=lookback_days,
+        horizon=prediction_horizon,
+    )
     input_size = X_t.shape[1]
     train_loader, val_loader = build_dataloaders(
         X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, batch_size=batch_size
@@ -169,7 +156,7 @@ def run(
             "max_epochs": max_epochs,
             "batch_size": batch_size,
             "lr": lr,
-            "data_source": "csv" if candles_df is not None and not candles_df.empty else "synthetic",
+            "data_source": "real_db",
             "options_features_enabled": bool(options_df is not None and not options_df.empty),
         })
         trainer.fit(model, train_loader, val_loader, ckpt_path=ckpt_path)
@@ -213,16 +200,16 @@ def main() -> None:
         "--csv",
         type=str,
         default=None,
-        help="Путь к CSV со свечами (candle_time/date, close, volume). Без указания используется синтетика.",
+        help="Путь к CSV со свечами (candle_time/date, close, volume). Обязательно.",
     )
     parser.add_argument("--lookback", type=int, default=60)
     parser.add_argument("--horizon", type=int, default=5)
     args = parser.parse_args()
-    candles_df = None
-    if args.csv:
-        candles_df = load_candles_from_csv(args.csv)
-        if candles_df.empty:
-            raise SystemExit(f"Не удалось загрузить свечи из {args.csv}")
+    if not args.csv:
+        raise SystemExit("Synthetic data is disabled: pass --csv with real candles")
+    candles_df = load_candles_from_csv(args.csv)
+    if candles_df.empty:
+        raise SystemExit(f"Не удалось загрузить свечи из {args.csv}")
     run_id = run(
         max_epochs=args.epochs,
         batch_size=args.batch_size,

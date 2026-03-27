@@ -69,14 +69,27 @@ async def test_market_service_paths() -> None:
         async def count_instruments(self, _session):
             return 1
 
-        async def list_recommendations(self, _session, *, offset=0, limit=200):
+        async def list_recommendations_with_instrument(self, _session, *, offset=0, limit=200):
             return [
-                SimpleNamespace(
-                    figi="F1",
-                    recommendation="BUY",
-                    confidence=0.9,
-                    score=0.8,
-                    analysis_date="2026-01-01",
+                (
+                    SimpleNamespace(
+                        id="rec-1",
+                        figi="F1",
+                        recommendation="BUY",
+                        confidence=0.9,
+                        score=0.8,
+                        analysis_date="2026-01-01",
+                        llm_jury_payload={"reason": "test"},
+                        nn_score=0.8,
+                        nn_confidence=0.9,
+                        nn_payload={
+                            "featureColumns": ["ret1", "ret5", "ret20", "vol_norm"],
+                            "featureValues": [0.01, -0.02, 0.03, 0.5],
+                        },
+                    ),
+                    "T1",
+                    "N1",
+                    10,
                 )
             ]
         async def count_recommendations(self, _session):
@@ -100,6 +113,9 @@ async def test_market_service_paths() -> None:
 
     recommendations, total_recs = await service.get_recommendations(None)
     assert recommendations[0]["recommendation"] == "BUY"
+    assert recommendations[0]["ticker"] == "T1"
+    assert recommendations[0]["horizonMomentum"][0]["id"] == "1d"
+    assert recommendations[0]["horizonMomentum"][0]["returnPct"] == 1.0
     assert total_recs == 1
 
     stock = await service.get_stock(None, "F1")
@@ -247,6 +263,15 @@ async def test_additional_api_routes_for_coverage(client: AsyncClient) -> None:
     perf_alias = await client.get("/api/v1/system/performance/metrics")
     assert perf_alias.status_code == 200
     assert "throughput" in perf_alias.json()["data"]
+
+    analysis_kpi = await client.get("/api/v1/system/analysis/kpi", params={"window": "7d"})
+    assert analysis_kpi.status_code == 200
+    kpi_data = analysis_kpi.json()["data"]
+    assert "definitions" in kpi_data
+    assert "thresholds" in kpi_data
+    assert "report" in kpi_data
+    assert "alerts" in kpi_data
+    assert "business" in kpi_data["report"]
 
     settings_update = await client.put("/api/v1/settings", json={"key": "a.b", "value": 1})
     assert settings_update.status_code == 200

@@ -67,13 +67,39 @@ def _candles_to_weekly_tensors(
     val_ratio: float = 0.15,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Строит последовательности из свечей и возвращает train/val тензоры."""
-    X_seq, y = build_weekly_sequences(
-        candles,
-        options=options_df,
-        llm_aggregates=llm_aggregates,
-        seq_len=seq_len,
-        n_forecast=n_forecast,
-    )
+    # Если передан объединенный набор со столбцом FIGI, строим последовательности
+    # отдельно по каждому инструменту и конкатенируем выборки. Это исключает
+    # "перескок" окон между разными тикерами.
+    if "figi" in candles.columns:
+        chunks_x: list[np.ndarray] = []
+        chunks_y: list[np.ndarray] = []
+        for _figi, g in candles.groupby("figi"):
+            g_local = g.drop(columns=["figi"], errors="ignore")
+            if g_local.empty:
+                continue
+            X_part, y_part = build_weekly_sequences(
+                g_local,
+                options=options_df,
+                llm_aggregates=llm_aggregates,
+                seq_len=seq_len,
+                n_forecast=n_forecast,
+            )
+            if X_part.shape[0] <= 0 or y_part.shape[0] <= 0:
+                continue
+            chunks_x.append(X_part)
+            chunks_y.append(y_part)
+        if not chunks_x:
+            raise RuntimeError("Pipeline produced empty weekly sequences from multi-instrument candles")
+        X_seq = np.concatenate(chunks_x, axis=0)
+        y = np.concatenate(chunks_y, axis=0)
+    else:
+        X_seq, y = build_weekly_sequences(
+            candles,
+            options=options_df,
+            llm_aggregates=llm_aggregates,
+            seq_len=seq_len,
+            n_forecast=n_forecast,
+        )
     if X_seq.shape[0] == 0:
         raise RuntimeError("Pipeline produced empty weekly sequences from candles")
     n = len(y)
@@ -98,6 +124,20 @@ def _checkpoint_weekly_shape(path: Path) -> tuple[int, int] | None:
         return None
     try:
         return int(hp.get("input_size")), int(hp.get("seq_len"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _checkpoint_weekly_epoch(path: Path) -> int | None:
+    try:
+        payload = torch.load(path, map_location="cpu")
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    value = payload.get("epoch", payload.get("current_epoch"))
+    try:
+        return int(value)
     except (TypeError, ValueError):
         return None
 
@@ -129,7 +169,7 @@ def run(
     """
     Запускает обучение Weekly forecast. Возвращает run_id MLflow или None.
 
-    Если передан candles_df, обучение по реальным данным; иначе синтетика.
+    Обучение допустимо только по реальным данным (candles_df).
     """
     settings = get_training_settings()
     init_mlflow(experiment_name=experiment_name or settings.mlflow_experiment_name)
@@ -137,18 +177,14 @@ def run(
 
     mlflow.set_experiment(experiment_name or settings.mlflow_experiment_name)
 
-    if candles_df is not None and not candles_df.empty:
-        X_t, y_t, X_v, y_v = _candles_to_weekly_tensors(
-            candles_df,
-            options_df=options_df,
-            seq_len=seq_len,
-            n_forecast=n_forecast,
-        )
-    else:
-        X_t, y_t, X_v, y_v = _synthetic_weekly_data(
-            seq_len=seq_len,
-            n_forecast=n_forecast,
-        )
+    if candles_df is None or candles_df.empty:
+        raise RuntimeError("Synthetic data is disabled: weekly training requires real candles_df")
+    X_t, y_t, X_v, y_v = _candles_to_weekly_tensors(
+        candles_df,
+        options_df=options_df,
+        seq_len=seq_len,
+        n_forecast=n_forecast,
+    )
 
     _, seq_len_actual, input_size = X_t.shape
     train_loader, val_loader = build_weekly_dataloaders(
@@ -165,6 +201,7 @@ def run(
     ckpt_dir = models_root / "weekly"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = None
+    effective_max_epochs = int(max_epochs)
     if resume_from_latest:
         ckpt_path = _select_compatible_weekly_checkpoint(
             ckpt_dir, input_size=input_size, seq_len=seq_len_actual
@@ -175,6 +212,16 @@ def run(
                 input_size,
                 seq_len_actual,
             )
+        else:
+            current_epoch = _checkpoint_weekly_epoch(Path(ckpt_path))
+            if current_epoch is not None and effective_max_epochs <= current_epoch:
+                effective_max_epochs = current_epoch + 1
+                logger.warning(
+                    "weekly resume: bump max_epochs from %s to %s (checkpoint epoch=%s)",
+                    max_epochs,
+                    effective_max_epochs,
+                    current_epoch,
+                )
     checkpoint_callback = ModelCheckpoint(
         dirpath=str(ckpt_dir),
         filename="weekly_lstm-{epoch:02d}-{val_loss:.4f}",
@@ -183,7 +230,7 @@ def run(
         mode="min",
     )
     trainer = pl.Trainer(
-        max_epochs=max_epochs,
+        max_epochs=effective_max_epochs,
         callbacks=[checkpoint_callback],
         enable_progress_bar=True,
     )
@@ -193,9 +240,11 @@ def run(
             "seq_len": seq_len_actual,
             "n_forecast": n_forecast,
             "max_epochs": max_epochs,
+            "effective_max_epochs": effective_max_epochs,
             "batch_size": batch_size,
             "lr": lr,
-            "data_source": "csv" if candles_df is not None and not candles_df.empty else "synthetic",
+            "data_source": "real_db",
+            "resume_from_latest": bool(resume_from_latest),
             "options_features_enabled": bool(options_df is not None and not options_df.empty),
         })
         trainer.fit(model, train_loader, val_loader, ckpt_path=ckpt_path)
@@ -209,6 +258,7 @@ def run(
             checkpoint_path=best_model_path,
             params={
                 "max_epochs": max_epochs,
+                "effective_max_epochs": effective_max_epochs,
                 "batch_size": batch_size,
                 "lr": lr,
                 "seq_len": seq_len,
@@ -229,16 +279,16 @@ def main() -> None:
         "--csv",
         type=str,
         default=None,
-        help="Путь к CSV со свечами. Без указания используется синтетика.",
+        help="Путь к CSV со свечами (обязательно).",
     )
     parser.add_argument("--seq-len", type=int, default=30)
     parser.add_argument("--n-forecast", type=int, default=5)
     args = parser.parse_args()
-    candles_df = None
-    if args.csv:
-        candles_df = load_candles_from_csv(args.csv)
-        if candles_df.empty:
-            raise SystemExit(f"Не удалось загрузить свечи из {args.csv}")
+    if not args.csv:
+        raise SystemExit("Synthetic data is disabled: pass --csv with real candles")
+    candles_df = load_candles_from_csv(args.csv)
+    if candles_df.empty:
+        raise SystemExit(f"Не удалось загрузить свечи из {args.csv}")
     run_id = run(
         max_epochs=args.epochs,
         batch_size=args.batch_size,

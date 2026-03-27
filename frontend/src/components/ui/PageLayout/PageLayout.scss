@@ -10,15 +10,15 @@
 }
 
 .ui-page-layout__header {
-  width: min(1200px, 100%);
+  width: min(#{px-to-adaptive(1200px)}, 100%);
   margin: 0 auto;
 }
 
 .ui-page-layout__body {
-  width: min(1200px, 100%);
+  width: min(#{px-to-adaptive(1200px)}, 100%);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  grid-template-columns: minmax(#{px-to-adaptive(200px)}, #{px-to-adaptive(280px)}) minmax(0, 1fr);
   gap: var(--ds-space-lg);
 }
 
@@ -50,7 +50,7 @@
 
 @include media-breakpoint-up(md) {
   .ui-page-layout {
-    padding: #{px-to-adaptive(36px)};
-    gap: #{px-to-adaptive(20px)};
+    padding: var(--ds-space-2xl);
+    gap: var(--ds-space-lg);
   }
 }

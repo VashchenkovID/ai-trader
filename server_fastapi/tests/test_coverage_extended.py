@@ -784,6 +784,35 @@ async def test_api_market_stock_candles(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_api_market_recommendation_by_figi(client: AsyncClient) -> None:
+    """GET market/recommendations/{figi} — 404 или 200."""
+    r = await client.get("/api/v1/market/recommendations/NONEXISTENT_FIGI_XYZ")
+    assert r.status_code in (404, 200)
+    if r.status_code == 200:
+        assert "figi" in r.json()["data"]
+
+
+@pytest.mark.asyncio
+async def test_api_market_analyst_signals_and_weekly_forecast(client: AsyncClient) -> None:
+    """GET analyst-signals и weekly-forecast по FIGI."""
+    instruments_r = await client.get("/api/v1/market/instruments", params={"limit": 1})
+    assert instruments_r.status_code == 200
+    items = instruments_r.json()["data"]["items"]
+    if not items:
+        return
+    figi = items[0]["figi"]
+    sig_r = await client.get(f"/api/v1/market/stock/{figi}/analyst-signals")
+    assert sig_r.status_code == 200
+    assert "items" in sig_r.json()["data"]
+
+    wf_r = await client.get(f"/api/v1/market/stock/{figi}/weekly-forecast")
+    assert wf_r.status_code == 200
+    body = wf_r.json()["data"]
+    assert isinstance(body, dict)
+    assert "ok" in body
+
+
+@pytest.mark.asyncio
 async def test_api_news_by_figi_pagination(client: AsyncClient) -> None:
     """GET news/{figi} с offset, limit."""
     r = await client.get(

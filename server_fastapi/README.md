@@ -225,3 +225,48 @@ docker compose down
 docker compose logs -f fastapi
 ```
 
+## 12) KPI анализа NN+LLM
+
+Для контроля эффективности гибридного контура доступен endpoint:
+
+- `GET /api/v1/system/analysis/kpi?window=24h|7d|30d`
+
+Что возвращает:
+
+- `definitions`: словарь KPI и формулы расчета.
+- `thresholds`: целевые пороги SLO (`good/warn`) для основных метрик.
+- `report`: ежедневный/оконный отчет `NN vs LLM vs Fusion`:
+  - `summary` (покрытие, задачи, latency p95),
+  - `quality` (accuracy/brier/ece proxy),
+  - `fusion` (mode share, fallback rate, marginal gain),
+  - `operability` (coverage/success/skipped rate).
+- `alerts`: список предупреждений/критичных деградаций по правилам SLO.
+- `ui`: рекомендуемый минимальный набор карточек для Settings/Dashboard.
+
+Замечание:
+
+- Метрики `directionAccuracy/brier/ece/lift` сейчас являются operational proxy на основе
+  доступного telemetry из задач анализа. Для полноценной бизнес-оценки (`PnL/signal`,
+  `ProfitFactor`, `MaxDrawdown`) требуется post-trade контур в отдельном слое аналитики.
+
+## 13) Улучшенный analysis v2 (feature flags + canary)
+
+`analysis_market_portfolio` поддерживает поэтапный rollout улучшений через настройки:
+
+- `analysis_v2_enabled` — общий флаг включения улучшений.
+- `analysis_v2_canary_percent` — процент FIGI, попадающих в v2 (0..100).
+- `analysis_v2_llm_uncertainty_margin` — порог пограничной зоны NN для условного вызова LLM.
+- `analysis_v2_llm_cache_ttl_hours` — TTL кэша LLM-обогащения.
+- `analysis_v2_quality_gates_enabled` — quality gates (freshness/NaN/checkpoint compatibility).
+- `analysis_v2_conf_temp_nn_only`
+- `analysis_v2_conf_temp_llm_only`
+- `analysis_v2_conf_temp_nn_llm`
+
+Что добавлено в v2:
+
+- Адаптивные веса fusion NN/LLM по market regime.
+- Динамические BUY/SELL пороги по market regime.
+- Temperature scaling confidence для режимов `nn_only/llm_only/nn_llm`.
+- Conditional LLM + cache для снижения latency/cost.
+- Canary telemetry в результате задачи (`canaryProcessed/canarySkipped`, `llmCacheHits`, `llmCallsSaved`).
+

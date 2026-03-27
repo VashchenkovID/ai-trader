@@ -63,6 +63,29 @@ limit?: number,
     }
 
     /**
+     * Рекомендация по FIGI
+     * Последняя рекомендация по инструменту (тот же DTO, что в списке).
+     * @returns SuccessEnvelope_dict_str__object__ Successful Response
+     * @throws ApiError
+     */
+    public static marketRecommendationByFigiApiV1MarketRecommendationsFigiGet({
+figi,
+}: {
+figi: string,
+}): CancelablePromise<SuccessEnvelope_dict_str__object__> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/market/recommendations/{figi}',
+            path: {
+                'figi': figi,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+
+    /**
      * Карточка инструмента по FIGI
      * Возвращает детальную карточку инструмента.
      * @returns SuccessEnvelope_dict_str__object__ Successful Response
@@ -109,6 +132,60 @@ limit?: number,
             query: {
                 'offset': offset,
                 'limit': limit,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+
+    /**
+     * Сигналы аналитиков по FIGI
+     * Сигналы из БД (синхронизация scheduler signals_update).
+     * @returns SuccessEnvelope_dict_str__object__ Successful Response
+     * @throws ApiError
+     */
+    public static marketStockAnalystSignalsApiV1MarketStockFigiAnalystSignalsGet({
+figi,
+}: {
+figi: string,
+}): CancelablePromise<SuccessEnvelope_dict_str__object__> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/market/stock/{figi}/analyst-signals',
+            path: {
+                'figi': figi,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+
+    /**
+     * Weekly LSTM: прогноз (из БД или refresh)
+     * Сохранённый weekly-прогноз по рекомендации; при refresh — повторный инференс.
+     * @returns SuccessEnvelope_dict_str__object__ Successful Response
+     * @throws ApiError
+     */
+    public static marketStockWeeklyForecastApiV1MarketStockFigiWeeklyForecastGet({
+figi,
+refresh = false,
+}: {
+figi: string,
+/**
+ * Пересчитать модель и записать в БД
+ */
+refresh?: boolean,
+}): CancelablePromise<SuccessEnvelope_dict_str__object__> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/market/stock/{figi}/weekly-forecast',
+            path: {
+                'figi': figi,
+            },
+            query: {
+                'refresh': refresh,
             },
             errors: {
                 422: `Validation Error`,

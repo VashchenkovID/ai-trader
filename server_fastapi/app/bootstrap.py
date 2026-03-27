@@ -52,6 +52,29 @@ def _seed_setting_defaults() -> list[tuple[str, str, str, str]]:
             "portfolio",
             "Стартовый виртуальный капитал",
         ),
+        ("analysis_v2_enabled", "true", "analysis", "Флаг включения улучшенного анализа v2"),
+        (
+            "analysis_v2_canary_percent",
+            "20",
+            "analysis",
+            "Процент инструментов в canary-раскатке analysis v2",
+        ),
+        (
+            "analysis_v2_llm_uncertainty_margin",
+            "0.08",
+            "analysis",
+            "Окно неуверенности NN для условного вызова LLM",
+        ),
+        ("analysis_v2_llm_cache_ttl_hours", "6", "analysis", "TTL кэша LLM-ответов"),
+        (
+            "analysis_v2_quality_gates_enabled",
+            "true",
+            "analysis",
+            "Включены ли quality gates перед inference",
+        ),
+        ("analysis_v2_conf_temp_nn_only", "1.0", "analysis", "Temperature scaling nn_only"),
+        ("analysis_v2_conf_temp_llm_only", "1.0", "analysis", "Temperature scaling llm_only"),
+        ("analysis_v2_conf_temp_nn_llm", "1.0", "analysis", "Temperature scaling nn_llm"),
     ]
 
 

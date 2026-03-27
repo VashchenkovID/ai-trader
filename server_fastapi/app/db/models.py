@@ -78,6 +78,12 @@ class Recommendation(TimestampedUUIDModel):
     score: Mapped[Decimal] = mapped_column(Numeric(6, 4), nullable=False)
     analysis_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     llm_jury_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    nn_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 4), nullable=True)
+    nn_confidence: Mapped[Decimal | None] = mapped_column(Numeric(6, 4), nullable=True)
+    nn_checkpoint: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    nn_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    weekly_forecast: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    weekly_forecast_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Candle(TimestampedUUIDModel):

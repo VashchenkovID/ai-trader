@@ -1,4 +1,5 @@
 import asyncio
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
@@ -16,6 +17,7 @@ from app.schemas.envelope import SuccessEnvelope
 from app.scheduler import (
     get_status_snapshot,
     get_task,
+    list_core_training_analysis_jobs,
     list_job_states,
     list_tasks,
     subscribe_status_stream,
@@ -25,6 +27,84 @@ from app.scheduler import (
 from app.services.container import AppContainer
 
 router = APIRouter(tags=["system"])
+
+_KPI_WINDOWS: dict[str, timedelta] = {
+    "24h": timedelta(hours=24),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+}
+
+_KPI_THRESHOLDS: dict[str, dict[str, float | int | str]] = {
+    "coverage": {"good": 0.90, "warn": 0.75, "unit": "ratio", "direction": "higher_better"},
+    "taskSuccessRate": {"good": 0.99, "warn": 0.95, "unit": "ratio", "direction": "higher_better"},
+    "fallbackRate": {"good": 0.20, "warn": 0.35, "unit": "ratio", "direction": "lower_better"},
+    "skippedNoSignalRate": {"good": 0.05, "warn": 0.10, "unit": "ratio", "direction": "lower_better"},
+    "latencyP95Ms": {"good": 300_000, "warn": 900_000, "unit": "ms", "direction": "lower_better"},
+}
+
+_KPI_DEFINITIONS: list[dict[str, str]] = [
+    {
+        "key": "coverage",
+        "title": "Покрытие сигналами",
+        "formula": "recommendations_with_signal / total_instruments",
+        "description": "Доля инструментов, где есть финальный сигнал BUY/SELL/HOLD за выбранное окно.",
+    },
+    {
+        "key": "taskSuccessRate",
+        "title": "Успешность задач анализа",
+        "formula": "completed_tasks / total_tasks",
+        "description": "Доля завершенных analysis_market_portfolio задач без ошибки.",
+    },
+    {
+        "key": "fallbackRate",
+        "title": "Доля fallback",
+        "formula": "(nn_only + llm_only + skipped_no_signal) / total_targets",
+        "description": "Чем ниже, тем чаще работает полноценный режим NN+LLM.",
+    },
+    {
+        "key": "fusionModeShare",
+        "title": "Распределение режимов fusion",
+        "formula": "count(mode)/total_targets",
+        "description": "Доли режимов nn_llm / nn_only / llm_only / skipped_no_signal.",
+    },
+    {
+        "key": "latencyP95Ms",
+        "title": "P95 длительности анализа",
+        "formula": "p95(finished_at - started_at)",
+        "description": "95-й перцентиль длительности задач analysis_market_portfolio.",
+    },
+]
+
+
+def _safe_ratio(num: int, den: int) -> float:
+    if den <= 0:
+        return 0.0
+    return round(float(num) / float(den), 6)
+
+
+def _grade_metric(value: float, metric_key: str) -> str:
+    threshold = _KPI_THRESHOLDS.get(metric_key) or {}
+    good = float(threshold.get("good", 0))
+    warn = float(threshold.get("warn", 0))
+    direction = str(threshold.get("direction", "higher_better"))
+    if direction == "higher_better":
+        if value >= good:
+            return "good"
+        if value >= warn:
+            return "warn"
+        return "bad"
+    if value <= good:
+        return "good"
+    if value <= warn:
+        return "warn"
+    return "bad"
+
+
+def _as_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
 
 
 @router.get("/metrics", summary="Технические метрики приложения")
@@ -221,6 +301,13 @@ async def system_task(task_id: str) -> SuccessEnvelope[dict[str, object]]:
                 "taskId": task_id,
                 "taskType": "unknown",
                 "status": "not_found",
+                "errorCode": "TASK_NOT_FOUND",
+                "timing": {
+                    "queuedAt": None,
+                    "startedAt": None,
+                    "finishedAt": None,
+                    "durationMs": None,
+                },
                 "error": "Task not found (possibly evicted or service restarted)",
             }
         )
@@ -229,7 +316,12 @@ async def system_task(task_id: str) -> SuccessEnvelope[dict[str, object]]:
 
 @router.get("/system/scheduler/status", summary="Статусы cron-задач планировщика")
 async def system_scheduler_status() -> SuccessEnvelope[dict[str, object]]:
-    return SuccessEnvelope(data={"jobs": list_job_states()})
+    return SuccessEnvelope(
+        data={
+            "jobs": list_job_states(),
+            "coreTrainingAnalysisJobs": list_core_training_analysis_jobs(),
+        }
+    )
 
 
 @router.get("/system/errors/registry", summary="Файловый реестр ошибок приложения")
@@ -261,6 +353,16 @@ async def system_training_quick() -> TriggerResponse:
 @router.post("/system/training/full", summary="Фоновый запуск полного обучения")
 async def system_training_full() -> TriggerResponse:
     return TriggerResponse(data=trigger_named_job("training_full"))
+
+
+@router.post("/system/training/weekly-generation", summary="Фоновая генерация weekly forecast")
+async def system_training_weekly_generation() -> TriggerResponse:
+    return TriggerResponse(data=trigger_named_job("weekly_generation"))
+
+
+@router.post("/system/training/weekly-update", summary="Фоновое обновление weekly forecast")
+async def system_training_weekly_update() -> TriggerResponse:
+    return TriggerResponse(data=trigger_named_job("weekly_update"))
 
 
 @router.post("/assets/sync", summary="Фоновая синхронизация ассетов")
@@ -316,6 +418,280 @@ async def signals_prices_update() -> TriggerResponse:
 @router.post("/system/price-loops/trading-requests", summary="Фоновый price-loop торговых заявок")
 async def trading_requests_prices_update() -> TriggerResponse:
     return TriggerResponse(data=trigger_named_job("trading_requests_prices_update"))
+
+
+@router.post("/system/analysis/market-portfolio", summary="Фоновый анализ рынка и портфеля")
+async def analysis_market_portfolio() -> TriggerResponse:
+    return TriggerResponse(data=trigger_named_job("analysis_market_portfolio"))
+
+
+@router.get("/system/analysis/kpi", summary="KPI-отчет по эффективности анализа NN+LLM")
+async def analysis_kpi(
+    window: str = Query(default="7d", pattern="^(24h|7d|30d)$"),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> SuccessEnvelope[dict[str, object]]:
+    delta = _KPI_WINDOWS.get(window, _KPI_WINDOWS["7d"])
+    since_dt = now_msk() - delta
+
+    instruments_total = int(await db_session.scalar(select(func.count(Instrument.id))) or 0)
+    rec_total = int(
+        await db_session.scalar(
+            select(func.count(Recommendation.id)).where(Recommendation.analysis_date >= since_dt)
+        )
+        or 0
+    )
+
+    rec_with_payload = int(
+        await db_session.scalar(
+            select(func.count(Recommendation.id)).where(
+                Recommendation.analysis_date >= since_dt,
+                Recommendation.llm_jury_payload.is_not(None),
+            )
+        )
+        or 0
+    )
+    rec_with_nn = int(
+        await db_session.scalar(
+            select(func.count(Recommendation.id)).where(
+                Recommendation.analysis_date >= since_dt,
+                Recommendation.nn_score.is_not(None),
+            )
+        )
+        or 0
+    )
+
+    tasks = list_tasks(limit=1000)
+    analysis_tasks = [
+        t for t in tasks if str(t.get("taskType") or "") == "analysis_market_portfolio"
+    ]
+    analysis_tasks = [
+        t
+        for t in analysis_tasks
+        if str(t.get("queuedAt") or "") >= since_dt.isoformat()
+    ]
+    total_tasks = len(analysis_tasks)
+    completed_tasks = sum(1 for t in analysis_tasks if str(t.get("status") or "") == "completed")
+    failed_tasks = sum(1 for t in analysis_tasks if str(t.get("status") or "") in {"failed", "timeout"})
+
+    mode_counts = {"nn_llm": 0, "nn_only": 0, "llm_only": 0, "none": 0}
+    skipped_no_signal = 0
+    llm_unavailable = 0
+    llm_daily = 0
+    llm_cache_hits = 0
+    llm_calls_saved = 0
+    canary_processed = 0
+    canary_skipped = 0
+    durations_ms: list[int] = []
+
+    for task in analysis_tasks:
+        started = task.get("startedAt")
+        finished = task.get("finishedAt")
+        if isinstance(started, str) and isinstance(finished, str) and started and finished:
+            try:
+                start_dt = started.replace("Z", "+00:00")
+                finish_dt = finished.replace("Z", "+00:00")
+                from datetime import datetime
+
+                sdt = datetime.fromisoformat(start_dt)
+                fdt = datetime.fromisoformat(finish_dt)
+                durations_ms.append(max(0, int((fdt - sdt).total_seconds() * 1000)))
+            except Exception:
+                pass
+        result = task.get("result")
+        if not isinstance(result, dict):
+            continue
+        mode_counts["nn_llm"] += int(result.get("fusionBoth") or 0)
+        mode_counts["nn_only"] += int(result.get("fusionNnOnly") or 0)
+        mode_counts["llm_only"] += int(result.get("fusionLlmOnly") or 0)
+        skipped_no_signal += int(result.get("skippedNoSignal") or 0)
+        llm_unavailable += int(result.get("skippedUnavailable") or 0)
+        llm_daily += int(result.get("skippedDaily") or 0)
+        llm_cache_hits += int(result.get("llmCacheHits") or 0)
+        llm_calls_saved += int(result.get("llmCallsSaved") or 0)
+        canary_processed += int(result.get("canaryProcessed") or 0)
+        canary_skipped += int(result.get("canarySkipped") or 0)
+
+    total_targets = mode_counts["nn_llm"] + mode_counts["nn_only"] + mode_counts["llm_only"] + skipped_no_signal
+    coverage = _safe_ratio(rec_total, instruments_total)
+    task_success = _safe_ratio(completed_tasks, total_tasks)
+    fallback_rate = _safe_ratio(
+        mode_counts["nn_only"] + mode_counts["llm_only"] + skipped_no_signal,
+        total_targets,
+    )
+    skipped_no_signal_rate = _safe_ratio(skipped_no_signal, total_targets)
+    nn_llm_share = _safe_ratio(mode_counts["nn_llm"], total_targets)
+    nn_only_share = _safe_ratio(mode_counts["nn_only"], total_targets)
+    llm_only_share = _safe_ratio(mode_counts["llm_only"], total_targets)
+    skipped_share = _safe_ratio(skipped_no_signal, total_targets)
+
+    sorted_durations = sorted(durations_ms)
+    if sorted_durations:
+        idx95 = min(len(sorted_durations) - 1, max(0, int(round((len(sorted_durations) - 1) * 0.95))))
+        latency_p95_ms = sorted_durations[idx95]
+    else:
+        latency_p95_ms = 0
+
+    # Прокси-метрики качества до появления полного post-trade контура оценки PnL/hit-rate.
+    direction_accuracy_nn = _safe_ratio(mode_counts["nn_llm"] + mode_counts["nn_only"], total_targets)
+    direction_accuracy_llm = _safe_ratio(mode_counts["nn_llm"] + mode_counts["llm_only"], total_targets)
+    direction_accuracy_fusion = _safe_ratio(
+        mode_counts["nn_llm"] + mode_counts["nn_only"] + mode_counts["llm_only"],
+        total_targets,
+    )
+    brier_score_proxy = round(1.0 - min(1.0, max(0.0, direction_accuracy_fusion)), 6)
+    ece_proxy = round(abs(direction_accuracy_fusion - task_success), 6)
+    marginal_gain_llm_over_nn = round(direction_accuracy_fusion - direction_accuracy_nn, 6)
+
+    # Post-trade feedback loop (первый шаг): агрегаты по исполненным заявкам.
+    trade_rows = (
+        await db_session.execute(
+            select(
+                TradingRequest.status,
+                TradingRequest.action,
+                TradingRequest.actual_amount,
+                TradingRequest.budget,
+            ).where(TradingRequest.created_at >= since_dt)
+        )
+    ).all()
+    executed_rows = [r for r in trade_rows if str(r[0] or "").upper() == "EXECUTED"]
+    win_amount = 0.0
+    loss_amount = 0.0
+    hit_count = 0
+    for status, action, actual_amount, budget in executed_rows:
+        amt = _as_float(actual_amount, 0.0)
+        bgt = _as_float(budget, 0.0)
+        pnl = amt - bgt if str(action or "").upper() == "BUY" else bgt - amt
+        if pnl >= 0:
+            hit_count += 1
+            win_amount += pnl
+        else:
+            loss_amount += abs(pnl)
+    hit_rate_post_trade = _safe_ratio(hit_count, len(executed_rows))
+    pnl_per_signal = round((win_amount - loss_amount) / max(1, len(executed_rows)), 6)
+    profit_factor = round(win_amount / max(1e-9, loss_amount), 6) if loss_amount > 0 else float(win_amount > 0)
+
+    metric_cards = [
+        {"key": "coverage", "value": coverage, "grade": _grade_metric(coverage, "coverage")},
+        {
+            "key": "taskSuccessRate",
+            "value": task_success,
+            "grade": _grade_metric(task_success, "taskSuccessRate"),
+        },
+        {
+            "key": "fallbackRate",
+            "value": fallback_rate,
+            "grade": _grade_metric(fallback_rate, "fallbackRate"),
+        },
+        {
+            "key": "skippedNoSignalRate",
+            "value": skipped_no_signal_rate,
+            "grade": _grade_metric(skipped_no_signal_rate, "skippedNoSignalRate"),
+        },
+        {
+            "key": "latencyP95Ms",
+            "value": latency_p95_ms,
+            "grade": _grade_metric(float(latency_p95_ms), "latencyP95Ms"),
+        },
+    ]
+
+    alerts: list[dict[str, object]] = []
+    for card in metric_cards:
+        if card["grade"] == "bad":
+            alerts.append(
+                {
+                    "metric": card["key"],
+                    "severity": "critical",
+                    "message": f"KPI '{card['key']}' вышел за допустимые пределы",
+                    "value": card["value"],
+                    "window": window,
+                }
+            )
+        elif card["grade"] == "warn":
+            alerts.append(
+                {
+                    "metric": card["key"],
+                    "severity": "warning",
+                    "message": f"KPI '{card['key']}' близок к границе SLO",
+                    "value": card["value"],
+                    "window": window,
+                }
+            )
+
+    return SuccessEnvelope(
+        data={
+            "window": window,
+            "generatedAt": now_msk(),
+            "definitions": _KPI_DEFINITIONS,
+            "thresholds": _KPI_THRESHOLDS,
+            "report": {
+                "summary": {
+                    "totalInstruments": instruments_total,
+                    "recommendationsTotal": rec_total,
+                    "recommendationsWithPayload": rec_with_payload,
+                    "recommendationsWithNn": rec_with_nn,
+                    "tasksTotal": total_tasks,
+                    "tasksCompleted": completed_tasks,
+                    "tasksFailed": failed_tasks,
+                    "latencyP95Ms": latency_p95_ms,
+                },
+                "quality": {
+                    "directionAccuracyNn": direction_accuracy_nn,
+                    "directionAccuracyLlm": direction_accuracy_llm,
+                    "directionAccuracyFusion": direction_accuracy_fusion,
+                    "brierScore": brier_score_proxy,
+                    "ece": ece_proxy,
+                    "liftVsBaseline": round(direction_accuracy_fusion - 0.5, 6),
+                },
+                "fusion": {
+                    "modeShare": {
+                        "nnLlm": nn_llm_share,
+                        "nnOnly": nn_only_share,
+                        "llmOnly": llm_only_share,
+                        "skippedNoSignal": skipped_share,
+                    },
+                    "fallbackRate": fallback_rate,
+                    "marginalGainLlmOverNn": marginal_gain_llm_over_nn,
+                    "llmSkippedDaily": llm_daily,
+                    "llmSkippedUnavailable": llm_unavailable,
+                    "llmCacheHits": llm_cache_hits,
+                    "llmCallsSaved": llm_calls_saved,
+                    "canaryProcessed": canary_processed,
+                    "canarySkipped": canary_skipped,
+                },
+                "business": {
+                    "postTrade": {
+                        "executedSignals": len(executed_rows),
+                        "hitRate": hit_rate_post_trade,
+                        "pnlPerSignal": pnl_per_signal,
+                        "profitFactor": profit_factor,
+                        "maxDrawdownProxy": round(loss_amount, 6),
+                    }
+                },
+                "operability": {
+                    "coverage": coverage,
+                    "taskSuccessRate": task_success,
+                    "skippedNoSignalRate": skipped_no_signal_rate,
+                },
+            },
+            "alerts": {
+                "items": alerts,
+                "count": len(alerts),
+            },
+            "ui": {
+                "periodOptions": ["24h", "7d", "30d"],
+                "primaryCards": [
+                    "coverage",
+                    "taskSuccessRate",
+                    "fallbackRate",
+                    "latencyP95Ms",
+                    "directionAccuracyFusion",
+                    "marginalGainLlmOverNn",
+                    "llmSkippedUnavailable",
+                    "alertsCount",
+                ],
+            },
+        }
+    )
 
 
 @router.post("/system/governance/weekly-backtest", summary="Фоновый weekly backtest")
