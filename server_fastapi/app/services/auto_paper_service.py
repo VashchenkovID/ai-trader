@@ -167,17 +167,7 @@ class AutoPaperService:
                 "BUSINESS_RULE_VIOLATION",
                 message=can_exec.get("reason", "Cannot auto-execute"),
             )
-        # Approve
-        await self._trading_service.approve(db_session, request_id, comment=None)
+        # Одобрение в paper сразу исполняет заявку (см. TradingRequestService.approve).
+        result = await self._trading_service.approve(db_session, request_id, comment=None)
         await db_session.flush()
-        # Execute: используем price как actual_price, budget как actual_amount
-        req = await self._trading_repo.get_by_id(db_session, request_id)
-        actual_price = req.price if req else None
-        actual_amount = req.budget if req else None
-        result = await self._trading_service.execute(
-            db_session,
-            request_id,
-            actual_price=actual_price,
-            actual_amount=actual_amount,
-        )
         return result

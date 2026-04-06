@@ -4,6 +4,7 @@ from app.repositories.news_repository import NewsRepository
 from app.repositories.performance_repository import PerformanceRepository
 from app.repositories.profitability_repository import ProfitabilityRepository
 from app.repositories.trading_request_repository import TradingRequestRepository
+from app.repositories.virtual_portfolio_repository import VirtualPortfolioRepository
 from app.services.auth_service import AuthService
 from app.services.market_service import MarketService
 from app.services.news_service import NewsService
@@ -17,6 +18,7 @@ from app.services.ops_service import OpsService
 from app.services.risk_service import RiskService
 from app.services.trading_mode_service import TradingModeService
 from app.services.trading_request_service import TradingRequestService
+from app.services.virtual_portfolio_service import VirtualPortfolioService
 from app.services.tinkoff_client import TinkoffApiClient
 from app.services.telegram_service import TelegramConfig, TelegramService
 
@@ -35,6 +37,11 @@ class AppContainer:
         self.performance_repository = PerformanceRepository()
         self.profitability_repository = ProfitabilityRepository()
         self.trading_request_repository = TradingRequestRepository()
+        self.virtual_portfolio_repository = VirtualPortfolioRepository()
+        self.virtual_portfolio_service = VirtualPortfolioService(
+            market_repo=self.market_repository,
+            repo=self.virtual_portfolio_repository,
+        )
         self.auth_service = AuthService(settings=settings)
         self.settings_service = SettingsService()
         self.market_service = MarketService(repository=self.market_repository)
@@ -46,6 +53,7 @@ class AppContainer:
             trading_repo=self.trading_request_repository,
             market_repo=self.market_repository,
             risk_service=self.risk_service,
+            virtual_portfolio_service=self.virtual_portfolio_service,
         )
         self.trading_mode_service = TradingModeService(settings_service=self.settings_service)
         self.tinkoff_client: TinkoffApiClient | None = (

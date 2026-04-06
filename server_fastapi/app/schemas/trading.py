@@ -50,6 +50,19 @@ class TradingRequestCreateRequest(BaseModel):
     )
 
 
+class TradingRequestPreviewRequest(BaseModel):
+    """Предрасчёт заявки без записи в БД (те же поля, что у создания)."""
+    recommendationFigi: str | None = Field(default=None, description="FIGI рекомендации в БД")
+    recommendationData: dict[str, Any] | None = Field(
+        default=None,
+        description="Данные рекомендации напрямую (если нет строки в БД)"
+    )
+    options: TradingRequestCreateOptions = Field(
+        default_factory=TradingRequestCreateOptions,
+        description="Опции (action, mode, quantity)",
+    )
+
+
 class TradingRequestApproveRequest(BaseModel):
     comment: str | None = Field(default=None, description="Комментарий к одобрению")
 

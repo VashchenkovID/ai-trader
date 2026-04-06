@@ -88,4 +88,33 @@ export class PortfolioService {
         });
     }
 
+    /**
+     * Виртуальный портфель (paper, из БД)
+     * @returns SuccessEnvelope_dict_ Successful Response
+     * @throws ApiError
+     */
+    public static getVirtualPortfolioApiV1PortfolioVirtualGet(): CancelablePromise<SuccessEnvelope_dict_> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/portfolio/virtual',
+        });
+    }
+
+    /**
+     * Рекомендации по FIGI позиций портфеля (пакетно)
+     * @returns SuccessEnvelope_dict_ Successful Response
+     * @throws ApiError
+     */
+    public static getPortfolioPositionRecommendationsApiV1PortfolioPositionRecommendationsGet(
+        params?: { figi?: string[] },
+    ): CancelablePromise<SuccessEnvelope_dict_> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/portfolio/position-recommendations',
+            query: {
+                figi: params?.figi,
+            },
+        });
+    }
+
 }

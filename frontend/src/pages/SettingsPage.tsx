@@ -656,6 +656,9 @@ export function SettingsPage() {
     degradationCheck: initialActionState,
   })
   const socketTasks = useSystemStatusStore(state => state.tasks)
+  const schedulerAnalysisJob = useSystemStatusStore(
+    state => state.scheduler?.['analysis_market_portfolio'],
+  )
   const wsSystemMetrics = useSystemStatusStore(state => state.snapshot?.system)
   const wsConnectionStatus = useSystemStatusStore(state => state.connectionStatus)
 
@@ -1223,7 +1226,17 @@ export function SettingsPage() {
     onClick: () => void
   ) => {
     const action = actions[key]
-    const isActive = action.status === 'queued' || action.status === 'running'
+    const cronAnalysisRunning =
+      key === 'marketAnalysis' && schedulerAnalysisJob?.status === 'running'
+    const isActive =
+      action.status === 'queued' || action.status === 'running' || cronAnalysisRunning
+    const displayStatus: ActionState['status'] =
+      cronAnalysisRunning && action.status === 'idle' ? 'running' : action.status
+    const progressHint =
+      action.progressMessage ||
+      (cronAnalysisRunning && key === 'marketAnalysis'
+        ? 'Идёт анализ рынка и портфеля (планировщик)…'
+        : null)
     return (
       <div className="settings-page__action" key={key}>
         <Text as="h3" variant="title">
@@ -1236,14 +1249,14 @@ export function SettingsPage() {
           <Button onClick={onClick} loading={isActive} disabled={isActive}>
             {action.status === 'queued'
               ? 'Запускаем...'
-              : action.status === 'running'
+              : action.status === 'running' || cronAnalysisRunning
                 ? 'Выполняется...'
                 : 'Запустить'}
           </Button>
           <span
-            className={`settings-page__status-badge settings-page__status-badge--${action.status}`}
+            className={`settings-page__status-badge settings-page__status-badge--${displayStatus}`}
           >
-            {statusLabel[action.status]}
+            {statusLabel[displayStatus]}
           </span>
           {action.taskId && (
             <Text as="span" variant="hint" tone="muted">
@@ -1260,9 +1273,9 @@ export function SettingsPage() {
             <div className="settings-page__progress-bar" />
           </div>
         )}
-        {action.progressMessage && (
+        {progressHint && (
           <Text as="p" variant="hint" tone="muted">
-            {action.progressMessage}
+            {progressHint}
           </Text>
         )}
         {action.progressStage && (

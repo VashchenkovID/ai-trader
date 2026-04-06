@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { MarketService } from '@/api/generated/services/MarketService'
 import { NewsService } from '@/api/generated/services/NewsService'
@@ -6,6 +6,7 @@ import { Button, PageLayout, Sidebar, SurfaceCard, Text } from '@/components/ui'
 import { APP_SIDEBAR_ITEMS, getActiveSidebarItemId, navigateFromSidebar } from '@/navigation/appSidebar'
 import { RecommendationCard, type RecommendationCardItem } from '@/pages/RecommendationsPage/components/RecommendationCard'
 import { asRecord, normalizeRecommendation } from '@/pages/RecommendationsPage/recommendationPayload'
+import { useTradingCoreStore } from '@/store/tradingCoreStore'
 import { CandlesVolumeChart, type CandleRow } from './components/CandlesVolumeChart'
 import { WeeklyForecastChart } from './components/WeeklyForecastChart'
 import './RecommendationDetailPage.scss'
@@ -32,6 +33,20 @@ export function RecommendationDetailPage() {
   const [weeklyRefreshError, setWeeklyRefreshError] = useState<string | null>(null)
   const [signals, setSignals] = useState<Record<string, unknown>[]>([])
   const [news, setNews] = useState<Record<string, unknown>[]>([])
+
+  const totalBalance = useTradingCoreStore(s => s.totalBalance)
+
+  const refetchRecommendationOnly = useCallback(async () => {
+    if (!figi) return
+    try {
+      const res = await MarketService.marketRecommendationByFigiApiV1MarketRecommendationsFigiGet({ figi })
+      const env = asRecord(res)
+      const payload = asRecord(env.data)
+      setItem(normalizeRecommendation(payload))
+    } catch {
+      /* карточка остаётся без изменений */
+    }
+  }, [figi])
 
   useEffect(() => {
     if (!figi) return
@@ -218,7 +233,13 @@ export function RecommendationDetailPage() {
         </SurfaceCard>
       )}
 
-      {!loading && item && <RecommendationCard item={item} />}
+      {!loading && item && (
+        <RecommendationCard
+          item={item}
+          portfolioTotalValue={totalBalance > 0 ? totalBalance : null}
+          onTradeSuccess={() => void refetchRecommendationOnly()}
+        />
+      )}
 
       {!loading && (
         <>

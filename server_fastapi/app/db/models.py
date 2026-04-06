@@ -222,6 +222,23 @@ class RealPortfolio(Base):
     __table_args__ = (Index("ix_real_portfolio_last_updated", "last_updated"),)
 
 
+class VirtualPortfolio(Base):
+    """Виртуальный (paper) портфель: одна строка id=1, обновляется при исполнении paper-заявок."""
+    __tablename__ = "virtual_portfolio"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cash: Mapped[float] = mapped_column(nullable=False, default=0)
+    positions: Mapped[dict] = mapped_column(JSON, nullable=False, default=lambda: {})  # {figi: quantity}
+    trades: Mapped[list] = mapped_column(JSON, nullable=False, default=lambda: [])
+    total_value: Mapped[float] = mapped_column(nullable=False, default=0)
+    positions_value: Mapped[float] = mapped_column(nullable=False, default=0)
+    initial_capital: Mapped[float | None] = mapped_column(nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    last_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (Index("ix_virtual_portfolio_last_updated", "last_updated"),)
+
+
 class LlmJuryAggregate(TimestampedUUIDModel):
     """Агрегаты мнений LLM-жюри по дате и инструменту для пайплайна фичей."""
     __tablename__ = "llm_jury_aggregates"

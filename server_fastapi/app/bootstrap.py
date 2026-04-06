@@ -103,6 +103,17 @@ async def seed_app_settings() -> None:
         await session.commit()
 
 
+async def ensure_virtual_portfolio(container: AppContainer) -> None:
+    """Создаёт строку virtual_portfolio при отсутствии и при необходимости восстанавливает историю paper-исполнений."""
+    async with SessionLocal() as session:
+        reg = await session.scalar(text("SELECT to_regclass('public.virtual_portfolio')"))
+        if reg is None:
+            return
+        await container.virtual_portfolio_service.ensure_bootstrap_row(session)
+        await container.virtual_portfolio_service.backfill_from_history_if_needed(session)
+        await session.commit()
+
+
 async def seed_admin_user(container: AppContainer) -> None:
     async with SessionLocal() as session:
         await container.auth_service.ensure_admin_user(session)
@@ -117,5 +128,6 @@ async def ensure_bootstrap(container: AppContainer) -> None:
         if not has_tables:
             await asyncio.to_thread(run_alembic_upgrade_head)
         await seed_app_settings()
+        await ensure_virtual_portfolio(container)
         await seed_admin_user(container)
         _bootstrap_done = True

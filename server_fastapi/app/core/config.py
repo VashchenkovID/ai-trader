@@ -104,6 +104,9 @@ class Settings(BaseSettings):
     yandex_folder_id: str = Field(default="", alias="YANDEX_FOLDER_ID")
     idencefier: str = Field(default="", alias="idencefier")
 
+    # Торговые заявки: синтетические FIGI вида TEST-… (тесты/разработка). В проде выключить.
+    allow_synthetic_trading_figi: bool = Field(default=True, alias="ALLOW_SYNTHETIC_TRADING_FIGI")
+
 
 @lru_cache
 def get_settings() -> Settings:

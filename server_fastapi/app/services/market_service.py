@@ -271,6 +271,23 @@ class MarketService:
         except Exception:
             return None
 
+    async def get_recommendations_for_figis(
+        self, db_session: AsyncSession, figis: list[str]
+    ) -> list[dict[str, object]]:
+        """Пакетно: последняя рекомендация по каждому FIGI (для таблицы портфеля)."""
+        try:
+            rows = await self._repository.get_latest_recommendations_for_figis(db_session, figis)
+        except Exception:
+            return []
+        out: list[dict[str, object]] = []
+        for row in rows:
+            inst = await self._repository.get_instrument_by_figi(db_session, row.figi)
+            ticker = inst.ticker if inst else None
+            name = inst.name if inst else None
+            last_price = inst.last_price if inst else None
+            out.append(self._recommendation_row_to_payload(row, ticker, name, last_price))
+        return out
+
     async def get_analyst_signals_for_figi(
         self, db_session: AsyncSession, figi: str
     ) -> list[dict[str, object]]:

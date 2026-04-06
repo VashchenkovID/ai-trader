@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Select, desc, func, select
+from sqlalchemy import Select, delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import TradingRequest
@@ -129,3 +129,16 @@ class TradingRequestRepository:
             )
         )
         return int(value or 0)
+
+    async def delete_not_pending(
+        self,
+        db_session: AsyncSession,
+        *,
+        mode: str | None = None,
+    ) -> int:
+        """Удаляет все заявки, кроме PENDING. Возвращает количество удаленных строк."""
+        stmt = delete(TradingRequest).where(TradingRequest.status != "PENDING")
+        if mode:
+            stmt = stmt.where(TradingRequest.mode == mode)
+        res = await db_session.execute(stmt)
+        return int(res.rowcount or 0)

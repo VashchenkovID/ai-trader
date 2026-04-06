@@ -553,6 +553,61 @@ limit?: number,
     }
 
     /**
+     * Фоновая генерация weekly forecast
+     * @returns TriggerResponse Successful Response
+     * @throws ApiError
+     */
+    public static systemTrainingWeeklyGenerationApiV1SystemTrainingWeeklyGenerationPost(): CancelablePromise<TriggerResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/system/training/weekly-generation',
+        });
+    }
+
+    /**
+     * Фоновое обновление weekly forecast
+     * @returns TriggerResponse Successful Response
+     * @throws ApiError
+     */
+    public static systemTrainingWeeklyUpdateApiV1SystemTrainingWeeklyUpdatePost(): CancelablePromise<TriggerResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/system/training/weekly-update',
+        });
+    }
+
+    /**
+     * Фоновый анализ рынка и портфеля
+     * @returns TriggerResponse Successful Response
+     * @throws ApiError
+     */
+    public static analysisMarketPortfolioApiV1SystemAnalysisMarketPortfolioPost(): CancelablePromise<TriggerResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/system/analysis/market-portfolio',
+        });
+    }
+
+    /**
+     * KPI-отчёт по эффективности анализа
+     * @returns SuccessEnvelope_dict_str__object__ Successful Response
+     * @throws ApiError
+     */
+    public static analysisKpiApiV1SystemAnalysisKpiGet({
+        window = '7d',
+    }: {
+        window?: '24h' | '7d' | '30d',
+    }): CancelablePromise<SuccessEnvelope_dict_str__object__> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/system/analysis/kpi',
+            query: {
+                window: window,
+            },
+        });
+    }
+
+    /**
      * Статус обновления торговых окон
      * @returns SuccessEnvelope_dict_str__object__ Successful Response
      * @throws ApiError

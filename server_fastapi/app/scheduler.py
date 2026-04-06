@@ -214,6 +214,14 @@ async def _run_job_with_state(
     state.status = "running"
     state.last_run_at = _iso_now()
     await _publish("scheduler.status", {"job": _state_to_dict(state)})
+    cron_task: TaskRecord | None = None
+    cron_token: contextvars.Token[str | None] | None = None
+    if name in _CORE_TRAINING_ANALYSIS_JOBS:
+        cron_task = _create_task_record(name, source="cron")
+        cron_token = _current_task_id_var.set(cron_task.task_id)
+        _set_task_status(cron_task.task_id, status="running")
+        with contextlib.suppress(Exception):
+            await _publish("task.update", {"task": _task_to_dict(cron_task)})
     try:
         result = await fn()
         state.status = "ok"
@@ -221,6 +229,11 @@ async def _run_job_with_state(
         state.last_error = None
         state.last_duration_ms = int((time.monotonic() - started) * 1000)
         await _publish("scheduler.status", {"job": _state_to_dict(state)})
+        if cron_task is not None:
+            res_dict = result if isinstance(result, dict) else {"value": result}
+            _set_task_status(cron_task.task_id, status="completed", result=res_dict)
+            with contextlib.suppress(Exception):
+                await _publish("task.update", {"task": _task_to_dict(cron_task)})
         if name.startswith("training_") or name.startswith("weekly_"):
             await _publish("training.status", {"job": _state_to_dict(state), "result": result or {}})
         if name.startswith("analysis_"):
@@ -232,6 +245,10 @@ async def _run_job_with_state(
         state.status = "failed"
         state.last_error = str(e)
         state.last_duration_ms = int((time.monotonic() - started) * 1000)
+        if cron_task is not None:
+            _set_task_status(cron_task.task_id, status="failed", error=str(e))
+            with contextlib.suppress(Exception):
+                await _publish("task.update", {"task": _task_to_dict(cron_task)})
         with contextlib.suppress(Exception):
             await get_error_registry().record(
                 error_key=f"scheduler:{name}:{e.__class__.__name__}",
@@ -242,6 +259,9 @@ async def _run_job_with_state(
         logger.exception("Scheduler job %s failed: %s", name, e)
         await _publish("scheduler.status", {"job": _state_to_dict(state)})
         raise
+    finally:
+        if cron_token is not None:
+            _current_task_id_var.reset(cron_token)
 
 
 async def get_status_snapshot() -> dict[str, Any]:
@@ -1300,7 +1320,7 @@ async def _instruments_update_job(container: AppContainer) -> dict[str, Any]:
     """Задача: обновление списка инструментов — Shares, фильтр российские акции, upsert в instruments."""
     client = container.tinkoff_client
     if not client:
-        return
+        return {"degraded": True, "skipped": True, "reason": "tinkoff_client_unavailable"}
     try:
         data = await _sync_call(client.get_shares)
         instruments = data.get("instruments") or []
@@ -1343,7 +1363,7 @@ async def _last_prices_job(container: AppContainer) -> dict[str, Any]:
     """Задача: обновление последних цен — список FIGI из БД, GetLastPrices, обновить last_price."""
     client = container.tinkoff_client
     if not client:
-        return
+        return {"degraded": True, "skipped": True, "reason": "tinkoff_client_unavailable"}
     try:
         async with SessionLocal() as session:
             figi_list = await container.market_repository.list_figi(session, limit=500)

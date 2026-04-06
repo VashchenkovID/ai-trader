@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { MarketService } from '@/api/generated/services/MarketService'
 import { Button, PageLayout, Sidebar, SurfaceCard, Text } from '@/components/ui'
+import { useTradingCoreStore } from '@/store/tradingCoreStore'
 import { APP_SIDEBAR_ITEMS, getActiveSidebarItemId, navigateFromSidebar } from '@/navigation/appSidebar'
 import { RecommendationCard, type RecommendationCardItem } from './components/RecommendationCard'
 import {
@@ -28,6 +29,7 @@ const initialFilters: RecommendationFiltersValue = {
 export function RecommendationsPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const totalBalance = useTradingCoreStore(s => s.totalBalance)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [offset, setOffset] = useState(0)
@@ -158,7 +160,10 @@ export function RecommendationsPage() {
                 }
               }}
             >
-              <RecommendationCard item={item} />
+              <RecommendationCard
+                item={item}
+                portfolioTotalValue={totalBalance > 0 ? totalBalance : null}
+              />
             </div>
           ))}
         </div>

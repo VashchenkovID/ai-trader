@@ -90,6 +90,14 @@
     gap: var(--ds-space-xs);
   }
 
+  &__card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ds-space-sm);
+    margin-top: var(--ds-space-xs);
+  }
+
   &__trade-price {
     border: 1px solid var(--ui-border-default);
     border-radius: var(--ds-radius-sm);

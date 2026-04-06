@@ -1,4 +1,5 @@
 import { Input, Select, type SelectOption } from '@/components/ui'
+import { labelTradingRequestStatus } from '@/utils/labels'
 
 export type TradingRequestStatusFilter =
   | 'all'
@@ -23,11 +24,11 @@ type TradingRequestsFiltersProps = {
 
 const statusOptions: SelectOption[] = [
   { value: 'all', label: 'Все статусы' },
-  { value: 'PENDING', label: 'PENDING' },
-  { value: 'APPROVED', label: 'APPROVED' },
-  { value: 'EXECUTED', label: 'EXECUTED' },
-  { value: 'REJECTED', label: 'REJECTED' },
-  { value: 'CANCELED', label: 'CANCELED' },
+  { value: 'PENDING', label: labelTradingRequestStatus('PENDING') },
+  { value: 'APPROVED', label: labelTradingRequestStatus('APPROVED') },
+  { value: 'EXECUTED', label: labelTradingRequestStatus('EXECUTED') },
+  { value: 'REJECTED', label: labelTradingRequestStatus('REJECTED') },
+  { value: 'CANCELED', label: labelTradingRequestStatus('CANCELED') },
 ]
 
 const modeOptions: SelectOption[] = [

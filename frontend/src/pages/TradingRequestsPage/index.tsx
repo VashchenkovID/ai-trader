@@ -13,6 +13,7 @@ import {
 } from './components/TradingRequestsFilters'
 import { TradingRequestsStats, type TradingRequestsStatsData } from './components/TradingRequestsStats'
 import { TradingRequestsTable, type TradingRequestRow } from './components/TradingRequestsTable'
+import { cleanupCompletedTradingRequests } from '@/api/tradingRequestsExtras'
 import './TradingRequestsPage.scss'
 
 const PAGE_LIMIT = 20
@@ -152,6 +153,7 @@ export function TradingRequestsPage() {
   const [actionBusyId, setActionBusyId] = useState<string | null>(null)
   const [dialogAction, setDialogAction] = useState<TradingRequestActionType | null>(null)
   const [dialogRequestId, setDialogRequestId] = useState<string | null>(null)
+  const [cleanupBusy, setCleanupBusy] = useState(false)
   const initialFilters = useMemo<TradingRequestsFiltersValue>(
     () => ({
       query: searchParams.get('q') ?? '',
@@ -285,6 +287,25 @@ export function TradingRequestsPage() {
     navigateFromSidebar(navigate, itemId)
   }
 
+  const handleCleanupCompleted = async () => {
+    if (cleanupBusy) return
+    const ok = window.confirm('Удалить все завершенные заявки (все, кроме "Ожидает")?')
+    if (!ok) return
+    setCleanupBusy(true)
+    setError(null)
+    try {
+      const modeParam = filters.mode === 'all' ? null : filters.mode
+      await cleanupCompletedTradingRequests(modeParam)
+      setOffset(0)
+      await loadData(0, filters)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Ошибка очистки завершенных заявок'
+      setError(message)
+    } finally {
+      setCleanupBusy(false)
+    }
+  }
+
   return (
     <PageLayout
       className="trading-requests-page"
@@ -324,6 +345,14 @@ export function TradingRequestsPage() {
           />
           <Button variant="secondary" loading={loading} onClick={() => void loadData(offset, filters)}>
             Обновить
+          </Button>
+          <Button
+            variant="danger"
+            loading={cleanupBusy}
+            disabled={loading || cleanupBusy}
+            onClick={() => void handleCleanupCompleted()}
+          >
+            Очистить завершенные
           </Button>
         </div>
       </SurfaceCard>

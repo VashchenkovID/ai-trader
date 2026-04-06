@@ -104,10 +104,20 @@
   }
 
   &__pagination {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--ds-space-sm);
+    .ui-surface-card__body {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--ds-space-sm);
+
+      @include media-breakpoint-up(md) {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: nowrap;
+        gap: var(--ds-space-md);
+      }
+    }
   }
 
   &__state {

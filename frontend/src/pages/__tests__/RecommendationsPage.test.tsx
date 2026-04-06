@@ -40,7 +40,7 @@ describe('RecommendationsPage', () => {
     expect(heading).toBeInTheDocument()
     const card = heading.closest('.recommendations-page__card')
     if (!card) throw new Error('Recommendation card not found')
-    expect(within(card).getByText('BUY')).toBeInTheDocument()
+    expect(within(card).getByText('ПОКУПАТЬ')).toBeInTheDocument()
     expect(within(card).getByText(/FIGI: BBG004730N88/)).toBeInTheDocument()
   })
 
@@ -192,7 +192,7 @@ describe('RecommendationsPage', () => {
     )
 
     expect(await screen.findByRole('heading', { name: 'Без названия' })).toBeInTheDocument()
-    expect(screen.getByText('UNKNOWN')).toBeInTheDocument()
+    expect(screen.getByText('НЕИЗВЕСТНО')).toBeInTheDocument()
     expect(screen.getByText(/FIGI: —/)).toBeInTheDocument()
   })
 

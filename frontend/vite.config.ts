@@ -3,7 +3,18 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 // https://vitejs.dev/config/
+// При работе без VITE_API_BASE_URL: проксируем /api на бэкенд (REST + WebSocket system-status).
+// Если задан VITE_API_BASE_URL, клиент ходит на него напрямую — proxy не используется.
 export default defineConfig({
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
   plugins: [react()],
   css: {
     preprocessorOptions: {

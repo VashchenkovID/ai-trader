@@ -9,6 +9,44 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
 }
 
+function parseIsoDateOnly(raw: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(raw).trim())
+  if (!m) return null
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null
+  return new Date(y, mo - 1, d)
+}
+
+function formatRuDate(raw: string): string {
+  const dt = parseIsoDateOnly(raw)
+  if (!dt) return raw
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(dt)
+}
+
+function pickStatsFields(stats: Record<string, unknown>) {
+  const start =
+    (stats.startDate as string | undefined) ?? (stats.start_date as string | undefined) ?? ''
+  const end = (stats.endDate as string | undefined) ?? (stats.end_date as string | undefined) ?? ''
+  const rawCount = stats.executedCount ?? stats.executed_count ?? stats.requestsTotal
+  const executed =
+    typeof rawCount === 'number' && Number.isFinite(rawCount)
+      ? rawCount
+      : typeof rawCount === 'string'
+        ? Number.parseInt(rawCount, 10)
+        : NaN
+  return {
+    start,
+    end,
+    executedCount: Number.isFinite(executed) ? executed : null,
+  }
+}
+
 export function AutoPaperPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -42,6 +80,7 @@ export function AutoPaperPage() {
 
   const enabled = Boolean(status?.enabled)
   const mode = String(status?.tradingMode ?? status?.trading_mode ?? '—')
+  const statsFields = stats ? pickStatsFields(stats) : null
 
   return (
     <PageLayout
@@ -100,12 +139,27 @@ export function AutoPaperPage() {
         </Text>
       </SurfaceCard>
 
-      {stats && (
+      {stats && statsFields && (
         <SurfaceCard className="app-tool-page__section">
           <Text as="h2" variant="title">
             Статистика
           </Text>
-          <pre className="app-tool-page__json">{JSON.stringify(stats, null, 2)}</pre>
+          {statsFields.start && statsFields.end ? (
+            <Text as="p" variant="body">
+              Период учёта:{' '}
+              <strong>
+                {formatRuDate(statsFields.start)} — {formatRuDate(statsFields.end)}
+              </strong>
+            </Text>
+          ) : null}
+          <Text as="p" variant="body">
+            Исполнено заявок (paper, статус «Исполнена»):{' '}
+            <strong>{statsFields.executedCount != null ? statsFields.executedCount : '—'}</strong>
+          </Text>
+          <Text as="p" variant="hint" tone="muted">
+            Счётчик по всем исполненным заявкам в режиме paper; период задаётся на сервере (по умолчанию
+            последние 30 дней).
+          </Text>
         </SurfaceCard>
       )}
     </PageLayout>

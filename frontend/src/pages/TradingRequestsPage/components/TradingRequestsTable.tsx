@@ -1,4 +1,5 @@
 import { Button, SurfaceCard, Text } from '@/components/ui'
+import { labelTradingMode, labelTradingRequestStatus } from '@/utils/labels'
 
 export type TradingRequestRow = {
   requestId: string
@@ -56,7 +57,7 @@ export function TradingRequestsTable({
                 {row.ticker} ({row.figi})
               </Text>
               <span className={`trading-requests-page__status-badge trading-requests-page__status-badge--${toStatusClass(row.status)}`}>
-                {row.status}
+                {labelTradingRequestStatus(row.status)}
               </span>
             </div>
             <div className="trading-requests-page__row-grid">
@@ -65,7 +66,7 @@ export function TradingRequestsTable({
               <Text as="p" variant="body">Количество: {row.quantity ?? '—'}</Text>
               <Text as="p" variant="body">Цена: {row.price ?? '—'}</Text>
               <Text as="p" variant="body">Сумма: {row.amount ?? '—'}</Text>
-              <Text as="p" variant="body">Режим: {row.mode}</Text>
+              <Text as="p" variant="body">Режим: {labelTradingMode(row.mode)}</Text>
               <Text as="p" variant="hint" tone="muted">Создана: {row.createdAt || '—'}</Text>
               <Text as="p" variant="hint" tone="muted">Обновлена: {row.updatedAt || '—'}</Text>
               {row.comment && (

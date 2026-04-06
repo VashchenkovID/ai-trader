@@ -388,6 +388,55 @@ async def test_trading_request_service_create_from_data_ok() -> None:
 
 
 @pytest.mark.asyncio
+async def test_trading_request_service_preview_trade_from_data_ok() -> None:
+    class MarketRepo:
+        async def get_instrument_by_figi(self, *_):
+            return None
+
+    class TradingRepo:
+        async def count_active_by_figi(self, _session, *, figi):
+            return 0
+
+    svc = TradingRequestService(TradingRepo(), MarketRepo())
+    out = await svc.preview_trade(
+        None,
+        recommendation_figi=None,
+        recommendation_data={"figi": "F1", "recommendation": "BUY", "price": 100},
+        action=None,
+        mode="paper",
+        quantity=1,
+    )
+    assert out["ok"] is True
+    assert out["figi"] == "F1"
+    assert out["quantity"] == 1
+    assert out["action"] == "BUY"
+    assert out["hasActiveRequest"] is False
+
+
+@pytest.mark.asyncio
+async def test_trading_request_service_preview_trade_missing_figi() -> None:
+    class MarketRepo:
+        async def get_instrument_by_figi(self, *_):
+            return None
+
+    class TradingRepo:
+        async def count_active_by_figi(self, *_):
+            return 0
+
+    svc = TradingRequestService(TradingRepo(), MarketRepo())
+    out = await svc.preview_trade(
+        None,
+        recommendation_figi=None,
+        recommendation_data={"price": 100},
+        action="BUY",
+        mode="paper",
+        quantity=None,
+    )
+    assert out["ok"] is False
+    assert out.get("errorCode") == "BAD_REQUEST"
+
+
+@pytest.mark.asyncio
 async def test_trading_request_service_approve_not_found() -> None:
     class TradingRepo:
         async def get_by_id(self, *_):
@@ -445,7 +494,7 @@ async def test_trading_request_service_execute_not_found() -> None:
 
 @pytest.mark.asyncio
 async def test_trading_request_service_execute_updates_risk_stats() -> None:
-    req = SimpleNamespace(status="APPROVED", budget=Decimal("100"))
+    req = SimpleNamespace(status="APPROVED", budget=Decimal("100"), mode="paper")
 
     class TradingRepo:
         async def get_by_id(self, *_):
@@ -612,6 +661,23 @@ async def test_api_trading_requests_pending_approved(client: AsyncClient) -> Non
     assert r2.status_code == 200 and "items" in r2.json()["data"]
 
 
+@pytest.mark.asyncio
+async def test_api_trading_requests_preview_from_data(
+    client: AsyncClient, db_available: bool
+) -> None:
+    """Предрасчёт заявки без записи в БД."""
+    if not db_available:
+        pytest.skip("DB tables not available")
+    figi = f"TEST-{uuid4().hex[:12]}"
+    body = _create_request_body(figi)
+    r = await client.post("/api/v1/trading-requests/preview", json=body)
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data.get("ok") is True
+    assert data["figi"] == figi
+    assert data["action"] == "BUY"
+
+
 def _create_request_body(figi: str) -> dict:
     """Тело для create с recommendationData."""
     return {
@@ -644,7 +710,7 @@ async def test_api_trading_requests_create_from_data(
 async def test_api_trading_requests_create_approve_execute_flow(
     client: AsyncClient, db_available: bool
 ) -> None:
-    """Полный lifecycle: create -> approve -> execute."""
+    """Paper: create -> approve сразу исполняет заявку (EXECUTED)."""
     if not db_available:
         pytest.skip("DB tables not available")
     figi = f"TEST-{uuid4().hex[:12]}"
@@ -654,14 +720,7 @@ async def test_api_trading_requests_create_approve_execute_flow(
 
     approve_r = await client.post(f"/api/v1/trading-requests/{req_id}/approve", json={})
     assert approve_r.status_code == 200
-    assert approve_r.json()["data"]["status"] == "APPROVED"
-
-    exec_r = await client.post(
-        f"/api/v1/trading-requests/{req_id}/execute",
-        json={"actualPrice": 101, "actualAmount": 101},
-    )
-    assert exec_r.status_code == 200
-    assert exec_r.json()["data"]["status"] == "EXECUTED"
+    assert approve_r.json()["data"]["status"] == "EXECUTED"
 
 
 @pytest.mark.asyncio
@@ -699,6 +758,56 @@ async def test_api_trading_requests_cancel_flow(
     cancel_r = await client.post(f"/api/v1/trading-requests/{req_id}/cancel")
     assert cancel_r.status_code == 200
     assert cancel_r.json()["data"]["status"] == "CANCELLED"
+
+
+@pytest.mark.asyncio
+async def test_api_portfolio_virtual_get(client: AsyncClient, db_available: bool) -> None:
+    """GET /portfolio/virtual: контракт как у реального + isVirtual."""
+    if not db_available:
+        pytest.skip("DB tables not available")
+    r = await client.get("/api/v1/portfolio/virtual")
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data.get("isVirtual") is True
+    assert "cash" in data
+    assert "positions" in data
+    assert "positionsList" in data
+    assert "totalValue" in data
+    assert "positionsValue" in data
+
+
+@pytest.mark.asyncio
+async def test_api_portfolio_position_recommendations_batch(client: AsyncClient, db_available: bool) -> None:
+    """GET /portfolio/position-recommendations?figi=... возвращает items и meta."""
+    if not db_available:
+        pytest.skip("DB tables not available")
+    r = await client.get("/api/v1/portfolio/position-recommendations", params={"figi": []})
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data.get("items") == []
+    assert "meta" in data
+
+
+@pytest.mark.asyncio
+async def test_execute_paper_updates_virtual_portfolio(
+    client: AsyncClient, db_available: bool
+) -> None:
+    """После одобрения paper-заявки (автоисполнение) виртуальный портфель в БД отражает позицию."""
+    if not db_available:
+        pytest.skip("DB tables not available")
+    figi = f"TEST-{uuid4().hex[:12]}"
+    create_r = await client.post("/api/v1/trading-requests/create", json=_create_request_body(figi))
+    assert create_r.status_code == 200
+    req_id = create_r.json()["data"]["id"]
+    approve_r = await client.post(f"/api/v1/trading-requests/{req_id}/approve", json={})
+    assert approve_r.status_code == 200
+    assert approve_r.json()["data"]["status"] == "EXECUTED"
+    vp = await client.get("/api/v1/portfolio/virtual")
+    assert vp.status_code == 200
+    d = vp.json()["data"]
+    positions = d.get("positions") or {}
+    assert str(figi) in positions
+    assert int(positions[figi]) == 1
 
 
 @pytest.mark.asyncio

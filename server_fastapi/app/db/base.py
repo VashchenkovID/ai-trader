@@ -14,6 +14,7 @@ from app.db.models import (
     Signal,
     TradingRequest,
     User,
+    VirtualPortfolio,
 )
 
 __all__ = [
@@ -32,4 +33,5 @@ __all__ = [
     "LlmJuryOpinion",
     "LlmJuryAggregate",
     "RealPortfolio",
+    "VirtualPortfolio",
 ]

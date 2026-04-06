@@ -1,4 +1,6 @@
+import { QuickTradeButton } from '@/components/trading/QuickTradeButton'
 import { SurfaceCard, Text } from '@/components/ui'
+import { labelRecommendation } from '@/utils/labels'
 
 export type HorizonMomentumPoint = {
   id: '1d' | '5d' | '20d'
@@ -39,6 +41,8 @@ export type RecommendationCardItem = {
 
 type RecommendationCardProps = {
   item: RecommendationCardItem
+  portfolioTotalValue?: number | null
+  onTradeSuccess?: () => void
 }
 
 function formatPercent(value: number | null): string {
@@ -72,7 +76,11 @@ function horizonLabel(value: string | null): string {
   return value
 }
 
-export function RecommendationCard({ item }: RecommendationCardProps) {
+export function RecommendationCard({
+  item,
+  portfolioTotalValue,
+  onTradeSuccess,
+}: RecommendationCardProps) {
   return (
     <SurfaceCard className="recommendations-page__card">
       <div className="recommendations-page__card-header">
@@ -88,7 +96,7 @@ export function RecommendationCard({ item }: RecommendationCardProps) {
           </Text>
         </div>
         <span className={`recommendations-page__badge recommendations-page__badge--${item.recommendation}`}>
-          {item.recommendation}
+          {labelRecommendation(item.recommendation)}
         </span>
       </div>
 
@@ -117,6 +125,54 @@ export function RecommendationCard({ item }: RecommendationCardProps) {
             {formatNumber(item.takeProfit)}
           </Text>
         </div>
+      </div>
+
+      <div className="recommendations-page__card-actions">
+        {item.recommendation === 'BUY' && (
+          <QuickTradeButton
+            intent="buy"
+            source={{ kind: 'recommendationFigi', figi: item.figi }}
+            confidence={item.confidence ?? 0.5}
+            score={item.score ?? 0.5}
+            portfolioTotalValue={portfolioTotalValue}
+            onSuccess={onTradeSuccess}
+          />
+        )}
+        {item.recommendation === 'SELL' && (
+          <QuickTradeButton
+            intent="sell"
+            source={{ kind: 'recommendationFigi', figi: item.figi }}
+            confidence={item.confidence ?? 0.5}
+            score={item.score ?? 0.5}
+            portfolioTotalValue={portfolioTotalValue}
+            onSuccess={onTradeSuccess}
+          />
+        )}
+        {item.recommendation === 'HOLD' && (
+          <>
+            <QuickTradeButton
+              intent="buy"
+              source={{ kind: 'recommendationFigi', figi: item.figi }}
+              confidence={item.confidence ?? 0.5}
+              score={item.score ?? 0.5}
+              portfolioTotalValue={portfolioTotalValue}
+              onSuccess={onTradeSuccess}
+            />
+            <QuickTradeButton
+              intent="sell"
+              source={{ kind: 'recommendationFigi', figi: item.figi }}
+              confidence={item.confidence ?? 0.5}
+              score={item.score ?? 0.5}
+              portfolioTotalValue={portfolioTotalValue}
+              onSuccess={onTradeSuccess}
+            />
+          </>
+        )}
+        {item.recommendation === 'UNKNOWN' && (
+          <Text as="p" variant="hint" tone="muted">
+            Быстрая сделка недоступна: нет сигнала BUY/SELL/HOLD.
+          </Text>
+        )}
       </div>
 
       {item.horizonMomentum.length > 0 && (

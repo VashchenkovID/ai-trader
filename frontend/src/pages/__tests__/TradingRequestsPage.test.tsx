@@ -2,7 +2,12 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { TradingRequestsService } from '@/api/generated/services/TradingRequestsService'
+import { cleanupCompletedTradingRequests } from '@/api/tradingRequestsExtras'
 import { TradingRequestsPage } from '../TradingRequestsPage'
+
+jest.mock('@/api/tradingRequestsExtras', () => ({
+  cleanupCompletedTradingRequests: jest.fn(),
+}))
 
 describe('TradingRequestsPage', () => {
   afterEach(() => {
@@ -186,6 +191,41 @@ describe('TradingRequestsPage', () => {
     expect(screen.getByText('Одобрены')).toBeInTheDocument()
     expect(screen.getByText('Сумма: 450')).toBeInTheDocument()
     expect(screen.getByText('Сумма: 1000')).toBeInTheDocument()
+  })
+
+  it('cleans up completed requests and reloads list', async () => {
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
+    ;(cleanupCompletedTradingRequests as jest.Mock).mockResolvedValue({ success: true, data: { deleted: 3, mode: null } })
+
+    const listSpy = jest
+      .spyOn(TradingRequestsService, 'tradingRequestsListApiV1TradingRequestsGet')
+      .mockResolvedValueOnce({
+        success: true,
+        data: { items: [], meta: { total: 0 } },
+      } as never)
+      .mockResolvedValueOnce({
+        success: true,
+        data: { items: [], meta: { total: 0 } },
+      } as never)
+
+    jest.spyOn(TradingRequestsService, 'tradingRequestsStatsApiV1TradingRequestsStatsGet').mockResolvedValue({
+      success: true,
+      data: { byStatus: {}, total: 0 },
+    } as never)
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/trading-requests']}>
+        <TradingRequestsPage />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => expect(listSpy).toHaveBeenCalled())
+    await user.click(screen.getByRole('button', { name: 'Очистить завершенные' }))
+    await waitFor(() => expect(cleanupCompletedTradingRequests).toHaveBeenCalledWith(null))
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(listSpy.mock.calls.length).toBeGreaterThanOrEqual(2)
+    confirmSpy.mockRestore()
   })
 })
 

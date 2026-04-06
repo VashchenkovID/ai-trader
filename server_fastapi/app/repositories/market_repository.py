@@ -83,6 +83,27 @@ class MarketRepository:
         )
         return await db_session.scalar(stmt)
 
+    async def get_latest_recommendations_for_figis(
+        self, db_session: AsyncSession, figis: list[str]
+    ) -> list[Recommendation]:
+        """Последняя рекомендация по каждому FIGI из списка (порядок как во входном списке)."""
+        uniq = [f for f in dict.fromkeys(figis) if f and str(f).strip()]
+        if not uniq:
+            return []
+        stmt = (
+            select(Recommendation)
+            .where(Recommendation.figi.in_(uniq))
+            .order_by(Recommendation.figi.asc(), desc(Recommendation.analysis_date))
+        )
+        rows = list((await db_session.scalars(stmt)).all())
+        seen: set[str] = set()
+        by_figi: dict[str, Recommendation] = {}
+        for r in rows:
+            if r.figi not in seen:
+                seen.add(r.figi)
+                by_figi[r.figi] = r
+        return [by_figi[f] for f in uniq if f in by_figi]
+
     async def upsert_recommendation(
         self,
         db_session: AsyncSession,

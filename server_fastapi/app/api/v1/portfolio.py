@@ -5,9 +5,11 @@
 
 import asyncio
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_container
+from app.db.session import get_db_session
 from app.core.errors import AppError
 from app.schemas.envelope import SuccessEnvelope
 from app.scheduler import list_tasks, trigger_named_job
@@ -68,6 +70,37 @@ async def get_portfolio(
             "positionsList": positions,
         }
     )
+
+
+@router.get(
+    "/position-recommendations",
+    summary="Рекомендации по FIGI позиций портфеля (пакетно из БД)",
+)
+async def get_portfolio_position_recommendations(
+    db_session: AsyncSession = Depends(get_db_session),
+    container: AppContainer = Depends(get_container),
+    figi: list[str] = Query(
+        default=[],
+        description="Повторяющийся query-параметр: figi=TCS123&figi=...",
+    ),
+) -> SuccessEnvelope[dict]:
+    """Последние рекомендации (BUY/SELL/HOLD) по списку FIGI — для таблицы на странице портфеля."""
+    max_n = 100
+    clean = [f.strip() for f in figi if f and str(f).strip()][:max_n]
+    items = await container.market_service.get_recommendations_for_figis(db_session, clean)
+    await db_session.commit()
+    return SuccessEnvelope(data={"items": items, "meta": {"requested": len(clean), "returned": len(items)}})
+
+
+@router.get("/virtual", summary="Виртуальный портфель (paper, из БД)")
+async def get_virtual_portfolio(
+    db_session: AsyncSession = Depends(get_db_session),
+    container: AppContainer = Depends(get_container),
+) -> SuccessEnvelope[dict]:
+    """Снимок виртуального портфеля: тот же контракт, что у реального таба + isVirtual."""
+    data = await container.virtual_portfolio_service.get_portfolio_payload(db_session)
+    await db_session.commit()
+    return SuccessEnvelope(data=data)
 
 
 @router.get("/sync", summary="Синхронизация портфеля (то же что GET /portfolio)")

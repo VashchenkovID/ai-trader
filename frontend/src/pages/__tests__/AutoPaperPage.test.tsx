@@ -16,7 +16,11 @@ describe('AutoPaperPage', () => {
     } as never)
     jest.spyOn(AutoPaperTradingService, 'autoPaperStatsApiV1AutoPaperTradingStatsGet').mockResolvedValue({
       success: true,
-      data: { requestsTotal: 3 },
+      data: {
+        startDate: '2026-03-07',
+        endDate: '2026-04-06',
+        executedCount: 3,
+      },
     } as never)
 
     render(
@@ -27,7 +31,9 @@ describe('AutoPaperPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Автоторговля' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText(/Включено: да/)).toBeInTheDocument())
-    expect(screen.getByText(/requestsTotal/)).toBeInTheDocument()
+    expect(screen.getByText(/Период учёта:/)).toBeInTheDocument()
+    expect(screen.getByText(/Исполнено заявок/)).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
   })
 
   it('navigates to trading requests', async () => {

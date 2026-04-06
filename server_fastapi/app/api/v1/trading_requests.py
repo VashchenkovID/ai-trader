@@ -11,6 +11,7 @@ from app.schemas.trading import (
     TradingRequestApproveRequest,
     TradingRequestCreateRequest,
     TradingRequestExecuteRequest,
+    TradingRequestPreviewRequest,
     TradingRequestRejectRequest,
 )
 from app.services.container import AppContainer
@@ -92,6 +93,25 @@ async def trading_request_create(
     return SuccessEnvelope(data=data)
 
 
+@router.post("/preview", summary="Предрасчёт заявки (без записи)")
+async def trading_request_preview(
+    body: TradingRequestPreviewRequest,
+    container: AppContainer = Depends(get_container),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> SuccessEnvelope[dict]:
+    """Возвращает количество, цену, бюджет и признак активной заявки по FIGI."""
+    opts = body.options
+    data = await container.trading_request_service.preview_trade(
+        db_session,
+        recommendation_figi=body.recommendationFigi,
+        recommendation_data=body.recommendationData,
+        action=opts.action,
+        mode=opts.mode,
+        quantity=opts.quantity,
+    )
+    return SuccessEnvelope(data=data)
+
+
 @router.post("/{request_id}/approve", summary="Одобрить заявку")
 async def trading_request_approve(
     request_id: UUID = Path(..., description="ID заявки"),
@@ -157,4 +177,16 @@ async def trading_requests_stats(
 ) -> SuccessEnvelope[dict]:
     """Возвращает агрегаты по статусам заявок."""
     data = await container.trading_request_service.get_stats(db_session, mode=mode)
+    return SuccessEnvelope(data=data)
+
+
+@router.post("/cleanup", summary="Очистить завершенные заявки")
+async def trading_requests_cleanup(
+    mode: str | None = Query(default=None, description="Фильтр по режиму (опционально)"),
+    container: AppContainer = Depends(get_container),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> SuccessEnvelope[dict]:
+    """Удаляет все заявки, которые не в статусе PENDING."""
+    data = await container.trading_request_service.delete_completed(db_session, mode=mode)
+    await db_session.commit()
     return SuccessEnvelope(data=data)
