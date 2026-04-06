@@ -86,6 +86,16 @@ function normalizeHorizonMomentum(
   return parseHorizonMomentumFromNn(nnPayload)
 }
 
+function normalizeRecommendationSide(
+  raw: string | null | undefined,
+): 'BUY' | 'SELL' | 'HOLD' | 'UNKNOWN' {
+  const u = String(raw ?? '')
+    .trim()
+    .toUpperCase()
+  if (u === 'BUY' || u === 'SELL' || u === 'HOLD') return u
+  return 'UNKNOWN'
+}
+
 function normalizeFusionMode(payload: Record<string, unknown>): string {
   const explicit = asString(payload.fusionMode) ?? asString(payload.fusion_mode)
   if (explicit) return explicit
@@ -110,6 +120,15 @@ export function normalizeRecommendation(payload: Record<string, unknown>): Recom
     asString(payload.action) ??
     'UNKNOWN'
   const recommendation = recommendationRaw.toUpperCase()
+  const paperRecRaw =
+    asString(payload.paperRecommendation) ?? asString(payload.paper_recommendation)
+  const paperRecommendation: RecommendationCardItem['paperRecommendation'] =
+    paperRecRaw != null && paperRecRaw.trim() !== ''
+      ? normalizeRecommendationSide(paperRecRaw)
+      : null
+  const paperConfidence =
+    asNumber(payload.paperConfidence) ?? asNumber(payload.paper_confidence)
+  const paperScore = asNumber(payload.paperScore) ?? asNumber(payload.paper_score)
   const ticker =
     asString(payload.ticker) ?? asString(payload.symbol) ?? asString(payload.name) ?? '—'
   const figi = asString(payload.figi) ?? '—'
@@ -164,6 +183,9 @@ export function normalizeRecommendation(payload: Record<string, unknown>): Recom
       recommendation === 'BUY' || recommendation === 'SELL' || recommendation === 'HOLD'
         ? recommendation
         : 'UNKNOWN',
+    paperRecommendation,
+    paperConfidence,
+    paperScore,
     score,
     confidence,
     currentPrice,

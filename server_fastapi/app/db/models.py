@@ -84,6 +84,10 @@ class Recommendation(TimestampedUUIDModel):
     nn_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     weekly_forecast: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     weekly_forecast_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Мягкий сигнал для paper / симуляции (основные поля — консервативные для UI/real)
+    paper_recommendation: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    paper_confidence: Mapped[Decimal | None] = mapped_column(Numeric(6, 4), nullable=True)
+    paper_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 4), nullable=True)
 
 
 class Candle(TimestampedUUIDModel):

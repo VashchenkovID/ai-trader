@@ -181,6 +181,8 @@ async def test_market_repository_upsert_recommendation_with_llm_payload(
     assert created.llm_jury_payload is not None
     assert created.nn_score == Decimal("0.5200")
     assert created.nn_checkpoint == "models/python_nn/test.ckpt"
+    assert created.paper_recommendation == "BUY"
+    assert created.paper_confidence is not None
     updated = await repo.upsert_recommendation(
         db_session,
         figi=figi,
@@ -196,6 +198,7 @@ async def test_market_repository_upsert_recommendation_with_llm_payload(
     assert (updated.llm_jury_payload or {}).get("providers") is not None
     assert updated.nn_score == Decimal("0.7100")
     assert updated.nn_confidence == Decimal("0.8100")
+    assert updated.paper_recommendation == "BUY"
     await db_session.rollback()
 
 

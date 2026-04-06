@@ -97,10 +97,21 @@ class SettingsService:
         }
         self._kelly = KellySettingsDTO()
 
+    @staticmethod
+    def _is_visible_in_settings_api(key: str) -> bool:
+        """Служебные кэши планировщика (огромный JSON) — не отдаём в UI и не тянем по сети."""
+        k = str(key)
+        if k.endswith(".last_payload"):
+            return False
+        if k == "fundamental.last_sync":
+            return False
+        return True
+
     def get_all(self, *, offset: int = 0, limit: int = 200) -> tuple[list[SettingItemDTO], int]:
         """Возвращает все настройки в формате API."""
-        items = list(self._settings.values())
-        return items[offset : offset + limit], len(items)
+        items = [it for it in self._settings.values() if self._is_visible_in_settings_api(it.key)]
+        total = len(items)
+        return items[offset : offset + limit], total
 
     def update(self, key: str, value: object) -> SettingItemDTO:
         """Обновляет одну настройку по ключу или создает новую, если ключа нет."""

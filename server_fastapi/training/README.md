@@ -31,6 +31,8 @@ pip install -e ".[training]"
 - Выход: score [0, 1], confidence [0, 1].
 - Чекпоинты в `TRAINING_MODELS_ROOT/python_nn/` (по аналогии с Node `server/models`), логи в MLflow.
 - После обучения на тестовой выборке (time-based split) вызывается **бэктест**: метрики `test_mse`, `test_mae`, `test_direction_accuracy` логируются в MLflow. Отдельный скрипт walk-forward: `python -m training.run_backtest --checkpoint path [--splits 5]`. Оценка вручную: `training.backtest.evaluate_model_on_test(ckpt_path, X_test, y_test)`; разбиение: `training.backtest.walk_forward_split(X, y, n_splits=5)`.
+- Дисбаланс «плоских» vs сильных движений по forward return: флаги `python -m training.run_nn ... --imbalance-weighted [--flat-threshold 0.0005] [--focal-gamma 0]` (см. `training/sample_weights.py`).
+- **Метрики успеха:** что относится к качеству прогноза и что к paper-PnL — см. **[METRICS.md](METRICS.md)**. Сдвиг paper→real и мониторинг — **[REAL_TRANSFER.md](REAL_TRANSFER.md)**.
 
 ## Переменные окружения
 

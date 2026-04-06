@@ -90,6 +90,12 @@ export function DashboardPage() {
           recommendation: String(rec.recommendation ?? 'UNKNOWN'),
           confidence: asNumber(rec.confidence),
           score: asNumber(rec.score),
+          paperRecommendation:
+            (rec.paperRecommendation as string | undefined) ??
+            (rec.paper_recommendation as string | undefined) ??
+            null,
+          paperConfidence: asNumber(rec.paperConfidence) ?? asNumber(rec.paper_confidence),
+          paperScore: asNumber(rec.paperScore) ?? asNumber(rec.paper_score),
         }
       })
       const recMeta = asRecord(recData.meta)

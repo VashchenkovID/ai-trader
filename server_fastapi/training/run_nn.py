@@ -27,6 +27,7 @@ from training.experiments import init_mlflow
 from training.logs_rollup import append_lightning_rollup, prune_lightning_raw_dirs
 from training.models.nn import CondMLP
 from training.models.lightning_module import CondMLPLightning, build_dataloaders
+from training.sample_weights import movement_bucket_weights
 from training.backtest import evaluate_model_on_test
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,10 @@ def run(
     resume_from_latest: bool = False,
     options_df: pd.DataFrame | None = None,
     signals_df: pd.DataFrame | None = None,
+    *,
+    imbalance_weighted: bool = False,
+    flat_threshold: float = 5e-4,
+    focal_gamma: float = 0.0,
 ) -> str | None:
     """
     Запускает обучение NN с conditioning. Возвращает run_id MLflow или None.
@@ -125,10 +130,27 @@ def run(
         horizon=prediction_horizon,
     )
     input_size = X_t.shape[1]
+    train_weights = None
+    if imbalance_weighted and y_t.shape[0] > 0:
+        train_weights = movement_bucket_weights(y_t, flat_eps=flat_threshold)
     train_loader, val_loader = build_dataloaders(
-        X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, batch_size=batch_size
+        X_t,
+        y_t,
+        s_t,
+        h_t,
+        X_v,
+        y_v,
+        s_v,
+        h_v,
+        batch_size=batch_size,
+        train_sample_weights=train_weights,
     )
-    model = CondMLPLightning(input_size=input_size, lr=lr)
+    model = CondMLPLightning(
+        input_size=input_size,
+        lr=lr,
+        weighted_training=imbalance_weighted,
+        focal_gamma=focal_gamma,
+    )
     models_root = Path(settings.models_root)
     models_root.mkdir(parents=True, exist_ok=True)
     ckpt_dir = models_root / "python_nn"
@@ -158,6 +180,9 @@ def run(
             "lr": lr,
             "data_source": "real_db",
             "options_features_enabled": bool(options_df is not None and not options_df.empty),
+            "imbalance_weighted": imbalance_weighted,
+            "flat_threshold": flat_threshold,
+            "focal_gamma": focal_gamma,
         })
         trainer.fit(model, train_loader, val_loader, ckpt_path=ckpt_path)
         best_model_path = checkpoint_callback.best_model_path or None
@@ -184,6 +209,9 @@ def run(
                 "lr": lr,
                 "lookback_days": lookback_days,
                 "prediction_horizon": prediction_horizon,
+                "imbalance_weighted": imbalance_weighted,
+                "flat_threshold": flat_threshold,
+                "focal_gamma": focal_gamma,
             },
         )
         prune_lightning_raw_dirs(settings=settings)
@@ -204,6 +232,23 @@ def main() -> None:
     )
     parser.add_argument("--lookback", type=int, default=60)
     parser.add_argument("--horizon", type=int, default=5)
+    parser.add_argument(
+        "--imbalance-weighted",
+        action="store_true",
+        help="Веса по бакетам flat/up/down для forward return (см. training/sample_weights.py)",
+    )
+    parser.add_argument(
+        "--flat-threshold",
+        type=float,
+        default=5e-4,
+        help="Порог |return| для бакета «flat» при --imbalance-weighted",
+    )
+    parser.add_argument(
+        "--focal-gamma",
+        type=float,
+        default=0.0,
+        help="Focal-модификатор MSE (0=выкл.; чем больше, тем сильнее фокус на трудных примерах)",
+    )
     args = parser.parse_args()
     if not args.csv:
         raise SystemExit("Synthetic data is disabled: pass --csv with real candles")
@@ -218,6 +263,9 @@ def main() -> None:
         candles_df=candles_df,
         lookback_days=args.lookback,
         prediction_horizon=args.horizon,
+        imbalance_weighted=args.imbalance_weighted,
+        flat_threshold=args.flat_threshold,
+        focal_gamma=args.focal_gamma,
     )
     print("MLflow run_id:", run_id)
 

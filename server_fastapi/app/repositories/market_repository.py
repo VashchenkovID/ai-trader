@@ -10,6 +10,39 @@ from app.core.time_utils import now_msk
 from app.db.models import Candle, Instrument, Recommendation, Signal
 
 
+def sync_recommendation_paper_soft(row: Recommendation) -> None:
+    """
+    Заполняет paper_* для симуляции: при BUY/SELL копирует основной сигнал;
+    при HOLD — мягкий BUY, если score/confidence или NN проходят пороги PAPER_PIPELINE_*.
+    """
+    from app.core.config import get_settings
+
+    s = get_settings()
+    prim = (row.recommendation or "").strip().upper()
+    if prim in ("BUY", "SELL"):
+        row.paper_recommendation = prim
+        row.paper_confidence = row.confidence
+        row.paper_score = row.score
+        return
+    sc = float(row.score or 0)
+    conf = float(row.confidence or 0)
+    nn_s = float(row.nn_score) if row.nn_score is not None else None
+    nn_c = float(row.nn_confidence) if row.nn_confidence is not None else None
+    ms = float(s.paper_pipeline_min_score)
+    mc = float(s.paper_pipeline_min_confidence)
+    score_ok = sc >= ms and conf >= mc
+    nn_ok = nn_s is not None and nn_s >= ms and (nn_c if nn_c is not None else conf) >= mc
+    if score_ok or nn_ok:
+        row.paper_recommendation = "BUY"
+        row.paper_confidence = row.confidence
+        best = max(sc, nn_s if nn_s is not None else sc)
+        row.paper_score = Decimal(str(min(1.0, round(best, 6))))
+    else:
+        row.paper_recommendation = "HOLD"
+        row.paper_confidence = row.confidence
+        row.paper_score = row.score
+
+
 class MarketRepository:
     """Репозиторий рыночных данных (инструменты, рекомендации, свечи)."""
 
@@ -70,6 +103,17 @@ class MarketRepository:
     async def get_instrument_by_figi(self, db_session: AsyncSession, figi: str) -> Instrument | None:
         stmt: Select[tuple[Instrument]] = select(Instrument).where(Instrument.figi == figi).limit(1)
         return await db_session.scalar(stmt)
+
+    async def map_last_prices_by_figis(
+        self, db_session: AsyncSession, figis: list[str]
+    ) -> dict[str, Decimal | None]:
+        """Последняя цена из справочника инструментов по списку FIGI (для обогащения ответа портфеля)."""
+        uniq = [f for f in dict.fromkeys(figis) if f and str(f).strip()]
+        if not uniq:
+            return {}
+        stmt = select(Instrument.figi, Instrument.last_price).where(Instrument.figi.in_(uniq))
+        rows = await db_session.execute(stmt)
+        return {str(figi): lp for figi, lp in rows.all()}
 
     async def get_recommendation_by_figi(
         self, db_session: AsyncSession, figi: str
@@ -136,6 +180,7 @@ class MarketRepository:
                 existing.nn_checkpoint = nn_checkpoint
             if nn_payload is not None:
                 existing.nn_payload = nn_payload
+            sync_recommendation_paper_soft(existing)
             await db_session.flush()
             return existing
         row = Recommendation(
@@ -151,6 +196,7 @@ class MarketRepository:
             nn_payload=nn_payload,
         )
         db_session.add(row)
+        sync_recommendation_paper_soft(row)
         await db_session.flush()
         return row
 

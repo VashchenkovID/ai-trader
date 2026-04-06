@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.paper_trajectory_log import append_paper_mdp_event
 from app.core.time_utils import now_msk
 from app.db.models import AppSetting, TradingRequest, VirtualPortfolio
 from app.repositories.market_repository import MarketRepository
@@ -179,6 +180,12 @@ class VirtualPortfolioService:
         actual_amount: Decimal | None,
     ) -> None:
         row = await self.get_or_create_snapshot(session)
+        pre_snapshot = {
+            "cash": float(row.cash) if row.cash is not None else 0.0,
+            "totalValue": float(row.total_value) if row.total_value is not None else 0.0,
+            "positionsValue": float(row.positions_value) if row.positions_value is not None else 0.0,
+            "positionsKeys": list((row.positions or {}).keys()),
+        }
         positions = dict(row.positions or {})
         cash = float(row.cash)
         action = (req.action or "BUY").upper()
@@ -236,6 +243,28 @@ class VirtualPortfolioService:
         await session.flush()
         await self.recalculate_totals(session, row)
         await session.flush()
+        post_snapshot = {
+            "cash": float(row.cash) if row.cash is not None else 0.0,
+            "totalValue": float(row.total_value) if row.total_value is not None else 0.0,
+            "positionsValue": float(row.positions_value) if row.positions_value is not None else 0.0,
+            "positionsKeys": list((row.positions or {}).keys()),
+        }
+        append_paper_mdp_event(
+            {
+                "kind": "paper_execution",
+                "mode": "paper",
+                "requestId": str(req.id),
+                "figi": req.figi,
+                "action": action,
+                "quantity": qty,
+                "confidence": float(req.confidence) if req.confidence is not None else None,
+                "score": float(req.score) if req.score is not None else None,
+                "pre": pre_snapshot,
+                "post": post_snapshot,
+                "actualPrice": float(actual_price) if actual_price is not None else None,
+                "actualAmount": float(actual_amount) if actual_amount is not None else None,
+            }
+        )
 
     async def get_portfolio_payload(self, session: AsyncSession) -> dict[str, Any]:
         row = await self.get_or_create_snapshot(session)
@@ -267,6 +296,9 @@ class VirtualPortfolioService:
                     "ticker": ticker_out,
                     "name": name_out,
                     "currentPrice": lp,
+                    "instrumentLastPrice": float(inst.last_price)
+                    if inst and inst.last_price is not None
+                    else None,
                     "averagePositionPrice": avg_px,
                     "instrumentMissing": instrument_missing,
                 }

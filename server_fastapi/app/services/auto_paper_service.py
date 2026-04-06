@@ -5,12 +5,14 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.time_utils import now_msk
+from app.core.config import get_settings
 from app.core.errors import AppError
 from app.repositories.trading_request_repository import TradingRequestRepository
 from app.services.risk_service import RiskService
 from app.services.settings_service import SettingsService
 from app.services.trading_mode_service import TradingModeService
 from app.services.trading_request_service import TradingRequestService
+from app.services.virtual_portfolio_service import VirtualPortfolioService
 
 
 class AutoPaperService:
@@ -23,12 +25,14 @@ class AutoPaperService:
         trading_repo: TradingRequestRepository,
         trading_request_service: TradingRequestService,
         risk_service: RiskService,
+        virtual_portfolio_service: VirtualPortfolioService | None = None,
     ) -> None:
         self._settings = settings_service
         self._mode = trading_mode_service
         self._trading_repo = trading_repo
         self._trading_service = trading_request_service
         self._risk = risk_service
+        self._virtual_portfolio = virtual_portfolio_service
 
     @staticmethod
     def _coerce_bool(value: object) -> bool:
@@ -136,9 +140,52 @@ class AutoPaperService:
                 "reason": "Request has expired",
             }
 
-        # 5. Risk validation
+        # 5. Risk validation — те же капитал и доля позиции, что при расчёте qty заявки,
+        # иначе validate_order с дефолтом 1M и maxPosition 0.05 отклоняет нормальные paper-заявки.
         confidence = float(req.confidence) if req.confidence is not None else 0.5
         score = float(req.score) if req.score is not None else 0.5
+        floor = float(get_settings().paper_pipeline_min_confidence)
+
+        portfolio_value: Decimal
+        current_exposure: Decimal
+        max_pos_frac: float
+
+        max_pos_raw = "0.1"
+        if self._trading_service is not None:
+            max_pos_raw = await self._trading_service._read_app_setting_str(
+                db_session, "risk.maxPositionSize", "0.1"
+            )
+        try:
+            max_pos_frac = float(max_pos_raw)
+        except Exception:
+            max_pos_frac = 0.1
+        max_pos_frac = min(max(max_pos_frac, 1e-9), 1.0)
+
+        if self._virtual_portfolio is not None:
+            row = await self._virtual_portfolio.get_or_create_snapshot(db_session)
+            await self._virtual_portfolio.recalculate_totals(db_session, row)
+            await db_session.flush()
+            tv = float(row.total_value) if row.total_value is not None else 0.0
+            pv = float(row.positions_value) if row.positions_value is not None else 0.0
+            portfolio_value = Decimal(str(tv)) if tv > 0 else Decimal("0")
+            current_exposure = Decimal(str(pv)) if pv >= 0 else Decimal("0")
+        else:
+            portfolio_value = Decimal("1000000")
+            current_exposure = Decimal("0")
+
+        if portfolio_value <= 0:
+            cap_raw = "1000000"
+            if self._trading_service is not None:
+                cap_raw = await self._trading_service._read_app_setting_str(
+                    db_session, "portfolio.virtual.initial_capital", "1000000"
+                )
+            try:
+                portfolio_value = Decimal(str(cap_raw))
+            except Exception:
+                portfolio_value = Decimal("1000000")
+            if portfolio_value <= 0:
+                portfolio_value = Decimal("1000000")
+
         validation = self._risk.validate_order(
             figi=req.figi,
             action=req.action,
@@ -146,6 +193,10 @@ class AutoPaperService:
             price=req.price,
             confidence=confidence,
             score=score,
+            portfolio_value=portfolio_value,
+            current_exposure=current_exposure,
+            confidence_hard_floor=floor,
+            max_position_fraction=max_pos_frac,
         )
         if not validation.get("isValid", True):
             return {
@@ -154,6 +205,45 @@ class AutoPaperService:
             }
 
         return {"canAutoExecute": True, "reason": ""}
+
+    async def process_pending_paper_requests(
+        self, db_session: AsyncSession, *, limit: int = 100
+    ) -> dict[str, object]:
+        """
+        Повторные попытки автоисполнения для накопившихся PENDING paper (догон после сбоев риска/настроек).
+        """
+        if self._mode.get_current_mode() != "paper":
+            return {"attempted": 0, "executedFigis": [], "failed": [], "note": "not_paper_mode"}
+        if not self.get_status().get("enabled"):
+            return {"attempted": 0, "executedFigis": [], "failed": [], "note": "auto_disabled"}
+
+        items, _total = await self._trading_repo.list_requests(
+            db_session, status="PENDING", mode="paper", offset=0, limit=limit
+        )
+        executed_figis: list[str] = []
+        failed: list[dict[str, object]] = []
+        for req in items:
+            try:
+                await self.auto_execute_request(db_session, req.id)
+                if req.figi:
+                    executed_figis.append(str(req.figi))
+            except AppError as e:
+                failed.append({
+                    "figi": req.figi,
+                    "requestId": str(req.id),
+                    "detail": str(e.message),
+                })
+            except Exception as e:
+                failed.append({
+                    "figi": req.figi,
+                    "requestId": str(req.id),
+                    "detail": str(e),
+                })
+        return {
+            "attempted": len(items),
+            "executedFigis": executed_figis,
+            "failed": failed,
+        }
 
     async def auto_execute_request(
         self, db_session: AsyncSession, request_id: UUID

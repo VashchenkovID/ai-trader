@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_container
 from app.core.errors import AppError
+from app.db.session import get_db_session
+from app.services.app_settings_persistence import upsert_app_setting
 from app.schemas.envelope import SuccessEnvelope
 from app.schemas.platform import (
     KellySettingsDTO,
@@ -28,8 +31,11 @@ async def get_settings(
 async def update_settings(
     payload: SettingsUpdateRequest,
     container: AppContainer = Depends(get_container),
+    db_session: AsyncSession = Depends(get_db_session),
 ) -> SuccessEnvelope[SettingItemDTO]:
     item = container.settings_service.update(payload.key, payload.value)
+    await upsert_app_setting(db_session, payload.key, item.value)
+    await db_session.commit()
     return SuccessEnvelope(data=item)
 
 

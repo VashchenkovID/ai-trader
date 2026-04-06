@@ -1,4 +1,5 @@
 import { Button, SurfaceCard, Text } from '@/components/ui'
+import { labelRecommendation } from '@/utils/labels'
 import { formatPercent01 } from '../formatters'
 import type { DashboardRecommendation } from '../types'
 
@@ -47,6 +48,13 @@ export function DashboardTopRecommendations({
                   {rec.recommendation} · confidence: {formatPercent01(rec.confidence)} · score:{' '}
                   {rec.score == null ? '—' : rec.score.toFixed(2)}
                 </Text>
+                {rec.paperRecommendation != null && String(rec.paperRecommendation).trim() !== '' ? (
+                  <Text as="p" variant="hint" tone="muted">
+                    Paper: {labelRecommendation(rec.paperRecommendation)} · confidence:{' '}
+                    {formatPercent01(rec.paperConfidence)} · score:{' '}
+                    {rec.paperScore == null ? '—' : rec.paperScore.toFixed(2)}
+                  </Text>
+                ) : null}
               </button>
             </li>
           ))}

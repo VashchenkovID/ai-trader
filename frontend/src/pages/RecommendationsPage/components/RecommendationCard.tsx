@@ -16,6 +16,10 @@ export type RecommendationCardItem = {
   name: string | null
   figi: string
   recommendation: 'BUY' | 'SELL' | 'HOLD' | 'UNKNOWN'
+  /** Мягкий сигнал для paper / симуляции (если есть в API). */
+  paperRecommendation: 'BUY' | 'SELL' | 'HOLD' | 'UNKNOWN' | null
+  paperConfidence: number | null
+  paperScore: number | null
   score: number | null
   confidence: number | null
   currentPrice: number | null
@@ -95,9 +99,36 @@ export function RecommendationCard({
             FIGI: {item.figi}
           </Text>
         </div>
-        <span className={`recommendations-page__badge recommendations-page__badge--${item.recommendation}`}>
-          {labelRecommendation(item.recommendation)}
-        </span>
+        {item.paperRecommendation != null ? (
+          <div className="recommendations-page__signal-stack">
+            <div className="recommendations-page__signal-block">
+              <Text as="p" variant="hint" tone="muted">
+                Основной сигнал
+              </Text>
+              <span className={`recommendations-page__badge recommendations-page__badge--${item.recommendation}`}>
+                {labelRecommendation(item.recommendation)}
+              </span>
+            </div>
+            <div className="recommendations-page__signal-block recommendations-page__signal-block--paper">
+              <Text as="p" variant="hint" tone="muted">
+                Для paper (симуляция)
+              </Text>
+              <span
+                className={`recommendations-page__badge recommendations-page__badge--${item.paperRecommendation}`}
+              >
+                {labelRecommendation(item.paperRecommendation)}
+              </span>
+              <Text as="p" variant="hint" tone="muted" className="recommendations-page__paper-metrics">
+                confidence {formatPercent(item.paperConfidence)} · score{' '}
+                {item.paperScore == null || !Number.isFinite(item.paperScore) ? '—' : item.paperScore.toFixed(2)}
+              </Text>
+            </div>
+          </div>
+        ) : (
+          <span className={`recommendations-page__badge recommendations-page__badge--${item.recommendation}`}>
+            {labelRecommendation(item.recommendation)}
+          </span>
+        )}
       </div>
 
       <div className="recommendations-page__trade-strip">

@@ -50,4 +50,21 @@ describe('recommendationPayload', () => {
     expect(safeRecommendationsPayload(null)).toEqual([])
     expect(safeRecommendationsPayload({})).toEqual([])
   })
+
+  it('parses paper soft signal fields', () => {
+    const r = normalizeRecommendation({
+      ticker: 'X',
+      figi: 'F',
+      recommendation: 'HOLD',
+      confidence: 0.6,
+      score: 0.55,
+      paper_recommendation: 'BUY',
+      paper_confidence: 0.72,
+      paper_score: 0.68,
+    })
+    expect(r.recommendation).toBe('HOLD')
+    expect(r.paperRecommendation).toBe('BUY')
+    expect(r.paperConfidence).toBe(0.72)
+    expect(r.paperScore).toBe(0.68)
+  })
 })

@@ -22,6 +22,7 @@ type TabId = 'data' | 'settings'
 type ActionKey =
   | 'fullSyncYear'
   | 'cacheUpdate'
+  | 'lastPricesUpdate'
   | 'trainingQuick'
   | 'trainingFull'
   | 'weeklyForecastGeneration'
@@ -100,6 +101,13 @@ type AnalysisKpiSnapshot = {
   marginalGainLlmOverNn: number
   llmSkippedUnavailable: number
   alertsCount: number
+}
+
+/** Служебные кэши планировщика; не показываем даже если пришли из старого ответа. */
+function isHiddenInternalSettingsKey(key: string): boolean {
+  if (key.endsWith('.last_payload')) return true
+  if (key === 'fundamental.last_sync') return true
+  return false
 }
 
 /** Порядок вывода известных ключей; остальные — по алфавиту после них. */
@@ -498,6 +506,23 @@ function formatActionResultLines(
     }
     return lines
   }
+  if (actionKey === 'lastPricesUpdate') {
+    const msg = String(payload.message || '').trim()
+    const lines: string[] = []
+    if (msg === 'portfolio prices updated') {
+      lines.push('Последние цены обновлены в БД (Tinkoff GetLastPrices → instruments.last_price).')
+    } else if (msg) {
+      lines.push(msg)
+    }
+    const count = payload.count
+    if (typeof count === 'number' && Number.isFinite(count)) {
+      lines.push(`Котировок в ответе API: ${count}`)
+    }
+    if (payload.degraded === true) {
+      lines.push('Внимание: ответ Tinkoff помечен как degraded — проверьте логи.')
+    }
+    return lines
+  }
   if (actionKey === 'trainingQuick' || actionKey === 'trainingFull') {
     const lines: string[] = []
     const totalInstruments = Number(payload.totalInstruments || 0)
@@ -533,6 +558,7 @@ function formatActionResultLines(
 const MONITORED_BACKGROUND_TASK_TYPES = new Set([
   'full_db_sync_year',
   'cache_update',
+  'portfolio_prices_update',
   'training_quick',
   'training_full',
   'weekly_generation',
@@ -615,6 +641,7 @@ export function SettingsPage() {
   const pollGenerationRef = useRef<Record<ActionKey, number>>({
     fullSyncYear: 0,
     cacheUpdate: 0,
+    lastPricesUpdate: 0,
     trainingQuick: 0,
     trainingFull: 0,
     weeklyForecastGeneration: 0,
@@ -648,6 +675,7 @@ export function SettingsPage() {
   const [actions, setActions] = useState<Record<ActionKey, ActionState>>({
     fullSyncYear: initialActionState,
     cacheUpdate: initialActionState,
+    lastPricesUpdate: initialActionState,
     trainingQuick: initialActionState,
     trainingFull: initialActionState,
     weeklyForecastGeneration: initialActionState,
@@ -681,6 +709,7 @@ export function SettingsPage() {
       const byTaskType: Record<string, ActionKey> = {
         full_db_sync_year: 'fullSyncYear',
         cache_update: 'cacheUpdate',
+        portfolio_prices_update: 'lastPricesUpdate',
         training_quick: 'trainingQuick',
         training_full: 'trainingFull',
         weekly_generation: 'weeklyForecastGeneration',
@@ -788,7 +817,8 @@ export function SettingsPage() {
         offset: 0,
         limit: 1000,
       })
-      setSettingsItems((response.data.items || []) as SystemSetting[])
+      const raw = (response.data.items || []) as SystemSetting[]
+      setSettingsItems(raw.filter(item => !isHiddenInternalSettingsKey(item.key)))
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Ошибка загрузки системных настроек'
       setSettingsError(message)
@@ -1394,6 +1424,15 @@ export function SettingsPage() {
                   'cacheUpdate',
                   () => SystemService.systemCacheUpdateApiV1SystemCacheUpdatePost(),
                   refreshCacheUpdatedAt
+                )
+            )}
+            {renderAction(
+              'Обновление последних цен',
+              'То же, что cron tinkoff_last_prices: запрос последних цен в Tinkoff и запись в instruments.last_price (до 500 FIGI из справочника). Нужен TINKOFF_TOKEN.',
+              'lastPricesUpdate',
+              () =>
+                void runAction('lastPricesUpdate', () =>
+                  SystemService.portfolioPricesUpdateApiV1SystemPriceLoopsPortfolioPost()
                 )
             )}
             {renderAction(

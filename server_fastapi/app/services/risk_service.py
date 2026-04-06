@@ -73,6 +73,9 @@ class RiskService:
         score: float,
         portfolio_value: Decimal = Decimal("1000000"),
         current_exposure: Decimal = Decimal("0"),
+        confidence_hard_floor: float = 0.4,
+        max_position_fraction: float | None = None,
+        max_total_exposure_fraction: float | None = None,
     ) -> dict[str, Any]:
         """
         Валидирует ордер по лимитам.
@@ -91,10 +94,10 @@ class RiskService:
             validation["errors"].append("action must be BUY or SELL")
             return validation
 
-        if confidence < 0.4:
+        if confidence < confidence_hard_floor:
             validation["isValid"] = False
             validation["errors"].append(
-                f"Уверенность {confidence * 100:.1f}% ниже минимума 40%"
+                f"Уверенность {confidence * 100:.1f}% ниже минимума {confidence_hard_floor * 100:.0f}%"
             )
         elif confidence < limits.get("minConfidence", 0.6):
             validation["warnings"].append(
@@ -112,7 +115,13 @@ class RiskService:
             return validation
 
         requested_value = Decimal(quantity) * price
-        max_position = Decimal(str(limits.get("maxPositionSize", 0.05))) * portfolio_value
+        pos_frac = (
+            float(max_position_fraction)
+            if max_position_fraction is not None
+            else float(limits.get("maxPositionSize", 0.05))
+        )
+        pos_frac = min(max(pos_frac, 1e-12), 1.0)
+        max_position = Decimal(str(pos_frac)) * portfolio_value
         if requested_value > max_position:
             validation["isValid"] = False
             validation["errors"].append(
@@ -120,7 +129,13 @@ class RiskService:
             )
 
         total_after = current_exposure + (requested_value if action == "BUY" else -requested_value)
-        max_exposure = Decimal(str(limits.get("maxTotalExposure", 0.4))) * portfolio_value
+        exp_frac = (
+            float(max_total_exposure_fraction)
+            if max_total_exposure_fraction is not None
+            else float(limits.get("maxTotalExposure", 0.4))
+        )
+        exp_frac = min(max(exp_frac, 1e-12), 1.0)
+        max_exposure = Decimal(str(exp_frac)) * portfolio_value
         if action == "BUY" and total_after > max_exposure:
             validation["isValid"] = False
             validation["errors"].append(

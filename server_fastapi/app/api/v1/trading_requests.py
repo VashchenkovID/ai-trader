@@ -89,6 +89,23 @@ async def trading_request_create(
         )
     else:
         raise AppError("BAD_REQUEST", message="Требуется recommendationFigi или recommendationData")
+
+    mode = (opts.mode or "paper").strip().lower()
+    if mode == "paper":
+        if (
+            container.trading_mode_service.get_current_mode() == "paper"
+            and container.auto_paper_service.get_status().get("enabled")
+        ):
+            raw_id = data.get("id")
+            if raw_id is not None:
+                try:
+                    rid = raw_id if isinstance(raw_id, UUID) else UUID(str(raw_id))
+                    data = await container.auto_paper_service.auto_execute_request(
+                        db_session, rid
+                    )
+                except AppError:
+                    pass
+
     await db_session.commit()
     return SuccessEnvelope(data=data)
 

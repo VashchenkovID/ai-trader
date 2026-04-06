@@ -24,6 +24,26 @@ function toFiniteNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+/** Цена для строки портфеля: сначала last_price из БД, иначе поля брокера (в т.ч. units/nano). */
+function positionCurrentPriceRub(p: Record<string, unknown>): number | null {
+  const fromInstrument = toFiniteNumber(p.instrumentLastPrice ?? p.instrument_last_price)
+  if (fromInstrument != null) return fromInstrument
+  const cur = p.currentPrice ?? p.current_price
+  if (typeof cur === 'number') return toFiniteNumber(cur)
+  if (typeof cur === 'string') return toFiniteNumber(cur)
+  if (cur && typeof cur === 'object') {
+    const o = cur as Record<string, unknown>
+    const units = o.units
+    const nano = o.nano
+    if (typeof units === 'number' || typeof units === 'string') {
+      const u = Number(units)
+      const n = Number(nano ?? 0)
+      if (Number.isFinite(u)) return u + (Number.isFinite(n) ? n : 0) / 1e9
+    }
+  }
+  return null
+}
+
 function buildVirtualPortfolioFallback(initialCapital: number): Record<string, unknown> {
   return {
     cash: initialCapital,
@@ -282,9 +302,8 @@ export function PortfolioPage() {
                 const ticker = String(p.ticker ?? p.symbol ?? '')
                 const qty = p.quantity ?? p.qty ?? p.balance
                 const avg = p.averagePositionPrice ?? p.averagePositionPriceFifo ?? p.avgPrice
-                const cur = p.currentPrice ?? p.current_price
                 const avgN = toFiniteNumber(avg)
-                const curN = toFiniteNumber(cur)
+                const curN = positionCurrentPriceRub(p)
                 const delta =
                   activeTab === 'virtual' && avgN != null && curN != null ? curN - avgN : null
                 const instrumentMissing = p.instrumentMissing === true
@@ -292,6 +311,17 @@ export function PortfolioPage() {
                 const recRaw = recRow?.recommendation
                 const recText =
                   typeof recRaw === 'string' ? recommendationLabelRu(recRaw) : '—'
+                const paperRecRaw =
+                  recRow != null
+                    ? (recRow.paperRecommendation as string | undefined) ??
+                      (recRow.paper_recommendation as string | undefined)
+                    : undefined
+                const paperText =
+                  typeof paperRecRaw === 'string' && paperRecRaw.trim() !== ''
+                    ? recommendationLabelRu(paperRecRaw)
+                    : null
+                const paperConf =
+                  recRow != null ? recRow.paperConfidence ?? recRow.paper_confidence : undefined
                 const conf = recRow?.confidence
                 const confN = toFiniteNumber(recRow?.confidence) ?? 0.5
                 const scrN = toFiniteNumber(recRow?.score) ?? 0.5
@@ -324,15 +354,32 @@ export function PortfolioPage() {
                     </td>
                     <td>{qty != null && qty !== '' ? String(qty) : '—'}</td>
                     <td>
-                      {recText}
-                      {conf != null && conf !== '' ? (
-                        <span className="app-tool-page__mono" style={{ marginLeft: '0.35em' }}>
-                          ({String(conf)})
-                        </span>
+                      <span>
+                        {recText}
+                        {conf != null && conf !== '' ? (
+                          <span className="app-tool-page__mono" style={{ marginLeft: '0.35em' }}>
+                            ({String(conf)})
+                          </span>
+                        ) : null}
+                      </span>
+                      {paperText != null ? (
+                        <Text
+                          as="span"
+                          variant="hint"
+                          tone="muted"
+                          style={{ display: 'block', marginTop: '0.25rem' }}
+                        >
+                          Paper: {paperText}
+                          {paperConf != null && paperConf !== '' ? (
+                            <span className="app-tool-page__mono" style={{ marginLeft: '0.35em' }}>
+                              ({String(paperConf)})
+                            </span>
+                          ) : null}
+                        </Text>
                       ) : null}
                     </td>
                     <td>{formatMoneyRu(avg)}</td>
-                    <td>{formatMoneyRu(cur)}</td>
+                    <td>{formatMoneyRu(curN)}</td>
                     {activeTab === 'virtual' ? (
                       <td>{delta != null && Number.isFinite(delta) ? formatMoneyRu(delta) : '—'}</td>
                     ) : null}

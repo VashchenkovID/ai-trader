@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, Path
 
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_container
+from app.db.session import get_db_session
 from app.schemas.envelope import SuccessEnvelope
+from app.services.app_settings_persistence import upsert_app_setting
 from app.services.container import AppContainer
 
 class TradingModeSwitchRequest(BaseModel):
@@ -26,9 +29,13 @@ async def trading_mode_current(
 async def trading_mode_switch(
     body: TradingModeSwitchRequest,
     container: AppContainer = Depends(get_container),
+    db_session: AsyncSession = Depends(get_db_session),
 ) -> SuccessEnvelope[dict]:
     """Переключает режим торговли."""
     data = container.trading_mode_service.switch_mode(body.mode)
+    await upsert_app_setting(db_session, "trading_mode", body.mode)
+    await upsert_app_setting(db_session, "system.mode", body.mode)
+    await db_session.commit()
     return SuccessEnvelope(data=data)
 
 

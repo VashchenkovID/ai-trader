@@ -72,6 +72,7 @@ class AppContainer:
             trading_repo=self.trading_request_repository,
             trading_request_service=self.trading_request_service,
             risk_service=self.risk_service,
+            virtual_portfolio_service=self.virtual_portfolio_service,
         )
         self.preflight_service = PreflightService(
             risk_service=self.risk_service,
@@ -82,6 +83,7 @@ class AppContainer:
             trading_service=self.trading_request_service,
             market_repo=self.market_repository,
             trading_repo=self.trading_request_repository,
+            auto_paper_service=self.auto_paper_service,
         )
         self.telegram_service = TelegramService(
             TelegramConfig(

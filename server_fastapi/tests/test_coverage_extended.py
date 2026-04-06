@@ -586,7 +586,7 @@ async def test_recommendation_pipeline_skip_threshold() -> None:
 
 
 @pytest.mark.asyncio
-async def test_recommendation_pipeline_skip_hold() -> None:
+async def test_recommendation_pipeline_skip_hold(monkeypatch) -> None:
     rec = SimpleNamespace(figi="F1", recommendation="HOLD", confidence=Decimal("0.8"), score=Decimal("0.7"))
     class MarketRepo:
         async def list_recommendations(self, *args, **kwargs):
@@ -594,6 +594,21 @@ async def test_recommendation_pipeline_skip_hold() -> None:
     class TradingRepo:
         async def count_active_by_figi(self, *_):
             return 0
+
+    class PipeSettings:
+        paper_pipeline_min_confidence = 0.35
+        paper_pipeline_min_score = 0.35
+        paper_soft_use_db_columns = False
+        paper_soft_hold_to_buy = False
+        paper_exploration_enabled = False
+        paper_exploration_max_extra = 0
+        paper_exploration_min_score = 0.5
+        paper_exploration_action = "BUY"
+
+    monkeypatch.setattr(
+        "app.services.recommendation_pipeline_service.get_settings",
+        lambda: PipeSettings(),
+    )
     svc = RecommendationPipelineService(None, MarketRepo(), TradingRepo())
     r = await svc.run(None)
     assert len(r["skipped"]) == 1
@@ -617,6 +632,42 @@ async def test_recommendation_pipeline_create_success() -> None:
     r = await svc.run(None)
     assert len(r["created"]) == 1
     assert r["created"][0] == "F1"
+    assert r.get("autoExecuted") == []
+    assert r.get("autoExecuteSkipped") == []
+
+
+@pytest.mark.asyncio
+async def test_recommendation_pipeline_auto_executes_when_auto_paper_enabled() -> None:
+    """После create в paper вызывается auto_paper.auto_execute_request, если сервис передан."""
+    rec = SimpleNamespace(figi="F1", recommendation="BUY", confidence=Decimal("0.8"), score=Decimal("0.7"))
+    req_id = uuid4()
+
+    class MarketRepo:
+        async def list_recommendations(self, *args, **kwargs):
+            return [rec]
+
+    class TradingSvc:
+        async def create_from_recommendation(self, _s, figi, **kwargs):
+            return {"id": req_id, "figi": figi, "status": "PENDING"}
+
+    class TradingRepo:
+        async def count_active_by_figi(self, _session, *, figi):
+            return 0
+
+    executed: list[UUID] = []
+
+    class AutoPaperMock:
+        async def auto_execute_request(self, _session, request_id):
+            executed.append(request_id)
+
+    svc = RecommendationPipelineService(
+        TradingSvc(), MarketRepo(), TradingRepo(), auto_paper_service=AutoPaperMock()
+    )
+    r = await svc.run(None, mode="paper")
+    assert r["created"] == ["F1"]
+    assert r.get("autoExecuted") == ["F1"]
+    assert r.get("autoExecuteSkipped") == []
+    assert executed == [req_id]
 
 
 @pytest.mark.asyncio
@@ -632,6 +683,172 @@ async def test_recommendation_pipeline_skip_duplicate() -> None:
     r = await svc.run(None)
     assert len(r["skipped"]) == 1
     assert r["skipped"][0]["reason"] == "duplicate"
+
+
+@pytest.mark.asyncio
+async def test_recommendation_pipeline_exploration_hold(monkeypatch) -> None:
+    """При включённом paper exploration — доп. заявка по HOLD с высоким score."""
+    rec_hold = SimpleNamespace(
+        figi="F2", recommendation="HOLD", confidence=Decimal("0.9"), score=Decimal("0.9"),
+    )
+    class MarketRepo:
+        async def list_recommendations(self, *args, **kwargs):
+            return [rec_hold]
+
+    created_figis: list[str] = []
+
+    class TradingSvc:
+        async def create_from_recommendation(self, _s, figi, *, mode, action, **kwargs):
+            created_figis.append((str(figi), str(action)))
+            return {"id": uuid4(), "figi": figi}
+
+    class TradingRepo:
+        async def count_active_by_figi(self, _session, *, figi):
+            return 0
+
+    class ExplSettings:
+        paper_exploration_enabled = True
+        paper_exploration_max_extra = 1
+        paper_exploration_min_score = 0.5
+        paper_exploration_action = "BUY"
+        paper_pipeline_min_confidence = 0.5
+        paper_pipeline_min_score = 0.5
+        paper_soft_use_db_columns = False
+        paper_soft_hold_to_buy = False
+
+    monkeypatch.setattr(
+        "app.services.recommendation_pipeline_service.get_settings",
+        lambda: ExplSettings(),
+    )
+    svc = RecommendationPipelineService(TradingSvc(), MarketRepo(), TradingRepo())
+    r = await svc.run(None, mode="paper")
+    assert r.get("explorationCreated") == ["F2"]
+    assert len(created_figis) == 1
+    assert created_figis[0] == ("F2", "BUY")
+
+
+@pytest.mark.asyncio
+async def test_recommendation_pipeline_paper_uses_paper_db_columns_sell(monkeypatch) -> None:
+    """При PAPER_SOFT_USE_DB_COLUMNS — заявка по paper_* даже если основной сигнал HOLD."""
+    rec = SimpleNamespace(
+        figi="F-PAPER",
+        recommendation="HOLD",
+        confidence=Decimal("0.9"),
+        score=Decimal("0.9"),
+        paper_recommendation="SELL",
+        paper_confidence=Decimal("0.8"),
+        paper_score=Decimal("0.75"),
+    )
+
+    class MarketRepo:
+        async def list_recommendations(self, *args, **kwargs):
+            return [rec]
+
+    created: list[tuple[str, str]] = []
+
+    class TradingSvc:
+        async def create_from_recommendation(self, _s, figi, *, mode, action, **kwargs):
+            created.append((str(figi), str(action)))
+            return {"id": uuid4(), "figi": figi}
+
+    class TradingRepo:
+        async def count_active_by_figi(self, _session, *, figi):
+            return 0
+
+    class DbColSettings:
+        paper_pipeline_min_confidence = 0.35
+        paper_pipeline_min_score = 0.35
+        paper_soft_use_db_columns = True
+        paper_soft_hold_to_buy = False
+        paper_exploration_enabled = False
+        paper_exploration_max_extra = 0
+        paper_exploration_min_score = 0.5
+        paper_exploration_action = "BUY"
+
+    monkeypatch.setattr(
+        "app.services.recommendation_pipeline_service.get_settings",
+        lambda: DbColSettings(),
+    )
+    svc = RecommendationPipelineService(TradingSvc(), MarketRepo(), TradingRepo())
+    r = await svc.run(None, mode="paper")
+    assert r["created"] == ["F-PAPER"]
+    assert created == [("F-PAPER", "SELL")]
+
+
+@pytest.mark.asyncio
+async def test_recommendation_pipeline_paper_soft_thresholds_pass(monkeypatch) -> None:
+    """В режиме paper без явных min — пороги из env (ниже 0.5) пропускают слабее BUY."""
+    rec = SimpleNamespace(figi="F-LOW", recommendation="BUY", confidence=Decimal("0.4"), score=Decimal("0.4"))
+
+    class MarketRepo:
+        async def list_recommendations(self, *args, **kwargs):
+            return [rec]
+
+    class TradingSvc:
+        async def create_from_recommendation(self, *_a, **_k):
+            return {"id": uuid4()}
+
+    class TradingRepo:
+        async def count_active_by_figi(self, _session, *, figi):
+            return 0
+
+    class SoftSettings:
+        paper_pipeline_min_confidence = 0.35
+        paper_pipeline_min_score = 0.35
+        paper_soft_use_db_columns = False
+        paper_soft_hold_to_buy = False
+        paper_exploration_enabled = False
+        paper_exploration_max_extra = 0
+        paper_exploration_min_score = 0.5
+        paper_exploration_action = "BUY"
+
+    monkeypatch.setattr(
+        "app.services.recommendation_pipeline_service.get_settings",
+        lambda: SoftSettings(),
+    )
+    svc = RecommendationPipelineService(TradingSvc(), MarketRepo(), TradingRepo())
+    r = await svc.run(None, mode="paper")
+    assert r["created"] == ["F-LOW"]
+
+
+@pytest.mark.asyncio
+async def test_recommendation_pipeline_paper_hold_to_buy(monkeypatch) -> None:
+    """PAPER_SOFT_HOLD_TO_BUY — HOLD трактуется как BUY для отбора в pipeline."""
+    rec = SimpleNamespace(figi="F-HTB", recommendation="HOLD", confidence=Decimal("0.8"), score=Decimal("0.8"))
+
+    class MarketRepo:
+        async def list_recommendations(self, *args, **kwargs):
+            return [rec]
+
+    actions: list[str] = []
+
+    class TradingSvc:
+        async def create_from_recommendation(self, _s, figi, *, mode, action, **kwargs):
+            actions.append(str(action))
+            return {"id": uuid4(), "figi": figi}
+
+    class TradingRepo:
+        async def count_active_by_figi(self, _session, *, figi):
+            return 0
+
+    class HtbSettings:
+        paper_pipeline_min_confidence = 0.35
+        paper_pipeline_min_score = 0.35
+        paper_soft_use_db_columns = False
+        paper_soft_hold_to_buy = True
+        paper_exploration_enabled = False
+        paper_exploration_max_extra = 0
+        paper_exploration_min_score = 0.5
+        paper_exploration_action = "BUY"
+
+    monkeypatch.setattr(
+        "app.services.recommendation_pipeline_service.get_settings",
+        lambda: HtbSettings(),
+    )
+    svc = RecommendationPipelineService(TradingSvc(), MarketRepo(), TradingRepo())
+    r = await svc.run(None, mode="paper")
+    assert r["created"] == ["F-HTB"]
+    assert actions == ["BUY"]
 
 
 # --- API routes ---

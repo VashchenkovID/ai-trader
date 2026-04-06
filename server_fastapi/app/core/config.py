@@ -107,6 +107,35 @@ class Settings(BaseSettings):
     # Торговые заявки: синтетические FIGI вида TEST-… (тесты/разработка). В проде выключить.
     allow_synthetic_trading_figi: bool = Field(default=True, alias="ALLOW_SYNTHETIC_TRADING_FIGI")
 
+    # Лог траекторий paper (MDP) для калибровки / offline RL — см. training/METRICS.md
+    paper_mdp_log_enabled: bool = Field(default=True, alias="PAPER_MDP_LOG_ENABLED")
+    paper_mdp_log_path: str = Field(default="./logs/paper_mdp.jsonl", alias="PAPER_MDP_LOG_PATH")
+
+    # Исследовательские заявки в paper по HOLD с высоким score (только mode=paper)
+    paper_exploration_enabled: bool = Field(default=False, alias="PAPER_EXPLORATION_ENABLED")
+    paper_exploration_max_extra: int = Field(default=0, ge=0, alias="PAPER_EXPLORATION_MAX_EXTRA")
+    paper_exploration_min_score: float = Field(default=0.55, ge=0.0, le=1.0, alias="PAPER_EXPLORATION_MIN_SCORE")
+    paper_exploration_action: str = Field(default="BUY", alias="PAPER_EXPLORATION_ACTION")
+
+    # Мягкие пороги pipeline заявок только при mode=paper (если API не передал свои)
+    paper_pipeline_min_confidence: float = Field(
+        default=0.35, ge=0.0, le=1.0, alias="PAPER_PIPELINE_MIN_CONFIDENCE"
+    )
+    paper_pipeline_min_score: float = Field(
+        default=0.35, ge=0.0, le=1.0, alias="PAPER_PIPELINE_MIN_SCORE"
+    )
+    paper_soft_use_db_columns: bool = Field(
+        default=True,
+        alias="PAPER_SOFT_USE_DB_COLUMNS",
+        description="В mode=paper использовать колонки paper_* из БД при отборе заявок (после миграции). False — только основной сигнал.",
+    )
+    paper_soft_hold_to_buy: bool = Field(default=False, alias="PAPER_SOFT_HOLD_TO_BUY")
+
+    # Ожидаемый сдвиг real vs paper — см. training/REAL_TRANSFER.md
+    real_slippage_bps: int = Field(default=10, ge=0, alias="REAL_SLIPPAGE_BPS")
+    real_execution_delay_ms: int = Field(default=0, ge=0, alias="REAL_EXECUTION_DELAY_MS")
+    real_calibration_log_enabled: bool = Field(default=True, alias="REAL_CALIBRATION_LOG_ENABLED")
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -171,6 +171,8 @@ class TradingRequestService:
         action: str | None,
         mode: str,
         quantity: int | None,
+        confidence_override: Decimal | None = None,
+        score_override: Decimal | None = None,
     ) -> dict[str, Any]:
         """Поля заявки из строки рекомендации в БД (без записи)."""
         _ensure_figi_allowed_for_trading(figi)
@@ -200,6 +202,8 @@ class TradingRequestService:
                 )
             qty = 1
         budget = price * qty
+        conf = confidence_override if confidence_override is not None else rec.confidence
+        scr = score_override if score_override is not None else rec.score
         return {
             "figi": figi,
             "action": act,
@@ -209,8 +213,8 @@ class TradingRequestService:
             "budget": budget,
             "ticker": instrument.ticker if instrument else None,
             "name": instrument.name if instrument else None,
-            "confidence": rec.confidence,
-            "score": rec.score,
+            "confidence": conf,
+            "score": scr,
             "recommendation": str(rec.recommendation),
         }
 
@@ -364,12 +368,20 @@ class TradingRequestService:
         action: str | None = None,
         mode: str = "paper",
         quantity: int | None = None,
+        confidence_override: Decimal | None = None,
+        score_override: Decimal | None = None,
     ) -> dict[str, object]:
         """Создает заявку из рекомендации в БД."""
         lock = await self._get_create_lock(figi)
         async with lock:
             fields = await self._compute_order_from_recommendation(
-                db_session, figi, action=action, mode=mode, quantity=quantity
+                db_session,
+                figi,
+                action=action,
+                mode=mode,
+                quantity=quantity,
+                confidence_override=confidence_override,
+                score_override=score_override,
             )
             expires_at = now_msk() + timedelta(hours=4)
 

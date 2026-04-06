@@ -2546,6 +2546,21 @@ async def _analysis_market_portfolio_job() -> dict[str, Any]:
         # быть > 0 при фактическом rollback на выходе из сессии.
         await session.commit()
 
+        _pipe_created = len(data.get("created") or [])
+        _pipe_auto_ok = len(data.get("autoExecuted") or [])
+        _pipe_auto_skip = len(data.get("autoExecuteSkipped") or [])
+        _pipe_skip_reasons = data.get("autoExecuteSkippedByReason") or {}
+        _reason_bits = [f"{k}:{v}" for k, v in sorted(_pipe_skip_reasons.items())]
+        _retry = data.get("pendingPaperAutoRetry") or {}
+        _retry_n = int(_retry.get("attempted") or 0)
+        _retry_ok = len(_retry.get("executedFigis") or [])
+        _retry_fail = len(_retry.get("failed") or [])
+        _pipe_line = (
+            f"заявок pipeline: создано {_pipe_created}, автоисполнено {_pipe_auto_ok}, "
+            f"авто пропущено {_pipe_auto_skip}"
+            + (f" ({', '.join(_reason_bits)})" if _reason_bits else "")
+            + f"; догон PENDING: попыток {_retry_n}, исполнено {_retry_ok}, не вышло {_retry_fail}"
+        )
         await _update_current_task_progress(
             {
                 "progress": {
@@ -2562,7 +2577,8 @@ async def _analysis_market_portfolio_job() -> dict[str, Any]:
                         f"пропущено без реальных LLM-данных {skipped_unavailable}, "
                         f"пропущено без сигналов {skipped_no_signal}, "
                         f"canary processed {canary_processed}, skipped {canary_skipped}, "
-                        f"BUY {recommendation_buy}, SELL {recommendation_sell}, HOLD {recommendation_hold}"
+                        f"BUY {recommendation_buy}, SELL {recommendation_sell}, HOLD {recommendation_hold}. "
+                        f"{_pipe_line}"
                     ),
                     "phase": "done",
                     "stage": "done",

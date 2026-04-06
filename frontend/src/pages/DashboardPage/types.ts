@@ -6,6 +6,9 @@ export type DashboardRecommendation = {
   recommendation: string
   confidence: number | null
   score: number | null
+  paperRecommendation: string | null
+  paperConfidence: number | null
+  paperScore: number | null
 }
 
 export type DashboardTask = {

@@ -30,6 +30,6 @@ async def recommendation_pipeline_run(
         min_score=min_scr,
         limit=limit,
     )
-    if data.get("created"):
+    if data.get("created") or data.get("explorationCreated"):
         await db_session.commit()
     return SuccessEnvelope(data=data)

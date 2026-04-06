@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.models import AppSetting
 from app.db.session import SessionLocal, engine
+from app.services.app_settings_persistence import hydrate_settings_service_from_db
 from app.services.container import AppContainer
 
 _bootstrap_lock = asyncio.Lock()
@@ -128,6 +129,8 @@ async def ensure_bootstrap(container: AppContainer) -> None:
         if not has_tables:
             await asyncio.to_thread(run_alembic_upgrade_head)
         await seed_app_settings()
+        async with SessionLocal() as session:
+            await hydrate_settings_service_from_db(session, container.settings_service)
         await ensure_virtual_portfolio(container)
         await seed_admin_user(container)
         _bootstrap_done = True

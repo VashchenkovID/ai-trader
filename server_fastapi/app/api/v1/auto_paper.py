@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_container
 from app.db.session import get_db_session
+from app.db.session import get_db_session
 from app.schemas.envelope import SuccessEnvelope
+from app.services.app_settings_persistence import upsert_app_setting
 from app.services.container import AppContainer
 
 router = APIRouter(prefix="/auto-paper-trading", tags=["auto-paper-trading"])
@@ -24,18 +26,24 @@ async def auto_paper_status(
 @router.post("/enable", summary="Включить автоторговлю")
 async def auto_paper_enable(
     container: AppContainer = Depends(get_container),
+    db_session: AsyncSession = Depends(get_db_session),
 ) -> SuccessEnvelope[dict]:
     """Включает автоторговлю. Разрешено только в режиме paper."""
     container.auto_paper_service.enable()
+    await upsert_app_setting(db_session, "auto_paper_enabled", True)
+    await db_session.commit()
     return SuccessEnvelope(data={"message": "Автоторговля включена"})
 
 
 @router.post("/disable", summary="Выключить автоторговлю")
 async def auto_paper_disable(
     container: AppContainer = Depends(get_container),
+    db_session: AsyncSession = Depends(get_db_session),
 ) -> SuccessEnvelope[dict]:
     """Выключает автоторговлю."""
     container.auto_paper_service.disable()
+    await upsert_app_setting(db_session, "auto_paper_enabled", False)
+    await db_session.commit()
     return SuccessEnvelope(data={"message": "Автоторговля выключена"})
 
 

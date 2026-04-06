@@ -33,6 +33,7 @@ def _positions_value(positions: list[dict]) -> float:
 @router.get("", summary="Портфель (реальный счёт Tinkoff)")
 @router.get("/", summary="Портфель (реальный счёт Tinkoff)")
 async def get_portfolio(
+    db_session: AsyncSession = Depends(get_db_session),
     container: AppContainer = Depends(get_container),
 ) -> SuccessEnvelope[dict]:
     """
@@ -61,6 +62,17 @@ async def get_portfolio(
             cash += float(v) if not isinstance(v, dict) else price_units_nano_to_float(v)
     total_value = total_amount if total_amount > 0 else (cash + positions_value)
     positions_map = {p.get("figi", ""): p.get("quantity", 0) for p in positions if p.get("figi")}
+    figis = [str(p.get("figi")) for p in positions if p.get("figi")]
+    price_by_figi = await container.market_repository.map_last_prices_by_figis(db_session, figis)
+    for p in positions:
+        if not isinstance(p, dict):
+            continue
+        figi = p.get("figi")
+        if not figi:
+            continue
+        lp = price_by_figi.get(str(figi))
+        if lp is not None:
+            p["instrumentLastPrice"] = float(lp)
     return SuccessEnvelope(
         data={
             "cash": cash,
