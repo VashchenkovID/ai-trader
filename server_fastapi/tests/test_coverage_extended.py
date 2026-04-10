@@ -339,7 +339,11 @@ async def test_trading_request_service_create_from_recommendation_duplicate() ->
             return inst
     class TradingRepo:
         async def count_active_by_figi(self, _session, *, figi):
+            return 0
+
+        async def count_active_by_figi_and_profile(self, _session, *, figi, virtual_profile_slug):
             return 1
+
     svc = TradingRequestService(TradingRepo(), MarketRepo())
     with pytest.raises(AppError) as exc:
         await svc.create_from_recommendation(None, "F1")
@@ -374,6 +378,10 @@ async def test_trading_request_service_create_from_data_ok() -> None:
     class TradingRepo:
         async def count_active_by_figi(self, _session, *, figi):
             return 0
+
+        async def count_active_by_figi_and_profile(self, _session, *, figi, virtual_profile_slug):
+            return 0
+
         async def create(self, _session, **kwargs):
             return SimpleNamespace(id=uuid4(), status="PENDING", figi=kwargs["figi"], mode=kwargs["mode"],
                 action=kwargs["action"], quantity=kwargs["quantity"], price=kwargs["price"],
@@ -457,6 +465,38 @@ async def test_trading_request_service_approve_invalid_transition() -> None:
     with pytest.raises(AppError) as exc:
         await svc.approve(None, uuid4())
     assert "INVALID_STATE_TRANSITION" in exc.value.error_code
+
+
+@pytest.mark.asyncio
+async def test_trading_request_service_approve_insufficient_paper_cash() -> None:
+    """PENDING BUY paper: одобрение блокируется, если budget больше свободного cash профиля."""
+    rid = uuid4()
+    req = SimpleNamespace(
+        id=rid,
+        status="PENDING",
+        mode="paper",
+        action="BUY",
+        budget=Decimal("500000"),
+        figi="F1",
+        virtual_profile_slug="default",
+    )
+
+    class TradingRepo:
+        async def get_by_id(self, *_a, **_k):
+            return req
+
+    class VirtualPortfolioSvc:
+        async def get_or_create_snapshot(self, *_a, **_k):
+            return None
+
+        async def get_available_cash_for_sizing(self, *_a, **_k):
+            return Decimal("100")
+
+    svc = TradingRequestService(TradingRepo(), None, virtual_portfolio_service=VirtualPortfolioSvc())
+    with pytest.raises(AppError) as exc:
+        await svc.approve(None, rid)
+    assert exc.value.error_code == "BUSINESS_RULE_VIOLATION"
+    assert "Недостаточно" in exc.value.message
 
 
 @pytest.mark.asyncio
@@ -598,6 +638,7 @@ async def test_recommendation_pipeline_skip_hold(monkeypatch) -> None:
     class PipeSettings:
         paper_pipeline_min_confidence = 0.35
         paper_pipeline_min_score = 0.35
+        paper_pipeline_multi_profile = False
         paper_soft_use_db_columns = False
         paper_soft_hold_to_buy = False
         paper_exploration_enabled = False
@@ -616,7 +657,7 @@ async def test_recommendation_pipeline_skip_hold(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_recommendation_pipeline_create_success() -> None:
+async def test_recommendation_pipeline_create_success(monkeypatch) -> None:
     rec = SimpleNamespace(figi="F1", recommendation="BUY", confidence=Decimal("0.8"), score=Decimal("0.7"))
     class MarketRepo:
         async def list_recommendations(self, *args, **kwargs):
@@ -628,6 +669,22 @@ async def test_recommendation_pipeline_create_success() -> None:
     class TradingRepo:
         async def count_active_by_figi(self, _session, *, figi):
             return 0
+
+    class PipeSettings:
+        paper_pipeline_min_confidence = 0.35
+        paper_pipeline_min_score = 0.35
+        paper_pipeline_multi_profile = False
+        paper_soft_use_db_columns = False
+        paper_soft_hold_to_buy = False
+        paper_exploration_enabled = False
+        paper_exploration_max_extra = 0
+        paper_exploration_min_score = 0.5
+        paper_exploration_action = "BUY"
+
+    monkeypatch.setattr(
+        "app.services.recommendation_pipeline_service.get_settings",
+        lambda: PipeSettings(),
+    )
     svc = RecommendationPipelineService(TradingSvc(), MarketRepo(), TradingRepo())
     r = await svc.run(None)
     assert len(r["created"]) == 1
@@ -637,7 +694,7 @@ async def test_recommendation_pipeline_create_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_recommendation_pipeline_auto_executes_when_auto_paper_enabled() -> None:
+async def test_recommendation_pipeline_auto_executes_when_auto_paper_enabled(monkeypatch) -> None:
     """После create в paper вызывается auto_paper.auto_execute_request, если сервис передан."""
     rec = SimpleNamespace(figi="F1", recommendation="BUY", confidence=Decimal("0.8"), score=Decimal("0.7"))
     req_id = uuid4()
@@ -660,6 +717,21 @@ async def test_recommendation_pipeline_auto_executes_when_auto_paper_enabled() -
         async def auto_execute_request(self, _session, request_id):
             executed.append(request_id)
 
+    class PipeSettings:
+        paper_pipeline_min_confidence = 0.35
+        paper_pipeline_min_score = 0.35
+        paper_pipeline_multi_profile = False
+        paper_soft_use_db_columns = False
+        paper_soft_hold_to_buy = False
+        paper_exploration_enabled = False
+        paper_exploration_max_extra = 0
+        paper_exploration_min_score = 0.5
+        paper_exploration_action = "BUY"
+
+    monkeypatch.setattr(
+        "app.services.recommendation_pipeline_service.get_settings",
+        lambda: PipeSettings(),
+    )
     svc = RecommendationPipelineService(
         TradingSvc(), MarketRepo(), TradingRepo(), auto_paper_service=AutoPaperMock()
     )
@@ -668,6 +740,77 @@ async def test_recommendation_pipeline_auto_executes_when_auto_paper_enabled() -
     assert r.get("autoExecuted") == ["F1"]
     assert r.get("autoExecuteSkipped") == []
     assert executed == [req_id]
+
+
+@pytest.mark.asyncio
+async def test_recommendation_pipeline_paper_gate_uses_min_profile_thresholds(monkeypatch) -> None:
+    """Multi paper: внешний гейт = min по профилям; заявки только там, где сигнал ≥ порогов slug."""
+    rec = SimpleNamespace(
+        figi="F-GATE",
+        recommendation="BUY",
+        confidence=Decimal("0.53"),
+        score=Decimal("0.51"),
+    )
+
+    class MarketRepo:
+        async def list_recommendations(self, *args, **kwargs):
+            return [rec]
+
+    class TradingSvc:
+        async def create_from_recommendation(self, *_a, **_k):
+            return {"id": uuid4(), "figi": rec.figi}
+
+    class TradingRepo:
+        async def count_active_by_figi(self, _session, *, figi):
+            return 0
+
+    class FakeProfCfg:
+        def get_config(self, slug: str):
+            o = SimpleNamespace()
+            if slug == "conservative":
+                o.signal_min_score, o.signal_min_confidence = 0.99, 0.99
+            elif slug == "moderate":
+                o.signal_min_score, o.signal_min_confidence = 0.6, 0.62
+            elif slug == "aggressive":
+                o.signal_min_score, o.signal_min_confidence = 0.5, 0.52
+            else:
+                o.signal_min_score, o.signal_min_confidence = 0.55, 0.58
+            return o
+
+    class PipeSettings:
+        paper_pipeline_min_confidence = 0.0
+        paper_pipeline_min_score = 0.0
+        paper_pipeline_multi_profile = True
+        paper_soft_use_db_columns = False
+        paper_soft_hold_to_buy = False
+        paper_exploration_enabled = False
+        paper_exploration_max_extra = 0
+        paper_exploration_min_score = 0.5
+        paper_exploration_action = "BUY"
+
+    monkeypatch.setattr(
+        "app.services.recommendation_pipeline_service.get_settings",
+        lambda: PipeSettings(),
+    )
+
+    class TradingRepoMulti:
+        async def count_active_by_figi_and_profile(self, *_a, **_k):
+            return 0
+
+    svc = RecommendationPipelineService(
+        TradingSvc(),
+        MarketRepo(),
+        TradingRepoMulti(),
+        portfolio_profile_config_service=FakeProfCfg(),
+    )
+    r = await svc.run(
+        None,
+        mode="paper",
+        min_confidence=Decimal("0"),
+        min_score=Decimal("0"),
+    )
+    # Внешний гейт = min профилей; внутри создаётся только aggressive (0.52/0.5).
+    assert r["created"] == ["F-GATE:aggressive"]
 
 
 @pytest.mark.asyncio
@@ -713,6 +856,7 @@ async def test_recommendation_pipeline_exploration_hold(monkeypatch) -> None:
         paper_exploration_action = "BUY"
         paper_pipeline_min_confidence = 0.5
         paper_pipeline_min_score = 0.5
+        paper_pipeline_multi_profile = False
         paper_soft_use_db_columns = False
         paper_soft_hold_to_buy = False
 
@@ -758,6 +902,7 @@ async def test_recommendation_pipeline_paper_uses_paper_db_columns_sell(monkeypa
     class DbColSettings:
         paper_pipeline_min_confidence = 0.35
         paper_pipeline_min_score = 0.35
+        paper_pipeline_multi_profile = False
         paper_soft_use_db_columns = True
         paper_soft_hold_to_buy = False
         paper_exploration_enabled = False
@@ -795,6 +940,7 @@ async def test_recommendation_pipeline_paper_soft_thresholds_pass(monkeypatch) -
     class SoftSettings:
         paper_pipeline_min_confidence = 0.35
         paper_pipeline_min_score = 0.35
+        paper_pipeline_multi_profile = False
         paper_soft_use_db_columns = False
         paper_soft_hold_to_buy = False
         paper_exploration_enabled = False
@@ -834,6 +980,7 @@ async def test_recommendation_pipeline_paper_hold_to_buy(monkeypatch) -> None:
     class HtbSettings:
         paper_pipeline_min_confidence = 0.35
         paper_pipeline_min_score = 0.35
+        paper_pipeline_multi_profile = False
         paper_soft_use_db_columns = False
         paper_soft_hold_to_buy = True
         paper_exploration_enabled = False

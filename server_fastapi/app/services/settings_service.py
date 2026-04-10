@@ -94,6 +94,27 @@ class SettingsService:
                 module="analysis",
                 description="Temperature scaling для confidence в режиме nn_llm",
             ),
+            "portfolio.profiles": SettingItemDTO(
+                key="portfolio.profiles",
+                value={},
+                type="object",
+                module="portfolio",
+                description="Пороги и лимиты виртуальных профилей (переопределение дефолтов REWRITE_CORE §13)",
+            ),
+            "risk.pypfopt_enabled": SettingItemDTO(
+                key="risk.pypfopt_enabled",
+                value=False,
+                type="boolean",
+                module="risk",
+                description="Ограничивать долю позиции весом max-Sharpe по universe",
+            ),
+            "risk.pypfopt_universe": SettingItemDTO(
+                key="risk.pypfopt_universe",
+                value=[],
+                type="object",
+                module="risk",
+                description="Список FIGI для PyPortfolioOpt (JSON array)",
+            ),
         }
         self._kelly = KellySettingsDTO()
 

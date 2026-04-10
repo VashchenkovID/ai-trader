@@ -81,4 +81,26 @@ requestBody: RiskValidateRequest,
         });
     }
 
+    /**
+     * Верхняя доля позиции из max-Sharpe (preflight real, §5)
+     * @returns SuccessEnvelope_dict_ Successful Response
+     * @throws ApiError
+     */
+    public static riskRealCapPreviewApiV1RiskRealCapPreviewFigiGet({
+figi,
+}: {
+figi: string,
+}): CancelablePromise<SuccessEnvelope_dict_> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/risk/real-cap-preview/{figi}',
+            path: {
+                'figi': figi,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+
 }

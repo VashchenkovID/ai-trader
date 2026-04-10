@@ -39,4 +39,20 @@ export default defineConfig({
       '@hooks': path.resolve(__dirname, './src/hooks'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('lightweight-charts')) return 'vendor-charts'
+          if (id.includes('@mui') || id.includes('@emotion')) return 'vendor-mui'
+          if (id.includes('react-dom') || id.includes('/react/')) return 'vendor-react'
+          if (id.includes('react-router')) return 'vendor-router'
+          if (id.includes('framer-motion')) return 'vendor-motion'
+          return 'vendor'
+        },
+      },
+    },
+    chunkSizeWarningLimit: 650,
+  },
 })

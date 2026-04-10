@@ -6,8 +6,9 @@
 
 from __future__ import annotations
 
+import json
 import re
-from typing import Tuple
+from typing import Iterable, Tuple
 
 from training.llm_jury.providers.base import Action
 
@@ -59,3 +60,71 @@ def _parse_confidence(text: str) -> float:
             except ValueError:
                 continue
     return 0.5
+
+
+def _normalize_batch_action(raw: object) -> Action:
+    if raw is None:
+        return "HOLD"
+    u = str(raw).strip().upper()
+    if u in ("BUY", "SELL", "HOLD"):
+        return u  # type: ignore[return-value]
+    return "HOLD"
+
+
+def _normalize_batch_confidence(raw: object) -> float:
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return 0.5
+    if v < 0 or v > 1:
+        return 0.5
+    return round(v, 4)
+
+
+def _extract_json_object(text: str) -> dict | None:
+    if not text or not str(text).strip():
+        return None
+    s = str(text).strip()
+    if s.startswith("```"):
+        s = re.sub(r"^```(?:json)?\s*", "", s, flags=re.IGNORECASE)
+        s = re.sub(r"\s*```\s*$", "", s)
+    start = s.find("{")
+    end = s.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    blob = s[start : end + 1]
+    try:
+        out = json.loads(blob)
+    except json.JSONDecodeError:
+        return None
+    return out if isinstance(out, dict) else None
+
+
+def parse_batch_verdict(
+    text: str,
+    expected_figis: Iterable[str],
+) -> dict[str, tuple[Action, float]]:
+    """
+    Парсит JSON с ключом instruments: [{figi, action, confidence}, ...].
+    Для каждого ожидаемого FIGI возвращает (action, confidence); при отсутствии — (HOLD, 0.5).
+    """
+    expected = [str(f).strip() for f in expected_figis if str(f).strip()]
+    base: dict[str, tuple[Action, float]] = {f: ("HOLD", 0.5) for f in expected}
+    data = _extract_json_object(text)
+    if not data:
+        return base
+    items = data.get("instruments")
+    if not isinstance(items, list):
+        return base
+    seen: set[str] = set()
+    for row in items:
+        if not isinstance(row, dict):
+            continue
+        figi = str(row.get("figi") or "").strip()
+        if not figi or figi not in base or figi in seen:
+            continue
+        seen.add(figi)
+        act = _normalize_batch_action(row.get("action"))
+        conf = _normalize_batch_confidence(row.get("confidence"))
+        base[figi] = (act, conf)
+    return base

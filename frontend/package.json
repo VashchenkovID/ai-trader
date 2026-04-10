@@ -16,9 +16,15 @@
     "test:ci": "jest --ci --coverage --maxWorkers=2",
     "prepare": "husky install",
     "preview": "vite preview",
-    "generate:api": "npx openapi-typescript-codegen --useOptions -i swagger.json -o ./src/api/generated --client axios"
+    "generate:api": "npx openapi-typescript-codegen --useOptions -i http://localhost:8000/openapi.json -o ./src/api/generated --client axios"
   },
   "dependencies": {
+    "@babel/runtime": "^7.29.2",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.0.0",
+    "@mui/material": "^9.0.0",
+    "@uiw/react-json-view": "^2.0.0-alpha.41",
     "axios": "^1.6.2",
     "classnames": "^2.5.1",
     "framer-motion": "^12.35.2",

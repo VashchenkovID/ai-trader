@@ -25,6 +25,11 @@ pip install -e ".[training]"
 - **governance** — release-gate policy (пороги метрик) и JSONL-аудит решений промоута моделей.
 - **data.loaders** — `load_candles_from_csv(path)`, `candles_to_dataframe(rows)` для подачи свечей из БД или CSV в пайплайн.
 
+## Экспорт строки для обучения (REWRITE_CORE §7 MVP)
+
+- Склейка `mu` (PyPortfolioOpt) и метрик бэктеста: `training.data.targets_risk.build_training_alignment_row`.
+- CLI без БД: `python -m training.tools.export_alignment_row --out data/training/alignment_sample.json` (из каталога `server_fastapi`).
+
 ## Базовый контур NN (conditioning)
 
 - Вход: фичи (X), strategy_id (0=aggressive, 1=moderate, 2=conservative), horizon_id (0=short, 1=medium, 2=long).

@@ -82,8 +82,6 @@ async def market_stock_candles(
         offset=offset,
         limit=limit,
     )
-    if not candles:
-        raise AppError("NOT_FOUND", message="Инструмент не найден")
     return SuccessEnvelope(
         data={"items": candles, "meta": {"offset": offset, "limit": limit, "total": total}}
     )

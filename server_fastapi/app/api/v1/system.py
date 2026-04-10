@@ -20,6 +20,7 @@ from app.scheduler import (
     list_core_training_analysis_jobs,
     list_job_states,
     list_tasks,
+    prune_completed_tasks_and_broadcast,
     subscribe_status_stream,
     trigger_named_job,
     unsubscribe_status_stream,
@@ -177,9 +178,7 @@ async def system_settings(
     return SuccessEnvelope(data={"items": items, "meta": {"offset": offset, "limit": limit, "total": total}})
 
 
-@router.get("/system/performance/metrics", summary="Метрики производительности системы")
-@router.get("/performance/metrics", summary="Метрики производительности системы")
-async def performance_metrics(request: Request) -> SuccessEnvelope[dict[str, object]]:
+def _performance_metrics_payload(request: Request) -> SuccessEnvelope[dict[str, object]]:
     routes = request.app.state.metrics_registry.snapshot()
     route_count = sum(int(item["count"]) for item in routes.values()) if routes else 0
     error_count = sum(int(item["errorCount"]) for item in routes.values()) if routes else 0
@@ -191,6 +190,25 @@ async def performance_metrics(request: Request) -> SuccessEnvelope[dict[str, obj
             "cacheHitRate": 0,
         }
     )
+
+
+@router.get(
+    "/system/performance/metrics",
+    summary="Метрики производительности системы",
+)
+async def performance_metrics(request: Request) -> SuccessEnvelope[dict[str, object]]:
+    """Канонический путь; алиас `/performance/metrics` помечен deprecated."""
+    return _performance_metrics_payload(request)
+
+
+@router.get(
+    "/performance/metrics",
+    summary="Метрики производительности (deprecated)",
+    deprecated=True,
+    description="Используйте GET /api/v1/system/performance/metrics. Путь сохранён для обратной совместимости.",
+)
+async def performance_metrics_deprecated_alias(request: Request) -> SuccessEnvelope[dict[str, object]]:
+    return _performance_metrics_payload(request)
 
 
 @router.get("/system/performance/baseline", summary="Базовые целевые показатели производительности")
@@ -290,6 +308,12 @@ class TriggerResponse(SuccessEnvelope[dict[str, object]]):
 @router.get("/system/tasks", summary="Список фоновых задач")
 async def system_tasks(limit: int = Query(default=100, ge=1, le=1000)) -> SuccessEnvelope[dict[str, object]]:
     return SuccessEnvelope(data={"items": list_tasks(limit=limit), "meta": {"limit": limit}})
+
+
+@router.post("/system/tasks/prune-completed", summary="Удалить завершённые задачи из памяти планировщика")
+async def system_tasks_prune_completed() -> SuccessEnvelope[dict[str, object]]:
+    data = await prune_completed_tasks_and_broadcast()
+    return SuccessEnvelope(data=data)
 
 
 @router.get("/system/tasks/{task_id}", summary="Статус фоновой задачи")

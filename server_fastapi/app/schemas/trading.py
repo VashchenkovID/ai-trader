@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TradingRequestDTO(BaseModel):
@@ -35,6 +35,10 @@ class TradingRequestCreateOptions(BaseModel):
     action: str | None = Field(default=None, description="Переопределить action (BUY/SELL)")
     mode: str = Field(default="paper", description="Режим торговли")
     quantity: int | None = Field(default=None, description="Переопределить количество")
+    virtualProfile: str | None = Field(
+        default=None,
+        description="Профиль виртуального портфеля: conservative|moderate|aggressive|experimental",
+    )
 
 
 class TradingRequestCreateRequest(BaseModel):
@@ -64,7 +68,14 @@ class TradingRequestPreviewRequest(BaseModel):
 
 
 class TradingRequestApproveRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     comment: str | None = Field(default=None, description="Комментарий к одобрению")
+    manual_broker_execution: bool = Field(
+        default=False,
+        alias="manualBrokerExecution",
+        description="Режим real: одобрить без API-ордера; исполнение в T‑Invest вручную, затем «Исполнить»",
+    )
 
 
 class TradingRequestRejectRequest(BaseModel):

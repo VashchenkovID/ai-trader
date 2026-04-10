@@ -13,13 +13,16 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.deps import get_container
+from app.core.config import get_settings
 from app.core.errors import AppError
 from app.db.session import get_db_session
+from app.schemas.envelope import SuccessEnvelope
 from app.services.container import AppContainer
 from app.services.llm_jury_service import run_jury_for_figi
+from app.services.manual_llm_batch_service import apply_manual_llm_chunk, get_manual_prompt_chunk
 from sqlalchemy.ext.asyncio import AsyncSession
 from training.config import get_training_settings
 from training.governance import (
@@ -585,6 +588,61 @@ class RunJuryBody(BaseModel):
 
     figi: str | None = Field(None, description="Один FIGI инструмента")
     figi_list: list[str] | None = Field(None, description="Список FIGI для пакетного запуска")
+
+
+class ManualLlmApplyChunkBody(BaseModel):
+    """Ручной импорт одного батча ответов GigaChat + Алиса (тот же промпт, два сырьих ответа)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    chunk_index: int = Field(..., ge=0, alias="chunkIndex", description="Индекс чанка из GET prompt-chunk")
+    figi: list[str] = Field(..., min_length=1, description="FIGI в том же порядке, что вернул GET")
+    gigachat_raw: str = Field(..., alias="gigachatRaw", description="Сырой ответ GigaChat")
+    alisa_raw: str = Field(..., alias="alisaRaw", description="Сырой ответ Алиса / YandexGPT")
+
+
+@router.get(
+    "/llm-manual/prompt-chunk",
+    summary="Промпт батча LLM-жюри для ручного копирования",
+    description="Один чанк инструментов: текст промпта и список FIGI (порядок важен для apply).",
+)
+async def manual_llm_prompt_chunk(
+    chunk_index: int = Query(0, ge=0, alias="chunkIndex"),
+    container: AppContainer = Depends(get_container),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> SuccessEnvelope[dict[str, Any]]:
+    batch_size = max(1, int(get_settings().llm_jury_batch_size))
+    data = await get_manual_prompt_chunk(
+        db_session,
+        container.market_repository,
+        chunk_index=chunk_index,
+        batch_size=batch_size,
+    )
+    return SuccessEnvelope(data=data)
+
+
+@router.post(
+    "/llm-manual/apply-chunk",
+    summary="Применить ручной батч ответов LLM",
+    description="Парсит два сырьих ответа, сохраняет жюри, считает NN+fusion и обновляет рекомендации с analysis_date=сейчас (МСК).",
+)
+async def manual_llm_apply_chunk(
+    body: ManualLlmApplyChunkBody,
+    container: AppContainer = Depends(get_container),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> SuccessEnvelope[dict[str, Any]]:
+    batch_size = max(1, int(get_settings().llm_jury_batch_size))
+    data = await apply_manual_llm_chunk(
+        db_session,
+        container,
+        container.market_repository,
+        chunk_index=body.chunk_index,
+        batch_size=batch_size,
+        figis=body.figi,
+        gigachat_raw=body.gigachat_raw,
+        alisa_raw=body.alisa_raw,
+    )
+    return SuccessEnvelope(data=data)
 
 
 @router.post(

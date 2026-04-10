@@ -68,6 +68,13 @@ class Settings(BaseSettings):
     training_full_cron: str = Field(default="0 3 * * 1", description="Cron: полное обучение")
     training_quick_cron: str = Field(default="0 8,10,12,14,16,18 * * *", description="Cron: быстрое обучение")
     market_analysis_cron: str = Field(default="0 * * * *", description="Cron: анализ рынка и портфеля")
+    llm_jury_batch_size: int = Field(
+        default=45,
+        ge=1,
+        le=500,
+        alias="LLM_JURY_BATCH_SIZE",
+        description="Сколько FIGI в одном батч-промпте LLM-жюри в analysis_market_portfolio",
+    )
     weekly_generation_cron: str = Field(default="0 8 * * *", description="Cron: генерация weekly forecast")
     weekly_update_cron: str = Field(default="0 9 * * *", description="Cron: обновление weekly forecast")
     weekly_training_cron: str = Field(default="0 4 * * 1", description="Cron: weekly training")
@@ -135,6 +142,56 @@ class Settings(BaseSettings):
     real_slippage_bps: int = Field(default=10, ge=0, alias="REAL_SLIPPAGE_BPS")
     real_execution_delay_ms: int = Field(default=0, ge=0, alias="REAL_EXECUTION_DELAY_MS")
     real_calibration_log_enabled: bool = Field(default=True, alias="REAL_CALIBRATION_LOG_ENABLED")
+
+    # gRPC T-Invest (опционально; REST по умолчанию)
+    tinkoff_use_grpc: bool = Field(default=False, alias="TINKOFF_USE_GRPC")
+    broker_hint_after_manual_execute: bool = Field(
+        default=False,
+        alias="BROKER_HINT_AFTER_MANUAL_EXECUTE",
+        description="После EXECUTED из PENDING_MANUAL_REAL вызвать GetOperations для телеметрии",
+    )
+    paper_pipeline_multi_profile: bool = Field(
+        default=False,
+        alias="PAPER_PIPELINE_MULTI_PROFILE",
+        description="Создавать paper-заявки по всем виртуальным профилям без дубля (figi+slug)",
+    )
+    risk_real_cap_preview_enabled: bool = Field(
+        default=False,
+        alias="RISK_REAL_CAP_PREVIEW_ENABLED",
+        description="GET /risk/real-cap-preview/{figi} включает cap из PyPortfolioOpt",
+    )
+    indicators_api_enabled: bool = Field(
+        default=False,
+        alias="INDICATORS_API_ENABLED",
+        description="POST /quant/indicators-preview по FIGI",
+    )
+    portfolio_profiles_yaml_path: str = Field(
+        default="",
+        alias="PORTFOLIO_PROFILES_YAML_PATH",
+        description="Опциональный YAML профилей; пусто — только БД",
+    )
+    audit_log_path: str = Field(default="./logs/audit.jsonl", alias="AUDIT_LOG_PATH")
+    training_alignment_dataset_path: str = Field(
+        default="./data/training/alignment_dataset.jsonl",
+        alias="TRAINING_ALIGNMENT_DATASET_PATH",
+    )
+    training_alignment_cron: str = Field(
+        default="0 5 * * 0",
+        alias="TRAINING_ALIGNMENT_CRON",
+        description="Cron: append строки alignment row в JSONL (§7)",
+    )
+
+    # Ночной артефакт матрицы доходностей (заглушка-планировщик, см. scheduler)
+    quant_returns_matrix_cron: str = Field(default="0 3 * * *", description="Cron: артефакт returns matrix")
+    virtual_portfolio_nav_cron: str = Field(
+        default="30 23 * * *",
+        description="Cron: дневной снимок NAV виртуальных профилей (Europe/Moscow)",
+    )
+    completed_tasks_cleanup_cron: str = Field(
+        default="0 * * * *",
+        alias="COMPLETED_TASKS_CLEANUP_CRON",
+        description="Cron: удаление завершённых записей из in-memory реестра фоновых задач",
+    )
 
 
 @lru_cache

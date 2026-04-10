@@ -78,6 +78,7 @@ async def trading_request_create(
             action=opts.action,
             mode=opts.mode,
             quantity=opts.quantity,
+            virtual_profile_slug=opts.virtualProfile,
         )
     elif body.recommendationData:
         data = await container.trading_request_service.create_from_data(
@@ -86,6 +87,7 @@ async def trading_request_create(
             action=opts.action,
             mode=opts.mode,
             quantity=opts.quantity,
+            virtual_profile_slug=opts.virtualProfile,
         )
     else:
         raise AppError("BAD_REQUEST", message="Требуется recommendationFigi или recommendationData")
@@ -125,6 +127,7 @@ async def trading_request_preview(
         action=opts.action,
         mode=opts.mode,
         quantity=opts.quantity,
+        virtual_profile_slug=opts.virtualProfile,
     )
     return SuccessEnvelope(data=data)
 
@@ -136,9 +139,12 @@ async def trading_request_approve(
     container: AppContainer = Depends(get_container),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> SuccessEnvelope[dict]:
-    """Переводит заявку из PENDING в APPROVED."""
+    """Переводит заявку из PENDING в APPROVED или PENDING_MANUAL_REAL (real + manualBrokerExecution)."""
     comment = body.comment if body else None
-    data = await container.trading_request_service.approve(db_session, request_id, comment=comment)
+    manual = bool(body.manual_broker_execution) if body else False
+    data = await container.trading_request_service.approve(
+        db_session, request_id, comment=comment, manual_broker_execution=manual
+    )
     await db_session.commit()
     return SuccessEnvelope(data=data)
 

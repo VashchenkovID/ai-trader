@@ -2,8 +2,12 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_container
+from app.core.config import get_settings
+from app.core.errors import AppError
+from app.db.session import get_db_session
 from app.schemas.envelope import SuccessEnvelope
 from app.services.container import AppContainer
 
@@ -67,3 +71,27 @@ async def risk_validate(
         current_exposure=body.currentExposure,
     )
     return SuccessEnvelope(data=data)
+
+
+@router.get(
+    "/real-cap-preview/{figi}",
+    summary="Верхняя доля позиции из max-Sharpe (preflight real, §5)",
+)
+async def risk_real_cap_preview(
+    figi: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    container: AppContainer = Depends(get_container),
+) -> SuccessEnvelope[dict]:
+    if not get_settings().risk_real_cap_preview_enabled:
+        raise AppError(
+            "FORBIDDEN",
+            message="RISK_REAL_CAP_PREVIEW_ENABLED=false",
+        )
+    orch = getattr(container, "risk_pypfopt_orchestrator", None)
+    if orch is None:
+        raise AppError("SERVICE_UNAVAILABLE", message="Orchestrator unavailable")
+    cap = await orch.max_position_fraction_cap_for_figi(db_session, order_figi=figi)
+    await db_session.commit()
+    return SuccessEnvelope(
+        data={"figi": figi, "maxPositionFractionCap": cap, "note": "Не ордер; только оценка cap"}
+    )

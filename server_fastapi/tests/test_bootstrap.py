@@ -7,6 +7,14 @@ import pytest
 import app.bootstrap as bootstrap
 
 
+async def _noop_hydrate_settings(_s, _c) -> None:
+    return
+
+
+async def _noop_ensure_virtual_portfolio(_c) -> None:
+    return
+
+
 @pytest.mark.asyncio
 async def test_ensure_bootstrap_runs_migrations_when_tables_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(bootstrap, "_bootstrap_done", False)
@@ -25,8 +33,10 @@ async def test_ensure_bootstrap_runs_migrations_when_tables_missing(monkeypatch:
     monkeypatch.setattr(bootstrap, "seed_app_settings", _seed_settings)
     monkeypatch.setattr(bootstrap, "seed_admin_user", _seed_admin)
     monkeypatch.setattr(bootstrap, "run_alembic_upgrade_head", lambda: calls.append("alembic"))
+    monkeypatch.setattr(bootstrap, "hydrate_settings_service_from_db", _noop_hydrate_settings)
+    monkeypatch.setattr(bootstrap, "ensure_virtual_portfolio", _noop_ensure_virtual_portfolio)
 
-    await bootstrap.ensure_bootstrap(SimpleNamespace())
+    await bootstrap.ensure_bootstrap(SimpleNamespace(settings_service=object()))
     assert calls == ["alembic", "settings", "admin"]
 
 
@@ -48,8 +58,10 @@ async def test_ensure_bootstrap_skips_migrations_when_tables_exist(monkeypatch: 
     monkeypatch.setattr(bootstrap, "seed_app_settings", _seed_settings)
     monkeypatch.setattr(bootstrap, "seed_admin_user", _seed_admin)
     monkeypatch.setattr(bootstrap, "run_alembic_upgrade_head", lambda: calls.append("alembic"))
+    monkeypatch.setattr(bootstrap, "hydrate_settings_service_from_db", _noop_hydrate_settings)
+    monkeypatch.setattr(bootstrap, "ensure_virtual_portfolio", _noop_ensure_virtual_portfolio)
 
-    await bootstrap.ensure_bootstrap(SimpleNamespace())
+    await bootstrap.ensure_bootstrap(SimpleNamespace(settings_service=object()))
     assert calls == ["settings", "admin"]
 
 
@@ -70,8 +82,10 @@ async def test_ensure_bootstrap_is_idempotent(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(bootstrap, "db_tables_exist", _tables_exist)
     monkeypatch.setattr(bootstrap, "seed_app_settings", _seed_settings)
     monkeypatch.setattr(bootstrap, "seed_admin_user", _seed_admin)
+    monkeypatch.setattr(bootstrap, "hydrate_settings_service_from_db", _noop_hydrate_settings)
+    monkeypatch.setattr(bootstrap, "ensure_virtual_portfolio", _noop_ensure_virtual_portfolio)
 
-    container = SimpleNamespace()
+    container = SimpleNamespace(settings_service=object())
     await bootstrap.ensure_bootstrap(container)
     await bootstrap.ensure_bootstrap(container)
     assert calls == ["settings", "admin"]

@@ -13,7 +13,7 @@ type SchedulerJobState = {
   lastDurationMs?: number | null
 }
 
-type TaskRecord = {
+export type TaskRecord = {
   taskId: string
   taskType: string
   status: string
@@ -149,6 +149,47 @@ const normalizeTask = (task: Record<string, unknown>): TaskRecord => ({
   source: (task.source as string | null | undefined) ?? null,
 })
 
+function mergeTasksPrunedPayload(
+  prev: SystemStatusState,
+  payload: Record<string, unknown>,
+  timestamp: string,
+): { tasks: TaskRecord[]; snapshot: SystemSnapshotPayload | null } {
+  const rawTasks = payload.tasks
+  let nextTasks = prev.tasks
+  if (Array.isArray(rawTasks)) {
+    nextTasks = rawTasks
+      .map(row => normalizeTask(row as Record<string, unknown>))
+      .filter(t => t.taskId)
+      .slice(0, MAX_TASKS)
+  }
+  const workers = payload.workers as SystemSnapshotPayload['workers'] | undefined
+  let nextSnapshot = prev.snapshot
+  if (workers) {
+    if (nextSnapshot) {
+      nextSnapshot = { ...nextSnapshot, workers, tasks: nextTasks }
+    } else {
+      nextSnapshot = {
+        system: { cpuPercent: 0, ramPercent: 0, pid: 0, timestamp },
+        workers,
+        scheduler: prev.scheduler,
+        tasks: nextTasks,
+      }
+    }
+  } else if (nextSnapshot) {
+    nextSnapshot = { ...nextSnapshot, tasks: nextTasks }
+  }
+  return { tasks: nextTasks, snapshot: nextSnapshot }
+}
+
+/** Применить ответ POST prune-completed (тот же payload, что и в WebSocket `system.tasks_pruned`). */
+export function applyTasksPrunedFromServer(payload: Record<string, unknown>) {
+  const timestamp = new Date().toISOString()
+  useSystemStatusStore.setState(prev => {
+    const merged = mergeTasksPrunedPayload(prev, payload, timestamp)
+    return { ...prev, ...merged, lastEventAt: timestamp }
+  })
+}
+
 const applyWsEvent = (message: WsEnvelope) => {
   const { event, timestamp, sequence } = message
   useSystemStatusStore.setState(prev => {
@@ -179,6 +220,16 @@ const applyWsEvent = (message: WsEnvelope) => {
         const rest = nextTasks.filter(existing => existing.taskId !== task.taskId)
         nextTasks = [task, ...rest].slice(0, MAX_TASKS)
       }
+    }
+
+    if (event === 'system.tasks_pruned') {
+      const merged = mergeTasksPrunedPayload(
+        { ...prev, tasks: nextTasks, snapshot: nextSnapshot },
+        message.payload as Record<string, unknown>,
+        timestamp,
+      )
+      nextTasks = merged.tasks
+      nextSnapshot = merged.snapshot
     }
 
     return {

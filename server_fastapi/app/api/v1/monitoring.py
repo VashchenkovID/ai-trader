@@ -1,7 +1,13 @@
-from fastapi import APIRouter, Query, Request
+from datetime import datetime, timezone
 
+from fastapi import APIRouter, Depends, Query, Request
+
+from app.api.deps import get_container
+from app.core.config import get_settings
 from app.core.time_utils import iso_now_msk, now_msk
 from app.schemas.envelope import SuccessEnvelope
+from app.services.container import AppContainer
+from app.services.quant_artifact_service import load_returns_matrix_artifact
 
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
@@ -51,15 +57,51 @@ def _build_slo_alerts(routes: dict[str, dict[str, float | int]]) -> list[dict[st
     return alerts
 
 
+def _returns_matrix_freshness() -> dict[str, object]:
+    loaded = load_returns_matrix_artifact()
+    if not loaded.get("ok"):
+        return {"ok": False, "error": loaded.get("error", "artifact_unavailable")}
+    summary = loaded.get("summary") if isinstance(loaded.get("summary"), dict) else {}
+    last_run = summary.get("lastRunAt")
+    age_hours: float | None = None
+    if isinstance(last_run, str) and last_run.strip():
+        try:
+            dt = datetime.fromisoformat(last_run.replace("Z", "+00:00"))
+            age_hours = round((datetime.now(timezone.utc) - dt).total_seconds() / 3600.0, 3)
+        except ValueError:
+            age_hours = None
+    return {
+        "ok": True,
+        "lastRunAt": last_run,
+        "ageHours": age_hours,
+        "figiCount": summary.get("figiCount"),
+        "rows": summary.get("rows"),
+        "cols": summary.get("cols"),
+    }
+
+
 @router.get("/metrics", summary="Маршрутные метрики мониторинга")
-async def monitoring_metrics(request: Request) -> SuccessEnvelope[dict[str, object]]:
+async def monitoring_metrics(
+    request: Request,
+    container: AppContainer = Depends(get_container),
+) -> SuccessEnvelope[dict[str, object]]:
     routes = request.app.state.metrics_registry.snapshot()
+    settings = get_settings()
+    broker = {
+        "tokenConfigured": bool(settings.tinkoff_token),
+        "schedulerEnabled": settings.tinkoff_scheduler_enabled,
+        "grpcReadPath": settings.tinkoff_use_grpc,
+        "clientReady": container.tinkoff_client is not None,
+    }
+    quant_returns_matrix = _returns_matrix_freshness()
     return SuccessEnvelope(
         data={
             "routes": routes,
             "summary": {
                 "requestCount": sum(int(item["count"]) for item in routes.values()) if routes else 0,
                 "errorCount": sum(int(item["errorCount"]) for item in routes.values()) if routes else 0,
+                "broker": broker,
+                "quantReturnsMatrix": quant_returns_matrix,
             },
             "timestamp": now_msk(),
         }

@@ -76,6 +76,7 @@ class RiskService:
         confidence_hard_floor: float = 0.4,
         max_position_fraction: float | None = None,
         max_total_exposure_fraction: float | None = None,
+        max_position_fraction_cap: float | None = None,
     ) -> dict[str, Any]:
         """
         Валидирует ордер по лимитам.
@@ -121,6 +122,10 @@ class RiskService:
             else float(limits.get("maxPositionSize", 0.05))
         )
         pos_frac = min(max(pos_frac, 1e-12), 1.0)
+        if max_position_fraction_cap is not None:
+            cap = float(max_position_fraction_cap)
+            if cap > 0:
+                pos_frac = min(pos_frac, cap)
         max_position = Decimal(str(pos_frac)) * portfolio_value
         if requested_value > max_position:
             validation["isValid"] = False

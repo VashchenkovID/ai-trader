@@ -30,3 +30,9 @@ node_modules
 **/.DS_Store
 *.egg-info/
 **/*.egg-info/
+
+mlruns
+lightning_logs
+data/cutover_backups
+logs/runtime_errors.jsonl
+logs/lightning_runs.jsonl

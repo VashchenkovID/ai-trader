@@ -2,6 +2,7 @@ from app.db.base_class import Base
 from app.db.models import (
     AppSetting,
     Asset,
+    BacktestRun,
     Candle,
     Instrument,
     LlmJuryAggregate,
@@ -9,6 +10,7 @@ from app.db.models import (
     ModelPerformance,
     NewsItem,
     Option,
+    PortfolioAnalyzerReport,
     Recommendation,
     RealPortfolio,
     Signal,
@@ -34,4 +36,6 @@ __all__ = [
     "LlmJuryAggregate",
     "RealPortfolio",
     "VirtualPortfolio",
+    "BacktestRun",
+    "PortfolioAnalyzerReport",
 ]

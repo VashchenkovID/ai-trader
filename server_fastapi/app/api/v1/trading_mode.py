@@ -7,6 +7,7 @@ from app.api.deps import get_container
 from app.db.session import get_db_session
 from app.schemas.envelope import SuccessEnvelope
 from app.services.app_settings_persistence import upsert_app_setting
+from app.services.audit_log import append_audit
 from app.services.container import AppContainer
 
 class TradingModeSwitchRequest(BaseModel):
@@ -33,6 +34,10 @@ async def trading_mode_switch(
 ) -> SuccessEnvelope[dict]:
     """Переключает режим торговли."""
     data = container.trading_mode_service.switch_mode(body.mode)
+    append_audit(
+        "trading_mode_switch",
+        {"to": body.mode, "previousMode": data.get("previousMode")},
+    )
     await upsert_app_setting(db_session, "trading_mode", body.mode)
     await upsert_app_setting(db_session, "system.mode", body.mode)
     await db_session.commit()

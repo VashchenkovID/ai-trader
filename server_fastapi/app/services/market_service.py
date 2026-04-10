@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Recommendation
 from app.repositories.market_repository import MarketRepository
 from app.services.weekly_forecast_service import run_weekly_forecast_sync
+from training.data.llm_numeric import extract_llm_scores_from_jury_payload
 
 _WEEKLY_REFRESH_SEMAPHORE = asyncio.Semaphore(2)
 
@@ -186,6 +187,11 @@ class MarketService:
         trade_plan = self._build_trade_plan(row.recommendation, current_price, llm_payload)
         explain = self._build_explain_summary(row.recommendation, confidence, llm_payload, nn_payload)
         horizon_momentum = self._extract_horizon_momentum(nn_payload)
+        llm_scores = extract_llm_scores_from_jury_payload(llm_payload if isinstance(llm_payload, dict) else None)
+        if getattr(row, "llm_consensus", None) is not None:
+            llm_scores["llm_consensus"] = float(row.llm_consensus)
+        if getattr(row, "llm_dispersion", None) is not None:
+            llm_scores["llm_dispersion"] = float(row.llm_dispersion)
         return {
             "id": str(getattr(row, "id", "") or ""),
             "figi": row.figi,
@@ -200,6 +206,9 @@ class MarketService:
             "analysisDate": row.analysis_date,
             "lastPrice": last_price,
             "llmJuryPayload": llm_payload,
+            "llmConsensus": llm_scores.get("llm_consensus"),
+            "llmDispersion": llm_scores.get("llm_dispersion"),
+            "llmConfidenceAvg": llm_scores.get("llm_confidence_avg"),
             "nnScore": getattr(row, "nn_score", None),
             "nnConfidence": getattr(row, "nn_confidence", None),
             "nnCheckpoint": getattr(row, "nn_checkpoint", None),

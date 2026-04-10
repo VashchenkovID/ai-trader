@@ -19,4 +19,8 @@ export type TradingRequestCreateOptions = {
      * Переопределить количество
      */
     quantity?: (number | null);
+    /**
+     * Профиль виртуального портфеля: conservative|moderate|aggressive|experimental
+     */
+    virtualProfile?: (string | null);
 };

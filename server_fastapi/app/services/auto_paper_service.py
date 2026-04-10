@@ -8,10 +8,13 @@ from app.core.time_utils import now_msk
 from app.core.config import get_settings
 from app.core.errors import AppError
 from app.repositories.trading_request_repository import TradingRequestRepository
+from app.services.portfolio_profile_config_service import PortfolioProfileConfigService
+from app.services.risk_pypfopt_orchestrator import RiskPypfoptOrchestrator
 from app.services.risk_service import RiskService
 from app.services.settings_service import SettingsService
 from app.services.trading_mode_service import TradingModeService
 from app.services.trading_request_service import TradingRequestService
+from app.core.virtual_profiles import normalize_virtual_profile
 from app.services.virtual_portfolio_service import VirtualPortfolioService
 
 
@@ -26,6 +29,8 @@ class AutoPaperService:
         trading_request_service: TradingRequestService,
         risk_service: RiskService,
         virtual_portfolio_service: VirtualPortfolioService | None = None,
+        portfolio_profile_config_service: PortfolioProfileConfigService | None = None,
+        risk_pypfopt_orchestrator: RiskPypfoptOrchestrator | None = None,
     ) -> None:
         self._settings = settings_service
         self._mode = trading_mode_service
@@ -33,6 +38,8 @@ class AutoPaperService:
         self._trading_service = trading_request_service
         self._risk = risk_service
         self._virtual_portfolio = virtual_portfolio_service
+        self._profile_cfg = portfolio_profile_config_service
+        self._pypfopt = risk_pypfopt_orchestrator
 
     @staticmethod
     def _coerce_bool(value: object) -> bool:
@@ -144,11 +151,38 @@ class AutoPaperService:
         # иначе validate_order с дефолтом 1M и maxPosition 0.05 отклоняет нормальные paper-заявки.
         confidence = float(req.confidence) if req.confidence is not None else 0.5
         score = float(req.score) if req.score is not None else 0.5
-        floor = float(get_settings().paper_pipeline_min_confidence)
+        env_floor = float(get_settings().paper_pipeline_min_confidence)
+
+        vslug = normalize_virtual_profile(getattr(req, "virtual_profile_slug", None) or None)
+        prof = (
+            self._profile_cfg.get_config(vslug)
+            if self._profile_cfg is not None
+            else None
+        )
+        if prof is not None:
+            if score < prof.signal_min_score:
+                return {
+                    "canAutoExecute": False,
+                    "reason": (
+                        f"Score {score:.3f} ниже порога профиля {vslug} ({prof.signal_min_score})"
+                    ),
+                }
+            if confidence < prof.signal_min_confidence:
+                return {
+                    "canAutoExecute": False,
+                    "reason": (
+                        f"Уверенность {confidence:.3f} ниже порога профиля {vslug} "
+                        f"({prof.signal_min_confidence})"
+                    ),
+                }
+        floor = env_floor
+        if prof is not None:
+            floor = max(floor, float(prof.signal_min_confidence))
 
         portfolio_value: Decimal
         current_exposure: Decimal
         max_pos_frac: float
+        max_total_exp: float | None = None
 
         max_pos_raw = "0.1"
         if self._trading_service is not None:
@@ -160,9 +194,14 @@ class AutoPaperService:
         except Exception:
             max_pos_frac = 0.1
         max_pos_frac = min(max(max_pos_frac, 1e-9), 1.0)
+        if prof is not None:
+            max_pos_frac = min(max_pos_frac, float(prof.max_position_fraction))
+            max_total_exp = float(prof.max_total_exposure_fraction)
 
         if self._virtual_portfolio is not None:
-            row = await self._virtual_portfolio.get_or_create_snapshot(db_session)
+            row = await self._virtual_portfolio.get_or_create_snapshot(
+                db_session, profile_slug=vslug
+            )
             await self._virtual_portfolio.recalculate_totals(db_session, row)
             await db_session.flush()
             tv = float(row.total_value) if row.total_value is not None else 0.0
@@ -186,6 +225,15 @@ class AutoPaperService:
             if portfolio_value <= 0:
                 portfolio_value = Decimal("1000000")
 
+        cap_opt: float | None = None
+        if self._pypfopt is not None and req.figi:
+            try:
+                cap_opt = await self._pypfopt.max_position_fraction_cap_for_figi(
+                    db_session, order_figi=str(req.figi)
+                )
+            except Exception:
+                cap_opt = None
+
         validation = self._risk.validate_order(
             figi=req.figi,
             action=req.action,
@@ -197,6 +245,8 @@ class AutoPaperService:
             current_exposure=current_exposure,
             confidence_hard_floor=floor,
             max_position_fraction=max_pos_frac,
+            max_total_exposure_fraction=max_total_exp,
+            max_position_fraction_cap=cap_opt,
         )
         if not validation.get("isValid", True):
             return {

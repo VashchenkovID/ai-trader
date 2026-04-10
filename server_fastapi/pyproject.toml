@@ -20,6 +20,9 @@ dependencies = [
   "httpx>=0.28.0",
   "apscheduler>=3.10.0",
   "psutil>=5.9.0",
+  "pandas>=2.0.0",
+  "numpy>=1.24.0",
+  "PyYAML>=6.0.0",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +40,11 @@ training = [
   "torch>=2.0.0",
   "pytorch-lightning>=2.0.0",
   "httpx>=0.28.0",
+]
+quant = [
+  "PyPortfolioOpt>=1.5.0",
+  "scipy>=1.10.0",
+  "Backtesting>=0.3.3",
 ]
 
 [tool.pytest.ini_options]

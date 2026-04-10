@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any
@@ -10,12 +11,16 @@ from sqlalchemy import select
 from app.core.time_utils import now_msk
 from app.core.errors import AppError
 from app.core.config import get_settings
-from app.db.models import AppSetting
-from app.db.models import TradingRequest
+from app.core.virtual_profiles import normalize_virtual_profile
+from app.db.models import AppSetting, RealPortfolio, TradingRequest
 from app.repositories.market_repository import MarketRepository
 from app.repositories.trading_request_repository import TradingRequestRepository
+from app.services.audit_log import append_audit
+from app.services.manual_execution_broker_hint import fetch_recent_operations_hint
 from app.services.risk_service import RiskService
 from app.services.virtual_portfolio_service import VirtualPortfolioService
+
+logger = logging.getLogger(__name__)
 
 
 def _to_dto(req: TradingRequest) -> dict[str, object]:
@@ -41,6 +46,7 @@ def _to_dto(req: TradingRequest) -> dict[str, object]:
         "rejectReason": req.reject_reason,
         "actualPrice": req.actual_price,
         "actualAmount": req.actual_amount,
+        "virtualProfileSlug": getattr(req, "virtual_profile_slug", None),
     }
 
 
@@ -56,9 +62,12 @@ def _ensure_figi_allowed_for_trading(figi: str) -> None:
         )
 
 
+STATUS_PENDING_MANUAL_REAL = "PENDING_MANUAL_REAL"
+
 _ALLOWED_TRANSITIONS: dict[str, set[str]] = {
-    "PENDING": {"APPROVED", "REJECTED", "CANCELLED", "EXPIRED"},
+    "PENDING": {"APPROVED", "PENDING_MANUAL_REAL", "REJECTED", "CANCELLED", "EXPIRED"},
     "APPROVED": {"EXECUTED", "CANCELLED"},
+    "PENDING_MANUAL_REAL": {"EXECUTED", "CANCELLED"},
     "REJECTED": set(),
     "EXECUTED": set(),
     "CANCELLED": set(),
@@ -78,11 +87,13 @@ class TradingRequestService:
         market_repo: MarketRepository,
         risk_service: RiskService | None = None,
         virtual_portfolio_service: VirtualPortfolioService | None = None,
+        tinkoff_client: Any | None = None,
     ) -> None:
         self._trading_repo = trading_repo
         self._market_repo = market_repo
         self._risk_service = risk_service
         self._virtual_portfolio_service = virtual_portfolio_service
+        self._tinkoff_client = tinkoff_client
 
     async def _read_app_setting_str(
         self, db_session: AsyncSession, key: str, fallback: str
@@ -106,6 +117,7 @@ class TradingRequestService:
         action: str,
         price: Decimal,
         figi: str | None = None,
+        virtual_profile_slug: str | None = None,
     ) -> int:
         """
         Quantity по умолчанию, если клиент/пайплайн не передал quantity.
@@ -116,7 +128,7 @@ class TradingRequestService:
         if act == "SELL":
             if figi and self._virtual_portfolio_service is not None:
                 held = await self._virtual_portfolio_service.get_position_quantity(
-                    db_session, figi
+                    db_session, figi, profile_slug=virtual_profile_slug
                 )
                 return held if held >= 1 else 0
             return 0
@@ -140,7 +152,9 @@ class TradingRequestService:
         if mode == "paper":
             used_vp_cash = False
             if self._virtual_portfolio_service is not None:
-                cash_vp = await self._virtual_portfolio_service.get_available_cash_for_sizing(db_session)
+                cash_vp = await self._virtual_portfolio_service.get_available_cash_for_sizing(
+                    db_session, profile_slug=virtual_profile_slug
+                )
                 if cash_vp is not None and cash_vp > 0:
                     capital = cash_vp
                     used_vp_cash = True
@@ -173,6 +187,7 @@ class TradingRequestService:
         quantity: int | None,
         confidence_override: Decimal | None = None,
         score_override: Decimal | None = None,
+        virtual_profile_slug: str | None = None,
     ) -> dict[str, Any]:
         """Поля заявки из строки рекомендации в БД (без записи)."""
         _ensure_figi_allowed_for_trading(figi)
@@ -191,7 +206,12 @@ class TradingRequestService:
             int(quantity)
             if quantity is not None and int(quantity) >= 1
             else await self._compute_default_quantity(
-                db_session, mode=mode, action=act, price=price, figi=figi
+                db_session,
+                mode=mode,
+                action=act,
+                price=price,
+                figi=figi,
+                virtual_profile_slug=virtual_profile_slug,
             )
         )
         if qty < 1:
@@ -226,6 +246,7 @@ class TradingRequestService:
         action: str | None,
         mode: str,
         quantity: int | None,
+        virtual_profile_slug: str | None = None,
     ) -> dict[str, Any]:
         """Поля заявки из переданного словаря (без записи)."""
         figi = data.get("figi") or data.get("recommendationFigi")
@@ -245,7 +266,12 @@ class TradingRequestService:
         qty = int(qty_raw) if qty_raw is not None and int(qty_raw) >= 1 else 0
         if qty < 1:
             qty = await self._compute_default_quantity(
-                db_session, mode=mode, action=act, price=price, figi=figi_str
+                db_session,
+                mode=mode,
+                action=act,
+                price=price,
+                figi=figi_str,
+                virtual_profile_slug=virtual_profile_slug,
             )
         if qty < 1:
             if act == "SELL":
@@ -283,6 +309,7 @@ class TradingRequestService:
         action: str | None,
         mode: str,
         quantity: int | None,
+        virtual_profile_slug: str | None = None,
     ) -> dict[str, object]:
         """Предрасчёт заявки без записи; при ошибке валидации — ok=false."""
         try:
@@ -293,6 +320,7 @@ class TradingRequestService:
                     action=action,
                     mode=mode,
                     quantity=quantity,
+                    virtual_profile_slug=virtual_profile_slug,
                 )
             elif recommendation_data:
                 fields = await self._compute_order_from_data(
@@ -301,12 +329,19 @@ class TradingRequestService:
                     action=action,
                     mode=mode,
                     quantity=quantity,
+                    virtual_profile_slug=virtual_profile_slug,
                 )
             else:
                 raise AppError("BAD_REQUEST", message="Требуется recommendationFigi или recommendationData")
 
             figi_key = str(fields["figi"])
-            active = await self._trading_repo.count_active_by_figi(db_session, figi=figi_key)
+            vprof = normalize_virtual_profile(virtual_profile_slug)
+            if hasattr(self._trading_repo, "count_active_by_figi_and_profile"):
+                active = await self._trading_repo.count_active_by_figi_and_profile(
+                    db_session, figi=figi_key, virtual_profile_slug=vprof
+                )
+            else:
+                active = await self._trading_repo.count_active_by_figi(db_session, figi=figi_key)
             price = fields["price"]
             budget = fields["budget"]
             conf = fields["confidence"]
@@ -370,6 +405,7 @@ class TradingRequestService:
         quantity: int | None = None,
         confidence_override: Decimal | None = None,
         score_override: Decimal | None = None,
+        virtual_profile_slug: str | None = None,
     ) -> dict[str, object]:
         """Создает заявку из рекомендации в БД."""
         lock = await self._get_create_lock(figi)
@@ -382,10 +418,17 @@ class TradingRequestService:
                 quantity=quantity,
                 confidence_override=confidence_override,
                 score_override=score_override,
+                virtual_profile_slug=virtual_profile_slug,
             )
             expires_at = now_msk() + timedelta(hours=4)
 
-            active = await self._trading_repo.count_active_by_figi(db_session, figi=figi)
+            vprof = normalize_virtual_profile(virtual_profile_slug)
+            if hasattr(self._trading_repo, "count_active_by_figi_and_profile"):
+                active = await self._trading_repo.count_active_by_figi_and_profile(
+                    db_session, figi=figi, virtual_profile_slug=vprof
+                )
+            else:
+                active = await self._trading_repo.count_active_by_figi(db_session, figi=figi)
             if active > 0:
                 raise AppError("CONFLICT", message="Уже есть активная заявка по этому FIGI")
 
@@ -402,6 +445,7 @@ class TradingRequestService:
                 confidence=fields["confidence"],
                 score=fields["score"],
                 expires_at=expires_at,
+                virtual_profile_slug=vprof,
             )
             return _to_dto(req)
 
@@ -413,17 +457,29 @@ class TradingRequestService:
         action: str | None = None,
         mode: str = "paper",
         quantity: int | None = None,
+        virtual_profile_slug: str | None = None,
     ) -> dict[str, object]:
         """Создает заявку из переданных данных."""
         fields = await self._compute_order_from_data(
-            db_session, data, action=action, mode=mode, quantity=quantity
+            db_session,
+            data,
+            action=action,
+            mode=mode,
+            quantity=quantity,
+            virtual_profile_slug=virtual_profile_slug,
         )
         figi_str = str(fields["figi"])
         expires_at = now_msk() + timedelta(hours=4)
 
         lock = await self._get_create_lock(figi_str)
         async with lock:
-            active = await self._trading_repo.count_active_by_figi(db_session, figi=figi_str)
+            vprof = normalize_virtual_profile(virtual_profile_slug)
+            if hasattr(self._trading_repo, "count_active_by_figi_and_profile"):
+                active = await self._trading_repo.count_active_by_figi_and_profile(
+                    db_session, figi=figi_str, virtual_profile_slug=vprof
+                )
+            else:
+                active = await self._trading_repo.count_active_by_figi(db_session, figi=figi_str)
             if active > 0:
                 raise AppError("CONFLICT", message="Уже есть активная заявка по этому FIGI")
 
@@ -440,6 +496,7 @@ class TradingRequestService:
                 confidence=fields["confidence"],
                 score=fields["score"],
                 expires_at=expires_at,
+                virtual_profile_slug=vprof,
             )
             return _to_dto(req)
 
@@ -452,26 +509,110 @@ class TradingRequestService:
                 details={"current": current, "requested": new_status},
             )
 
+    async def _assert_sufficient_cash_for_buy_approve(
+        self, db_session: AsyncSession, req: TradingRequest
+    ) -> None:
+        """Перед одобрением PENDING BUY: свободный cash ≥ budget (paper — виртуальный счёт; real/micro — снимок real_portfolio)."""
+        need = Decimal(str(req.budget or 0))
+        if need <= 0:
+            return
+        mode = str(getattr(req, "mode", None) or "").lower()
+        if mode == "paper":
+            if self._virtual_portfolio_service is None:
+                raise AppError(
+                    "INTERNAL_ERROR",
+                    message="Виртуальный портфель недоступен: нельзя проверить остаток наличных",
+                )
+            slug = normalize_virtual_profile(getattr(req, "virtual_profile_slug", None))
+            await self._virtual_portfolio_service.get_or_create_snapshot(db_session, profile_slug=slug)
+            cash = await self._virtual_portfolio_service.get_available_cash_for_sizing(
+                db_session, slug
+            )
+            available = cash if cash is not None else Decimal("0")
+            if available < need:
+                raise AppError(
+                    "BUSINESS_RULE_VIOLATION",
+                    message=(
+                        f"Недостаточно свободных средств в виртуальном портфеле ({slug}): "
+                        f"нужно {need}, доступно {available}"
+                    ),
+                    details={
+                        "profileSlug": slug,
+                        "requiredRub": str(need),
+                        "availableRub": str(available),
+                    },
+                )
+            return
+        if mode in ("real", "micro"):
+            row = await db_session.scalar(select(RealPortfolio).where(RealPortfolio.id == 1).limit(1))
+            available = (
+                Decimal(str(row.cash))
+                if row is not None and row.cash is not None
+                else Decimal("0")
+            )
+            reserved = await self._trading_repo.sum_reserved_buy_budget_real_accounts(db_session)
+            total_required = need + reserved
+            if total_required > available:
+                raise AppError(
+                    "BUSINESS_RULE_VIOLATION",
+                    message=(
+                        "Недостаточно свободных средств по снимку реального портфеля: "
+                        f"нужно {need} по заявке + {reserved} уже в одобренных BUY = {total_required}, "
+                        f"доступно {available}. Обновите портфель (синхронизация) или отмените лишние заявки."
+                    ),
+                    details={
+                        "requiredRub": str(need),
+                        "reservedByOtherApprovedRub": str(reserved),
+                        "totalRequiredRub": str(total_required),
+                        "availableRub": str(available),
+                    },
+                )
+
     async def approve(
-        self, db_session: AsyncSession, request_id: UUID, comment: str | None = None
+        self,
+        db_session: AsyncSession,
+        request_id: UUID,
+        comment: str | None = None,
+        *,
+        manual_broker_execution: bool = False,
     ) -> dict[str, object]:
         req = await self._trading_repo.get_by_id(db_session, request_id)
         if req is None:
             raise AppError("TRADING_REQUEST_NOT_FOUND")
-        self._check_transition(req.status, "APPROVED")
-        await self._trading_repo.update_status(
-            db_session,
-            request_id,
-            "APPROVED",
-            approved_at=now_msk(),
-        )
-        # Paper: исполнение сразу по цене/сумме заявки — иначе виртуальный портфель не меняется до отдельного «Исполнить».
-        if str(req.mode or "").lower() == "paper":
+        if str(req.status or "") == "PENDING" and str(getattr(req, "action", None) or "").upper() == "BUY":
+            await self._assert_sufficient_cash_for_buy_approve(db_session, req)
+        mode = str(getattr(req, "mode", None) or "").lower()
+        # Paper: всегда автоисполнение; флаг manual игнорируется.
+        if mode == "paper":
+            self._check_transition(req.status, "APPROVED")
+            await self._trading_repo.update_status(
+                db_session,
+                request_id,
+                "APPROVED",
+                approved_at=now_msk(),
+            )
             return await self.execute(
                 db_session,
                 request_id,
                 actual_price=req.price,
                 actual_amount=req.budget,
+            )
+        # Real / micro: явный статус «ждём ручного исполнения в T‑Invest» (REWRITE_CORE §11).
+        if manual_broker_execution:
+            self._check_transition(req.status, STATUS_PENDING_MANUAL_REAL)
+            await self._trading_repo.update_status(
+                db_session,
+                request_id,
+                STATUS_PENDING_MANUAL_REAL,
+                approved_at=now_msk(),
+            )
+        else:
+            self._check_transition(req.status, "APPROVED")
+            await self._trading_repo.update_status(
+                db_session,
+                request_id,
+                "APPROVED",
+                approved_at=now_msk(),
             )
         updated = await self._trading_repo.get_by_id(db_session, request_id)
         return _to_dto(updated) if updated else {}
@@ -501,6 +642,7 @@ class TradingRequestService:
         req = await self._trading_repo.get_by_id(db_session, request_id)
         if req is None:
             raise AppError("TRADING_REQUEST_NOT_FOUND")
+        prev_status = str(req.status or "")
         self._check_transition(req.status, "EXECUTED")
         updated = await self._trading_repo.update_status(
             db_session,
@@ -510,7 +652,7 @@ class TradingRequestService:
             actual_price=actual_price,
             actual_amount=actual_amount,
         )
-        if req.mode == "paper" and self._virtual_portfolio_service is not None:
+        if str(getattr(req, "mode", None) or "").lower() == "paper" and self._virtual_portfolio_service is not None:
             await self._virtual_portfolio_service.apply_paper_execution(
                 db_session,
                 updated,
@@ -521,6 +663,23 @@ class TradingRequestService:
             expected = float(req.budget or 0)
             actual = float(actual_amount if actual_amount is not None else (req.budget or 0))
             self._risk_service.record_execution_result(pnl_delta=actual - expected)
+        if prev_status == STATUS_PENDING_MANUAL_REAL:
+            append_audit(
+                "manual_real_executed",
+                {
+                    "requestId": str(request_id),
+                    "figi": str(req.figi),
+                    "actualPrice": str(actual_price) if actual_price is not None else None,
+                },
+            )
+        if (
+            get_settings().broker_hint_after_manual_execute
+            and self._tinkoff_client is not None
+            and prev_status == STATUS_PENDING_MANUAL_REAL
+            and str(getattr(req, "mode", None) or "").lower() == "real"
+        ):
+            hint = fetch_recent_operations_hint(self._tinkoff_client, figi=str(req.figi))
+            logger.info("manual_real_execute broker_operations_hint figi=%s %s", req.figi, hint)
         return _to_dto(updated)
 
     async def cancel(self, db_session: AsyncSession, request_id: UUID) -> dict[str, object]:

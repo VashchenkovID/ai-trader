@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Index, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -32,6 +32,7 @@ class TradingRequest(TimestampedUUIDModel):
     reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     actual_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
     actual_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    virtual_profile_slug: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     __table_args__ = (
         Index("ix_trading_requests_status", "status"),
@@ -88,6 +89,8 @@ class Recommendation(TimestampedUUIDModel):
     paper_recommendation: Mapped[str | None] = mapped_column(String(16), nullable=True)
     paper_confidence: Mapped[Decimal | None] = mapped_column(Numeric(6, 4), nullable=True)
     paper_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 4), nullable=True)
+    llm_consensus: Mapped[Decimal | None] = mapped_column(Numeric(8, 6), nullable=True)
+    llm_dispersion: Mapped[Decimal | None] = mapped_column(Numeric(8, 6), nullable=True)
 
 
 class Candle(TimestampedUUIDModel):
@@ -227,10 +230,12 @@ class RealPortfolio(Base):
 
 
 class VirtualPortfolio(Base):
-    """Виртуальный (paper) портфель: одна строка id=1, обновляется при исполнении paper-заявок."""
+    """Виртуальный (paper) портфель по профилю (REWRITE_CORE §13); обновляется при исполнении paper-заявок."""
+
     __tablename__ = "virtual_portfolio"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    profile_slug: Mapped[str] = mapped_column(String(32), nullable=False, default="moderate")
     cash: Mapped[float] = mapped_column(nullable=False, default=0)
     positions: Mapped[dict] = mapped_column(JSON, nullable=False, default=lambda: {})  # {figi: quantity}
     trades: Mapped[list] = mapped_column(JSON, nullable=False, default=lambda: [])
@@ -240,7 +245,46 @@ class VirtualPortfolio(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     last_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    __table_args__ = (Index("ix_virtual_portfolio_last_updated", "last_updated"),)
+    __table_args__ = (
+        Index("ix_virtual_portfolio_last_updated", "last_updated"),
+        UniqueConstraint("profile_slug", name="uq_virtual_portfolio_profile_slug"),
+    )
+
+
+class VirtualPortfolioNavSnapshot(TimestampedUUIDModel):
+    """Дневной снимок total_value виртуального портфеля (Sharpe / drawdown)."""
+
+    __tablename__ = "virtual_portfolio_nav_snapshots"
+
+    profile_slug: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    nav_date: Mapped[date] = mapped_column(Date, nullable=False)
+    total_value: Mapped[Decimal] = mapped_column(Numeric(24, 6), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("profile_slug", "nav_date", name="uq_vp_nav_profile_date"),
+        Index("ix_vp_nav_nav_date", "nav_date"),
+    )
+
+
+class BacktestRun(TimestampedUUIDModel):
+    """Сохранённый результат бэктеста (Фаза C)."""
+
+    __tablename__ = "backtest_runs"
+
+    universe_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    strategy: Mapped[str] = mapped_column(String(64), nullable=False, default="sma_cross")
+    params: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    stats: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class PortfolioAnalyzerReport(TimestampedUUIDModel):
+    """Текстовый отчёт анализатора портфелей (Фаза E)."""
+
+    __tablename__ = "portfolio_analyzer_reports"
+
+    user_query: Mapped[str] = mapped_column(Text, nullable=False)
+    profiles_payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    text_report: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class LlmJuryAggregate(TimestampedUUIDModel):

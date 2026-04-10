@@ -174,7 +174,7 @@ refresh = false,
 }: {
 figi: string,
 /**
- * Пересчитать модель и записать в БД
+ * Пересчитать модель и записать в БД (лимит параллелизма на сервере)
  */
 refresh?: boolean,
 }): CancelablePromise<SuccessEnvelope_dict_str__object__> {

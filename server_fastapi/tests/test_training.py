@@ -339,8 +339,45 @@ def test_build_jury_prompt_substitutes_ticker_and_context() -> None:
     assert "финансовый аналитик" in out
     assert "ACTION: BUY|SELL|HOLD" in out
     assert "CONFIDENCE: 0.00-1.00" in out
+    assert "независимый вердикт" in out
+    assert "веб-поиск" in out
+    assert "используй вместе" in out
     assert "только на русском языке" in out
-    assert "максимум 120 слов" in out
+    assert "максимум 180 слов" in out
+
+
+def test_build_jury_batch_prompt_includes_json_contract_and_list() -> None:
+    from training.llm_jury.prompts import build_jury_batch_prompt
+
+    lines = ["1. FIGI=ABC; тикер X; контекст."]
+    out = build_jury_batch_prompt(lines)
+    assert "FIGI=ABC" in out
+    assert '"instruments"' in out
+    assert "независимый вердикт" in out
+    assert "используй вместе" in out
+    assert "IMOEX" in out or "S&P 500" in out
+
+
+def test_nn_conf_with_llm_fallback() -> None:
+    from app.scheduler import _nn_conf_with_llm_fallback
+
+    assert _nn_conf_with_llm_fallback(0.0, 0.72) == pytest.approx(0.72)
+    assert _nn_conf_with_llm_fallback(0.05, 0.6) == pytest.approx(0.6)
+    assert _nn_conf_with_llm_fallback(0.5, 0.9) == pytest.approx(0.5)
+    assert _nn_conf_with_llm_fallback(0.5, None) == pytest.approx(0.5)
+    assert _nn_conf_with_llm_fallback(0.09, 0.55, threshold=0.08) == pytest.approx(0.09)
+    assert _nn_conf_with_llm_fallback(0.07, 0.55, threshold=0.08) == pytest.approx(0.55)
+
+
+def test_nn_score_with_llm_fallback() -> None:
+    from app.scheduler import _nn_score_with_llm_fallback
+
+    assert _nn_score_with_llm_fallback(0.0, 0.72) == pytest.approx(0.72)
+    assert _nn_score_with_llm_fallback(0.05, 0.6) == pytest.approx(0.6)
+    assert _nn_score_with_llm_fallback(0.5, 0.9) == pytest.approx(0.5)
+    assert _nn_score_with_llm_fallback(0.5, None) == pytest.approx(0.5)
+    assert _nn_score_with_llm_fallback(0.09, 0.55, threshold=0.08) == pytest.approx(0.09)
+    assert _nn_score_with_llm_fallback(0.07, 0.55, threshold=0.08) == pytest.approx(0.55)
 
 
 @pytest.mark.asyncio

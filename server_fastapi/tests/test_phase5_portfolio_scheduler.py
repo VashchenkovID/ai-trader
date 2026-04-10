@@ -69,7 +69,10 @@ async def test_get_portfolio_builds_contract_from_tinkoff_data() -> None:
             }
         ),
     )
-    container = SimpleNamespace(tinkoff_client=client)
+    market_repo = SimpleNamespace(
+        map_last_prices_by_figis=AsyncMock(return_value={"F1": 100.0}),
+    )
+    container = SimpleNamespace(tinkoff_client=client, market_repository=market_repo)
 
     response = await get_portfolio(container=container)
 

@@ -7,6 +7,7 @@ export function labelTradingRequestStatus(raw: string | null | undefined): strin
     REJECTED: 'Отклонено',
     CANCELED: 'Отменено',
     CANCELLED: 'Отменено',
+    PENDING_MANUAL_REAL: 'Ожидает ручного исполнения (real)',
   }
   return map[s] ?? (raw == null || String(raw).trim() === '' ? '—' : String(raw))
 }

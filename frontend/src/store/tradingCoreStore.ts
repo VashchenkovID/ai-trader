@@ -6,6 +6,12 @@ import {
   type UserDTO,
 } from '@/api/generated'
 import { verifyStoredSession } from '@/services/auth'
+import {
+  normalizePaperVirtualProfileSlug,
+  persistPaperVirtualProfileSlug,
+  readStoredPaperVirtualProfileSlug,
+  type PaperVirtualProfileSlug,
+} from '@/store/paperVirtualProfile'
 
 type PortfolioUpdateSource = 'api' | 'socket'
 type PortfolioKind = 'real' | 'virtual'
@@ -16,6 +22,8 @@ type TradingCoreState = {
   tradingMode: Record<string, unknown> | null
   portfolio: Record<string, unknown> | null
   portfolioKind: PortfolioKind | null
+  /** Профиль виртуального портфеля для paper (`GET /portfolio/virtual?profile=`). */
+  paperVirtualProfileSlug: PaperVirtualProfileSlug
   totalBalance: number
   stocksValue: number
   profitLoss: number
@@ -26,6 +34,7 @@ type TradingCoreState = {
   error: string | null
   ensureLoaded: () => Promise<void>
   refreshPortfolio: (source?: PortfolioUpdateSource) => Promise<void>
+  setPaperVirtualProfileSlug: (slug: string) => void
   reset: () => void
 }
 
@@ -71,7 +80,7 @@ const mapPortfolioMetrics = (portfolio: Record<string, unknown>) => {
   return { totalBalance, stocksValue, profitLoss }
 }
 
-const buildVirtualPortfolio = (initialCapital: number) => ({
+const buildVirtualPortfolio = (initialCapital: number): Record<string, unknown> => ({
   cash: initialCapital,
   positions: {},
   totalValue: initialCapital,
@@ -80,7 +89,8 @@ const buildVirtualPortfolio = (initialCapital: number) => ({
   isVirtual: true,
 })
 
-const fetchVirtualPortfolio = async () => {
+/** Fallback, если `GET /portfolio/virtual` недоступен (сеть / БД). */
+const virtualPortfolioFromSettings = async (): Promise<Record<string, unknown>> => {
   const response = await SettingsService.getSettingsApiV1SettingsGet({ limit: 500 })
   const items = Array.isArray(response.data?.items) ? response.data.items : []
   const initialCapitalItem = items.find(item => item?.key === 'portfolio.virtual.initial_capital')
@@ -88,11 +98,30 @@ const fetchVirtualPortfolio = async () => {
   return buildVirtualPortfolio(initialCapital)
 }
 
+const fetchVirtualPortfolio = async (
+  profileSlug: PaperVirtualProfileSlug,
+): Promise<Record<string, unknown>> => {
+  try {
+    const res = await PortfolioService.getVirtualPortfolioApiV1PortfolioVirtualGet({
+      profile: profileSlug,
+      includeTrades: false,
+    })
+    const data = res.data
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      return data as Record<string, unknown>
+    }
+  } catch {
+    /* fallback ниже */
+  }
+  return virtualPortfolioFromSettings()
+}
+
 export const useTradingCoreStore = create<TradingCoreState>((set, get) => ({
   profile: null,
   tradingMode: null,
   portfolio: null,
   portfolioKind: null,
+  paperVirtualProfileSlug: readStoredPaperVirtualProfileSlug(),
   totalBalance: 0,
   stocksValue: 0,
   profitLoss: 0,
@@ -121,9 +150,10 @@ export const useTradingCoreStore = create<TradingCoreState>((set, get) => ({
         await TradingModeService.tradingModeCurrentApiV1TradingModeCurrentGet()
       const tradingMode = tradingModeResponse.data ?? null
       const mode = getTradingMode(tradingMode)
+      const slug = get().paperVirtualProfileSlug
       const portfolioData =
         mode === 'paper'
-          ? await fetchVirtualPortfolio()
+          ? await fetchVirtualPortfolio(slug)
           : ((await PortfolioService.getPortfolioApiV1PortfolioGet1()).data ?? null)
 
       set({
@@ -150,9 +180,10 @@ export const useTradingCoreStore = create<TradingCoreState>((set, get) => ({
 
   refreshPortfolio: async (source = 'api') => {
     const mode = getTradingMode(get().tradingMode)
+    const slug = get().paperVirtualProfileSlug
     const portfolio =
       mode === 'paper'
-        ? await fetchVirtualPortfolio()
+        ? await fetchVirtualPortfolio(slug)
         : ((await PortfolioService.getPortfolioApiV1PortfolioGet1()).data ?? null)
     set({
       portfolio,
@@ -163,12 +194,24 @@ export const useTradingCoreStore = create<TradingCoreState>((set, get) => ({
     })
   },
 
+  setPaperVirtualProfileSlug: (slug: string) => {
+    const normalized = normalizePaperVirtualProfileSlug(slug)
+    const prev = get().paperVirtualProfileSlug
+    if (normalized === prev) return
+    persistPaperVirtualProfileSlug(normalized)
+    set({ paperVirtualProfileSlug: normalized })
+    if (getTradingMode(get().tradingMode) === 'paper') {
+      void get().refreshPortfolio('api')
+    }
+  },
+
   reset: () => {
     set({
       profile: null,
       tradingMode: null,
       portfolio: null,
       portfolioKind: null,
+      paperVirtualProfileSlug: readStoredPaperVirtualProfileSlug(),
       totalBalance: 0,
       stocksValue: 0,
       profitLoss: 0,

@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from app.services.tinkoff_client import (
+    GET_LAST_PRICES_MAX_INSTRUMENTS,
     TinkoffApiClient,
     TinkoffApiError,
     price_units_nano_to_float,
@@ -64,6 +65,32 @@ class TestTinkoffApiClientRequest:
         out = client.get_last_prices([])
         assert out == {"lastPrices": []}
         mock_client_class.assert_not_called()
+
+    @patch("app.services.tinkoff_client.httpx.Client")
+    def test_get_last_prices_merges_chunks(self, mock_client_class):
+        figis = [f"F{i}" for i in range(GET_LAST_PRICES_MAX_INSTRUMENTS + 3)]
+
+        def post_side_effect(*_a, **kwargs):
+            body = kwargs.get("json") or {}
+            chunk = body.get("figi") or []
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.is_success = True
+            mock_response.json.return_value = {
+                "lastPrices": [{"figi": f, "price": {"units": "1", "nano": 0}} for f in chunk]
+            }
+            return mock_response
+
+        mock_client = MagicMock()
+        mock_client.post.side_effect = post_side_effect
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        client = TinkoffApiClient("https://api.test", "token", "acc")
+        out = client.get_last_prices(figis)
+        assert len(out["lastPrices"]) == len(figis)
+        assert mock_client.post.call_count == 2
 
     @patch("app.services.tinkoff_client.httpx.Client")
     def test_get_portfolio_no_account(self, mock_client_class):

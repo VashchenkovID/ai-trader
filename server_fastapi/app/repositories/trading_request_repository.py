@@ -59,6 +59,7 @@ class TradingRequestRepository:
         confidence: Decimal | None = None,
         score: Decimal | None = None,
         expires_at: datetime | None = None,
+        virtual_profile_slug: str | None = None,
     ) -> TradingRequest:
         req = TradingRequest(
             status="PENDING",
@@ -73,6 +74,7 @@ class TradingRequestRepository:
             confidence=confidence,
             score=score,
             expires_at=expires_at,
+            virtual_profile_slug=virtual_profile_slug,
         )
         db_session.add(req)
         await db_session.flush()
@@ -121,14 +123,46 @@ class TradingRequestRepository:
         return int(value or 0)
 
     async def count_active_by_figi(self, db_session: AsyncSession, *, figi: str) -> int:
-        """Количество активных заявок по FIGI (PENDING или APPROVED)."""
+        """Количество активных заявок по FIGI (ожидают решения или исполнения)."""
         value = await db_session.scalar(
             select(func.count(TradingRequest.id)).where(
                 TradingRequest.figi == figi,
-                TradingRequest.status.in_(("PENDING", "APPROVED")),
+                TradingRequest.status.in_(("PENDING", "APPROVED", "PENDING_MANUAL_REAL")),
             )
         )
         return int(value or 0)
+
+    async def count_active_by_figi_and_profile(
+        self,
+        db_session: AsyncSession,
+        *,
+        figi: str,
+        virtual_profile_slug: str,
+    ) -> int:
+        """Активные заявки по паре FIGI + виртуальный профиль (§13 multi-slug)."""
+        value = await db_session.scalar(
+            select(func.count(TradingRequest.id)).where(
+                TradingRequest.figi == figi,
+                TradingRequest.virtual_profile_slug == virtual_profile_slug,
+                TradingRequest.status.in_(("PENDING", "APPROVED", "PENDING_MANUAL_REAL")),
+            )
+        )
+        return int(value or 0)
+
+    async def sum_reserved_buy_budget_real_accounts(self, db_session: AsyncSession) -> Decimal:
+        """
+        Сумма budget по BUY-заявкам real/micro в статусах, где сделка ещё не исполнена в приложении,
+        но средства считаются зарезервированными под исполнение.
+        """
+        stmt = select(func.coalesce(func.sum(TradingRequest.budget), 0)).where(
+            TradingRequest.status.in_(("APPROVED", "PENDING_MANUAL_REAL")),
+            func.upper(TradingRequest.action) == "BUY",
+            func.lower(TradingRequest.mode).in_(("real", "micro")),
+        )
+        raw = await db_session.scalar(stmt)
+        if raw is None:
+            return Decimal("0")
+        return Decimal(str(raw))
 
     async def delete_not_pending(
         self,
@@ -136,8 +170,10 @@ class TradingRequestRepository:
         *,
         mode: str | None = None,
     ) -> int:
-        """Удаляет все заявки, кроме PENDING. Возвращает количество удаленных строк."""
-        stmt = delete(TradingRequest).where(TradingRequest.status != "PENDING")
+        """Удаляет завершённые заявки; сохраняет PENDING и PENDING_MANUAL_REAL."""
+        stmt = delete(TradingRequest).where(
+            TradingRequest.status.notin(("PENDING", "PENDING_MANUAL_REAL"))
+        )
         if mode:
             stmt = stmt.where(TradingRequest.mode == mode)
         res = await db_session.execute(stmt)

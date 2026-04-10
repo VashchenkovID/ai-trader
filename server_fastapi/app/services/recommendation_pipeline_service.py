@@ -8,11 +8,13 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.virtual_profiles import VIRTUAL_PROFILE_SLUGS, normalize_virtual_profile
 from app.core.errors import AppError
 from app.db.models import Recommendation
 from app.repositories.market_repository import MarketRepository
 from app.repositories.trading_request_repository import TradingRequestRepository
 from app.services.auto_paper_service import AutoPaperService
+from app.services.portfolio_profile_config_service import PortfolioProfileConfigService
 from app.services.trading_request_service import TradingRequestService
 
 logger = logging.getLogger(__name__)
@@ -67,6 +69,90 @@ def _resolve_pipeline_thresholds(
     return mc, ms
 
 
+def _paper_profile_gate_min_thresholds(
+    profile_cfg: PortfolioProfileConfigService,
+) -> tuple[Decimal, Decimal]:
+    """
+    Минимальные signal_min_confidence / signal_min_score среди всех виртуальных профилей.
+    Общий гейт pipeline не должен быть жёстче самого мягкого профиля — иначе заявки
+    для aggressive/experimental никогда не создадутся, пока не пройдёт moderate.
+    """
+    gate_conf = Decimal("1")
+    gate_scr = Decimal("1")
+    for slug in VIRTUAL_PROFILE_SLUGS:
+        mod = profile_cfg.get_config(slug)
+        c = Decimal(str(mod.signal_min_confidence))
+        s = Decimal(str(mod.signal_min_score))
+        gate_conf = min(gate_conf, c)
+        gate_scr = min(gate_scr, s)
+    return gate_conf, gate_scr
+
+
+def _format_threshold_skip_detail(
+    confidence: Decimal,
+    score: Decimal,
+    min_conf: Decimal,
+    min_scr: Decimal,
+    *,
+    effective_action: str,
+    mode: str,
+    paper_multi_profile: bool,
+    profile_gate_active: bool,
+) -> str:
+    """Человекочитаемое пояснение для skipped.reason=threshold (логи / UI анализа)."""
+    c_ok = confidence >= min_conf
+    s_ok = score >= min_scr
+    problems: list[str] = []
+    if not c_ok:
+        problems.append(
+            f"уверенность {confidence:.4f} < требуемой {min_conf:.4f} "
+            f"(не хватает {min_conf - confidence:.4f})"
+        )
+    if not s_ok:
+        problems.append(
+            f"score {score:.4f} < требуемого {min_scr:.4f} "
+            f"(не хватает {min_scr - score:.4f})"
+        )
+    lead = "Порог pipeline: " + ("; ".join(problems) if problems else "условия не выполнены")
+
+    hints: list[str] = []
+    if mode == "paper" and profile_gate_active:
+        if paper_multi_profile:
+            hints.append(
+                "Пороги = max(аргументы run или PAPER_PIPELINE_MIN_* из env, "
+                "минимальные signal_min_confidence / signal_min_score среди всех виртуальных профилей) "
+                "— как у общего гейта перед созданием заявок."
+            )
+        else:
+            hints.append(
+                "Пороги = max(аргументы run или PAPER_PIPELINE_MIN_* из env, "
+                "signal_min_* виртуального профиля по умолчанию, обычно moderate)."
+            )
+    elif mode == "paper":
+        hints.append(
+            "Пороги = аргументы run или PAPER_PIPELINE_MIN_CONFIDENCE / PAPER_PIPELINE_MIN_SCORE из настроек."
+        )
+    else:
+        hints.append("Пороги = аргументы run или встроенные дефолты pipeline для данного режима.")
+
+    if confidence == 0 and score == 0:
+        hints.append(
+            "Нули: часто пустые или непроставленные paper_confidence/paper_score при "
+            "PAPER_SOFT_USE_DB_COLUMNS и заданном paper_recommendation, либо нет основного сигнала в БД."
+        )
+    elif effective_action == "SELL" and not s_ok and score > 0:
+        hints.append(
+            "При SELL итоговый score обычно низкий (шкала «доля long» в fusion), "
+            "но проверяется один общий min score — как при BUY/HOLD."
+        )
+
+    tail = " ".join(hints)
+    return (
+        f"{lead}. Сводка: эффективный мин. уверенность = {min_conf:.4f}, "
+        f"мин. score = {min_scr:.4f}; сигнал для проверки: {effective_action}. {tail}"
+    )
+
+
 def _effective_trade_signal(
     rec: Recommendation,
     *,
@@ -109,11 +195,13 @@ class RecommendationPipelineService:
         market_repo: MarketRepository,
         trading_repo: TradingRequestRepository,
         auto_paper_service: AutoPaperService | None = None,
+        portfolio_profile_config_service: PortfolioProfileConfigService | None = None,
     ) -> None:
         self._trading = trading_service
         self._market = market_repo
         self._trading_repo = trading_repo
         self._auto_paper = auto_paper_service
+        self._profile_cfg = portfolio_profile_config_service
 
     async def _maybe_auto_execute_paper(
         self,
@@ -164,11 +252,29 @@ class RecommendationPipelineService:
         Обрабатывает рекомендации: проверяет пороги, дедупликацию, создает заявки.
         Возвращает сводку: created, skipped (с причинами).
         """
+        settings_for_gate = get_settings()
+        paper_multi_profile = (
+            mode == "paper" and settings_for_gate.paper_pipeline_multi_profile
+        )
+
         min_conf, min_scr = _resolve_pipeline_thresholds(
             mode=mode,
             min_confidence=min_confidence,
             min_score=min_score,
         )
+        if mode == "paper" and self._profile_cfg is not None:
+            if paper_multi_profile:
+                # Внешний фильтр: хотя бы один виртуальный профиль мог бы принять сигнал.
+                gate_conf, gate_scr = _paper_profile_gate_min_thresholds(self._profile_cfg)
+            else:
+                # Одна заявка — только для DEFAULT_VIRTUAL_PROFILE; гейт = его пороги,
+                # иначе проходим по min всех, а auto_paper режет по moderate/и т.д.
+                only_slug = normalize_virtual_profile(None)
+                p0 = self._profile_cfg.get_config(only_slug)
+                gate_conf = Decimal(str(p0.signal_min_confidence))
+                gate_scr = Decimal(str(p0.signal_min_score))
+            min_conf = max(min_conf, gate_conf)
+            min_scr = max(min_scr, gate_scr)
 
         created: list[str] = []
         skipped: list[dict[str, object]] = []
@@ -200,7 +306,16 @@ class RecommendationPipelineService:
                 skipped.append({
                     "figi": figi,
                     "reason": "threshold",
-                    "detail": f"confidence={confidence}, score={score} below min",
+                    "detail": _format_threshold_skip_detail(
+                        confidence,
+                        score,
+                        min_conf,
+                        min_scr,
+                        effective_action=eff_action,
+                        mode=mode,
+                        paper_multi_profile=paper_multi_profile,
+                        profile_gate_active=mode == "paper" and self._profile_cfg is not None,
+                    ),
                 })
                 continue
 
@@ -209,31 +324,61 @@ class RecommendationPipelineService:
                 continue
 
             try:
-                active = await self._trading_repo.count_active_by_figi(db_session, figi=figi)
-                if active > 0:
-                    skipped.append({"figi": figi, "reason": "duplicate", "detail": "active request exists"})
-                    continue
+                settings = get_settings()
+                profile_slugs: list[str]
+                if mode == "paper" and settings.paper_pipeline_multi_profile:
+                    profile_slugs = [normalize_virtual_profile(s) for s in VIRTUAL_PROFILE_SLUGS]
+                else:
+                    profile_slugs = [normalize_virtual_profile(None)]
 
-                dto = await self._trading.create_from_recommendation(
-                    db_session,
-                    figi,
-                    mode=mode,
-                    action=eff_action,
-                    confidence_override=confidence,
-                    score_override=score,
-                )
-                created.append(figi)
-                ok_ae, err_ae = await self._maybe_auto_execute_paper(
-                    db_session, mode=mode, figi=figi, dto=dto
-                )
-                if ok_ae:
-                    auto_executed.append(figi)
-                elif err_ae:
-                    auto_execute_skipped.append({
+                any_created = False
+                for vslug in profile_slugs:
+                    repo = self._trading_repo
+                    if hasattr(repo, "count_active_by_figi_and_profile"):
+                        active = await repo.count_active_by_figi_and_profile(
+                            db_session, figi=figi, virtual_profile_slug=vslug
+                        )
+                    else:
+                        active = await repo.count_active_by_figi(db_session, figi=figi)
+                    if active > 0:
+                        continue
+
+                    if mode == "paper" and self._profile_cfg is not None:
+                        prof = self._profile_cfg.get_config(vslug)
+                        pc = Decimal(str(prof.signal_min_confidence))
+                        ps = Decimal(str(prof.signal_min_score))
+                        if confidence < pc or score < ps:
+                            continue
+
+                    dto = await self._trading.create_from_recommendation(
+                        db_session,
+                        figi,
+                        mode=mode,
+                        action=eff_action,
+                        confidence_override=confidence,
+                        score_override=score,
+                        virtual_profile_slug=vslug,
+                    )
+                    any_created = True
+                    created.append(f"{figi}:{vslug}" if len(profile_slugs) > 1 else figi)
+                    ok_ae, err_ae = await self._maybe_auto_execute_paper(
+                        db_session, mode=mode, figi=figi, dto=dto
+                    )
+                    if ok_ae:
+                        auto_executed.append(figi)
+                    elif err_ae:
+                        auto_execute_skipped.append({
+                            "figi": figi,
+                            "profile": vslug,
+                            "requestId": str(dto.get("id", "")),
+                            "reason": _classify_auto_execute_skip_reason(err_ae),
+                            "detail": err_ae,
+                        })
+                if not any_created:
+                    skipped.append({
                         "figi": figi,
-                        "requestId": str(dto.get("id", "")),
-                        "reason": _classify_auto_execute_skip_reason(err_ae),
-                        "detail": err_ae,
+                        "reason": "duplicate",
+                        "detail": "active request exists for all target profiles",
                     })
             except Exception as e:
                 msg = str(e)

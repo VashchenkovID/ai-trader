@@ -19,6 +19,11 @@ from app.api.v1.training import router as training_v1_router
 from app.api.v1.portfolio import router as portfolio_v1_router
 from app.api.v1.telegram import router as telegram_v1_router
 from app.api.v1.tinkoff import router as tinkoff_v1_router
+from app.api.v1.quant import router as quant_v1_router
+from app.api.v1.backtesting import router as backtesting_v1_router
+from app.api.v1.portfolio_analyzer import router as portfolio_analyzer_v1_router
+from app.api.v1.reports import router as reports_v1_router
+from app.api.v1.portfolio_migration import router as portfolio_migration_v1_router
 
 api_router = APIRouter()
 
@@ -42,6 +47,11 @@ v1_routers = [
     risk_v1_router,
     preflight_v1_router,
     training_v1_router,
+    quant_v1_router,
+    backtesting_v1_router,
+    portfolio_analyzer_v1_router,
+    reports_v1_router,
+    portfolio_migration_v1_router,
 ]
 
 for router in v1_routers:

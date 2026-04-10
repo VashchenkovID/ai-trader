@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+import httpx
 import pytest
 
 from app.services.telegram_service import TelegramConfig, TelegramService
@@ -17,5 +18,12 @@ def test_live_telegram_bot_send() -> None:
     service = TelegramService(
         TelegramConfig(token=token, default_chat_id=chat_id, enabled=True)
     )
-    out = service.send_message("ai-trader-fastapi live telegram test")
+    try:
+        out = service.send_message("ai-trader-fastapi live telegram test")
+    except httpx.ConnectTimeout as exc:
+        pytest.skip(
+            "api.telegram.org unreachable (ConnectTimeout). "
+            "Valid TELEGRAM_BOT_TOKEN does not help if the network blocks or cannot reach Telegram API."
+            f" Details: {exc}"
+        )
     assert out["ok"] is True

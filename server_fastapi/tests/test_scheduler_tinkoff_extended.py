@@ -374,6 +374,7 @@ async def test_analysis_market_portfolio_job_nn_only_fallback(monkeypatch: pytes
         ),
     )
     monkeypatch.setattr(scheduler, "_latest_checkpoint_path", lambda _p: "models/python_nn/test.ckpt")
+    monkeypatch.setattr(scheduler, "_is_canary_enabled_for_figi", lambda _figi, _p: True)
 
     out = await scheduler._analysis_market_portfolio_job()
     assert out["message"] == "analysis completed"
@@ -672,7 +673,7 @@ async def test_last_prices_job_records_degraded_runtime_error(monkeypatch: pytes
             self.calls.append(kwargs)
 
     class _MarketRepo:
-        async def list_figi(self, _session, limit: int = 500):
+        async def list_figi(self, _session, limit: int | None = None):
             return ["FIGI1"]
 
         async def update_last_price(self, _session, *, figi: str, last_price: float):

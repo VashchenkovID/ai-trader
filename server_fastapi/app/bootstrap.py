@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 
 from alembic import command
@@ -10,8 +11,15 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.models import AppSetting
 from app.db.session import SessionLocal, engine
-from app.services.app_settings_persistence import hydrate_settings_service_from_db
+from app.core.config import get_settings
+from app.services.app_settings_persistence import (
+    hydrate_settings_service_from_db,
+    parse_stored_value,
+    upsert_app_setting,
+)
 from app.services.container import AppContainer
+
+logger = logging.getLogger(__name__)
 
 _bootstrap_lock = asyncio.Lock()
 _bootstrap_done = False
@@ -76,6 +84,14 @@ def _seed_setting_defaults() -> list[tuple[str, str, str, str]]:
         ("analysis_v2_conf_temp_nn_only", "1.0", "analysis", "Temperature scaling nn_only"),
         ("analysis_v2_conf_temp_llm_only", "1.0", "analysis", "Temperature scaling llm_only"),
         ("analysis_v2_conf_temp_nn_llm", "1.0", "analysis", "Temperature scaling nn_llm"),
+        (
+            "portfolio.profiles",
+            "{}",
+            "portfolio",
+            "JSON словаря slug → {signal_min_score, signal_min_confidence, max_position_fraction, ...}",
+        ),
+        ("risk.pypfopt_enabled", "false", "risk", "Включить cap позиции из max-Sharpe (PyPortfolioOpt)"),
+        ("risk.pypfopt_universe", "[]", "risk", "JSON-массив FIGI для оптимизатора (≥2 вместе с заявкой)"),
     ]
 
 
@@ -120,6 +136,43 @@ async def seed_admin_user(container: AppContainer) -> None:
         await container.auth_service.ensure_admin_user(session)
 
 
+async def maybe_apply_portfolio_profiles_yaml(container: AppContainer) -> None:
+    """Опционально подмешивает `configs/portfolios*.yml` в `portfolio.profiles` (YAML перекрывает БД по ключам)."""
+    path_str = (get_settings().portfolio_profiles_yaml_path or "").strip()
+    if not path_str:
+        return
+    path = Path(path_str)
+    if not path.is_file():
+        logger.info("portfolio_profiles_yaml_path set but file missing: %s", path)
+        return
+    try:
+        import yaml
+    except ImportError:
+        logger.warning("PyYAML not installed; skip portfolio YAML merge")
+        return
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    profiles = (raw or {}).get("profiles") if isinstance(raw, dict) else None
+    if not isinstance(profiles, dict):
+        return
+    async with SessionLocal() as session:
+        row = await session.get(AppSetting, "portfolio.profiles")
+        current: dict = {}
+        if row and row.value:
+            parsed = parse_stored_value(str(row.value))
+            if isinstance(parsed, dict):
+                current = parsed
+        merged = dict(current)
+        for slug, patch in profiles.items():
+            if not isinstance(patch, dict):
+                continue
+            prev = merged.get(slug) if isinstance(merged.get(slug), dict) else {}
+            merged[slug] = {**prev, **patch}
+        await upsert_app_setting(session, "portfolio.profiles", merged)
+        await session.commit()
+    async with SessionLocal() as session:
+        await hydrate_settings_service_from_db(session, container.settings_service)
+
+
 async def ensure_bootstrap(container: AppContainer) -> None:
     global _bootstrap_done
     async with _bootstrap_lock:
@@ -131,6 +184,7 @@ async def ensure_bootstrap(container: AppContainer) -> None:
         await seed_app_settings()
         async with SessionLocal() as session:
             await hydrate_settings_service_from_db(session, container.settings_service)
+        await maybe_apply_portfolio_profiles_yaml(container)
         await ensure_virtual_portfolio(container)
         await seed_admin_user(container)
         _bootstrap_done = True

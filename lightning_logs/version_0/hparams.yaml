@@ -1,7 +1,0 @@
-dropout: 0.1
-hidden_size: 32
-input_size: 4
-lr: 0.001
-n_forecast: 5
-num_layers: 1
-seq_len: 30

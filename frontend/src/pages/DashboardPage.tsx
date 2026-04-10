@@ -1,243 +1,243 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { MarketService } from '@/api/generated/services/MarketService'
-import { MonitoringService } from '@/api/generated/services/MonitoringService'
-import { RiskService } from '@/api/generated/services/RiskService'
-import { Button, PageLayout, Sidebar, SurfaceCard, Text } from '@/components/ui'
-import { APP_SIDEBAR_ITEMS, getActiveSidebarItemId, navigateFromSidebar } from '@/navigation/appSidebar'
-import { DashboardHero } from '@/pages/DashboardPage/components/DashboardHero'
-import { DashboardKpiRow } from '@/pages/DashboardPage/components/DashboardKpiRow'
-import { DashboardRiskAlerts } from '@/pages/DashboardPage/components/DashboardRiskAlerts'
-import { DashboardSystemStatus } from '@/pages/DashboardPage/components/DashboardSystemStatus'
-import { DashboardTasksPanel } from '@/pages/DashboardPage/components/DashboardTasksPanel'
-import { DashboardTopRecommendations } from '@/pages/DashboardPage/components/DashboardTopRecommendations'
-import { useSystemStatusStore } from '@/store/systemStatusStore'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  FormControl,
+  Grid,
+  InputLabel,
+  LinearProgress,
+  Link as MuiLink,
+  MenuItem,
+  Select,
+  Snackbar,
+  Stack,
+  Typography,
+} from '@mui/material'
+import { useCallback, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { SystemService } from '@/api/generated'
+import { DashboardOperationsCard } from '@/components/dashboard/DashboardOperationsCard'
+import { DashboardTaskList } from '@/components/dashboard/DashboardTaskList'
+import { HighlightCard } from '@/components/ui/HighlightCard'
+import { PAPER_VIRTUAL_PROFILE_SLUGS } from '@/store/paperVirtualProfile'
+import { applyTasksPrunedFromServer, useSystemStatusStore } from '@/store/systemStatusStore'
 import { useTradingCoreStore } from '@/store/tradingCoreStore'
-import type { DashboardRecommendation, DashboardTask } from './DashboardPage/types'
-import './DashboardPage.scss'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
+import { unwrapEnvelopeData } from '@/utils/unwrapEnvelope'
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
-}
-
-function asNumber(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string') {
-    const parsed = Number(value)
-    if (Number.isFinite(parsed)) return parsed
-  }
-  return null
+function formatMoney(value: number) {
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    maximumFractionDigits: 0,
+  }).format(value)
 }
 
 export function DashboardPage() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [isLoading, setIsLoading] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [recommendations, setRecommendations] = useState<DashboardRecommendation[]>([])
-  const [recommendationsTotal, setRecommendationsTotal] = useState<number>(0)
-  const [alertsTotal, setAlertsTotal] = useState<number>(0)
-  const [riskEmergencyStop, setRiskEmergencyStop] = useState<boolean | null>(null)
-  const [riskMaxPositionSize, setRiskMaxPositionSize] = useState<number | null>(null)
-  const [isRefreshBusy, setIsRefreshBusy] = useState(false)
-  const connectionStatus = useSystemStatusStore(state => state.connectionStatus)
-  const lastEventAt = useSystemStatusStore(state => state.lastEventAt)
-  const tasks = useSystemStatusStore(state => state.tasks)
-  const scheduler = useSystemStatusStore(state => state.scheduler)
-  const profile = useTradingCoreStore(state => state.profile)
-  const tradingMode = useTradingCoreStore(state => state.tradingMode)
-  const portfolioKind = useTradingCoreStore(state => state.portfolioKind)
-  const totalBalance = useTradingCoreStore(state => state.totalBalance)
-  const profitLoss = useTradingCoreStore(state => state.profitLoss)
-  const lastPortfolioUpdatedAt = useTradingCoreStore(state => state.lastPortfolioUpdatedAt)
-  const refreshPortfolio = useTradingCoreStore(state => state.refreshPortfolio)
-  const isCoreLoading = useTradingCoreStore(state => state.isLoading)
-  const coreError = useTradingCoreStore(state => state.error)
-  const taskActiveCount = useMemo(
-    () => tasks.filter(t => t.status === 'queued' || t.status === 'running').length,
-    [tasks]
+  const {
+    tradingMode,
+    portfolioKind,
+    paperVirtualProfileSlug,
+    setPaperVirtualProfileSlug,
+    totalBalance,
+    stocksValue,
+    profitLoss,
+    isLoaded,
+    isLoading,
+    error,
+  } = useTradingCoreStore()
+
+  const { connectionStatus, snapshot, tasks } = useSystemStatusStore()
+  const modeLabel = String(tradingMode?.mode ?? '—').toUpperCase()
+
+  const recentTasks = tasks.slice(0, 10)
+
+  const [pruneBusy, setPruneBusy] = useState(false)
+  const [pruneSnack, setPruneSnack] = useState<{ message: string; severity: 'success' | 'error' } | null>(
+    null,
   )
-  const taskFailedCount = useMemo(() => tasks.filter(t => t.status === 'failed').length, [tasks])
-  const schedulerCount = Object.keys(scheduler).length
-  const modeText = String(tradingMode?.mode ?? 'paper').toLowerCase()
-  const topTasks: DashboardTask[] = tasks.slice(0, 5).map(task => ({
-    taskId: task.taskId,
-    taskType: task.taskType,
-    status: task.status,
-  }))
 
-  const activeSidebarItemId = getActiveSidebarItemId(location.pathname)
-
-  const loadDashboard = async () => {
-    setIsLoading(true)
-    setLoadError(null)
+  const pruneCompletedTasks = useCallback(async () => {
+    setPruneBusy(true)
     try {
-      const [recRes, alertsRes, riskRes] = await Promise.all([
-        MarketService.marketRecommendationsApiV1MarketRecommendationsGet({ offset: 0, limit: 5 }),
-        MonitoringService.monitoringAlertsApiV1MonitoringAlertsGet({ resolved: false, limit: 50 }),
-        RiskService.riskStatusApiV1RiskStatusGet(),
-      ])
-
-      const recData = asRecord(recRes.data)
-      const recItems = Array.isArray(recData.items) ? recData.items : []
-      const recMapped = recItems.map((item, index) => {
-        const rec = asRecord(item)
-        return {
-          id: String(rec.id ?? rec.figi ?? `rec-${index}`),
-          figi: String(rec.figi ?? ''),
-          ticker: String(rec.ticker ?? '—'),
-          name: String(rec.name ?? 'Без названия'),
-          recommendation: String(rec.recommendation ?? 'UNKNOWN'),
-          confidence: asNumber(rec.confidence),
-          score: asNumber(rec.score),
-          paperRecommendation:
-            (rec.paperRecommendation as string | undefined) ??
-            (rec.paper_recommendation as string | undefined) ??
-            null,
-          paperConfidence: asNumber(rec.paperConfidence) ?? asNumber(rec.paper_confidence),
-          paperScore: asNumber(rec.paperScore) ?? asNumber(rec.paper_score),
-        }
-      })
-      const recMeta = asRecord(recData.meta)
-
-      const alertsData = asRecord(alertsRes.data)
-      const alertsItems = Array.isArray(alertsData.items) ? alertsData.items : []
-
-      const riskData = asRecord(riskRes.data)
-      const riskLimits = asRecord(riskData.limits)
-
-      setRecommendations(recMapped)
-      setRecommendationsTotal(asNumber(recMeta.total) ?? recMapped.length)
-      setAlertsTotal(alertsItems.length)
-      setRiskEmergencyStop(Boolean(riskData.emergencyStop))
-      setRiskMaxPositionSize(asNumber(riskLimits.maxPositionSize))
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось загрузить данные главной страницы'
-      setLoadError(message)
+      const raw = await SystemService.systemTasksPruneCompletedApiV1SystemTasksPruneCompletedPost()
+      const inner =
+        unwrapEnvelopeData<Record<string, unknown>>(raw) ?? (raw as Record<string, unknown>)
+      applyTasksPrunedFromServer(inner)
+      const removed = inner.removedCount != null ? String(inner.removedCount) : '0'
+      setPruneSnack({ message: `Удалено завершённых записей: ${removed}`, severity: 'success' })
+    } catch (e) {
+      setPruneSnack({ message: apiErrorMessage(e), severity: 'error' })
     } finally {
-      setIsLoading(false)
+      setPruneBusy(false)
     }
-  }
-
-  useEffect(() => {
-    void loadDashboard()
   }, [])
 
-  const handleRefreshAll = async () => {
-    if (isRefreshBusy) return
-    setIsRefreshBusy(true)
-    setLoadError(null)
-    try {
-      await MarketService.marketRefreshApiV1MarketRefreshPost()
-      await refreshPortfolio('api')
-      await loadDashboard()
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Не удалось обновить данные. Повторите позже.'
-      setLoadError(message)
-    } finally {
-      setIsRefreshBusy(false)
-    }
-  }
-
-  const handleSidebarSelect = (itemId: string) => {
-    navigateFromSidebar(navigate, itemId)
-  }
-
   return (
-    <PageLayout
-      className="dashboard-page"
-      header={<DashboardHero />}
-      sidebar={
-        <Sidebar
-          title="Навигация"
-          items={APP_SIDEBAR_ITEMS}
-          activeItemId={activeSidebarItemId}
-          onSelect={handleSidebarSelect}
-        />
-      }
-    >
-      <div className="dashboard-page__quick-links">
-        <Button variant="secondary" onClick={() => navigate('/portfolio')}>
-          Портфель
-        </Button>
-        <Button variant="secondary" onClick={() => navigate('/monitoring/alerts')}>
-          Алерты
-        </Button>
-        <Button variant="secondary" onClick={() => navigate('/trading-requests')}>
-          Заявки
-        </Button>
-        <Button variant="secondary" onClick={() => navigate('/auto-paper')}>
+    <Stack spacing={3}>
+      <Box>
+        <Typography variant="h5" gutterBottom>
+          Сводка
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Режим торговли, оценка капитала и фоновые процессы.
+        </Typography>
+      </Box>
+
+      {error ? <Alert severity="error">{error}</Alert> : null}
+
+      {isLoading && !isLoaded ? <LinearProgress /> : null}
+
+      <DashboardOperationsCard />
+
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card variant="outlined">
+            <CardContent>
+              <Typography variant="caption" color="text.secondary">
+                Режим
+              </Typography>
+              <Typography variant="h6">{modeLabel}</Typography>
+              <Chip
+                size="small"
+                label={portfolioKind === 'virtual' ? 'Виртуальный снимок' : 'Брокер'}
+                sx={{ mt: 1 }}
+              />
+              {portfolioKind === 'virtual' ? (
+                <FormControl size="small" fullWidth sx={{ mt: 2 }}>
+                  <InputLabel id="dash-paper-profile-label">Профиль paper</InputLabel>
+                  <Select
+                    labelId="dash-paper-profile-label"
+                    label="Профиль paper"
+                    value={paperVirtualProfileSlug}
+                    onChange={e => setPaperVirtualProfileSlug(String(e.target.value))}
+                  >
+                    {PAPER_VIRTUAL_PROFILE_SLUGS.map(slug => (
+                      <MenuItem key={slug} value={slug}>
+                        {slug}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              ) : null}
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <HighlightCard>
+            <CardContent>
+              <Typography variant="caption" color="text.secondary">
+                Оценка / баланс
+              </Typography>
+              <Typography variant="h6">{formatMoney(totalBalance)}</Typography>
+            </CardContent>
+          </HighlightCard>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card variant="outlined">
+            <CardContent>
+              <Typography variant="caption" color="text.secondary">
+                Акции (оценка)
+              </Typography>
+              <Typography variant="h6">{formatMoney(stocksValue)}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card variant="outlined">
+            <CardContent>
+              <Typography variant="caption" color="text.secondary">
+                P&amp;L (оценка)
+              </Typography>
+              <Typography variant="h6" color={profitLoss >= 0 ? 'success.main' : 'error.main'}>
+                {formatMoney(profitLoss)}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Card variant="outlined">
+        <CardContent>
+          <Typography variant="subtitle1" gutterBottom>
+            Система
+          </Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            WebSocket: {connectionStatus}
+            {snapshot?.system?.timestamp
+              ? ` · снимок ${new Date(snapshot.system.timestamp).toLocaleString('ru-RU')}`
+              : null}
+          </Typography>
+          {snapshot?.system ? (
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              CPU {snapshot.system.cpuPercent}% · RAM {snapshot.system.ramPercent}%
+            </Typography>
+          ) : null}
+          {snapshot?.workers ? (
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              Задачи в памяти: выполняется {snapshot.workers.running}, ошибок {snapshot.workers.failed},
+              завершено {snapshot.workers.completed}
+            </Typography>
+          ) : null}
+          <Box sx={{ mb: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={pruneBusy}
+              onClick={() => void pruneCompletedTasks()}
+            >
+              {pruneBusy ? 'Очистка…' : 'Убрать завершённые из списка'}
+            </Button>
+          </Box>
+          <DashboardTaskList tasks={recentTasks} />
+        </CardContent>
+      </Card>
+
+      <Snackbar
+        open={pruneSnack != null}
+        autoHideDuration={4000}
+        onClose={() => setPruneSnack(null)}
+        message={pruneSnack?.message}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
+
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        <Button
+          component={Link}
+          to="/virtual-trading"
+          variant="outlined"
+          endIcon={<OpenInNewIcon />}
+        >
           Автоторговля
         </Button>
-        <Button variant="secondary" onClick={() => navigate('/performance')}>
-          Производительность
+        <Button
+          component={Link}
+          to="/trading-requests"
+          variant="outlined"
+          endIcon={<OpenInNewIcon />}
+        >
+          Заявки
         </Button>
-      </div>
-      <DashboardKpiRow
-        totalBalance={totalBalance}
-        profitLoss={profitLoss}
-        taskActiveCount={taskActiveCount}
-        alertsTotal={alertsTotal}
-      />
-      <div className="dashboard-page__main-grid">
-        <div className="dashboard-page__slot dashboard-page__slot--system">
-          <DashboardSystemStatus
-            username={profile?.username ?? null}
-            modeText={modeText}
-            portfolioKind={portfolioKind}
-            connectionStatus={connectionStatus}
-            taskFailedCount={taskFailedCount}
-            schedulerCount={schedulerCount}
-            lastEventAt={lastEventAt}
-            lastPortfolioUpdatedAt={lastPortfolioUpdatedAt}
-            isRefreshBusy={isRefreshBusy}
-            onRefresh={() => void handleRefreshAll()}
-          />
-        </div>
-        <div className="dashboard-page__slot dashboard-page__slot--risk">
-          <DashboardRiskAlerts
-            riskEmergencyStop={riskEmergencyStop}
-            riskMaxPositionSize={riskMaxPositionSize}
-            alertsTotal={alertsTotal}
-          />
-        </div>
-        <div className="dashboard-page__slot dashboard-page__slot--recommendations">
-          <DashboardTopRecommendations
-            recommendations={recommendations}
-            recommendationsTotal={recommendationsTotal}
-            isLoading={isLoading}
-            onOpenAll={() => navigate('/recommendations')}
-            onOpenOne={figi => navigate(`/recommendations/${encodeURIComponent(figi)}`)}
-          />
-        </div>
-        <div className="dashboard-page__slot dashboard-page__slot--tasks">
-          <DashboardTasksPanel tasks={topTasks} />
-        </div>
-      </div>
+        <Button component={Link} to="/portfolio" variant="outlined" endIcon={<OpenInNewIcon />}>
+          Портфель
+        </Button>
+      </Box>
 
-      {(isLoading || isCoreLoading) && (
-        <SurfaceCard>
-          <Text as="p" variant="body" tone="muted">
-            Загрузка данных дашборда...
-          </Text>
-        </SurfaceCard>
-      )}
-
-      {(loadError || coreError) && (
-        <SurfaceCard>
-          {loadError && (
-            <Text as="p" variant="body" tone="danger">
-              Ошибка загрузки dashboard API: {loadError}
-            </Text>
-          )}
-          {coreError && (
-            <Text as="p" variant="body" tone="danger">
-              Ошибка core данных: {coreError}
-            </Text>
-          )}
-        </SurfaceCard>
-      )}
-    </PageLayout>
+      <Typography variant="caption" color="text.secondary">
+        В режиме paper снимок идёт из{' '}
+        <MuiLink component={Link} to="/virtual-portfolios" underline="hover">
+          виртуальных портфелей
+        </MuiLink>
+        ; при сбое API — стартовый капитал в{' '}
+        <MuiLink component={Link} to="/settings" underline="hover">
+          настройках
+        </MuiLink>
+        .
+      </Typography>
+    </Stack>
   )
 }

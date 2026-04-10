@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy import select
@@ -13,12 +14,19 @@ from app.db.models import AppSetting
 def serialize_setting_value(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
     return str(value)
 
 
 def parse_stored_value(raw: str) -> Any:
     """Восстанавливает значение из строки в БД (как в seed/bootstrap)."""
     s = raw.strip()
+    if (s.startswith("{") and s.endswith("}")) or (s.startswith("[") and s.endswith("]")):
+        try:
+            return json.loads(s)
+        except json.JSONDecodeError:
+            pass
     low = s.lower()
     if low in ("true", "false"):
         return low == "true"

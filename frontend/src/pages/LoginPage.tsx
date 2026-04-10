@@ -1,110 +1,94 @@
-import { type FormEvent, useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Button, Input, SurfaceCard, Text } from '@/components/ui'
-import { loginUser, verifyStoredSession } from '@/services/auth'
-import './LoginPage.scss'
+import { Alert, Box, Button, Container, Paper, TextField, Typography } from '@mui/material'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { FormField } from '@/components/ui/FormField'
+import { loginUser } from '@/services/auth'
 
 export function LoginPage() {
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [isCheckingSession, setIsCheckingSession] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    let active = true
-
-    const checkSession = async () => {
-      setIsCheckingSession(true)
-      const session = await verifyStoredSession()
-      if (!active) return
-
-      if (session.ok) {
-        navigate('/dashboard', { replace: true })
-        return
-      }
-
-      setIsCheckingSession(false)
-    }
-
-    void checkSession()
-    return () => {
-      active = false
-    }
-  }, [navigate])
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!username.trim() || !password.trim()) {
-      setError('Укажите логин и пароль')
-      return
-    }
-
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setError(null)
-    setIsSubmitting(true)
+    setLoading(true)
     try {
       await loginUser(username.trim(), password)
       navigate('/dashboard', { replace: true })
-    } catch {
-      setError('Неверный логин или пароль')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка входа')
     } finally {
-      setIsSubmitting(false)
+      setLoading(false)
     }
   }
 
   return (
-    <main className="login-page">
-      <SurfaceCard className="login-page__card" tone="elevated">
-        <Text as="p" variant="eyebrow" tone="muted">
-          AI Trader
-        </Text>
-        <Text as="h1" variant="title">
-          Вход в систему
-        </Text>
-        <Text as="p" variant="body" tone="muted">
-          Авторизация через API с валидацией токена перед входом в dashboard.
-        </Text>
-
-        {isCheckingSession ? (
-          <Text as="p" variant="body" tone="muted">
-            Проверяем активную сессию...
-          </Text>
-        ) : (
-          <form className="login-page__form" onSubmit={handleSubmit}>
-            <Input
-              label="Логин"
-              value={username}
-              onChange={event => setUsername(event.target.value)}
-              placeholder="Введите username"
-              autoComplete="username"
-            />
-            <Input
-              label="Пароль"
-              type="password"
-              value={password}
-              onChange={event => setPassword(event.target.value)}
-              placeholder="********"
-              autoComplete="current-password"
-            />
-            {error && (
-              <Text as="p" variant="hint" tone="danger">
-                {error}
-              </Text>
-            )}
-            <Button type="submit" loading={isSubmitting} disabled={isSubmitting}>
-              Войти
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: 'background.default',
+        p: 2,
+      }}
+    >
+      <Container maxWidth="sm">
+        <Paper sx={{ p: 4 }}>
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 700 }}>
+            Вход
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            AI Trader — введите учётные данные бэкенда.
+          </Typography>
+          {error ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          ) : null}
+          <Box component="form" onSubmit={e => void handleSubmit(e)} sx={{ mt: 1 }}>
+            <FormField id="login-username" label="Имя пользователя" sx={{ mb: 2 }}>
+              <TextField
+                id="login-username"
+                name="username"
+                autoComplete="username"
+                fullWidth
+                size="small"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                required
+              />
+            </FormField>
+            <FormField id="login-password" label="Пароль" sx={{ mb: 1 }}>
+              <TextField
+                id="login-password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                fullWidth
+                size="small"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+              />
+            </FormField>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              fullWidth
+              size="large"
+              sx={{ mt: 3 }}
+              disabled={loading}
+            >
+              {loading ? 'Вход…' : 'Войти'}
             </Button>
-          </form>
-        )}
-
-        <Text as="p" variant="hint" tone="muted">
-          Временный переход в shell:{' '}
-          <Link to="/dashboard" className="login-page__link">
-            Dashboard
-          </Link>
-        </Text>
-      </SurfaceCard>
-    </main>
+          </Box>
+        </Paper>
+      </Container>
+    </Box>
   )
 }

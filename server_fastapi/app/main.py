@@ -61,7 +61,12 @@ def create_app() -> FastAPI:
     register_middlewares(app, app.state.metrics_registry)
     register_exception_handlers(app)
 
-    @app.get("/health", tags=["health"], summary="Проверка доступности сервиса")
+    @app.get(
+        "/health",
+        tags=["health"],
+        summary="Проверка доступности сервиса (корень приложения)",
+        description="Для балансировщиков и k8s probe. Версионированный аналог: GET /api/v1/health.",
+    )
     async def health() -> SuccessEnvelope[HealthDTO]:
         health_dto = HealthDTO(
             status="ok",

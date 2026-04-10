@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from app.services.tinkoff_client import TinkoffApiClient
+from app.services.tinkoff_client import GET_SIGNALS_PAGE_SIZE, TinkoffApiClient
 
 
 def test_tinkoff_surface_methods_call_expected_paths(monkeypatch) -> None:
@@ -70,7 +70,7 @@ def test_get_analyst_signals_falls_back_to_legacy_on_404(monkeypatch) -> None:
     out = client.get_analyst_signals()
     assert out == {"signals": [{"id": 1}]}
     assert calls[0][0].endswith("SignalService/GetSignals")
-    assert calls[0][1] == {"limit": 100}
+    assert calls[0][1] == {"paging": {"limit": GET_SIGNALS_PAGE_SIZE, "pageNumber": 0}}
     assert calls[1][0].endswith("AnalyticsService/GetAnalystRecommendations")
 
 

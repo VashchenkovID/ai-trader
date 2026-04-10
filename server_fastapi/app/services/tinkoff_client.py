@@ -14,6 +14,8 @@ from typing import Any
 
 import httpx
 
+from app.services import tinkoff_grpc_adapter
+
 logger = logging.getLogger(__name__)
 
 # Интервалы свечей Tinkoff API
@@ -27,6 +29,11 @@ INITIAL_DELAY = 1.0
 MAX_DELAY = 15.0
 EXPONENTIAL_BASE = 1.5
 REQUEST_DELAY = 0.5
+
+# Лимиты провайдера: большие списки режем на запросы, ответы склеиваем (все инструменты/цены).
+GET_LAST_PRICES_MAX_INSTRUMENTS = 200
+GET_SIGNALS_PAGE_SIZE = 500
+GET_SIGNALS_MAX_PAGES = 10_000
 
 
 def _to_iso8601_utc(value: str | datetime) -> str:
@@ -78,12 +85,17 @@ class TinkoffApiClient:
         token: str,
         account_id: str = "",
         verify_ssl: bool = True,
+        *,
+        use_grpc: bool = False,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.account_id = account_id or ""
         self.verify_ssl = verify_ssl
+        self.use_grpc = bool(use_grpc)
         self._last_request_time = 0.0
+        if self.use_grpc:
+            logger.info("TINKOFF_USE_GRPC=true: GetLastPrices через gRPC при доступном tinkoff-invest-python")
 
     def _delay_if_needed(self) -> None:
         elapsed = time.monotonic() - self._last_request_time
@@ -158,10 +170,12 @@ class TinkoffApiClient:
         logger.error("Tinkoff API request failed without captured error: path=%s", path)
         raise TinkoffApiError("Request failed after retries")
 
-    def get_last_prices(self, figi_list: list[str]) -> dict[str, Any]:
-        """Последние цены по списку FIGI."""
-        if not figi_list:
-            return {"lastPrices": []}
+    def _get_last_prices_single_request(self, figi_list: list[str]) -> dict[str, Any]:
+        """Один вызов GetLastPrices (не больше GET_LAST_PRICES_MAX_INSTRUMENTS элементов)."""
+        if self.use_grpc:
+            grpc_out = tinkoff_grpc_adapter.get_last_prices_grpc(self.token, figi_list)
+            if grpc_out is not None and grpc_out.get("lastPrices"):
+                return grpc_out
         try:
             return self._request(
                 "/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastPrices",
@@ -176,6 +190,34 @@ class TinkoffApiClient:
                 "_error_type": e.__class__.__name__,
                 "_operation": "get_last_prices",
             }
+
+    def get_last_prices(self, figi_list: list[str]) -> dict[str, Any]:
+        """Последние цены по списку FIGI; длинные списки батчатся, результаты объединяются."""
+        if not figi_list:
+            return {"lastPrices": []}
+        chunk = GET_LAST_PRICES_MAX_INSTRUMENTS
+        if len(figi_list) <= chunk:
+            return self._get_last_prices_single_request(figi_list)
+        merged: list[dict[str, Any]] = []
+        degraded = False
+        errors: list[str] = []
+        err_types: list[str] = []
+        for i in range(0, len(figi_list), chunk):
+            part = self._get_last_prices_single_request(figi_list[i : i + chunk])
+            merged.extend(part.get("lastPrices") or [])
+            if part.get("_degraded"):
+                degraded = True
+                if part.get("_error"):
+                    errors.append(str(part["_error"]))
+                if part.get("_error_type"):
+                    err_types.append(str(part["_error_type"]))
+        out: dict[str, Any] = {"lastPrices": merged}
+        if degraded:
+            out["_degraded"] = True
+            out["_error"] = "; ".join(errors) if errors else "get_last_prices partial failure"
+            out["_error_type"] = err_types[0] if err_types else "RuntimeError"
+            out["_operation"] = "get_last_prices"
+        return out
 
     def get_assets(self) -> dict[str, Any]:
         """
@@ -204,36 +246,86 @@ class TinkoffApiClient:
             logger.warning("get_options failed: %s", e)
             return {"instruments": []}
 
+    @staticmethod
+    def _signals_list_from_payload(payload: dict[str, Any]) -> list[Any]:
+        for key in ("signals", "recommendations", "analystRecommendations", "items"):
+            v = payload.get(key)
+            if isinstance(v, list):
+                return v
+        return []
+
+    def _collect_signals_paginated(self, path: str) -> list[dict[str, Any]] | None:
+        """
+        Все страницы GetSignals. None — сервис недоступен (404 и т.п.), вызывающий идёт в legacy.
+        """
+        page_size = GET_SIGNALS_PAGE_SIZE
+        merged: list[dict[str, Any]] = []
+        page = 0
+        used_flat_limit_fallback = False
+        while page < GET_SIGNALS_MAX_PAGES:
+            try:
+                payload = self._request(
+                    path,
+                    {"paging": {"limit": page_size, "pageNumber": page}},
+                )
+            except httpx.HTTPStatusError as e:
+                if e.response is not None and e.response.status_code == 404 and page == 0:
+                    return None
+                if (
+                    e.response is not None
+                    and e.response.status_code == 400
+                    and page == 0
+                    and not used_flat_limit_fallback
+                ):
+                    try:
+                        payload = self._request(path, {"limit": page_size})
+                        used_flat_limit_fallback = True
+                    except httpx.HTTPStatusError as e2:
+                        if e2.response is not None and e2.response.status_code == 404:
+                            return None
+                        raise
+                else:
+                    raise
+            except Exception:
+                if page == 0:
+                    raise
+                break
+            batch = self._signals_list_from_payload(payload)
+            merged.extend([x for x in batch if isinstance(x, dict)])
+            if used_flat_limit_fallback or len(batch) < page_size:
+                break
+            page += 1
+        return merged
+
     def get_analyst_signals(self) -> dict[str, Any]:
         """Сигналы аналитиков/стратегий (если доступны в API)."""
-        candidates: list[tuple[str, dict[str, Any]]] = [
-            # Каноничный путь по документации T-Bank и legacy Node-серверу.
-            ("/tinkoff.public.invest.api.contract.v1.SignalService/GetSignals", {"limit": 100}),
-            # Legacy fallback для окружений со старым контрактом.
-            ("/tinkoff.public.invest.api.contract.v1.AnalyticsService/GetAnalystRecommendations", {}),
-        ]
-        for path, body in candidates:
-            try:
-                payload = self._request(path, body)
-                signals = payload.get("signals")
-                if isinstance(signals, list):
-                    return {"signals": signals}
-                recommendations = payload.get("recommendations")
-                if isinstance(recommendations, list):
-                    return {"signals": recommendations}
-                analyst_recommendations = payload.get("analystRecommendations")
-                if isinstance(analyst_recommendations, list):
-                    return {"signals": analyst_recommendations}
-                items = payload.get("items")
-                if isinstance(items, list):
-                    return {"signals": items}
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:
-                    logger.warning("Tinkoff API 404: %s", path)
-                    continue
+        path_signals = "/tinkoff.public.invest.api.contract.v1.SignalService/GetSignals"
+        try:
+            collected = self._collect_signals_paginated(path_signals)
+        except httpx.HTTPStatusError as e:
+            logger.warning("get_analyst_signals failed via %s: %s", path_signals, e)
+            collected = None
+        except Exception as e:
+            logger.warning("get_analyst_signals failed via %s: %s", path_signals, e)
+            collected = None
+        if collected is not None:
+            return {"signals": collected}
+
+        legacy = (
+            "/tinkoff.public.invest.api.contract.v1.AnalyticsService/GetAnalystRecommendations",
+            {},
+        )
+        path, body = legacy
+        try:
+            payload = self._request(path, body)
+            batch = self._signals_list_from_payload(payload)
+            if batch:
+                return {"signals": [x for x in batch if isinstance(x, dict)]}
+        except httpx.HTTPStatusError as e:
+            if e.response is None or e.response.status_code != 404:
                 logger.warning("get_analyst_signals failed via %s: %s", path, e)
-            except Exception as e:
-                logger.warning("get_analyst_signals failed via %s: %s", path, e)
+        except Exception as e:
+            logger.warning("get_analyst_signals failed via %s: %s", path, e)
         return {"signals": []}
 
     def get_candles(
@@ -289,6 +381,17 @@ class TinkoffApiClient:
         aid = account_id or self.account_id
         if not aid:
             return self._empty_portfolio()
+        if self.use_grpc:
+            grpc_pf = tinkoff_grpc_adapter.get_portfolio_grpc(self.token, aid)
+            if grpc_pf and isinstance(grpc_pf, dict):
+                try:
+                    # Убираем служебные поля перед нормализацией
+                    raw = {k: v for k, v in grpc_pf.items() if not str(k).startswith("_")}
+                    norm = self._normalize_portfolio(raw)
+                    norm["_transport"] = "grpc"
+                    return norm
+                except Exception:
+                    logger.warning("get_portfolio: gRPC normalize fallback to REST", exc_info=True)
         try:
             data = self._request(
                 "/tinkoff.public.invest.api.contract.v1.OperationsService/GetPortfolio",
@@ -309,6 +412,16 @@ class TinkoffApiClient:
         aid = account_id or self.account_id
         if not aid:
             return {"positions": [], "money": [], "blocked": []}
+        if self.use_grpc:
+            grpc_pos = tinkoff_grpc_adapter.get_positions_grpc(self.token, aid)
+            if grpc_pos and isinstance(grpc_pos, dict):
+                try:
+                    raw = {k: v for k, v in grpc_pos.items() if not str(k).startswith("_")}
+                    norm = self._normalize_positions(raw)
+                    norm["_transport"] = "grpc"
+                    return norm
+                except Exception:
+                    logger.warning("get_positions: gRPC normalize fallback to REST", exc_info=True)
         try:
             data = self._request(
                 "/tinkoff.public.invest.api.contract.v1.OperationsService/GetPositions",

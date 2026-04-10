@@ -6,6 +6,7 @@ import type { SuccessEnvelope_dict_ } from '../models/SuccessEnvelope_dict_';
 import type { TradingRequestApproveRequest } from '../models/TradingRequestApproveRequest';
 import type { TradingRequestCreateRequest } from '../models/TradingRequestCreateRequest';
 import type { TradingRequestExecuteRequest } from '../models/TradingRequestExecuteRequest';
+import type { TradingRequestPreviewRequest } from '../models/TradingRequestPreviewRequest';
 import type { TradingRequestRejectRequest } from '../models/TradingRequestRejectRequest';
 
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -127,8 +128,30 @@ requestBody: TradingRequestCreateRequest,
     }
 
     /**
+     * Предрасчёт заявки (без записи)
+     * Возвращает количество, цену, бюджет и признак активной заявки по FIGI.
+     * @returns SuccessEnvelope_dict_ Successful Response
+     * @throws ApiError
+     */
+    public static tradingRequestPreviewApiV1TradingRequestsPreviewPost({
+requestBody,
+}: {
+requestBody: TradingRequestPreviewRequest,
+}): CancelablePromise<SuccessEnvelope_dict_> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/trading-requests/preview',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+
+    /**
      * Одобрить заявку
-     * Переводит заявку из PENDING в APPROVED.
+     * Переводит заявку из PENDING в APPROVED или PENDING_MANUAL_REAL (real + manualBrokerExecution).
      * @returns SuccessEnvelope_dict_ Successful Response
      * @throws ApiError
      */
@@ -259,6 +282,32 @@ mode?: (string | null),
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/v1/trading-requests/stats',
+            query: {
+                'mode': mode,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+
+    /**
+     * Очистить завершенные заявки
+     * Удаляет все заявки, которые не в статусе PENDING.
+     * @returns SuccessEnvelope_dict_ Successful Response
+     * @throws ApiError
+     */
+    public static tradingRequestsCleanupApiV1TradingRequestsCleanupPost({
+mode,
+}: {
+/**
+ * Фильтр по режиму (опционально)
+ */
+mode?: (string | null),
+}): CancelablePromise<SuccessEnvelope_dict_> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/trading-requests/cleanup',
             query: {
                 'mode': mode,
             },

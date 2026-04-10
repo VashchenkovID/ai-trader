@@ -8,6 +8,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.time_utils import now_msk
 from app.db.models import Candle, Instrument, Recommendation, Signal
+from training.data.llm_numeric import extract_llm_scores_from_jury_payload
+
+
+def _sync_llm_numeric_persisted(row: Recommendation) -> None:
+    p = row.llm_jury_payload
+    if not isinstance(p, dict):
+        return
+    scores = extract_llm_scores_from_jury_payload(p)
+    if "llm_consensus" in scores:
+        row.llm_consensus = Decimal(str(scores["llm_consensus"]))
+    if "llm_dispersion" in scores:
+        row.llm_dispersion = Decimal(str(scores["llm_dispersion"]))
 
 
 def sync_recommendation_paper_soft(row: Recommendation) -> None:
@@ -180,6 +192,7 @@ class MarketRepository:
                 existing.nn_checkpoint = nn_checkpoint
             if nn_payload is not None:
                 existing.nn_payload = nn_payload
+            _sync_llm_numeric_persisted(existing)
             sync_recommendation_paper_soft(existing)
             await db_session.flush()
             return existing
@@ -196,6 +209,7 @@ class MarketRepository:
             nn_payload=nn_payload,
         )
         db_session.add(row)
+        _sync_llm_numeric_persisted(row)
         sync_recommendation_paper_soft(row)
         await db_session.flush()
         return row
@@ -304,9 +318,11 @@ class MarketRepository:
         await db_session.flush()
         return inst
 
-    async def list_figi(self, db_session: AsyncSession, *, limit: int = 5000) -> list[str]:
-        """Список FIGI инструментов (для обновления цен)."""
-        stmt = select(Instrument.figi).limit(limit)
+    async def list_figi(self, db_session: AsyncSession, *, limit: int | None = None) -> list[str]:
+        """Список FIGI инструментов (для обновления цен). limit=None — все строки из instruments."""
+        stmt = select(Instrument.figi).order_by(Instrument.figi)
+        if limit is not None:
+            stmt = stmt.limit(limit)
         rows = await db_session.scalars(stmt)
         return list(rows)
 

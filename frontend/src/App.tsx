@@ -1,20 +1,51 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { Box, CircularProgress, Typography } from '@mui/material'
+import { lazy, useEffect, useState, type ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { AutoPaperPage } from '@/pages/AutoPaperPage'
-import { DashboardPage } from '@/pages/DashboardPage'
+import { AppShell } from '@/components/layout/AppShell'
+import { labRoutesEnabled } from '@/config/labRoutes'
 import { LoginPage } from '@/pages/LoginPage'
-import { MonitoringAlertsPage } from '@/pages/MonitoringAlertsPage'
-import { PerformancePage } from '@/pages/PerformancePage'
-import { PortfolioPage } from '@/pages/PortfolioPage'
-import { RecommendationDetailPage } from '@/pages/RecommendationDetailPage'
-import { RecommendationsPage } from '@/pages/RecommendationsPage'
-import { RiskPage } from '@/pages/RiskPage'
-import { SettingsPage } from '@/pages/SettingsPage'
-import { TinkoffPage } from '@/pages/TinkoffPage'
-import { TradingRequestsPage } from '@/pages/TradingRequestsPage'
-import { TrainingPipelinePage } from '@/pages/TrainingPipelinePage'
+
+const DashboardPage = lazy(() =>
+  import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })),
+)
+const VirtualTradingPage = lazy(() =>
+  import('@/pages/VirtualTradingPage').then(m => ({ default: m.VirtualTradingPage })),
+)
+const VirtualPortfoliosPage = lazy(() =>
+  import('@/pages/VirtualPortfoliosPage').then(m => ({ default: m.VirtualPortfoliosPage })),
+)
+const PortfolioPage = lazy(() =>
+  import('@/pages/PortfolioPage').then(m => ({ default: m.PortfolioPage })),
+)
+const RecommendationsPage = lazy(() =>
+  import('@/pages/RecommendationsPage').then(m => ({ default: m.RecommendationsPage })),
+)
+const RecommendationDetailPage = lazy(() =>
+  import('@/pages/RecommendationDetailPage').then(m => ({ default: m.RecommendationDetailPage })),
+)
+const TradingRequestsPage = lazy(() =>
+  import('@/pages/TradingRequestsPage').then(m => ({ default: m.TradingRequestsPage })),
+)
+const MonitoringAlertsPage = lazy(() =>
+  import('@/pages/MonitoringAlertsPage').then(m => ({ default: m.MonitoringAlertsPage })),
+)
+const RiskPage = lazy(() => import('@/pages/RiskPage').then(m => ({ default: m.RiskPage })))
+const PerformancePage = lazy(() =>
+  import('@/pages/PerformancePage').then(m => ({ default: m.PerformancePage })),
+)
+const PortfolioAnalyzerPage = lazy(() =>
+  import('@/pages/PortfolioAnalyzerPage').then(m => ({ default: m.PortfolioAnalyzerPage })),
+)
+const BacktestSmaPage = lazy(() =>
+  import('@/pages/BacktestSmaPage').then(m => ({ default: m.BacktestSmaPage })),
+)
+const SettingsPage = lazy(() =>
+  import('@/pages/SettingsPage').then(m => ({ default: m.SettingsPage })),
+)
+const ManualLlmImportPage = lazy(() =>
+  import('@/pages/ManualLlmImportPage').then(m => ({ default: m.ManualLlmImportPage })),
+)
 import { verifyStoredSession } from '@/services/auth'
-import { Text } from '@/components/ui'
 import { useSystemStatusStore } from '@/store/systemStatusStore'
 import { useTradingCoreStore } from '@/store/tradingCoreStore'
 
@@ -38,15 +69,28 @@ function ProtectedWithRealtime({ children }: { children: ReactNode }) {
     if (status !== 'allowed') return
     useSystemStatusStore.getState().connect()
     void useTradingCoreStore.getState().ensureLoaded()
+    return () => {
+      useSystemStatusStore.getState().disconnect()
+      useTradingCoreStore.getState().reset()
+    }
   }, [status])
 
   if (status === 'checking') {
     return (
-      <main>
-        <Text as="p" variant="body" tone="muted">
-          Проверяем токен...
-        </Text>
-      </main>
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 2,
+          bgcolor: 'background.default',
+        }}
+      >
+        <CircularProgress color="primary" />
+        <Typography color="text.secondary">Проверяем токен…</Typography>
+      </Box>
     )
   }
 
@@ -75,11 +119,20 @@ function RootRedirect() {
 
   if (!target) {
     return (
-      <main>
-        <Text as="p" variant="body" tone="muted">
-          Проверяем токен...
-        </Text>
-      </main>
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 2,
+          bgcolor: 'background.default',
+        }}
+      >
+        <CircularProgress color="primary" />
+        <Typography color="text.secondary">Проверяем токен…</Typography>
+      </Box>
     )
   }
 
@@ -100,113 +153,50 @@ function RouteDataGuard() {
   return null
 }
 
-function App() {
+function ProtectedLayout() {
+  return (
+    <ProtectedWithRealtime>
+      <AppShell />
+    </ProtectedWithRealtime>
+  )
+}
+
+export default function App() {
   return (
     <>
       <RouteDataGuard />
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<RootRedirect />} />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedWithRealtime>
-              <DashboardPage />
-            </ProtectedWithRealtime>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <ProtectedWithRealtime>
-              <SettingsPage />
-            </ProtectedWithRealtime>
-          }
-        />
-        <Route
-          path="/recommendations"
-          element={
-            <ProtectedWithRealtime>
-              <RecommendationsPage />
-            </ProtectedWithRealtime>
-          }
-        />
-        <Route
-          path="/recommendations/:figi"
-          element={
-            <ProtectedWithRealtime>
-              <RecommendationDetailPage />
-            </ProtectedWithRealtime>
-          }
-        />
-        <Route
-          path="/trading-requests"
-          element={
-            <ProtectedWithRealtime>
-              <TradingRequestsPage />
-            </ProtectedWithRealtime>
-          }
-        />
-        <Route
-          path="/portfolio"
-          element={
-            <ProtectedWithRealtime>
-              <PortfolioPage />
-            </ProtectedWithRealtime>
-          }
-        />
-        <Route
-          path="/monitoring/alerts"
-          element={
-            <ProtectedWithRealtime>
-              <MonitoringAlertsPage />
-            </ProtectedWithRealtime>
-          }
-        />
-        <Route
-          path="/auto-paper"
-          element={
-            <ProtectedWithRealtime>
-              <AutoPaperPage />
-            </ProtectedWithRealtime>
-          }
-        />
-        <Route
-          path="/performance"
-          element={
-            <ProtectedWithRealtime>
-              <PerformancePage />
-            </ProtectedWithRealtime>
-          }
-        />
-        <Route
-          path="/risk"
-          element={
-            <ProtectedWithRealtime>
-              <RiskPage />
-            </ProtectedWithRealtime>
-          }
-        />
-        <Route
-          path="/tinkoff"
-          element={
-            <ProtectedWithRealtime>
-              <TinkoffPage />
-            </ProtectedWithRealtime>
-          }
-        />
-        <Route
-          path="/training"
-          element={
-            <ProtectedWithRealtime>
-              <TrainingPipelinePage />
-            </ProtectedWithRealtime>
-          }
-        />
+        <Route path="/login" element={<LoginPage />} />
+
+        <Route element={<ProtectedLayout />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/virtual-trading" element={<VirtualTradingPage />} />
+          <Route path="/virtual-portfolios" element={<VirtualPortfoliosPage />} />
+          <Route path="/portfolio" element={<PortfolioPage />} />
+          <Route path="/recommendations" element={<RecommendationsPage />} />
+          <Route path="/recommendations/:figi" element={<RecommendationDetailPage />} />
+          <Route path="/trading-requests" element={<TradingRequestsPage />} />
+          <Route path="/monitoring/alerts" element={<MonitoringAlertsPage />} />
+          <Route path="/risk" element={<RiskPage />} />
+          <Route path="/performance" element={<PerformancePage />} />
+          {labRoutesEnabled ? (
+            <>
+              <Route path="/portfolio-analyzer" element={<PortfolioAnalyzerPage />} />
+              <Route path="/backtest-sma" element={<BacktestSmaPage />} />
+            </>
+          ) : (
+            <>
+              <Route path="/portfolio-analyzer" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/backtest-sma" element={<Navigate to="/dashboard" replace />} />
+            </>
+          )}
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/manual-llm-import" element={<ManualLlmImportPage />} />
+        </Route>
+
         <Route path="*" element={<RootRedirect />} />
       </Routes>
     </>
   )
 }
-
-export default App

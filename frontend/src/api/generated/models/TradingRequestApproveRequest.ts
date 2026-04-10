@@ -8,4 +8,8 @@ export type TradingRequestApproveRequest = {
      * Комментарий к одобрению
      */
     comment?: (string | null);
+    /**
+     * Режим real: одобрить без API-ордера; исполнение в T‑Invest вручную, затем «Исполнить»
+     */
+    manualBrokerExecution?: boolean;
 };

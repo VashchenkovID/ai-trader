@@ -1,0 +1,17 @@
+# Пример профилей портфеля для GitOps (REWRITE_CORE «автоматизация кодом»).
+# MVP в продукте — AppSetting `portfolio.profiles` в БД; этот файл опционален как шаблон.
+# Загрузка из файла в рантайм не выполняется по умолчанию — см. P5_OPTIONAL_STACK.md
+
+profiles:
+  conservative:
+    label: "Консервативный"
+    max_position_fraction: 0.05
+  moderate:
+    label: "Умеренный"
+    max_position_fraction: 0.12
+  aggressive:
+    label: "Агрессивный"
+    max_position_fraction: 0.20
+  experimental:
+    label: "Экспериментальный"
+    max_position_fraction: 0.30

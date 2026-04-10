@@ -13,7 +13,7 @@ export class TrainingService {
 
     /**
      * Запустить обучение NN с conditioning
-     * Ставит в очередь фоновую задачу обучения базового контура NN. Чекпоинты сохраняются в MLflow и TRAINING_ARTIFACTS_DIR. Требует установки зависимости [training].
+     * Deprecated: synthetic-only сценарий отключен. Используйте /run-nn-from-figi или scheduler jobs.
      * @returns any Successful Response
      * @throws ApiError
      */
@@ -86,7 +86,7 @@ resumeFromLatest?: boolean,
 
     /**
      * Запланировать обучение NN в фоне
-     * Добавляет задачу обучения в BackgroundTasks и сразу возвращает ответ. Результат обучения пишется в MLflow; для получения run_id смотрите логи приложения.
+     * Deprecated: synthetic-only сценарий отключен. Используйте scheduler training jobs с реальными данными.
      * @returns any Successful Response
      * @throws ApiError
      */
@@ -115,7 +115,7 @@ resumeFromLatest?: boolean,
 
     /**
      * Запустить обучение Weekly forecast (LSTM)
-     * Запускает обучение контура weekly в executor. Без FIGI используется синтетика. Чекпоинты в models_root/weekly/.
+     * Deprecated: synthetic-only сценарий отключен. Используйте /run-weekly-from-figi или scheduler weekly jobs.
      * @returns any Successful Response
      * @throws ApiError
      */
@@ -226,7 +226,7 @@ resumeFromLatest?: boolean,
 
     /**
      * Запустить walk-forward бэктест по чекпоинту NN
-     * Загружает данные (по FIGI из БД или синтетика), разбивает на n_splits окон, оценивает модель на каждом тестовом окне, возвращает средние метрики (test_mse, test_mae, test_direction_accuracy).
+     * Загружает данные по FIGI из БД, разбивает на n_splits окон, оценивает модель на каждом тестовом окне.
      * @returns any Successful Response
      * @throws ApiError
      */
@@ -242,7 +242,7 @@ limit = 2000,
 checkpoint: string,
 nSplits?: number,
 /**
- * FIGI для загрузки свечей из БД; без указания — синтетика
+ * FIGI для загрузки свечей из БД
  */
 figi?: (string | null),
 limit?: number,
@@ -264,7 +264,7 @@ limit?: number,
 
     /**
      * Запустить обучение мета-модели стекинга поверх CondMLP
-     * Загружает базовый чекпоинт CondMLP, строит мета-признаки из 9×2 предсказаний, обучает StackingModel, сохраняет чекпоинт в models_root/stacking/.
+     * Загружает базовый чекпоинт CondMLP и реальные свечи по FIGI из БД, обучает StackingModel.
      * @returns any Successful Response
      * @throws ApiError
      */
@@ -280,7 +280,7 @@ limit = 2000,
 baseCheckpoint: string,
 epochs?: number,
 /**
- * FIGI для загрузки свечей из БД; без указания — синтетика
+ * FIGI для загрузки свечей из БД
  */
 figi?: (string | null),
 limit?: number,
@@ -336,6 +336,50 @@ requestBody?: RunJuryBody,
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/training/run-jury',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+
+    /**
+     * Промпт батча LLM-жюри для ручного копирования (один чанк).
+     */
+    public static manualLlmPromptChunkApiV1TrainingLlmManualPromptChunkGet({
+chunkIndex = 0,
+}: {
+chunkIndex?: number,
+}): CancelablePromise<{ success?: boolean, data: Record<string, unknown> }> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/training/llm-manual/prompt-chunk',
+            query: {
+                chunkIndex,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+
+    /**
+     * Применить ручной батч ответов GigaChat + Алиса.
+     */
+    public static manualLlmApplyChunkApiV1TrainingLlmManualApplyChunkPost({
+requestBody,
+}: {
+requestBody: {
+chunkIndex: number,
+figi: Array<string>,
+gigachatRaw: string,
+alisaRaw: string,
+},
+}): CancelablePromise<{ success?: boolean, data: Record<string, unknown> }> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/training/llm-manual/apply-chunk',
             body: requestBody,
             mediaType: 'application/json',
             errors: {
