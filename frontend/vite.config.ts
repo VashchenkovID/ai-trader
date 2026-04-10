@@ -40,16 +40,15 @@ export default defineConfig({
     },
   },
   build: {
+    // Не дробить React / MUI / Emotion / router по разным vendor-чанкам: в проде даёт
+    // «Cannot access 'X' before initialization» (TDZ) из-за порядка загрузки чанков.
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined
+          // Тяжёлая изолированная либа — ок в отдельном чанке
           if (id.includes('lightweight-charts')) return 'vendor-charts'
-          if (id.includes('@mui') || id.includes('@emotion')) return 'vendor-mui'
-          if (id.includes('react-dom') || id.includes('/react/')) return 'vendor-react'
-          if (id.includes('react-router')) return 'vendor-router'
-          if (id.includes('framer-motion')) return 'vendor-motion'
-          return 'vendor'
+          return undefined
         },
       },
     },
