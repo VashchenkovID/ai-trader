@@ -8,7 +8,7 @@
 
 ## Корневой `.env` (рядом с `docker-compose.yml`)
 
-См. `.env.docker.example`: `DATABASE_URL_DOCKER`, `POSTGRES_*`, пустой `VITE_API_BASE_URL` для прод-сборки.
+См. `.env.docker.example`: **`POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`** (одни и те же для Postgres и FastAPI), пустой `VITE_API_BASE_URL` для прод-сборки.
 
 ## Запуск стека
 

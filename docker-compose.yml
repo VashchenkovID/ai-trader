@@ -5,8 +5,8 @@
 #   либо `docker compose down -v` (удалит данные!) и заново с нужными POSTGRES_*,
 #   либо вручную: CREATE DATABASE aitrader; ALTER USER postgres PASSWORD '...';
 #
-# FastAPI в Docker: задайте DATABASE_URL_DOCKER — тот же URL, что локальный DATABASE_URL в server_fastapi/.env,
-# но хост `postgres` вместо `localhost`, например postgresql+asyncpg://postgres:ПАРОЛЬ@postgres:5432/aitrader
+# FastAPI: DATABASE_URL собирается из тех же POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB, что и контейнер postgres
+# (иначе после первого init кластер с одним паролем, а приложение подключается с другим → password authentication failed).
 #
 # VITE_API_BASE_URL — пусто для прод-сборки (запросы на /api того же домена).
 #
@@ -45,9 +45,8 @@ services:
       - ./server_fastapi/.env
     environment:
       TZ: Europe/Moscow
-      # Задайте в корневом .env (локальный DATABASE_URL, но хост postgres — не localhost).
-      # Дефолт совпадает с первым запуском postgres без своего .env: postgres/postgres, БД ai_trader
-      DATABASE_URL: ${DATABASE_URL_DOCKER:-postgresql+asyncpg://postgres:postgres@postgres:5432/ai_trader}
+      # Тот же пароль/БД, что у сервиса postgres выше (корневой .env). В пароле избегайте символов @ : / ? # &.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_trader}
       # Явные пути под смонтированные тома (см. volumes ниже)
       ERROR_REGISTRY_PATH: /app/logs/error_registry.json
       RUNTIME_ERROR_LOG_PATH: /app/logs/runtime_errors.jsonl
