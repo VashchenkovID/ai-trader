@@ -1,3 +1,7 @@
+# Переменные для подстановки ${...} читаются из .env в КОРНЕ репозитория (рядом с этим файлом), не из server_fastapi/.env.
+# Задайте там POSTGRES_DB / POSTGRES_PASSWORD / POSTGRES_USER — они должны совпадать с вашей БД (например БД aitrader, пароль как у postgres).
+# VITE_API_BASE_URL: оставьте пустым для прод-сборки — фронт ходит на тот же домен (/api проксируется nginx → fastapi).
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -67,7 +71,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        # Пусто → в бандле API = origin сайта (nginx /api → fastapi). localhost здесь сломает прод в браузере.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     container_name: ai-trader-client
     # На VPS часто заняты 80/443 системным nginx — дефолты 8080/8443; для прямого 80 задайте FRONTEND_PORT=80
     ports:
