@@ -12,6 +12,8 @@
 
 ## Запуск стека
 
+**Не задавайте `FRONTEND_PORT=80` в корневом `.env`,** если на сервере уже слушает хостовый nginx на 80/443 — получите `address already in use`. Оставьте дефолт **8080** (или уберите строку `FRONTEND_PORT` из `.env`).
+
 ```bash
 docker compose build --no-cache frontend
 docker compose up -d
@@ -20,10 +22,10 @@ curl -sI http://127.0.0.1:8080/health
 
 ## Хостовый nginx
 
-1. Скопируйте [`nginx-host-reverse-proxy.example.conf`](nginx-host-reverse-proxy.example.conf) в `/etc/nginx/sites-available/`, при необходимости поправьте порт, если `FRONTEND_PORT` не 8080.
-2. Включите сайт в `sites-enabled`, проверьте `nginx -t`, перезагрузите nginx.
-3. Если `ssl_dhparams.pem` нет — строка `ssl_dhparam` в примере закомментирована; при необходимости создайте через certbot или уберите include, если certbot выдаёт ошибку.
+1. Скопируйте [`nginx-host-reverse-proxy.example.conf`](nginx-host-reverse-proxy.example.conf) в `/etc/nginx/sites-available/vashchenkovaitrader.ru`. В `proxy_pass` укажите тот же порт, что у Docker (`8080`, если `FRONTEND_PORT` не меняли).
+2. Убедитесь, что файлы сертификатов по путям `ssl_certificate` уже есть (выпустите через certbot). Пример конфига **не** подключает `options-ssl-nginx.conf`, чтобы `nginx -t` не падал, если certbot ещё не создал этот файл.
+3. `sudo nginx -t && sudo systemctl reload nginx`
 
 ## Альтернатива без хостового nginx
 
-Освободите порты 80/443 на хосте и в корневом `.env` задайте `FRONTEND_PORT=80` и при необходимости `FRONTEND_PORT_HTTPS=443`; тогда нужен снова TLS **внутри** контейнера (отдельный `nginx.conf` с ssl — не в текущем репозитории по умолчанию).
+Освободите порты 80/443 на хосте и только тогда задайте `FRONTEND_PORT=80` в корневом `.env`. Иначе контейнер фронта не поднимется.
