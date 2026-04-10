@@ -1859,8 +1859,9 @@ async def _training_full_job() -> dict[str, Any]:
         from training.run_weekly import run as run_weekly
         from training.run_stacking import run as run_stacking
         from training.rl import train_agent
-    except Exception:
-        return {"message": "training deps unavailable"}
+    except Exception as exc:
+        logger.warning("training imports failed (install [training] extra): %s", exc, exc_info=True)
+        return {"message": "training deps unavailable", "detail": str(exc)}
     target_figi: str | None = None
     market_repo = getattr(_container, "market_repository", None) if _container is not None else None
     if market_repo is not None:
@@ -2048,8 +2049,9 @@ async def _training_quick_job() -> dict[str, Any]:
         from training.run_nn import run as run_nn
         from training.run_stacking import run as run_stacking
         from training.rl import train_agent
-    except Exception:
-        return {"message": "training deps unavailable"}
+    except Exception as exc:
+        logger.warning("training imports failed (install [training] extra): %s", exc, exc_info=True)
+        return {"message": "training deps unavailable", "detail": str(exc)}
     target_figi: str | None = None
     market_repo = getattr(_container, "market_repository", None) if _container is not None else None
     if market_repo is not None:

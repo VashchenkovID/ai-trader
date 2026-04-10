@@ -15,8 +15,9 @@ COPY training ./training
 COPY alembic ./alembic
 COPY alembic.ini ./
 
+# [training] — torch, lightning, mlflow (полное/быстрое обучение из scheduler)
 RUN python -m pip install --upgrade pip setuptools wheel && \
-    python -m pip install -e .
+    python -m pip install -e ".[training]"
 
 EXPOSE 8000
 
