@@ -9,6 +9,8 @@
 # но хост `postgres` вместо `localhost`, например postgresql+asyncpg://postgres:ПАРОЛЬ@postgres:5432/aitrader
 #
 # VITE_API_BASE_URL — пусто для прод-сборки (запросы на /api того же домена).
+#
+# Домен в браузере: хостовый nginx → 127.0.0.1:${FRONTEND_PORT:-8080} (см. deploy/nginx-host-reverse-proxy.example.conf).
 
 services:
   postgres:
@@ -84,12 +86,9 @@ services:
         # Пусто → в бандле API = origin сайта (nginx /api → fastapi). localhost здесь сломает прод в браузере.
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     container_name: ai-trader-client
-    # На VPS часто заняты 80/443 системным nginx — дефолты 8080/8443; для прямого 80 задайте FRONTEND_PORT=80
+    # Фронт в контейнере только HTTP:80; TLS на хостовом nginx (deploy/). Иначе FRONTEND_PORT=80 и освободить порт на хосте.
     ports:
       - "${FRONTEND_PORT:-8080}:80"
-      - "${FRONTEND_PORT_HTTPS:-8443}:443"
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - fastapi
     restart: unless-stopped
