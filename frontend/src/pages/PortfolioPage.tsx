@@ -183,18 +183,18 @@ export function PortfolioPage() {
       await loadPortfolioVerdicts()
       await loadMarketRecommendations(figis)
       const payload = env.data as { llmSource?: string; saved?: number; message?: string } | undefined
-      const src =
-        payload?.llmSource === 'perplexity'
-          ? 'LLM'
-          : payload?.llmSource === 'market_fallback'
-            ? 'рыночный fallback'
-            : (payload?.llmSource ?? '—')
+      const src = payload?.llmSource === 'perplexity' ? 'LLM' : (payload?.llmSource ?? '—')
       setSnack({
         message:
           payload?.message === 'no_positions'
             ? 'Нет открытых позиций — нечего анализировать.'
-            : `Рекомендации по портфелю обновлены (${src}, записей: ${payload?.saved ?? '—'}).`,
-        severity: payload?.message === 'no_positions' ? 'warning' : 'success',
+            : payload?.message === 'no_llm_verdict'
+              ? 'Нет валидного ответа LLM — записи рекомендаций по позициям не обновлялись.'
+              : `Рекомендации по портфелю обновлены (${src}, записей: ${payload?.saved ?? '—'}).`,
+        severity:
+          payload?.message === 'no_positions' || payload?.message === 'no_llm_verdict'
+            ? 'warning'
+            : 'success',
       })
     } catch (e) {
       setSnack({ message: apiErrorMessage(e), severity: 'error' })

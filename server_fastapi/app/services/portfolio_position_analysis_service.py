@@ -47,7 +47,7 @@ _VERDICT_PROMPT_HEAD = """Ты финансовый аналитик. По по�
 Системный рыночный сигнал по инструментам (если передан): краткая сводка BUY/SELL/HOLD или score по FIGI — не подменяй ею цены и PnL из JSON позиций.
 
 Задача (всегда одна и та же):
-1) По КАЖДОЙ позиции в JSON верни ровно одно действие: BUY, SELL или HOLD (удержание текущей позиции, без обязательства докупать).
+1) По КАЖДОЙ позиции в JSON верни ровно одно действие: BUY, SELL или HOLD. BUY — только если явно рекомендуешь увеличить уже открытую позицию (докупка); если достаточно держать без докупки — HOLD, не BUY. SELL — закрыть/сократить. Не подменяй рыночный BUY из сводки на «докупку», если по фактам позиции уместнее HOLD.
 2) Для каждой позиции укажи confidence от 0 до 1 и 1–3 причины, явно связывая вывод с ценой закупки, текущей ценой и PnL; при наличии daysInPosition / firstBuyAt учитывай горизонт удержания.
 3) При необходимости добавь краткий блок по портфелю целиком (концентрация, общий риск) — без новых чисел вне JSON.
 
@@ -362,8 +362,6 @@ class PortfolioPositionAnalysisService:
 
     async def _call_perplexity(self, prompt: str) -> str:
         key = (self._settings.perplexity_api_key or "").strip()
-        if not key:
-            return ""
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 r = await client.post(
@@ -409,27 +407,6 @@ class PortfolioPositionAnalysisService:
             )
         return parsed, obj
 
-    def _fallback_verdicts(
-        self,
-        positions: list[dict[str, Any]],
-        market_by_figi: dict[str, dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        out: list[dict[str, Any]] = []
-        for p in positions:
-            figi = str(p.get("figi") or "")
-            m = market_by_figi.get(figi) or {}
-            act = _clamp_action(str(m.get("recommendation") or "HOLD"))
-            conf = _clamp01(m.get("confidence"), 0.5)
-            out.append(
-                {
-                    "figi": figi,
-                    "action": act,
-                    "confidence": conf,
-                    "reasons": ["fallback: только рыночная рекомендация из БД (нет PERPLEXITY_API_KEY или сбой LLM)"],
-                }
-            )
-        return out
-
     async def run_verdict(
         self,
         session: AsyncSession,
@@ -463,11 +440,20 @@ class PortfolioPositionAnalysisService:
         )
         raw_text = await self._call_perplexity(prompt)
         parsed, full_obj = self.parse_llm_verdict(raw_text)
-        source = "perplexity"
         if not parsed:
-            parsed = self._fallback_verdicts(positions, market_by_figi)
-            source = "market_fallback"
+            return {
+                "portfolioScope": scope,
+                "analysisRunId": None,
+                "saved": 0,
+                "positions": positions,
+                "meta": meta,
+                "verdicts": [],
+                "llmSource": "no_llm",
+                "message": "no_llm_verdict",
+                "rawLlmTextPreview": (raw_text[:500] + "…") if len(raw_text) > 500 else raw_text,
+            }
 
+        source = "perplexity"
         by_figi = {x["figi"]: x for x in parsed}
         run_id = uuid.uuid4()
         saved = 0

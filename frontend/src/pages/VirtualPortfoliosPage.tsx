@@ -153,13 +153,13 @@ export function VirtualPortfoliosPage() {
         const payload = env.data as { llmSource?: string; saved?: number; message?: string } | undefined
         if (payload?.message === 'no_positions') {
           setSnack({ message: `Профиль «${slug}»: нет позиций для анализа.`, severity: 'warning' })
+        } else if (payload?.message === 'no_llm_verdict') {
+          setSnack({
+            message: `Профиль «${slug}»: нет валидного ответа LLM — записи в БД не менялись.`,
+            severity: 'warning',
+          })
         } else {
-          const src =
-            payload?.llmSource === 'perplexity'
-              ? 'LLM'
-              : payload?.llmSource === 'market_fallback'
-                ? 'fallback'
-                : (payload?.llmSource ?? '—')
+          const src = payload?.llmSource === 'perplexity' ? 'LLM' : (payload?.llmSource ?? '—')
           setSnack({
             message: `Профиль «${slug}»: вердикт обновлён (${src}, записей: ${payload?.saved ?? '—'}).`,
             severity: 'success',

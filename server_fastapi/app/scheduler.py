@@ -2817,7 +2817,7 @@ async def _analysis_market_portfolio_job() -> dict[str, Any]:
 
 
 async def _analysis_portfolio_positions_job() -> dict[str, Any]:
-    """BUY/SELL/HOLD по открытым позициям каждого scope (Perplexity или fallback по БД)."""
+    """BUY/SELL/HOLD по открытым позициям каждого scope (только при валидном ответе LLM)."""
     if not _container:
         raise RuntimeError("Container is not initialized")
     from app.core.portfolio_scope import all_portfolio_scopes, canonical_portfolio_scope
