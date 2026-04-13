@@ -1,8 +1,9 @@
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import {
+  Alert,
   Box,
   Button,
-  Chip,
+  Divider,
   FormControl,
   InputLabel,
   MenuItem,
@@ -12,7 +13,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TextField,
@@ -22,10 +22,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MarketService, RecommendationPipelineService } from '@/api/generated'
 import { JsonViewBlock } from '@/components/json'
+import { RecommendationStatusBadge } from '@/components/recommendations/RecommendationStatusBadge'
+import { ScrollableTablePaper } from '@/components/ui/ScrollableTablePaper'
 import { CreateTradingRequestModal } from '@/components/trading'
 import type { RecommendationRecord } from '@/utils/recommendationFormat'
 import { formatPrice, formatScoreConfidence, recNum, recString } from '@/utils/recommendationFormat'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
+import { FIGI_TABLE_CELL_SX, TABLE_NUMERIC_CELL_SX } from '@/theme/tableStyles'
 
 const SIGNAL_OPTIONS = ['', 'BUY', 'SELL', 'HOLD'] as const
 
@@ -38,7 +41,7 @@ function tradeButtonLabel(action: 'BUY' | 'SELL') {
   return action === 'SELL' ? 'Продать' : 'Купить'
 }
 
-export function RecommendationsPage() {
+function RecommendationsPage() {
   const [items, setItems] = useState<RecommendationRecord[]>([])
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
@@ -130,151 +133,157 @@ export function RecommendationsPage() {
     }
   }, [load, pipeLimit, pipeMinConf, pipeMinScore, pipeMode])
 
-  const chipForSignal = (sig: string) => {
-    const s = sig.toUpperCase()
-    if (s === 'BUY') return <Chip size="small" label={sig} color="primary" variant="outlined" />
-    if (s === 'SELL') return <Chip size="small" label={sig} color="secondary" variant="outlined" />
-    return <Chip size="small" label={sig || '—'} variant="outlined" />
-  }
-
   return (
-    <Stack spacing={3}>
+    <Stack spacing={2}>
       <Box>
-        <Typography variant="h5" gutterBottom>
+        <Typography variant="h6" component="h1" sx={{ fontWeight: 600, color: 'primary.main' }}>
           Рекомендации
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Сохранённые строки из анализа (fusion NN+LLM). Создание заявки — кнопка «Купить» / «Продать» в
-          строке или на карточке; дальше одобрение и исполнение в разделе «Торговые заявки».
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25, maxWidth: 720 }}>
+          Fusion NN+LLM. Заявка — «Купить»/«Продать» в строке; одобрение — в «Торговые заявки».
         </Typography>
       </Box>
 
       {error ? (
-        <Paper variant="outlined" sx={{ p: 2, borderColor: 'error.main' }}>
-          <Typography color="error">{error}</Typography>
-          <Button sx={{ mt: 1 }} onClick={() => void load()}>
-            Повторить
-          </Button>
-        </Paper>
+        <Alert
+          severity="error"
+          sx={{ py: 0.5, alignItems: 'center' }}
+          action={
+            <Button color="inherit" size="small" onClick={() => void load()}>
+              Повторить
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
       ) : null}
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            flexWrap: 'wrap',
-            gap: 2,
-            alignItems: { sm: 'center' },
-          }}
-        >
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel id="rec-signal">Сигнал</InputLabel>
-            <Select
-              labelId="rec-signal"
-              label="Сигнал"
-              value={signalFilter}
-              onChange={e => setSignalFilter(String(e.target.value))}
-            >
-              {SIGNAL_OPTIONS.map(s => (
-                <MenuItem key={s || 'all'} value={s}>
-                  {s || 'Все'}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
-            size="small"
-            label="Поиск FIGI / тикер / имя"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            sx={{ minWidth: { xs: '100%', sm: 280 } }}
-          />
-          <Button variant="outlined" onClick={() => void load()} disabled={loading}>
-            Обновить
-          </Button>
-          <Typography variant="body2" color="text.secondary" sx={{ ml: { sm: 'auto' } }}>
-            Страница: {items.length} из {total} · после фильтра: {filtered.length}
+      <Paper variant="outlined" sx={{ p: 1.5, borderColor: 'divider' }}>
+        <Stack spacing={1.25}>
+          <Typography variant="caption" sx={{ fontWeight: 600, color: 'secondary.main', letterSpacing: '0.04em' }}>
+            СПИСОК И ФИЛЬТРЫ
           </Typography>
-        </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          Фильтр сигнала и поиск применяются к загруженной странице ({limit} записей). Листайте
-          ниже, чтобы подгрузить другой срез.
-        </Typography>
-      </Paper>
-
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="subtitle2" gutterBottom>
-          Pipeline рекомендаций
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-          Запуск на бэкенде: пороги, дедупликация, создание заявок (см. API recommendation-pipeline).
-        </Typography>
-        <Box
-          sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 2,
-            alignItems: 'center',
-          }}
-        >
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="pipe-mode">Режим</InputLabel>
-            <Select
-              labelId="pipe-mode"
-              label="Режим"
-              value={pipeMode}
-              onChange={e => setPipeMode(String(e.target.value))}
-            >
-              {['paper', 'real', 'micro'].map(m => (
-                <MenuItem key={m} value={m}>
-                  {m}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
-            size="small"
-            label="Limit"
-            value={pipeLimit}
-            onChange={e => setPipeLimit(e.target.value)}
-            sx={{ width: 100 }}
-          />
-          <TextField
-            size="small"
-            label="Min confidence"
-            value={pipeMinConf}
-            onChange={e => setPipeMinConf(e.target.value)}
-            sx={{ width: 130 }}
-          />
-          <TextField
-            size="small"
-            label="Min score"
-            value={pipeMinScore}
-            onChange={e => setPipeMinScore(e.target.value)}
-            sx={{ width: 120 }}
-          />
-          <Button variant="contained" disabled={pipeLoading} onClick={() => void runPipeline()}>
-            {pipeLoading ? 'Запуск…' : 'Запустить pipeline'}
-          </Button>
-        </Box>
-        {pipeNotice ? (
-          <Typography
-            variant="body2"
-            color={pipeNotice.kind === 'success' ? 'success.main' : 'error.main'}
-            sx={{ mt: 1.5 }}
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              flexWrap: 'wrap',
+              gap: 1.25,
+              alignItems: { sm: 'center' },
+            }}
           >
-            {pipeNotice.text}
-          </Typography>
-        ) : null}
-        {pipeNotice?.kind === 'success' && pipeResult != null ? (
-          <Box sx={{ mt: 1 }}>
-            <JsonViewBlock data={pipeResult} maxHeight={240} collapsed={2} />
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel id="rec-signal">Сигнал</InputLabel>
+              <Select
+                labelId="rec-signal"
+                label="Сигнал"
+                value={signalFilter}
+                onChange={e => setSignalFilter(String(e.target.value))}
+              >
+                {SIGNAL_OPTIONS.map(s => (
+                  <MenuItem key={s || 'all'} value={s}>
+                    {s || 'Все'}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              size="small"
+              label="Поиск FIGI / тикер / имя"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              sx={{ minWidth: { xs: '100%', sm: 280 } }}
+            />
+            <Button variant="outlined" size="small" onClick={() => void load()} disabled={loading}>
+              Обновить
+            </Button>
+            <Typography variant="caption" color="text.secondary" sx={{ ml: { sm: 'auto' } }}>
+              Стр.: {items.length}/{total} · после фильтра: {filtered.length}
+            </Typography>
           </Box>
-        ) : null}
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            Фильтр и поиск — по загруженной странице ({limit} записей); пагинация внизу.
+          </Typography>
+
+          <Divider sx={{ borderColor: 'divider' }} />
+
+          <Box>
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 600, color: 'primary.main', letterSpacing: '0.04em', display: 'block', mb: 0.75 }}
+            >
+              PIPELINE
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Пороги, дедупликация, заявки (API recommendation-pipeline).
+            </Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 1.25,
+                alignItems: 'center',
+              }}
+            >
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <InputLabel id="pipe-mode">Режим</InputLabel>
+                <Select
+                  labelId="pipe-mode"
+                  label="Режим"
+                  value={pipeMode}
+                  onChange={e => setPipeMode(String(e.target.value))}
+                >
+                  {['paper', 'real', 'micro'].map(m => (
+                    <MenuItem key={m} value={m}>
+                      {m}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                size="small"
+                label="Limit"
+                value={pipeLimit}
+                onChange={e => setPipeLimit(e.target.value)}
+                sx={{ width: 100 }}
+              />
+              <TextField
+                size="small"
+                label="Min confidence"
+                value={pipeMinConf}
+                onChange={e => setPipeMinConf(e.target.value)}
+                sx={{ width: 130 }}
+              />
+              <TextField
+                size="small"
+                label="Min score"
+                value={pipeMinScore}
+                onChange={e => setPipeMinScore(e.target.value)}
+                sx={{ width: 120 }}
+              />
+              <Button variant="contained" size="small" disabled={pipeLoading} onClick={() => void runPipeline()}>
+                {pipeLoading ? 'Запуск…' : 'Запустить pipeline'}
+              </Button>
+            </Box>
+            {pipeNotice ? (
+              <Typography
+                variant="body2"
+                color={pipeNotice.kind === 'success' ? 'success.main' : 'error.main'}
+                sx={{ mt: 1 }}
+              >
+                {pipeNotice.text}
+              </Typography>
+            ) : null}
+            {pipeNotice?.kind === 'success' && pipeResult != null ? (
+              <Box sx={{ mt: 0.75 }}>
+                <JsonViewBlock data={pipeResult} maxHeight={200} collapsed={2} />
+              </Box>
+            ) : null}
+          </Box>
+        </Stack>
       </Paper>
 
-      <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
+      <ScrollableTablePaper maxHeight="min(62vh, 480px)" sx={{ overflowX: 'auto' }}>
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
@@ -283,7 +292,9 @@ export function RecommendationsPage() {
               <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Тикер</TableCell>
               <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Название</TableCell>
               <TableCell>Уверенность / score</TableCell>
-              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Цена</TableCell>
+              <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                Цена
+              </TableCell>
               <TableCell align="right">Заявка</TableCell>
               <TableCell align="right">Карточка</TableCell>
             </TableRow>
@@ -302,12 +313,10 @@ export function RecommendationsPage() {
                 const tAct = tradeActionFromRecommendation(r)
                 return (
                   <TableRow key={recString(r, 'id') || figi} hover>
-                    <TableCell>{chipForSignal(recString(r, 'recommendation'))}</TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
-                        {figi}
-                      </Typography>
+                      <RecommendationStatusBadge value={recString(r, 'recommendation')} />
                     </TableCell>
+                    <TableCell sx={FIGI_TABLE_CELL_SX}>{figi}</TableCell>
                     <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                       {recString(r, 'ticker') || '—'}
                     </TableCell>
@@ -319,7 +328,10 @@ export function RecommendationsPage() {
                         {formatScoreConfidence(recNum(r, 'score'), recNum(r, 'confidence'))}
                       </Typography>
                     </TableCell>
-                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                    <TableCell
+                      align="right"
+                      sx={{ display: { xs: 'none', sm: 'table-cell' }, ...TABLE_NUMERIC_CELL_SX }}
+                    >
                       {formatPrice(r.lastPrice)}
                     </TableCell>
                     <TableCell align="right">
@@ -351,7 +363,7 @@ export function RecommendationsPage() {
             )}
           </TableBody>
         </Table>
-      </TableContainer>
+      </ScrollableTablePaper>
 
       <CreateTradingRequestModal
         open={tradeOpen}
@@ -364,14 +376,12 @@ export function RecommendationsPage() {
         onSuccess={() => void load()}
       />
 
-      <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-        <Button
-          disabled={offset === 0 || loading}
-          onClick={() => setOffset(o => Math.max(0, o - limit))}
-        >
+      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+        <Button size="small" disabled={offset === 0 || loading} onClick={() => setOffset(o => Math.max(0, o - limit))}>
           Назад
         </Button>
         <Button
+          size="small"
           disabled={offset + items.length >= total || loading}
           onClick={() => setOffset(o => o + limit)}
         >
@@ -381,3 +391,6 @@ export function RecommendationsPage() {
     </Stack>
   )
 }
+
+export { RecommendationsPage }
+export default RecommendationsPage

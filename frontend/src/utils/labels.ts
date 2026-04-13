@@ -1,5 +1,7 @@
 export function labelTradingRequestStatus(raw: string | null | undefined): string {
-  const s = String(raw ?? '').trim().toUpperCase()
+  const s = String(raw ?? '')
+    .trim()
+    .toUpperCase()
   const map: Record<string, string> = {
     PENDING: 'Ожидает',
     APPROVED: 'Одобрено',
@@ -13,7 +15,9 @@ export function labelTradingRequestStatus(raw: string | null | undefined): strin
 }
 
 export function labelTradingMode(raw: string | null | undefined): string {
-  const s = String(raw ?? '').trim().toLowerCase()
+  const s = String(raw ?? '')
+    .trim()
+    .toLowerCase()
   const map: Record<string, string> = {
     paper: 'Бумажный',
     real: 'Реальный',
@@ -22,14 +26,4 @@ export function labelTradingMode(raw: string | null | undefined): string {
   return map[s] ?? (raw == null || String(raw).trim() === '' ? '—' : String(raw))
 }
 
-export function labelRecommendation(raw: string | null | undefined): string {
-  const s = String(raw ?? '').trim().toUpperCase()
-  const map: Record<string, string> = {
-    BUY: 'ПОКУПАТЬ',
-    SELL: 'ПРОДАВАТЬ',
-    HOLD: 'ДЕРЖАТЬ',
-    UNKNOWN: 'НЕИЗВЕСТНО',
-  }
-  return map[s] ?? (raw == null || String(raw).trim() === '' ? '—' : String(raw))
-}
-
+export { recommendationSignalLabelRu as labelRecommendation } from '@/components/recommendations/recommendationSignal'

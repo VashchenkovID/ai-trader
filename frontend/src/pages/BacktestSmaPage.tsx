@@ -12,7 +12,7 @@ import { BacktestingService } from '@/api/generated'
 import { JsonViewBlock } from '@/components/json'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
-export function BacktestSmaPage() {
+function BacktestSmaPage() {
   const [figi, setFigi] = useState('')
   const [smaPeriod, setSmaPeriod] = useState('20')
   const [candleLimit, setCandleLimit] = useState('500')
@@ -99,3 +99,6 @@ export function BacktestSmaPage() {
     </Box>
   )
 }
+
+export { BacktestSmaPage }
+export default BacktestSmaPage

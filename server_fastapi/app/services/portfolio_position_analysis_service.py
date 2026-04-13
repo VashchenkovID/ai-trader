@@ -2,6 +2,8 @@
 Анализ открытых позиций в разрезе портфеля (scope): цена закупки, текущая цена,
 рыночная рекомендация из БД + вердикт GigaChat; свежий ручной импорт (manual/apply)
 переиспользуется без повторного вызова LLM по тем же FIGI (см. PPR_MANUAL_REUSE_TTL_HOURS).
+Для переиспользования берётся последняя по времени запись с source=manual_external, а не просто
+последняя строка по FIGI — иначе после авто-вызова GigaChat ручной вердикт перестаёт находиться.
 """
 
 from __future__ import annotations
@@ -31,6 +33,8 @@ from app.repositories.market_repository import MarketRepository
 from app.repositories.portfolio_position_recommendation_repository import (
     PortfolioPositionRecommendationRepository,
 )
+from app.services.tinkoff_client import tinkoff_quotation_quantity_to_float
+from app.services.tinkoff_portfolio_helpers import TINKOFF_RUB_CASH_POSITION_FIGI
 from app.services.portfolio_position_timing import (
     days_in_position_calendar,
     fifo_first_buy_at,
@@ -151,6 +155,27 @@ def _manual_row_still_fresh(row: PortfolioPositionRecommendation, *, ttl_hours: 
     if created.tzinfo is None:
         created = created.replace(tzinfo=timezone.utc)
     return created + timedelta(hours=ttl_hours) >= datetime.now(timezone.utc)
+
+
+def _fresh_manual_verdicts_by_figi_from_rows(
+    rows: list[PortfolioPositionRecommendation],
+    *,
+    ttl_hours: int,
+) -> dict[str, dict[str, Any]]:
+    """
+    По убыванию created_at ищем для каждого FIGI последнюю свежую строку с ручным вердиктом.
+    Не путаем с «последней строкой вообще»: после GigaChat сверху может лежать source=gigachat.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        if r.figi in out:
+            continue
+        if not _manual_row_still_fresh(r, ttl_hours=ttl_hours):
+            continue
+        reused = _verdict_from_manual_row(r)
+        if reused is not None:
+            out[r.figi] = reused
+    return out
 
 
 class PortfolioPositionAnalysisService:
@@ -279,7 +304,9 @@ class PortfolioPositionAnalysisService:
             figi = str(p.get("figi") or "").strip()
             if not figi:
                 continue
-            qty = int(p.get("quantity") or 0)
+            if figi == TINKOFF_RUB_CASH_POSITION_FIGI:
+                continue
+            qty = tinkoff_quotation_quantity_to_float(p.get("quantity"))
             if qty <= 0:
                 continue
             avg = _num(p.get("averagePositionPrice"))
@@ -454,19 +481,13 @@ class PortfolioPositionAnalysisService:
         figis = [str(p["figi"]) for p in positions]
         market_by_figi = await self.market_signals_by_figi(session, figis)
         ttl = int(getattr(self._settings, "ppr_manual_reuse_ttl_hours", 0) or 0)
-        latest_map = await self._ppr.latest_by_figi_map(session, portfolio_scope=scope)
+        ppr_rows = await self._ppr.list_recent(session, portfolio_scope=scope, limit=2000)
+        manual_by_figi = _fresh_manual_verdicts_by_figi_from_rows(ppr_rows, ttl_hours=ttl)
 
-        manual_by_figi: dict[str, dict[str, Any]] = {}
         need_llm: list[dict[str, Any]] = []
         for p in positions:
             figi = str(p["figi"])
-            row = latest_map.get(figi)
-            reused: dict[str, Any] | None = None
-            if row is not None and _manual_row_still_fresh(row, ttl_hours=ttl):
-                reused = _verdict_from_manual_row(row)
-            if reused is not None:
-                manual_by_figi[figi] = reused
-            else:
+            if figi not in manual_by_figi:
                 need_llm.append(p)
 
         raw_text = ""
@@ -500,6 +521,29 @@ class PortfolioPositionAnalysisService:
         raw_text = await self._call_gigachat(prompt)
         parsed, full_obj = self.parse_llm_verdict(raw_text)
         if not parsed:
+            if manual_by_figi:
+                by_figi: dict[str, dict[str, Any]] = dict(manual_by_figi)
+                for p in need_llm:
+                    figi = str(p["figi"])
+                    if figi not in by_figi:
+                        by_figi[figi] = {
+                            "figi": figi,
+                            "action": "HOLD",
+                            "confidence": 0.5,
+                            "reasons": ["auto_llm_response_unparseable"],
+                        }
+                preview = (raw_text[:500] + "…") if len(raw_text) > 500 else raw_text
+                return {
+                    "portfolioScope": scope,
+                    "analysisRunId": None,
+                    "saved": 0,
+                    "positions": positions,
+                    "meta": meta,
+                    "verdicts": [by_figi[str(p["figi"])] for p in positions],
+                    "llmSource": "manual_cached_partial",
+                    "message": "used_manual_merged_auto_llm_unparseable",
+                    "rawLlmTextPreview": preview,
+                }
             return {
                 "portfolioScope": scope,
                 "analysisRunId": None,

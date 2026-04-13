@@ -8,7 +8,6 @@ import PieChartOutlineOutlinedIcon from '@mui/icons-material/PieChartOutlineOutl
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import ShowChartOutlinedIcon from '@mui/icons-material/ShowChartOutlined'
-import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined'
 import TextSnippetOutlinedIcon from '@mui/icons-material/TextSnippetOutlined'
 import TrendingUpOutlinedIcon from '@mui/icons-material/TrendingUpOutlined'
 import WalletOutlinedIcon from '@mui/icons-material/WalletOutlined'
@@ -34,7 +33,6 @@ const RAW_SIDEBAR_GROUPS: SidebarNavGroup[] = [
   {
     items: [
       { label: 'Главная', path: '/dashboard', icon: DashboardOutlinedIcon },
-      { label: 'Автоторговля', path: '/virtual-trading', icon: SmartToyOutlinedIcon },
       {
         label: 'Виртуальные портфели',
         path: '/virtual-portfolios',

@@ -57,7 +57,7 @@ function stringifyValue(v: unknown): string {
   }
 }
 
-export function SettingsPage() {
+function SettingsPage() {
   const [items, setItems] = useState<SettingItemDTO[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -360,3 +360,6 @@ export function SettingsPage() {
     </Box>
   )
 }
+
+export { SettingsPage }
+export default SettingsPage

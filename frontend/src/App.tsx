@@ -5,46 +5,19 @@ import { AppShell } from '@/components/layout/AppShell'
 import { labRoutesEnabled } from '@/config/labRoutes'
 import { LoginPage } from '@/pages/LoginPage'
 
-const DashboardPage = lazy(() =>
-  import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })),
-)
-const VirtualTradingPage = lazy(() =>
-  import('@/pages/VirtualTradingPage').then(m => ({ default: m.VirtualTradingPage })),
-)
-const VirtualPortfoliosPage = lazy(() =>
-  import('@/pages/VirtualPortfoliosPage').then(m => ({ default: m.VirtualPortfoliosPage })),
-)
-const PortfolioPage = lazy(() =>
-  import('@/pages/PortfolioPage').then(m => ({ default: m.PortfolioPage })),
-)
-const RecommendationsPage = lazy(() =>
-  import('@/pages/RecommendationsPage').then(m => ({ default: m.RecommendationsPage })),
-)
-const RecommendationDetailPage = lazy(() =>
-  import('@/pages/RecommendationDetailPage').then(m => ({ default: m.RecommendationDetailPage })),
-)
-const TradingRequestsPage = lazy(() =>
-  import('@/pages/TradingRequestsPage').then(m => ({ default: m.TradingRequestsPage })),
-)
-const MonitoringAlertsPage = lazy(() =>
-  import('@/pages/MonitoringAlertsPage').then(m => ({ default: m.MonitoringAlertsPage })),
-)
-const RiskPage = lazy(() => import('@/pages/RiskPage').then(m => ({ default: m.RiskPage })))
-const PerformancePage = lazy(() =>
-  import('@/pages/PerformancePage').then(m => ({ default: m.PerformancePage })),
-)
-const PortfolioAnalyzerPage = lazy(() =>
-  import('@/pages/PortfolioAnalyzerPage').then(m => ({ default: m.PortfolioAnalyzerPage })),
-)
-const BacktestSmaPage = lazy(() =>
-  import('@/pages/BacktestSmaPage').then(m => ({ default: m.BacktestSmaPage })),
-)
-const SettingsPage = lazy(() =>
-  import('@/pages/SettingsPage').then(m => ({ default: m.SettingsPage })),
-)
-const ManualLlmImportPage = lazy(() =>
-  import('@/pages/ManualLlmImportPage').then(m => ({ default: m.ManualLlmImportPage })),
-)
+const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
+const VirtualPortfoliosPage = lazy(() => import('@/pages/VirtualPortfoliosPage'))
+const PortfolioPage = lazy(() => import('@/pages/PortfolioPage'))
+const RecommendationsPage = lazy(() => import('@/pages/RecommendationsPage'))
+const RecommendationDetailPage = lazy(() => import('@/pages/RecommendationDetailPage'))
+const TradingRequestsPage = lazy(() => import('@/pages/TradingRequestsPage'))
+const MonitoringAlertsPage = lazy(() => import('@/pages/MonitoringAlertsPage'))
+const RiskPage = lazy(() => import('@/pages/RiskPage'))
+const PerformancePage = lazy(() => import('@/pages/PerformancePage'))
+const PortfolioAnalyzerPage = lazy(() => import('@/pages/PortfolioAnalyzerPage'))
+const BacktestSmaPage = lazy(() => import('@/pages/BacktestSmaPage'))
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
+const ManualLlmImportPage = lazy(() => import('@/pages/ManualLlmImportPage'))
 import { verifyStoredSession } from '@/services/auth'
 import { useSystemStatusStore } from '@/store/systemStatusStore'
 import { useTradingCoreStore } from '@/store/tradingCoreStore'
@@ -171,7 +144,7 @@ export default function App() {
 
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/virtual-trading" element={<VirtualTradingPage />} />
+          <Route path="/virtual-trading" element={<Navigate to="/dashboard" replace />} />
           <Route path="/virtual-portfolios" element={<VirtualPortfoliosPage />} />
           <Route path="/portfolio" element={<PortfolioPage />} />
           <Route path="/recommendations" element={<RecommendationsPage />} />

@@ -9,6 +9,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   Drawer,
   FormControl,
   FormControlLabel,
@@ -22,7 +23,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TextField,
@@ -36,7 +36,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TradingRequestsService } from '@/api/generated'
 import { JsonViewBlock } from '@/components/json'
+import { ScrollableTablePaper } from '@/components/ui/ScrollableTablePaper'
 import { tradingRequestActionDisabledReason } from '@/domain/tradingRequestUiHints'
+import { FIGI_TABLE_CELL_SX, TABLE_NUMERIC_CELL_SX } from '@/theme/tableStyles'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import { filterTradingRequestRows } from '@/utils/tradingRequestFilters'
 
@@ -123,7 +125,7 @@ function formatNum(v: unknown): string {
   return Number.isFinite(n) ? n.toLocaleString('ru-RU', { maximumFractionDigits: 4 }) : String(v)
 }
 
-export function TradingRequestsPage() {
+function TradingRequestsPage() {
   const theme = useTheme()
   const isNarrow = useMediaQuery(theme.breakpoints.down('md'))
   const [items, setItems] = useState<TradingRequestRow[]>([])
@@ -322,7 +324,7 @@ export function TradingRequestsPage() {
   }
 
   const filterExtras = (
-    <Stack spacing={2} sx={{ mt: { xs: 0, md: 2 } }}>
+    <Stack spacing={1.25} sx={{ mt: { xs: 0, md: 1 } }}>
       <TextField
         size="small"
         label="FIGI или тикер (содержит)"
@@ -355,102 +357,114 @@ export function TradingRequestsPage() {
   )
 
   return (
-    <Stack spacing={3}>
+    <Stack spacing={2}>
       <Box>
-        <Typography variant="h5" gutterBottom>
+        <Typography variant="h6" component="h1" sx={{ fontWeight: 600, color: 'primary.main' }}>
           Торговые заявки
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Список, фильтры и действия в рамках state machine; превью —{' '}
-          <code>POST /trading-requests/preview</code> (сгенерированный клиент).
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+          State machine, фильтры и действия. Превью: <code>POST /trading-requests/preview</code>.
         </Typography>
       </Box>
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="subtitle2" gutterBottom>
-          Агрегаты по статусам {modeFilter ? `(режим: ${modeFilter})` : '(все режимы)'}
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: statsTotal ? 1 : 0 }}>
-          {Object.entries(statsByStatus).map(([st, n]) => (
-            <Chip key={st} size="small" label={`${st}: ${n}`} variant="outlined" />
-          ))}
-        </Box>
-        <Typography variant="caption" color="text.secondary">
-          Всего в выборке статистики: {statsTotal}
-        </Typography>
-      </Paper>
-
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            flexWrap: 'wrap',
-            gap: 2,
-            alignItems: { sm: 'center' },
-          }}
-        >
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel id="tr-status-filter">Статус</InputLabel>
-            <Select
-              labelId="tr-status-filter"
-              label="Статус"
-              value={statusFilter}
-              onChange={e => {
-                setStatusFilter(String(e.target.value))
-                setOffset(0)
-              }}
-            >
-              {STATUS_OPTIONS.map(s => (
-                <MenuItem key={s || 'all'} value={s}>
-                  {s || 'Все'}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel id="tr-mode-filter">Режим</InputLabel>
-            <Select
-              labelId="tr-mode-filter"
-              label="Режим"
-              value={modeFilter}
-              onChange={e => {
-                setModeFilter(String(e.target.value))
-                setOffset(0)
-              }}
-            >
-              {MODE_OPTIONS.map(m => (
-                <MenuItem key={m || 'all-m'} value={m}>
-                  {m || 'Все'}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Button variant="outlined" onClick={() => refresh()} disabled={loading}>
-            Обновить
-          </Button>
-          {isNarrow ? (
-            <Button
-              variant="text"
-              startIcon={<FilterListIcon />}
-              onClick={() => setFilterDrawerOpen(true)}
-            >
-              Доп. фильтры
-            </Button>
-          ) : null}
-          <Typography variant="body2" color="text.secondary" sx={{ ml: { sm: 'auto' } }}>
-            {total
-              ? `Записи ${offset + 1}–${Math.min(offset + items.length, total)} из ${total}`
-              : loading
-                ? 'Загрузка…'
-                : 'Нет данных'}
+      <Paper variant="outlined" sx={{ p: 1.5, borderColor: 'divider' }}>
+        <Stack spacing={1.25}>
+          <Typography variant="caption" sx={{ fontWeight: 600, color: 'secondary.main', letterSpacing: '0.04em' }}>
+            СТАТУСЫ
           </Typography>
-        </Box>
-        {!isNarrow ? filterExtras : null}
+          <Typography variant="caption" color="text.secondary">
+            Агрегаты {modeFilter ? `(режим: ${modeFilter})` : '(все режимы)'} · всего: {statsTotal}
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+            {Object.entries(statsByStatus).map(([st, n]) => (
+              <Chip
+                key={st}
+                size="small"
+                label={`${st}: ${n}`}
+                variant="outlined"
+                sx={{ borderColor: 'divider', color: 'text.secondary' }}
+              />
+            ))}
+          </Box>
+
+          <Divider sx={{ borderColor: 'divider' }} />
+
+          <Typography variant="caption" sx={{ fontWeight: 600, color: 'primary.main', letterSpacing: '0.04em' }}>
+            ФИЛЬТРЫ
+          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              flexWrap: 'wrap',
+              gap: 1.25,
+              alignItems: { sm: 'center' },
+            }}
+          >
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel id="tr-status-filter">Статус</InputLabel>
+              <Select
+                labelId="tr-status-filter"
+                label="Статус"
+                value={statusFilter}
+                onChange={e => {
+                  setStatusFilter(String(e.target.value))
+                  setOffset(0)
+                }}
+              >
+                {STATUS_OPTIONS.map(s => (
+                  <MenuItem key={s || 'all'} value={s}>
+                    {s || 'Все'}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel id="tr-mode-filter">Режим</InputLabel>
+              <Select
+                labelId="tr-mode-filter"
+                label="Режим"
+                value={modeFilter}
+                onChange={e => {
+                  setModeFilter(String(e.target.value))
+                  setOffset(0)
+                }}
+              >
+                {MODE_OPTIONS.map(m => (
+                  <MenuItem key={m || 'all-m'} value={m}>
+                    {m || 'Все'}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button variant="outlined" size="small" onClick={() => refresh()} disabled={loading}>
+              Обновить
+            </Button>
+            {isNarrow ? (
+              <Button
+                variant="text"
+                size="small"
+                color="secondary"
+                startIcon={<FilterListIcon />}
+                onClick={() => setFilterDrawerOpen(true)}
+              >
+                Доп. фильтры
+              </Button>
+            ) : null}
+            <Typography variant="caption" color="text.secondary" sx={{ ml: { sm: 'auto' } }}>
+              {total
+                ? `${offset + 1}–${Math.min(offset + items.length, total)} / ${total}`
+                : loading
+                  ? 'Загрузка…'
+                  : 'Нет данных'}
+            </Typography>
+          </Box>
+          {!isNarrow ? filterExtras : null}
+        </Stack>
       </Paper>
 
       <Drawer anchor="right" open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)}>
-        <Box sx={{ width: 320, p: 2 }}>
+        <Box sx={{ width: 300, p: 1.5 }}>
           <Typography variant="subtitle2" gutterBottom>
             Дополнительные фильтры
           </Typography>
@@ -461,7 +475,7 @@ export function TradingRequestsPage() {
         </Box>
       </Drawer>
 
-      <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
+      <ScrollableTablePaper maxHeight="min(62vh, 480px)" sx={{ overflowX: 'auto' }}>
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
@@ -470,7 +484,9 @@ export function TradingRequestsPage() {
               <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Тикер</TableCell>
               <TableCell>Действие</TableCell>
               <TableCell>Режим</TableCell>
-              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Кол-во</TableCell>
+              <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                Кол-во
+              </TableCell>
               <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Профиль</TableCell>
               <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Создана</TableCell>
               <TableCell align="right">Действия</TableCell>
@@ -489,7 +505,7 @@ export function TradingRequestsPage() {
                   <TableCell>
                     <Chip label={row.status} size="small" />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={FIGI_TABLE_CELL_SX}>
                     <Typography
                       variant="body2"
                       component={Link}
@@ -504,7 +520,10 @@ export function TradingRequestsPage() {
                   </TableCell>
                   <TableCell>{row.action ?? '—'}</TableCell>
                   <TableCell>{row.mode ?? '—'}</TableCell>
-                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                  <TableCell
+                    sx={{ display: { xs: 'none', sm: 'table-cell' }, ...TABLE_NUMERIC_CELL_SX }}
+                    align="right"
+                  >
                     {row.quantity ?? '—'}
                   </TableCell>
                   <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
@@ -574,7 +593,7 @@ export function TradingRequestsPage() {
                     <Typography
                       variant="caption"
                       color="text.secondary"
-                      sx={{ display: 'block', mt: 0.5 }}
+                      sx={{ display: 'block', mt: 0.5, ...TABLE_NUMERIC_CELL_SX }}
                     >
                       Цена {formatNum(row.price)} · Бюджет {formatNum(row.budget)}
                     </Typography>
@@ -584,7 +603,7 @@ export function TradingRequestsPage() {
             )}
           </TableBody>
         </Table>
-      </TableContainer>
+      </ScrollableTablePaper>
 
       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
         <Button
@@ -697,3 +716,6 @@ export function TradingRequestsPage() {
     </Stack>
   )
 }
+
+export { TradingRequestsPage }
+export default TradingRequestsPage

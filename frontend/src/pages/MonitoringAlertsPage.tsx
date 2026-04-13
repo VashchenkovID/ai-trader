@@ -45,7 +45,7 @@ function asRows(raw: unknown): AlertRow[] {
   })
 }
 
-export function MonitoringAlertsPage() {
+function MonitoringAlertsPage() {
   const [rows, setRows] = useState<AlertRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -194,3 +194,6 @@ export function MonitoringAlertsPage() {
     </Box>
   )
 }
+
+export { MonitoringAlertsPage }
+export default MonitoringAlertsPage

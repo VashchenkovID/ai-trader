@@ -16,6 +16,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Suspense, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -187,11 +188,14 @@ export function AppShell() {
         component="main"
         sx={{
           flexGrow: 1,
-          p: { xs: 2, sm: 3 },
+          p: { xs: 1.75, sm: 2.5 },
           width: { md: `calc(100% - ${drawerWidth}px)` },
           mt: { xs: 7, md: 0 },
           minHeight: '100vh',
           bgcolor: 'background.default',
+          backgroundImage: t =>
+            `radial-gradient(ellipse 80% 50% at 50% 0%, ${alpha(t.palette.primary.main, 0.07)}, transparent 55%),
+             radial-gradient(ellipse 45% 40% at 100% 70%, ${alpha(t.palette.secondary.main, 0.05)}, transparent 50%)`,
         }}
       >
         <Box
@@ -200,7 +204,7 @@ export function AppShell() {
             flexWrap: 'wrap',
             alignItems: 'center',
             gap: 1,
-            mb: 2,
+            mb: 1.5,
           }}
         >
           <Typography variant="caption" color="text.secondary">

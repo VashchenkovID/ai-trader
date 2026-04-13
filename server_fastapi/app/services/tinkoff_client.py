@@ -64,6 +64,29 @@ def price_units_nano_to_float(units: int | str | None, nano: int | None = None) 
     return u + n / 1e9
 
 
+def tinkoff_quotation_quantity_to_float(raw: Any) -> float:
+    """
+    Количество бумаг / лотов из Quotation (units+nano) или числа.
+    int(units) отбрасывает дробную часть и даёт 0, если весь объём в nano — отсюда «пустые» позиции.
+    """
+    if raw is None:
+        return 0.0
+    if isinstance(raw, dict):
+        try:
+            u = float(raw.get("units") or 0)
+        except (TypeError, ValueError):
+            u = 0.0
+        try:
+            n = float(raw.get("nano") or 0)
+        except (TypeError, ValueError):
+            n = 0.0
+        return u + n / 1e9
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 class TinkoffApiError(Exception):
     """Ошибка вызова Tinkoff Invest API."""
 
@@ -595,7 +618,7 @@ class TinkoffApiClient:
         positions = []
         for p in data.get("positions") or []:
             qty = p.get("quantity") or {}
-            q = int(qty.get("units", 0)) if isinstance(qty, dict) else int(qty or 0)
+            q = tinkoff_quotation_quantity_to_float(qty) if isinstance(qty, dict) else tinkoff_quotation_quantity_to_float(qty)
             avg = val_cur(p.get("averagePositionPrice"))[0]
             cur_p = val_cur(p.get("currentPrice"))[0]
             exp_y = val_cur(p.get("expectedYield"))[0]
@@ -625,7 +648,7 @@ class TinkoffApiClient:
         positions = []
         for p in data.get("positions") or []:
             qty = p.get("quantity") or {}
-            q = int(qty.get("units", 0)) if isinstance(qty, dict) else int(qty or 0)
+            q = tinkoff_quotation_quantity_to_float(qty) if isinstance(qty, dict) else tinkoff_quotation_quantity_to_float(qty)
             avg = p.get("averagePositionPrice") or {}
             cur_p = p.get("currentPrice") or {}
             it = p.get("instrumentType")

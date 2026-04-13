@@ -22,7 +22,7 @@ function overallChip(status: string | undefined) {
   return <Chip label={status ?? '—'} variant="outlined" size="small" />
 }
 
-export function RiskPage() {
+function RiskPage() {
   const [status, setStatus] = useState<Record<string, unknown> | null>(null)
   const [limits, setLimits] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(false)
@@ -247,3 +247,6 @@ export function RiskPage() {
     </Box>
   )
 }
+
+export { RiskPage }
+export default RiskPage

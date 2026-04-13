@@ -16,7 +16,7 @@ import { PerformanceService } from '@/api/generated'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import { unwrapEnvelopeData } from '@/utils/unwrapEnvelope'
 
-export function PerformancePage() {
+function PerformancePage() {
   const [period, setPeriod] = useState(30)
   const [dashboard, setDashboard] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(false)
@@ -160,3 +160,6 @@ export function PerformancePage() {
     </Box>
   )
 }
+
+export { PerformancePage }
+export default PerformancePage

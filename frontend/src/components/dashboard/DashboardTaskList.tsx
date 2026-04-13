@@ -33,14 +33,19 @@ function statusColor(
 export function DashboardTaskList({ tasks }: { tasks: TaskRecord[] }) {
   if (tasks.length === 0) {
     return (
-      <Typography variant="body2" color="text.secondary">
-        Нет недавних задач в снимке.
-      </Typography>
+      <Box>
+        <Typography variant="body2" color="text.secondary">
+          Нет недавних задач в снимке.
+        </Typography>
+        <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.75 }}>
+          Задачи появятся после фоновых операций (анализ портфеля, пайплайн рекомендаций и т.д.).
+        </Typography>
+      </Box>
     )
   }
 
   return (
-    <Stack spacing={1.5}>
+    <Stack spacing={1}>
       {tasks.map(t => {
         const duration = formatTaskDuration(t)
         const summary = formatTaskResultSummary(t.result ?? undefined)
@@ -48,7 +53,7 @@ export function DashboardTaskList({ tasks }: { tasks: TaskRecord[] }) {
           <Box
             key={t.taskId || `${t.taskType}-${t.queuedAt}`}
             sx={{
-              p: 1.5,
+              p: 1,
               borderRadius: 1,
               border: '1px solid',
               borderColor: 'divider',

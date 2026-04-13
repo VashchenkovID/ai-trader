@@ -6,11 +6,14 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Divider,
   FormControl,
+  Grid,
   InputLabel,
   MenuItem,
   Select,
   Snackbar,
+  Stack,
   TextField,
   Typography,
 } from '@mui/material'
@@ -18,7 +21,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { PortfolioAnalysisService, TrainingService } from '@/api/generated'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
-export function ManualLlmImportPage() {
+function ManualLlmImportPage() {
   const [chunkIndex, setChunkIndex] = useState(0)
   const [chunkTotal, setChunkTotal] = useState<number | null>(null)
   const [batchSize, setBatchSize] = useState<number | null>(null)
@@ -207,30 +210,82 @@ export function ManualLlmImportPage() {
   const batchLabel =
     chunkTotal != null && chunkTotal > 0 ? `Чанк ${chunkIndex + 1} из ${chunkTotal}` : `Чанк #${chunkIndex}`
 
-  return (
-    <Box sx={{ p: 2, maxWidth: 1080, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Typography variant="h5" component="h1">
-        Ручной импорт LLM
-      </Typography>
-      <Typography color="text.secondary" variant="body2">
-        Ниже два независимых сценария: (1) батч рекомендаций по инструментам — GigaChat и Алиса; (2) вердикт по
-        открытым позициям выбранного портфеля — одна внешняя модель и JSON-ответ.
-      </Typography>
-      <Typography color="text.secondary" variant="body2">
-        <strong>Рекомендации по рынку:</strong> загрузите промпт для чанка, скопируйте его и вставьте один и тот же
-        текст в обе модели. Вставьте сюда два сырых ответа и нажмите «Применить батч». Порядок FIGI должен совпадать с
-        ответом GET.
-      </Typography>
+  const readonlyPromptSx = {
+    flex: 1,
+    minWidth: 0,
+    '& .MuiInputBase-root': {
+      fontFamily: 'ui-monospace, "Cascadia Code", Consolas, monospace',
+      alignItems: 'flex-start',
+    },
+    '& .MuiInputBase-input': {
+      fontSize: { xs: '0.6875rem', sm: '0.75rem' },
+      lineHeight: 1.4,
+      py: 0.5,
+    },
+    '& .MuiInputLabel-root': {
+      fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+    },
+  } as const
 
-      <Card variant="outlined">
-        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Typography variant="subtitle1">Рекомендации по инструментам (жюри) — {batchLabel}</Typography>
-          {batchSize != null ? (
-            <Typography variant="caption" color="text.secondary">
-              Размер батча (настройка сервера): {batchSize}
-            </Typography>
-          ) : null}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+  /** Поля вставки ответов нейросетей: компактный шрифт, ровно 6 видимых строк, дальше прокрутка. */
+  const neuralResponseSx = {
+    '& .MuiInputBase-root': {
+      fontFamily: 'ui-monospace, "Cascadia Code", Consolas, monospace',
+      alignItems: 'flex-start',
+    },
+    '& .MuiInputBase-input': {
+      fontSize: { xs: '0.6875rem', sm: '0.75rem' },
+      lineHeight: 1.4,
+      py: 0.5,
+      overflow: 'auto',
+    },
+    '& .MuiInputLabel-root': {
+      fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+    },
+  } as const
+
+  const neuralResponseRows = { minRows: 5, maxRows: 5 } as const
+
+  const cardContentSx = {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 1,
+    py: 1.5,
+    px: 1.75,
+    '&:last-child': { pb: 1.5 },
+  }
+
+  return (
+    <Stack spacing={1.5} sx={{ maxWidth: { xs: '100%', md: 1320 }, width: 1 }}>
+      <Box>
+        <Typography variant="h6" component="h1" sx={{ fontWeight: 600, color: 'primary.main' }}>
+          Ручной импорт LLM
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.35, maxWidth: 720 }}>
+          Два сценария: <strong>жюри</strong> (батч FIGI, GigaChat + Алиса) и <strong>портфель</strong> (позиции, один
+          JSON внешней модели).
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+          Жюри: один промпт в обе модели → два сырых ответа → «Применить батч». Порядок FIGI как в GET.
+        </Typography>
+      </Box>
+
+      <Grid container spacing={1.5} sx={{ alignItems: 'stretch' }}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ ...cardContentSx, flex: 1 }}>
+          <Typography variant="caption" sx={{ fontWeight: 600, color: 'secondary.main', letterSpacing: '0.04em' }}>
+            ЖЮРИ · РЕКОМЕНДАЦИИ ПО ИНСТРУМЕНТАМ
+          </Typography>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+            {batchLabel}
+            {batchSize != null ? (
+              <Typography component="span" variant="caption" color="text.secondary" sx={{ fontWeight: 400, ml: 1 }}>
+                батч: {batchSize}
+              </Typography>
+            ) : null}
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
             <TextField
               label="Индекс чанка (0 …)"
               type="number"
@@ -238,28 +293,39 @@ export function ManualLlmImportPage() {
               value={chunkIndex}
               onChange={e => setChunkIndex(Math.max(0, parseInt(e.target.value, 10) || 0))}
               slotProps={{ htmlInput: { min: 0 } }}
-              sx={{ width: 160 }}
+              sx={{ width: { xs: '100%', sm: 160 } }}
             />
-            <Button variant="contained" onClick={() => void loadPrompt()} disabled={loadingPrompt}>
+            <Button variant="contained" onClick={() => void loadPrompt()} disabled={loadingPrompt} size="small">
               {loadingPrompt ? <CircularProgress size={22} color="inherit" /> : 'Загрузить промпт'}
             </Button>
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: 1,
+              alignItems: { xs: 'stretch', sm: 'flex-start' },
+            }}
+          >
             <TextField
               label="Промпт (только чтение)"
               value={prompt}
               fullWidth
               multiline
-              minRows={6}
+              minRows={3}
+              maxRows={16}
+              size="small"
               slotProps={{ htmlInput: { readOnly: true } }}
+              sx={readonlyPromptSx}
             />
             <Button
               startIcon={<ContentCopyIcon />}
               variant="outlined"
+              size="small"
               onClick={() => void copyPrompt()}
               disabled={!prompt}
-              sx={{ flexShrink: 0, mt: 1 }}
+              sx={{ flexShrink: 0, alignSelf: { xs: 'flex-start', sm: 'flex-start' }, mt: { xs: 0, sm: 0.5 } }}
             >
               Копировать
             </Button>
@@ -271,7 +337,10 @@ export function ManualLlmImportPage() {
             onChange={e => setGiga(e.target.value)}
             fullWidth
             multiline
-            minRows={8}
+            minRows={neuralResponseRows.minRows}
+            maxRows={neuralResponseRows.maxRows}
+            size="small"
+            sx={neuralResponseSx}
           />
           <TextField
             label="Ответ Алиса / YandexGPT (сырой текст / JSON)"
@@ -279,42 +348,55 @@ export function ManualLlmImportPage() {
             onChange={e => setAlisa(e.target.value)}
             fullWidth
             multiline
-            minRows={8}
+            minRows={neuralResponseRows.minRows}
+            maxRows={neuralResponseRows.maxRows}
+            size="small"
+            sx={neuralResponseSx}
           />
 
           {figis.length > 0 ? (
-            <Typography variant="caption" color="text.secondary">
-              FIGI в батче: {figis.join(', ')}
+            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35, wordBreak: 'break-all' }}>
+              FIGI: {figis.join(', ')}
             </Typography>
           ) : null}
 
-          <Button variant="contained" color="secondary" onClick={() => void applyBatch()} disabled={applying}>
+          <Button variant="contained" color="secondary" size="small" onClick={() => void applyBatch()} disabled={applying}>
             {applying ? <CircularProgress size={22} color="inherit" /> : 'Применить батч'}
           </Button>
-        </CardContent>
-      </Card>
 
-      {error ? <Alert severity="error">{error}</Alert> : null}
-      {resultMsg ? <Alert severity="success">{resultMsg}</Alert> : null}
+          {error ? (
+            <Alert severity="error" sx={{ py: 0.5 }}>
+              {error}
+            </Alert>
+          ) : null}
+          {resultMsg ? (
+            <Alert severity="success" sx={{ py: 0.5 }}>
+              {resultMsg}
+            </Alert>
+          ) : null}
+            </CardContent>
+          </Card>
+        </Grid>
 
-      <Card variant="outlined">
-        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Typography variant="subtitle1">Портфель: внешняя нейросеть (вердикт по позициям)</Typography>
-          <Typography color="text.secondary" variant="body2">
-            Аналогично блоку выше: загрузите промпт, скопируйте в ChatGPT / Claude / Perplexity и т.д., вставьте{' '}
-            <strong>один</strong> сырой ответ в формате JSON с массивом{' '}
-            <code style={{ fontSize: '0.9em' }}>instruments[]</code> (figi, action, confidence, reasons). Список и
-            порядок FIGI должны совпадать с ответом GET (как для рекомендаций по чанку).
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ ...cardContentSx, flex: 1 }}>
+          <Typography variant="caption" sx={{ fontWeight: 600, color: 'primary.main', letterSpacing: '0.04em' }}>
+            ПОРТФЕЛЬ · ВЕРДИКТ ПО ПОЗИЦИЯМ
           </Typography>
-          <Alert severity="info" variant="outlined" sx={{ py: 0.75 }}>
-            <strong>Не смешивать с «Рынком».</strong> Верхний блок на этой странице обновляет общие рекомендации по
-            инструментам (жюри). Этот блок сохраняет вердикт в{' '}
-            <code style={{ fontSize: '0.85em' }}>portfolio_position_recommendations</code> — на экране позиций смотрите
-            колонку <strong>«Портфель (позиция)»</strong>. Колонка «Рынок» / карточка FIGI — отдельный контур и может
-            показывать BUY, пока по позиции сохранён SELL — это разные задачи.
+          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.45 }}>
+            Промпт → внешняя модель → один JSON с <code>instruments[]</code> (figi, action, confidence, reasons).
+            Порядок FIGI как в GET.
+          </Typography>
+          <Alert severity="info" variant="outlined" sx={{ py: 0.35, px: 1, '& .MuiAlert-message': { fontSize: 12, lineHeight: 1.4 } }}>
+            <strong>Не жюри.</strong> Соседняя колонка — рынок/инструменты; здесь —{' '}
+            <code style={{ fontSize: '0.85em' }}>portfolio_position_recommendations</code> (колонка «Портфель» на
+            позициях). «Рынок» на FIGI — другой контур.
           </Alert>
 
-          <FormControl size="small" sx={{ maxWidth: 360 }}>
+          <Divider sx={{ borderColor: 'divider', my: 0.25 }} />
+
+          <FormControl size="small" sx={{ width: { xs: '100%', sm: 'auto' }, maxWidth: { sm: 360 } }}>
             <InputLabel id="pf-scope-label">Портфель</InputLabel>
             <Select
               labelId="pf-scope-label"
@@ -339,27 +421,38 @@ export function ManualLlmImportPage() {
             placeholder="Пусто = все открытые позиции"
           />
 
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-            <Button variant="contained" onClick={() => void loadPortfolioPrompt()} disabled={pfLoadingPrompt}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
+            <Button variant="contained" onClick={() => void loadPortfolioPrompt()} disabled={pfLoadingPrompt} size="small">
               {pfLoadingPrompt ? <CircularProgress size={22} color="inherit" /> : 'Загрузить промпт'}
             </Button>
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: 1,
+              alignItems: { xs: 'stretch', sm: 'flex-start' },
+            }}
+          >
             <TextField
               label="Промпт (только чтение)"
               value={pfPrompt}
               fullWidth
               multiline
-              minRows={6}
+              minRows={3}
+              maxRows={16}
+              size="small"
               slotProps={{ htmlInput: { readOnly: true } }}
+              sx={readonlyPromptSx}
             />
             <Button
               startIcon={<ContentCopyIcon />}
               variant="outlined"
+              size="small"
               onClick={() => void copyPortfolioPrompt()}
               disabled={!pfPrompt}
-              sx={{ flexShrink: 0, mt: 1 }}
+              sx={{ flexShrink: 0, alignSelf: { xs: 'flex-start', sm: 'flex-start' }, mt: { xs: 0, sm: 0.5 } }}
             >
               Копировать
             </Button>
@@ -371,30 +464,47 @@ export function ManualLlmImportPage() {
             onChange={e => setPfExternalRaw(e.target.value)}
             fullWidth
             multiline
-            minRows={8}
+            minRows={neuralResponseRows.minRows}
+            maxRows={neuralResponseRows.maxRows}
+            size="small"
+            sx={neuralResponseSx}
           />
 
           {pfFigis.length > 0 ? (
-            <Typography variant="caption" color="text.secondary">
-              FIGI в запросе: {pfFigis.join(', ')}
+            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35, wordBreak: 'break-all' }}>
+              FIGI: {pfFigis.join(', ')}
             </Typography>
           ) : null}
 
           <Button
             variant="contained"
             color="secondary"
+            size="small"
             onClick={() => void applyPortfolioManual()}
             disabled={pfApplying}
           >
             {pfApplying ? <CircularProgress size={22} color="inherit" /> : 'Применить ответ'}
           </Button>
 
-          {pfError ? <Alert severity="error">{pfError}</Alert> : null}
-          {pfResult ? <Alert severity="success">{pfResult}</Alert> : null}
-        </CardContent>
-      </Card>
+          {pfError ? (
+            <Alert severity="error" sx={{ py: 0.5 }}>
+              {pfError}
+            </Alert>
+          ) : null}
+          {pfResult ? (
+            <Alert severity="success" sx={{ py: 0.5 }}>
+              {pfResult}
+            </Alert>
+          ) : null}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
       <Snackbar open={Boolean(snack)} autoHideDuration={3000} onClose={() => setSnack(null)} message={snack} />
-    </Box>
+    </Stack>
   )
 }
+
+export { ManualLlmImportPage }
+export default ManualLlmImportPage

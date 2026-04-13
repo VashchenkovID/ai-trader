@@ -5,26 +5,40 @@ import {
   Box,
   Button,
   Chip,
+  Grid,
   LinearProgress,
   Paper,
   Snackbar,
+  Stack,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   Tooltip,
   Typography,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PortfolioAnalysisService, PortfolioService } from '@/api/generated'
+import { RecommendationStatusBadge } from '@/components/recommendations/RecommendationStatusBadge'
+import { ScrollableTablePaper } from '@/components/ui/ScrollableTablePaper'
 import { CreateTradingRequestModal, parsePositionQuantity } from '@/components/trading'
+import { FIGI_TABLE_CELL_SX, TABLE_NUMERIC_CELL_SX } from '@/theme/tableStyles'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import { parseLatestVerdictMap, type PortfolioVerdictCell } from '@/utils/portfolioPositionVerdict'
 
 const REAL_PORTFOLIO_SCOPE = 'real'
+
+type PortfolioPayload = {
+  cash?: unknown
+  totalValue?: unknown
+  positionsValue?: unknown
+  positionsList?: unknown[]
+  cached?: boolean
+  lastUpdated?: unknown
+}
 
 function formatMoney(value: unknown) {
   const n = typeof value === 'number' ? value : Number(value)
@@ -34,6 +48,12 @@ function formatMoney(value: unknown) {
     currency: 'RUB',
     maximumFractionDigits: 0,
   }).format(n)
+}
+
+function formatSourceUpdated(data: PortfolioPayload | null, source: 'live' | 'db') {
+  const src = source === 'live' ? 'live Tinkoff' : 'кэш БД'
+  const upd = data?.lastUpdated != null ? ` · ${String(data.lastUpdated)}` : ''
+  return `${src}${upd}`
 }
 
 function priceFromPosition(p: Record<string, unknown>): number | null {
@@ -47,26 +67,20 @@ function priceFromPosition(p: Record<string, unknown>): number | null {
   return null
 }
 
-type PortfolioPayload = {
-  cash?: unknown
-  totalValue?: unknown
-  positionsValue?: unknown
-  positionsList?: unknown[]
-  cached?: boolean
-  lastUpdated?: unknown
-}
-
-export function PortfolioPage() {
+function PortfolioPage() {
   const [data, setData] = useState<PortfolioPayload | null>(null)
   const [source, setSource] = useState<'live' | 'db'>('live')
   const [recByFigi, setRecByFigi] = useState<Map<string, Record<string, unknown>>>(new Map())
-  const [portfolioVerdictByFigi, setPortfolioVerdictByFigi] = useState<Map<string, PortfolioVerdictCell>>(
-    new Map(),
-  )
+  const [portfolioVerdictByFigi, setPortfolioVerdictByFigi] = useState<
+    Map<string, PortfolioVerdictCell>
+  >(new Map())
   const [loading, setLoading] = useState(false)
   const [verdictLoading, setVerdictLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [snack, setSnack] = useState<{ message: string; severity: 'success' | 'error' | 'warning' } | null>(null)
+  const [snack, setSnack] = useState<{
+    message: string
+    severity: 'success' | 'error' | 'warning'
+  } | null>(null)
 
   const [sellOpen, setSellOpen] = useState(false)
   const [sellData, setSellData] = useState<Record<string, unknown> | null>(null)
@@ -113,11 +127,8 @@ export function PortfolioPage() {
   }, [data])
 
   const figis = useMemo(
-    () =>
-      positions
-        .map(p => String(p.figi ?? '').trim())
-        .filter(Boolean),
-    [positions],
+    () => positions.map(p => String(p.figi ?? '').trim()).filter(Boolean),
+    [positions]
   )
 
   const loadMarketRecommendations = useCallback(async (ids: string[]) => {
@@ -127,9 +138,11 @@ export function PortfolioPage() {
     }
     try {
       const env =
-        await PortfolioService.getPortfolioPositionRecommendationsApiV1PortfolioPositionRecommendationsGet({
-          figi: ids,
-        })
+        await PortfolioService.getPortfolioPositionRecommendationsApiV1PortfolioPositionRecommendationsGet(
+          {
+            figi: ids,
+          }
+        )
       const body = env.data as { items?: unknown[] }
       const items = Array.isArray(body.items) ? body.items : []
       const m = new Map<string, Record<string, unknown>>()
@@ -182,13 +195,15 @@ export function PortfolioPage() {
       })
       await loadPortfolioVerdicts()
       await loadMarketRecommendations(figis)
-      const payload = env.data as { llmSource?: string; saved?: number; message?: string } | undefined
+      const payload = env.data as
+        | { llmSource?: string; saved?: number; message?: string }
+        | undefined
       const src =
         payload?.llmSource === 'gigachat' ||
         payload?.llmSource === 'gigachat_manual_merge' ||
         payload?.llmSource === 'perplexity'
           ? 'GigaChat/LLM'
-          : payload?.llmSource === 'manual_cached'
+          : payload?.llmSource === 'manual_cached' || payload?.llmSource === 'manual_cached_partial'
             ? 'ручной кэш'
             : (payload?.llmSource ?? '—')
       setSnack({
@@ -197,11 +212,15 @@ export function PortfolioPage() {
             ? 'Нет открытых позиций — нечего анализировать.'
             : payload?.message === 'no_llm_verdict'
               ? 'Нет валидного ответа GigaChat — записи рекомендаций по позициям не обновлялись.'
-              : payload?.message === 'used_manual_verdict_cache'
-                ? 'Все позиции покрыты свежим ручным импортом — GigaChat не вызывался.'
-                : `Рекомендации по портфелю обновлены (${src}, записей: ${payload?.saved ?? '—'}).`,
+              : payload?.message === 'used_manual_merged_auto_llm_unparseable'
+                ? 'Ответ GigaChat не разобран; для позиций без ручного импорта показан HOLD. Ручные вердикты учтены.'
+                : payload?.message === 'used_manual_verdict_cache'
+                  ? 'Все позиции покрыты свежим ручным импортом — GigaChat не вызывался.'
+                  : `Рекомендации по портфелю обновлены (${src}, записей: ${payload?.saved ?? '—'}).`,
         severity:
-          payload?.message === 'no_positions' || payload?.message === 'no_llm_verdict'
+          payload?.message === 'no_positions' ||
+          payload?.message === 'no_llm_verdict' ||
+          payload?.message === 'used_manual_merged_auto_llm_unparseable'
             ? 'warning'
             : 'success',
       })
@@ -222,51 +241,93 @@ export function PortfolioPage() {
   }, [loadLive])
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, mx: 'auto' }}>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 2 }}>
-        <Typography variant="h5" sx={{ flexGrow: 1 }}>
+    <Box sx={{ p: { xs: 1.5, md: 2 }, maxWidth: 1400, mx: 'auto' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 1,
+          rowGap: 1,
+          mb: 1,
+        }}
+      >
+        <Typography
+          variant="h5"
+          sx={{
+            flexGrow: 1,
+            minWidth: 200,
+            fontWeight: 800,
+            color: 'primary.main',
+            letterSpacing: '-0.02em',
+          }}
+        >
           Портфель (реальный счёт)
         </Typography>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<RefreshIcon />}
-          onClick={() => void loadLive()}
-          disabled={loading}
-        >
-          Обновить (Tinkoff)
-        </Button>
-        <Button variant="outlined" size="small" onClick={() => void loadDbSnapshot()} disabled={loading}>
-          Снимок из БД
-        </Button>
-        <Button variant="text" size="small" onClick={() => void triggerSync()} disabled={loading}>
-          Поставить sync в очередь
-        </Button>
-        <Tooltip title="Пересчёт BUY/SELL/HOLD с учётом цены закупки и рыночного сигнала (LLM при наличии ключа)">
-          <span>
-            <Button
-              variant="contained"
-              size="small"
-              color="secondary"
-              startIcon={<AutoAwesomeIcon />}
-              onClick={() => void runPortfolioVerdictRefresh()}
-              disabled={loading || verdictLoading}
-            >
-              Обновить рекомендации по портфелю
-            </Button>
-          </span>
-        </Tooltip>
+        <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<RefreshIcon />}
+            onClick={() => void loadLive()}
+            disabled={loading}
+          >
+            Обновить (Tinkoff)
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => void loadDbSnapshot()}
+            disabled={loading}
+          >
+            Снимок из БД
+          </Button>
+          <Button variant="text" size="small" onClick={() => void triggerSync()} disabled={loading}>
+            Sync в очередь
+          </Button>
+          <Tooltip title="Пересчёт BUY/SELL/HOLD с учётом цены закупки и рыночного сигнала (LLM при наличии ключа)">
+            <span>
+              <Button
+                variant="contained"
+                size="small"
+                color="secondary"
+                startIcon={<AutoAwesomeIcon />}
+                onClick={() => void runPortfolioVerdictRefresh()}
+                disabled={loading || verdictLoading}
+              >
+                Рекомендации по портфелю
+              </Button>
+            </span>
+          </Tooltip>
+        </Stack>
       </Box>
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Источник: {source === 'live' ? 'live Tinkoff' : 'кэш БД'}
-        {data?.lastUpdated != null ? ` · обновлено: ${String(data.lastUpdated)}` : ''}
-      </Typography>
+      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center', mb: 1.5 }}>
+        <Chip
+          size="small"
+          label={formatSourceUpdated(data, source)}
+          variant="outlined"
+          sx={{
+            borderColor: theme => alpha(theme.palette.primary.main, 0.45),
+            color: 'primary.light',
+            fontWeight: 600,
+          }}
+        />
+        {data?.cached ? (
+          <Chip
+            size="small"
+            label="Кэш API"
+            color="warning"
+            variant="outlined"
+            sx={{ fontWeight: 600 }}
+          />
+        ) : null}
+      </Stack>
 
       {error ? (
-        <Alert severity="warning" sx={{ mb: 2 }}>
+        <Alert severity="warning" sx={{ mb: 1.5, py: 0.5 }}>
           {error}
-          <Box sx={{ mt: 1 }}>
+          <Box sx={{ mt: 0.75 }}>
             <Button size="small" onClick={() => void loadDbSnapshot()}>
               Загрузить снимок из БД
             </Button>
@@ -274,66 +335,128 @@ export function PortfolioPage() {
         </Alert>
       ) : null}
 
-      {loading && !data ? <LinearProgress sx={{ mb: 2 }} /> : null}
-      {verdictLoading ? <LinearProgress sx={{ mb: 1 }} /> : null}
+      {loading && !data ? <LinearProgress sx={{ mb: 1 }} /> : null}
+      {verdictLoading ? <LinearProgress sx={{ mb: 0.75 }} /> : null}
 
       {data ? (
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                Кэш
-              </Typography>
-              <Typography variant="h6">{formatMoney(data.cash)}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                Позиции
-              </Typography>
-              <Typography variant="h6">{formatMoney(data.positionsValue)}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                Итого
-              </Typography>
-              <Typography variant="h6">{formatMoney(data.totalValue)}</Typography>
-            </Box>
-          </Box>
+        <Paper
+          sx={theme => ({
+            p: 1.5,
+            mb: 1.5,
+            borderColor: alpha(theme.palette.primary.main, 0.28),
+            boxShadow: `0 0 0 1px ${alpha(theme.palette.primary.main, 0.08)}`,
+          })}
+        >
+          <Grid container spacing={1.5}>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <Box
+                sx={theme => ({
+                  pl: { sm: 1.5 },
+                  borderLeft: { sm: `3px solid ${theme.palette.secondary.main}` },
+                  py: 0.25,
+                })}
+              >
+                <Typography variant="caption" sx={{ color: 'secondary.light', fontWeight: 600 }}>
+                  Кэш
+                </Typography>
+                <Typography
+                  variant="h6"
+                  sx={{ color: 'secondary.main', fontWeight: 700, lineHeight: 1.2 }}
+                >
+                  {formatMoney(data.cash)}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <Box
+                sx={theme => ({
+                  pl: { sm: 1.5 },
+                  borderLeft: { sm: `3px solid ${theme.palette.primary.main}` },
+                  py: 0.25,
+                })}
+              >
+                <Typography variant="caption" sx={{ color: 'primary.light', fontWeight: 600 }}>
+                  Позиции
+                </Typography>
+                <Typography
+                  variant="h6"
+                  sx={{ color: 'primary.main', fontWeight: 700, lineHeight: 1.2 }}
+                >
+                  {formatMoney(data.positionsValue)}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <Box
+                sx={theme => ({
+                  pl: { sm: 1.5 },
+                  borderLeft: { sm: `3px solid ${theme.palette.success.main}` },
+                  py: 0.25,
+                })}
+              >
+                <Typography variant="caption" sx={{ color: 'success.light', fontWeight: 600 }}>
+                  Итого
+                </Typography>
+                <Typography
+                  variant="h6"
+                  sx={{ color: 'success.main', fontWeight: 800, lineHeight: 1.2 }}
+                >
+                  {formatMoney(data.totalValue)}
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
         </Paper>
       ) : null}
 
-      <Paper sx={{ p: 2 }}>
-        <Typography variant="subtitle1" sx={{ mb: 1 }}>
+      <Paper
+        sx={theme => ({
+          p: 1.5,
+          borderColor: alpha(theme.palette.secondary.main, 0.28),
+        })}
+      >
+        <Typography variant="subtitle1" sx={{ mb: 0.5, color: 'secondary.main', fontWeight: 700 }}>
           Позиции и рекомендации
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-          <strong>Портфель</strong> — вердикт по <em>вашей</em> позиции (цена входа, PnL, ручной LLM-импорт на странице
-          «Ручной импорт LLM»). Им ориентируйтесь для решений по этому счёту.
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mb: 1, lineHeight: 1.45 }}
+        >
+          <Box component="span" sx={{ color: 'secondary.main', fontWeight: 700 }}>
+            Портфель
+          </Box>{' '}
+          — вердикт по вашей позиции (вход, PnL, ручной LLM).{' '}
+          <Box component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
+            Рынок
+          </Box>{' '}
+          — сигнал fusion по FIGI без учёта вашей средней; может отличаться от «Портфель».
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-          <strong>Рынок</strong> — последняя строка из общей таблицы рекомендаций по FIGI (fusion/рынок), без учёта вашей
-          средней и доли в портфеле. Может расходиться с колонкой «Портфель» — это ожидаемо, не путайте источники.
-        </Typography>
-        <TableContainer>
-          <Table size="small">
+        <ScrollableTablePaper sx={{ overflowX: 'auto' }} maxHeight="min(62vh, 520px)">
+          <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell>FIGI</TableCell>
-                <TableCell>Тикер</TableCell>
-                <TableCell align="right">Кол-во</TableCell>
-                <TableCell align="right">Цена</TableCell>
-                <TableCell>
+                <TableCell sx={{ color: 'secondary.main', fontWeight: 700 }}>FIGI</TableCell>
+                <TableCell sx={{ color: 'primary.main', fontWeight: 700 }}>Тикер</TableCell>
+                <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 700 }}>
+                  Кол-во
+                </TableCell>
+                <TableCell align="right" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                  Цена
+                </TableCell>
+                <TableCell sx={{ color: 'primary.main', fontWeight: 700 }}>
                   <Tooltip title="Сигнал по инструменту из таблицы recommendations (общий для всех), не персональный">
                     <span>Рынок (FIGI)</span>
                   </Tooltip>
                 </TableCell>
-                <TableCell>
+                <TableCell sx={{ color: 'secondary.main', fontWeight: 700 }}>
                   <Tooltip title="Вердикт по вашей позиции: закупка, PnL, доля; ручной импорт LLM пишет сюда">
                     <span>Портфель (позиция)</span>
                   </Tooltip>
                 </TableCell>
-                <TableCell align="right">Заявка</TableCell>
-                <TableCell />
+                <TableCell align="right" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                  Действия
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -346,14 +469,24 @@ export function PortfolioPage() {
                 const qtyHeld = parsePositionQuantity(p)
                 return (
                   <TableRow key={figi || JSON.stringify(p)}>
-                    <TableCell>{figi || '—'}</TableCell>
-                    <TableCell>{String(p.ticker ?? p.name ?? '—')}</TableCell>
-                    <TableCell align="right">{String(p.quantity ?? '—')}</TableCell>
-                    <TableCell align="right">{px != null ? formatMoney(px) : '—'}</TableCell>
+                    <TableCell sx={{ ...FIGI_TABLE_CELL_SX, color: 'secondary.light' }}>
+                      {figi || '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                        {String(p.ticker ?? p.name ?? '—')}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right" sx={TABLE_NUMERIC_CELL_SX}>
+                      {String(p.quantity ?? '—')}
+                    </TableCell>
+                    <TableCell align="right" sx={TABLE_NUMERIC_CELL_SX}>
+                      {px != null ? formatMoney(px) : '—'}
+                    </TableCell>
                     <TableCell>
                       {sig !== '—' ? (
                         <Tooltip title="Общий рыночный сигнал по FIGI; не заменяет вердикт по портфелю">
-                          <Chip size="small" label={sig} variant="outlined" color="default" />
+                          <RecommendationStatusBadge value={sig} />
                         </Tooltip>
                       ) : (
                         <Typography variant="body2" color="text.secondary">
@@ -366,7 +499,7 @@ export function PortfolioPage() {
                         <Tooltip
                           title={`Уверенность портфельного вердикта: ${(pv.finalConfidence * 100).toFixed(0)}%. Для сделок по этой позиции ориентируйтесь на этот столбец.`}
                         >
-                          <Chip size="small" label={pv.finalAction} color="secondary" variant="filled" />
+                          <RecommendationStatusBadge value={pv.finalAction} />
                         </Tooltip>
                       ) : (
                         <Typography variant="body2" color="text.secondary">
@@ -376,55 +509,60 @@ export function PortfolioPage() {
                     </TableCell>
                     <TableCell align="right">
                       {figi ? (
-                        <Button
-                          size="small"
-                          color="secondary"
-                          variant="outlined"
-                          disabled={qtyHeld < 1}
-                          title={qtyHeld < 1 ? 'Нет количества для продажи' : undefined}
-                          onClick={() => {
-                            setSellData({
-                              figi,
-                              recommendation: 'SELL',
-                              price: px != null && px > 0 ? px : 1,
-                              ticker: p.ticker,
-                              name: p.name,
-                            })
-                            setSellInitialQty(qtyHeld >= 1 ? String(qtyHeld) : '')
-                            setSellOpen(true)
-                          }}
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}
                         >
-                          Продать
-                        </Button>
+                          <Button
+                            size="small"
+                            color="secondary"
+                            variant="outlined"
+                            disabled={qtyHeld < 1}
+                            title={qtyHeld < 1 ? 'Нет количества для продажи' : undefined}
+                            onClick={() => {
+                              setSellData({
+                                figi,
+                                recommendation: 'SELL',
+                                price: px != null && px > 0 ? px : 1,
+                                ticker: p.ticker,
+                                name: p.name,
+                              })
+                              setSellInitialQty(qtyHeld >= 1 ? String(qtyHeld) : '')
+                              setSellOpen(true)
+                            }}
+                          >
+                            Продать
+                          </Button>
+                          <Button
+                            component={Link}
+                            to={`/recommendations/${encodeURIComponent(figi)}`}
+                            size="small"
+                            sx={{ color: 'primary.light' }}
+                            title="Карточка инструмента и рыночный fusion — не портфельный вердикт по позиции"
+                          >
+                            Карточка
+                          </Button>
+                        </Stack>
                       ) : (
                         '—'
                       )}
-                    </TableCell>
-                    <TableCell>
-                      {figi ? (
-                        <Button
-                          component={Link}
-                          to={`/recommendations/${encodeURIComponent(figi)}`}
-                          size="small"
-                          title="Карточка инструмента и рыночный fusion — не портфельный вердикт по позиции"
-                        >
-                          Рынок · карточка
-                        </Button>
-                      ) : null}
                     </TableCell>
                   </TableRow>
                 )
               })}
               {positions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8}>
-                    <Typography color="text.secondary">Нет позиций или данные не загружены.</Typography>
+                  <TableCell colSpan={7}>
+                    <Typography sx={{ color: 'text.disabled' }}>
+                      Нет позиций или данные не загружены.
+                    </Typography>
                   </TableCell>
                 </TableRow>
               ) : null}
             </TableBody>
           </Table>
-        </TableContainer>
+        </ScrollableTablePaper>
       </Paper>
 
       <Snackbar
@@ -460,3 +598,6 @@ export function PortfolioPage() {
     </Box>
   )
 }
+
+export { PortfolioPage }
+export default PortfolioPage

@@ -133,20 +133,22 @@ export function DashboardOperationsCard() {
   return (
     <>
       <Card variant="outlined">
-        <CardContent>
-          <Typography variant="subtitle1" gutterBottom>
+        <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+          <Typography
+            variant="subtitle2"
+            sx={{ fontWeight: 600, color: 'primary.main', letterSpacing: '0.02em', mb: 0.5 }}
+          >
             Операции
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Фоновые задачи планировщика. Статус выполнения смотрите ниже в блоке «Система»
-            (WebSocket).
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25, fontSize: 13 }}>
+            Фоновые задачи планировщика. Статус — в блоке «Система» (WebSocket).
           </Typography>
           <Box
             sx={{
               display: 'flex',
               flexDirection: { xs: 'column', sm: 'row' },
               flexWrap: 'wrap',
-              gap: 1,
+              gap: 0.75,
             }}
           >
             <Button

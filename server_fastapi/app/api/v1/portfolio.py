@@ -18,19 +18,19 @@ from app.scheduler import list_tasks, trigger_named_job
 from app.core.virtual_profiles import VIRTUAL_PROFILE_SLUGS, normalize_virtual_profile
 from app.services.container import AppContainer
 from app.services.tinkoff_client import price_units_nano_to_float
+from app.services.tinkoff_portfolio_helpers import (
+    merge_rub_cash,
+    positions_value_rub_excluding_cash,
+    total_rub_cash_from_positions,
+    without_rub_cash_positions,
+)
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
 
 def _positions_value(positions: list[dict]) -> float:
-    """Сумма стоимости позиций (quantity * currentPrice)."""
-    total = 0.0
-    for p in positions:
-        qty = p.get("quantity") or 0
-        cur = p.get("currentPrice") or {}
-        val = price_units_nano_to_float(cur) if isinstance(cur, dict) else float(cur or 0)
-        total += qty * val
-    return total
+    """Сумма стоимости бумаг (без рублёвой позиции-кэша RUB000UTSTOM)."""
+    return positions_value_rub_excluding_cash(positions)
 
 
 @router.get("", summary="Портфель (реальный счёт Tinkoff)")
@@ -55,19 +55,22 @@ async def get_portfolio(
     total_amount = (portfolio.get("totalAmountPortfolio") or {}).get("value") or 0.0
     if isinstance(total_amount, dict):
         total_amount = price_units_nano_to_float(total_amount)
-    positions_value = _positions_value(positions)
+    rub_from_cash_figi = total_rub_cash_from_positions(positions)
+    positions_trading = without_rub_cash_positions(positions)
+    positions_value = _positions_value(positions_trading)
     money = positions_data.get("money") or []
-    cash = 0.0
+    cash_from_money = 0.0
     for m in money:
         cur = (m or {}).get("currency", "RUB")
         if cur == "RUB":
             v = (m or {}).get("value", 0)
-            cash += float(v) if not isinstance(v, dict) else price_units_nano_to_float(v)
+            cash_from_money += float(v) if not isinstance(v, dict) else price_units_nano_to_float(v)
+    cash = merge_rub_cash(cash_from_money, rub_from_cash_figi)
     total_value = total_amount if total_amount > 0 else (cash + positions_value)
-    positions_map = {p.get("figi", ""): p.get("quantity", 0) for p in positions if p.get("figi")}
-    figis = [str(p.get("figi")) for p in positions if p.get("figi")]
+    positions_map = {p.get("figi", ""): p.get("quantity", 0) for p in positions_trading if p.get("figi")}
+    figis = [str(p.get("figi")) for p in positions_trading if p.get("figi")]
     price_by_figi = await container.market_repository.map_last_prices_by_figis(db_session, figis)
-    for p in positions:
+    for p in positions_trading:
         if not isinstance(p, dict):
             continue
         figi = p.get("figi")
@@ -82,7 +85,7 @@ async def get_portfolio(
             "positions": positions_map,
             "totalValue": total_value,
             "positionsValue": positions_value,
-            "positionsList": positions,
+            "positionsList": positions_trading,
         }
     )
 

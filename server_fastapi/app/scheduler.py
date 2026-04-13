@@ -31,6 +31,12 @@ from app.db.models import AppSetting, Asset, Candle, Instrument, Option, RealPor
 from app.db.session import SessionLocal
 from app.services.container import AppContainer
 from app.services.tinkoff_client import price_units_nano_to_float
+from app.services.tinkoff_portfolio_helpers import (
+    merge_rub_cash,
+    positions_value_rub_excluding_cash,
+    total_rub_cash_from_positions,
+    without_rub_cash_positions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -461,16 +467,6 @@ def schedule_background_job(
         "taskType": task_type,
         "queuedAt": rec.queued_at,
     }
-
-
-def _positions_value(positions: list[dict]) -> float:
-    total = 0.0
-    for p in positions:
-        qty = p.get("quantity") or 0
-        cur = p.get("currentPrice") or {}
-        val = price_units_nano_to_float(cur) if isinstance(cur, dict) else float(cur or 0)
-        total += qty * val
-    return total
 
 
 def _parse_tinkoff_datetime(raw: Any) -> datetime | None:
@@ -1345,16 +1341,19 @@ async def _portfolio_sync_job(container: AppContainer) -> dict[str, Any]:
         total_amount = (portfolio.get("totalAmountPortfolio") or {}).get("value") or 0.0
         if isinstance(total_amount, dict):
             total_amount = price_units_nano_to_float(total_amount)
-        positions_value = _positions_value(positions)
+        rub_from_cash_figi = total_rub_cash_from_positions(positions)
+        positions_trading = without_rub_cash_positions(positions)
+        positions_value = positions_value_rub_excluding_cash(positions_trading)
         money = positions_data.get("money") or []
-        cash = 0.0
+        cash_from_money = 0.0
         for m in money:
             cur = (m or {}).get("currency", "RUB")
             if cur == "RUB":
                 v = (m or {}).get("value", 0)
-                cash += float(v) if not isinstance(v, dict) else price_units_nano_to_float(v)
+                cash_from_money += float(v) if not isinstance(v, dict) else price_units_nano_to_float(v)
+        cash = merge_rub_cash(cash_from_money, rub_from_cash_figi)
         total_value = total_amount if total_amount > 0 else (cash + positions_value)
-        positions_map = {p.get("figi", ""): p.get("quantity", 0) for p in positions if p.get("figi")}
+        positions_map = {p.get("figi", ""): p.get("quantity", 0) for p in positions_trading if p.get("figi")}
 
         async with SessionLocal() as session:
             row = await session.scalar(select(RealPortfolio).where(RealPortfolio.id == 1).limit(1))

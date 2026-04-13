@@ -1,4 +1,5 @@
 import { Box, Typography } from '@mui/material'
+import type { SxProps, Theme } from '@mui/material/styles'
 import type { ReactNode } from 'react'
 
 /**
@@ -9,11 +10,15 @@ export function ChartContainer({
   subtitle,
   children,
   minHeight = 320,
+  titleSx,
+  subtitleSx,
 }: {
   title?: string
   subtitle?: string
   children: ReactNode
   minHeight?: number
+  titleSx?: SxProps<Theme>
+  subtitleSx?: SxProps<Theme>
 }) {
   return (
     <Box
@@ -29,18 +34,28 @@ export function ChartContainer({
       {(title || subtitle) && (
         <Box sx={{ px: 2, pt: 1.5, pb: title ? 0.5 : 0 }}>
           {title ? (
-            <Typography variant="subtitle2" color="text.primary">
+            <Typography variant="subtitle2" color="text.primary" sx={titleSx}>
               {title}
             </Typography>
           ) : null}
           {subtitle ? (
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={
+                [
+                  { color: 'text.secondary' },
+                  ...(subtitleSx != null ? [subtitleSx] : []),
+                ] as SxProps<Theme>
+              }
+            >
               {subtitle}
             </Typography>
           ) : null}
         </Box>
       )}
-      <Box sx={{ px: title || subtitle ? 2 : 0, pb: 2, pt: title || subtitle ? 1 : 0 }}>{children}</Box>
+      <Box sx={{ px: title || subtitle ? 2 : 0, pb: 2, pt: title || subtitle ? 1 : 0 }}>
+        {children}
+      </Box>
     </Box>
   )
 }

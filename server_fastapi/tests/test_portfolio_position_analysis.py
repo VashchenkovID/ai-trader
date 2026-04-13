@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
 from app.core.portfolio_scope import (
     PORTFOLIO_SCOPE_REAL,
     all_portfolio_scopes,
@@ -11,6 +14,7 @@ from app.core.portfolio_scope import (
 )
 from app.services.portfolio_position_analysis_service import (
     PortfolioPositionAnalysisService,
+    _fresh_manual_verdicts_by_figi_from_rows,
     extract_json_object,
 )
 from app.services.virtual_portfolio_service import VirtualPortfolioService
@@ -40,6 +44,31 @@ def test_extract_json_object() -> None:
     obj = extract_json_object(raw)
     assert obj is not None
     assert obj["instruments"][0]["figi"] == "x"
+
+
+def test_fresh_manual_verdicts_finds_manual_below_latest_gigachat_row() -> None:
+    """После авто-GigaChat последняя строка по FIGI не manual_external — ручной вердикт всё равно подхватывается."""
+    now = datetime.now(timezone.utc)
+    giga = SimpleNamespace(
+        figi="F1",
+        created_at=now,
+        llm_payload={
+            "source": "gigachat",
+            "parsed": {"figi": "F1", "action": "SELL", "confidence": 0.9, "reasons": []},
+        },
+    )
+    manual = SimpleNamespace(
+        figi="F1",
+        created_at=now - timedelta(hours=1),
+        llm_payload={
+            "source": "manual_external",
+            "parsed": {"figi": "F1", "action": "HOLD", "confidence": 0.7, "reasons": ["user"]},
+        },
+    )
+    rows = [giga, manual]
+    out = _fresh_manual_verdicts_by_figi_from_rows(rows, ttl_hours=168)
+    assert out["F1"]["action"] == "HOLD"
+    assert out["F1"]["confidence"] == 0.7
 
 
 def test_parse_llm_verdict() -> None:

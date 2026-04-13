@@ -17,7 +17,7 @@ import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
 type ReportListItem = { id: string; createdAt?: string; queryPreview?: string }
 
-export function PortfolioAnalyzerPage() {
+function PortfolioAnalyzerPage() {
   const [query, setQuery] = useState('Сравни виртуальные профили по риску и диверсификации.')
   const [reports, setReports] = useState<ReportListItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -182,3 +182,6 @@ export function PortfolioAnalyzerPage() {
     </Box>
   )
 }
+
+export { PortfolioAnalyzerPage }
+export default PortfolioAnalyzerPage
