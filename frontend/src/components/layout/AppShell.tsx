@@ -18,7 +18,7 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { APP_SIDEBAR_GROUPS } from '@/navigation/appSidebar'
 import { logoutUser } from '@/services/auth'
@@ -27,6 +27,151 @@ import { tokens } from '@/theme/tokens'
 import type { SidebarNavItem } from '@/navigation/appSidebar'
 
 const drawerWidth = tokens.drawerWidth
+
+type AmbientDrift = {
+  /** Смещение в долях ширины/высоты вьюпорта — заметное движение по экрану. */
+  xVw: number
+  yVh: number
+  scale: number
+  opacity: number
+  /** Длительность перехода к этой точке (сек), совпадает с setTimeout до следующей цели. */
+  durationSec: number
+}
+
+function randomAmbientDrift(opts?: { scaleMin?: number; scaleMax?: number; opacityMin?: number; opacityMax?: number }) {
+  const smin = opts?.scaleMin ?? 0.82
+  const smax = opts?.scaleMax ?? 1.22
+  const omin = opts?.opacityMin ?? 0.34
+  const omax = opts?.opacityMax ?? 0.72
+  return {
+    xVw: (Math.random() - 0.5) * 100,
+    yVh: (Math.random() - 0.5) * 92,
+    scale: smin + Math.random() * (smax - smin),
+    opacity: omin + Math.random() * (omax - omin),
+    durationSec: 5.5 + Math.random() * 12,
+  } satisfies AmbientDrift
+}
+
+/** Слой градиента: каждые N секунд новая случайная позиция (плавный CSS transition). */
+function AmbientRandomBlob({
+  reduceMotion,
+  initialDelayMs,
+  background,
+  sxBase,
+}: {
+  reduceMotion: boolean
+  initialDelayMs: number
+  background: string
+  sxBase: Record<string, unknown>
+}) {
+  const [drift, setDrift] = useState<AmbientDrift>(() => randomAmbientDrift())
+
+  useEffect(() => {
+    if (reduceMotion) return
+    let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout>
+
+    const step = () => {
+      if (cancelled) return
+      const next = randomAmbientDrift()
+      setDrift(next)
+      timeoutId = setTimeout(step, Math.max(900, next.durationSec * 1000))
+    }
+
+    timeoutId = setTimeout(step, initialDelayMs)
+    return () => {
+      cancelled = true
+      clearTimeout(timeoutId)
+    }
+  }, [reduceMotion, initialDelayMs])
+
+  const d = reduceMotion
+    ? { xVw: 0, yVh: 0, scale: 1, opacity: 0.48, durationSec: 0 }
+    : drift
+
+  return (
+    <Box
+      sx={{
+        position: 'absolute',
+        borderRadius: '50%',
+        pointerEvents: 'none',
+        background,
+        willChange: 'transform, opacity',
+        ...sxBase,
+        transform: `translate3d(${d.xVw}vw, ${d.yVh}vh, 0) scale(${d.scale})`,
+        opacity: d.opacity,
+        transition: reduceMotion
+          ? undefined
+          : `transform ${d.durationSec}s cubic-bezier(0.42, 0, 0.18, 1), opacity ${d.durationSec * 0.9}s ease-in-out`,
+      }}
+    />
+  )
+}
+
+function MainAmbientLayer({
+  drawerWidthPx,
+  reduceMotion,
+}: {
+  drawerWidthPx: number
+  reduceMotion: boolean
+}) {
+  const theme = useTheme()
+  const p = theme.palette.primary.main
+  const s = theme.palette.secondary.main
+
+  return (
+    <Box
+      aria-hidden
+      sx={{
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: { xs: 0, md: `${drawerWidthPx}px` },
+        zIndex: 0,
+        pointerEvents: 'none',
+        overflow: 'hidden',
+      }}
+    >
+      <AmbientRandomBlob
+        reduceMotion={reduceMotion}
+        initialDelayMs={120}
+        background={`radial-gradient(circle at 42% 42%, ${alpha(p, 0.24)}, transparent 66%)`}
+        sxBase={{
+          width: 'min(88vw, 760px)',
+          height: 'min(88vw, 760px)',
+          top: '-20%',
+          left: '-15%',
+          filter: 'blur(58px)',
+        }}
+      />
+      <AmbientRandomBlob
+        reduceMotion={reduceMotion}
+        initialDelayMs={2400}
+        background={`radial-gradient(circle at 50% 50%, ${alpha(s, 0.2)}, transparent 68%)`}
+        sxBase={{
+          width: 'min(78vw, 600px)',
+          height: 'min(78vw, 600px)',
+          bottom: '-12%',
+          right: '-12%',
+          filter: 'blur(54px)',
+        }}
+      />
+      <AmbientRandomBlob
+        reduceMotion={reduceMotion}
+        initialDelayMs={4800}
+        background={`radial-gradient(circle, ${alpha(p, 0.12)}, transparent 72%)`}
+        sxBase={{
+          width: 'min(58vw, 460px)',
+          height: 'min(58vw, 460px)',
+          top: '32%',
+          left: '22%',
+          filter: 'blur(44px)',
+        }}
+      />
+    </Box>
+  )
+}
 
 function formatMoneyShort(value: number) {
   return new Intl.NumberFormat('ru-RU', {
@@ -187,19 +332,22 @@ export function AppShell() {
       <Box
         component="main"
         sx={{
+          position: 'relative',
+          isolation: 'isolate',
           flexGrow: 1,
           p: { xs: 1.75, sm: 2.5 },
           width: { md: `calc(100% - ${drawerWidth}px)` },
           mt: { xs: 7, md: 0 },
           minHeight: '100vh',
           bgcolor: 'background.default',
-          backgroundImage: t =>
-            `radial-gradient(ellipse 80% 50% at 50% 0%, ${alpha(t.palette.primary.main, 0.07)}, transparent 55%),
-             radial-gradient(ellipse 45% 40% at 100% 70%, ${alpha(t.palette.secondary.main, 0.05)}, transparent 50%)`,
         }}
       >
+        <MainAmbientLayer drawerWidthPx={drawerWidth} reduceMotion={Boolean(reduceMotion)} />
+
         <Box
           sx={{
+            position: 'relative',
+            zIndex: 1,
             display: { xs: 'none', md: 'flex' },
             flexWrap: 'wrap',
             alignItems: 'center',
@@ -230,22 +378,32 @@ export function AppShell() {
             </Typography>
           ) : null}
         </Box>
-        <Suspense
-          fallback={
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-              <CircularProgress color="primary" aria-label="Загрузка страницы" />
-            </Box>
-          }
-        >
-          <motion.div
-            initial={reduceMotion ? undefined : { opacity: 0.88 }}
-            animate={reduceMotion ? undefined : { opacity: 1 }}
-            transition={{ duration: 0.2 }}
-            style={{ minHeight: 4 }}
+        <Box sx={{ position: 'relative', zIndex: 1 }}>
+          <Suspense
+            fallback={
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress color="primary" aria-label="Загрузка страницы" />
+              </Box>
+            }
           >
-            <Outlet />
-          </motion.div>
-        </Suspense>
+            <motion.div
+              key={location.pathname}
+              initial={reduceMotion ? false : { opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={
+                reduceMotion
+                  ? { duration: 0 }
+                  : {
+                      duration: 1.15,
+                      ease: [0.18, 0.75, 0.4, 1],
+                    }
+              }
+              style={{ minHeight: 4 }}
+            >
+              <Outlet />
+            </motion.div>
+          </Suspense>
+        </Box>
       </Box>
     </Box>
   )
