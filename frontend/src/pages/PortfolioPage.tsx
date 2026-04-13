@@ -297,8 +297,13 @@ export function PortfolioPage() {
         <Typography variant="subtitle1" sx={{ mb: 1 }}>
           Позиции и рекомендации
         </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-          «Рынок» — последняя строка рекомендаций по FIGI; «Портфель» — вердикт с учётом вашей позиции (кнопка выше).
+        <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+          <strong>Портфель</strong> — вердикт по <em>вашей</em> позиции (цена входа, PnL, ручной LLM-импорт на странице
+          «Ручной импорт LLM»). Им ориентируйтесь для решений по этому счёту.
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          <strong>Рынок</strong> — последняя строка из общей таблицы рекомендаций по FIGI (fusion/рынок), без учёта вашей
+          средней и доли в портфеле. Может расходиться с колонкой «Портфель» — это ожидаемо, не путайте источники.
         </Typography>
         <TableContainer>
           <Table size="small">
@@ -308,8 +313,16 @@ export function PortfolioPage() {
                 <TableCell>Тикер</TableCell>
                 <TableCell align="right">Кол-во</TableCell>
                 <TableCell align="right">Цена</TableCell>
-                <TableCell>Рынок</TableCell>
-                <TableCell>Портфель</TableCell>
+                <TableCell>
+                  <Tooltip title="Сигнал по инструменту из таблицы recommendations (общий для всех), не персональный">
+                    <span>Рынок (FIGI)</span>
+                  </Tooltip>
+                </TableCell>
+                <TableCell>
+                  <Tooltip title="Вердикт по вашей позиции: закупка, PnL, доля; ручной импорт LLM пишет сюда">
+                    <span>Портфель (позиция)</span>
+                  </Tooltip>
+                </TableCell>
                 <TableCell align="right">Заявка</TableCell>
                 <TableCell />
               </TableRow>
@@ -330,7 +343,9 @@ export function PortfolioPage() {
                     <TableCell align="right">{px != null ? formatMoney(px) : '—'}</TableCell>
                     <TableCell>
                       {sig !== '—' ? (
-                        <Chip size="small" label={sig} variant="outlined" />
+                        <Tooltip title="Общий рыночный сигнал по FIGI; не заменяет вердикт по портфелю">
+                          <Chip size="small" label={sig} variant="outlined" color="default" />
+                        </Tooltip>
                       ) : (
                         <Typography variant="body2" color="text.secondary">
                           —
@@ -339,8 +354,10 @@ export function PortfolioPage() {
                     </TableCell>
                     <TableCell>
                       {pv ? (
-                        <Tooltip title={`Уверенность: ${(pv.finalConfidence * 100).toFixed(0)}%`}>
-                          <Chip size="small" label={pv.finalAction} color="secondary" variant="outlined" />
+                        <Tooltip
+                          title={`Уверенность портфельного вердикта: ${(pv.finalConfidence * 100).toFixed(0)}%. Для сделок по этой позиции ориентируйтесь на этот столбец.`}
+                        >
+                          <Chip size="small" label={pv.finalAction} color="secondary" variant="filled" />
                         </Tooltip>
                       ) : (
                         <Typography variant="body2" color="text.secondary">
@@ -376,8 +393,13 @@ export function PortfolioPage() {
                     </TableCell>
                     <TableCell>
                       {figi ? (
-                        <Button component={Link} to={`/recommendations/${encodeURIComponent(figi)}`} size="small">
-                          Карточка
+                        <Button
+                          component={Link}
+                          to={`/recommendations/${encodeURIComponent(figi)}`}
+                          size="small"
+                          title="Карточка инструмента и рыночный fusion — не портфельный вердикт по позиции"
+                        >
+                          Рынок · карточка
                         </Button>
                       ) : null}
                     </TableCell>

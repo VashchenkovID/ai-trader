@@ -306,6 +306,13 @@ export function ManualLlmImportPage() {
             <code style={{ fontSize: '0.9em' }}>instruments[]</code> (figi, action, confidence, reasons). Список и
             порядок FIGI должны совпадать с ответом GET (как для рекомендаций по чанку).
           </Typography>
+          <Alert severity="info" variant="outlined" sx={{ py: 0.75 }}>
+            <strong>Не смешивать с «Рынком».</strong> Верхний блок на этой странице обновляет общие рекомендации по
+            инструментам (жюри). Этот блок сохраняет вердикт в{' '}
+            <code style={{ fontSize: '0.85em' }}>portfolio_position_recommendations</code> — на экране позиций смотрите
+            колонку <strong>«Портфель (позиция)»</strong>. Колонка «Рынок» / карточка FIGI — отдельный контур и может
+            показывать BUY, пока по позиции сохранён SELL — это разные задачи.
+          </Alert>
 
           <FormControl size="small" sx={{ maxWidth: 360 }}>
             <InputLabel id="pf-scope-label">Портфель</InputLabel>

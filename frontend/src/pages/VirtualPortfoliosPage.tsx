@@ -435,7 +435,11 @@ export function VirtualPortfoliosPage() {
                           <TableCell align="right">Δ ₽</TableCell>
                           <TableCell align="right">Δ %</TableCell>
                           <TableCell align="right">P/L позиции</TableCell>
-                          <TableCell>Портфель</TableCell>
+                          <TableCell>
+                            <Tooltip title="Вердикт по позиции в этом виртуальном профиле (цена входа, PnL). Не путать с рыночной карточкой FIGI">
+                              <span>Портфель (позиция)</span>
+                            </Tooltip>
+                          </TableCell>
                           <TableCell align="right">Действия</TableCell>
                         </TableRow>
                       </TableHead>
@@ -486,8 +490,10 @@ export function VirtualPortfoliosPage() {
                                 {(() => {
                                   const v = (verdictByProfile[slug] ?? new Map()).get(figi)
                                   return v ? (
-                                    <Tooltip title={`Уверенность: ${(v.finalConfidence * 100).toFixed(0)}%`}>
-                                      <Chip size="small" label={v.finalAction} color="secondary" variant="outlined" />
+                                    <Tooltip
+                                      title={`Портфельный вердикт: уверенность ${(v.finalConfidence * 100).toFixed(0)}%. Для действий по этой строке — этот тег, не карточка FIGI.`}
+                                    >
+                                      <Chip size="small" label={v.finalAction} color="secondary" variant="filled" />
                                     </Tooltip>
                                   ) : (
                                     <Typography variant="body2" color="text.secondary">
@@ -528,8 +534,9 @@ export function VirtualPortfoliosPage() {
                                       component={Link}
                                       to={`/recommendations/${encodeURIComponent(figi)}`}
                                       size="small"
+                                      title="Рыночная карточка инструмента (fusion) — не вердикт по позиции в профиле"
                                     >
-                                      Карточка
+                                      Рынок · карточка
                                     </Button>
                                   </Stack>
                                 ) : null}
