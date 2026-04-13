@@ -1,8 +1,9 @@
 from datetime import date, datetime
 from decimal import Decimal
+from uuid import UUID as PyUUID
 
 from sqlalchemy import Boolean, Date, DateTime, Index, Integer, Numeric, String, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import JSON, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base_class import Base, TimestampedUUIDModel
@@ -285,6 +286,25 @@ class PortfolioAnalyzerReport(TimestampedUUIDModel):
     user_query: Mapped[str] = mapped_column(Text, nullable=False)
     profiles_payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     text_report: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class PortfolioPositionRecommendation(TimestampedUUIDModel):
+    """Вердикт BUY/SELL/HOLD по позиции в контексте конкретного портфеля (scope)."""
+
+    __tablename__ = "portfolio_position_recommendations"
+
+    portfolio_scope: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
+    figi: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    analysis_run_id: Mapped[PyUUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
+    market_score: Mapped[Decimal | None] = mapped_column(Numeric(8, 6), nullable=True)
+    market_confidence: Mapped[Decimal | None] = mapped_column(Numeric(8, 6), nullable=True)
+    final_action: Mapped[str] = mapped_column(String(16), nullable=False)
+    final_confidence: Mapped[Decimal] = mapped_column(Numeric(8, 6), nullable=False)
+    llm_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    position_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    raw_llm_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (Index("ix_ppr_scope_figi_created", "portfolio_scope", "figi", "created_at"),)
 
 
 class LlmJuryAggregate(TimestampedUUIDModel):

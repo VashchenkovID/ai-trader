@@ -16,7 +16,13 @@ import { SystemService } from '@/api/generated'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import { unwrapEnvelopeData } from '@/utils/unwrapEnvelope'
 
-type OpKind = 'fullSync' | 'cache' | 'analysis' | 'trainingQuick' | 'trainingFull'
+type OpKind =
+  | 'fullSync'
+  | 'cache'
+  | 'analysis'
+  | 'portfolioPositions'
+  | 'trainingQuick'
+  | 'trainingFull'
 
 const COPY: Record<
   OpKind,
@@ -37,10 +43,19 @@ const COPY: Record<
     heavy: false,
   },
   analysis: {
-    title: 'Анализ рынка и портфеля',
-    body: 'Запускается фоновый анализ (`analysis_market_portfolio`). Результат отслеживайте в блоке «Система».',
-    confirm: 'Запустить анализ',
-    button: 'Провести анализ',
+    title: 'Анализ рынка (NN+LLM)',
+    body:
+      'Запускается `analysis_market_portfolio`: fusion по инструментам, таблица рекомендаций и при необходимости пайплайн заявок по **рыночным** сигналам. Это **не** анализ открытых позиций с ценой закупки (он — отдельная кнопка ниже).',
+    confirm: 'Запустить анализ рынка',
+    button: 'Анализ рынка',
+    heavy: false,
+  },
+  portfolioPositions: {
+    title: 'Анализ позиций портфелей',
+    body:
+      'Запускается `analysis_portfolio_positions`: вердикт BUY/SELL/HOLD по каждой открытой позиции для real и всех виртуальных профилей. Автосоздание заявок из этих вердиктов на сервере включается переменной `PPR_AUTO_PIPELINE_ENABLED=true` (иначе только сохранение вердиктов; заявку можно создать вручную на странице виртуальных портфелей).',
+    confirm: 'Запустить анализ позиций',
+    button: 'Анализ позиций портфелей',
     heavy: false,
   },
   trainingQuick: {
@@ -88,6 +103,8 @@ export function DashboardOperationsCard() {
         raw = await SystemService.systemTrainingQuickApiV1SystemTrainingQuickPost()
       } else if (kind === 'trainingFull') {
         raw = await SystemService.systemTrainingFullApiV1SystemTrainingFullPost()
+      } else if (kind === 'portfolioPositions') {
+        raw = await SystemService.analysisPortfolioPositionsApiV1SystemAnalysisPortfolioPositionsPost()
       } else {
         raw = await SystemService.analysisMarketPortfolioApiV1SystemAnalysisMarketPortfolioPost()
       }
@@ -145,6 +162,13 @@ export function DashboardOperationsCard() {
             </Button>
             <Button variant="outlined" disabled={busy !== null} onClick={() => open('analysis')}>
               {busy === 'analysis' ? 'Запуск…' : COPY.analysis.button}
+            </Button>
+            <Button
+              variant="outlined"
+              disabled={busy !== null}
+              onClick={() => open('portfolioPositions')}
+            >
+              {busy === 'portfolioPositions' ? 'Запуск…' : COPY.portfolioPositions.button}
             </Button>
             <Button variant="outlined" disabled={busy !== null} onClick={() => open('trainingQuick')}>
               {busy === 'trainingQuick' ? 'Запуск…' : COPY.trainingQuick.button}

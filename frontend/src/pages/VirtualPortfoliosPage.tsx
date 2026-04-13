@@ -13,6 +13,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Snackbar,
   Stack,
   Table,
   TableBody,
@@ -25,17 +26,19 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { PortfolioService } from '@/api/generated'
+import { PortfolioAnalysisService, PortfolioService } from '@/api/generated'
 import { ChartContainer } from '@/components/charts/ChartContainer'
 import { CreateTradingRequestModal, parsePositionQuantity } from '@/components/trading'
 import { CollapsibleRawJson, LabeledValuesTable } from '@/components/ops'
 import { NavLineChart, type NavPoint } from '@/components/virtual/NavLineChart'
 import { useVirtualPortfolioOverview } from '@/hooks/useVirtualPortfolioOverview'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
+import { parseLatestVerdictMap, type PortfolioVerdictCell } from '@/utils/portfolioPositionVerdict'
 import { virtualProfileConfigToRows } from '@/utils/virtualProfileConfigDisplay'
 
 const PROFILE_SLUGS = ['conservative', 'moderate', 'aggressive', 'experimental'] as const
@@ -97,6 +100,79 @@ export function VirtualPortfoliosPage() {
   const [sellData, setSellData] = useState<Record<string, unknown> | null>(null)
   const [sellInitialQty, setSellInitialQty] = useState('')
   const [sellProfileSlug, setSellProfileSlug] = useState('moderate')
+
+  const [verdictByProfile, setVerdictByProfile] = useState<
+    Partial<Record<string, Map<string, PortfolioVerdictCell>>>
+  >({})
+  const [verdictBusySlug, setVerdictBusySlug] = useState<string | null>(null)
+  const [verdictsLoading, setVerdictsLoading] = useState(false)
+  const [snack, setSnack] = useState<{ message: string; severity: 'success' | 'error' | 'warning' } | null>(null)
+
+  const loadSavedVerdictsAll = useCallback(async () => {
+    setVerdictsLoading(true)
+    try {
+      const entries = await Promise.all(
+        PROFILE_SLUGS.map(async slug => {
+          try {
+            const env = await PortfolioAnalysisService.getLatestApiV1PortfolioAnalysisLatestGet({
+              portfolioScope: `virtual:${slug}`,
+              limit: 100,
+            })
+            return [slug, parseLatestVerdictMap(env.data)] as const
+          } catch {
+            return [slug, new Map<string, PortfolioVerdictCell>()] as const
+          }
+        }),
+      )
+      setVerdictByProfile(Object.fromEntries(entries))
+    } finally {
+      setVerdictsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadSavedVerdictsAll()
+  }, [loadSavedVerdictsAll])
+
+  const refreshVerdictForProfile = useCallback(
+    async (slug: string) => {
+      const scope = `virtual:${slug}`
+      setVerdictBusySlug(slug)
+      try {
+        const env = await PortfolioAnalysisService.postVerdictApiV1PortfolioAnalysisVerdictPost({
+          requestBody: { portfolio_scope: scope },
+        })
+        const latest = await PortfolioAnalysisService.getLatestApiV1PortfolioAnalysisLatestGet({
+          portfolioScope: scope,
+          limit: 100,
+        })
+        setVerdictByProfile(prev => ({
+          ...prev,
+          [slug]: parseLatestVerdictMap(latest.data),
+        }))
+        const payload = env.data as { llmSource?: string; saved?: number; message?: string } | undefined
+        if (payload?.message === 'no_positions') {
+          setSnack({ message: `Профиль «${slug}»: нет позиций для анализа.`, severity: 'warning' })
+        } else {
+          const src =
+            payload?.llmSource === 'perplexity'
+              ? 'LLM'
+              : payload?.llmSource === 'market_fallback'
+                ? 'fallback'
+                : (payload?.llmSource ?? '—')
+          setSnack({
+            message: `Профиль «${slug}»: вердикт обновлён (${src}, записей: ${payload?.saved ?? '—'}).`,
+            severity: 'success',
+          })
+        }
+      } catch (e) {
+        setSnack({ message: apiErrorMessage(e), severity: 'error' })
+      } finally {
+        setVerdictBusySlug(null)
+      }
+    },
+    [],
+  )
 
   const loadNav = useCallback(async () => {
     setNavLoading(true)
@@ -168,6 +244,18 @@ export function VirtualPortfoliosPage() {
         <Button size="small" variant="outlined" onClick={() => void refetchOverview()} disabled={overviewLoading}>
           Обновить данные
         </Button>
+        <Tooltip title="Подтянуть с сервера последние сохранённые вердикты BUY/SELL/HOLD по позициям (без вызова LLM)">
+          <span>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => void loadSavedVerdictsAll()}
+              disabled={overviewLoading || verdictsLoading}
+            >
+              Загрузить вердикты по позициям
+            </Button>
+          </span>
+        </Tooltip>
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Позиции, средняя цена закупки и сравнение с текущей котировкой по каждому профилю; NAV и пороги.
@@ -274,9 +362,10 @@ export function VirtualPortfoliosPage() {
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Средняя цена — по сделкам в виртуальном портфеле; текущая — last price из БД (или последняя цена сделки,
-          если инструмент не найден).
+          если инструмент не найден). Колонка «Портфель» — сохранённый вердикт с учётом позиции; пересчёт — кнопка в
+          шапке аккордеона профиля.
         </Typography>
-        {overviewLoading ? <LinearProgress sx={{ mb: 1 }} /> : null}
+        {overviewLoading || verdictsLoading ? <LinearProgress sx={{ mb: 1 }} /> : null}
         {orderedProfileSummaries.map(prow => {
           const slug = String(prow.profileSlug ?? '—')
           const rawList = prow.positionsList
@@ -310,6 +399,24 @@ export function VirtualPortfoliosPage() {
                       Σ нереализ. P/L: {formatSignedRub(sumPnl)}
                     </Typography>
                   ) : null}
+                  <Box sx={{ flexGrow: 1 }} />
+                  <Tooltip title="Пересчёт рекомендаций по позициям этого профиля (цена закупки + рыночный сигнал)">
+                    <span>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<AutoAwesomeIcon />}
+                        disabled={verdictBusySlug === slug}
+                        onClick={e => {
+                          e.stopPropagation()
+                          void refreshVerdictForProfile(slug)
+                        }}
+                      >
+                        Обновить рекомендации
+                      </Button>
+                    </span>
+                  </Tooltip>
                 </Box>
               </AccordionSummary>
               <AccordionDetails>
@@ -328,6 +435,7 @@ export function VirtualPortfoliosPage() {
                           <TableCell align="right">Δ ₽</TableCell>
                           <TableCell align="right">Δ %</TableCell>
                           <TableCell align="right">P/L позиции</TableCell>
+                          <TableCell>Портфель</TableCell>
                           <TableCell align="right">Действия</TableCell>
                         </TableRow>
                       </TableHead>
@@ -373,6 +481,20 @@ export function VirtualPortfoliosPage() {
                                 <Typography variant="body2" sx={{ color: pnlColor(pnl), fontWeight: 600 }}>
                                   {formatSignedRub(p.unrealizedPnlRub)}
                                 </Typography>
+                              </TableCell>
+                              <TableCell>
+                                {(() => {
+                                  const v = (verdictByProfile[slug] ?? new Map()).get(figi)
+                                  return v ? (
+                                    <Tooltip title={`Уверенность: ${(v.finalConfidence * 100).toFixed(0)}%`}>
+                                      <Chip size="small" label={v.finalAction} color="secondary" variant="outlined" />
+                                    </Tooltip>
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary">
+                                      —
+                                    </Typography>
+                                  )
+                                })()}
                               </TableCell>
                               <TableCell align="right">
                                 {figi ? (
@@ -445,6 +567,22 @@ export function VirtualPortfoliosPage() {
           ))
         )}
       </Paper>
+
+      <Snackbar
+        open={snack != null}
+        autoHideDuration={8000}
+        onClose={() => setSnack(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnack(null)}
+          severity={snack?.severity ?? 'success'}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snack?.message}
+        </Alert>
+      </Snackbar>
 
       <CreateTradingRequestModal
         open={sellOpen}

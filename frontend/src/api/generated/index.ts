@@ -16,8 +16,10 @@ export type { HealthDTO } from './models/HealthDTO';
 export type { HTTPValidationError } from './models/HTTPValidationError';
 export type { KellySettingsDTO } from './models/KellySettingsDTO';
 export type { KellySettingsUpdateRequest } from './models/KellySettingsUpdateRequest';
+export type { ManualLlmApplyChunkBody } from './models/ManualLlmApplyChunkBody';
 export type { NotificationSettingsBody } from './models/NotificationSettingsBody';
 export type { OpsModeBody } from './models/OpsModeBody';
+export type { PortfolioManualApplyBody } from './models/PortfolioManualApplyBody';
 export type { ReleaseGateBody } from './models/ReleaseGateBody';
 export type { RiskValidateRequest } from './models/RiskValidateRequest';
 export type { RunJuryBody } from './models/RunJuryBody';
@@ -46,6 +48,7 @@ export type { TradingRequestRejectRequest } from './models/TradingRequestRejectR
 export type { TriggerResponse } from './models/TriggerResponse';
 export type { UserDTO } from './models/UserDTO';
 export type { ValidationError } from './models/ValidationError';
+export type { VerdictRequest } from './models/VerdictRequest';
 export type { VerifyTokenRequest } from './models/VerifyTokenRequest';
 
 export { AuthService } from './services/AuthService';
@@ -58,6 +61,7 @@ export { NewsService } from './services/NewsService';
 export { ObservabilityService } from './services/ObservabilityService';
 export { PerformanceService } from './services/PerformanceService';
 export { PortfolioService } from './services/PortfolioService';
+export { PortfolioAnalysisService } from './services/PortfolioAnalysisService';
 export { PortfolioAnalyzerService } from './services/PortfolioAnalyzerService';
 export { PortfolioMigrationService } from './services/PortfolioMigrationService';
 export { PreflightCheckService } from './services/PreflightCheckService';

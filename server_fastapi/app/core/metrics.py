@@ -7,18 +7,24 @@ from time import perf_counter
 class RouteMetric:
     count: int = 0
     error_count: int = 0
+    server_error_count: int = 0
+    client_error_count: int = 0
     latency_sum_ms: float = 0.0
     latency_max_ms: float = 0.0
     latencies_ms: list[float] = field(default_factory=list)
 
-    def record(self, latency_ms: float, is_error: bool) -> None:
+    def record(self, latency_ms: float, status_code: int) -> None:
         self.count += 1
         self.latency_sum_ms += latency_ms
         self.latency_max_ms = max(self.latency_max_ms, latency_ms)
         self.latencies_ms.append(latency_ms)
         if len(self.latencies_ms) > 200:
             self.latencies_ms.pop(0)
-        if is_error:
+        if status_code >= 500:
+            self.server_error_count += 1
+            self.error_count += 1
+        elif status_code >= 400:
+            self.client_error_count += 1
             self.error_count += 1
 
     @property
@@ -33,6 +39,18 @@ class RouteMetric:
             return 0.0
         return self.error_count / self.count
 
+    @property
+    def server_error_rate(self) -> float:
+        if self.count == 0:
+            return 0.0
+        return self.server_error_count / self.count
+
+    @property
+    def client_error_rate(self) -> float:
+        if self.count == 0:
+            return 0.0
+        return self.client_error_count / self.count
+
 
 class MetricsRegistry:
     def __init__(self) -> None:
@@ -43,7 +61,7 @@ class MetricsRegistry:
 
     def observe(self, route_key: str, started_at: float, status_code: int) -> None:
         latency_ms = (perf_counter() - started_at) * 1000
-        self._routes[route_key].record(latency_ms=latency_ms, is_error=status_code >= 400)
+        self._routes[route_key].record(latency_ms=latency_ms, status_code=status_code)
 
     def snapshot(self) -> dict[str, dict[str, float | int]]:
         return {
@@ -51,6 +69,10 @@ class MetricsRegistry:
                 "count": metric.count,
                 "errorCount": metric.error_count,
                 "errorRate": round(metric.error_rate, 4),
+                "serverErrorCount": metric.server_error_count,
+                "serverErrorRate": round(metric.server_error_rate, 4),
+                "clientErrorCount": metric.client_error_count,
+                "clientErrorRate": round(metric.client_error_rate, 4),
                 "avgLatencyMs": round(metric.avg_latency_ms, 2),
                 "maxLatencyMs": round(metric.latency_max_ms, 2),
                 "p50LatencyMs": round(self._percentile(metric.latencies_ms, 50), 2),

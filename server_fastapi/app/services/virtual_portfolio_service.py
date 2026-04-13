@@ -18,6 +18,11 @@ from app.core.virtual_profiles import VIRTUAL_PROFILE_SLUGS, normalize_virtual_p
 from app.repositories.market_repository import MarketRepository
 from app.repositories.virtual_portfolio_repository import VirtualPortfolioRepository
 from app.services.execution_simulator import simulate_execution_detailed
+from app.services.portfolio_position_timing import (
+    days_in_position_calendar,
+    fifo_first_buy_at,
+    first_buy_iso_for_json,
+)
 from app.services.virtual_portfolio_metrics import compute_trade_metrics
 
 logger = logging.getLogger(__name__)
@@ -391,6 +396,7 @@ class VirtualPortfolioService:
                         unrealized_pnl = (cur - au) * qf
             except (TypeError, ValueError):
                 pass
+            first_dt = fifo_first_buy_at(str(figi), trades_list)
             positions_list.append(
                 {
                     "figi": str(figi),
@@ -406,6 +412,8 @@ class VirtualPortfolioService:
                     "priceDeltaPercent": price_delta_pct,
                     "unrealizedPnlRub": unrealized_pnl,
                     "instrumentMissing": instrument_missing,
+                    "firstBuyAt": first_buy_iso_for_json(first_dt),
+                    "daysInPosition": days_in_position_calendar(first_dt, now_msk()),
                 }
             )
         ic = float(row.initial_capital) if row.initial_capital is not None else 0.0

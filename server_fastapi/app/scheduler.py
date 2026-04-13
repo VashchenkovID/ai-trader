@@ -100,6 +100,7 @@ _CORE_TRAINING_ANALYSIS_JOBS: tuple[str, ...] = (
     "weekly_generation",
     "weekly_update",
     "analysis_market_portfolio",
+    "analysis_portfolio_positions",
     "weekly_backtest",
 )
 
@@ -2815,6 +2816,49 @@ async def _analysis_market_portfolio_job() -> dict[str, Any]:
         }
 
 
+async def _analysis_portfolio_positions_job() -> dict[str, Any]:
+    """BUY/SELL/HOLD по открытым позициям каждого scope (Perplexity или fallback по БД)."""
+    if not _container:
+        raise RuntimeError("Container is not initialized")
+    from app.core.portfolio_scope import all_portfolio_scopes, canonical_portfolio_scope
+
+    svc = _container.portfolio_position_analysis_service
+    results: list[dict[str, Any]] = []
+    for scope in all_portfolio_scopes():
+        try:
+            canon = canonical_portfolio_scope(scope)
+        except ValueError:
+            continue
+        async with SessionLocal() as session:
+            try:
+                one = await svc.run_verdict(
+                    session,
+                    portfolio_scope=canon,
+                    figi_filter=None,
+                    persist=True,
+                )
+                ppr_pipe: dict[str, Any] | None = None
+                if (
+                    _container.settings.ppr_auto_pipeline_enabled
+                    and int(one.get("saved") or 0) > 0
+                ):
+                    ppr_pipe = await _container.portfolio_position_pipeline_service.run_for_scope(
+                        session,
+                        portfolio_scope=canon,
+                        mode="paper",
+                        limit=50,
+                    )
+                await session.commit()
+                if ppr_pipe is not None:
+                    one = {**one, "pprPipeline": ppr_pipe}
+                results.append(one)
+            except Exception as e:
+                logger.exception("analysis_portfolio_positions failed for %s", canon)
+                await session.rollback()
+                results.append({"portfolioScope": canon, "error": str(e)})
+    return {"message": "analysis_portfolio_positions completed", "scopes": results}
+
+
 async def _collect_weekly_training_dataset(
     *,
     mode: str,
@@ -3602,6 +3646,7 @@ def _job_handlers() -> dict[str, Callable[[], Awaitable[dict[str, Any] | None]]]
         "training_full": _training_full_job,
         "training_quick": _training_quick_job,
         "analysis_market_portfolio": _analysis_market_portfolio_job,
+        "analysis_portfolio_positions": _analysis_portfolio_positions_job,
         "weekly_generation": _weekly_generation_job,
         "weekly_update": _weekly_update_job,
         "weekly_training": _weekly_training_job,

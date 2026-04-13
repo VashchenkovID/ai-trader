@@ -98,18 +98,7 @@ limit?: number,
 
     /**
      * Метрики производительности системы
-     * @returns SuccessEnvelope_dict_str__object__ Successful Response
-     * @throws ApiError
-     */
-    public static performanceMetricsApiV1PerformanceMetricsGet(): CancelablePromise<SuccessEnvelope_dict_str__object__> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/performance/metrics',
-        });
-    }
-
-    /**
-     * Метрики производительности системы
+     * Канонический путь; алиас `/performance/metrics` помечен deprecated.
      * @returns SuccessEnvelope_dict_str__object__ Successful Response
      * @throws ApiError
      */
@@ -117,6 +106,20 @@ limit?: number,
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/v1/system/performance/metrics',
+        });
+    }
+
+    /**
+     * @deprecated
+     * Метрики производительности (deprecated)
+     * Используйте GET /api/v1/system/performance/metrics. Путь сохранён для обратной совместимости.
+     * @returns SuccessEnvelope_dict_str__object__ Successful Response
+     * @throws ApiError
+     */
+    public static performanceMetricsDeprecatedAliasApiV1PerformanceMetricsGet(): CancelablePromise<SuccessEnvelope_dict_str__object__> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/performance/metrics',
         });
     }
 
@@ -525,6 +528,18 @@ limit?: number,
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/system/analysis/market-portfolio',
+        });
+    }
+
+    /**
+     * Фоновый анализ открытых позиций по всем портфелям (BUY/SELL/HOLD)
+     * @returns TriggerResponse Successful Response
+     * @throws ApiError
+     */
+    public static analysisPortfolioPositionsApiV1SystemAnalysisPortfolioPositionsPost(): CancelablePromise<TriggerResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/system/analysis/portfolio-positions',
         });
     }
 

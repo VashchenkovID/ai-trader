@@ -191,8 +191,8 @@ limitDays?: number,
     }
 
     /**
-     * Синхронизация портфеля (то же что GET /portfolio)
-     * Явный запрос синхронизации портфеля — те же данные, что GET /portfolio.
+     * Снимок портфеля (live), без фоновой задачи
+     * Те же данные, что GET /portfolio: немедленное чтение из Tinkoff. Не путать с POST /portfolio/sync.
      * @returns SuccessEnvelope_dict_ Successful Response
      * @throws ApiError
      */
@@ -204,7 +204,8 @@ limitDays?: number,
     }
 
     /**
-     * Фоновый sync портфеля
+     * Поставить в очередь фоновую синхронизацию портфеля
+     * Триггер named job `portfolio_sync`. Не возвращает позиции — для снимка используйте GET /portfolio или GET /portfolio/sync.
      * @returns SuccessEnvelope_dict_str__object__ Successful Response
      * @throws ApiError
      */
@@ -216,7 +217,8 @@ limitDays?: number,
     }
 
     /**
-     * Фоновый sync реального портфеля из Tinkoff
+     * Поставить в очередь фоновую синхронизацию реального портфеля
+     * Триггер named job `portfolio_real_sync` (запись снимка в БД и т.п.).
      * @returns SuccessEnvelope_dict_str__object__ Successful Response
      * @throws ApiError
      */
@@ -228,7 +230,8 @@ limitDays?: number,
     }
 
     /**
-     * Статус последнего sync портфеля
+     * Статус последних задач синхронизации портфеля
+     * Последние задачи типов portfolio_sync, portfolio_real_sync, tinkoff_portfolio_sync.
      * @returns SuccessEnvelope_dict_str__object__ Successful Response
      * @throws ApiError
      */

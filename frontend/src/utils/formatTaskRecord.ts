@@ -22,6 +22,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   cache_update: 'Обновление кеша',
   cache_full_update: 'Полное обновление кеша',
   analysis_market_portfolio: 'Анализ рынка и портфеля',
+  analysis_portfolio_positions: 'Анализ позиций портфелей (вердикт)',
   portfolio_sync: 'Синхронизация портфеля',
   portfolio_real_sync: 'Синхронизация реального портфеля',
   tinkoff_portfolio_sync: 'Синхронизация Tinkoff',

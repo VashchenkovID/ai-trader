@@ -449,6 +449,14 @@ async def analysis_market_portfolio() -> TriggerResponse:
     return TriggerResponse(data=trigger_named_job("analysis_market_portfolio"))
 
 
+@router.post(
+    "/system/analysis/portfolio-positions",
+    summary="Фоновый анализ открытых позиций по всем портфелям (BUY/SELL/HOLD)",
+)
+async def analysis_portfolio_positions() -> TriggerResponse:
+    return TriggerResponse(data=trigger_named_job("analysis_portfolio_positions"))
+
+
 @router.get("/system/analysis/kpi", summary="KPI-отчет по эффективности анализа NN+LLM")
 async def analysis_kpi(
     window: str = Query(default="7d", pattern="^(24h|7d|30d)$"),

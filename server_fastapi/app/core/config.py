@@ -62,7 +62,16 @@ class Settings(BaseSettings):
     max_drawdown: float = Field(default=0.15, alias="MAX_DRAWDOWN")
     min_confidence: float = Field(default=0.6, alias="MIN_CONFIDENCE")
     disable_rate_limit: bool = Field(default=False, alias="DISABLE_RATE_LIMIT")
-    rate_limit_max: int = Field(default=100000, alias="RATE_LIMIT_MAX")
+    rate_limit_max: int = Field(default=100000, ge=0, alias="RATE_LIMIT_MAX")
+    rate_limit_window_seconds: int = Field(default=60, ge=1, alias="RATE_LIMIT_WINDOW_SECONDS")
+    slo_alert_min_samples: int = Field(default=20, ge=1, alias="SLO_ALERT_MIN_SAMPLES")
+    trusted_hosts: str = Field(
+        default="",
+        alias="TRUSTED_HOSTS",
+        description="Список разрешённых Host через запятую; пусто — middleware отключён",
+    )
+    expose_root_metrics: bool = Field(default=True, alias="EXPOSE_ROOT_METRICS")
+    metrics_auth_token: str | None = Field(default=None, alias="METRICS_AUTH_TOKEN")
 
     # Wave 3: AI/ML background jobs
     training_full_cron: str = Field(default="0 3 * * 1", description="Cron: полное обучение")
@@ -154,6 +163,42 @@ class Settings(BaseSettings):
         default=False,
         alias="PAPER_PIPELINE_MULTI_PROFILE",
         description="Создавать paper-заявки по всем виртуальным профилям без дубля (figi+slug)",
+    )
+    # Авто-пайплайн заявок после analysis_portfolio_positions (только paper в планировщике)
+    ppr_auto_pipeline_enabled: bool = Field(
+        default=False,
+        alias="PPR_AUTO_PIPELINE_ENABLED",
+        description="После run_verdict вызывать PortfolioPositionPipelineService для каждого scope",
+    )
+    ppr_pipeline_min_confidence: float = Field(
+        default=0.22,
+        ge=0.0,
+        le=1.0,
+        alias="PPR_PIPELINE_MIN_CONFIDENCE",
+        description="Мин. final_confidence для отбора в PPR pipeline (paper)",
+    )
+    ppr_pipeline_min_score: float = Field(
+        default=0.22,
+        ge=0.0,
+        le=1.0,
+        alias="PPR_PIPELINE_MIN_SCORE",
+        description="Мин. эффективный score (max рынок, final_confidence) для отбора в PPR pipeline",
+    )
+    ppr_pipeline_use_profile_gate: bool = Field(
+        default=False,
+        alias="PPR_PIPELINE_USE_PROFILE_GATE",
+        description=(
+            "True: к порогам выше добавить max(signal_min_* профиля scope). "
+            "False: только PPR_PIPELINE_MIN_* (рекомендуется для портфельных SELL)"
+        ),
+    )
+    ppr_pipeline_bump_signal_to_profile_floor: bool = Field(
+        default=True,
+        alias="PPR_PIPELINE_BUMP_SIGNAL_TO_PROFILE_FLOOR",
+        description=(
+            "Перед create_from_data поднять confidence и score до signal_min_* профиля, "
+            "если ниже — иначе auto-paper часто отклоняет заявку после создания"
+        ),
     )
     risk_real_cap_preview_enabled: bool = Field(
         default=False,

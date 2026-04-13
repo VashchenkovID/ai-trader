@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.router import api_router
 from app.bootstrap import ensure_bootstrap
@@ -8,6 +10,7 @@ from app.core.config import get_settings
 from app.core.exception_handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.metrics import MetricsRegistry
+from app.core.metrics_access import check_root_metrics_access
 from app.core.middleware import register_middlewares
 from app.core.time_utils import now_msk
 from app.schemas.envelope import SuccessEnvelope
@@ -38,6 +41,10 @@ def create_app() -> FastAPI:
         version="1.0.0",
         lifespan=lifespan,
     )
+
+    trusted = [h.strip() for h in settings.trusted_hosts.split(",") if h.strip()]
+    if trusted:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted)
 
     allowed_origins = [
         "http://localhost:5173",
@@ -78,7 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(api_router, prefix="/api")
 
     @app.get("/metrics", tags=["observability"], summary="Снимок метрик приложения")
-    async def metrics() -> SuccessEnvelope[dict[str, object]]:
+    async def metrics(_access: None = Depends(check_root_metrics_access)) -> SuccessEnvelope[dict[str, object]]:
         return SuccessEnvelope(data={"routes": app.state.metrics_registry.snapshot()})
 
     return app

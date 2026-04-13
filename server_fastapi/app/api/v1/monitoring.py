@@ -26,19 +26,23 @@ def _default_alerts() -> list[dict[str, object]]:
 
 
 def _build_slo_alerts(routes: dict[str, dict[str, float | int]]) -> list[dict[str, object]]:
+    min_samples = get_settings().slo_alert_min_samples
     alerts: list[dict[str, object]] = []
     for route, metric in routes.items():
-        error_rate = float(metric.get("errorRate", 0))
+        count = int(metric.get("count", 0))
+        if count < min_samples:
+            continue
+        server_rate = float(metric.get("serverErrorRate", 0))
         p95 = float(metric.get("p95LatencyMs", 0))
-        if error_rate >= 0.05:
+        if server_rate >= 0.05:
             alerts.append(
                 {
                     "id": f"error-rate:{route}",
                     "category": "availability",
                     "severity": "critical",
                     "resolved": False,
-                    "message": f"Sustained error rate on {route}",
-                    "metric": {"errorRate": error_rate},
+                    "message": f"Sustained server error rate on {route}",
+                    "metric": {"serverErrorRate": server_rate},
                     "timestamp": iso_now_msk(),
                 }
             )
@@ -100,6 +104,9 @@ async def monitoring_metrics(
             "summary": {
                 "requestCount": sum(int(item["count"]) for item in routes.values()) if routes else 0,
                 "errorCount": sum(int(item["errorCount"]) for item in routes.values()) if routes else 0,
+                "serverErrorCount": sum(int(item.get("serverErrorCount", 0)) for item in routes.values())
+                if routes
+                else 0,
                 "broker": broker,
                 "quantReturnsMatrix": quant_returns_matrix,
             },
@@ -144,11 +151,13 @@ async def monitoring_performance(request: Request) -> SuccessEnvelope[dict[str, 
     routes = request.app.state.metrics_registry.snapshot()
     aggregate_count = sum(int(item["count"]) for item in routes.values()) if routes else 0
     aggregate_errors = sum(int(item["errorCount"]) for item in routes.values()) if routes else 0
+    aggregate_server = sum(int(item.get("serverErrorCount", 0)) for item in routes.values()) if routes else 0
     return SuccessEnvelope(
         data={
             "responseTime": 0,
             "throughput": aggregate_count,
             "errorRate": 0 if aggregate_count == 0 else round(aggregate_errors / aggregate_count, 4),
+            "serverErrorRate": 0 if aggregate_count == 0 else round(aggregate_server / aggregate_count, 4),
             "cacheHitRate": 0,
         }
     )

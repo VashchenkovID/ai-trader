@@ -22,6 +22,7 @@ from app.api.v1.tinkoff import router as tinkoff_v1_router
 from app.api.v1.quant import router as quant_v1_router
 from app.api.v1.backtesting import router as backtesting_v1_router
 from app.api.v1.portfolio_analyzer import router as portfolio_analyzer_v1_router
+from app.api.v1.portfolio_analysis import router as portfolio_analysis_v1_router
 from app.api.v1.reports import router as reports_v1_router
 from app.api.v1.portfolio_migration import router as portfolio_migration_v1_router
 
@@ -50,6 +51,7 @@ v1_routers = [
     quant_v1_router,
     backtesting_v1_router,
     portfolio_analyzer_v1_router,
+    portfolio_analysis_v1_router,
     reports_v1_router,
     portfolio_migration_v1_router,
 ]

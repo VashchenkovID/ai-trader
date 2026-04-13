@@ -2,8 +2,10 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { ManualLlmApplyChunkBody } from '../models/ManualLlmApplyChunkBody';
 import type { ReleaseGateBody } from '../models/ReleaseGateBody';
 import type { RunJuryBody } from '../models/RunJuryBody';
+import type { SuccessEnvelope_dict_str__Any__ } from '../models/SuccessEnvelope_dict_str__Any__';
 
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
@@ -323,6 +325,51 @@ requestBody: ReleaseGateBody,
     }
 
     /**
+     * Промпт батча LLM-жюри для ручного копирования
+     * Один чанк инструментов: текст промпта и список FIGI (порядок важен для apply).
+     * @returns SuccessEnvelope_dict_str__Any__ Successful Response
+     * @throws ApiError
+     */
+    public static manualLlmPromptChunkApiV1TrainingLlmManualPromptChunkGet({
+chunkIndex,
+}: {
+chunkIndex?: number,
+}): CancelablePromise<SuccessEnvelope_dict_str__Any__> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/training/llm-manual/prompt-chunk',
+            query: {
+                'chunkIndex': chunkIndex,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+
+    /**
+     * Применить ручной батч ответов LLM
+     * Парсит два сырьих ответа, сохраняет жюри, считает NN+fusion и обновляет рекомендации с analysis_date=сейчас (МСК).
+     * @returns SuccessEnvelope_dict_str__Any__ Successful Response
+     * @throws ApiError
+     */
+    public static manualLlmApplyChunkApiV1TrainingLlmManualApplyChunkPost({
+requestBody,
+}: {
+requestBody: ManualLlmApplyChunkBody,
+}): CancelablePromise<SuccessEnvelope_dict_str__Any__> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/training/llm-manual/apply-chunk',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+
+    /**
      * Запустить LLM-жюри по FIGI и сохранить мнения в БД
      * Загружает инструмент и свечи из БД, вызывает всех провайдеров жюри, сохраняет мнения в llm_jury_opinions и агрегат в llm_jury_aggregates.
      * @returns any Successful Response
@@ -336,50 +383,6 @@ requestBody?: RunJuryBody,
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/training/run-jury',
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-
-    /**
-     * Промпт батча LLM-жюри для ручного копирования (один чанк).
-     */
-    public static manualLlmPromptChunkApiV1TrainingLlmManualPromptChunkGet({
-chunkIndex = 0,
-}: {
-chunkIndex?: number,
-}): CancelablePromise<{ success?: boolean, data: Record<string, unknown> }> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/v1/training/llm-manual/prompt-chunk',
-            query: {
-                chunkIndex,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-
-    /**
-     * Применить ручной батч ответов GigaChat + Алиса.
-     */
-    public static manualLlmApplyChunkApiV1TrainingLlmManualApplyChunkPost({
-requestBody,
-}: {
-requestBody: {
-chunkIndex: number,
-figi: Array<string>,
-gigachatRaw: string,
-alisaRaw: string,
-},
-}): CancelablePromise<{ success?: boolean, data: Record<string, unknown> }> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/v1/training/llm-manual/apply-chunk',
             body: requestBody,
             mediaType: 'application/json',
             errors: {

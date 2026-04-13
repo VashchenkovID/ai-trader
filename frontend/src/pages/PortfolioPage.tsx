@@ -1,3 +1,4 @@
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import {
   Alert,
@@ -6,19 +7,24 @@ import {
   Chip,
   LinearProgress,
   Paper,
+  Snackbar,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { PortfolioService } from '@/api/generated'
+import { PortfolioAnalysisService, PortfolioService } from '@/api/generated'
 import { CreateTradingRequestModal, parsePositionQuantity } from '@/components/trading'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
+import { parseLatestVerdictMap, type PortfolioVerdictCell } from '@/utils/portfolioPositionVerdict'
+
+const REAL_PORTFOLIO_SCOPE = 'real'
 
 function formatMoney(value: unknown) {
   const n = typeof value === 'number' ? value : Number(value)
@@ -54,8 +60,13 @@ export function PortfolioPage() {
   const [data, setData] = useState<PortfolioPayload | null>(null)
   const [source, setSource] = useState<'live' | 'db'>('live')
   const [recByFigi, setRecByFigi] = useState<Map<string, Record<string, unknown>>>(new Map())
+  const [portfolioVerdictByFigi, setPortfolioVerdictByFigi] = useState<Map<string, PortfolioVerdictCell>>(
+    new Map(),
+  )
   const [loading, setLoading] = useState(false)
+  const [verdictLoading, setVerdictLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [snack, setSnack] = useState<{ message: string; severity: 'success' | 'error' | 'warning' } | null>(null)
 
   const [sellOpen, setSellOpen] = useState(false)
   const [sellData, setSellData] = useState<Record<string, unknown> | null>(null)
@@ -109,36 +120,88 @@ export function PortfolioPage() {
     [positions],
   )
 
+  const loadMarketRecommendations = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) {
+      setRecByFigi(new Map())
+      return
+    }
+    try {
+      const env =
+        await PortfolioService.getPortfolioPositionRecommendationsApiV1PortfolioPositionRecommendationsGet({
+          figi: ids,
+        })
+      const body = env.data as { items?: unknown[] }
+      const items = Array.isArray(body.items) ? body.items : []
+      const m = new Map<string, Record<string, unknown>>()
+      for (const it of items) {
+        if (!it || typeof it !== 'object') continue
+        const o = it as Record<string, unknown>
+        const f = String(o.figi ?? '')
+        if (f) m.set(f, o)
+      }
+      setRecByFigi(m)
+    } catch {
+      setRecByFigi(new Map())
+    }
+  }, [])
+
+  const loadPortfolioVerdicts = useCallback(async () => {
+    try {
+      const env = await PortfolioAnalysisService.getLatestApiV1PortfolioAnalysisLatestGet({
+        portfolioScope: REAL_PORTFOLIO_SCOPE,
+        limit: 100,
+      })
+      setPortfolioVerdictByFigi(parseLatestVerdictMap(env.data))
+    } catch {
+      setPortfolioVerdictByFigi(new Map())
+    }
+  }, [])
+
   useEffect(() => {
     if (figis.length === 0) {
       setRecByFigi(new Map())
+      setPortfolioVerdictByFigi(new Map())
       return
     }
     let cancelled = false
     const run = async () => {
-      try {
-        const env = await PortfolioService.getPortfolioPositionRecommendationsApiV1PortfolioPositionRecommendationsGet({
-          figi: figis,
-        })
-        const body = env.data as { items?: unknown[] }
-        const items = Array.isArray(body.items) ? body.items : []
-        const m = new Map<string, Record<string, unknown>>()
-        for (const it of items) {
-          if (!it || typeof it !== 'object') continue
-          const o = it as Record<string, unknown>
-          const f = String(o.figi ?? '')
-          if (f) m.set(f, o)
-        }
-        if (!cancelled) setRecByFigi(m)
-      } catch {
-        if (!cancelled) setRecByFigi(new Map())
-      }
+      await loadMarketRecommendations(figis)
+      if (!cancelled) await loadPortfolioVerdicts()
     }
     void run()
     return () => {
       cancelled = true
     }
-  }, [figis.join('|')])
+  }, [figis.join('|'), loadMarketRecommendations, loadPortfolioVerdicts])
+
+  const runPortfolioVerdictRefresh = useCallback(async () => {
+    setVerdictLoading(true)
+    try {
+      const env = await PortfolioAnalysisService.postVerdictApiV1PortfolioAnalysisVerdictPost({
+        requestBody: { portfolio_scope: REAL_PORTFOLIO_SCOPE },
+      })
+      await loadPortfolioVerdicts()
+      await loadMarketRecommendations(figis)
+      const payload = env.data as { llmSource?: string; saved?: number; message?: string } | undefined
+      const src =
+        payload?.llmSource === 'perplexity'
+          ? 'LLM'
+          : payload?.llmSource === 'market_fallback'
+            ? 'рыночный fallback'
+            : (payload?.llmSource ?? '—')
+      setSnack({
+        message:
+          payload?.message === 'no_positions'
+            ? 'Нет открытых позиций — нечего анализировать.'
+            : `Рекомендации по портфелю обновлены (${src}, записей: ${payload?.saved ?? '—'}).`,
+        severity: payload?.message === 'no_positions' ? 'warning' : 'success',
+      })
+    } catch (e) {
+      setSnack({ message: apiErrorMessage(e), severity: 'error' })
+    } finally {
+      setVerdictLoading(false)
+    }
+  }, [figis, loadMarketRecommendations, loadPortfolioVerdicts])
 
   const triggerSync = useCallback(async () => {
     try {
@@ -170,6 +233,20 @@ export function PortfolioPage() {
         <Button variant="text" size="small" onClick={() => void triggerSync()} disabled={loading}>
           Поставить sync в очередь
         </Button>
+        <Tooltip title="Пересчёт BUY/SELL/HOLD с учётом цены закупки и рыночного сигнала (LLM при наличии ключа)">
+          <span>
+            <Button
+              variant="contained"
+              size="small"
+              color="secondary"
+              startIcon={<AutoAwesomeIcon />}
+              onClick={() => void runPortfolioVerdictRefresh()}
+              disabled={loading || verdictLoading}
+            >
+              Обновить рекомендации по портфелю
+            </Button>
+          </span>
+        </Tooltip>
       </Box>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -189,6 +266,7 @@ export function PortfolioPage() {
       ) : null}
 
       {loading && !data ? <LinearProgress sx={{ mb: 2 }} /> : null}
+      {verdictLoading ? <LinearProgress sx={{ mb: 1 }} /> : null}
 
       {data ? (
         <Paper sx={{ p: 2, mb: 2 }}>
@@ -219,6 +297,9 @@ export function PortfolioPage() {
         <Typography variant="subtitle1" sx={{ mb: 1 }}>
           Позиции и рекомендации
         </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          «Рынок» — последняя строка рекомендаций по FIGI; «Портфель» — вердикт с учётом вашей позиции (кнопка выше).
+        </Typography>
         <TableContainer>
           <Table size="small">
             <TableHead>
@@ -227,7 +308,8 @@ export function PortfolioPage() {
                 <TableCell>Тикер</TableCell>
                 <TableCell align="right">Кол-во</TableCell>
                 <TableCell align="right">Цена</TableCell>
-                <TableCell>Рекомендация</TableCell>
+                <TableCell>Рынок</TableCell>
+                <TableCell>Портфель</TableCell>
                 <TableCell align="right">Заявка</TableCell>
                 <TableCell />
               </TableRow>
@@ -237,6 +319,7 @@ export function PortfolioPage() {
                 const figi = String(p.figi ?? '')
                 const rec = recByFigi.get(figi)
                 const sig = rec?.recommendation != null ? String(rec.recommendation) : '—'
+                const pv = portfolioVerdictByFigi.get(figi)
                 const px = priceFromPosition(p)
                 const qtyHeld = parsePositionQuantity(p)
                 return (
@@ -248,6 +331,17 @@ export function PortfolioPage() {
                     <TableCell>
                       {sig !== '—' ? (
                         <Chip size="small" label={sig} variant="outlined" />
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          —
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {pv ? (
+                        <Tooltip title={`Уверенность: ${(pv.finalConfidence * 100).toFixed(0)}%`}>
+                          <Chip size="small" label={pv.finalAction} color="secondary" variant="outlined" />
+                        </Tooltip>
                       ) : (
                         <Typography variant="body2" color="text.secondary">
                           —
@@ -292,7 +386,7 @@ export function PortfolioPage() {
               })}
               {positions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={8}>
                     <Typography color="text.secondary">Нет позиций или данные не загружены.</Typography>
                   </TableCell>
                 </TableRow>
@@ -301,6 +395,22 @@ export function PortfolioPage() {
           </Table>
         </TableContainer>
       </Paper>
+
+      <Snackbar
+        open={snack != null}
+        autoHideDuration={8000}
+        onClose={() => setSnack(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnack(null)}
+          severity={snack?.severity ?? 'success'}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snack?.message}
+        </Alert>
+      </Snackbar>
 
       <CreateTradingRequestModal
         open={sellOpen}

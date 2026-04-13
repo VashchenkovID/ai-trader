@@ -20,8 +20,22 @@ async def test_monitoring_endpoints_extended(client: AsyncClient) -> None:
 
         def snapshot(self) -> dict[str, dict[str, float | int]]:
             return {
-                "/api/v1/auth/login": {"count": 100, "errorCount": 6, "errorRate": 0.06, "p95LatencyMs": 1200},
-                "/api/v1/health": {"count": 20, "errorCount": 0, "errorRate": 0.0, "p95LatencyMs": 10},
+                "/api/v1/auth/login": {
+                    "count": 100,
+                    "errorCount": 6,
+                    "errorRate": 0.06,
+                    "serverErrorCount": 6,
+                    "serverErrorRate": 0.06,
+                    "p95LatencyMs": 1200,
+                },
+                "/api/v1/health": {
+                    "count": 20,
+                    "errorCount": 0,
+                    "errorRate": 0.0,
+                    "serverErrorCount": 0,
+                    "serverErrorRate": 0.0,
+                    "p95LatencyMs": 10,
+                },
             }
 
         def reset(self) -> None:

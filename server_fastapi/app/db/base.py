@@ -11,6 +11,7 @@ from app.db.models import (
     NewsItem,
     Option,
     PortfolioAnalyzerReport,
+    PortfolioPositionRecommendation,
     Recommendation,
     RealPortfolio,
     Signal,
@@ -38,4 +39,5 @@ __all__ = [
     "VirtualPortfolio",
     "BacktestRun",
     "PortfolioAnalyzerReport",
+    "PortfolioPositionRecommendation",
 ]

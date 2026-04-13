@@ -4,6 +4,9 @@ from app.repositories.news_repository import NewsRepository
 from app.repositories.performance_repository import PerformanceRepository
 from app.repositories.profitability_repository import ProfitabilityRepository
 from app.repositories.trading_request_repository import TradingRequestRepository
+from app.repositories.portfolio_position_recommendation_repository import (
+    PortfolioPositionRecommendationRepository,
+)
 from app.repositories.virtual_portfolio_repository import VirtualPortfolioRepository
 from app.services.auth_service import AuthService
 from app.services.market_service import MarketService
@@ -15,7 +18,9 @@ from app.services.auto_paper_service import AutoPaperService
 from app.services.backtesting_service import BacktestingService
 from app.services.market_returns_service import MarketReturnsService
 from app.services.portfolio_analyzer_service import PortfolioAnalyzerService
+from app.services.portfolio_position_analysis_service import PortfolioPositionAnalysisService
 from app.services.risk_optimization_service import RiskOptimizationService
+from app.services.portfolio_position_pipeline_service import PortfolioPositionPipelineService
 from app.services.recommendation_pipeline_service import RecommendationPipelineService
 from app.services.preflight_service import PreflightService
 from app.services.ops_service import OpsService
@@ -44,6 +49,7 @@ class AppContainer:
         self.profitability_repository = ProfitabilityRepository()
         self.trading_request_repository = TradingRequestRepository()
         self.virtual_portfolio_repository = VirtualPortfolioRepository()
+        self.portfolio_position_recommendation_repository = PortfolioPositionRecommendationRepository()
         self.virtual_portfolio_service = VirtualPortfolioService(
             market_repo=self.market_repository,
             repo=self.virtual_portfolio_repository,
@@ -72,6 +78,13 @@ class AppContainer:
             )
             if settings.tinkoff_token
             else None
+        )
+        self.portfolio_position_analysis_service = PortfolioPositionAnalysisService(
+            settings=settings,
+            market_repo=self.market_repository,
+            virtual_portfolio_service=self.virtual_portfolio_service,
+            ppr_repo=self.portfolio_position_recommendation_repository,
+            tinkoff_client=self.tinkoff_client,
         )
         self.trading_request_service = TradingRequestService(
             trading_repo=self.trading_request_repository,
@@ -105,6 +118,14 @@ class AppContainer:
             trading_service=self.trading_request_service,
             market_repo=self.market_repository,
             trading_repo=self.trading_request_repository,
+            auto_paper_service=self.auto_paper_service,
+            portfolio_profile_config_service=self.portfolio_profile_config_service,
+        )
+        self.portfolio_position_pipeline_service = PortfolioPositionPipelineService(
+            trading_service=self.trading_request_service,
+            market_repo=self.market_repository,
+            trading_repo=self.trading_request_repository,
+            ppr_repo=self.portfolio_position_recommendation_repository,
             auto_paper_service=self.auto_paper_service,
             portfolio_profile_config_service=self.portfolio_profile_config_service,
         )
