@@ -1,6 +1,7 @@
 """
 Анализ открытых позиций в разрезе портфеля (scope): цена закупки, текущая цена,
-рыночная рекомендация из БД + LLM-вердикт (Perplexity) либо fallback без ключа API.
+рыночная рекомендация из БД + вердикт GigaChat; свежий ручной импорт (manual/apply)
+переиспользуется без повторного вызова LLM по тем же FIGI (см. PPR_MANUAL_REUSE_TTL_HOURS).
 """
 
 from __future__ import annotations
@@ -14,7 +15,6 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +26,7 @@ from app.core.portfolio_scope import (
     canonical_portfolio_scope,
     virtual_slug_from_scope,
 )
-from app.db.models import RealPortfolio
+from app.db.models import PortfolioPositionRecommendation, RealPortfolio
 from app.repositories.market_repository import MarketRepository
 from app.repositories.portfolio_position_recommendation_repository import (
     PortfolioPositionRecommendationRepository,
@@ -113,6 +113,44 @@ def extract_json_object(text: str) -> dict[str, Any] | None:
                 except json.JSONDecodeError:
                     return None
     return None
+
+
+def _coerce_verdict_dict(figi: str, src: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(src, dict):
+        return {
+            "figi": figi,
+            "action": "HOLD",
+            "confidence": 0.5,
+            "reasons": ["invalid_parsed_shape"],
+        }
+    return {
+        "figi": figi,
+        "action": _clamp_action(str(src.get("action") or "HOLD")),
+        "confidence": _clamp01(src.get("confidence"), 0.5),
+        "reasons": src.get("reasons") if isinstance(src.get("reasons"), list) else [],
+    }
+
+
+def _verdict_from_manual_row(row: PortfolioPositionRecommendation) -> dict[str, Any] | None:
+    payload = row.llm_payload or {}
+    if payload.get("source") != "manual_external":
+        return None
+    p = payload.get("parsed")
+    if not isinstance(p, dict):
+        return None
+    figi = str(p.get("figi") or row.figi).strip()
+    if not figi:
+        return None
+    return _coerce_verdict_dict(figi, p)
+
+
+def _manual_row_still_fresh(row: PortfolioPositionRecommendation, *, ttl_hours: int) -> bool:
+    if ttl_hours <= 0:
+        return False
+    created = row.created_at
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return created + timedelta(hours=ttl_hours) >= datetime.now(timezone.utc)
 
 
 class PortfolioPositionAnalysisService:
@@ -360,28 +398,11 @@ class PortfolioPositionAnalysisService:
         )
         return _VERDICT_PROMPT_HEAD + tail
 
-    async def _call_perplexity(self, prompt: str) -> str:
-        key = (self._settings.perplexity_api_key or "").strip()
-        try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                r = await client.post(
-                    "https://api.perplexity.ai/chat/completions",
-                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                    json={
-                        "model": "sonar",
-                        "messages": [{"role": "user", "content": prompt}],
-                    },
-                )
-                r.raise_for_status()
-                data = r.json()
-                choices = data.get("choices") or []
-                if choices:
-                    msg = (choices[0].get("message") or {}).get("content") or ""
-                    if isinstance(msg, str):
-                        return msg.strip()
-        except Exception as e:
-            logger.warning("Perplexity portfolio verdict failed: %s", e)
-        return ""
+    async def _call_gigachat(self, prompt: str) -> str:
+        from training.llm_jury.providers.gigachat import GigaChatProvider
+
+        prov = GigaChatProvider(timeout=120.0)
+        return (await prov.complete_text(prompt, max_tokens=4096)).strip()
 
     def parse_llm_verdict(self, raw: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         obj = extract_json_object(raw)
@@ -432,13 +453,51 @@ class PortfolioPositionAnalysisService:
 
         figis = [str(p["figi"]) for p in positions]
         market_by_figi = await self.market_signals_by_figi(session, figis)
+        ttl = int(getattr(self._settings, "ppr_manual_reuse_ttl_hours", 0) or 0)
+        latest_map = await self._ppr.latest_by_figi_map(session, portfolio_scope=scope)
+
+        manual_by_figi: dict[str, dict[str, Any]] = {}
+        need_llm: list[dict[str, Any]] = []
+        for p in positions:
+            figi = str(p["figi"])
+            row = latest_map.get(figi)
+            reused: dict[str, Any] | None = None
+            if row is not None and _manual_row_still_fresh(row, ttl_hours=ttl):
+                reused = _verdict_from_manual_row(row)
+            if reused is not None:
+                manual_by_figi[figi] = reused
+            else:
+                need_llm.append(p)
+
+        raw_text = ""
+        full_obj: dict[str, Any] | None = None
+        parsed: list[dict[str, Any]] = []
+
+        if not need_llm:
+            by_figi = dict(manual_by_figi)
+            verdicts_out = [by_figi[str(p["figi"])] for p in positions]
+            return {
+                "portfolioScope": scope,
+                "analysisRunId": None,
+                "saved": 0,
+                "positions": positions,
+                "meta": meta,
+                "verdicts": verdicts_out,
+                "llmSource": "manual_cached",
+                "message": "used_manual_verdict_cache",
+                "rawLlmTextPreview": "",
+            }
+
+        market_partial = {
+            str(p["figi"]): market_by_figi.get(str(p["figi"])) or {} for p in need_llm
+        }
         prompt = self.build_verdict_prompt(
             portfolio_scope=scope,
-            positions=positions,
+            positions=need_llm,
             portfolio_meta=meta,
-            market_by_figi=market_by_figi,
+            market_by_figi=market_partial,
         )
-        raw_text = await self._call_perplexity(prompt)
+        raw_text = await self._call_gigachat(prompt)
         parsed, full_obj = self.parse_llm_verdict(raw_text)
         if not parsed:
             return {
@@ -453,26 +512,48 @@ class PortfolioPositionAnalysisService:
                 "rawLlmTextPreview": (raw_text[:500] + "…") if len(raw_text) > 500 else raw_text,
             }
 
-        source = "perplexity"
-        by_figi = {x["figi"]: x for x in parsed}
+        by_llm = {x["figi"]: x for x in parsed}
+        by_figi: dict[str, dict[str, Any]] = dict(manual_by_figi)
+        for p in need_llm:
+            figi = str(p["figi"])
+            verdict = by_llm.get(figi) or {
+                "figi": figi,
+                "action": "HOLD",
+                "confidence": 0.5,
+                "reasons": ["no_llm_row"],
+            }
+            by_figi[figi] = verdict
+
+        source = "gigachat_manual_merge" if manual_by_figi else "gigachat"
         run_id = uuid.uuid4()
         saved = 0
+        need_llm_figis = {str(p["figi"]) for p in need_llm}
         for p in positions:
             figi = str(p["figi"])
             verdict = by_figi.get(figi) or {
                 "figi": figi,
                 "action": "HOLD",
                 "confidence": 0.5,
-                "reasons": ["no_llm_row"],
+                "reasons": ["missing_in_llm_response"],
             }
             m = market_by_figi.get(figi) or {}
             ms = m.get("score")
             mc = m.get("confidence")
-            llm_payload: dict[str, Any] = {
-                "source": source,
-                "parsed": verdict,
-                "portfolioComment": (full_obj or {}).get("portfolioComment"),
-            }
+            if figi in manual_by_figi:
+                llm_payload: dict[str, Any] = {
+                    "source": "manual_external",
+                    "parsed": verdict,
+                    "portfolioComment": (full_obj or {}).get("portfolioComment"),
+                    "reusedManualInAutoRun": True,
+                }
+                row_raw: str | None = None
+            else:
+                llm_payload = {
+                    "source": "gigachat",
+                    "parsed": verdict,
+                    "portfolioComment": (full_obj or {}).get("portfolioComment"),
+                }
+                row_raw = raw_text if raw_text and figi in need_llm_figis else None
             if persist:
                 await self._ppr.add_row(
                     session,
@@ -485,7 +566,7 @@ class PortfolioPositionAnalysisService:
                     final_confidence=Decimal(str(round(float(verdict["confidence"]), 6))),
                     position_snapshot=dict(p),
                     llm_payload=llm_payload,
-                    raw_llm_text=raw_text if raw_text else None,
+                    raw_llm_text=row_raw,
                 )
                 saved += 1
 
@@ -495,18 +576,7 @@ class PortfolioPositionAnalysisService:
             "saved": saved,
             "positions": positions,
             "meta": meta,
-            "verdicts": [
-                by_figi.get(
-                    str(p["figi"]),
-                    {
-                        "figi": str(p["figi"]),
-                        "action": "HOLD",
-                        "confidence": 0.5,
-                        "reasons": ["missing_in_llm_response"],
-                    },
-                )
-                for p in positions
-            ],
+            "verdicts": [by_figi[str(p["figi"])] for p in positions],
             "llmSource": source,
             "rawLlmTextPreview": (raw_text[:500] + "…") if len(raw_text) > 500 else raw_text,
         }

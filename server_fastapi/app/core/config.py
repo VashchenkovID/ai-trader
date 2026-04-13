@@ -165,6 +165,15 @@ class Settings(BaseSettings):
         description="Создавать paper-заявки по всем виртуальным профилям без дубля (figi+slug)",
     )
     # Авто-пайплайн заявок после analysis_portfolio_positions (только paper в планировщике)
+    ppr_manual_reuse_ttl_hours: int = Field(
+        default=168,
+        ge=0,
+        alias="PPR_MANUAL_REUSE_TTL_HOURS",
+        description=(
+            "Сколько часов вердикт из ручного импорта (manual/apply) считать свежим: "
+            "run_verdict не вызывает GigaChat по этим FIGI; 0 — не переиспользовать ручные"
+        ),
+    )
     ppr_auto_pipeline_enabled: bool = Field(
         default=False,
         alias="PPR_AUTO_PIPELINE_ENABLED",

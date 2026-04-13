@@ -95,7 +95,10 @@ async def post_manual_apply(
     return SuccessEnvelope(data=data)
 
 
-@router.post("/verdict", summary="Вердикт BUY/SELL/HOLD по позициям портфеля (LLM или fallback)")
+@router.post(
+    "/verdict",
+    summary="Вердикт по позициям: GigaChat + переиспользование свежего ручного импорта (TTL)",
+)
 async def post_verdict(
     body: VerdictRequest,
     db_session: AsyncSession = Depends(get_db_session),

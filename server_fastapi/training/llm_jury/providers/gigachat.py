@@ -10,9 +10,12 @@ Chat: gigachat.devices.sberbank.ru/api/v1/chat/completions.
 from __future__ import annotations
 
 import base64
+import logging
 import os
 import uuid
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from training.llm_jury.parse_verdict import parse_verdict
@@ -112,6 +115,44 @@ class GigaChatProvider(LLMProviderBase):
             confidence=confidence,
             raw_text=raw_text[:2000] if raw_text else "",
         )
+
+    async def complete_text(self, prompt: str, *, max_tokens: int = 4096) -> str:
+        """Сырой текст ответа chat/completions (для JSON-задач вне формата жюри)."""
+        if not self._client_id or not self._client_secret:
+            return ""
+        try:
+            import httpx
+        except ImportError:
+            return ""
+        try:
+            token = await self._get_token(httpx)
+        except Exception as e:
+            logger.warning("GigaChat OAuth failed: %s", e)
+            return ""
+        payload: dict[str, Any] = {
+            "model": "GigaChat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+        }
+        try:
+            async with httpx.AsyncClient(
+                timeout=self._timeout,
+                verify=self._ssl_verify,
+            ) as client:
+                resp = await client.post(
+                    CHAT_URL,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as e:
+            logger.warning("GigaChat chat/completions failed: %s", e)
+            return ""
+        return _extract_content(data)
 
     async def _get_token(self, httpx_module: Any) -> str:
         credentials = base64.b64encode(

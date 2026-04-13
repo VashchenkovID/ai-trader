@@ -155,11 +155,23 @@ export function VirtualPortfoliosPage() {
           setSnack({ message: `Профиль «${slug}»: нет позиций для анализа.`, severity: 'warning' })
         } else if (payload?.message === 'no_llm_verdict') {
           setSnack({
-            message: `Профиль «${slug}»: нет валидного ответа LLM — записи в БД не менялись.`,
+            message: `Профиль «${slug}»: нет валидного ответа GigaChat — записи в БД не менялись.`,
             severity: 'warning',
           })
+        } else if (payload?.message === 'used_manual_verdict_cache') {
+          setSnack({
+            message: `Профиль «${slug}»: все позиции покрыты свежим ручным импортом — вызов GigaChat не нужен.`,
+            severity: 'success',
+          })
         } else {
-          const src = payload?.llmSource === 'perplexity' ? 'LLM' : (payload?.llmSource ?? '—')
+          const src =
+            payload?.llmSource === 'gigachat' ||
+            payload?.llmSource === 'gigachat_manual_merge' ||
+            payload?.llmSource === 'perplexity'
+              ? 'GigaChat/LLM'
+              : payload?.llmSource === 'manual_cached'
+                ? 'ручной кэш'
+                : (payload?.llmSource ?? '—')
           setSnack({
             message: `Профиль «${slug}»: вердикт обновлён (${src}, записей: ${payload?.saved ?? '—'}).`,
             severity: 'success',
