@@ -149,6 +149,20 @@ class TradingRequestRepository:
         )
         return int(value or 0)
 
+    async def expire_overdue(self, db_session: AsyncSession, now: datetime) -> int:
+        """Переводит просроченные заявки PENDING в EXPIRED."""
+        from sqlalchemy import update
+        stmt = (
+            update(TradingRequest)
+            .where(
+                TradingRequest.status == "PENDING",
+                TradingRequest.expires_at <= now,
+            )
+            .values(status="EXPIRED", reject_reason="Request has expired")
+        )
+        res = await db_session.execute(stmt)
+        return int(res.rowcount or 0)
+
     async def sum_reserved_buy_budget_real_accounts(self, db_session: AsyncSession) -> Decimal:
         """
         Сумма budget по BUY-заявкам real/micro в статусах, где сделка ещё не исполнена в приложении,

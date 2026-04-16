@@ -812,3 +812,12 @@ class TradingRequestService:
         """Удаляет все заявки, которые не в статусе PENDING."""
         deleted = await self._trading_repo.delete_not_pending(db_session, mode=mode)
         return {"deleted": deleted, "mode": mode}
+
+    async def expire_overdue_requests(self, db_session: AsyncSession) -> dict[str, object]:
+        """Переводит просроченные заявки PENDING в EXPIRED."""
+        from app.core.time_utils import now_msk
+        expired_count = await self._trading_repo.expire_overdue(db_session, now_msk())
+        if expired_count > 0:
+            logger.info("Expired %d overdue PENDING requests", expired_count)
+        return {"expiredCount": expired_count}
+

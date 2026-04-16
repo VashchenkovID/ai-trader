@@ -845,17 +845,11 @@ def _nn_conf_with_llm_fallback(
     threshold: float | None = None,
 ) -> float:
     """
-    Если уверенность внутренней NN нулевая или слишком низкая, берём уверенность внешней модели (LLM),
-    чтобы взвешенная уверенность не схлопывалась в ноль.
+    Убрано асимметричное поведение. Возвращаем nn_conf как есть.
     """
-    thr = float(threshold if threshold is not None else _NN_CONF_LLM_FALLBACK_THRESHOLD)
-    nc = _clamp01(float(nn_conf), default=0.5) if nn_conf is not None else 0.5
-    if llm_conf is None:
-        return nc
-    lc = _clamp01(float(llm_conf), default=0.5)
-    if nc <= 0.0 or nc < thr:
-        return lc
-    return nc
+    if nn_conf is None:
+        return 0.5
+    return _clamp01(float(nn_conf), default=0.5)
 
 
 # Порог: score внутренней NN ниже этого (или 0) считаем «сломанным» и подставляем консенсус LLM.
@@ -869,19 +863,12 @@ def _nn_score_with_llm_fallback(
     threshold: float | None = None,
 ) -> float:
     """
-    Если score внутренней NN нулевой или слишком низкий, берём консенсус внешних LLM (та же шкала 0–1),
-    чтобы итоговый сигнал не залипал у нуля при слабом NN.
+    Убрано асимметричное поведение. Возвращаем nn_score как есть.
+    Смешивание будет происходить через веса (w_nn, w_llm).
     """
-    thr = float(threshold if threshold is not None else _NN_SCORE_LLM_FALLBACK_THRESHOLD)
     if nn_score is None:
         return 0.5
-    ns = _clamp01(float(nn_score), default=0.5)
-    if llm_consensus is None:
-        return ns
-    lc = _clamp01(float(llm_consensus), default=0.5)
-    if ns <= 0.0 or ns < thr:
-        return lc
-    return ns
+    return _clamp01(float(nn_score), default=0.5)
 
 
 def _score_to_recommendation(score: float) -> str:
@@ -2461,11 +2448,10 @@ async def _analysis_market_portfolio_job() -> dict[str, Any]:
             regime = str(((nn_data or {}).get("payload") or {}).get("marketRegime") or "normal")
             w_nn, w_llm, buy_threshold, sell_threshold = _adaptive_fusion_params(regime)
             nn_score_preview = _clamp01(float(nn_data.get("score")), default=0.5) if nn_ok else None
-            margin_use_llm = True
+            margin_use_llm = True  # Всегда используем LLM, так как NN может ошибаться даже при 100% уверенности
             if nn_score_preview is not None:
-                margin_use_llm = abs(nn_score_preview - 0.5) <= max(0.01, llm_margin)
-                if not margin_use_llm:
-                    llm_calls_saved += 1
+                # margin_use_llm = abs(nn_score_preview - 0.5) <= max(0.01, llm_margin)
+                pass
 
             cache_key = f"{figi}:{now_msk().date().isoformat()}"
             row_state: dict[str, Any] = {
@@ -3287,6 +3273,18 @@ async def _trading_requests_prices_update_job() -> dict[str, Any]:
     return {"message": "trading requests prices updated", "updated": updated}
 
 
+async def _expire_trading_requests_job() -> dict[str, Any]:
+    if not _container:
+        raise RuntimeError("Container is not initialized")
+    trading_service = _container.trading_request_service
+    if not trading_service:
+        return {"message": "trading service unavailable", "expiredCount": 0}
+    async with SessionLocal() as session:
+        result = await trading_service.expire_overdue_requests(session)
+        await session.commit()
+    return {"message": "overdue requests expired", **result}
+
+
 def _backtest_metrics_all_nan(metrics: dict[str, Any]) -> bool:
     """True, если все ключевые метрики NaN — пропуск инструмента."""
     for key in ("test_mse", "test_mae", "test_direction_accuracy"):
@@ -3887,6 +3885,12 @@ def start_app_scheduler(container: AppContainer, settings: Settings) -> AsyncIOS
         job_id="trading_requests_prices_update",
         cron_expr="*/1 * * * *",
         fn=_trading_requests_prices_update_job,
+    )
+    _register_job(
+        scheduler,
+        job_id="expire_trading_requests",
+        cron_expr="*/5 * * * *",
+        fn=_expire_trading_requests_job,
     )
     _register_job(
         scheduler,

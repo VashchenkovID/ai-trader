@@ -1,5 +1,5 @@
 import FilterListIcon from '@mui/icons-material/FilterList'
-import type { ButtonProps } from '@mui/material'
+import type { ButtonProps, ChipProps } from '@mui/material'
 import {
   Alert,
   Box,
@@ -97,6 +97,26 @@ const STATUS_OPTIONS = [
   'EXPIRED',
 ]
 const MODE_OPTIONS = ['', 'paper', 'real', 'micro']
+
+type StatusMeta = {
+  labelRu: string
+  color: ChipProps['color']
+  variant?: ChipProps['variant']
+}
+
+const STATUS_META: Record<string, StatusMeta> = {
+  PENDING: { labelRu: 'В ожидании', color: 'warning', variant: 'filled' },
+  APPROVED: { labelRu: 'Одобрена', color: 'info', variant: 'filled' },
+  PENDING_MANUAL_REAL: { labelRu: 'Ожидает ручного исполнения', color: 'secondary', variant: 'filled' },
+  EXECUTED: { labelRu: 'Исполнена', color: 'success', variant: 'filled' },
+  REJECTED: { labelRu: 'Отклонена', color: 'error', variant: 'filled' },
+  CANCELLED: { labelRu: 'Отменена', color: 'default', variant: 'outlined' },
+  EXPIRED: { labelRu: 'Истекла', color: 'default', variant: 'outlined' },
+}
+
+function statusMeta(status: string): StatusMeta {
+  return STATUS_META[status] ?? { labelRu: status || 'Неизвестно', color: 'default', variant: 'outlined' }
+}
 
 function asRows(raw: unknown): TradingRequestRow[] {
   if (!Array.isArray(raw)) return []
@@ -382,13 +402,7 @@ function TradingRequestsPage() {
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
             {Object.entries(statsByStatus).map(([st, n]) => (
-              <Chip
-                key={st}
-                size="small"
-                label={`${st}: ${n}`}
-                variant="outlined"
-                sx={{ borderColor: 'divider', color: 'text.secondary' }}
-              />
+              <Chip key={st} size="small" label={`${statusMeta(st).labelRu}: ${n}`} color={statusMeta(st).color} variant={statusMeta(st).variant ?? 'outlined'} />
             ))}
           </Box>
 
@@ -419,7 +433,7 @@ function TradingRequestsPage() {
               >
                 {STATUS_OPTIONS.map(s => (
                   <MenuItem key={s || 'all'} value={s}>
-                    {s || 'Все'}
+                    {s ? statusMeta(s).labelRu : 'Все'}
                   </MenuItem>
                 ))}
               </Select>
@@ -508,7 +522,12 @@ function TradingRequestsPage() {
               items.map(row => (
                 <TableRow key={row.id} hover>
                   <TableCell>
-                    <Chip label={row.status} size="small" />
+                    <Chip
+                      label={statusMeta(row.status).labelRu}
+                      size="small"
+                      color={statusMeta(row.status).color}
+                      variant={statusMeta(row.status).variant ?? 'outlined'}
+                    />
                   </TableCell>
                   <TableCell sx={FIGI_TABLE_CELL_SX}>
                     <Typography
