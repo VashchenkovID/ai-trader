@@ -39,7 +39,7 @@ def test_run_stacking_happy_path_with_mocks(tmp_path: Path, monkeypatch) -> None
     y_val = torch.randn(4)
 
     def _fake_tensors(*_args, **_kwargs):
-        return x_train, y_train, torch.zeros(6), torch.zeros(6), x_val, y_val, torch.zeros(4), torch.zeros(4), torch.zeros(0, 10), torch.zeros(0), torch.zeros(0), torch.zeros(0)
+        return x_train, y_train, torch.zeros(6), torch.zeros(6), x_val, y_val, torch.zeros(4), torch.zeros(4), torch.zeros(0, 10), torch.zeros(0), torch.zeros(0), torch.zeros(0), []
 
     class _RunCtx:
         def __enter__(self):
@@ -93,6 +93,7 @@ def test_run_stacking_returns_none_on_empty_train_loader(tmp_path: Path, monkeyp
             torch.zeros((0,)),
             torch.zeros((0,)),
             torch.zeros((0,)),
+            []
         )
 
     monkeypatch.setattr("training.run_stacking.load_cond_mlp", lambda *_args, **_kwargs: _FakeBase())

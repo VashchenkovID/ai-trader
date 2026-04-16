@@ -44,25 +44,37 @@ def build_meta_features(base_model: torch.nn.Module, X: torch.Tensor, device: to
     return torch.stack(meta_list, dim=1)
 
 
-def _checkpoint_input_size(path: Path) -> int | None:
+def _checkpoint_compatibility_info(path: Path) -> tuple[int | None, list[int] | None]:
     try:
         payload = torch.load(path, map_location="cpu")
     except Exception:
-        return None
+        return None, None
     if not isinstance(payload, dict):
-        return None
+        return None, None
     hp = payload.get("hyper_parameters")
     if not isinstance(hp, dict):
-        return None
+        return None, None
     value = hp.get("input_size")
     try:
-        return int(value)
+        input_size = int(value)
     except (TypeError, ValueError):
-        return None
+        input_size = None
+        
+    jury_indices = hp.get("jury_signal_indices")
+    if not isinstance(jury_indices, list):
+        jury_indices = None
+        
+    return input_size, jury_indices
 
 
-def _find_compatible_base_checkpoint(base_path: Path, expected_input_size: int) -> Path | None:
-    if "nan" not in base_path.name.lower() and _checkpoint_input_size(base_path) == expected_input_size:
+def _checkpoint_input_size(path: Path) -> int | None:
+    info = _checkpoint_compatibility_info(path)
+    return info[0] if info else None
+
+
+def _find_compatible_base_checkpoint(base_path: Path, expected_input_size: int, expected_jury_indices: list[int] | None = None) -> Path | None:
+    ckpt_input_size, ckpt_jury_indices = _checkpoint_compatibility_info(base_path)
+    if "nan" not in base_path.name.lower() and ckpt_input_size == expected_input_size and (ckpt_jury_indices or []) == (expected_jury_indices or []):
         return base_path
     parent = base_path.parent
     if not parent.exists():
@@ -71,7 +83,8 @@ def _find_compatible_base_checkpoint(base_path: Path, expected_input_size: int) 
     for ckpt in candidates:
         if "nan" in ckpt.name.lower():
             continue
-        if _checkpoint_input_size(ckpt) == expected_input_size:
+        ckpt_input_size, ckpt_jury_indices = _checkpoint_compatibility_info(ckpt)
+        if ckpt_input_size == expected_input_size and (ckpt_jury_indices or []) == (expected_jury_indices or []):
             return ckpt
     return None
 
@@ -102,7 +115,7 @@ def run(
 
     if candles_df is None or candles_df.empty:
         raise RuntimeError("Synthetic data is disabled: stacking requires real candles_df")
-    X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _candles_to_tensors(
+    X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te, jury_signal_indices = _candles_to_tensors(
         candles_df,
         options_df=options_df,
         signals_df=signals_df,
@@ -111,7 +124,7 @@ def run(
     )
 
     expected_input_size = int(X_t.shape[1]) if len(X_t.shape) >= 2 else 0
-    compatible_path = _find_compatible_base_checkpoint(base_path, expected_input_size)
+    compatible_path = _find_compatible_base_checkpoint(base_path, expected_input_size, jury_signal_indices)
     if compatible_path is None:
         logger.warning(
             "Stacking skipped: no compatible base checkpoint (expected input_size=%s, base=%s)",

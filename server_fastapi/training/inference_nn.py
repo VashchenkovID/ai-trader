@@ -45,11 +45,13 @@ def load_cond_mlp(checkpoint_path: str | Path) -> CondMLP:
     hidden_sizes = hparams.get("hidden_sizes", (64, 32))
     embed_dim = hparams.get("embed_dim", 8)
     dropout = hparams.get("dropout", 0.1)
+    jury_signal_indices = hparams.get("jury_signal_indices", None)
     model = CondMLP(
         input_size=input_size,
         hidden_sizes=list(hidden_sizes),
         embed_dim=embed_dim,
         dropout=dropout,
+        jury_signal_indices=jury_signal_indices,
     )
     load_result = model.load_state_dict(state, strict=False)
     if load_result.missing_keys:

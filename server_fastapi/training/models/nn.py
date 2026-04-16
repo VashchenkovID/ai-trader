@@ -29,10 +29,12 @@ class CondMLP(nn.Module):
         hidden_sizes: list[int] = (64, 32),
         embed_dim: int = 8,
         dropout: float = 0.1,
+        jury_signal_indices: list[int] | None = None,
     ):
         super().__init__()
         self.input_size = input_size
         self.embed_dim = embed_dim
+        self.jury_signal_indices = jury_signal_indices or []
         layers: list[nn.Module] = []
         prev = input_size
         for h in hidden_sizes:
@@ -48,8 +50,16 @@ class CondMLP(nn.Module):
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(16, 2),
-            nn.Sigmoid(),
         )
+        
+        num_jury = len(self.jury_signal_indices)
+        if num_jury > 0:
+            self.jury_direct = nn.Linear(num_jury, 2)
+            # Инициализируем большими весами, чтобы мнение жюри и сигналы были решающими
+            nn.init.constant_(self.jury_direct.weight, 1.0)
+            nn.init.constant_(self.jury_direct.bias, 0.0)
+        else:
+            self.jury_direct = None
 
     def forward(
         self,
@@ -67,7 +77,13 @@ class CondMLP(nn.Module):
         s_emb = self.strategy_embed(strategy_id)
         h_emb = self.horizon_embed(horizon_id)
         combined = torch.cat([rep, s_emb, h_emb], dim=1)
-        out = self.head(combined)
+        logits = self.head(combined)
+        
+        if self.jury_direct is not None:
+            jury_feats = x[:, self.jury_signal_indices]
+            logits = logits + self.jury_direct(jury_feats)
+            
+        out = torch.sigmoid(logits)
         score = out[:, 0]
         confidence = out[:, 1]
         return score, confidence

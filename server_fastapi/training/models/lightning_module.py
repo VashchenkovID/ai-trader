@@ -29,6 +29,7 @@ class CondMLPLightning(pl.LightningModule):
         *,
         weighted_training: bool = False,
         focal_gamma: float = 0.0,
+        jury_signal_indices: list[int] | None = None,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -37,6 +38,7 @@ class CondMLPLightning(pl.LightningModule):
             hidden_sizes=hidden_sizes,
             embed_dim=embed_dim,
             dropout=dropout,
+            jury_signal_indices=jury_signal_indices,
         )
         self.lr = lr
         self.weighted_training = weighted_training

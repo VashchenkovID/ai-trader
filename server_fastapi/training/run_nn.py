@@ -39,7 +39,7 @@ def _candles_to_tensors(
     signals_df: pd.DataFrame | None = None,
     lookback: int = 60,
     horizon: int = 5,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[int]]:
     """Строит фичи из свечей и возвращает тензоры train/val/test для обучения и бэктеста."""
     X, y = build_feature_pipeline(
         candles,
@@ -66,35 +66,44 @@ def _candles_to_tensors(
     y_v = torch.tensor(y_val.values, dtype=torch.float32)
     X_te = torch.tensor(X_test.values, dtype=torch.float32) if n_test else torch.zeros(0, X.shape[1], dtype=torch.float32)
     y_te = torch.tensor(y_test.values, dtype=torch.float32) if n_test else torch.zeros(0, dtype=torch.float32)
-    return X_t, y_t, strategy_train, horizon_train, X_v, y_v, strategy_val, horizon_val, X_te, y_te, strategy_test, horizon_test
+    jury_signal_indices = [i for i, col in enumerate(X.columns) if col.startswith("llm_") or col.startswith("sig_")]
+    return X_t, y_t, strategy_train, horizon_train, X_v, y_v, strategy_val, horizon_val, X_te, y_te, strategy_test, horizon_test, jury_signal_indices
 
 
-def _checkpoint_input_size(path: Path) -> int | None:
+def _checkpoint_compatibility_info(path: Path) -> tuple[int | None, list[int] | None]:
     try:
         payload = torch.load(path, map_location="cpu")
     except Exception:
-        return None
+        return None, None
     if not isinstance(payload, dict):
-        return None
+        return None, None
     hp = payload.get("hyper_parameters")
     if not isinstance(hp, dict):
-        return None
+        return None, None
     value = hp.get("input_size")
     try:
-        return int(value)
+        input_size = int(value)
     except (TypeError, ValueError):
-        return None
+        input_size = None
+        
+    jury_indices = hp.get("jury_signal_indices")
+    if not isinstance(jury_indices, list):
+        jury_indices = None
+        
+    return input_size, jury_indices
 
 
-def _select_compatible_checkpoint(ckpt_dir: Path, *, input_size: int) -> str | None:
+def _select_compatible_checkpoint(ckpt_dir: Path, *, input_size: int, jury_signal_indices: list[int] | None = None) -> str | None:
     if not ckpt_dir.exists():
         return None
     latest = sorted(ckpt_dir.glob("*.ckpt"), key=lambda p: p.stat().st_mtime, reverse=True)
     for ckpt in latest:
         if "nan" in ckpt.name.lower():
             continue
-        if _checkpoint_input_size(ckpt) == int(input_size):
-            return str(ckpt)
+        ckpt_input_size, ckpt_jury_indices = _checkpoint_compatibility_info(ckpt)
+        if ckpt_input_size == int(input_size):
+            if (ckpt_jury_indices or []) == (jury_signal_indices or []):
+                return str(ckpt)
     return None
 
 
@@ -126,7 +135,7 @@ def run(
 
     if candles_df is None or candles_df.empty:
         raise RuntimeError("Synthetic data is disabled: NN training requires real candles_df")
-    X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te = _candles_to_tensors(
+    X_t, y_t, s_t, h_t, X_v, y_v, s_v, h_v, X_te, y_te, s_te, h_te, jury_signal_indices = _candles_to_tensors(
         candles_df,
         options_df=options_df,
         signals_df=signals_df,
@@ -154,6 +163,7 @@ def run(
         lr=lr,
         weighted_training=imbalance_weighted,
         focal_gamma=focal_gamma,
+        jury_signal_indices=jury_signal_indices,
     )
     models_root = Path(settings.models_root)
     models_root.mkdir(parents=True, exist_ok=True)
@@ -161,9 +171,9 @@ def run(
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = None
     if resume_from_latest:
-        ckpt_path = _select_compatible_checkpoint(ckpt_dir, input_size=input_size)
+        ckpt_path = _select_compatible_checkpoint(ckpt_dir, input_size=input_size, jury_signal_indices=jury_signal_indices)
         if ckpt_path is None:
-            logger.info("No compatible NN checkpoint for input_size=%s; start fresh", input_size)
+            logger.info("No compatible NN checkpoint for input_size=%s, jury_indices=%s; start fresh", input_size, jury_signal_indices)
     checkpoint_callback = ModelCheckpoint(
         dirpath=str(ckpt_dir),
         filename="cond_mlp-{epoch:02d}-{val_loss:.4f}",

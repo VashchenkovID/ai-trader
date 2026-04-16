@@ -960,7 +960,8 @@ def _align_features_for_checkpoint(x_row: Any, checkpoint_path: str) -> tuple[An
     with contextlib.suppress(Exception):
         from training.run_stacking import _find_compatible_base_checkpoint
 
-        compatible = _find_compatible_base_checkpoint(ckpt_path, n_features)
+        expected_jury_indices = [i for i, col in enumerate(x_row.columns) if col.startswith("llm_") or col.startswith("sig_")]
+        compatible = _find_compatible_base_checkpoint(ckpt_path, n_features, expected_jury_indices)
         if compatible is not None:
             return x_row, str(compatible)
     if n_features > expected:
@@ -992,10 +993,11 @@ def _select_meta_base_checkpoint(
             prediction_horizon=prediction_horizon,
         )
         if x is None or getattr(x, "empty", True):
-            return latest
+            return None
         expected_input = int(x.shape[1])
-        compatible = _find_compatible_base_checkpoint(Path(latest), expected_input)
-        return str(compatible) if compatible is not None else latest
+        expected_jury_indices = [i for i, col in enumerate(x.columns) if col.startswith("llm_") or col.startswith("sig_")]
+        compatible = _find_compatible_base_checkpoint(Path(latest), expected_input, expected_jury_indices)
+        return str(compatible) if compatible is not None else None
     except Exception as exc:
         logger.warning(
             "select_meta_base_checkpoint: не удалось сопоставить размерность признаков с NN-чекпоинтом, "
