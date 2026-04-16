@@ -379,16 +379,6 @@ async def system_training_full() -> TriggerResponse:
     return TriggerResponse(data=trigger_named_job("training_full"))
 
 
-@router.post("/system/training/weekly-generation", summary="Фоновая генерация weekly forecast")
-async def system_training_weekly_generation() -> TriggerResponse:
-    return TriggerResponse(data=trigger_named_job("weekly_generation"))
-
-
-@router.post("/system/training/weekly-update", summary="Фоновое обновление weekly forecast")
-async def system_training_weekly_update() -> TriggerResponse:
-    return TriggerResponse(data=trigger_named_job("weekly_update"))
-
-
 @router.post("/assets/sync", summary="Фоновая синхронизация ассетов")
 async def assets_sync() -> TriggerResponse:
     return TriggerResponse(data=trigger_named_job("assets_sync"))

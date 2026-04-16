@@ -30,5 +30,10 @@ export function formatScoreConfidence(score: number | null, confidence: number |
 export function formatPrice(v: unknown): string {
   if (v == null || v === '') return '—'
   const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) ? n.toLocaleString('ru-RU', { maximumFractionDigits: 4 }) : String(v)
+  if (!Number.isFinite(n)) return String(v)
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    maximumFractionDigits: 4,
+  }).format(n)
 }

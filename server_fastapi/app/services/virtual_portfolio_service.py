@@ -359,10 +359,22 @@ class VirtualPortfolioService:
         *,
         include_trades: bool = False,
     ) -> dict[str, Any]:
+        from app.repositories.portfolio_position_recommendation_repository import PortfolioPositionRecommendationRepository
+        from app.core.portfolio_scope import virtual_scope
+        
         slug = normalize_virtual_profile(profile_slug)
         row = await self.get_or_create_snapshot(session, profile_slug=slug)
         await self.recalculate_totals(session, row)
         await session.flush()
+        
+        ppr = PortfolioPositionRecommendationRepository()
+        latest_verdicts = await ppr.latest_by_figi_map(session, portfolio_scope=virtual_scope(slug))
+        portfolio_comment = None
+        for v in latest_verdicts.values():
+            if v.llm_payload and v.llm_payload.get("portfolioComment"):
+                portfolio_comment = v.llm_payload.get("portfolioComment")
+                break
+
         positions_map: dict[str, Any] = dict(row.positions or {})
         trades_list: list[Any] = list(row.trades or [])
         positions_list: list[dict[str, Any]] = []
@@ -397,6 +409,19 @@ class VirtualPortfolioService:
             except (TypeError, ValueError):
                 pass
             first_dt = fifo_first_buy_at(str(figi), trades_list)
+            
+            verdict_row = latest_verdicts.get(str(figi))
+            latest_verdict = None
+            if verdict_row:
+                latest_verdict = {
+                    "finalAction": verdict_row.final_action,
+                    "finalConfidence": float(verdict_row.final_confidence),
+                    "createdAt": verdict_row.created_at.isoformat(),
+                    "analysisRunId": str(verdict_row.analysis_run_id),
+                    "marketScore": float(verdict_row.market_score) if verdict_row.market_score is not None else None,
+                    "reasons": verdict_row.llm_payload.get("parsed", {}).get("reasons", []) if verdict_row.llm_payload else [],
+                }
+
             positions_list.append(
                 {
                     "figi": str(figi),
@@ -414,6 +439,7 @@ class VirtualPortfolioService:
                     "instrumentMissing": instrument_missing,
                     "firstBuyAt": first_buy_iso_for_json(first_dt),
                     "daysInPosition": days_in_position_calendar(first_dt, now_msk()),
+                    "latestVerdict": latest_verdict,
                 }
             )
         ic = float(row.initial_capital) if row.initial_capital is not None else 0.0
@@ -435,6 +461,7 @@ class VirtualPortfolioService:
             "initialCapital": row.initial_capital,
             "isVirtual": True,
             "tradeMetrics": metrics,
+            "portfolioComment": portfolio_comment,
         }
         if include_trades:
             out["trades"] = trades_list[-200:] if len(trades_list) > 200 else trades_list

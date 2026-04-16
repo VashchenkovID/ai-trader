@@ -55,7 +55,20 @@ function BacktestSmaPage() {
 
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+          {error.includes('quant: Backtesting') || error.includes('quant') ? (
+            <>
+              <Typography variant="body2" fontWeight="bold">
+                Отсутствует модуль Backtesting
+              </Typography>
+              <Typography variant="body2">
+                Для работы этого раздела необходимо установить optional-зависимость quant на бэкенде:
+                <br />
+                <code>pip install -e ".[quant]"</code>
+              </Typography>
+            </>
+          ) : (
+            error
+          )}
         </Alert>
       ) : null}
 

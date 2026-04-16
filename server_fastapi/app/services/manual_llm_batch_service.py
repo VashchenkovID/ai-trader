@@ -299,10 +299,6 @@ async def apply_manual_llm_chunk(
                 else {"ok": False, "reason": (nn_data or {}).get("reason", "unavailable")}
             ),
         )
-        try:
-            await container.market_service.compute_and_store_weekly_forecast(session, figi)
-        except Exception as wf_exc:
-            logger.warning("weekly forecast persist failed for %s: %s", figi, wf_exc)
         updated.append(figi)
 
     await session.commit()

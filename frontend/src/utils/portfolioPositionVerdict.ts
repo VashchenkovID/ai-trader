@@ -3,6 +3,8 @@
 export type PortfolioVerdictCell = {
   finalAction: string
   finalConfidence: number
+  reasons: string[]
+  portfolioComment?: string
 }
 
 export function parseLatestVerdictMap(data: unknown): Map<string, PortfolioVerdictCell> {
@@ -16,9 +18,17 @@ export function parseLatestVerdictMap(data: unknown): Map<string, PortfolioVerdi
     const figi = String(o.figi ?? '').trim()
     if (!figi) continue
     const conf = typeof o.finalConfidence === 'number' ? o.finalConfidence : Number(o.finalConfidence)
+    
+    const llmPayload = o.llmPayload as Record<string, unknown> | undefined
+    const parsed = llmPayload?.parsed as Record<string, unknown> | undefined
+    const reasons = Array.isArray(parsed?.reasons) ? parsed.reasons.map(String) : []
+    const portfolioComment = typeof llmPayload?.portfolioComment === 'string' ? llmPayload.portfolioComment : undefined
+
     m.set(figi, {
       finalAction: String(o.finalAction ?? '—'),
       finalConfidence: Number.isFinite(conf) ? conf : 0,
+      reasons,
+      portfolioComment,
     })
   }
   return m

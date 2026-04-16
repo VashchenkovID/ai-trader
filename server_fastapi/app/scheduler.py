@@ -103,8 +103,6 @@ _current_task_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVa
 _CORE_TRAINING_ANALYSIS_JOBS: tuple[str, ...] = (
     "training_quick",
     "training_full",
-    "weekly_generation",
-    "weekly_update",
     "analysis_market_portfolio",
     "analysis_portfolio_positions",
     "weekly_backtest",
@@ -317,12 +315,12 @@ def list_tasks(limit: int = 100) -> list[dict[str, Any]]:
 
 
 def clear_completed_tasks() -> dict[str, int]:
-    """Удаляет из памяти задачи со статусом completed (кроме текущей контекстной, если есть)."""
+    """Удаляет из памяти задачи со статусом completed и failed (кроме текущей контекстной, если есть)."""
     current_id = _current_task_id_var.get()
     removed = 0
     to_pop: list[str] = []
     for tid, rec in _tasks.items():
-        if rec.status != "completed":
+        if rec.status not in ("completed", "failed"):
             continue
         if current_id and tid == current_id:
             continue
@@ -1011,7 +1009,13 @@ def _select_meta_base_checkpoint(
         expected_input = int(x.shape[1])
         compatible = _find_compatible_base_checkpoint(Path(latest), expected_input)
         return str(compatible) if compatible is not None else latest
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "select_meta_base_checkpoint: не удалось сопоставить размерность признаков с NN-чекпоинтом, "
+            "используем последний чекпоинт как есть: %s",
+            exc,
+            exc_info=True,
+        )
         return latest
 
 
@@ -1879,7 +1883,7 @@ async def _training_full_job() -> dict[str, Any]:
             df, used_window_days = await _load_training_candles_with_backfill(
                 figi,
                 preferred_window_days=365,
-                min_rows=80,
+                min_rows=200,
                 max_window_days=365 * 5,
                 max_rows=20_000,
             )
@@ -1921,9 +1925,13 @@ async def _training_full_job() -> dict[str, Any]:
                     }
                 }
             )
-            nn_run_id = await asyncio.to_thread(
-                run_nn, 12, 32, 1e-3, None, df, 60, 5, True, options_df=opt_df, signals_df=sig_df
-            )
+            try:
+                nn_run_id = await asyncio.to_thread(
+                    run_nn, 12, 32, 1e-3, None, df, 60, 5, True, options_df=opt_df, signals_df=sig_df
+                )
+            except Exception as e:
+                logger.warning("training_full: NN failed for figi=%s: %s", figi, e)
+                continue
             nn_runs.append({"figi": figi, "runId": nn_run_id})
             await _update_current_task_progress(
                 {
@@ -1945,43 +1953,55 @@ async def _training_full_job() -> dict[str, Any]:
                 lookback_days=60,
                 prediction_horizon=5,
             )
-            meta_ckpt = None
-            if nn_ckpt:
-                meta_ckpt = await asyncio.to_thread(
-                    run_stacking,
-                    base_checkpoint_path=nn_ckpt,
-                    max_epochs=8,
-                    batch_size=32,
-                    lr=1e-3,
-                    candles_df=df,
-                    options_df=opt_df,
-                    signals_df=sig_df,
-                    lookback_days=60,
-                    prediction_horizon=5,
+            meta_entry: dict[str, Any] = {"figi": figi, "nnRunId": nn_run_id}
+            if not nn_ckpt:
+                meta_entry["checkpoint"] = None
+                meta_entry["skipReason"] = "no_nn_base_checkpoint"
+                logger.warning(
+                    "training_full: meta пропущен figi=%s — нет базового NN-чекпоинта (models/python_nn)",
+                    figi,
                 )
-            meta_runs.append({"figi": figi, "checkpoint": meta_ckpt})
+            else:
+                meta_entry["baseCheckpoint"] = nn_ckpt
+                try:
+                    meta_ckpt = await asyncio.to_thread(
+                        run_stacking,
+                        base_checkpoint_path=nn_ckpt,
+                        max_epochs=8,
+                        batch_size=32,
+                        lr=1e-3,
+                        candles_df=df,
+                        options_df=opt_df,
+                        signals_df=sig_df,
+                        lookback_days=60,
+                        prediction_horizon=5,
+                    )
+                    meta_entry["checkpoint"] = meta_ckpt
+                    if meta_ckpt:
+                        logger.info(
+                            "training_full: meta/ensemble ok figi=%s checkpoint=%s",
+                            figi,
+                            meta_ckpt,
+                        )
+                    else:
+                        meta_entry["skipReason"] = "stacking_returned_none"
+                        logger.warning(
+                            "training_full: run_stacking вернул None figi=%s base=%s",
+                            figi,
+                            nn_ckpt,
+                        )
+                except Exception as meta_exc:
+                    meta_entry["checkpoint"] = None
+                    meta_entry["error"] = str(meta_exc)
+                    logger.exception(
+                        "training_full: ошибка meta/stacking figi=%s baseCheckpoint=%s",
+                        figi,
+                        nn_ckpt,
+                    )
+            meta_runs.append(meta_entry)
 
-        for idx, (figi, df, opt_df, _sig_df, used_window_days) in enumerate(prepared, start=1):
-            await _update_current_task_progress(
-                {
-                    "progress": {
-                        "phase": "weekly",
-                        "phaseIndex": 3,
-                        "phaseTotal": 4,
-                        "message": f"Этап 3/4: weekly [{idx}/{total}] FIGI {figi} (окно: {used_window_days} дн.)",
-                        "figi": figi,
-                        "instrumentIndex": idx,
-                        "instrumentTotal": total,
-                    }
-                }
-            )
-            weekly_run_id = await asyncio.to_thread(
-                run_weekly, 12, 32, 1e-3, None, df, 30, 5, True, options_df=opt_df
-            )
-            weekly_runs.append({"figi": figi, "runId": weekly_run_id})
         target_figi = prepared[0][0]
         nn_run_id = nn_runs[0]["runId"] if nn_runs else None
-        weekly_run_id = weekly_runs[0]["runId"] if weekly_runs else None
         total_instruments = len(figi_list)
         trained_instruments = len(prepared)
     else:
@@ -1995,19 +2015,18 @@ async def _training_full_job() -> dict[str, Any]:
             "metaSucceeded": 0,
             "metaFailed": 0,
         }
-    await _update_current_task_progress(
+        await _update_current_task_progress(
         {
             "progress": {
                 "phase": "rl",
-                "phaseIndex": 4,
-                "phaseTotal": 4,
+                "phaseIndex": 3,
+                "phaseTotal": 3,
                 "message": (
-                    f"Этап 4/4: обучение RL-агента (контур по БД, FIGI {target_figi})"
+                    f"Этап 3/3: обучение RL-агента (контур по БД, FIGI {target_figi})"
                     if target_figi
-                    else "Этап 4/4: обучение RL-агента"
+                    else "Этап 3/3: обучение RL-агента"
                 ),
                 "nnRunId": nn_run_id,
-                "weeklyRunId": weekly_run_id,
                 "figi": target_figi,
             }
         }
@@ -2032,8 +2051,6 @@ async def _training_full_job() -> dict[str, Any]:
         "message": "full training completed",
         "figi": target_figi,
         "mlflowRunId": nn_run_id,
-        "weeklyRunId": weekly_run_id,
-        "metaRuns": meta_runs,
         "metaSucceeded": meta_succeeded,
         "metaFailed": meta_failed,
         "ensembleWeightsPath": ensemble_weights_path,
@@ -2074,14 +2091,14 @@ async def _training_quick_job() -> dict[str, Any]:
             target_figi = figi
             candles_df, used_window_days = await _load_training_candles_with_backfill(
                 figi,
-                preferred_window_days=1,
-                min_rows=24,
+                preferred_window_days=7,
+                min_rows=60,
                 max_window_days=365,
                 max_rows=20_000,
             )
-            if candles_df is None or len(candles_df) < 24:
+            if candles_df is None or len(candles_df) < 60:
                 intraday_df = await _load_intraday_candles_last_day(figi)
-                if intraday_df is not None and len(intraday_df) >= 24:
+                if intraday_df is not None and len(intraday_df) >= 60:
                     candles_df = intraday_df
                     used_window_days = 1
             if candles_df is None:
@@ -2134,11 +2151,21 @@ async def _training_quick_job() -> dict[str, Any]:
                         options_df=options_df,
                         signals_df=signals_df,
                     )
-                elif "Pipeline produced empty X" in msg:
+                elif "Pipeline produced empty X" in msg or "Not enough data after split" in msg:
+                    logger.warning(
+                        "training_quick: NN пропущен figi=%s reason=insufficient_data (%s)",
+                        figi, msg
+                    )
                     skipped += 1
                     continue
                 else:
                     raise
+            logger.info(
+                "training_quick: NN завершён figi=%s mlflowRunId=%s windowDays=%s",
+                figi,
+                run_id,
+                used_window_days,
+            )
             run_ids.append({"figi": figi, "runId": run_id})
             await _update_current_task_progress(
                 {
@@ -2160,21 +2187,52 @@ async def _training_quick_job() -> dict[str, Any]:
                 lookback_days=5,
                 prediction_horizon=1,
             )
-            meta_ckpt = None
-            if nn_ckpt:
-                meta_ckpt = await asyncio.to_thread(
-                    run_stacking,
-                    base_checkpoint_path=nn_ckpt,
-                    max_epochs=3,
-                    batch_size=16,
-                    lr=1e-3,
-                    candles_df=candles_df,
-                    options_df=options_df,
-                    signals_df=signals_df,
-                    lookback_days=5,
-                    prediction_horizon=1,
+            meta_entry: dict[str, Any] = {"figi": figi, "nnRunId": run_id}
+            if not nn_ckpt:
+                meta_entry["checkpoint"] = None
+                meta_entry["skipReason"] = "no_nn_base_checkpoint"
+                logger.warning(
+                    "training_quick: meta пропущен figi=%s reason=no_nn_base_checkpoint",
+                    figi,
                 )
-            meta_runs.append({"figi": figi, "checkpoint": meta_ckpt})
+            else:
+                meta_entry["baseCheckpoint"] = nn_ckpt
+                try:
+                    meta_ckpt = await asyncio.to_thread(
+                        run_stacking,
+                        base_checkpoint_path=nn_ckpt,
+                        max_epochs=3,
+                        batch_size=16,
+                        lr=1e-3,
+                        candles_df=candles_df,
+                        options_df=options_df,
+                        signals_df=signals_df,
+                        lookback_days=5,
+                        prediction_horizon=1,
+                    )
+                    meta_entry["checkpoint"] = meta_ckpt
+                    if meta_ckpt:
+                        logger.info(
+                            "training_quick: meta/ensemble ok figi=%s checkpoint=%s",
+                            figi,
+                            meta_ckpt,
+                        )
+                    else:
+                        meta_entry["skipReason"] = "stacking_returned_none"
+                        logger.warning(
+                            "training_quick: run_stacking вернул None figi=%s base=%s",
+                            figi,
+                            nn_ckpt,
+                        )
+                except Exception as meta_exc:
+                    meta_entry["checkpoint"] = None
+                    meta_entry["error"] = str(meta_exc)
+                    logger.exception(
+                        "training_quick: ошибка meta/stacking figi=%s baseCheckpoint=%s",
+                        figi,
+                        nn_ckpt,
+                    )
+            meta_runs.append(meta_entry)
 
         if not run_ids:
             return {
@@ -2210,7 +2268,6 @@ async def _training_quick_job() -> dict[str, Any]:
             "message": "quick training completed",
             "figi": run_ids[0]["figi"],
             "mlflowRunId": run_ids[0]["runId"],
-            "metaRuns": meta_runs,
             "metaSucceeded": meta_succeeded,
             "metaFailed": meta_failed,
             "rlCheckpoint": rl_checkpoint,
@@ -2218,7 +2275,6 @@ async def _training_quick_job() -> dict[str, Any]:
             "totalInstruments": total,
             "trainedInstruments": len(run_ids),
             "skippedInstruments": skipped,
-            "runIds": run_ids,
         }
 
     return {
@@ -3646,9 +3702,6 @@ def _job_handlers() -> dict[str, Callable[[], Awaitable[dict[str, Any] | None]]]
         "training_quick": _training_quick_job,
         "analysis_market_portfolio": _analysis_market_portfolio_job,
         "analysis_portfolio_positions": _analysis_portfolio_positions_job,
-        "weekly_generation": _weekly_generation_job,
-        "weekly_update": _weekly_update_job,
-        "weekly_training": _weekly_training_job,
         "portfolio_prices_update": _portfolio_prices_update_job,
         "active_signals_prices_update": _active_signals_prices_update_job,
         "trading_requests_prices_update": _trading_requests_prices_update_job,
@@ -3819,26 +3872,8 @@ def start_app_scheduler(container: AppContainer, settings: Settings) -> AsyncIOS
     )
     _register_job(
         scheduler,
-        job_id="weekly_generation",
-        cron_expr=settings.weekly_generation_cron,
-        fn=_weekly_generation_job,
-    )
-    _register_job(
-        scheduler,
-        job_id="weekly_update",
-        cron_expr=settings.weekly_update_cron,
-        fn=_weekly_update_job,
-    )
-    _register_job(
-        scheduler,
-        job_id="weekly_training",
-        cron_expr=settings.weekly_training_cron,
-        fn=_weekly_training_job,
-    )
-    _register_job(
-        scheduler,
         job_id="portfolio_prices_update",
-        cron_expr="*/10 * * * *",
+        cron_expr="*/2 * * * *",
         fn=_portfolio_prices_update_job,
     )
     _register_job(

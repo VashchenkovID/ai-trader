@@ -98,20 +98,6 @@ async def market_stock_analyst_signals(
     return SuccessEnvelope(data={"items": items, "meta": {"figi": figi, "total": len(items)}})
 
 
-@router.get("/stock/{figi}/weekly-forecast", summary="Weekly LSTM: прогноз (из БД или refresh)")
-async def market_stock_weekly_forecast(
-    figi: str,
-    refresh: bool = Query(default=False, description="Пересчитать модель и записать в БД (лимит параллелизма на сервере)"),
-    container: AppContainer = Depends(get_container),
-    db_session: AsyncSession = Depends(get_db_session),
-) -> SuccessEnvelope[dict[str, object]]:
-    """Сохранённый weekly-прогноз по рекомендации; при refresh — повторный инференс."""
-    data = await container.market_service.get_weekly_forecast_for_figi(
-        db_session, figi, refresh=refresh
-    )
-    return SuccessEnvelope(data=data)
-
-
 @router.post("/refresh", summary="Фоновый refresh рыночных данных")
 async def market_refresh() -> SuccessEnvelope[dict[str, object]]:
     return SuccessEnvelope(data=trigger_named_job("market_refresh"))

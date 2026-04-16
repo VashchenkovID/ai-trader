@@ -62,13 +62,15 @@ def _checkpoint_input_size(path: Path) -> int | None:
 
 
 def _find_compatible_base_checkpoint(base_path: Path, expected_input_size: int) -> Path | None:
-    if _checkpoint_input_size(base_path) == expected_input_size:
+    if "nan" not in base_path.name.lower() and _checkpoint_input_size(base_path) == expected_input_size:
         return base_path
     parent = base_path.parent
     if not parent.exists():
         return None
     candidates = sorted(parent.glob("*.ckpt"), key=lambda p: p.stat().st_mtime, reverse=True)
     for ckpt in candidates:
+        if "nan" in ckpt.name.lower():
+            continue
         if _checkpoint_input_size(ckpt) == expected_input_size:
             return ckpt
     return None

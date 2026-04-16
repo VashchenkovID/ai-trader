@@ -411,6 +411,15 @@ function VirtualPortfoliosPage() {
                 <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 700 }}>
                   Стартовый капитал
                 </TableCell>
+                <TableCell align="right" sx={{ color: 'success.main', fontWeight: 700 }}>
+                  Доходность
+                </TableCell>
+                <TableCell align="right" sx={{ color: 'info.main', fontWeight: 700 }}>
+                  Sharpe (90d)
+                </TableCell>
+                <TableCell align="right" sx={{ color: 'error.main', fontWeight: 700 }}>
+                  Max DD (90d)
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -467,12 +476,29 @@ function VirtualPortfoliosPage() {
                     <TableCell align="right" sx={TABLE_NUMERIC_CELL_SX}>
                       {row ? formatMoney(row.initialCapital) : '—'}
                     </TableCell>
+                    <TableCell align="right" sx={TABLE_NUMERIC_CELL_SX}>
+                      {row?.tradeMetrics ? (
+                        <Typography variant="body2" sx={{ color: pnlColor(numOrNull((row.tradeMetrics as any).totalReturnPct)), fontWeight: 700 }}>
+                          {formatPercent((row.tradeMetrics as any).totalReturnPct)}
+                        </Typography>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell align="right" sx={TABLE_NUMERIC_CELL_SX}>
+                      {row?.tradeMetrics && (row.tradeMetrics as any).sharpeAnnualized != null
+                        ? Number((row.tradeMetrics as any).sharpeAnnualized).toFixed(2)
+                        : '—'}
+                    </TableCell>
+                    <TableCell align="right" sx={TABLE_NUMERIC_CELL_SX}>
+                      {row?.tradeMetrics && (row.tradeMetrics as any).maxDrawdownPct != null
+                        ? <Typography variant="body2" sx={{ color: 'error.main' }}>{Number((row.tradeMetrics as any).maxDrawdownPct).toFixed(2)}%</Typography>
+                        : '—'}
+                    </TableCell>
                   </TableRow>
                 )
               })}
               {summaryRows.length === 0 && !overviewLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={8}>
                     <Typography sx={{ color: 'warning.main' }}>
                       Нет данных профилей с сервера.
                     </Typography>
@@ -574,6 +600,28 @@ function VirtualPortfoliosPage() {
             </Typography>
           ) : null}
         </Box>
+        {(() => {
+          const map = verdictByProfile[positionsTab]
+          if (!map) return null
+          let comment: string | undefined
+          for (const v of map.values()) {
+            if (v.portfolioComment) {
+              comment = v.portfolioComment
+              break
+            }
+          }
+          if (!comment) return null
+          return (
+            <Box sx={{ mb: 2, p: 1.5, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="subtitle2" sx={{ color: 'secondary.main', mb: 0.5 }}>
+                Мнение LLM по портфелю:
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {comment}
+              </Typography>
+            </Box>
+          )
+        })()}
         {tabProfileData.sorted.length === 0 ? (
           <Typography sx={{ color: 'text.secondary' }}>
             Нет открытых позиций в этом профиле.
@@ -678,9 +726,26 @@ function VirtualPortfoliosPage() {
                           const v = (verdictByProfile[slug] ?? new Map()).get(figi)
                           return v ? (
                             <Tooltip
-                              title={`Портфельный вердикт: уверенность ${(v.finalConfidence * 100).toFixed(0)}%. Для действий по этой строке — этот тег, не карточка FIGI.`}
+                              title={
+                                <Box>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    Уверенность: {(v.finalConfidence * 100).toFixed(0)}%
+                                  </Typography>
+                                  {v.reasons && v.reasons.length > 0 && (
+                                    <Box component="ul" sx={{ m: 0, pl: 2, mt: 0.5 }}>
+                                      {v.reasons.map((r, i) => (
+                                        <Typography component="li" variant="caption" key={i}>
+                                          {r}
+                                        </Typography>
+                                      ))}
+                                    </Box>
+                                  )}
+                                </Box>
+                              }
                             >
-                              <RecommendationStatusBadge value={v.finalAction} />
+                              <Box sx={{ display: 'inline-block' }}>
+                                <RecommendationStatusBadge value={v.finalAction} />
+                              </Box>
                             </Tooltip>
                           ) : (
                             <Typography variant="body2" sx={{ color: 'text.disabled' }}>

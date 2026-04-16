@@ -267,27 +267,6 @@ def _run_stacking_sync(
         return None
 
 
-def _run_weekly_sync(
-    epochs: int = 20,
-    candles_df: Any = None,
-    seq_len: int = 30,
-    n_forecast: int = 5,
-    resume_from_latest: bool = False,
-) -> str | None:
-    """Синхронный запуск обучения Weekly forecast (вызывается в executor)."""
-    try:
-        from training.run_weekly import run
-        return run(
-            max_epochs=epochs,
-            candles_df=candles_df,
-            seq_len=seq_len,
-            n_forecast=n_forecast,
-            resume_from_latest=resume_from_latest,
-        )
-    except ImportError:
-        return None
-
-
 def _run_rl_sync(
     total_steps: int = 10_000,
     env_name: str = "paper",
@@ -302,23 +281,6 @@ def _run_rl_sync(
         )
     except ImportError:
         return None
-
-
-@router.post(
-    "/run-weekly",
-    summary="Запустить обучение Weekly forecast (LSTM)",
-    description="Deprecated: synthetic-only сценарий отключен. Используйте /run-weekly-from-figi или scheduler weekly jobs.",
-)
-async def run_weekly_training(
-    epochs: int = Query(20, ge=1, le=500),
-    seq_len: int = Query(30, ge=10, le=60),
-    n_forecast: int = Query(5, ge=1, le=14),
-    resume_from_latest: bool = Query(False, description="Продолжить обучение с последнего weekly чекпоинта"),
-) -> dict[str, Any]:
-    raise AppError(
-        "BAD_REQUEST",
-        message="Synthetic weekly training is disabled. Use /api/v1/training/run-weekly-from-figi or scheduler weekly jobs.",
-    )
 
 
 @router.post(
@@ -350,79 +312,6 @@ async def run_rl_training(
         "rl_checkpoint": checkpoint,
         "total_steps": total_steps,
         "env_name": env_name,
-    }
-
-
-@router.post(
-    "/run-weekly-from-figi",
-    summary="Запустить обучение Weekly forecast по свечам из БД (FIGI)",
-    description="Загружает свечи по FIGI из БД и запускает обучение LSTM в executor.",
-)
-async def run_weekly_from_figi(
-    figi: str = Query(..., description="FIGI инструмента"),
-    epochs: int = Query(20, ge=1, le=500),
-    seq_len: int = Query(30, ge=10, le=60),
-    n_forecast: int = Query(5, ge=1, le=14),
-    limit: int = Query(2000, ge=100, le=5000),
-    resume_from_latest: bool = Query(False, description="Продолжить обучение с последнего weekly чекпоинта"),
-    container: AppContainer = Depends(get_container),
-    db_session: AsyncSession = Depends(get_db_session),
-) -> dict[str, Any]:
-    try:
-        from training.data.loaders import candles_to_dataframe
-    except ImportError:
-        raise AppError(
-            "SERVICE_UNAVAILABLE",
-            message='Training package not installed. Install with: pip install -e ".[training]"',
-        )
-    rows = await container.market_repository.get_candles_by_figi(
-        db_session, figi=figi, offset=0, limit=limit
-    )
-    if not rows:
-        raise AppError("NOT_FOUND", message=f"Свечи по FIGI {figi} не найдены")
-    df = candles_to_dataframe(rows)
-    min_rows = 20 + seq_len + n_forecast + 50
-    if df.empty or len(df) < min_rows:
-        raise AppError(
-            "BAD_REQUEST",
-            message=f"Недостаточно свечей для weekly (нужно >= {min_rows}, получено {len(df)})",
-        )
-    loop = asyncio.get_event_loop()
-    run_id = await loop.run_in_executor(
-        None,
-        lambda: _run_weekly_sync(
-            epochs=epochs,
-            candles_df=df,
-            seq_len=seq_len,
-            n_forecast=n_forecast,
-            resume_from_latest=resume_from_latest,
-        ),
-    )
-    if run_id is None:
-        return {"status": "unavailable", "message": "Training package not installed."}
-    llm_payload = None
-    try:
-        stock = None
-        if hasattr(container.market_repository, "get_instrument_by_figi"):
-            stock = await container.market_repository.get_instrument_by_figi(db_session, figi)
-        ticker = getattr(stock, "ticker", None) or figi
-        sector = getattr(stock, "sector", None) or "—"
-        llm_payload = await _save_jury_to_recommendation(
-            container=container,
-            db_session=db_session,
-            figi=figi,
-            ticker=str(ticker),
-            sector=str(sector),
-            candles=[{"close": float(v)} for v in df["close"].tail(5).tolist()] if "close" in df else None,
-        )
-    except Exception:
-        llm_payload = None
-    return {
-        "status": "completed",
-        "mlflow_run_id": run_id,
-        "figi": figi,
-        "rows_used": len(df),
-        "llmJuryPayloadSaved": bool(llm_payload),
     }
 
 

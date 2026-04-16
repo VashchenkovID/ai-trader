@@ -60,6 +60,36 @@ function RecommendationDetailPage() {
     return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString('ru-RU')
   }, [])
 
+  const formatAnalystTarget = useCallback((v: unknown): string => {
+    if (v == null) return '—'
+    if (typeof v === 'number' || typeof v === 'string') return String(v)
+    if (typeof v !== 'object') return String(v)
+    const obj = v as Record<string, unknown>
+    const units = obj.units
+    const nano = obj.nano
+    if (typeof units === 'string' || typeof units === 'number') {
+      const intPart = Number(units)
+      const fracPart = typeof nano === 'number' ? nano / 1_000_000_000 : 0
+      if (Number.isFinite(intPart) && Number.isFinite(fracPart)) {
+        const amount = intPart + fracPart
+        const currency = obj.currency ?? obj.ccy ?? obj.currencyCode
+        return currency != null ? `${amount.toFixed(2)} ${String(currency)}` : `${amount.toFixed(2)} ₽`
+      }
+    }
+    const value = obj.value ?? obj.price ?? obj.targetPrice ?? obj.amount
+    const from = obj.from ?? obj.min
+    const to = obj.to ?? obj.max
+    const currency = obj.currency ?? obj.ccy ?? obj.currencyCode
+    if (from != null && to != null) {
+      const range = `${String(from)} - ${String(to)}`
+      return currency != null ? `${range} ${String(currency)}` : `${range} ₽`
+    }
+    if (value != null) {
+      return currency != null ? `${String(value)} ${String(currency)}` : `${String(value)} ₽`
+    }
+    return '—'
+  }, [])
+
   const load = useCallback(async () => {
     if (!figi) {
       setError('Не указан FIGI')
@@ -323,7 +353,48 @@ function RecommendationDetailPage() {
                       <Stack spacing={1}>
                         {analystItems.map((row, idx) => {
                           const uid = row.signalUid != null ? String(row.signalUid) : `sig-${idx}`
-                          const dir = row.direction != null ? String(row.direction) : ''
+                          const payload =
+                            row.payload != null && typeof row.payload === 'object'
+                              ? (row.payload as Record<string, unknown>)
+                              : null
+                          const dir = (() => {
+                            const normalize = (raw: string): string => {
+                              const up = raw.trim().toUpperCase()
+                              if (up === 'SIGNAL_DIRECTION_BUY') return 'BUY'
+                              if (up === 'SIGNAL_DIRECTION_SELL') return 'SELL'
+                              if (up === 'SIGNAL_DIRECTION_HOLD') return 'HOLD'
+                              if (['BUY', 'ПОКУПКА', 'КУПИТЬ', 'LONG'].includes(up)) return 'BUY'
+                              if (['SELL', 'ПРОДАЖА', 'ПРОДАТЬ', 'SHORT'].includes(up)) return 'SELL'
+                              if (['HOLD', 'УДЕРЖАНИЕ', 'HOLDING', 'NEUTRAL'].includes(up)) return 'HOLD'
+                              return up
+                            }
+                            const direct = row.direction != null ? String(row.direction).trim() : ''
+                            if (direct) return normalize(direct)
+                            if (!payload) return ''
+                            const fromPayload = [
+                              payload.direction,
+                              payload.signal,
+                              payload.recommendation,
+                              payload.action,
+                            ].find(v => typeof v === 'string' && String(v).trim())
+                            return fromPayload != null ? normalize(String(fromPayload)) : ''
+                          })()
+                          const payloadDetails = payload
+                            ? [
+                                payload.analyst != null ? `аналитик: ${String(payload.analyst)}` : null,
+                                payload.currency != null ? `валюта: ${String(payload.currency)}` : null,
+                                payload.targetPrice != null
+                                  ? `цель: ${formatAnalystTarget(payload.targetPrice)}`
+                                  : null,
+                                (payload.stopLoss ?? payload.stoploss) != null
+                                  ? `stop-loss: ${formatAnalystTarget(payload.stopLoss ?? payload.stoploss)}`
+                                  : null,
+                                payload.horizon != null ? `горизонт: ${String(payload.horizon)}` : null,
+                                payload.consensus != null
+                                  ? `консенсус: ${String(payload.consensus)}`
+                                  : null,
+                              ].filter((v): v is string => Boolean(v))
+                            : []
                           return (
                             <Box
                               key={uid}
@@ -344,6 +415,11 @@ function RecommendationDetailPage() {
                                 }}
                               >
                                 <RecommendationStatusBadge value={dir} />
+                                {dir ? (
+                                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                    сигнал: {recommendationSignalLabelRu(dir)}
+                                  </Typography>
+                                ) : null}
                                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                                   обновлено: {formatSyncedAt(row.syncedAt)}
                                 </Typography>
@@ -361,6 +437,18 @@ function RecommendationDetailPage() {
                                   uid: {String(row.signalUid)}
                                 </Typography>
                               ) : null}
+                              {payloadDetails.length > 0 ? (
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    color: 'text.secondary',
+                                    display: 'block',
+                                    mt: 0.25,
+                                  }}
+                                >
+                                  {payloadDetails.join(' · ')}
+                                </Typography>
+                              ) : null}
                             </Box>
                           )
                         })}
@@ -370,16 +458,15 @@ function RecommendationDetailPage() {
 
                   <Divider flexItem />
                   <Stack spacing={0.75}>
-                    <Typography variant="body1" sx={{ color: 'text.primary' }}>
-                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
-                        Сигнал:
-                      </Box>{' '}
-                      {recommendationSignalLabelRu(signal)} ·{' '}
-                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
-                        Уверенность и оценка:
-                      </Box>{' '}
-                      {formatScoreConfidence(recNum(rec, 'score'), recNum(rec, 'confidence'))}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <RecommendationStatusBadge value={signal} />
+                      <Typography variant="body1" sx={{ color: 'text.primary' }}>
+                        <Box component="span" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                          Уверенность и оценка:
+                        </Box>{' '}
+                        {formatScoreConfidence(recNum(rec, 'score'), recNum(rec, 'confidence'))}
+                      </Typography>
+                    </Box>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       <Box component="span" sx={{ color: 'secondary.main', fontWeight: 600 }}>
                         Цена на момент анализа:

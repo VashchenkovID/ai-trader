@@ -149,16 +149,21 @@ class TradingRequestService:
             max_pos = Decimal("1")
 
         capital: Decimal
-        if mode == "paper":
-            used_vp_cash = False
-            if self._virtual_portfolio_service is not None:
-                cash_vp = await self._virtual_portfolio_service.get_available_cash_for_sizing(
-                    db_session, profile_slug=virtual_profile_slug
-                )
-                if cash_vp is not None and cash_vp > 0:
-                    capital = cash_vp
-                    used_vp_cash = True
-            if not used_vp_cash:
+        used_virtual_cash_row = False
+        if mode == "paper" and self._virtual_portfolio_service is not None:
+            vslug = normalize_virtual_profile(virtual_profile_slug)
+            await self._virtual_portfolio_service.get_or_create_snapshot(
+                db_session, profile_slug=vslug
+            )
+            cash_vp = await self._virtual_portfolio_service.get_available_cash_for_sizing(
+                db_session, vslug
+            )
+            if cash_vp is not None:
+                capital = cash_vp
+                used_virtual_cash_row = True
+
+        if not used_virtual_cash_row:
+            if mode == "paper":
                 capital_raw = await self._read_app_setting_str(
                     db_session, "portfolio.virtual.initial_capital", "1000000"
                 )
@@ -166,15 +171,15 @@ class TradingRequestService:
                     capital = Decimal(capital_raw)
                 except Exception:
                     capital = Decimal("1000000")
-        else:
-            # Для real без доступа к реальному портфелю используем безопасный дефолт.
-            capital = Decimal("1000000")
-
-        if capital <= 0:
-            capital = Decimal("1000000")
+            else:
+                capital = Decimal("1000000")
+            if capital <= 0:
+                capital = Decimal("1000000")
 
         budget = capital * max_pos
         qty = int(budget // price)
+        if used_virtual_cash_row:
+            return qty if qty >= 1 else 0
         return qty if qty >= 1 else 1
 
     async def _compute_order_from_recommendation(
@@ -219,6 +224,12 @@ class TradingRequestService:
                 raise AppError(
                     "BUSINESS_RULE_VIOLATION",
                     message="Нет позиции в виртуальном портфеле для продажи по этому инструменту",
+                )
+            if act == "BUY":
+                raise AppError(
+                    "BUSINESS_RULE_VIOLATION",
+                    message="Недостаточно свободных средств для BUY: при текущих настройках размер заявки 0.",
+                    details={"reason": "insufficient_cash"},
                 )
             qty = 1
         budget = price * qty
@@ -278,6 +289,12 @@ class TradingRequestService:
                 raise AppError(
                     "BUSINESS_RULE_VIOLATION",
                     message="Нет позиции в виртуальном портфеле для продажи по этому инструменту",
+                )
+            if act == "BUY":
+                raise AppError(
+                    "BUSINESS_RULE_VIOLATION",
+                    message="Недостаточно свободных средств для BUY: при текущих настройках размер заявки 0.",
+                    details={"reason": "insufficient_cash"},
                 )
             qty = 1
         budget = price * qty
@@ -432,6 +449,14 @@ class TradingRequestService:
             if active > 0:
                 raise AppError("CONFLICT", message="Уже есть активная заявка по этому FIGI")
 
+            if str(fields.get("action") or "").upper() == "BUY":
+                await self._assert_sufficient_cash_for_buy_create(
+                    db_session,
+                    mode=str(fields["mode"]),
+                    budget=Decimal(str(fields["budget"])),
+                    virtual_profile_slug=vprof,
+                )
+
             req = await self._trading_repo.create(
                 db_session,
                 figi=fields["figi"],
@@ -483,6 +508,14 @@ class TradingRequestService:
             if active > 0:
                 raise AppError("CONFLICT", message="Уже есть активная заявка по этому FIGI")
 
+            if str(fields.get("action") or "").upper() == "BUY":
+                await self._assert_sufficient_cash_for_buy_create(
+                    db_session,
+                    mode=str(fields["mode"]),
+                    budget=Decimal(str(fields["budget"])),
+                    virtual_profile_slug=vprof,
+                )
+
             req = await self._trading_repo.create(
                 db_session,
                 figi=figi_str,
@@ -499,6 +532,71 @@ class TradingRequestService:
                 virtual_profile_slug=vprof,
             )
             return _to_dto(req)
+
+    async def _assert_sufficient_cash_for_buy_create(
+        self,
+        db_session: AsyncSession,
+        *,
+        mode: str,
+        budget: Decimal,
+        virtual_profile_slug: str,
+    ) -> None:
+        """Не создаём BUY, если на счёте (paper / real) не хватает свободных рублей под budget."""
+        need = Decimal(str(budget or 0))
+        if need <= 0:
+            return
+        mode_l = (mode or "paper").strip().lower()
+        if mode_l == "paper":
+            if self._virtual_portfolio_service is None:
+                raise AppError(
+                    "INTERNAL_ERROR",
+                    message="Виртуальный портфель недоступен: нельзя проверить остаток наличных",
+                )
+            await self._virtual_portfolio_service.get_or_create_snapshot(
+                db_session, profile_slug=virtual_profile_slug
+            )
+            cash = await self._virtual_portfolio_service.get_available_cash_for_sizing(
+                db_session, virtual_profile_slug
+            )
+            available = cash if cash is not None else Decimal("0")
+            if available < need:
+                raise AppError(
+                    "BUSINESS_RULE_VIOLATION",
+                    message=(
+                        f"Недостаточно наличных в виртуальном портфеле ({virtual_profile_slug}): "
+                        f"нужно {need} RUB, доступно {available} RUB"
+                    ),
+                    details={
+                        "reason": "insufficient_cash",
+                        "requiredRub": str(need),
+                        "availableRub": str(available),
+                        "profileSlug": virtual_profile_slug,
+                    },
+                )
+            return
+        if mode_l in ("real", "micro"):
+            row = await db_session.scalar(select(RealPortfolio).where(RealPortfolio.id == 1).limit(1))
+            available = (
+                Decimal(str(row.cash)) if row is not None and row.cash is not None else Decimal("0")
+            )
+            reserved = await self._trading_repo.sum_reserved_buy_budget_real_accounts(db_session)
+            free = available - reserved
+            if need > free:
+                raise AppError(
+                    "BUSINESS_RULE_VIOLATION",
+                    message=(
+                        "Недостаточно свободных средств по снимку реального портфеля: "
+                        f"нужно {need} RUB по заявке, свободно {free} RUB "
+                        f"(остаток {available} RUB минус зарезервировано под одобренные BUY {reserved} RUB)"
+                    ),
+                    details={
+                        "reason": "insufficient_cash",
+                        "requiredRub": str(need),
+                        "availableRub": str(free),
+                        "portfolioCashRub": str(available),
+                        "reservedRub": str(reserved),
+                    },
+                )
 
     def _check_transition(self, current: str, new_status: str) -> None:
         allowed = _ALLOWED_TRANSITIONS.get(current, set())

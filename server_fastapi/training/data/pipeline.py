@@ -203,6 +203,14 @@ def build_feature_pipeline(
 
     X = _merge_options_features(X, options)
     X = _merge_signals_features(X, signals)
+
+    # Очистка от NaN/Inf (могут возникнуть от pct_change или деления на 0)
+    X = X.replace([np.inf, -np.inf], np.nan)
+    y = y.replace([np.inf, -np.inf], np.nan)
+    valid_mask = ~X.isna().any(axis=1) & ~y.isna()
+    X = X[valid_mask]
+    y = y[valid_mask]
+
     return X, y
 
 
@@ -227,6 +235,12 @@ def time_based_split(
     n = len(X)
     t1 = int(n * train_ratio)
     t2 = int(n * (train_ratio + val_ratio))
+    if t1 == n:
+        t1 = n - 1
+    if t2 <= t1:
+        t2 = t1 + 1
+    if t2 > n:
+        t2 = n
     X_train, X_val, X_test = X.iloc[:t1], X.iloc[t1:t2], X.iloc[t2:]
     y_train = y.loc[X_train.index]
     y_val = y.loc[X_val.index]
@@ -358,4 +372,6 @@ def build_weekly_sequences(
             y[s] = (end_close / start_close) - 1.0
         else:
             y[s] = 0.0
+            
+    np.nan_to_num(y, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
     return X_seq, y

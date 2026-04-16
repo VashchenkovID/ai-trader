@@ -52,6 +52,8 @@ def _candles_to_tensors(
         raise RuntimeError("Pipeline produced empty X from candles")
     X_train, y_train, X_val, y_val, X_test, y_test = time_based_split(X, y)
     n_train, n_val, n_test = len(X_train), len(X_val), len(X_test)
+    if n_train == 0 or n_val == 0:
+        raise RuntimeError(f"Not enough data after split: train={n_train}, val={n_val}")
     strategy_train = torch.randint(0, 3, (n_train,))
     horizon_train = torch.randint(0, 3, (n_train,))
     strategy_val = torch.randint(0, 3, (n_val,))
@@ -89,6 +91,8 @@ def _select_compatible_checkpoint(ckpt_dir: Path, *, input_size: int) -> str | N
         return None
     latest = sorted(ckpt_dir.glob("*.ckpt"), key=lambda p: p.stat().st_mtime, reverse=True)
     for ckpt in latest:
+        if "nan" in ckpt.name.lower():
+            continue
         if _checkpoint_input_size(ckpt) == int(input_size):
             return str(ckpt)
     return None

@@ -380,6 +380,18 @@ class RecommendationPipelineService:
                         "reason": "duplicate",
                         "detail": "active request exists for all target profiles",
                     })
+            except AppError as e:
+                detail_reason = (e.details or {}).get("reason")
+                if detail_reason == "insufficient_cash":
+                    skipped.append({
+                        "figi": figi,
+                        "reason": "insufficient_cash",
+                        "detail": e.message,
+                    })
+                elif e.error_code == "CONFLICT":
+                    skipped.append({"figi": figi, "reason": "duplicate", "detail": e.message})
+                else:
+                    skipped.append({"figi": figi, "reason": "error", "detail": e.message})
             except Exception as e:
                 msg = str(e)
                 if "INSUFFICIENT_STRATEGY_BUDGET" in msg or "budget" in msg.lower():

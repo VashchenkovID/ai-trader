@@ -84,10 +84,6 @@ class Settings(BaseSettings):
         alias="LLM_JURY_BATCH_SIZE",
         description="Сколько FIGI в одном батч-промпте LLM-жюри в analysis_market_portfolio",
     )
-    weekly_generation_cron: str = Field(default="0 8 * * *", description="Cron: генерация weekly forecast")
-    weekly_update_cron: str = Field(default="0 9 * * *", description="Cron: обновление weekly forecast")
-    weekly_training_cron: str = Field(default="0 4 * * 1", description="Cron: weekly training")
-
     # Ops + Cutover (Фаза 6)
     cutover_backup_dir: str = Field(
         default="./data/cutover_backups",

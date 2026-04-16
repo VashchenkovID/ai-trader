@@ -149,6 +149,8 @@ def _select_compatible_weekly_checkpoint(
         return None
     latest = sorted(ckpt_dir.glob("*.ckpt"), key=lambda p: p.stat().st_mtime, reverse=True)
     for ckpt in latest:
+        if "nan" in ckpt.name.lower():
+            continue
         shape = _checkpoint_weekly_shape(ckpt)
         if shape == (int(input_size), int(seq_len)):
             return str(ckpt)
