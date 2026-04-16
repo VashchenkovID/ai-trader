@@ -733,7 +733,7 @@ function VirtualPortfoliosPage() {
                                   </Typography>
                                   {v.reasons && v.reasons.length > 0 && (
                                     <Box component="ul" sx={{ m: 0, pl: 2, mt: 0.5 }}>
-                                      {v.reasons.map((r, i) => (
+                                      {v.reasons.map((r: string, i: number) => (
                                         <Typography component="li" variant="caption" key={i}>
                                           {r}
                                         </Typography>

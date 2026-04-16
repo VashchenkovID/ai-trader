@@ -57,7 +57,7 @@ function BacktestSmaPage() {
         <Alert severity="error" sx={{ mb: 2 }}>
           {error.includes('quant: Backtesting') || error.includes('quant') ? (
             <>
-              <Typography variant="body2" fontWeight="bold">
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
                 Отсутствует модуль Backtesting
               </Typography>
               <Typography variant="body2">
